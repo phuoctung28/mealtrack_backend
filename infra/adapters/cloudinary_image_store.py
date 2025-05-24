@@ -4,6 +4,7 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 import cloudinary.utils
+import cloudinary.exceptions
 from typing import Optional, Dict
 from dotenv import load_dotenv
 import logging
@@ -148,41 +149,56 @@ class CloudinaryImageStore(ImageStorePort):
         Returns:
             URL to access the image if available, None otherwise
         """
-        import requests
-        
         logger.info(f"Getting URL for image ID: {image_id}")
         folder = "mealtrack"  # Same folder used in save method
+        public_id = f"{folder}/{image_id}"
         
-        # Get cloud name from config
-        cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME")
-        if not cloud_name:
-            logger.error("CLOUDINARY_CLOUD_NAME not found in environment")
+        try:
+            # Get resource details from Cloudinary API to get the correct version and format
+            resource = cloudinary.api.resource(public_id)
+            
+            # Extract the secure_url which includes the version number
+            secure_url = resource.get('secure_url')
+            if secure_url:
+                logger.info(f"Found Cloudinary URL: {secure_url}")
+                return secure_url
+            else:
+                logger.error(f"No secure_url found in Cloudinary resource for {public_id}")
+                return None
+                
+        except cloudinary.exceptions.NotFound:
+            logger.error(f"Image not found in Cloudinary: {public_id}")
             return None
-        
-        # Try both common formats since we don't store the original format
-        formats_to_try = ["jpg", "png"]
-        
-        for fmt in formats_to_try:
-            # Build the direct Cloudinary URL
-            # Format: https://res.cloudinary.com/{cloud_name}/image/upload/{folder}/{image_id}.{format}
-            url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{folder}/{image_id}.{fmt}"
+        except Exception as e:
+            logger.error(f"Error getting Cloudinary resource: {str(e)}")
             
-            logger.info(f"Trying Cloudinary URL: {url}")
+            # Fallback to manual URL construction (without version)
+            logger.info("Falling back to manual URL construction")
+            cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME")
+            if not cloud_name:
+                logger.error("CLOUDINARY_CLOUD_NAME not found in environment")
+                return None
             
-            # Check if the URL is accessible
-            try:
-                response = requests.head(url, timeout=5)
-                if response.status_code == 200:
-                    logger.info(f"Found working URL: {url}")
-                    return url
-                else:
-                    logger.debug(f"URL returned status {response.status_code}: {url}")
-            except Exception as e:
-                logger.debug(f"Error checking URL {url}: {str(e)}")
-                continue
-        
-        logger.error(f"No working URL found for image ID: {image_id}")
-        return None
+            # Try both common formats
+            formats_to_try = ["jpg", "png"]
+            
+            for fmt in formats_to_try:
+                # Build the direct Cloudinary URL (without version as fallback)
+                url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{folder}/{image_id}.{fmt}"
+                
+                logger.info(f"Trying fallback URL: {url}")
+                
+                # Check if the URL is accessible
+                try:
+                    import requests
+                    response = requests.head(url, timeout=5)
+                    if response.status_code == 200:
+                        logger.info(f"Found working fallback URL: {url}")
+                        return url
+                except:
+                    continue
+            
+            return None
     
     def delete(self, image_id: str) -> bool:
         """
