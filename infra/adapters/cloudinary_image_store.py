@@ -71,17 +71,27 @@ class CloudinaryImageStore(ImageStorePort):
         image_id = str(uuid.uuid4())
         logger.info(f"Generated image_id: {image_id}")
         
+        # Determine file extension from content type
+        if content_type == "image/jpeg":
+            file_extension = "jpg"
+        elif content_type == "image/png":
+            file_extension = "png"
+        else:
+            file_extension = "jpg"  # Default fallback
+        
         # Upload to Cloudinary
-        # Use the image_id as the public_id in Cloudinary
+        # Use the image_id with extension as the public_id in Cloudinary
         folder = "mealtrack"  # Use a folder for organization
         
         try:
-            # Upload the image
+            # Upload the image with explicit format
             logger.info(f"Uploading to Cloudinary with public_id: {folder}/{image_id}")
             response = cloudinary.uploader.upload(
                 image_bytes,
                 public_id=f"{folder}/{image_id}",
-                resource_type="image"
+                resource_type="image",
+                format=file_extension,  # Explicitly set the format
+                overwrite=True
             )
             
             logger.info(f"Upload successful. Cloudinary URL: {response.get('secure_url')}")
@@ -138,26 +148,41 @@ class CloudinaryImageStore(ImageStorePort):
         Returns:
             URL to access the image if available, None otherwise
         """
+        import requests
+        
         logger.info(f"Getting URL for image ID: {image_id}")
         folder = "mealtrack"  # Same folder used in save method
-        public_id = f"{folder}/{image_id}"
         
-        # Try to get the URL from Cloudinary
-        try:
-            # Build the Cloudinary URL using the utils function to ensure correct formatting
-            url = cloudinary.utils.cloudinary_url(
-                public_id,
-                secure=True,  # Use HTTPS
-                format="auto",  # Let Cloudinary deliver the best format
-                quality="auto",  # Let Cloudinary optimize the quality
-                fetch_format="auto"  # Auto-select format based on client
-            )[0]  # The first element is the URL
-            
-            logger.info(f"Generated Cloudinary URL: {url}")
-            return url
-        except Exception as e:
-            logger.error(f"Error generating Cloudinary URL: {str(e)}")
+        # Get cloud name from config
+        cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME")
+        if not cloud_name:
+            logger.error("CLOUDINARY_CLOUD_NAME not found in environment")
             return None
+        
+        # Try both common formats since we don't store the original format
+        formats_to_try = ["jpg", "png"]
+        
+        for fmt in formats_to_try:
+            # Build the direct Cloudinary URL
+            # Format: https://res.cloudinary.com/{cloud_name}/image/upload/{folder}/{image_id}.{format}
+            url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{folder}/{image_id}.{fmt}"
+            
+            logger.info(f"Trying Cloudinary URL: {url}")
+            
+            # Check if the URL is accessible
+            try:
+                response = requests.head(url, timeout=5)
+                if response.status_code == 200:
+                    logger.info(f"Found working URL: {url}")
+                    return url
+                else:
+                    logger.debug(f"URL returned status {response.status_code}: {url}")
+            except Exception as e:
+                logger.debug(f"Error checking URL {url}: {str(e)}")
+                continue
+        
+        logger.error(f"No working URL found for image ID: {image_id}")
+        return None
     
     def delete(self, image_id: str) -> bool:
         """
