@@ -19,12 +19,34 @@ load_dotenv()
 config = context.config
 
 # Update the connection URL with environment variables
-config.set_main_option("sqlalchemy.url", 
-                       f"mysql+pymysql://{os.getenv('DB_USER', 'root')}:"
-                       f"{os.getenv('DB_PASSWORD', '')}@"
-                       f"{os.getenv('DB_HOST', 'localhost')}:"
-                       f"{os.getenv('DB_PORT', '3306')}/"
-                       f"{os.getenv('DB_NAME', 'mealtrack')}")
+# Use the same database configuration logic as our main config
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    # Railway or other platform provides DATABASE_URL
+    SQLALCHEMY_DATABASE_URL = DATABASE_URL
+    # Replace mysql:// with mysql+pymysql:// if needed
+    if SQLALCHEMY_DATABASE_URL.startswith("mysql://"):
+        SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("mysql://", "mysql+pymysql://", 1)
+else:
+    # Use individual environment variables (existing setup)
+    DB_USER = os.getenv("DB_USER", "root")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_PORT = os.getenv("DB_PORT", "3306")
+    DB_NAME = os.getenv("DB_NAME", "mealtrack")
+
+    # Use SQLite for development
+    USE_SQLITE = os.getenv("USE_SQLITE", "1") == "1"
+
+    if USE_SQLITE:
+        # SQLite URL
+        SQLALCHEMY_DATABASE_URL = "sqlite:///./mealtrack.db"
+    else:
+        # MySQL URL
+        SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+config.set_main_option("sqlalchemy.url", SQLALCHEMY_DATABASE_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

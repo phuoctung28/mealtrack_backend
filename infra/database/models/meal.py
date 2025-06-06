@@ -19,6 +19,7 @@ class Meal(Base, BaseMixin):
     # Rename id to meal_id to match domain model
     meal_id = Column(String(36), primary_key=True)
     status = Column(Enum(MealStatusEnum), nullable=False)
+    ready_at = Column(DateTime, nullable=True)  # When meal analysis was completed
     error_message = Column(Text, nullable=True)
     raw_ai_response = Column(Text, nullable=True)
     
@@ -50,6 +51,7 @@ class Meal(Base, BaseMixin):
             created_at=self.created_at,
             image=self.image.to_domain() if self.image else None,
             nutrition=self.nutrition.to_domain() if self.nutrition else None,
+            ready_at=self.ready_at,  # Include ready_at timestamp
             error_message=self.error_message,
             raw_gpt_json=self.raw_ai_response
         )
@@ -74,6 +76,7 @@ class Meal(Base, BaseMixin):
             status=status_mapping[domain_model.status],
             created_at=domain_model.created_at,
             updated_at=getattr(domain_model, "updated_at", None),
+            ready_at=getattr(domain_model, "ready_at", None),  # Include ready_at timestamp
             error_message=getattr(domain_model, "error_message", None),
             raw_ai_response=getattr(domain_model, "raw_gpt_json", None),
         )
