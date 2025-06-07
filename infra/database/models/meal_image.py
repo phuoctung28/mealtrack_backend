@@ -3,7 +3,6 @@ from sqlalchemy import Column, String, Integer
 from infra.database.config import Base
 from infra.database.models.base import BaseMixin
 
-
 class MealImage(Base, BaseMixin):
     """Database model for meal images."""
     

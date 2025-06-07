@@ -1,7 +1,5 @@
-from typing import Optional, List, Dict, Any, Union
-
 from pydantic import BaseModel, Field
-
+from typing import Optional, List, Dict, Any, Union
 
 class OnboardingFieldResponse(BaseModel):
     field_id: str

@@ -1,12 +1,14 @@
 import logging
 import time
+from typing import List
 
-from app.handlers.enrich_nutrition_handler import EnrichNutritionHandler
 from domain.model.meal import MealStatus
-from domain.ports.food_database_port import FoodDatabasePort
 from domain.ports.meal_repository_port import MealRepositoryPort
-from infra.adapters.usda_food_database import USDAFoodDatabase
+from domain.ports.food_database_port import FoodDatabasePort
+from app.handlers.enrich_nutrition_handler import EnrichNutritionHandler
+
 from infra.repositories.meal_repository import MealRepository
+from infra.adapters.usda_food_database import USDAFoodDatabase
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

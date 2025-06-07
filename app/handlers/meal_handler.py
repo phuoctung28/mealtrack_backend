@@ -1,12 +1,11 @@
+from typing import Optional, Dict, Any, BinaryIO
 import uuid
 from datetime import datetime
-from typing import Optional, BinaryIO
 
 from domain.model.meal import Meal, MealStatus
 from domain.model.meal_image import MealImage
-from domain.ports.image_store_port import ImageStorePort
 from domain.ports.meal_repository_port import MealRepositoryPort
-
+from domain.ports.image_store_port import ImageStorePort
 
 class MealHandler:
     """

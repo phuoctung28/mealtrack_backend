@@ -1,9 +1,8 @@
+import pytest
+import httpx
 import asyncio
 import os
 from typing import Generator
-
-import httpx
-import pytest
 
 
 def pytest_configure(config):

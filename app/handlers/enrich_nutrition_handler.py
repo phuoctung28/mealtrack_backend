@@ -2,10 +2,10 @@ import logging
 from typing import Optional
 
 from domain.model.meal import Meal, MealStatus
-from domain.ports.food_database_port import FoodDatabasePort
 from domain.ports.meal_repository_port import MealRepositoryPort
+from domain.ports.food_database_port import FoodDatabasePort
+from domain.services.nutrition_service import NutritionService, EnrichmentResult
 from domain.services.gpt_response_parser import GPTResponseParser
-from domain.services.nutrition_service import NutritionService
 
 # Configure logging
 logger = logging.getLogger(__name__)

@@ -5,29 +5,29 @@ This module contains functions that provide dependencies to FastAPI endpoints.
 """
 
 import os
-
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.handlers.meal_handler import MealHandler
 from app.handlers.upload_meal_image_handler import UploadMealImageHandler
 from app.services.meal_ingredient_service import MealIngredientService
-from domain.ports.image_store_port import ImageStorePort
 from domain.ports.meal_repository_port import MealRepositoryPort
+from domain.ports.image_store_port import ImageStorePort
 from domain.ports.vision_ai_service_port import VisionAIServicePort
 from domain.services.gpt_response_parser import GPTResponseParser
+from infra.repositories.meal_repository import MealRepository
 from infra.adapters.image_store import ImageStore
 from infra.adapters.mock_vision_ai_service import MockVisionAIService
 from infra.database.config import get_db
-from infra.repositories.meal_repository import MealRepository
 
-# Optional imports with fallbacks
+# Optional cloudinary import
 try:
     from infra.adapters.cloudinary_image_store import CloudinaryImageStore
     CLOUDINARY_AVAILABLE = True
 except ImportError:
     CLOUDINARY_AVAILABLE = False
 
+# Optional vision AI import
 try:
     from infra.adapters.vision_ai_service import VisionAIService
     VISION_AI_AVAILABLE = True
@@ -37,7 +37,7 @@ except ImportError:
 # Check if we should use mock storage or Cloudinary
 USE_MOCK_STORAGE = bool(int(os.getenv("USE_MOCK_STORAGE", "1")))
 
-# Global singleton instances
+# Global ingredient service instance (singleton for in-memory storage)
 _ingredient_service = None
 
 def get_meal_repository(db: Session = Depends(get_db)) -> MealRepositoryPort:
@@ -114,8 +114,10 @@ def get_meal_handler(
     )
 
 def get_upload_meal_image_handler(
+    image_store: ImageStorePort = Depends(get_image_store),
+    meal_repository: MealRepositoryPort = Depends(get_meal_repository),
     vision_service: VisionAIServicePort = Depends(get_vision_service),
-    ingredient_service: MealIngredientService = Depends(get_meal_ingredient_service)
+    gpt_parser: GPTResponseParser = Depends(get_gpt_parser)
 ) -> UploadMealImageHandler:
     """
     Get the upload meal image handler instance.
@@ -124,6 +126,8 @@ def get_upload_meal_image_handler(
         UploadMealImageHandler: The upload meal image handler
     """
     return UploadMealImageHandler(
-        vision_ai_service=vision_service,
-        ingredient_service=ingredient_service
+        image_store=image_store,
+        meal_repository=meal_repository,
+        vision_service=vision_service,
+        gpt_parser=gpt_parser
     ) 

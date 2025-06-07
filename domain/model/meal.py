@@ -1,12 +1,10 @@
-import uuid
 from dataclasses import dataclass
-from datetime import datetime
-from enum import Enum
+from enum import Enum, auto
 from typing import Optional
-
+from datetime import datetime
 from .meal_image import MealImage
 from .nutrition import Nutrition
-
+import uuid
 
 class MealStatus(Enum):
     """Status of a meal in the analysis pipeline."""
