@@ -1,8 +1,9 @@
+import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any
-from datetime import datetime
-import uuid
+
 
 class ActivityType(Enum):
     """Types of activities that can be tracked."""

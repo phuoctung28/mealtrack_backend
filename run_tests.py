@@ -24,13 +24,14 @@ Options:
     --junit             - Generate JUnit XML report
 """
 
-import sys
+import argparse
 import os
 import subprocess
-import argparse
+import sys
 import time
+from typing import List
+
 import httpx
-from typing import List, Dict, Any
 
 
 class Colors:

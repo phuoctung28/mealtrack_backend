@@ -1,8 +1,9 @@
-from sqlalchemy import Column, String, Integer, Float, Text, ForeignKey, Boolean
+from sqlalchemy import Column, String, Float, Text, ForeignKey
 from sqlalchemy.orm import relationship
 
 from infra.database.config import Base
 from infra.database.models.base import BaseMixin
+
 
 class Macros(Base):
     """Database model for macronutrients."""

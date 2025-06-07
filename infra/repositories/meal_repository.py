@@ -1,20 +1,19 @@
-import os
-import json
-import uuid
 from typing import List, Optional, Dict, Any
-from datetime import datetime
-import time
+from typing import List, Optional, Dict, Any
+
+from sqlalchemy.orm import Session
+
+from domain.model.macros import Macros
 from domain.model.meal import Meal, MealStatus
 from domain.model.meal_image import MealImage
-from domain.model.nutrition import Nutrition, FoodItem
-from domain.model.macros import Macros
 from domain.model.micros import Micros
+from domain.model.nutrition import Nutrition, FoodItem
 from domain.ports.meal_repository_port import MealRepositoryPort
-from sqlalchemy.orm import Session
 from infra.database.config import SessionLocal
 from infra.database.models.meal import Meal as DBMeal
 from infra.database.models.meal_image import MealImage as DBMealImage
 from infra.database.models.nutrition import Nutrition as DBNutrition
+
 
 # For development, we'll use an in-memory store
 # In a real application, this would be replaced with a database

@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+
 from .macros import Macros
 from .micros import Micros
+
 
 @dataclass(frozen=True)
 class FoodItem:

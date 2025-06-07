@@ -5,9 +5,8 @@ This script will download a sample Vietnamese noodle soup (Bun Bo Hue) image.
 
 import os
 import sys
+
 import requests
-from urllib.parse import urlparse
-import tempfile
 
 # Test image URL - replace this with a public URL to the noodle soup image
 # For now, using a placeholder service
