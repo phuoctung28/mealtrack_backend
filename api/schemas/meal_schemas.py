@@ -31,17 +31,6 @@ class UpdateMealMacrosRequest(BaseModel):
     size: Optional[float] = Field(None, gt=0, description="Size/amount of meal")
     amount: Optional[float] = Field(None, gt=0, description="Amount of meal")
     unit: Optional[str] = Field(None, max_length=50, description="Unit of measurement")
-<<<<<<< Updated upstream
-    
-    @root_validator
-    def at_least_one_required(cls, values):
-        size = values.get('size')
-        amount = values.get('amount')
-        if size is None and amount is None:
-            raise ValueError('At least one of size or amount must be provided')
-        return values
-=======
->>>>>>> Stashed changes
 
 # Photo Analysis Schemas
 class MealPhotoResponse(BaseModel):
