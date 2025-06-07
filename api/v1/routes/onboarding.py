@@ -1,10 +1,8 @@
-import logging
-
-from fastapi import APIRouter, HTTPException, status
-
+from fastapi import APIRouter, HTTPException, status, Depends
 from api.schemas.onboarding_schemas import (
     OnboardingSectionsResponse, OnboardingResponseRequest, OnboardingResponseResponse
 )
+import logging
 
 logger = logging.getLogger(__name__)
 

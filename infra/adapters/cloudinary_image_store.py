@@ -1,14 +1,13 @@
-import logging
 import os
 import uuid
-from typing import Optional
-
 import cloudinary
-import cloudinary.api
-import cloudinary.exceptions
 import cloudinary.uploader
+import cloudinary.api
 import cloudinary.utils
+import cloudinary.exceptions
+from typing import Optional, Dict
 from dotenv import load_dotenv
+import logging
 
 from domain.ports.image_store_port import ImageStorePort
 

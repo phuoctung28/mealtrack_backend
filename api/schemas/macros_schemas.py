@@ -1,9 +1,6 @@
-from typing import Optional, Dict, List
-
 from pydantic import BaseModel, Field, validator
-
-from .meal_schemas import MacrosSchema
-
+from typing import Optional, Dict, Any, List
+from .food_schemas import MacrosSchema
 
 class OnboardingChoicesRequest(BaseModel):
     age: int = Field(..., ge=13, le=120, description="User age")

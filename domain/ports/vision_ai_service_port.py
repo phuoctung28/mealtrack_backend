@@ -5,17 +5,17 @@ class VisionAIServicePort(ABC):
     """
     Port interface for AI vision services that can analyze food images.
     
-    Uses the Strategy pattern - one analyze method that accepts different analysis strategies.
+    This port is used by the application layer to interact with vision AI services
+    like OpenAI Vision API.
     """
     
     @abstractmethod
-    def analyze(self, image_bytes: bytes, strategy=None) -> Dict[str, Any]:
+    def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
         """
-        Analyze a food image using the provided strategy.
+        Analyze a food image to extract nutritional information.
         
         Args:
             image_bytes: The raw bytes of the image to analyze
-            strategy: Analysis strategy to use (optional, defaults to basic analysis)
             
         Returns:
             JSON-compatible dictionary with the raw AI response

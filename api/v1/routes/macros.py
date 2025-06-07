@@ -1,11 +1,9 @@
-import logging
-
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks
-
+from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
 from api.schemas.macros_schemas import (
     OnboardingChoicesRequest, MacrosCalculationResponse,
     ConsumedMacrosRequest, UpdatedMacrosResponse, DailyMacrosResponse
 )
+import logging
 
 logger = logging.getLogger(__name__)
 

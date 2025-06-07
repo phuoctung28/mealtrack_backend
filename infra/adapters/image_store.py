@@ -1,7 +1,6 @@
 import os
 import uuid
-from typing import Optional
-
+from typing import Optional, Dict
 from dotenv import load_dotenv
 
 from domain.ports.image_store_port import ImageStorePort

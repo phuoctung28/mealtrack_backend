@@ -1,11 +1,9 @@
-import enum
-
 from sqlalchemy import Column, String, Text, Enum, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
+import enum
 
 from infra.database.config import Base
 from infra.database.models.base import BaseMixin
-
 
 class MealStatusEnum(enum.Enum):
     """Enum for meal status in database."""
@@ -85,6 +83,7 @@ class Meal(Base, BaseMixin):
         
         # Add image reference
         if domain_model.image:
+            from infra.database.models.meal_image import MealImage
             meal.image_id = domain_model.image.image_id
             
         # Add nutrition if it exists

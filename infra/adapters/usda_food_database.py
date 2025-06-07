@@ -1,13 +1,12 @@
-import logging
 import os
-from typing import Optional, Dict, Any, List
-
 import requests
+import logging
+from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 
-from domain.model.macros import Macros
-from domain.model.nutrition import FoodItem
 from domain.ports.food_database_port import FoodDatabasePort
+from domain.model.nutrition import FoodItem
+from domain.model.macros import Macros
 
 # Load environment variables
 load_dotenv()
