@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, root_validator
 
 
 class MacrosSchema(BaseModel):
@@ -31,6 +31,14 @@ class UpdateMealMacrosRequest(BaseModel):
     size: Optional[float] = Field(None, gt=0, description="Size/amount of meal")
     amount: Optional[float] = Field(None, gt=0, description="Amount of meal")
     unit: Optional[str] = Field(None, max_length=50, description="Unit of measurement")
+    
+    @root_validator
+    def at_least_one_required(cls, values):
+        size = values.get('size')
+        amount = values.get('amount')
+        if size is None and amount is None:
+            raise ValueError('At least one of size or amount must be provided')
+        return values
 
 # Photo Analysis Schemas
 class MealPhotoResponse(BaseModel):
