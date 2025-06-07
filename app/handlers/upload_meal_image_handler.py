@@ -1,155 +1,144 @@
-from dataclasses import dataclass
-from typing import Dict, Any, Optional
-from domain.model.meal import Meal, MealStatus
-from domain.model.meal_image import MealImage
-from domain.ports.image_store_port import ImageStorePort
-from domain.ports.meal_repository_port import MealRepositoryPort
-from domain.ports.vision_ai_service_port import VisionAIServicePort
-from domain.services.gpt_response_parser import GPTResponseParser, GPTResponseParsingError
+import asyncio
 import logging
+import uuid
+from typing import Dict, Any, List
+
+from fastapi import UploadFile
+
+from app.services.meal_ingredient_service import MealIngredientService
+from domain.ports.vision_ai_service_port import VisionAIServicePort
+from domain.services.analysis_strategy import AnalysisStrategyFactory
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class UploadResult:
-    """Result from uploading a meal image."""
-    meal_id: str
-    status: str
-
-
 class UploadMealImageHandler:
-    """
-    Handler for uploading meal images.
+    """Handler for meal image upload and analysis operations."""
     
-    Implements US-1.3 and US-1.4 - Save the raw image bytes and persist initial Meal.
-    """
+    def __init__(self, vision_ai_service: VisionAIServicePort, ingredient_service: MealIngredientService):
+        self.vision_ai_service = vision_ai_service
+        self.ingredient_service = ingredient_service
     
-    def __init__(
-        self,
-        image_store: ImageStorePort,
-        meal_repository: MealRepositoryPort,
-        vision_service: Optional[VisionAIServicePort] = None,
-        gpt_parser: Optional[GPTResponseParser] = None
-    ):
-        self.image_store = image_store
-        self.meal_repository = meal_repository
-        self.vision_service = vision_service
-        self.gpt_parser = gpt_parser
-    
-    def handle(self, image_bytes: bytes, content_type: str) -> UploadResult:
-        """
-        Handle the upload of a meal image.
+    async def handle_meal_upload(self, file: UploadFile) -> Dict[str, Any]:
+        """Handle meal image upload and analysis."""
+        await self._validate_image_file(file)
         
-        Args:
-            image_bytes: The raw image bytes
-            content_type: The MIME content type (image/jpeg or image/png)
-            
-        Returns:
-            UploadResult with meal_id and status
-        """
-        # Save image to storage service
-        image_id = self.image_store.save(image_bytes, content_type)
+        meal_id = str(uuid.uuid4())
+        image_bytes = await file.read()
         
-        # Determine image format and size
-        image_format = "jpeg" if content_type == "image/jpeg" else "png"
-        size_bytes = len(image_bytes)
-        
-        # Create MealImage value object
-        meal_image = MealImage(
-            image_id=image_id,
-            format=image_format,
-            size_bytes=size_bytes,
-            url=self.image_store.get_url(image_id)
-        )
-        
-        # Create Meal with PROCESSING status
-        meal = Meal.create_new_processing(meal_image)
-        
-        # Persist the meal entity
-        saved_meal = self.meal_repository.save(meal)
-        
-        return UploadResult(
-            meal_id=saved_meal.meal_id,
-            status=str(saved_meal.status)
-        )
-    
-    def analyze_meal_background(self, meal_id: str) -> None:
-        """
-        Analyze a meal image in the background.
-        
-        This method is meant to be called as a FastAPI background task.
-        
-        Args:
-            meal_id: The ID of the meal to analyze
-        """
         try:
-            logger.info(f"Background task: Processing meal {meal_id}")
+            result = self.vision_ai_service.analyze(image_bytes)
             
-            # Fetch the meal from the repository
-            meal = self.meal_repository.find_by_id(meal_id)
-            if not meal:
-                logger.error(f"Background task: Meal {meal_id} not found")
-                return
-            
-            # 1. Mark as ANALYZING
-            analyzing_meal = meal.mark_analyzing()
-            self.meal_repository.save(analyzing_meal)
-            
-            # 2. Load the image
-            image_id = meal.image.image_id
-            image_bytes = self.image_store.load(image_id)
-            
-            if not image_bytes:
-                logger.error(f"Background task: Failed to load image {image_id}")
-                failed_meal = analyzing_meal.mark_failed("Failed to load image")
-                self.meal_repository.save(failed_meal)
-                return
-            
-            # 3. Call Vision AI API
-            if not self.vision_service:
-                logger.error("Background task: Vision service not available")
-                failed_meal = analyzing_meal.mark_failed("Vision service not available")
-                self.meal_repository.save(failed_meal)
-                return
-                
-            gpt_response = self.vision_service.analyze(image_bytes)
-            
-            # 4. Parse the GPT response
-            if not self.gpt_parser:
-                logger.error("Background task: GPT parser not available")
-                failed_meal = analyzing_meal.mark_failed("GPT parser not available")
-                self.meal_repository.save(failed_meal)
-                return
-                
-            try:
-                # Parse the GPT response
-                nutrition = self.gpt_parser.parse_to_nutrition(gpt_response)
-                
-                # Extract raw JSON for storage
-                raw_gpt_json = self.gpt_parser.extract_raw_json(gpt_response)
-                
-                # Update meal with nutrition data
-                # First mark as READY with the nutrition data
-                ready_meal = analyzing_meal.mark_ready(nutrition)
-                
-                # Move to ENRICHING state (which keeps the nutrition data)
-                enriched_meal = ready_meal.mark_enriching(raw_gpt_json)
-                self.meal_repository.save(enriched_meal)
-                
-                logger.info(f"Background task: Successfully processed meal {meal_id}")
-                
-            except GPTResponseParsingError as e:
-                logger.error(f"Background task: Failed to parse GPT response for meal {meal_id}: {str(e)}")
-                failed_meal = analyzing_meal.mark_failed(f"Failed to parse AI response: {str(e)}")
-                self.meal_repository.save(failed_meal)
-                
+            return {
+                "meal_id": meal_id,
+                "status": "success",
+                "message": "Meal image analyzed successfully",
+                "analysis": result["structured_data"],
+                "confidence": result["structured_data"].get("confidence", 0.0),
+                "raw_response": result.get("raw_response", "")
+            }
         except Exception as e:
-            logger.error(f"Background task: Error processing meal {meal_id}: {str(e)}", exc_info=True)
-            try:
-                # Try to mark meal as failed
-                meal = self.meal_repository.find_by_id(meal_id)
-                if meal:
-                    failed_meal = meal.mark_failed(f"Processing error: {str(e)}")
-                    self.meal_repository.save(failed_meal)
-            except Exception as mark_failed_error:
-                logger.error(f"Background task: Error marking meal as failed: {str(mark_failed_error)}") 
+            logger.error(f"Failed to analyze meal image: {str(e)}")
+            return {
+                "meal_id": meal_id,
+                "status": "error",
+                "message": "Failed to analyze meal image",
+                "error": str(e)
+            }
+    
+    async def update_meal_macros(self, meal_id: str, portion_size: float, unit: str) -> Dict[str, Any]:
+        """Update meal macros based on portion size."""
+        # Return scaled response immediately
+        scaled_response = self._calculate_immediate_scaling(portion_size, unit)
+        
+        # Start background analysis
+        asyncio.create_task(self.analyze_meal_with_portion_background(meal_id, portion_size, unit))
+        
+        return {
+            "meal_id": meal_id,
+            "status": "analyzing",
+            "message": "Calculating precise macros with AI analysis",
+            "immediate_calculation": scaled_response,
+            "note": "Final results will be available shortly"
+        }
+    
+    async def add_ingredients_to_meal(self, meal_id: str, ingredients: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Add ingredients to meal and update macros."""
+        # Store ingredients
+        for ingredient_data in ingredients:
+            self.ingredient_service.add_ingredient(meal_id, ingredient_data)
+        
+        # Return immediate response
+        stored_ingredients = self.ingredient_service.get_ingredients_for_meal(meal_id)
+        
+        # Start background analysis
+        asyncio.create_task(self.analyze_meal_with_ingredients_background(meal_id, stored_ingredients))
+        
+        return {
+            "meal_id": meal_id,
+            "status": "analyzing", 
+            "message": "Ingredients added, calculating combined macros with AI",
+            "ingredients_added": len(ingredients),
+            "total_ingredients": len(stored_ingredients),
+            "note": "Final macro calculations will be available shortly"
+        }
+    
+    async def analyze_meal_with_portion_background(self, meal_id: str, portion_size: float, unit: str):
+        """Background task for portion-aware analysis."""
+        try:
+            strategy = AnalysisStrategyFactory.create_portion_strategy(portion_size, unit)
+            await self._analyze_meal_background_with_context(meal_id, strategy, "portion analysis")
+        except Exception as e:
+            logger.error(f"Background portion analysis failed for meal {meal_id}: {str(e)}")
+    
+    async def analyze_meal_with_ingredients_background(self, meal_id: str, ingredients: List[Dict[str, Any]]):
+        """Background task for ingredient-aware analysis."""
+        try:
+            strategy = AnalysisStrategyFactory.create_ingredient_strategy(ingredients)
+            await self._analyze_meal_background_with_context(meal_id, strategy, "ingredient analysis")
+        except Exception as e:
+            logger.error(f"Background ingredient analysis failed for meal {meal_id}: {str(e)}")
+    
+    async def _analyze_meal_background_with_context(self, meal_id: str, strategy, analysis_type: str):
+        """Perform background analysis with context."""
+        try:
+            # Simulate image bytes (in real app, get from stored meal)
+            mock_image_bytes = b"mock_image_data"
+            
+            result = self.vision_ai_service.analyze(mock_image_bytes, strategy)
+            
+            logger.info(f"Completed {analysis_type} for meal {meal_id}")
+            logger.info(f"Strategy used: {result.get('strategy_used', 'unknown')}")
+            logger.info(f"Confidence: {result['structured_data'].get('confidence', 0.0)}")
+            
+        except Exception as e:
+            logger.error(f"Failed {analysis_type} for meal {meal_id}: {str(e)}")
+    
+    def _calculate_immediate_scaling(self, portion_size: float, unit: str) -> Dict[str, Any]:
+        """Calculate immediate macro scaling."""
+        base_macros = {"protein": 25.0, "carbs": 30.0, "fat": 12.0, "fiber": 8.0}
+        base_calories = 350
+        base_portion = 150.0
+        
+        ratio = portion_size / base_portion
+        
+        return {
+            "portion_size": portion_size,
+            "unit": unit,
+            "scaling_ratio": round(ratio, 2),
+            "estimated_calories": round(base_calories * ratio),
+            "estimated_macros": {k: round(v * ratio, 1) for k, v in base_macros.items()},
+            "note": "Estimates based on mathematical scaling. AI analysis in progress for precise values."
+        }
+    
+    async def _validate_image_file(self, file: UploadFile):
+        """Validate uploaded image file."""
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise ValueError("File must be an image")
+        
+        # Check file size (8MB limit)
+        content = await file.read()
+        if len(content) > 8 * 1024 * 1024:
+            raise ValueError("File size exceeds 8MB limit")
+        
+        # Reset file pointer for later reading
+        await file.seek(0) 

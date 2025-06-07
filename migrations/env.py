@@ -2,11 +2,10 @@ import os
 import sys
 from logging.config import fileConfig
 
+from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-from dotenv import load_dotenv
-
-from alembic import context
 
 # Add the project root directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -55,9 +54,6 @@ if config.config_file_name is not None:
 
 # Add model MetaData objects here
 from infra.database.config import Base
-from infra.database.models.meal import Meal
-from infra.database.models.meal_image import MealImage
-from infra.database.models.nutrition import Nutrition, Macros, FoodItem
 
 # Register the models with Alembic
 target_metadata = Base.metadata

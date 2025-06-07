@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
+
 from domain.model.nutrition import FoodItem
+
 
 class FoodDatabasePort(ABC):
     """Port interface for food database lookup services."""

@@ -5,9 +5,10 @@ Database setup script.
 This script initializes the MySQL database for the application.
 """
 
+import logging
 import os
 import sys
-import logging
+
 import mysql.connector
 from dotenv import load_dotenv
 

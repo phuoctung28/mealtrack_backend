@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
+
 from domain.model.meal import Meal, MealStatus
+
 
 class MealRepositoryPort(ABC):
     """Port interface for meal persistence operations."""

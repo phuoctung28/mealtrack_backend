@@ -1,9 +1,9 @@
 import logging
-from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
+from typing import List, Optional, Dict
 
-from domain.model.nutrition import Nutrition, FoodItem
 from domain.model.macros import Macros
+from domain.model.nutrition import Nutrition, FoodItem
 from domain.ports.food_database_port import FoodDatabasePort
 
 # Configure logging

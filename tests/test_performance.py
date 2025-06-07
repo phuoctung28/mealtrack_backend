@@ -1,9 +1,9 @@
-import pytest
-import httpx
-import time
-import asyncio
 import statistics
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import httpx
+import pytest
 
 
 @pytest.mark.api
