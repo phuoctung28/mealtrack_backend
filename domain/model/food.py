@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Optional, List
 from datetime import datetime
 from .macros import Macros
-from .micros import Micros
 import uuid
 
 @dataclass
@@ -18,7 +17,6 @@ class Food:
     serving_unit: Optional[str] = None
     calories_per_serving: Optional[float] = None
     macros_per_serving: Optional[Macros] = None
-    micros_per_serving: Optional[Micros] = None
     barcode: Optional[str] = None
     image_url: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -49,7 +47,7 @@ class Food:
             **kwargs
         )
     
-    def update_nutritional_info(self, calories: float, macros: Macros, micros: Optional[Micros] = None) -> 'Food':
+    def update_nutritional_info(self, calories: float, macros: Macros) -> 'Food':
         """Update the nutritional information of the food."""
         return Food(
             food_id=self.food_id,
@@ -60,7 +58,6 @@ class Food:
             serving_unit=self.serving_unit,
             calories_per_serving=calories,
             macros_per_serving=macros,
-            micros_per_serving=micros,
             barcode=self.barcode,
             image_url=self.image_url,
             created_at=self.created_at,
@@ -88,8 +85,6 @@ class Food:
             result["calories_per_serving"] = self.calories_per_serving
         if self.macros_per_serving:
             result["macros_per_serving"] = self.macros_per_serving.to_dict()
-        if self.micros_per_serving:
-            result["micros_per_serving"] = self.micros_per_serving.to_dict()
         if self.barcode:
             result["barcode"] = self.barcode
         if self.image_url:

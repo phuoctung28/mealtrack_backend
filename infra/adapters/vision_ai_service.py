@@ -1,12 +1,17 @@
 import os
 import json
-from typing import Dict, Any
+import base64
+from typing import Dict, Any, List
 
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from domain.ports.vision_ai_service_port import VisionAIServicePort
+from domain.services.analysis_strategy import (
+    MealAnalysisStrategy, 
+    AnalysisStrategyFactory
+)
 
 # Load environment variables
 load_dotenv()
@@ -32,47 +37,13 @@ class VisionAIService(VisionAIServicePort):
             convert_system_message_to_human=True
         )
         
-        self._setup_prompt()
-        
-    def _setup_prompt(self):
-        """Set up the system prompt for analyzing food images."""
-        self.system_prompt = """
-        You are a nutrition analysis assistant that can analyze food in images.
-        Examine the image carefully and provide detailed nutritional information.
-        
-        Return your analysis in the following JSON format:
-        {
-          "foods": [
-            {
-              "name": "Food name",
-              "quantity": 1.0,
-              "unit": "serving/g/oz/cup/etc",
-              "calories": 100,
-              "macros": {
-                "protein": 10,
-                "carbs": 20,
-                "fat": 5,
-                "fiber": 2
-              }
-            }
-          ],
-          "total_calories": 100,
-          "confidence": 0.8
-        }
-        
-        - Each food item should include name, estimated quantity, unit of measurement, calories, and macros
-        - For quantities, estimate as precisely as possible based on visual cues
-        - All macros should be in grams
-        - Confidence should be between 0 (low) and 1 (high) based on how certain you are of your analysis
-        - Always return well-formed JSON
+    def analyze_with_strategy(self, image_bytes: bytes, strategy: MealAnalysisStrategy) -> Dict[str, Any]:
         """
-        
-    def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
-        """
-        Analyze a food image to extract nutritional information.
+        Analyze a food image using the provided analysis strategy.
         
         Args:
             image_bytes: The raw bytes of the image to analyze
+            strategy: The analysis strategy to use
             
         Returns:
             JSON-compatible dictionary with the raw AI response
@@ -82,15 +53,14 @@ class VisionAIService(VisionAIServicePort):
         """
         try:
             # Encode image for the API
-            import base64
             image_base64 = base64.b64encode(image_bytes).decode('utf-8')
             
-            # Create message with the image
+            # Create message with the image using strategy
             messages = [
-                SystemMessage(content=self.system_prompt),
+                SystemMessage(content=strategy.get_analysis_prompt()),
                 HumanMessage(
                     content=[
-                        {"type": "text", "text": "Analyze this food image and provide nutritional information:"},
+                        {"type": "text", "text": strategy.get_user_message()},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
                     ]
                 )
@@ -124,8 +94,54 @@ class VisionAIService(VisionAIServicePort):
             
             return {
                 "raw_response": content,
-                "structured_data": result
+                "structured_data": result,
+                "strategy_used": strategy.get_strategy_name()
             }
             
         except Exception as e:
-            raise RuntimeError(f"Failed to analyze image: {str(e)}") 
+            raise RuntimeError(f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}")
+        
+    def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
+        """
+        Analyze a food image to extract nutritional information.
+        
+        Args:
+            image_bytes: The raw bytes of the image to analyze
+            
+        Returns:
+            JSON-compatible dictionary with the raw AI response
+            
+        Raises:
+            RuntimeError: If analysis fails
+        """
+        strategy = AnalysisStrategyFactory.create_basic_strategy()
+        return self.analyze_with_strategy(image_bytes, strategy)
+    
+    def analyze_with_portion_context(self, image_bytes: bytes, portion_size: float, unit: str) -> Dict[str, Any]:
+        """
+        Analyze a food image with specific portion size context.
+        
+        Args:
+            image_bytes: The raw bytes of the image to analyze
+            portion_size: The target portion size
+            unit: The unit of the portion size
+            
+        Returns:
+            JSON-compatible dictionary with the raw AI response
+        """
+        strategy = AnalysisStrategyFactory.create_portion_strategy(portion_size, unit)
+        return self.analyze_with_strategy(image_bytes, strategy)
+    
+    def analyze_with_ingredients_context(self, image_bytes: bytes, ingredients: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Analyze a food image with known ingredients context.
+        
+        Args:
+            image_bytes: The raw bytes of the image to analyze
+            ingredients: List of ingredient dictionaries with name, quantity, unit
+            
+        Returns:
+            JSON-compatible dictionary with the raw AI response
+        """
+        strategy = AnalysisStrategyFactory.create_ingredient_strategy(ingredients)
+        return self.analyze_with_strategy(image_bytes, strategy) 

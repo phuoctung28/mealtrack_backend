@@ -82,8 +82,48 @@ class UploadMealImageHandler:
         Args:
             meal_id: The ID of the meal to analyze
         """
+        self._analyze_meal_background_with_context(meal_id)
+    
+    def analyze_meal_with_portion_background(self, meal_id: str, portion_size: float, unit: str) -> None:
+        """
+        Re-analyze a meal with specific portion size context.
+        
+        Args:
+            meal_id: The ID of the meal to analyze
+            portion_size: The target portion size
+            unit: The unit of the portion size
+        """
+        context = {
+            "type": "portion",
+            "portion_size": portion_size,
+            "unit": unit
+        }
+        self._analyze_meal_background_with_context(meal_id, context)
+    
+    def analyze_meal_with_ingredients_background(self, meal_id: str, ingredients: list) -> None:
+        """
+        Re-analyze a meal with known ingredients context.
+        
+        Args:
+            meal_id: The ID of the meal to analyze
+            ingredients: List of ingredient dictionaries
+        """
+        context = {
+            "type": "ingredients",
+            "ingredients": ingredients
+        }
+        self._analyze_meal_background_with_context(meal_id, context)
+    
+    def _analyze_meal_background_with_context(self, meal_id: str, context: dict = None) -> None:
+        """
+        Internal method to analyze a meal image with optional context.
+        
+        Args:
+            meal_id: The ID of the meal to analyze
+            context: Optional context for specialized analysis
+        """
         try:
-            logger.info(f"Background task: Processing meal {meal_id}")
+            logger.info(f"Background task: Processing meal {meal_id}" + (f" with {context['type']} context" if context else ""))
             
             # Fetch the meal from the repository
             meal = self.meal_repository.find_by_id(meal_id)
@@ -105,14 +145,30 @@ class UploadMealImageHandler:
                 self.meal_repository.save(failed_meal)
                 return
             
-            # 3. Call Vision AI API
+            # 3. Call Vision AI API with context
             if not self.vision_service:
                 logger.error("Background task: Vision service not available")
                 failed_meal = analyzing_meal.mark_failed("Vision service not available")
                 self.meal_repository.save(failed_meal)
                 return
-                
-            gpt_response = self.vision_service.analyze(image_bytes)
+            
+            # Choose the appropriate analysis method based on context
+            if context and context["type"] == "portion":
+                logger.info(f"Analyzing with portion context: {context['portion_size']} {context['unit']}")
+                gpt_response = self.vision_service.analyze_with_portion_context(
+                    image_bytes, 
+                    context["portion_size"], 
+                    context["unit"]
+                )
+            elif context and context["type"] == "ingredients":
+                logger.info(f"Analyzing with ingredients context: {len(context['ingredients'])} ingredients")
+                gpt_response = self.vision_service.analyze_with_ingredients_context(
+                    image_bytes, 
+                    context["ingredients"]
+                )
+            else:
+                logger.info("Analyzing without additional context")
+                gpt_response = self.vision_service.analyze(image_bytes)
             
             # 4. Parse the GPT response
             if not self.gpt_parser:
@@ -136,7 +192,8 @@ class UploadMealImageHandler:
                 enriched_meal = ready_meal.mark_enriching(raw_gpt_json)
                 self.meal_repository.save(enriched_meal)
                 
-                logger.info(f"Background task: Successfully processed meal {meal_id}")
+                context_info = f" with {context['type']} context" if context else ""
+                logger.info(f"Background task: Successfully processed meal {meal_id}{context_info}")
                 
             except GPTResponseParsingError as e:
                 logger.error(f"Background task: Failed to parse GPT response for meal {meal_id}: {str(e)}")

@@ -1,53 +1,81 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
 from api.schemas.ingredient_schemas import (
     CreateIngredientRequest, UpdateIngredientRequest, IngredientResponse,
     IngredientCreatedResponse, IngredientUpdatedResponse, IngredientDeletedResponse,
     IngredientListResponse
 )
+from api.dependencies import get_meal_ingredient_service, get_upload_meal_image_handler
+from app.services.meal_ingredient_service import MealIngredientService
+from app.handlers.upload_meal_image_handler import UploadMealImageHandler
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
-    prefix="/food/{food_id}/ingredients",
+    prefix="/meals/{meal_id}/ingredients",
     tags=["ingredients"],
 )
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=IngredientCreatedResponse)
 async def add_ingredient(
-    food_id: str,
+    meal_id: str,
     ingredient_data: CreateIngredientRequest,
-    # handler: IngredientHandler = Depends(get_ingredient_handler),
+    background_tasks: BackgroundTasks,
+    ingredient_service: MealIngredientService = Depends(get_meal_ingredient_service),
+    meal_handler: UploadMealImageHandler = Depends(get_upload_meal_image_handler),
 ):
     """
-    Add food ingredients will update the macros of the food.
+    Add meal ingredients will update the macros of the meal.
     
-    - Creates a new ingredient for the specified food
-    - Automatically recalculates food macros based on ingredients
-    - Must priority endpoint
+    - Creates a new ingredient for the specified meal
+    - Triggers LLM-based recalculation of meal macros
+    - Must priority endpoint for accurate nutrition calculation
     """
     try:
-        # TODO: Implement ingredient creation and food macro update
-        logger.info(f"Adding ingredient {ingredient_data.name} to food {food_id}")
+        logger.info(f"Adding ingredient {ingredient_data.name} to meal {meal_id}")
         
-        # Placeholder response - implement actual creation
+        # Add ingredient to the service
+        ingredient_id = ingredient_service.add_ingredient(
+            meal_id=meal_id,
+            name=ingredient_data.name,
+            quantity=ingredient_data.quantity,
+            unit=ingredient_data.unit,
+            calories=ingredient_data.calories,
+            macros=ingredient_data.macros.dict() if ingredient_data.macros else None
+        )
+        
+        # Create ingredient response
         ingredient_response = IngredientResponse(
-            ingredient_id="temp-ingredient-id",
-            food_id=food_id,
+            ingredient_id=ingredient_id,
+            meal_id=meal_id,
             name=ingredient_data.name,
             quantity=ingredient_data.quantity,
             unit=ingredient_data.unit,
             calories=ingredient_data.calories,
             macros=ingredient_data.macros,
-            micros=ingredient_data.micros,
             created_at="2024-01-01T00:00:00Z"
         )
         
+        # Schedule LLM-based nutrition recalculation with all ingredients
+        logger.info(f"Triggering LLM recalculation for meal {meal_id} with all ingredients")
+        
+        # Get all ingredients for context
+        all_ingredients = ingredient_service.get_ingredients_context_for_llm(meal_id)
+        
+        # Add background task to recalculate nutrition with ingredients context
+        background_tasks.add_task(
+            _recalculate_meal_with_ingredients,
+            meal_id,
+            all_ingredients,
+            meal_handler
+        )
+        
+        # Return immediate response
         return IngredientCreatedResponse(
             ingredient=ingredient_response,
-            message="Ingredient added successfully",
-            updated_food_macros={
-                "protein": 25.0,
+            message=f"Ingredient added successfully - LLM recalculating nutrition with {len(all_ingredients)} ingredients",
+            updated_meal_macros={
+                "protein": 25.0,  # Placeholder - LLM will calculate accurate values
                 "carbs": 30.0,
                 "fat": 10.0,
                 "fiber": 5.0
@@ -55,68 +83,71 @@ async def add_ingredient(
         )
         
     except Exception as e:
-        logger.error(f"Error adding ingredient to food {food_id}: {str(e)}", exc_info=True)
+        logger.error(f"Error adding ingredient to meal {meal_id}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error adding ingredient: {str(e)}"
         )
 
-@router.get("/", response_model=IngredientListResponse)
-async def get_ingredients(
-    food_id: str,
-    # handler: IngredientHandler = Depends(get_ingredient_handler)
-):
+
+def _recalculate_meal_with_ingredients(meal_id: str, ingredients: list, handler: UploadMealImageHandler):
     """
-    Get all ingredients for a specific food.
+    Background task to recalculate meal nutrition after adding ingredients using LLM.
     
-    - Returns list of all ingredients belonging to the food
+    Args:
+        meal_id: ID of the meal to recalculate
+        ingredients: List of all ingredients in the meal
+        handler: Upload meal image handler with LLM integration
     """
     try:
-        # TODO: Implement ingredient retrieval
-        logger.info(f"Retrieving ingredients for food {food_id}")
+        logger.info(f"Background task: Recalculating meal {meal_id} with {len(ingredients)} ingredients")
         
-        # Placeholder response - implement actual retrieval
-        ingredients = [
-            IngredientResponse(
-                ingredient_id="ingredient-1",
-                food_id=food_id,
-                name="Sample Ingredient 1",
-                quantity=50.0,
-                unit="g",
-                calories=100.0,
-                macros={
-                    "protein": 10.0,
-                    "carbs": 15.0,
-                    "fat": 5.0,
-                    "fiber": 2.0
-                },
+        # Use the specialized ingredient-aware analysis method
+        handler.analyze_meal_with_ingredients_background(meal_id, ingredients)
+        
+        logger.info(f"Background task: Completed ingredient-based recalculation for meal {meal_id}")
+        
+    except Exception as e:
+        logger.error(f"Background task: Error recalculating meal {meal_id} with ingredients: {str(e)}", exc_info=True)
+
+@router.get("/", response_model=IngredientListResponse)
+async def get_ingredients(
+    meal_id: str,
+    ingredient_service: MealIngredientService = Depends(get_meal_ingredient_service),
+):
+    """
+    Get all ingredients for a specific meal.
+    
+    - Returns list of all ingredients belonging to the meal
+    """
+    try:
+        logger.info(f"Retrieving ingredients for meal {meal_id}")
+        
+        # Get ingredients from service
+        ingredients = ingredient_service.get_ingredients_for_meal(meal_id)
+        
+        # Convert to response format
+        ingredient_responses = []
+        for ingredient in ingredients:
+            ingredient_responses.append(IngredientResponse(
+                ingredient_id=ingredient.ingredient_id,
+                meal_id=ingredient.meal_id,
+                name=ingredient.name,
+                quantity=ingredient.quantity,
+                unit=ingredient.unit,
+                calories=ingredient.calories,
+                macros=ingredient.macros,
                 created_at="2024-01-01T00:00:00Z"
-            ),
-            IngredientResponse(
-                ingredient_id="ingredient-2",
-                food_id=food_id,
-                name="Sample Ingredient 2",
-                quantity=30.0,
-                unit="g",
-                calories=80.0,
-                macros={
-                    "protein": 8.0,
-                    "carbs": 10.0,
-                    "fat": 3.0,
-                    "fiber": 1.0
-                },
-                created_at="2024-01-01T00:00:00Z"
-            )
-        ]
+            ))
         
         return IngredientListResponse(
-            ingredients=ingredients,
-            total_count=len(ingredients),
-            food_id=food_id
+            ingredients=ingredient_responses,
+            total_count=len(ingredient_responses),
+            meal_id=meal_id
         )
         
     except Exception as e:
-        logger.error(f"Error retrieving ingredients for food {food_id}: {str(e)}", exc_info=True)
+        logger.error(f"Error retrieving ingredients for meal {meal_id}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving ingredients: {str(e)}"
@@ -124,26 +155,26 @@ async def get_ingredients(
 
 @router.put("/{ingredient_id}", response_model=IngredientUpdatedResponse)
 async def update_ingredient(
-    food_id: str,
+    meal_id: str,
     ingredient_id: str,
     ingredient_data: UpdateIngredientRequest,
     # handler: IngredientHandler = Depends(get_ingredient_handler)
 ):
     """
-    Update food ingredients will update the macros of the food.
+    Update meal ingredients will update the macros of the meal.
     
     - Updates existing ingredient
-    - Automatically recalculates food macros based on updated ingredients
+    - Automatically recalculates meal macros based on updated ingredients
     - Must priority endpoint
     """
     try:
-        # TODO: Implement ingredient update and food macro recalculation
-        logger.info(f"Updating ingredient {ingredient_id} for food {food_id}")
+        # TODO: Implement ingredient update and meal macro recalculation
+        logger.info(f"Updating ingredient {ingredient_id} for meal {meal_id}")
         
         # Placeholder response - implement actual update
         ingredient_response = IngredientResponse(
             ingredient_id=ingredient_id,
-            food_id=food_id,
+            meal_id=meal_id,
             name=ingredient_data.name or "Updated Ingredient",
             quantity=ingredient_data.quantity or 75.0,
             unit=ingredient_data.unit or "g",
@@ -154,7 +185,6 @@ async def update_ingredient(
                 "fat": 7.0,
                 "fiber": 3.0
             },
-            micros=ingredient_data.micros,
             created_at="2024-01-01T00:00:00Z",
             updated_at="2024-01-01T12:00:00Z"
         )
@@ -162,7 +192,7 @@ async def update_ingredient(
         return IngredientUpdatedResponse(
             ingredient=ingredient_response,
             message="Ingredient updated successfully",
-            updated_food_macros={
+            updated_meal_macros={
                 "protein": 28.0,
                 "carbs": 32.0,
                 "fat": 11.0,
@@ -179,26 +209,27 @@ async def update_ingredient(
 
 @router.delete("/{ingredient_id}", response_model=IngredientDeletedResponse)
 async def delete_ingredient(
-    food_id: str,
+    meal_id: str,
     ingredient_id: str,
     # handler: IngredientHandler = Depends(get_ingredient_handler)
 ):
     """
-    Delete food ingredients will update the macros of the food.
+    Delete meal ingredients will update the macros of the meal.
     
     - Deletes existing ingredient
-    - Automatically recalculates food macros after deletion
+    - Automatically recalculates meal macros after deletion
     - Must priority endpoint
     """
     try:
-        # TODO: Implement ingredient deletion and food macro recalculation
-        logger.info(f"Deleting ingredient {ingredient_id} from food {food_id}")
+        # TODO: Implement ingredient deletion and meal macro recalculation
+        logger.info(f"Deleting ingredient {ingredient_id} from meal {meal_id}")
         
         # Placeholder response - implement actual deletion
         return IngredientDeletedResponse(
             message="Ingredient deleted successfully",
             deleted_ingredient_id=ingredient_id,
-            updated_food_macros={
+            meal_id=meal_id,
+            updated_meal_macros={
                 "protein": 20.0,
                 "carbs": 25.0,
                 "fat": 8.0,

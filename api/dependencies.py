@@ -10,18 +10,35 @@ from sqlalchemy.orm import Session
 
 from app.handlers.meal_handler import MealHandler
 from app.handlers.upload_meal_image_handler import UploadMealImageHandler
+from app.services.meal_ingredient_service import MealIngredientService
 from domain.ports.meal_repository_port import MealRepositoryPort
 from domain.ports.image_store_port import ImageStorePort
 from domain.ports.vision_ai_service_port import VisionAIServicePort
 from domain.services.gpt_response_parser import GPTResponseParser
 from infra.repositories.meal_repository import MealRepository
 from infra.adapters.image_store import ImageStore
-from infra.adapters.cloudinary_image_store import CloudinaryImageStore
-from infra.adapters.vision_ai_service import VisionAIService
+from infra.adapters.mock_vision_ai_service import MockVisionAIService
 from infra.database.config import get_db
+
+# Optional cloudinary import
+try:
+    from infra.adapters.cloudinary_image_store import CloudinaryImageStore
+    CLOUDINARY_AVAILABLE = True
+except ImportError:
+    CLOUDINARY_AVAILABLE = False
+
+# Optional vision AI import
+try:
+    from infra.adapters.vision_ai_service import VisionAIService
+    VISION_AI_AVAILABLE = True
+except ImportError:
+    VISION_AI_AVAILABLE = False
 
 # Check if we should use mock storage or Cloudinary
 USE_MOCK_STORAGE = bool(int(os.getenv("USE_MOCK_STORAGE", "1")))
+
+# Global ingredient service instance (singleton for in-memory storage)
+_ingredient_service = None
 
 def get_meal_repository(db: Session = Depends(get_db)) -> MealRepositoryPort:
     """
@@ -39,7 +56,7 @@ def get_image_store() -> ImageStorePort:
     Returns:
         ImageStorePort: The image store (either local or Cloudinary)
     """
-    if USE_MOCK_STORAGE:
+    if USE_MOCK_STORAGE or not CLOUDINARY_AVAILABLE:
         return ImageStore()
     else:
         return CloudinaryImageStore()
@@ -49,9 +66,16 @@ def get_vision_service() -> VisionAIServicePort:
     Get the vision AI service instance.
     
     Returns:
-        VisionAIServicePort: The vision AI service
+        VisionAIServicePort: The vision AI service (real or mock)
     """
-    return VisionAIService()
+    if VISION_AI_AVAILABLE:
+        try:
+            return VisionAIService()
+        except Exception:
+            # Fall back to mock if real service fails to initialize
+            return MockVisionAIService()
+    else:
+        return MockVisionAIService()
 
 def get_gpt_parser() -> GPTResponseParser:
     """
@@ -61,6 +85,18 @@ def get_gpt_parser() -> GPTResponseParser:
         GPTResponseParser: The GPT response parser
     """
     return GPTResponseParser()
+
+def get_meal_ingredient_service() -> MealIngredientService:
+    """
+    Get the meal ingredient service instance (singleton).
+    
+    Returns:
+        MealIngredientService: The meal ingredient service
+    """
+    global _ingredient_service
+    if _ingredient_service is None:
+        _ingredient_service = MealIngredientService()
+    return _ingredient_service
 
 def get_meal_handler(
     meal_repository: MealRepositoryPort = Depends(get_meal_repository),

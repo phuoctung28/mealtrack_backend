@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import Optional, List
-from api.schemas.food_schemas import (
-    CreateFoodRequest, FoodResponse, PaginatedFoodResponse,
-    FoodSearchRequest, FoodSearchResponse
+from api.schemas.meal_schemas import (
+    CreateMealRequest, MealResponse, PaginatedMealResponse,
+    MealSearchRequest, MealSearchResponse
 )
 import logging
 
@@ -13,19 +13,19 @@ router = APIRouter(
     tags=["food-database"],
 )
 
-@router.get("/", response_model=PaginatedFoodResponse)
-async def get_foods_list(
+@router.get("/", response_model=PaginatedMealResponse)
+async def get_meals_list(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
     include_ingredients: bool = Query(False, description="Include ingredients in the response"),
-    verified_only: bool = Query(False, description="Only return verified foods"),
-    # handler: FoodDatabaseHandler = Depends(get_food_database_handler)
+    verified_only: bool = Query(False, description="Only return verified meals"),
+    # handler: MealDatabaseHandler = Depends(get_meal_database_handler)
 ):
     """
-    Retrieve list of foods, ingredients with their macros.
+    Retrieve list of meals, ingredients with their macros.
     
     - Must priority endpoint
-    - Returns paginated list of foods from the database
+    - Returns paginated list of meals from the database
     - Can filter by verification status
     """
     try:
@@ -33,11 +33,10 @@ async def get_foods_list(
         logger.info(f"Retrieving foods list: page={page}, page_size={page_size}")
         
         # Placeholder response - implement actual database retrieval
-        foods = [
-            FoodResponse(
-                food_id="food-1",
+        meals = [
+            MealResponse(
+                meal_id="meal-1",
                 name="Chicken Breast",
-                brand="Generic",
                 description="Boneless, skinless chicken breast",
                 serving_size=100.0,
                 serving_unit="g",
@@ -48,7 +47,7 @@ async def get_foods_list(
                     "fat": 3.6,
                     "fiber": 0.0
                 },
-                is_verified=True,
+                status="ready",
                 created_at="2024-01-01T00:00:00Z"
             ),
             FoodResponse(
@@ -165,19 +164,15 @@ async def add_food_to_database(
         logger.info(f"Adding food to database: {food_data.name}")
         
         # Placeholder response - implement actual database addition
-        return FoodResponse(
-            food_id="new-food-id",
+        return MealResponse(
+            meal_id="new-meal-id",
             name=food_data.name,
-            brand=food_data.brand,
             description=food_data.description,
             serving_size=food_data.serving_size,
             serving_unit=food_data.serving_unit,
             calories_per_serving=food_data.calories_per_serving,
             macros_per_serving=food_data.macros_per_serving,
-            micros_per_serving=food_data.micros_per_serving,
-            barcode=food_data.barcode,
-            image_url=food_data.image_url,
-            is_verified=False,  # New foods start as unverified
+            status="created",
             created_at="2024-01-01T12:00:00Z"
         )
         
