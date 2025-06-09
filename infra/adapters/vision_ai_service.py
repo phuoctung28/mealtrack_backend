@@ -1,15 +1,15 @@
-import os
-import json
 import base64
+import json
+import os
 from typing import Dict, Any, List
 
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from domain.ports.vision_ai_service_port import VisionAIServicePort
 from domain.services.analysis_strategy import (
-    MealAnalysisStrategy, 
+    MealAnalysisStrategy,
     AnalysisStrategyFactory
 )
 

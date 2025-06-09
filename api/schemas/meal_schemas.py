@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Optional, List
+
+from pydantic import BaseModel, Field, root_validator
+
 
 class MacrosSchema(BaseModel):
     protein: float = Field(..., ge=0, description="Protein in grams")

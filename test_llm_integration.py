@@ -9,9 +9,9 @@ This script tests:
 4. Status changes reflect the LLM processing pipeline
 """
 
-import requests
-import json
 import time
+
+import requests
 
 BASE_URL = "http://127.0.0.1:8000/v1"
 

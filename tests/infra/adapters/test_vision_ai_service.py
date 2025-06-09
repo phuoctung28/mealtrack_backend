@@ -1,11 +1,11 @@
-import pytest
-from unittest.mock import patch, MagicMock
 import json
-import base64
 import os
+from unittest.mock import patch, MagicMock
 
-from domain.ports.vision_ai_service_port import VisionAIServicePort
+import pytest
+
 from infra.adapters.vision_ai_service import VisionAIService
+
 
 class TestVisionAIService:
     """Tests for the Vision AI service adapter."""

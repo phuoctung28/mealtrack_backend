@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks, Query
+import logging
+from typing import Optional, Dict
+
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Query
+
 from api.schemas.macros_schemas import (
     OnboardingChoicesRequest, MacrosCalculationResponse,
     ConsumedMacrosRequest, UpdatedMacrosResponse, DailyMacrosResponse
 )
-import logging
-from typing import Optional, Dict
 
 logger = logging.getLogger(__name__)
 

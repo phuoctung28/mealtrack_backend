@@ -1,17 +1,15 @@
 import logging
 import time
-from typing import List, Optional
 
 from domain.model.meal import Meal, MealStatus
-from domain.ports.meal_repository_port import MealRepositoryPort
 from domain.ports.image_store_port import ImageStorePort
+from domain.ports.meal_repository_port import MealRepositoryPort
 from domain.ports.vision_ai_service_port import VisionAIServicePort
 from domain.services.gpt_response_parser import GPTResponseParser, GPTResponseParsingError
-
-from infra.repositories.meal_repository import MealRepository
-from infra.adapters.image_store import ImageStore
 from infra.adapters.cloudinary_image_store import CloudinaryImageStore
+from infra.adapters.image_store import ImageStore
 from infra.adapters.vision_ai_service import VisionAIService
+from infra.repositories.meal_repository import MealRepository
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -1,9 +1,11 @@
+import uuid
 from dataclasses import dataclass
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
 from .macros import Macros
 from .micros import Micros
-import uuid
+
 
 @dataclass
 class Ingredient:

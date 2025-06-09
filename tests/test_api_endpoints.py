@@ -1,9 +1,7 @@
-import pytest
-import httpx
-import json
 import io
-from pathlib import Path
 
+import httpx
+import pytest
 
 # Test configuration
 BASE_URL = "http://localhost:8000"

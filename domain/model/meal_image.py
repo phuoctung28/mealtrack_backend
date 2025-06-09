@@ -1,6 +1,7 @@
+import uuid
 from dataclasses import dataclass
 from typing import Optional
-import uuid
+
 
 @dataclass(frozen=True)
 class MealImage:

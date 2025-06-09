@@ -9,7 +9,6 @@ This script demonstrates:
 """
 
 import requests
-import json
 
 BASE_URL = "http://127.0.0.1:8000/v1"
 

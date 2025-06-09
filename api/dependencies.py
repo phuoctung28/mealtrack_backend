@@ -5,20 +5,21 @@ This module contains functions that provide dependencies to FastAPI endpoints.
 """
 
 import os
+
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.handlers.meal_handler import MealHandler
 from app.handlers.upload_meal_image_handler import UploadMealImageHandler
 from app.services.meal_ingredient_service import MealIngredientService
-from domain.ports.meal_repository_port import MealRepositoryPort
 from domain.ports.image_store_port import ImageStorePort
+from domain.ports.meal_repository_port import MealRepositoryPort
 from domain.ports.vision_ai_service_port import VisionAIServicePort
 from domain.services.gpt_response_parser import GPTResponseParser
-from infra.repositories.meal_repository import MealRepository
 from infra.adapters.image_store import ImageStore
 from infra.adapters.mock_vision_ai_service import MockVisionAIService
 from infra.database.config import get_db
+from infra.repositories.meal_repository import MealRepository
 
 # Optional cloudinary import
 try:

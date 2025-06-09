@@ -1,17 +1,18 @@
-from fastapi import APIRouter, UploadFile, HTTPException, status, Depends, File, BackgroundTasks, Query
-from typing import Dict, List
-from api.dependencies import get_upload_meal_image_handler, get_meal_handler
-from app.handlers.upload_meal_image_handler import UploadMealImageHandler
-from app.handlers.meal_handler import MealHandler
-from api.schemas.meal_schemas import (
-    CreateMealRequest, UpdateMealRequest, UpdateMealMacrosRequest,
-    MealResponse, MealPhotoResponse, PaginatedMealResponse,
-    MealSearchRequest, MealSearchResponse, MealStatusResponse,
-    DetailedMealResponse, MacrosSchema
-)
-from domain.model.meal import MealStatus, Meal
 import logging
 from datetime import datetime
+from typing import Dict
+
+from fastapi import APIRouter, UploadFile, HTTPException, status, Depends, File, BackgroundTasks
+
+from api.dependencies import get_upload_meal_image_handler, get_meal_handler
+from api.schemas.meal_schemas import (
+    UpdateMealMacrosRequest,
+    MealResponse, MealStatusResponse,
+    DetailedMealResponse, MacrosSchema
+)
+from app.handlers.meal_handler import MealHandler
+from app.handlers.upload_meal_image_handler import UploadMealImageHandler
+from domain.model.meal import MealStatus, Meal
 
 logger = logging.getLogger(__name__)
 

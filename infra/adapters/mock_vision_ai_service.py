@@ -1,7 +1,7 @@
-from typing import Dict, Any, List
 import json
-import uuid
 import logging
+import uuid
+from typing import Dict, Any, List
 
 from domain.ports.vision_ai_service_port import VisionAIServicePort
 

@@ -2,10 +2,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.v1.routes.meals import router as meals_router
 from api.v1.routes.activities import router as activities_router
 from api.v1.routes.macros import router as macros_router
+from api.v1.routes.meals import router as meals_router
 from api.v1.routes.onboarding import router as onboarding_router
+
 # from api.v1.routes.food_database import router as food_database_router  # Temporarily commented out
 
 # Load environment variables

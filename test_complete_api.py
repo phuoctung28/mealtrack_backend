@@ -14,9 +14,6 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 """
 
 import requests
-import json
-import time
-from typing import Dict, Any
 
 BASE_URL = "http://localhost:8000"
 
