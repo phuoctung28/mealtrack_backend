@@ -214,6 +214,64 @@ Account for how these ingredients combine and any cooking methods that might aff
     def get_strategy_name(self) -> str:
         return f"IngredientAware({len(self.ingredients)}ingredients)"
 
+class WeightAwareAnalysisStrategy(MealAnalysisStrategy):
+    """
+    Weight-aware meal analysis strategy.
+    """
+    
+    def __init__(self, weight_grams: float):
+        self.weight_grams = weight_grams
+        logger.info(f"Created WeightAwareAnalysisStrategy: {weight_grams}g")
+    
+    def get_analysis_prompt(self) -> str:
+        return """
+        You are a nutrition analysis assistant that can analyze food in images with weight awareness.
+        Examine the image carefully and provide detailed nutritional information adjusted for the specified total weight.
+        
+        IMPORTANT: The user has specified a target total weight for this meal. Please adjust your calculations accordingly.
+        
+        Return your analysis in the following JSON format:
+        {
+          "foods": [
+            {
+              "name": "Food name",
+              "quantity": 1.0,
+              "unit": "g",
+              "calories": 100,
+              "macros": {
+                "protein": 10,
+                "carbs": 20,
+                "fat": 5,
+                "fiber": 2
+              }
+            }
+          ],
+          "total_calories": 100,
+          "confidence": 0.85,
+          "weight_adjustment": "Adjusted for specified total weight",
+          "total_weight_grams": 300
+        }
+        
+        - Each food item should reflect proportions that add up to the target total weight
+        - Calculate nutrition values to match the specified total weight
+        - Use grams as the primary unit for quantities
+        - All macros should be in grams
+        - Higher confidence scores are appropriate with weight context
+        - Include weight_adjustment and total_weight_grams fields
+        - Always return well-formed JSON
+        """
+    
+    def get_user_message(self) -> str:
+        return f"""Analyze this food image and provide nutritional information.
+
+WEIGHT CONTEXT: The user has specified that this meal should have a total weight of {self.weight_grams} grams.
+
+Please examine the visual portions in the image and calculate nutritional values that correspond to this total weight of {self.weight_grams}g.
+Adjust your analysis to ensure the combined weight of all food items matches the target weight as closely as possible."""
+    
+    def get_strategy_name(self) -> str:
+        return f"WeightAware({self.weight_grams}g)"
+
 class AnalysisStrategyFactory:
     """
     Factory class for creating meal analysis strategies.
@@ -233,6 +291,11 @@ class AnalysisStrategyFactory:
     def create_ingredient_strategy(ingredients: List[Dict[str, Any]]) -> MealAnalysisStrategy:
         """Create an ingredient-aware analysis strategy."""
         return IngredientAwareAnalysisStrategy(ingredients)
+    
+    @staticmethod
+    def create_weight_strategy(weight_grams: float) -> MealAnalysisStrategy:
+        """Create a weight-aware analysis strategy."""
+        return WeightAwareAnalysisStrategy(weight_grams)
     
     @staticmethod
     def create_combined_strategy(

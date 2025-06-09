@@ -9,8 +9,9 @@ from api.schemas.meal_schemas import (
     MealSearchRequest, MealSearchResponse, MealStatusResponse,
     DetailedMealResponse, MacrosSchema
 )
-from domain.model.meal import MealStatus
+from domain.model.meal import MealStatus, Meal
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -90,85 +91,6 @@ async def get_meal(
     
     return DetailedMealResponse.from_domain(meal)
 
-@router.put("/{meal_id}", response_model=MealResponse)
-async def update_meal(
-    meal_id: str,
-    meal_data: UpdateMealRequest,
-    # handler: MealHandler = Depends(get_meal_handler)
-):
-    """
-    Update meal info and macros.
-    
-    - Updates existing meal item
-    - Must priority endpoint for meal modification
-    """
-    try:
-        # TODO: Implement meal update
-        logger.info(f"Updating meal: {meal_id}")
-        
-        # Placeholder response - implement actual update
-        return MealResponse(
-            meal_id=meal_id,
-            name=meal_data.name or "Updated Meal",
-            description=meal_data.description,
-            serving_size=meal_data.serving_size,
-            serving_unit=meal_data.serving_unit,
-            calories_per_serving=meal_data.calories_per_serving,
-            macros_per_serving=meal_data.macros_per_serving,
-            status="updated",
-            created_at="2024-01-01T00:00:00Z",
-            updated_at="2024-01-01T12:00:00Z"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error updating meal {meal_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating meal: {str(e)}"
-        )
-
-@router.get("/", response_model=PaginatedMealResponse)
-async def list_meals(
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    # handler: MealHandler = Depends(get_meal_handler)
-):
-    """
-    Get paginated list of meals.
-    
-    - Returns paginated meal data
-    - Should priority endpoint for meal browsing
-    """
-    try:
-        # TODO: Implement paginated meal retrieval
-        logger.info(f"Fetching meals - page: {page}, page_size: {page_size}")
-        
-        # Placeholder response - implement actual pagination
-        sample_meals = []
-        for i in range(min(page_size, 5)):  # Return up to 5 sample meals
-            sample_meals.append(MealResponse(
-                meal_id=f"meal-{i+1}",
-                name=f"Sample Meal {i+1}",
-                description=f"Description for meal {i+1}",
-                status="ready",
-                created_at="2024-01-01T00:00:00Z"
-            ))
-        
-        return PaginatedMealResponse(
-            meals=sample_meals,
-            total=50,  # Placeholder total
-            page=page,
-            page_size=page_size,
-            total_pages=(50 + page_size - 1) // page_size
-        )
-        
-    except Exception as e:
-        logger.error(f"Error listing meals: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing meals: {str(e)}"
-        )
-
 @router.post("/{meal_id}/macros", response_model=MealResponse)
 async def update_meal_macros(
     meal_id: str,
@@ -177,82 +99,88 @@ async def update_meal_macros(
     meal_handler: MealHandler = Depends(get_meal_handler)
 ):
     """
-    Send size and/or amount of food to update food macros.
+    Update meal macros based on actual weight in grams.
     
-    - Updates meal macros based on portion size or amount
+    - Updates meal macros based on precise weight measurement
     - Triggers LLM-based nutrition recalculation for accuracy
     - Must priority endpoint for portion adjustment
     """
     try:
-        logger.info(f"Updating macros for meal {meal_id} with size: {macros_request.size}, amount: {macros_request.amount}, unit: {macros_request.unit}")
+        logger.info(f"Updating macros for meal {meal_id} with weight: {macros_request.weight_grams}g")
         
         # Get the current meal
         meal = meal_handler.get_meal(meal_id)
         if not meal:
             raise HTTPException(status_code=404, detail=f"Meal with ID {meal_id} not found")
         
-        # Calculate new serving size
-        new_amount = macros_request.size or macros_request.amount
-        if not new_amount:
-            raise HTTPException(status_code=400, detail="Either size or amount must be provided")
+        # Validate weight
+        new_weight_grams = macros_request.weight_grams
         
-        # Store the portion adjustment information
-        # In a real implementation, you would:
-        # 1. Update the meal's serving size in the database
-        # 2. Trigger LLM recalculation with the new portion size
-        # 3. Use the original image but with portion size context
+        # Update the meal with new weight and persist the changes
+        updated_meal = meal_handler.update_meal_weight(meal_id, new_weight_grams)
+        if not updated_meal:
+            raise HTTPException(status_code=404, detail=f"Failed to update meal {meal_id}")
         
-        # For now, we'll mark the meal for re-analysis with portion context
-        logger.info(f"Triggering LLM recalculation for meal {meal_id} with new portion: {new_amount}{macros_request.unit or 'g'}")
+        logger.info(f"Successfully updated meal {meal_id} weight to {new_weight_grams}g in database")
         
-        # Add background task to re-analyze with new portion size
-        # This would call the LLM with additional context about portion size
+        # Add background task to re-analyze with new weight
+        # This would call the LLM with additional context about weight
         from api.dependencies import get_upload_meal_image_handler
         handler = get_upload_meal_image_handler()
         
-        # Schedule background re-analysis with portion context
+        # Schedule background re-analysis with weight context
         background_tasks.add_task(
-            _recalculate_meal_with_portion,
+            _recalculate_meal_with_weight,
             meal_id,
-            new_amount,
-            macros_request.unit or "g",
+            new_weight_grams,
             handler
         )
         
         # Calculate temporary proportional macros for immediate response
         # (The LLM will provide more accurate results asynchronously)
-        base_serving_size = meal.nutrition.food_items[0].quantity if meal.nutrition and meal.nutrition.food_items else 100.0
-        ratio = new_amount / base_serving_size
+        base_weight = getattr(updated_meal, 'original_weight_grams', 300.0)
+        ratio = new_weight_grams / base_weight
         
         # Get current macros and scale them
         current_macros = meal.nutrition.macros if meal.nutrition else MacrosSchema(protein=20.0, carbs=30.0, fat=10.0, fiber=5.0)
         current_calories = meal.nutrition.calories if meal.nutrition else 250.0
         
-        updated_macros = MacrosSchema(
+        # Calculate total macros for the new weight
+        total_macros = MacrosSchema(
             protein=round(current_macros.protein * ratio, 1),
             carbs=round(current_macros.carbs * ratio, 1),
             fat=round(current_macros.fat * ratio, 1),
             fiber=round(current_macros.fiber * ratio, 1) if current_macros.fiber else None
         )
         
-        updated_calories = round(current_calories * ratio, 1)
+        total_calories = round(current_calories * ratio, 1)
         
-        logger.info(f"Immediate response with scaled macros for {new_amount}{macros_request.unit or 'g'}: {updated_macros.protein}p, {updated_macros.carbs}c, {updated_macros.fat}f")
+        # Calculate per-100g values
+        weight_ratio_for_100g = new_weight_grams / 100.0
+        calories_per_100g = round(total_calories / weight_ratio_for_100g, 1)
+        macros_per_100g = MacrosSchema(
+            protein=round(total_macros.protein / weight_ratio_for_100g, 1),
+            carbs=round(total_macros.carbs / weight_ratio_for_100g, 1),
+            fat=round(total_macros.fat / weight_ratio_for_100g, 1),
+            fiber=round(total_macros.fiber / weight_ratio_for_100g, 1) if total_macros.fiber else None
+        )
+        
+        logger.info(f"Calculated macros for {new_weight_grams}g: {total_macros.protein}p, {total_macros.carbs}c, {total_macros.fat}f")
         logger.info(f"LLM recalculation scheduled in background for more accurate results")
         
-        # Return immediate response with scaled macros
-        # Note: User should check meal status later for LLM-calculated results
+        # Return response with the updated meal data
         return MealResponse(
             meal_id=meal_id,
             name=meal.name if hasattr(meal, 'name') else "Meal",
-            description=f"Portion adjusted to {new_amount}{macros_request.unit or 'g'} - LLM recalculation in progress",
-            serving_size=new_amount,
-            serving_unit=macros_request.unit or "g",
-            calories_per_serving=updated_calories,
-            macros_per_serving=updated_macros,
-            status="analyzing",  # Indicates LLM recalculation in progress
-            created_at="2024-01-01T00:00:00Z",
-            updated_at="2024-01-01T12:00:00Z"
+            description=f"Weight updated to {new_weight_grams}g - LLM recalculation in progress",
+            weight_grams=new_weight_grams,
+            total_calories=total_calories,
+            calories_per_100g=calories_per_100g,
+            macros_per_100g=macros_per_100g,
+            total_macros=total_macros,
+            status=updated_meal.status.value,  # Use the updated meal's status
+            created_at=updated_meal.created_at.isoformat() if updated_meal.created_at else "2024-01-01T00:00:00Z",
+            updated_at=updated_meal.updated_at.isoformat() if hasattr(updated_meal, 'updated_at') and updated_meal.updated_at else "2024-01-01T12:00:00Z"
         )
         
     except HTTPException:
@@ -264,26 +192,45 @@ async def update_meal_macros(
             detail=f"Error updating meal macros: {str(e)}"
         )
 
-def _recalculate_meal_with_portion(meal_id: str, portion_size: float, unit: str, handler):
+def _recalculate_meal_with_weight(meal_id: str, weight_grams: float, handler):
     """
-    Background task to recalculate meal nutrition with new portion size using LLM.
+    Background task to recalculate meal nutrition with new weight using LLM.
     
     Args:
         meal_id: ID of the meal to recalculate
-        portion_size: New portion size
-        unit: Unit of the portion size
+        weight_grams: New weight in grams
         handler: Upload meal image handler with LLM integration
     """
     try:
-        logger.info(f"Background task: Recalculating meal {meal_id} with portion {portion_size}{unit}")
+        logger.info(f"Background task: Recalculating meal {meal_id} with weight {weight_grams}g using LLM")
         
-        # Use the specialized portion-aware analysis method
-        handler.analyze_meal_with_portion_background(meal_id, portion_size, unit)
+        # Use the specialized weight-aware analysis method
+        handler.analyze_meal_with_weight_background(meal_id, weight_grams)
         
-        logger.info(f"Background task: Completed recalculation for meal {meal_id}")
+        logger.info(f"Background task: LLM recalculation completed for meal {meal_id}")
         
     except Exception as e:
-        logger.error(f"Background task: Error recalculating meal {meal_id}: {str(e)}", exc_info=True)
+        logger.error(f"Background task: Error recalculating meal {meal_id} with LLM: {str(e)}", exc_info=True)
+        
+        # Try to mark meal as failed
+        try:
+            from api.dependencies import get_meal_handler
+            meal_handler = get_meal_handler()
+            meal = meal_handler.get_meal(meal_id)
+            if meal:
+                # Update meal to failed status
+                failed_meal = Meal(
+                    meal_id=meal.meal_id,
+                    status=MealStatus.FAILED,
+                    created_at=meal.created_at,
+                    updated_at=datetime.now(),
+                    image=meal.image,
+                    nutrition=meal.nutrition,
+                    error_message=f"LLM recalculation failed: {str(e)}"
+                )
+                meal_handler.meal_repository.save(failed_meal)
+        except Exception as mark_failed_error:
+            logger.error(f"Background task: Error marking meal as failed: {str(mark_failed_error)}")
 
 @router.get("/{meal_id}/status", response_model=MealStatusResponse)
 async def get_meal_status(

@@ -12,28 +12,26 @@ class MacrosSchema(BaseModel):
 class CreateMealRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="Meal name")
     description: Optional[str] = Field(None, max_length=500, description="Meal description")
-    serving_size: Optional[float] = Field(None, gt=0, description="Serving size")
-    serving_unit: Optional[str] = Field(None, max_length=50, description="Serving unit (e.g., 'cup', 'piece')")
-    calories_per_serving: Optional[float] = Field(None, ge=0, description="Calories per serving")
-    macros_per_serving: Optional[MacrosSchema] = Field(None, description="Macros per serving")
+    weight_grams: Optional[float] = Field(None, gt=0, description="Weight in grams")
+    calories_per_100g: Optional[float] = Field(None, ge=0, description="Calories per 100g")
+    macros_per_100g: Optional[MacrosSchema] = Field(None, description="Macros per 100g")
 
 class UpdateMealRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200, description="Meal name")
     description: Optional[str] = Field(None, max_length=500, description="Meal description")
-    serving_size: Optional[float] = Field(None, gt=0, description="Serving size")
-    serving_unit: Optional[str] = Field(None, max_length=50, description="Serving unit")
-    calories_per_serving: Optional[float] = Field(None, ge=0, description="Calories per serving")
-    macros_per_serving: Optional[MacrosSchema] = Field(None, description="Macros per serving")
+    weight_grams: Optional[float] = Field(None, gt=0, description="Weight in grams")
+    calories_per_100g: Optional[float] = Field(None, ge=0, description="Calories per 100g")
+    macros_per_100g: Optional[MacrosSchema] = Field(None, description="Macros per 100g")
 
 class UpdateMealMacrosRequest(BaseModel):
-    size: Optional[float] = Field(None, gt=0, description="Size/amount of meal")
-    amount: Optional[float] = Field(None, gt=0, description="Amount of meal")
-    unit: Optional[str] = Field(None, max_length=50, description="Unit of measurement")
+    weight_grams: float = Field(..., gt=0, description="Weight of the meal portion in grams")
     
-    @validator('size', 'amount')
-    def at_least_one_required(cls, v, values):
-        if v is None and values.get('size') is None and values.get('amount') is None:
-            raise ValueError('At least one of size or amount must be provided')
+    @validator('weight_grams')
+    def validate_weight(cls, v):
+        if v <= 0:
+            raise ValueError('Weight must be greater than 0 grams')
+        if v > 5000:  # 5kg limit seems reasonable for a meal
+            raise ValueError('Weight cannot exceed 5000 grams')
         return v
 
 # Photo Analysis Schemas
@@ -47,11 +45,13 @@ class MealPhotoResponse(BaseModel):
 
 # Simplified Nutrition Schema
 class NutritionSummary(BaseModel):
-    """Simplified nutrition summary without detailed food items breakdown."""
+    """Simplified nutrition summary with gram-based measurements."""
     meal_name: str = Field(..., description="Identified meal name")
-    calories: float = Field(..., ge=0, description="Total calories")
-    macros: MacrosSchema = Field(..., description="Macronutrients breakdown")
-    serving_info: Optional[str] = Field(None, description="Serving size information (e.g., '1 bowl', '2 pieces')")
+    total_calories: float = Field(..., ge=0, description="Total calories for the portion")
+    total_weight_grams: float = Field(..., gt=0, description="Total weight of the meal in grams")
+    calories_per_100g: float = Field(..., ge=0, description="Calories per 100g")
+    macros_per_100g: MacrosSchema = Field(..., description="Macronutrients per 100g")
+    total_macros: MacrosSchema = Field(..., description="Total macronutrients for the portion")
     confidence_score: float = Field(..., ge=0, le=1, description="AI analysis confidence")
 
 # Response Schemas
@@ -59,10 +59,11 @@ class MealResponse(BaseModel):
     meal_id: str
     name: Optional[str] = None
     description: Optional[str] = None
-    serving_size: Optional[float] = None
-    serving_unit: Optional[str] = None
-    calories_per_serving: Optional[float] = None
-    macros_per_serving: Optional[MacrosSchema] = None
+    weight_grams: Optional[float] = None
+    total_calories: Optional[float] = None
+    calories_per_100g: Optional[float] = None
+    macros_per_100g: Optional[MacrosSchema] = None
+    total_macros: Optional[MacrosSchema] = None
     status: str
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -130,12 +131,21 @@ class DetailedMealResponse(BaseModel):
         if meal.nutrition:
             # Extract meal name from first food item or use a default
             meal_name = "Unknown Meal"
-            serving_info = None
             
-            if hasattr(meal.nutrition, 'food_items') and meal.nutrition.food_items:
-                first_food = meal.nutrition.food_items[0]
-                meal_name = first_food.name
-                serving_info = f"{first_food.quantity} {first_food.unit}"
+            # Check if meal has been updated with new weight
+            if hasattr(meal, 'updated_weight_grams'):
+                estimated_weight = meal.updated_weight_grams
+            else:
+                estimated_weight = 300.0  # Default estimated weight in grams
+                
+                if hasattr(meal.nutrition, 'food_items') and meal.nutrition.food_items:
+                    first_food = meal.nutrition.food_items[0]
+                    meal_name = first_food.name
+                    # Try to extract weight from quantity if unit suggests weight
+                    if first_food.unit and 'g' in first_food.unit.lower():
+                        estimated_weight = first_food.quantity
+                    elif first_food.quantity > 10:  # Assume grams if quantity is large
+                        estimated_weight = first_food.quantity
             
             # Create macros response
             macros_response = MacrosSchema(
@@ -145,12 +155,40 @@ class DetailedMealResponse(BaseModel):
                 fiber=meal.nutrition.macros.fiber if hasattr(meal.nutrition.macros, 'fiber') else None
             )
             
+            # Calculate nutrition values based on current weight
+            if hasattr(meal, 'updated_weight_grams') and hasattr(meal, 'original_weight_grams'):
+                # Meal has been updated - scale nutrition accordingly
+                ratio = meal.updated_weight_grams / meal.original_weight_grams
+                total_calories = meal.nutrition.calories * ratio
+                total_macros = MacrosSchema(
+                    protein=macros_response.protein * ratio,
+                    carbs=macros_response.carbs * ratio,
+                    fat=macros_response.fat * ratio,
+                    fiber=macros_response.fiber * ratio if macros_response.fiber else None
+                )
+            else:
+                # Use original nutrition values
+                total_calories = meal.nutrition.calories
+                total_macros = macros_response
+            
+            # Calculate per-100g values
+            weight_ratio = estimated_weight / 100.0
+            calories_per_100g = total_calories / weight_ratio if weight_ratio > 0 else total_calories
+            macros_per_100g = MacrosSchema(
+                protein=total_macros.protein / weight_ratio if weight_ratio > 0 else total_macros.protein,
+                carbs=total_macros.carbs / weight_ratio if weight_ratio > 0 else total_macros.carbs,
+                fat=total_macros.fat / weight_ratio if weight_ratio > 0 else total_macros.fat,
+                fiber=total_macros.fiber / weight_ratio if weight_ratio > 0 and total_macros.fiber else total_macros.fiber
+            )
+            
             # Create simplified nutrition summary
             nutrition_response = NutritionSummary(
                 meal_name=meal_name,
-                calories=meal.nutrition.calories,
-                macros=macros_response,
-                serving_info=serving_info,
+                total_calories=total_calories,
+                total_weight_grams=estimated_weight,
+                calories_per_100g=calories_per_100g,
+                macros_per_100g=macros_per_100g,
+                total_macros=total_macros,
                 confidence_score=meal.nutrition.confidence_score
             )
         

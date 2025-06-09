@@ -114,6 +114,23 @@ class UploadMealImageHandler:
         }
         self._analyze_meal_background_with_context(meal_id, context)
     
+    def analyze_meal_with_weight_background(self, meal_id: str, weight_grams: float) -> None:
+        """
+        Re-analyze a meal with specific weight context for accurate nutrition.
+        
+        This method calls the LLM to provide more accurate nutrition data
+        based on the specified weight, rather than simple proportional scaling.
+        
+        Args:
+            meal_id: The ID of the meal to analyze
+            weight_grams: The target weight in grams
+        """
+        context = {
+            "type": "weight",
+            "weight_grams": weight_grams
+        }
+        self._analyze_meal_background_with_context(meal_id, context)
+    
     def _analyze_meal_background_with_context(self, meal_id: str, context: dict = None) -> None:
         """
         Internal method to analyze a meal image with optional context.
@@ -165,6 +182,12 @@ class UploadMealImageHandler:
                 gpt_response = self.vision_service.analyze_with_ingredients_context(
                     image_bytes, 
                     context["ingredients"]
+                )
+            elif context and context["type"] == "weight":
+                logger.info(f"Analyzing with weight context: {context['weight_grams']} grams")
+                gpt_response = self.vision_service.analyze_with_weight_context(
+                    image_bytes, 
+                    context["weight_grams"]
                 )
             else:
                 logger.info("Analyzing without additional context")

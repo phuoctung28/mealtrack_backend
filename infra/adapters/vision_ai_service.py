@@ -144,4 +144,18 @@ class VisionAIService(VisionAIServicePort):
             JSON-compatible dictionary with the raw AI response
         """
         strategy = AnalysisStrategyFactory.create_ingredient_strategy(ingredients)
+        return self.analyze_with_strategy(image_bytes, strategy)
+    
+    def analyze_with_weight_context(self, image_bytes: bytes, weight_grams: float) -> Dict[str, Any]:
+        """
+        Analyze a food image with specific weight context for accurate nutrition.
+        
+        Args:
+            image_bytes: The raw bytes of the image to analyze
+            weight_grams: The target weight in grams
+            
+        Returns:
+            JSON-compatible dictionary with the raw AI response
+        """
+        strategy = AnalysisStrategyFactory.create_weight_strategy(weight_grams)
         return self.analyze_with_strategy(image_bytes, strategy) 

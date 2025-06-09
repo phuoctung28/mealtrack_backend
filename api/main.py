@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.v1.routes.meals import router as meals_router
-from api.v1.routes.ingredients import router as ingredients_router
 from api.v1.routes.activities import router as activities_router
 from api.v1.routes.macros import router as macros_router
 from api.v1.routes.onboarding import router as onboarding_router
@@ -58,7 +57,6 @@ async def root():
 app.include_router(onboarding_router, prefix="/v1")
 app.include_router(activities_router, prefix="/v1")
 app.include_router(meals_router, prefix="/v1")
-app.include_router(ingredients_router, prefix="/v1")
 app.include_router(macros_router, prefix="/v1")
 # app.include_router(food_database_router, prefix="/v1")  # Temporarily commented out
 
