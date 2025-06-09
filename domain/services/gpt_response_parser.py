@@ -1,9 +1,9 @@
+from typing import Dict, Any, List, Tuple, Optional
 import json
-from typing import Dict, Any, List
 
-from domain.model.macros import Macros
 from domain.model.nutrition import Nutrition, FoodItem
-
+from domain.model.macros import Macros
+from domain.model.micros import Micros
 
 class GPTResponseParsingError(Exception):
     """Exception raised for errors in parsing GPT responses."""

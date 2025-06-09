@@ -14,6 +14,9 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 """
 
 import requests
+import json
+import time
+from typing import Dict, Any
 
 BASE_URL = "http://localhost:8000"
 
@@ -70,7 +73,7 @@ def test_ingredient_management():
     
     response = requests.post(
         f"{BASE_URL}/v1/meals/{meal_id}/ingredients/",
-        json=[quinoa_data],
+        json=quinoa_data,
         headers={"Content-Type": "application/json"}
     )
     
@@ -98,7 +101,7 @@ def test_ingredient_management():
     
     response = requests.post(
         f"{BASE_URL}/v1/meals/{meal_id}/ingredients/",
-        json=[salmon_data],
+        json=salmon_data,
         headers={"Content-Type": "application/json"}
     )
     
@@ -114,9 +117,9 @@ def test_ingredient_management():
     response = requests.get(f"{BASE_URL}/v1/meals/{meal_id}/ingredients/")
     
     if response.status_code == 200:
-        ingredients = response.json()
-        print(f"✅ Retrieved {len(ingredients)} ingredients")
-        for ingredient in ingredients:
+        result = response.json()
+        print(f"✅ Retrieved {result['total_count']} ingredients")
+        for ingredient in result['ingredients']:
             print(f"   • {ingredient['name']}: {ingredient['quantity']} {ingredient['unit']}")
     else:
         print(f"❌ Failed to get ingredients: {response.status_code}")
@@ -151,26 +154,15 @@ def test_strategy_pattern():
         ingredient_strategy = AnalysisStrategyFactory.create_ingredient_strategy(test_ingredients)
         print(f"✅ Ingredient Strategy: {ingredient_strategy.get_strategy_name()}")
         
-        # Test mock vision service with strategy pattern
+        # Test mock vision service
         from infra.adapters.mock_vision_ai_service import MockVisionAIService
         
         mock_service = MockVisionAIService()
         mock_image = b"fake_image_bytes"
         
-        # Test basic analysis (no strategy)
         basic_result = mock_service.analyze(mock_image)
-        print(f"✅ Mock Basic Analysis: {basic_result['strategy_used']}")
+        print(f"✅ Mock Analysis: {basic_result['strategy_used']}")
         print(f"   Confidence: {basic_result['structured_data']['confidence']}")
-        
-        # Test with portion strategy
-        portion_strategy = AnalysisStrategyFactory.create_portion_strategy(200.0, "g")
-        portion_result = mock_service.analyze(mock_image, portion_strategy)
-        print(f"✅ Mock Portion Analysis: {portion_result['strategy_used']}")
-        
-        # Test with ingredient strategy  
-        ingredient_strategy = AnalysisStrategyFactory.create_ingredient_strategy(test_ingredients)
-        ingredient_result = mock_service.analyze(mock_image, ingredient_strategy)
-        print(f"✅ Mock Ingredient Analysis: {ingredient_result['strategy_used']}")
         
         return True
         

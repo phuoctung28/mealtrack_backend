@@ -1,11 +1,12 @@
+import pytest
 from unittest.mock import Mock, MagicMock
-from unittest.mock import Mock, MagicMock
+from datetime import datetime
+import uuid
 
-from app.jobs.analyse_meal_image_job import AnalyseMealImageJob
 from domain.model.meal import Meal, MealStatus
 from domain.model.meal_image import MealImage
-from domain.services.gpt_response_parser import GPTResponseParsingError
-
+from domain.services.gpt_response_parser import GPTResponseParser, GPTResponseParsingError
+from app.jobs.analyse_meal_image_job import AnalyseMealImageJob
 
 class TestAnalyseMealImageJob:
     """Tests for the AnalyseMealImageJob."""

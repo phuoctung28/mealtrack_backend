@@ -1,10 +1,11 @@
+import pytest
 from unittest.mock import Mock
+from typing import Dict, Optional
 
-from domain.model.macros import Macros
 from domain.model.nutrition import Nutrition, FoodItem
+from domain.model.macros import Macros
 from domain.ports.food_database_port import FoodDatabasePort
 from domain.services.nutrition_service import NutritionService, EnrichmentResult
-
 
 class TestNutritionService:
     """Tests for the NutritionService domain service."""

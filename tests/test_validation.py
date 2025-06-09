@@ -1,7 +1,6 @@
-import io
-
-import httpx
 import pytest
+import httpx
+import io
 
 
 @pytest.mark.api

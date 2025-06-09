@@ -1,9 +1,6 @@
-from typing import Optional, Dict, List
-
 from pydantic import BaseModel, Field, validator
-
+from typing import Optional, Dict, Any, List
 from .meal_schemas import MacrosSchema
-
 
 class OnboardingChoicesRequest(BaseModel):
     age: int = Field(..., ge=13, le=120, description="User age")
@@ -49,10 +46,15 @@ class MacrosCalculationResponse(BaseModel):
     user_macros_id: str = Field(..., description="ID for tracking daily macros")
 
 class ConsumedMacrosRequest(BaseModel):
-    calories: float = Field(..., ge=0, description="Consumed calories")
-    macros: MacrosSchema = Field(..., description="Consumed macros")
-    meal_id: Optional[str] = Field(None, description="Related meal ID if from a meal")
-    food_id: Optional[str] = Field(None, description="Related food ID if from manual food entry")
+    meal_id: str = Field(..., description="ID of the consumed meal")
+    weight_grams: Optional[float] = Field(None, gt=0, description="Actual weight consumed in grams (if different from meal's estimated weight)")
+    portion_percentage: Optional[float] = Field(None, gt=0, le=100, description="Percentage of the meal consumed (if partial consumption)")
+    
+    @validator('portion_percentage')
+    def validate_portion(cls, v):
+        if v is not None and (v <= 0 or v > 100):
+            raise ValueError('Portion percentage must be between 0 and 100')
+        return v
 
 class UpdatedMacrosResponse(BaseModel):
     user_macros_id: str

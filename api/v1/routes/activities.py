@@ -1,11 +1,9 @@
-import logging
+from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import Optional, List
-
-from fastapi import APIRouter, HTTPException, status, Query
-
 from api.schemas.activity_schemas import (
-    ActivityResponse, ActivitiesListResponse
+    ActivityResponse, ActivitiesListResponse, ActivityFilterRequest
 )
+import logging
 
 logger = logging.getLogger(__name__)
 

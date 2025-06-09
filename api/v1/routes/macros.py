@@ -1,11 +1,10 @@
-import logging
-
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks
-
+from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks, Query
 from api.schemas.macros_schemas import (
     OnboardingChoicesRequest, MacrosCalculationResponse,
     ConsumedMacrosRequest, UpdatedMacrosResponse, DailyMacrosResponse
 )
+import logging
+from typing import Optional, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -111,18 +110,62 @@ async def update_consumed_macros(
     # handler: MacrosTrackingHandler = Depends(get_macros_tracking_handler)
 ):
     """
-    Send consumed macros and retrieve updated macros left in a day.
+    Track consumed macros from a specific meal.
     
     - Must priority endpoint
-    - Updates daily macro consumption
+    - Updates daily macro consumption based on meal and portion consumed
     - Returns remaining macros and progress
     """
     try:
-        # TODO: Implement macro consumption tracking
-        logger.info(f"Updating consumed macros: {consumed_data.calories} calories")
+        # TODO: Implement meal-based macro consumption tracking
+        logger.info(f"Updating consumed macros from meal {consumed_data.meal_id}")
         
-        # Placeholder response - implement actual tracking
-        # This should update the user's daily macro consumption
+        # Get meal information to calculate consumed nutrition
+        # This would fetch the meal from the database/handler
+        # For now, using placeholder meal nutrition data
+        meal_nutrition = {
+            "total_calories": 400.0,
+            "total_weight_grams": 350.0,
+            "calories_per_100g": 114.3,
+            "macros_per_100g": {
+                "protein": 8.5,
+                "carbs": 15.2,
+                "fat": 4.8,
+                "fiber": 2.1
+            },
+            "total_macros": {
+                "protein": 29.8,
+                "carbs": 53.2,
+                "fat": 16.8,
+                "fiber": 7.4
+            }
+        }
+        
+        # Calculate actual consumed nutrition based on portion
+        consumed_calories = meal_nutrition["total_calories"]
+        consumed_macros = meal_nutrition["total_macros"]
+        
+        # If specific weight or portion percentage is provided, adjust
+        if consumed_data.weight_grams:
+            weight_ratio = consumed_data.weight_grams / meal_nutrition["total_weight_grams"]
+            consumed_calories = meal_nutrition["total_calories"] * weight_ratio
+            consumed_macros = {
+                "protein": meal_nutrition["total_macros"]["protein"] * weight_ratio,
+                "carbs": meal_nutrition["total_macros"]["carbs"] * weight_ratio,
+                "fat": meal_nutrition["total_macros"]["fat"] * weight_ratio,
+                "fiber": meal_nutrition["total_macros"]["fiber"] * weight_ratio
+            }
+        elif consumed_data.portion_percentage:
+            portion_ratio = consumed_data.portion_percentage / 100.0
+            consumed_calories = meal_nutrition["total_calories"] * portion_ratio
+            consumed_macros = {
+                "protein": meal_nutrition["total_macros"]["protein"] * portion_ratio,
+                "carbs": meal_nutrition["total_macros"]["carbs"] * portion_ratio,
+                "fat": meal_nutrition["total_macros"]["fat"] * portion_ratio,
+                "fiber": meal_nutrition["total_macros"]["fiber"] * portion_ratio
+            }
+        
+        logger.info(f"Calculated consumed nutrition: {consumed_calories} calories, {consumed_macros['protein']}g protein")
         
         # Example daily targets (should come from user's profile)
         target_calories = 2000.0
@@ -134,12 +177,12 @@ async def update_consumed_macros(
         }
         
         # Example current consumption (should come from database)
-        current_consumed_calories = 800.0 + consumed_data.calories
+        current_consumed_calories = 800.0 + consumed_calories
         current_consumed_macros = {
-            "protein": 60.0 + consumed_data.macros.protein,
-            "carbs": 90.0 + consumed_data.macros.carbs,
-            "fat": 25.0 + consumed_data.macros.fat,
-            "fiber": 12.0 + (consumed_data.macros.fiber or 0)
+            "protein": 60.0 + consumed_macros["protein"],
+            "carbs": 90.0 + consumed_macros["carbs"],
+            "fat": 25.0 + consumed_macros["fat"],
+            "fiber": 12.0 + consumed_macros["fiber"]
         }
         
         # Calculate remaining
@@ -165,14 +208,21 @@ async def update_consumed_macros(
             for key in ["calories", "protein", "carbs", "fat"]
         )
         
-        # Generate recommendations
+        # Generate meal-specific recommendations
         recommendations = []
+        if consumed_data.weight_grams:
+            recommendations.append(f"Tracked {consumed_data.weight_grams}g portion from meal {consumed_data.meal_id}")
+        elif consumed_data.portion_percentage:
+            recommendations.append(f"Tracked {consumed_data.portion_percentage}% of meal {consumed_data.meal_id}")
+        else:
+            recommendations.append(f"Tracked full meal {consumed_data.meal_id}")
+            
         if completion_percentage["protein"] < 50:
             recommendations.append("Consider adding more protein-rich foods to reach your daily target")
         if completion_percentage["calories"] > 110:
             recommendations.append("You're close to exceeding your daily calorie target")
         if remaining_calories > 500:
-            recommendations.append("You have room for a substantial meal or snack")
+            recommendations.append("You have room for another substantial meal")
         if is_goal_met:
             recommendations.append("Great job! You're on track with your daily nutrition goals")
         
@@ -249,4 +299,70 @@ async def get_daily_macros(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving daily macros: {str(e)}"
+        )
+
+@router.get("/meal/{meal_id}", response_model=Dict)
+async def get_meal_macros(
+    meal_id: str,
+    weight_grams: Optional[float] = Query(None, gt=0, description="Calculate macros for specific weight in grams"),
+    # meal_handler: MealHandler = Depends(get_meal_handler)
+):
+    """
+    Get macros for a specific meal, optionally scaled to a specific weight.
+    
+    - Returns meal nutrition information for macro tracking
+    - Supports weight-based scaling for portion control
+    """
+    try:
+        logger.info(f"Retrieving macros for meal {meal_id}" + (f" at {weight_grams}g" if weight_grams else ""))
+        
+        # TODO: Implement actual meal retrieval
+        # meal = meal_handler.get_meal(meal_id)
+        # if not meal:
+        #     raise HTTPException(status_code=404, detail=f"Meal with ID {meal_id} not found")
+        
+        # Placeholder meal data - replace with actual meal retrieval
+        base_meal = {
+            "meal_id": meal_id,
+            "name": "Chicken Stir Fry",
+            "total_calories": 420.0,
+            "total_weight_grams": 350.0,
+            "calories_per_100g": 120.0,
+            "macros_per_100g": {
+                "protein": 9.5,
+                "carbs": 12.8,
+                "fat": 5.2,
+                "fiber": 2.8
+            },
+            "total_macros": {
+                "protein": 33.3,
+                "carbs": 44.8,
+                "fat": 18.2,
+                "fiber": 9.8
+            }
+        }
+        
+        # If specific weight is requested, calculate scaled values
+        if weight_grams:
+            weight_ratio = weight_grams / base_meal["total_weight_grams"]
+            scaled_meal = {
+                **base_meal,
+                "actual_weight_grams": weight_grams,
+                "actual_calories": round(base_meal["total_calories"] * weight_ratio, 1),
+                "actual_macros": {
+                    "protein": round(base_meal["total_macros"]["protein"] * weight_ratio, 1),
+                    "carbs": round(base_meal["total_macros"]["carbs"] * weight_ratio, 1),
+                    "fat": round(base_meal["total_macros"]["fat"] * weight_ratio, 1),
+                    "fiber": round(base_meal["total_macros"]["fiber"] * weight_ratio, 1)
+                }
+            }
+            return scaled_meal
+        
+        return base_meal
+        
+    except Exception as e:
+        logger.error(f"Error retrieving meal macros: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving meal macros: {str(e)}"
         ) 

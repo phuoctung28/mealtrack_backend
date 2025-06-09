@@ -1,11 +1,10 @@
-import logging
-from typing import List
-
-from fastapi import APIRouter, HTTPException, status, Query
-
+from fastapi import APIRouter, HTTPException, status, Depends, Query
+from typing import Optional, List
 from api.schemas.meal_schemas import (
-    MealResponse, PaginatedMealResponse
+    CreateMealRequest, MealResponse, PaginatedMealResponse,
+    MealSearchRequest, MealSearchResponse
 )
+import logging
 
 logger = logging.getLogger(__name__)
 

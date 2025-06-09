@@ -1,16 +1,17 @@
-import logging
+from fastapi import APIRouter, UploadFile, HTTPException, status, Depends, File, BackgroundTasks, Query
 from typing import Dict, List
-
-from fastapi import APIRouter, UploadFile, HTTPException, status, Depends, File, Query
-
 from api.dependencies import get_upload_meal_image_handler, get_meal_handler
-from api.schemas.meal_schemas import (
-    UpdateMealMacrosRequest, CreateMealRequest, UpdateMealRequest,
-    MealResponse, DetailedMealResponse, PaginatedMealResponse,
-    MealSearchRequest, MealSearchResponse, MealStatusResponse
-)
 from app.handlers.upload_meal_image_handler import UploadMealImageHandler
 from app.handlers.meal_handler import MealHandler
+from api.schemas.meal_schemas import (
+    CreateMealRequest, UpdateMealRequest, UpdateMealMacrosRequest,
+    MealResponse, MealPhotoResponse, PaginatedMealResponse,
+    MealSearchRequest, MealSearchResponse, MealStatusResponse,
+    DetailedMealResponse, MacrosSchema
+)
+from domain.model.meal import MealStatus, Meal
+import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -20,40 +21,54 @@ router = APIRouter(
 )
 
 MAX_FILE_SIZE = 8 * 1024 * 1024
+
 ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png"]
 
 @router.post("/image", status_code=status.HTTP_201_CREATED, response_model=Dict)
 async def upload_meal_image(
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
     handler: UploadMealImageHandler = Depends(get_upload_meal_image_handler),
 ):
-    """Upload meal photo and return meal analysis with nutritional data."""
+    """
+    Send meal photo and return meal analysis with nutritional data.
+    
+    - Accepts image/jpeg or image/png files up to 8MB
+    - Returns meal identification and nutritional analysis
+    - Must priority endpoint for meal scanning
+    """
     try:
+        # Validate content type
         if file.content_type not in ALLOWED_CONTENT_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid file type. Only {', '.join(ALLOWED_CONTENT_TYPES)} are allowed."
             )
         
+        # Read file content
         contents = await file.read()
         
+        # Validate file size
         if len(contents) > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File size exceeds maximum allowed (8MB)"
             )
         
-        # Reset file for handler
-        await file.seek(0)
-        
+        # Process the upload using the application handler
         logger.info("Analyzing meal photo")
-        result = await handler.handle_meal_upload(file)
-        logger.info(f"Meal created with ID: {result['meal_id']}")
+        result = handler.handle(contents, file.content_type)
+        logger.info(f"Meal created with ID: {result.meal_id}")
         
-        return result
+        if background_tasks:
+            logger.info(f"Adding background task to analyze meal {result.meal_id}")
+            background_tasks.add_task(handler.analyze_meal_background, result.meal_id)
+        
+        return {
+            "meal_id": result.meal_id,
+            "status": result.status
+        }
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error analyzing meal photo: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -66,228 +81,186 @@ async def get_meal(
     meal_id: str,
     meal_handler: MealHandler = Depends(get_meal_handler)
 ):
-    """Retrieve meal information by its ID."""
+    """
+    Retrieve meal information by its id.
+    - Returns complete meal information including nutritional data
+    """
+    meal = meal_handler.get_meal(meal_id)
+    if not meal:
+        raise HTTPException(status_code=404, detail=f"Meal with ID {meal_id} not found")
+    
+    return DetailedMealResponse.from_domain(meal)
+
+@router.post("/{meal_id}/macros", response_model=MealResponse)
+async def update_meal_macros(
+    meal_id: str,
+    macros_request: UpdateMealMacrosRequest,
+    background_tasks: BackgroundTasks,
+    meal_handler: MealHandler = Depends(get_meal_handler)
+):
+    """
+    Update meal macros based on actual weight in grams.
+    
+    - Updates meal macros based on precise weight measurement
+    - Triggers LLM-based nutrition recalculation for accuracy
+    - Must priority endpoint for portion adjustment
+    """
     try:
+        logger.info(f"Updating macros for meal {meal_id} with weight: {macros_request.weight_grams}g")
+        
+        # Get the current meal
         meal = meal_handler.get_meal(meal_id)
         if not meal:
             raise HTTPException(status_code=404, detail=f"Meal with ID {meal_id} not found")
         
-        return DetailedMealResponse.from_domain(meal)
+        # Validate weight
+        new_weight_grams = macros_request.weight_grams
+        
+        # Update the meal with new weight and persist the changes
+        updated_meal = meal_handler.update_meal_weight(meal_id, new_weight_grams)
+        if not updated_meal:
+            raise HTTPException(status_code=404, detail=f"Failed to update meal {meal_id}")
+        
+        logger.info(f"Successfully updated meal {meal_id} weight to {new_weight_grams}g in database")
+        
+        # Add background task to re-analyze with new weight
+        # This would call the LLM with additional context about weight
+        from api.dependencies import get_upload_meal_image_handler
+        handler = get_upload_meal_image_handler()
+        
+        # Schedule background re-analysis with weight context
+        background_tasks.add_task(
+            _recalculate_meal_with_weight,
+            meal_id,
+            new_weight_grams,
+            handler
+        )
+        
+        # Calculate temporary proportional macros for immediate response
+        # (The LLM will provide more accurate results asynchronously)
+        base_weight = getattr(updated_meal, 'original_weight_grams', 300.0)
+        ratio = new_weight_grams / base_weight
+        
+        # Get current macros and scale them
+        current_macros = meal.nutrition.macros if meal.nutrition else MacrosSchema(protein=20.0, carbs=30.0, fat=10.0, fiber=5.0)
+        current_calories = meal.nutrition.calories if meal.nutrition else 250.0
+        
+        # Calculate total macros for the new weight
+        total_macros = MacrosSchema(
+            protein=round(current_macros.protein * ratio, 1),
+            carbs=round(current_macros.carbs * ratio, 1),
+            fat=round(current_macros.fat * ratio, 1),
+            fiber=round(current_macros.fiber * ratio, 1) if current_macros.fiber else None
+        )
+        
+        total_calories = round(current_calories * ratio, 1)
+        
+        # Calculate per-100g values
+        weight_ratio_for_100g = new_weight_grams / 100.0
+        calories_per_100g = round(total_calories / weight_ratio_for_100g, 1)
+        macros_per_100g = MacrosSchema(
+            protein=round(total_macros.protein / weight_ratio_for_100g, 1),
+            carbs=round(total_macros.carbs / weight_ratio_for_100g, 1),
+            fat=round(total_macros.fat / weight_ratio_for_100g, 1),
+            fiber=round(total_macros.fiber / weight_ratio_for_100g, 1) if total_macros.fiber else None
+        )
+        
+        logger.info(f"Calculated macros for {new_weight_grams}g: {total_macros.protein}p, {total_macros.carbs}c, {total_macros.fat}f")
+        logger.info(f"LLM recalculation scheduled in background for more accurate results")
+        
+        # Return response with the updated meal data
+        return MealResponse(
+            meal_id=meal_id,
+            name=meal.name if hasattr(meal, 'name') else "Meal",
+            description=f"Weight updated to {new_weight_grams}g - LLM recalculation in progress",
+            weight_grams=new_weight_grams,
+            total_calories=total_calories,
+            calories_per_100g=calories_per_100g,
+            macros_per_100g=macros_per_100g,
+            total_macros=total_macros,
+            status=updated_meal.status.value,  # Use the updated meal's status
+            created_at=updated_meal.created_at.isoformat() if updated_meal.created_at else "2024-01-01T00:00:00Z",
+            updated_at=updated_meal.updated_at.isoformat() if hasattr(updated_meal, 'updated_at') and updated_meal.updated_at else "2024-01-01T12:00:00Z"
+        )
+        
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error retrieving meal {meal_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving meal: {str(e)}"
-        )
-
-@router.put("/{meal_id}", response_model=MealResponse)
-async def update_meal(
-    meal_id: str,
-    meal_data: UpdateMealRequest,
-    meal_handler: MealHandler = Depends(get_meal_handler)
-):
-    """Update meal information and macros."""
-    try:
-        logger.info(f"Updating meal: {meal_id}")
-        
-        # For now, return a placeholder response
-        # TODO: Implement actual meal update logic
-        return MealResponse(
-            meal_id=meal_id,
-            name=meal_data.name or "Updated Meal",
-            description=meal_data.description,
-            serving_size=meal_data.serving_size,
-            serving_unit=meal_data.serving_unit,
-            calories_per_serving=meal_data.calories_per_serving,
-            macros_per_serving=meal_data.macros_per_serving,
-            status="updated",
-            created_at="2024-01-01T00:00:00Z",
-            updated_at="2024-01-01T12:00:00Z"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error updating meal {meal_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating meal: {str(e)}"
-        )
-
-@router.get("/", response_model=PaginatedMealResponse)
-async def list_meals(
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    meal_handler: MealHandler = Depends(get_meal_handler)
-):
-    """Get paginated list of meals."""
-    try:
-        logger.info(f"Fetching meals - page: {page}, page_size: {page_size}")
-        
-        # For now, return sample meals
-        # TODO: Implement actual pagination logic
-        sample_meals = []
-        for i in range(min(page_size, 5)):
-            sample_meals.append(MealResponse(
-                meal_id=f"meal-{i+1}",
-                name=f"Sample Meal {i+1}",
-                description=f"Description for meal {i+1}",
-                status="ready",
-                created_at="2024-01-01T00:00:00Z"
-            ))
-        
-        return PaginatedMealResponse(
-            meals=sample_meals,
-            total=50,
-            page=page,
-            page_size=page_size,
-            total_pages=(50 + page_size - 1) // page_size
-        )
-        
-    except Exception as e:
-        logger.error(f"Error listing meals: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing meals: {str(e)}"
-        )
-
-@router.post("/", status_code=status.HTTP_201_CREATED, response_model=MealResponse)
-async def create_meal(
-    meal_data: CreateMealRequest,
-    meal_handler: MealHandler = Depends(get_meal_handler)
-):
-    """Create a new meal manually."""
-    try:
-        logger.info(f"Creating meal: {meal_data.name}")
-        
-        # For now, return a placeholder response
-        # TODO: Implement actual meal creation logic
-        meal_id = f"meal-{hash(meal_data.name) % 10000}"
-        
-        return MealResponse(
-            meal_id=meal_id,
-            name=meal_data.name,
-            description=meal_data.description,
-            serving_size=meal_data.serving_size,
-            serving_unit=meal_data.serving_unit,
-            calories_per_serving=meal_data.calories_per_serving,
-            macros_per_serving=meal_data.macros_per_serving,
-            status="created",
-            created_at="2024-01-01T00:00:00Z"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error creating meal: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating meal: {str(e)}"
-        )
-
-@router.delete("/{meal_id}")
-async def delete_meal(
-    meal_id: str,
-    meal_handler: MealHandler = Depends(get_meal_handler)
-):
-    """Delete a meal."""
-    try:
-        logger.info(f"Deleting meal: {meal_id}")
-        
-        # For now, return success
-        # TODO: Implement actual meal deletion logic
-        return {"message": f"Meal {meal_id} deleted successfully"}
-        
-    except Exception as e:
-        logger.error(f"Error deleting meal {meal_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting meal: {str(e)}"
-        )
-
-@router.post("/{meal_id}/macros", response_model=Dict)
-async def update_meal_macros(
-    meal_id: str,
-    macros_request: UpdateMealMacrosRequest,
-    handler: UploadMealImageHandler = Depends(get_upload_meal_image_handler)
-):
-    """Update meal macros based on portion size with LLM recalculation."""
-    try:
-        new_amount = macros_request.size or macros_request.amount
-        if not new_amount:
-            raise HTTPException(status_code=400, detail="Either size or amount must be provided")
-        
-        unit = macros_request.unit or "g"
-        
-        logger.info(f"Updating macros for meal {meal_id} with portion: {new_amount} {unit}")
-        
-        result = await handler.update_meal_macros(meal_id, new_amount, unit)
-        
-        return result
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating meal macros for {meal_id}: {str(e)}", exc_info=True)
+        logger.error(f"Error updating macros for meal {meal_id}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error updating meal macros: {str(e)}"
         )
+
+def _recalculate_meal_with_weight(meal_id: str, weight_grams: float, handler):
+    """
+    Background task to recalculate meal nutrition with new weight using LLM.
+    
+    Args:
+        meal_id: ID of the meal to recalculate
+        weight_grams: New weight in grams
+        handler: Upload meal image handler with LLM integration
+    """
+    try:
+        logger.info(f"Background task: Recalculating meal {meal_id} with weight {weight_grams}g using LLM")
+        
+        # Use the specialized weight-aware analysis method
+        handler.analyze_meal_with_weight_background(meal_id, weight_grams)
+        
+        logger.info(f"Background task: LLM recalculation completed for meal {meal_id}")
+        
+    except Exception as e:
+        logger.error(f"Background task: Error recalculating meal {meal_id} with LLM: {str(e)}", exc_info=True)
+        
+        # Try to mark meal as failed
+        try:
+            from api.dependencies import get_meal_handler
+            meal_handler = get_meal_handler()
+            meal = meal_handler.get_meal(meal_id)
+            if meal:
+                # Update meal to failed status
+                failed_meal = Meal(
+                    meal_id=meal.meal_id,
+                    status=MealStatus.FAILED,
+                    created_at=meal.created_at,
+                    updated_at=datetime.now(),
+                    image=meal.image,
+                    nutrition=meal.nutrition,
+                    error_message=f"LLM recalculation failed: {str(e)}"
+                )
+                meal_handler.meal_repository.save(failed_meal)
+        except Exception as mark_failed_error:
+            logger.error(f"Background task: Error marking meal as failed: {str(mark_failed_error)}")
 
 @router.get("/{meal_id}/status", response_model=MealStatusResponse)
 async def get_meal_status(
     meal_id: str,
     meal_handler: MealHandler = Depends(get_meal_handler)
 ):
-    """Get the current status of a meal analysis."""
-    try:
-        # For now, return a placeholder status
-        # TODO: Implement actual status checking
-        return MealStatusResponse(
-            meal_id=meal_id,
-            status="ready",
-            status_message="Meal analysis complete",
-            error_message=None
-        )
-        
-    except Exception as e:
-        logger.error(f"Error getting meal status for {meal_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting meal status: {str(e)}"
-        )
+    """
+    Get only the status of a meal.
+    
+    This is a lightweight endpoint that returns just the status without
+    the full meal details.
+    """
+    meal = meal_handler.get_meal(meal_id)
+    if not meal:
+        raise HTTPException(status_code=404, detail=f"Meal with ID {meal_id} not found")
+    
+    return MealStatusResponse(
+        meal_id=meal.meal_id,
+        status=meal.status.value,
+        status_message=_get_status_message(meal.status),
+        error_message=meal.error_message
+    )
 
-@router.post("/search", response_model=MealSearchResponse)
-async def search_meals(
-    search_request: MealSearchRequest,
-    meal_handler: MealHandler = Depends(get_meal_handler)
-):
-    """Search meals by name, description, or ingredients."""
-    try:
-        logger.info(f"Searching meals with query: '{search_request.query}'")
-        
-        # For now, return sample search results
-        # TODO: Implement actual search logic
-        sample_results = []
-        if search_request.query:
-            for i in range(min(search_request.limit, 3)):
-                sample_results.append(MealResponse(
-                    meal_id=f"search-result-{i+1}",
-                    name=f"Meal matching '{search_request.query}' #{i+1}",
-                    description=f"A delicious meal that matches your search for '{search_request.query}'",
-                    status="ready",
-                    created_at="2024-01-01T00:00:00Z"
-                ))
-        
-        return MealSearchResponse(
-            results=sample_results,
-            query=search_request.query,
-            total_results=len(sample_results)
-        )
-        
-    except Exception as e:
-        logger.error(f"Error searching meals: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error searching meals: {str(e)}"
-        )
-
- 
+def _get_status_message(status: MealStatus) -> str:
+    """Get a user-friendly status message based on the meal status."""
+    messages = {
+        MealStatus.PROCESSING: "Your meal is being processed",
+        MealStatus.ANALYZING: "AI is analyzing your meal",
+        MealStatus.ENRICHING: "Enhancing your meal data",
+        MealStatus.READY: "Your meal analysis is ready",
+        MealStatus.FAILED: "Analysis failed"
+    }
+    return messages.get(status, "Unknown status") 

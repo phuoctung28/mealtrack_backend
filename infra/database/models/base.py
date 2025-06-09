@@ -1,10 +1,9 @@
-import uuid
 from datetime import datetime
+import uuid
 
 from sqlalchemy import Column, String, DateTime
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import declarative_mixin
-
 
 @declarative_mixin
 class BaseMixin:
