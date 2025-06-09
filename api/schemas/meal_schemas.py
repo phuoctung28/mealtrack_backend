@@ -26,13 +26,16 @@ class UpdateMealRequest(BaseModel):
 class UpdateMealMacrosRequest(BaseModel):
     weight_grams: float = Field(..., gt=0, description="Weight of the meal portion in grams")
     
-    @validator('weight_grams')
-    def validate_weight(cls, v):
-        if v <= 0:
+    @root_validator
+    def validate_fields(cls, values):
+        weight_grams = values.get('weight_grams')
+        if weight_grams is None:
+            raise ValueError('Weight is required and must be provided')
+        if weight_grams <= 0:
             raise ValueError('Weight must be greater than 0 grams')
-        if v > 5000:  # 5kg limit seems reasonable for a meal
+        if weight_grams > 5000:  # 5kg limit seems reasonable for a meal
             raise ValueError('Weight cannot exceed 5000 grams')
-        return v
+        return values
 
 # Photo Analysis Schemas
 class MealPhotoResponse(BaseModel):
