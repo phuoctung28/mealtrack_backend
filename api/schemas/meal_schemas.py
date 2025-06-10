@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field
 
 
 class MacrosSchema(BaseModel):
@@ -26,18 +26,7 @@ class UpdateMealRequest(BaseModel):
     macros_per_100g: Optional[MacrosSchema] = Field(None, description="Macros per 100g")
 
 class UpdateMealMacrosRequest(BaseModel):
-    weight_grams: float = Field(..., gt=0, description="Weight of the meal portion in grams")
-    
-    @root_validator
-    def validate_fields(cls, values):
-        weight_grams = values.get('weight_grams')
-        if weight_grams is None:
-            raise ValueError('Weight is required and must be provided')
-        if weight_grams <= 0:
-            raise ValueError('Weight must be greater than 0 grams')
-        if weight_grams > 5000:  # 5kg limit seems reasonable for a meal
-            raise ValueError('Weight cannot exceed 5000 grams')
-        return values
+    weight_grams: float = Field(..., gt=0, le=5000, description="Weight of the meal portion in grams (must be between 0 and 5000g)")
 
 # Photo Analysis Schemas
 class MealPhotoResponse(BaseModel):

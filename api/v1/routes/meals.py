@@ -77,6 +77,67 @@ async def upload_meal_image(
             detail=f"Error analyzing meal photo: {str(e)}"
         )
 
+@router.post("/image/analyze", status_code=status.HTTP_200_OK, response_model=DetailedMealResponse)
+async def analyze_meal_image_immediate(
+    file: UploadFile = File(...),
+    handler: UploadMealImageHandler = Depends(get_upload_meal_image_handler),
+):
+    """
+    Send meal photo and return immediate meal analysis with nutritional data.
+    
+    This endpoint processes the image and returns complete nutritional analysis
+    synchronously without background processing. Use this when you need 
+    immediate results.
+    
+    - Accepts image/jpeg or image/png files up to 8MB
+    - Returns complete meal analysis immediately
+    - Processing time may be longer than the background version
+    - Recommended for interactive use cases
+    """
+    try:
+        # Validate content type
+        if file.content_type not in ALLOWED_CONTENT_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid file type. Only {', '.join(ALLOWED_CONTENT_TYPES)} are allowed."
+            )
+        
+        # Read file content
+        contents = await file.read()
+        
+        # Validate file size
+        if len(contents) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File size exceeds maximum allowed (8MB)"
+            )
+        
+        # Process the upload and analyze immediately
+        logger.info("Analyzing meal photo immediately")
+        meal = handler.handle_immediate(contents, file.content_type)
+        logger.info(f"Immediate analysis completed for meal ID: {meal.meal_id}, status: {meal.status}")
+        
+        # Check if analysis was successful
+        if meal.status.value == "FAILED":
+            error_message = meal.error_message or "Analysis failed"
+            logger.error(f"Immediate analysis failed: {error_message}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Failed to analyze meal image: {error_message}"
+            )
+        
+        # Return the detailed meal response
+        return DetailedMealResponse.from_domain(meal)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in immediate meal analysis: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error analyzing meal photo: {str(e)}"
+        )
+
 @router.get("/{meal_id}", response_model=DetailedMealResponse)
 async def get_meal(
     meal_id: str,

@@ -1,5 +1,4 @@
 from unittest.mock import Mock, MagicMock
-from unittest.mock import Mock, MagicMock
 
 from app.jobs.analyse_meal_image_job import AnalyseMealImageJob
 from domain.model.meal import Meal, MealStatus

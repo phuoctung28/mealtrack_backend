@@ -113,38 +113,3 @@ The application automatically processes uploaded meal images in the background:
 3. **ENRICHING**: Finalizing nutritional data
 4. **READY**: Analysis complete, nutrition data available
 5. **FAILED**: Processing failed (check error_message)
-
-## Development
-
-### Running Tests
-```bash
-pytest
-```
-
-### Project Structure
-```
-mealtrack_backend/
-├── api/                    # Presentation layer
-│   ├── main.py            # FastAPI application
-│   ├── dependencies.py    # Dependency injection
-│   ├── schemas/           # Request/response models
-│   └── v1/routes/         # API route definitions
-├── app/                   # Application layer
-│   └── handlers/          # Use case handlers
-├── domain/                # Domain layer
-│   ├── model/             # Domain entities
-│   ├── ports/             # Interface definitions
-│   └── services/          # Domain services
-├── infra/                 # Infrastructure layer
-│   ├── adapters/          # External service adapters
-│   ├── database/          # Database configuration
-│   └── repositories/      # Data access implementations
-└── requirements.txt       # Python dependencies
-```
-
-## Contributing
-
-1. Follow the existing architecture patterns
-2. Add tests for new functionality
-3. Update documentation as needed
-4. Ensure proper error handling and logging 

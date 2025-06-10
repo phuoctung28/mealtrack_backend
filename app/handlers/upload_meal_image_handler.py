@@ -74,6 +74,112 @@ class UploadMealImageHandler:
             status=str(saved_meal.status)
         )
     
+    def handle_immediate(self, image_bytes: bytes, content_type: str) -> 'Meal':
+        """
+        Handle the upload of a meal image with immediate analysis.
+        
+        This method performs synchronous analysis and returns the complete meal
+        with nutrition data immediately instead of using background processing.
+        
+        Args:
+            image_bytes: The raw image bytes
+            content_type: The MIME content type (image/jpeg or image/png)
+            
+        Returns:
+            Meal with complete nutrition data
+            
+        Raises:
+            RuntimeError: If analysis fails
+        """
+        # Save image to storage service
+        image_id = self.image_store.save(image_bytes, content_type)
+        
+        # Determine image format and size
+        image_format = "jpeg" if content_type == "image/jpeg" else "png"
+        size_bytes = len(image_bytes)
+        
+        # Create MealImage value object
+        meal_image = MealImage(
+            image_id=image_id,
+            format=image_format,
+            size_bytes=size_bytes,
+            url=self.image_store.get_url(image_id)
+        )
+        
+        # Create Meal with PROCESSING status
+        meal = Meal.create_new_processing(meal_image)
+        
+        # Persist the initial meal entity
+        saved_meal = self.meal_repository.save(meal)
+        
+        try:
+            # Mark as ANALYZING
+            analyzing_meal = saved_meal.mark_analyzing()
+            self.meal_repository.save(analyzing_meal)
+            
+            # Check if vision service is available
+            if not self.vision_service:
+                logger.error("Vision service not available for immediate analysis")
+                failed_meal = analyzing_meal.mark_failed("Vision service not available")
+                self.meal_repository.save(failed_meal)
+                return failed_meal
+            
+            # Check if GPT parser is available
+            if not self.gpt_parser:
+                logger.error("GPT parser not available for immediate analysis")
+                failed_meal = analyzing_meal.mark_failed("GPT parser not available")
+                self.meal_repository.save(failed_meal)
+                return failed_meal
+            
+            # Call Vision AI API for immediate analysis
+            logger.info(f"Performing immediate analysis for meal {saved_meal.meal_id}")
+            gpt_response = self.vision_service.analyze(image_bytes)
+            
+            # Parse the GPT response
+            try:
+                # Parse the GPT response
+                nutrition = self.gpt_parser.parse_to_nutrition(gpt_response)
+                
+                # Extract raw JSON for storage
+                raw_gpt_json = self.gpt_parser.extract_raw_json(gpt_response)
+                
+                # Update meal with nutrition data
+                # First mark as READY with the nutrition data
+                ready_meal = analyzing_meal.mark_ready(nutrition)
+                
+                # Move to ENRICHING state (which keeps the nutrition data)
+                enriched_meal = ready_meal.mark_enriching(raw_gpt_json)
+                final_meal = self.meal_repository.save(enriched_meal)
+                
+                logger.info(f"Immediate analysis completed successfully for meal {saved_meal.meal_id}")
+                return final_meal
+                
+            except GPTResponseParsingError as e:
+                logger.error(f"Failed to parse GPT response for immediate analysis: {str(e)}")
+                failed_meal = analyzing_meal.mark_failed(f"Failed to parse AI response: {str(e)}")
+                self.meal_repository.save(failed_meal)
+                return failed_meal
+                
+        except Exception as e:
+            logger.error(f"Error during immediate analysis: {str(e)}", exc_info=True)
+            try:
+                # Try to mark meal as failed
+                meal = self.meal_repository.find_by_id(saved_meal.meal_id)
+                if meal:
+                    failed_meal = meal.mark_failed(f"Immediate analysis error: {str(e)}")
+                    self.meal_repository.save(failed_meal)
+                    return failed_meal
+                else:
+                    # If we can't find the meal, create a failed one
+                    failed_meal = saved_meal.mark_failed(f"Immediate analysis error: {str(e)}")
+                    self.meal_repository.save(failed_meal)
+                    return failed_meal
+            except Exception as mark_failed_error:
+                logger.error(f"Error marking meal as failed: {str(mark_failed_error)}")
+                # Return the original meal with failed status
+                failed_meal = saved_meal.mark_failed(f"Immediate analysis error: {str(e)}")
+                return failed_meal
+    
     def analyze_meal_background(self, meal_id: str) -> None:
         """
         Analyze a meal image in the background.

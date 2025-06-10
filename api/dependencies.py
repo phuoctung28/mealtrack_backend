@@ -1,9 +1,3 @@
-"""
-API dependencies for FastAPI dependency injection.
-
-This module contains functions that provide dependencies to FastAPI endpoints.
-"""
-
 import os
 
 from fastapi import Depends
@@ -21,24 +15,20 @@ from infra.adapters.mock_vision_ai_service import MockVisionAIService
 from infra.database.config import get_db
 from infra.repositories.meal_repository import MealRepository
 
-# Optional cloudinary import
 try:
     from infra.adapters.cloudinary_image_store import CloudinaryImageStore
     CLOUDINARY_AVAILABLE = True
 except ImportError:
     CLOUDINARY_AVAILABLE = False
 
-# Optional vision AI import
 try:
     from infra.adapters.vision_ai_service import VisionAIService
     VISION_AI_AVAILABLE = True
 except ImportError:
     VISION_AI_AVAILABLE = False
 
-# Check if we should use mock storage or Cloudinary
 USE_MOCK_STORAGE = bool(int(os.getenv("USE_MOCK_STORAGE", "1")))
 
-# Global ingredient service instance (singleton for in-memory storage)
 _ingredient_service = None
 
 def get_meal_repository(db: Session = Depends(get_db)) -> MealRepositoryPort:
