@@ -66,5 +66,5 @@ async def upload_meal_image(
         logger.error(f"Error analyzing meal photo: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error analyzing meal photo: {str(e)}"
+            detail="An error occurred while processing the meal photo."
         )
