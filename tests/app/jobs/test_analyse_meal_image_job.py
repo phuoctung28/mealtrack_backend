@@ -1,9 +1,10 @@
 from unittest.mock import Mock, MagicMock
 
 from app.jobs.analyse_meal_image_job import AnalyseMealImageJob
+
+from app.services.gpt_response_parser import GPTResponseParsingError
 from domain.model.meal import Meal, MealStatus
 from domain.model.meal_image import MealImage
-from domain.services.gpt_response_parser import GPTResponseParsingError
 
 
 class TestAnalyseMealImageJob:

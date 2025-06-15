@@ -7,11 +7,11 @@ from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from domain.ports.vision_ai_service_port import VisionAIServicePort
-from domain.services.analysis_strategy import (
+from app.services.analysis_strategy import (
     MealAnalysisStrategy,
     AnalysisStrategyFactory
 )
+from domain.ports.vision_ai_service_port import VisionAIServicePort
 
 # Load environment variables
 load_dotenv()

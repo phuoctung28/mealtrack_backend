@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy.orm import Session
@@ -168,11 +169,21 @@ class MealRepository(MealRepositoryPort):
         Returns:
             Paginated list of meals
         """
-        all_meals = list(self._meals.values())
-        all_meals.sort(key=lambda m: m["created_at"], reverse=True)  # Newest first
+        db = self._get_db()
         
-        paginated_meals = all_meals[offset:offset + limit]
-        return [self._meal_from_dict(meal_dict) for meal_dict in paginated_meals]
+        try:
+            db_meals = (
+                db.query(DBMeal)
+                .where(DBMeal.status.in_(["ENRICHING", "READY"]))
+                .order_by(DBMeal.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+                .all()
+            )
+            
+            return [meal.to_domain() for meal in db_meals]
+        finally:
+            self._close_db_if_created(db)
     
     def count(self) -> int:
         """
@@ -181,7 +192,12 @@ class MealRepository(MealRepositoryPort):
         Returns:
             Total count
         """
-        return len(self._meals)
+        db = self._get_db()
+        
+        try:
+            return db.query(DBMeal).count()
+        finally:
+            self._close_db_if_created(db)
     
     def _meal_from_dict(self, data: Dict[str, Any]) -> Meal:
         """Convert dictionary representation back to Meal object."""

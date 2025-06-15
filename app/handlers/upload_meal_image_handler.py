@@ -2,12 +2,12 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
+from app.services.gpt_response_parser import GPTResponseParser, GPTResponseParsingError
 from domain.model.meal import Meal
 from domain.model.meal_image import MealImage
 from domain.ports.image_store_port import ImageStorePort
 from domain.ports.meal_repository_port import MealRepositoryPort
 from domain.ports.vision_ai_service_port import VisionAIServicePort
-from domain.services.gpt_response_parser import GPTResponseParser, GPTResponseParsingError
 
 logger = logging.getLogger(__name__)
 

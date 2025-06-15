@@ -2,8 +2,8 @@ import json
 
 import pytest
 
+from app.services.gpt_response_parser import GPTResponseParser, GPTResponseParsingError
 from domain.model.nutrition import Nutrition
-from domain.services.gpt_response_parser import GPTResponseParser, GPTResponseParsingError
 
 
 class TestGPTResponseParser:

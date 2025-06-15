@@ -3,15 +3,15 @@ import os
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.handlers.activities_handler import ActivitiesHandler
 from app.handlers.meal_handler import MealHandler
 from app.handlers.upload_meal_image_handler import UploadMealImageHandler
-from app.services.meal_ingredient_service import MealIngredientService
+from app.services.gpt_response_parser import GPTResponseParser
+from app.services.ingredient_extraction_service import IngredientExtractionService
 from domain.ports.image_store_port import ImageStorePort
 from domain.ports.meal_repository_port import MealRepositoryPort
 from domain.ports.vision_ai_service_port import VisionAIServicePort
-from domain.services.gpt_response_parser import GPTResponseParser
 from infra.adapters.image_store import ImageStore
-from infra.adapters.mock_vision_ai_service import MockVisionAIService
 from infra.database.config import get_db
 from infra.repositories.meal_repository import MealRepository
 
@@ -59,14 +59,7 @@ def get_vision_service() -> VisionAIServicePort:
     Returns:
         VisionAIServicePort: The vision AI service (real or mock)
     """
-    if VISION_AI_AVAILABLE:
-        try:
-            return VisionAIService()
-        except Exception:
-            # Fall back to mock if real service fails to initialize
-            return MockVisionAIService()
-    else:
-        return MockVisionAIService()
+    return VisionAIService()
 
 def get_gpt_parser() -> GPTResponseParser:
     """
@@ -77,21 +70,19 @@ def get_gpt_parser() -> GPTResponseParser:
     """
     return GPTResponseParser()
 
-def get_meal_ingredient_service() -> MealIngredientService:
+def get_ingredient_extraction_service() -> IngredientExtractionService:
     """
-    Get the meal ingredient service instance (singleton).
+    Get the ingredient extraction service instance.
     
     Returns:
-        MealIngredientService: The meal ingredient service
+        IngredientExtractionService: The ingredient extraction service
     """
-    global _ingredient_service
-    if _ingredient_service is None:
-        _ingredient_service = MealIngredientService()
-    return _ingredient_service
+    return IngredientExtractionService()
 
 def get_meal_handler(
     meal_repository: MealRepositoryPort = Depends(get_meal_repository),
-    image_store: ImageStorePort = Depends(get_image_store)
+    image_store: ImageStorePort = Depends(get_image_store),
+    ingredient_extraction_service: IngredientExtractionService = Depends(get_ingredient_extraction_service)
 ) -> MealHandler:
     """
     Get the meal handler instance.
@@ -101,7 +92,8 @@ def get_meal_handler(
     """
     return MealHandler(
         meal_repository=meal_repository,
-        image_store=image_store
+        image_store=image_store,
+        ingredient_extraction_service=ingredient_extraction_service
     )
 
 def get_upload_meal_image_handler(
@@ -121,4 +113,15 @@ def get_upload_meal_image_handler(
         meal_repository=meal_repository,
         vision_service=vision_service,
         gpt_parser=gpt_parser
-    ) 
+    )
+
+def get_activities_handler(
+    meal_repository: MealRepositoryPort = Depends(get_meal_repository)
+) -> ActivitiesHandler:
+    """
+    Get the activities handler instance.
+    
+    Returns:
+        ActivitiesHandler: The activities handler for managing user activities
+    """
+    return ActivitiesHandler(meal_repository=meal_repository) 
