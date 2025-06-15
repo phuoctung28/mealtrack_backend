@@ -22,6 +22,10 @@ from .base import BaseRequest, BaseResponse, TimestampedResponse
 class CreateIngredientRequest(BaseRequest):
     """Request DTO for creating a new ingredient."""
     name: str = Field(..., description="Ingredient name")
+    quantity: float = Field(..., ge=0, description="Ingredient quantity")
+    unit: str = Field(..., description="Unit of measurement (g, oz, cup, etc.)")
+    calories: Optional[float] = Field(None, ge=0, description="Calories per quantity")
+    macros: Optional[MacrosSchema] = Field(None, description="Macronutrients breakdown")
     description: Optional[str] = Field(None, description="Optional description")
     category: Optional[str] = Field(None, description="Ingredient category")
 
@@ -29,6 +33,10 @@ class CreateIngredientRequest(BaseRequest):
 class UpdateIngredientRequest(BaseRequest):
     """Request DTO for updating an ingredient."""
     name: Optional[str] = Field(None, description="Updated ingredient name")
+    quantity: Optional[float] = Field(None, ge=0, description="Updated ingredient quantity")
+    unit: Optional[str] = Field(None, description="Updated unit of measurement")
+    calories: Optional[float] = Field(None, ge=0, description="Updated calories per quantity")
+    macros: Optional[MacrosSchema] = Field(None, description="Updated macronutrients breakdown")
     description: Optional[str] = Field(None, description="Updated description")
     category: Optional[str] = Field(None, description="Updated category")
 
