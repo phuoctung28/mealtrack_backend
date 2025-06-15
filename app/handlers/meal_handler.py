@@ -1,11 +1,32 @@
+import logging
 import uuid
 from datetime import datetime
-from typing import Optional, Dict, Any, BinaryIO
+from typing import Optional, Dict, Any, BinaryIO, List
 
-from domain.model.meal import Meal, MealStatus
+from app.services.ingredient_extraction_service import IngredientExtractionService, IngredientData
+from domain.model import FoodItem
+from domain.model.macros import Macros
+from domain.model.meal import Meal
+from domain.model.meal import MealStatus
 from domain.model.meal_image import MealImage
+from domain.model.nutrition import Nutrition
 from domain.ports.image_store_port import ImageStorePort
 from domain.ports.meal_repository_port import MealRepositoryPort
+
+logger = logging.getLogger(__name__)
+
+
+def _get_status_message(status):
+    """Get a user-friendly status message based on the meal status."""
+
+    messages = {
+        MealStatus.PROCESSING: "Your meal is being processed",
+        MealStatus.ANALYZING: "AI is analyzing your meal",
+        MealStatus.ENRICHING: "Enhancing your meal data",
+        MealStatus.READY: "Your meal analysis is ready",
+        MealStatus.FAILED: "Analysis failed"
+    }
+    return messages.get(status, "Unknown status")
 
 
 class MealHandler:
@@ -19,7 +40,8 @@ class MealHandler:
     def __init__(
         self,
         meal_repository: MealRepositoryPort,
-        image_store: ImageStorePort
+        image_store: ImageStorePort,
+        ingredient_extraction_service: Optional[IngredientExtractionService] = None
     ):
         """
         Initialize the handler with dependencies.
@@ -27,9 +49,11 @@ class MealHandler:
         Args:
             meal_repository: Repository for meal data
             image_store: Service for storing images
+            ingredient_extraction_service: Service for extracting ingredient data
         """
         self.meal_repository = meal_repository
         self.image_store = image_store
+        self.ingredient_extraction_service = ingredient_extraction_service or IngredientExtractionService()
     
     def upload_meal_image(
         self,
@@ -114,8 +138,7 @@ class MealHandler:
         if not meal:
             return None
         
-        # Calculate scaling factor from original weight
-        original_weight = 300.0  # Default weight in grams
+        original_weight = 300.0
         if meal.nutrition and hasattr(meal.nutrition, 'food_items') and meal.nutrition.food_items:
             first_food = meal.nutrition.food_items[0]
             if first_food.unit and 'g' in first_food.unit.lower():
@@ -144,7 +167,7 @@ class MealHandler:
         self.meal_repository.save(updated_meal)
         
         return updated_meal
-    
+
     def update_meal_with_llm_nutrition(self, meal_id: str, nutrition_data: Dict[str, Any]) -> Optional[Meal]:
         """
         Update meal with new nutrition data from LLM analysis.
@@ -156,10 +179,7 @@ class MealHandler:
         Returns:
             The updated meal if found, None otherwise
         """
-        from domain.model.nutrition import Nutrition
-        from domain.model.food_item import FoodItem
-        from domain.model.macros import Macros
-        
+
         # Get the existing meal
         meal = self.meal_repository.find_by_id(meal_id)
         if not meal:
@@ -240,4 +260,42 @@ class MealHandler:
             )
             
             self.meal_repository.save(failed_meal)
-            return None 
+            return None
+    
+    def get_status_message(self, meal: Meal) -> str:
+        """
+        Get a user-friendly status message for a meal.
+        
+        Args:
+            meal: Domain meal model
+            
+        Returns:
+            Human-readable status message
+        """
+        return _get_status_message(meal.status)
+    
+    def extract_ingredients_from_meal(self, meal: Meal) -> Optional[List[IngredientData]]:
+        """
+        Extract ingredient breakdown from a meal's raw AI response.
+        
+        Args:
+            meal: Domain meal model
+            
+        Returns:
+            List of IngredientData objects, or None if no data available
+        """
+        return self.ingredient_extraction_service.extract_ingredients_from_meal(meal)
+
+    def extract_meal_analysis_from_meal(self, meal: Meal):
+        """
+        Extract both meal name and ingredients from a meal's raw AI response.
+        
+        Args:
+            meal: Domain meal model
+            
+        Returns:
+            MealAnalysisData with meal name and ingredients, or None if no data available
+        """
+        return self.ingredient_extraction_service.extract_meal_analysis_from_meal(meal)
+    
+ 

@@ -2,8 +2,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.v1.routes.macros import router as macros_router
-from api.v1.routes.meals import router as meals_router
+from api.routes.v1.meals import router as meals_router
+from api.routes.v2.meals import router as meals_router_v2
 
 load_dotenv()
 
@@ -46,7 +46,7 @@ async def root():
     }
 
 app.include_router(meals_router, prefix="/v1")
-app.include_router(macros_router, prefix="/v1")
+app.include_router(meals_router_v2, prefix="/v2")
 
 if __name__ == "__main__":
     import uvicorn

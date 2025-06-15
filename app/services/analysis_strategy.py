@@ -52,13 +52,17 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
         You are a nutrition analysis assistant that can analyze food in images.
         Examine the image carefully and provide detailed nutritional information.
         
+        IMPORTANT: Break down complex dishes into their individual ingredients rather than listing the dish name.
+        For example, instead of "Bún bò Huế", list the actual ingredients like "beef", "pork", "rice noodles", "broth", "herbs", etc.
+        
         Return your analysis in the following JSON format:
         {
+          "meal_name": "Overall dish name (if applicable)",
           "foods": [
             {
-              "name": "Food name",
+              "name": "Individual ingredient name (not dish name)",
               "quantity": 1.0,
-              "unit": "serving/g/oz/cup/etc",
+              "unit": "g/ml/piece/etc",
               "calories": 100,
               "macros": {
                 "protein": 10,
@@ -72,10 +76,15 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
           "confidence": 0.8
         }
         
-        - Each food item should include name, estimated quantity, unit of measurement, calories, and macros
-        - For quantities, estimate as precisely as possible based on visual cues
+        GUIDELINES:
+        - For "foods" array: List individual ingredients (meat, vegetables, grains, etc.), NOT the dish name
+        - For Vietnamese dishes like Phở, Bún bò Huế: Break down into beef, noodles, broth, herbs, etc.
+        - For sandwiches: Break down into bread, meat, vegetables, sauces, etc.
+        - For salads: List each vegetable, protein, dressing separately
+        - Use "meal_name" field for the overall dish identification
+        - Estimate quantities as precisely as possible based on visual cues
         - All macros should be in grams
-        - Confidence should be between 0 (low) and 1 (high) based on how certain you are of your analysis
+        - Confidence should be between 0 (low) and 1 (high) based on how certain you are
         - Always return well-formed JSON
         """
     
