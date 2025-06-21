@@ -52,6 +52,7 @@ class NutritionSummary(BaseModel):
 class MealResponse(BaseModel):
     meal_id: str
     name: Optional[str] = None
+    dish_name: Optional[str] = None
     description: Optional[str] = None
     weight_grams: Optional[float] = None
     total_calories: Optional[float] = None
@@ -103,6 +104,7 @@ class DetailedMealResponse(BaseModel):
     status: str
     created_at: datetime
     image: MealImageResponse
+    dish_name: Optional[str] = None
     nutrition: Optional[NutritionSummary] = None
     error_message: Optional[str] = None
     ready_at: Optional[datetime] = None
@@ -123,9 +125,9 @@ class DetailedMealResponse(BaseModel):
         # Create simplified nutrition response if available
         nutrition_response = None
         if meal.nutrition:
-            # Extract meal name from first food item or use a default
-            meal_name = "Unknown Meal"
-            
+            # Use dish_name directly from the domain model
+            meal_name = meal.dish_name or "Unknown Meal"
+
             # Check if meal has been updated with new weight
             if hasattr(meal, 'updated_weight_grams'):
                 estimated_weight = meal.updated_weight_grams
@@ -134,7 +136,6 @@ class DetailedMealResponse(BaseModel):
                 
                 if hasattr(meal.nutrition, 'food_items') and meal.nutrition.food_items:
                     first_food = meal.nutrition.food_items[0]
-                    meal_name = first_food.name
                     # Try to extract weight from quantity if unit suggests weight
                     if first_food.unit and 'g' in first_food.unit.lower():
                         estimated_weight = first_food.quantity
@@ -192,6 +193,7 @@ class DetailedMealResponse(BaseModel):
             status=meal.status.value,
             created_at=meal.created_at,
             image=image_response,
+            dish_name=meal.dish_name,
             nutrition=nutrition_response,
             error_message=meal.error_message,
             ready_at=getattr(meal, "ready_at", None)

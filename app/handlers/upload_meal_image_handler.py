@@ -95,7 +95,7 @@ class UploadMealImageHandler:
         image_id = self.image_store.save(image_bytes, content_type)
         
         # Determine image format and size
-        image_format = "jpeg" if content_type == "image/jpeg" else "png"
+        image_format = "jpeg" if content_type in ["image/jpeg", "image/jpg"] else "png"
         size_bytes = len(image_bytes)
         
         # Create MealImage value object

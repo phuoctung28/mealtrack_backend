@@ -131,6 +131,7 @@ class MealHandler:
             created_at=meal.created_at,
             updated_at=datetime.now(),
             image=meal.image,
+            dish_name=meal.dish_name,  # Preserve dish_name
             nutrition=meal.nutrition,  # Keep existing nutrition temporarily
             error_message=None
         )
@@ -156,8 +157,7 @@ class MealHandler:
         Returns:
             The updated meal if found, None otherwise
         """
-        from domain.model.nutrition import Nutrition
-        from domain.model.food_item import FoodItem
+        from domain.model.nutrition import Nutrition, FoodItem
         from domain.model.macros import Macros
         
         # Get the existing meal
@@ -168,6 +168,9 @@ class MealHandler:
         try:
             # Parse nutrition data from LLM response
             structured_data = nutrition_data.get("structured_data", {})
+            
+            # Store the dish_name if available
+            dish_name = structured_data.get("dish_name", None)
             
             # Create food items
             food_items = []
@@ -208,6 +211,7 @@ class MealHandler:
             # Create updated meal with new nutrition
             updated_meal = Meal(
                 meal_id=meal.meal_id,
+                dish_name=dish_name,
                 status=MealStatus.READY,  # Mark as ready with new nutrition
                 created_at=meal.created_at,
                 updated_at=datetime.now(),

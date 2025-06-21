@@ -234,6 +234,7 @@ async def update_meal_macros(
         return MealResponse(
             meal_id=meal_id,
             name=meal.name if hasattr(meal, 'name') else "Meal",
+            dish_name=meal.dish_name,
             description=f"Weight updated to {new_weight_grams}g - LLM recalculation in progress",
             weight_grams=new_weight_grams,
             total_calories=total_calories,
@@ -287,6 +288,7 @@ def _recalculate_meal_with_weight(meal_id: str, weight_grams: float, handler):
                     created_at=meal.created_at,
                     updated_at=datetime.now(),
                     image=meal.image,
+                    dish_name=meal.dish_name,
                     nutrition=meal.nutrition,
                     error_message=f"LLM recalculation failed: {str(e)}"
                 )

@@ -54,6 +54,7 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
         
         Return your analysis in the following JSON format:
         {
+          "dish_name": "Overall dish name or comma-separated food items if complex",
           "foods": [
             {
               "name": "Food name",
@@ -72,6 +73,8 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
           "confidence": 0.8
         }
         
+        - Include a dish_name field with the overall dish name (e.g., "Chicken Caesar Salad", "Spaghetti Bolognese")
+        - If the foods are difficult to describe as a single dish, list them as comma-separated items (e.g., "grilled chicken, rice, broccoli")
         - Each food item should include name, estimated quantity, unit of measurement, calories, and macros
         - For quantities, estimate as precisely as possible based on visual cues
         - All macros should be in grams
@@ -104,6 +107,7 @@ class PortionAwareAnalysisStrategy(MealAnalysisStrategy):
         
         Return your analysis in the following JSON format:
         {
+          "dish_name": "Overall dish name or comma-separated food items if complex",
           "foods": [
             {
               "name": "Food name",
@@ -123,6 +127,8 @@ class PortionAwareAnalysisStrategy(MealAnalysisStrategy):
           "portion_adjustment": "Adjusted for specified portion size"
         }
         
+        - Include a dish_name field with the overall dish name (e.g., "Chicken Caesar Salad", "Spaghetti Bolognese")
+        - If the foods are difficult to describe as a single dish, list them as comma-separated items (e.g., "grilled chicken, rice, broccoli")
         - Each food item should reflect the specified portion size
         - Calculate nutrition values proportionally to match the target portion
         - All macros should be in grams
@@ -160,6 +166,7 @@ class IngredientAwareAnalysisStrategy(MealAnalysisStrategy):
         
         Return your analysis in the following JSON format:
         {
+          "dish_name": "Overall dish name or comma-separated food items if complex",
           "foods": [
             {
               "name": "Food name",
@@ -180,6 +187,8 @@ class IngredientAwareAnalysisStrategy(MealAnalysisStrategy):
           "combined_nutrition": "Calculated based on provided ingredients"
         }
         
+        - Include a dish_name field with the overall dish name (e.g., "Chicken Caesar Salad", "Spaghetti Bolognese")
+        - If the foods are difficult to describe as a single dish, list them as comma-separated items (e.g., "grilled chicken, rice, broccoli")
         - Use the provided ingredient list to improve accuracy
         - Calculate total nutrition considering all ingredients combined
         - Account for cooking methods and ingredient interactions
@@ -232,6 +241,7 @@ class WeightAwareAnalysisStrategy(MealAnalysisStrategy):
         
         Return your analysis in the following JSON format:
         {
+          "dish_name": "Overall dish name or comma-separated food items if complex",
           "foods": [
             {
               "name": "Food name",
@@ -252,6 +262,8 @@ class WeightAwareAnalysisStrategy(MealAnalysisStrategy):
           "total_weight_grams": 300
         }
         
+        - Include a dish_name field with the overall dish name (e.g., "Chicken Caesar Salad", "Spaghetti Bolognese")
+        - If the foods are difficult to describe as a single dish, list them as comma-separated items (e.g., "grilled chicken, rice, broccoli")
         - Each food item should reflect proportions that add up to the target total weight
         - Calculate nutrition values to match the specified total weight
         - Use grams as the primary unit for quantities

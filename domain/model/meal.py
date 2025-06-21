@@ -29,6 +29,7 @@ class Meal:
     status: MealStatus
     created_at: datetime
     image: MealImage
+    dish_name: Optional[str] = None
     nutrition: Optional[Nutrition] = None
     ready_at: Optional[datetime] = None
     error_message: Optional[str] = None
@@ -69,32 +70,35 @@ class Meal:
             status=MealStatus.ANALYZING,
             created_at=self.created_at,
             image=self.image,
+            dish_name=self.dish_name,
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=self.error_message,
             raw_gpt_json=self.raw_gpt_json
         )
     
-    def mark_enriching(self, raw_gpt_json: str) -> 'Meal':
+    def mark_enriching(self, raw_gpt_json: str, dish_name: Optional[str] = None) -> 'Meal':
         """Transition to ENRICHING state with GPT response."""
         return Meal(
             meal_id=self.meal_id,
             status=MealStatus.ENRICHING,
             created_at=self.created_at,
             image=self.image,
+            dish_name=dish_name or self.dish_name,
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=self.error_message,
             raw_gpt_json=raw_gpt_json
         )
     
-    def mark_ready(self, nutrition: Nutrition) -> 'Meal':
+    def mark_ready(self, nutrition: Nutrition, dish_name: Optional[str] = None) -> 'Meal':
         """Transition to READY state with final nutrition data."""
         return Meal(
             meal_id=self.meal_id,
             status=MealStatus.READY,
             created_at=self.created_at,
             image=self.image,
+            dish_name=dish_name or self.dish_name,
             nutrition=nutrition,
             ready_at=datetime.now(),
             error_message=self.error_message,
@@ -108,6 +112,7 @@ class Meal:
             status=MealStatus.FAILED,
             created_at=self.created_at,
             image=self.image,
+            dish_name=self.dish_name,
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=error_message,
@@ -123,6 +128,9 @@ class Meal:
             "image": self.image.to_dict()
         }
         
+        if self.dish_name is not None:
+            result["dish_name"] = self.dish_name
+            
         if self.nutrition is not None:
             result["nutrition"] = self.nutrition.to_dict()
             
