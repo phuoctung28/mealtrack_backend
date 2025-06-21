@@ -185,6 +185,31 @@ class MealRepository(MealRepositoryPort):
         """
         return len(self._meals)
     
+    def find_by_date(self, date, limit: int = 50) -> List[Meal]:
+        """Find meals created on a specific date."""
+        db = self._get_db()
+        
+        try:
+            from datetime import datetime, timedelta
+            
+            # Create start and end datetime for the date range
+            start_datetime = datetime.combine(date, datetime.min.time())
+            end_datetime = start_datetime + timedelta(days=1)
+            
+            # Query meals created within the date range
+            db_meals = (
+                db.query(DBMeal)
+                .filter(DBMeal.created_at >= start_datetime)
+                .filter(DBMeal.created_at < end_datetime)
+                .order_by(DBMeal.created_at.desc())  # Newest first
+                .limit(limit)
+                .all()
+            )
+            
+            return [meal.to_domain() for meal in db_meals]
+        finally:
+            self._close_db_if_created(db)
+    
     def _meal_from_dict(self, data: Dict[str, Any]) -> Meal:
         """Convert dictionary representation back to Meal object."""
         # Create MealImage

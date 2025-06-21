@@ -69,4 +69,18 @@ class MealRepositoryPort(ABC):
         Returns:
             Total count
         """
+        pass
+    
+    @abstractmethod
+    def find_by_date(self, date, limit: int = 50) -> List[Meal]:
+        """
+        Finds meals created on a specific date.
+        
+        Args:
+            date: The date to filter by (date object)
+            limit: Maximum number of results
+            
+        Returns:
+            List of meals created on the specified date
+        """
         pass 

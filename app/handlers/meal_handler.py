@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional, Dict, Any, BinaryIO
+from typing import Optional, Dict, Any, BinaryIO, List
 
 from domain.model.meal import Meal, MealStatus
 from domain.model.meal_image import MealImage
@@ -97,6 +97,19 @@ class MealHandler:
             The meal if found, None otherwise
         """
         return self.meal_repository.find_by_id(meal_id)
+    
+    def get_meals_by_date(self, date, limit: int = 50) -> List[Meal]:
+        """
+        Get meals created on a specific date.
+        
+        Args:
+            date: The date to filter by (date object)
+            limit: Maximum number of results
+            
+        Returns:
+            List of meals created on the specified date
+        """
+        return self.meal_repository.find_by_date(date, limit)
     
     def update_meal_weight(self, meal_id: str, weight_grams: float) -> Optional[Meal]:
         """

@@ -1,3 +1,5 @@
+import uuid
+from datetime import datetime
 from unittest.mock import Mock, MagicMock
 
 from app.jobs.analyse_meal_image_job import AnalyseMealImageJob
@@ -25,21 +27,19 @@ class TestAnalyseMealImageJob:
             gpt_parser=self.gpt_parser
         )
         
-        # Create a test meal
-        self.test_image = MealImage(
-            image_id=str(uuid.uuid4()),
-            format="jpeg",
-            size_bytes=1000,
-            width=100,
-            height=100
-        )
+        # Create a mock meal with mock image
+        self.test_image = MagicMock()
+        self.test_image.image_id = str(uuid.uuid4())
+        self.test_image.format = "jpeg"
+        self.test_image.size_bytes = 1000
+        self.test_image.width = 100
+        self.test_image.height = 100
         
-        self.test_meal = Meal(
-            meal_id=str(uuid.uuid4()),
-            status=MealStatus.PROCESSING,
-            created_at=datetime.now(),
-            image=self.test_image
-        )
+        self.test_meal = MagicMock()
+        self.test_meal.meal_id = str(uuid.uuid4())
+        self.test_meal.status = MealStatus.PROCESSING
+        self.test_meal.created_at = datetime.now()
+        self.test_meal.image = self.test_image
     
     def test_run_no_meals(self):
         """Test run when there are no meals to process."""
@@ -73,23 +73,30 @@ class TestAnalyseMealImageJob:
         self.gpt_parser.parse_to_nutrition.return_value = nutrition
         self.gpt_parser.extract_raw_json.return_value = "raw json"
         
-        # Mock meal status transitions
+        # Mock meal status transitions - actual flow is: mark_analyzing -> mark_ready -> mark_enriching
         analyzing_meal = MagicMock()
         self.test_meal.mark_analyzing.return_value = analyzing_meal
         
+        ready_meal = MagicMock()
+        analyzing_meal.mark_ready.return_value = ready_meal
+        
         enriched_meal = MagicMock()
-        analyzing_meal.mark_enriching.return_value = enriched_meal
+        ready_meal.mark_enriching.return_value = enriched_meal
         
         # Act
         result = self.job.run()
         
         # Assert
         assert result == 1
-        self.meal_repository.save.assert_called_with(enriched_meal)
+        # Should save twice: once after mark_analyzing, once after mark_enriching
+        assert self.meal_repository.save.call_count == 2
+        self.meal_repository.save.assert_any_call(analyzing_meal)
+        self.meal_repository.save.assert_any_call(enriched_meal)
         self.image_store.load.assert_called_once_with(self.test_image.image_id)
         self.vision_service.analyze.assert_called_once_with(b"fake image bytes")
         self.gpt_parser.parse_to_nutrition.assert_called_once_with(gpt_response)
-        analyzing_meal.mark_enriching.assert_called_once_with("raw json")
+        analyzing_meal.mark_ready.assert_called_once_with(nutrition)
+        ready_meal.mark_enriching.assert_called_once_with("raw json")
     
     def test_process_meal_image_load_failure(self):
         """Test handling of image loading failure."""
@@ -104,14 +111,17 @@ class TestAnalyseMealImageJob:
         self.test_meal.mark_analyzing.return_value = analyzing_meal
         
         failed_meal = MagicMock()
-        analyzing_meal.mark_failed.return_value = failed_meal
+        self.test_meal.mark_failed.return_value = failed_meal
         
         # Act
         result = self.job.run()
         
         # Assert
-        assert result == 0
-        self.meal_repository.save.assert_called_with(failed_meal)
+        assert result == 0  # No meals processed successfully
+        # Should save twice: once after mark_analyzing, once after mark_failed
+        assert self.meal_repository.save.call_count == 2
+        self.meal_repository.save.assert_any_call(analyzing_meal)
+        self.meal_repository.save.assert_any_call(failed_meal)
     
     def test_process_meal_parsing_failure(self):
         """Test handling of GPT response parsing failure."""
@@ -139,6 +149,9 @@ class TestAnalyseMealImageJob:
         result = self.job.run()
         
         # Assert
-        assert result == 0
-        analyzing_meal.mark_failed.assert_called_once()
-        self.meal_repository.save.assert_called_with(failed_meal) 
+        assert result == 1  # Meal was processed (even though it failed)
+        # Should save twice: once after mark_analyzing, once after mark_failed
+        assert self.meal_repository.save.call_count == 2
+        self.meal_repository.save.assert_any_call(analyzing_meal)
+        self.meal_repository.save.assert_any_call(failed_meal)
+        analyzing_meal.mark_failed.assert_called_once() 

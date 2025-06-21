@@ -96,7 +96,6 @@ class TestVisionAIService:
     def test_json_extraction_from_markdown(self, mock_env_vars):
         """Test extracting JSON from markdown code blocks."""
         # Arrange
-        service = VisionAIService()
         mock_response = MagicMock()
         mock_response.content = """
         Here's the analysis:
@@ -114,6 +113,9 @@ class TestVisionAIService:
             mock_instance = MagicMock()
             mock_instance.invoke.return_value = mock_response
             mock.return_value = mock_instance
+            
+            # Create service after mock is set up
+            service = VisionAIService()
             
             # Act
             result = service.analyze(b"fake image data")
