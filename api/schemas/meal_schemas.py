@@ -52,6 +52,7 @@ class NutritionSummary(BaseModel):
 class MealResponse(BaseModel):
     meal_id: str
     name: Optional[str] = None
+    dish_name: Optional[str] = None
     description: Optional[str] = None
     weight_grams: Optional[float] = None
     total_calories: Optional[float] = None
@@ -103,6 +104,7 @@ class DetailedMealResponse(BaseModel):
     status: str
     created_at: datetime
     image: MealImageResponse
+    dish_name: Optional[str] = None
     nutrition: Optional[NutritionSummary] = None
     error_message: Optional[str] = None
     ready_at: Optional[datetime] = None
@@ -203,6 +205,7 @@ class DetailedMealResponse(BaseModel):
             status=meal.status.value,
             created_at=meal.created_at,
             image=image_response,
+            dish_name=meal.dish_name,
             nutrition=nutrition_response,
             error_message=meal.error_message,
             ready_at=getattr(meal, "ready_at", None)

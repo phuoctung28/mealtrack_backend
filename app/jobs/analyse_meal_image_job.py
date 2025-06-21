@@ -124,11 +124,16 @@ class AnalyseMealImageJob:
             # 5. Extract raw JSON for storage
             raw_gpt_json = self.gpt_parser.extract_raw_json(gpt_response)
             
-            # 6. Update meal with nutrition data
-            # First mark as READY with the nutrition data
-            ready_meal = analyzing_meal.mark_ready(nutrition)
+            # 6. Extract dish_name from the response
+            dish_name = None
+            if 'structured_data' in gpt_response:
+                dish_name = gpt_response['structured_data'].get('dish_name')
             
-            # 7. Move to ENRICHING state (which keeps the nutrition data)
+            # 7. Update meal with nutrition data
+            # First mark as READY with the nutrition data and dish_name
+            ready_meal = analyzing_meal.mark_ready(nutrition, dish_name=dish_name)
+            
+            # 8. Move to ENRICHING state (which keeps the nutrition data and dish_name)
             enriched_meal = ready_meal.mark_enriching(raw_gpt_json)
             self.meal_repository.save(enriched_meal)
             

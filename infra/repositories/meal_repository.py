@@ -1,4 +1,5 @@
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -70,6 +71,7 @@ class MealRepository(MealRepositoryPort):
                 }
                 
                 existing_meal.status = status_mapping[meal.status]
+                existing_meal.dish_name = getattr(meal, "dish_name", None)
                 existing_meal.error_message = getattr(meal, "error_message", None)
                 existing_meal.raw_ai_response = getattr(meal, "raw_gpt_json", None)
                 
