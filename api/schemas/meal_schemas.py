@@ -123,9 +123,21 @@ class DetailedMealResponse(BaseModel):
         # Create simplified nutrition response if available
         nutrition_response = None
         if meal.nutrition:
-            # Extract meal name from first food item or use a default
+            # Get dish_name from raw_gpt_json if available
             meal_name = "Unknown Meal"
-            
+            if hasattr(meal, 'raw_gpt_json') and meal.raw_gpt_json:
+                try:
+                    import json
+                    raw_data = json.loads(meal.raw_gpt_json)
+                    # Handle both direct JSON and wrapped response formats
+                    if isinstance(raw_data, dict):
+                        if 'structured_data' in raw_data:
+                            meal_name = raw_data['structured_data'].get('dish_name', meal_name)
+                        else:
+                            meal_name = raw_data.get('dish_name', meal_name)
+                except (json.JSONDecodeError, KeyError):
+                    pass
+
             # Check if meal has been updated with new weight
             if hasattr(meal, 'updated_weight_grams'):
                 estimated_weight = meal.updated_weight_grams
@@ -134,7 +146,6 @@ class DetailedMealResponse(BaseModel):
                 
                 if hasattr(meal.nutrition, 'food_items') and meal.nutrition.food_items:
                     first_food = meal.nutrition.food_items[0]
-                    meal_name = first_food.name
                     # Try to extract weight from quantity if unit suggests weight
                     if first_food.unit and 'g' in first_food.unit.lower():
                         estimated_weight = first_food.quantity

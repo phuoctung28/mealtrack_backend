@@ -16,6 +16,7 @@ class TestGPTResponseParser:
         gpt_response = {
             "raw_response": "JSON response from GPT",
             "structured_data": {
+                "dish_name": "Grilled Chicken with Brown Rice",
                 "foods": [
                     {
                         "name": "Grilled Chicken Breast",
@@ -80,6 +81,7 @@ class TestGPTResponseParser:
         parser = GPTResponseParser()
         gpt_response = {
             "structured_data": {
+                "dish_name": "Incomplete Food",
                 "foods": [
                     {
                         "name": "Incomplete Food",
@@ -115,7 +117,7 @@ class TestGPTResponseParser:
         """Test extracting raw JSON falls back to structured data if raw_response is missing."""
         # Arrange
         parser = GPTResponseParser()
-        structured_data = {"foods": [], "confidence": 0.5}
+        structured_data = {"dish_name": "Empty Meal", "foods": [], "confidence": 0.5}
         gpt_response = {
             "structured_data": structured_data
         }

@@ -151,6 +151,7 @@ class MockVisionAIService(VisionAIServicePort):
         }
         
         mock_json_response = {
+            "dish_name": "Grilled Chicken Breast, Brown Rice, Steamed Broccoli",
             "foods": foods,
             "total_calories": total_calories,
             "confidence": confidence_map.get(context_type, 0.8),

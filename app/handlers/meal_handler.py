@@ -169,6 +169,9 @@ class MealHandler:
             # Parse nutrition data from LLM response
             structured_data = nutrition_data.get("structured_data", {})
             
+            # Store the dish_name if available
+            dish_name = structured_data.get("dish_name", None)
+            
             # Create food items
             food_items = []
             for food_data in structured_data.get("foods", []):
