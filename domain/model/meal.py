@@ -77,28 +77,28 @@ class Meal:
             raw_gpt_json=self.raw_gpt_json
         )
     
-    def mark_enriching(self, raw_gpt_json: str, dish_name: Optional[str] = None) -> 'Meal':
+    def mark_enriching(self, raw_gpt_json: str) -> 'Meal':
         """Transition to ENRICHING state with GPT response."""
         return Meal(
             meal_id=self.meal_id,
             status=MealStatus.ENRICHING,
             created_at=self.created_at,
             image=self.image,
-            dish_name=dish_name or self.dish_name,
+            dish_name=self.dish_name,
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=self.error_message,
             raw_gpt_json=raw_gpt_json
         )
     
-    def mark_ready(self, nutrition: Nutrition, dish_name: Optional[str] = None) -> 'Meal':
+    def mark_ready(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
         """Transition to READY state with final nutrition data."""
         return Meal(
             meal_id=self.meal_id,
             status=MealStatus.READY,
             created_at=self.created_at,
             image=self.image,
-            dish_name=dish_name or self.dish_name,
+            dish_name=dish_name,
             nutrition=nutrition,
             ready_at=datetime.now(),
             error_message=self.error_message,

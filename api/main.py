@@ -1,6 +1,8 @@
+import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from api.v1.routes.macros import router as macros_router
 from api.v1.routes.meals import router as meals_router
@@ -49,6 +51,12 @@ async def root():
 app.include_router(meals_router, prefix="/v1")
 app.include_router(macros_router, prefix="/v1")
 app.include_router(activities_router, prefix="/v1")
+
+# Serve static files from uploads directory (development)
+if os.environ.get('ENVIRONMENT') == 'development':
+    uploads_path = "/Users/tonytran/Projects/mealtrack_backend/uploads"
+    if os.path.exists(uploads_path):
+        app.mount("/uploads", StaticFiles(directory=uploads_path), name="uploads")
 
 if __name__ == "__main__":
     import uvicorn

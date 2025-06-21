@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from domain.model.macros import Macros
 from domain.model.nutrition import Nutrition, FoodItem
@@ -141,6 +141,22 @@ class GPTResponseParser:
             # Calculate from food items if available
             total_calories = sum(item.calories for item in food_items) if food_items else total_macros.total_calories
             return total_calories
+    
+    def parse_dish_name(self, gpt_response: Dict[str, Any]) -> Optional[str]:
+        """
+        Parse dish name from GPT response.
+        
+        Args:
+            gpt_response: Response from the OpenAI Vision API
+            
+        Returns:
+            Dish name string or None if not found
+        """
+        try:
+            structured_data = gpt_response.get("structured_data", {})
+            return structured_data.get("dish_name")
+        except (KeyError, TypeError):
+            return None
     
     def extract_raw_json(self, gpt_response: Dict[str, Any]) -> str:
         """

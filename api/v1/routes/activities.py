@@ -46,16 +46,18 @@ async def get_daily_activities(
         
         # Get meal activities for the date
         meal_activities = await _get_meal_activities(target_date, meal_handler)
+        logger.info(f"Found {len(meal_activities)} meal activities for date {target_date.strftime('%Y-%m-%d')}")
         activities.extend(meal_activities)
         
         # Get workout activities for the date (placeholder)
         workout_activities = await _get_workout_activities(target_date)
+        logger.info(f"Found {len(workout_activities)} workout activities for date {target_date.strftime('%Y-%m-%d')}")
         activities.extend(workout_activities)
         
         # Sort by timestamp (newest first)
         activities.sort(key=lambda x: x['timestamp'], reverse=True)
         
-        logger.info(f"Retrieved {len(activities)} activities for date {target_date.strftime('%Y-%m-%d')}")
+        logger.info(f"Retrieved {len(activities)} total activities for date {target_date.strftime('%Y-%m-%d')}")
         return activities
         
     except HTTPException:
@@ -65,59 +67,6 @@ async def get_daily_activities(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving activities: {str(e)}"
-        )
-
-@router.post("/workout", response_model=Dict)
-async def add_workout_activity(
-    workout_data: Dict
-):
-    """
-    Add a new workout activity.
-    
-    This is a placeholder endpoint for future workout tracking functionality.
-    Currently returns a mock response for development purposes.
-    """
-    try:
-        # TODO: Implement actual workout activity storage
-        logger.info("Adding workout activity (placeholder)")
-        
-        # Mock workout activity creation
-        activity_id = f"workout_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        return {
-            "activity_id": activity_id,
-            "status": "created",
-            "message": "Workout activity tracking will be implemented in future versions"
-        }
-        
-    except Exception as e:
-        logger.error(f"Error adding workout activity: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error adding workout activity: {str(e)}"
-        )
-
-@router.delete("/workout/{activity_id}")
-async def delete_workout_activity(activity_id: str):
-    """
-    Delete a workout activity.
-    
-    This is a placeholder endpoint for future workout tracking functionality.
-    """
-    try:
-        # TODO: Implement actual workout activity deletion
-        logger.info(f"Deleting workout activity {activity_id} (placeholder)")
-        
-        return {
-            "status": "deleted",
-            "message": "Workout activity deletion will be implemented in future versions"
-        }
-        
-    except Exception as e:
-        logger.error(f"Error deleting workout activity: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting workout activity: {str(e)}"
         )
 
 async def _get_meal_activities(target_date: datetime, meal_handler: MealHandler) -> List[Dict]:
@@ -131,29 +80,52 @@ async def _get_meal_activities(target_date: datetime, meal_handler: MealHandler)
         
         meal_activities = []
         for meal in meals:
+            # Only include meals that have nutrition data
+            # Include both READY and ENRICHING status as they both have nutrition data
+            if not meal.nutrition or meal.status.value not in ["READY", "ENRICHING"]:
+                continue
+                
             # Determine meal type based on time
             meal_time = meal.created_at
             meal_type = _determine_meal_type(meal_time)
+            
+            # Get meal name from nutrition data
+            estimated_weight = 300.0  # Default weight in grams
+            
+            if meal.nutrition.food_items:
+                # Try to get weight from first food item
+                first_food = meal.nutrition.food_items[0]
+                if first_food.unit and 'g' in first_food.unit.lower():
+                    estimated_weight = first_food.quantity
+                elif first_food.quantity > 10:  # Assume grams if quantity is large
+                    estimated_weight = first_food.quantity
+            
+            # Check if meal has been updated with new weight
+            if hasattr(meal, 'updated_weight_grams'):
+                estimated_weight = meal.updated_weight_grams
+            
+            # Get image URL if available
+            image_url = None
+            if hasattr(meal, 'image') and meal.image:
+                image_url = meal.image.url
             
             # Create meal activity format
             activity = {
                 "id": meal.meal_id,
                 "type": "meal",
                 "timestamp": meal.created_at.isoformat() if meal.created_at else target_date.isoformat(),
-                "title": meal.meal_name or "Unknown Meal",
-                "description": _generate_meal_description(meal),
+                "title": meal.dish_name or "Unknown Meal",
                 "meal_type": meal_type,
-                "calories": meal.nutrition.total_calories if meal.nutrition else 0,
+                "calories": meal.nutrition.calories if meal.nutrition else 0,
                 "macros": {
-                    "protein": meal.nutrition.total_protein if meal.nutrition else 0,
-                    "carbs": meal.nutrition.total_carbohydrates if meal.nutrition else 0,
-                    "fat": meal.nutrition.total_fat if meal.nutrition else 0,
-                    "fiber": meal.nutrition.total_fiber if meal.nutrition else 0,
-                    "sugar": meal.nutrition.total_sugar if meal.nutrition else 0,
-                    "sodium": meal.nutrition.total_sodium if meal.nutrition else 0,
+                    "protein": meal.nutrition.macros.protein if meal.nutrition else 0,
+                    "carbs": meal.nutrition.macros.carbs if meal.nutrition else 0,
+                    "fat": meal.nutrition.macros.fat if meal.nutrition else 0,
+                    "fiber": meal.nutrition.macros.fiber if meal.nutrition and hasattr(meal.nutrition.macros, 'fiber') else 0,
                 },
-                "quantity": meal.weight_grams if meal.weight_grams else 100,
-                "status": meal.status.value if meal.status else "unknown"
+                "quantity": estimated_weight,
+                "status": meal.status.value if meal.status else "unknown",
+                "image_url": image_url
             }
             meal_activities.append(activity)
         
@@ -235,23 +207,34 @@ def _determine_meal_type(meal_time):
         return "dinner"
     else:
         return "snack"
-
-def _generate_meal_description(meal):
     """Generate a description for the meal activity."""
-    if not meal:
+    if not meal or not meal.nutrition:
         return "Meal"
     
     description_parts = []
     
-    if meal.weight_grams:
-        description_parts.append(f"{meal.weight_grams}g")
+    # Get weight from nutrition data or use default
+    estimated_weight = 300.0
+    if hasattr(meal, 'updated_weight_grams'):
+        estimated_weight = meal.updated_weight_grams
+    elif meal.nutrition.food_items:
+        first_food = meal.nutrition.food_items[0]
+        if first_food.unit and 'g' in first_food.unit.lower():
+            estimated_weight = first_food.quantity
+        elif first_food.quantity > 10:
+            estimated_weight = first_food.quantity
     
-    if meal.nutrition and meal.nutrition.total_calories:
-        description_parts.append(f"{int(meal.nutrition.total_calories)} calories")
+    description_parts.append(f"{int(estimated_weight)}g")
     
-    if meal.meal_name and "," in meal.meal_name:
-        # If meal name contains ingredients, use first part
-        main_item = meal.meal_name.split(",")[0].strip()
-        description_parts.insert(0, main_item)
+    if meal.nutrition.calories:
+        description_parts.append(f"{int(meal.nutrition.calories)} calories")
     
-    return " • ".join(description_parts) if description_parts else meal.meal_name or "Meal" 
+    # Get food items for description
+    if meal.nutrition.food_items:
+        food_names = [item.name for item in meal.nutrition.food_items[:2]]
+        if len(food_names) == 1:
+            description_parts.insert(0, food_names[0])
+        elif len(food_names) == 2:
+            description_parts.insert(0, f"{food_names[0]}, {food_names[1]}")
+    
+    return " • ".join(description_parts) if description_parts else "Meal" 
