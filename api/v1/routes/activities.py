@@ -51,10 +51,11 @@ async def get_daily_activities(
         activities.extend(meal_activities)
         
         # Get workout activities for the date (placeholder)
-        workout_activities = await _get_workout_activities(target_date)
-        logger.info(f"Found {len(workout_activities)} workout activities for date {target_date.strftime('%Y-%m-%d')}")
-        activities.extend(workout_activities)
-        
+        # TODO (TONY): Implement workout activities
+        # workout_activities = await _get_workout_activities(target_date)
+        # logger.info(f"Found {len(workout_activities)} workout activities for date {target_date.strftime('%Y-%m-%d')}")
+        # activities.extend(workout_activities)
+
         # Sort by timestamp (newest first)
         activities.sort(key=lambda x: x['timestamp'], reverse=True)
         

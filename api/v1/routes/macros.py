@@ -255,7 +255,7 @@ async def update_consumed_macros(
 @router.get("/daily", response_model=DailyMacrosResponse)
 async def get_daily_macros(
     date: str = None,  # Optional date parameter, defaults to today
-    # handler: MacrosTrackingHandler = Depends(get_macros_tracking_handler)
+    meal_handler: MealHandler = Depends(get_meal_handler)
 ):
     """
     Get daily macro targets and current consumption for a specific date.
@@ -280,34 +280,36 @@ async def get_daily_macros(
         
         logger.info(f"Retrieving daily macros for date: {parsed_date}")
         
-        # TODO: Replace with actual database queries
-        # This should fetch from user's goals and consumed meals for the date
-        
-        # Mock realistic data that varies by date for testing
-        import hashlib
-        date_hash = int(hashlib.md5(str(parsed_date).encode()).hexdigest()[:8], 16)
-        variance = (date_hash % 100) / 100.0  # 0.0 to 0.99
-        
-        # Base targets (should come from user's profile/goals)
+        # Base targets (should come from user's profile/goals in the future)
         base_calories = 2000.0
         base_protein = 150.0
         base_carbs = 225.0
         base_fat = 67.0
         base_fiber = 25.0
         
-        # Simulate consumption (would come from actual meal entries)
-        consumed_ratio = 0.4 + (variance * 0.5)  # 40-90% consumption
-        consumed_calories = base_calories * consumed_ratio
-        consumed_protein = base_protein * (consumed_ratio + (variance * 0.2 - 0.1))
-        consumed_carbs = base_carbs * (consumed_ratio + (variance * 0.3 - 0.15))
-        consumed_fat = base_fat * (consumed_ratio + (variance * 0.2 - 0.1))
-        consumed_fiber = base_fiber * (consumed_ratio + (variance * 0.4 - 0.2))
+        # Get actual meals from database for the specified date
+        meals = meal_handler.get_meals_by_date(parsed_date)
         
-        # Ensure non-negative values
-        consumed_protein = max(0, consumed_protein)
-        consumed_carbs = max(0, consumed_carbs)
-        consumed_fat = max(0, consumed_fat)
-        consumed_fiber = max(0, consumed_fiber)
+        # Calculate consumed macros from actual meal data
+        consumed_calories = 0.0
+        consumed_protein = 0.0
+        consumed_carbs = 0.0
+        consumed_fat = 0.0
+        consumed_fiber = 0.0
+        
+        for meal in meals:
+            # Only include meals that have nutrition data and are ready/enriching
+            if meal.nutrition and meal.status in [MealStatus.READY, MealStatus.ENRICHING]:
+                consumed_calories += meal.nutrition.calories
+                consumed_protein += meal.nutrition.macros.protein
+                consumed_carbs += meal.nutrition.macros.carbs
+                consumed_fat += meal.nutrition.macros.fat
+                
+                # Add fiber if available
+                if meal.nutrition.macros.fiber is not None:
+                    consumed_fiber += meal.nutrition.macros.fiber
+        
+        logger.info(f"Found {len(meals)} meals for {parsed_date}, consumed: {consumed_calories} calories, {consumed_protein}g protein")
         
         # Calculate remaining
         remaining_calories = max(0, base_calories - consumed_calories)
@@ -317,10 +319,10 @@ async def get_daily_macros(
         remaining_fiber = max(0, base_fiber - consumed_fiber)
         
         # Calculate completion percentages
-        completion_calories = min(100.0, (consumed_calories / base_calories) * 100)
-        completion_protein = min(100.0, (consumed_protein / base_protein) * 100)
-        completion_carbs = min(100.0, (consumed_carbs / base_carbs) * 100)
-        completion_fat = min(100.0, (consumed_fat / base_fat) * 100)
+        completion_calories = min(100.0, (consumed_calories / base_calories) * 100) if base_calories > 0 else 0.0
+        completion_protein = min(100.0, (consumed_protein / base_protein) * 100) if base_protein > 0 else 0.0
+        completion_carbs = min(100.0, (consumed_carbs / base_carbs) * 100) if base_carbs > 0 else 0.0
+        completion_fat = min(100.0, (consumed_fat / base_fat) * 100) if base_fat > 0 else 0.0
         
         return DailyMacrosResponse(
             date=str(parsed_date),
