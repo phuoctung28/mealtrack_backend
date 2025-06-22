@@ -88,7 +88,7 @@ async def _get_meal_activities(target_date: datetime, meal_handler: MealHandler)
             # Determine meal type based on time
             meal_time = meal.created_at
             meal_type = _determine_meal_type(meal_time)
-            
+
             # Get meal name from nutrition data
             estimated_weight = 300.0  # Default weight in grams
             
@@ -207,34 +207,3 @@ def _determine_meal_type(meal_time):
         return "dinner"
     else:
         return "snack"
-    """Generate a description for the meal activity."""
-    if not meal or not meal.nutrition:
-        return "Meal"
-    
-    description_parts = []
-    
-    # Get weight from nutrition data or use default
-    estimated_weight = 300.0
-    if hasattr(meal, 'updated_weight_grams'):
-        estimated_weight = meal.updated_weight_grams
-    elif meal.nutrition.food_items:
-        first_food = meal.nutrition.food_items[0]
-        if first_food.unit and 'g' in first_food.unit.lower():
-            estimated_weight = first_food.quantity
-        elif first_food.quantity > 10:
-            estimated_weight = first_food.quantity
-    
-    description_parts.append(f"{int(estimated_weight)}g")
-    
-    if meal.nutrition.calories:
-        description_parts.append(f"{int(meal.nutrition.calories)} calories")
-    
-    # Get food items for description
-    if meal.nutrition.food_items:
-        food_names = [item.name for item in meal.nutrition.food_items[:2]]
-        if len(food_names) == 1:
-            description_parts.insert(0, food_names[0])
-        elif len(food_names) == 2:
-            description_parts.insert(0, f"{food_names[0]}, {food_names[1]}")
-    
-    return " • ".join(description_parts) if description_parts else "Meal" 
