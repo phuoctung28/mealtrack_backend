@@ -1,9 +1,12 @@
+import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from api.v1.routes.macros import router as macros_router
 from api.v1.routes.meals import router as meals_router
+from api.v1.routes.activities import router as activities_router
 
 load_dotenv()
 
@@ -47,6 +50,13 @@ async def root():
 
 app.include_router(meals_router, prefix="/v1")
 app.include_router(macros_router, prefix="/v1")
+app.include_router(activities_router, prefix="/v1")
+
+# Serve static files from uploads directory (development)
+if os.environ.get('ENVIRONMENT') == 'development':
+    uploads_path = os.getenv("UPLOADS_DIR", "./uploads")  # Default to './uploads' if UPLOADS_DIR is not set
+    if os.path.exists(uploads_path):
+        app.mount("/uploads", StaticFiles(directory=uploads_path), name="uploads")
 
 if __name__ == "__main__":
     import uvicorn

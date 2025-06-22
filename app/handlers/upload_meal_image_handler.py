@@ -137,15 +137,18 @@ class UploadMealImageHandler:
             
             # Parse the GPT response
             try:
+                # Parse the dish name
+                dish_name = self.gpt_parser.parse_dish_name(gpt_response)
+
                 # Parse the GPT response
                 nutrition = self.gpt_parser.parse_to_nutrition(gpt_response)
                 
                 # Extract raw JSON for storage
                 raw_gpt_json = self.gpt_parser.extract_raw_json(gpt_response)
                 
-                # Update meal with nutrition data
+                # Update meal with nutrition data and dish name
                 # First mark as READY with the nutrition data
-                ready_meal = analyzing_meal.mark_ready(nutrition)
+                ready_meal = analyzing_meal.mark_ready(nutrition, dish_name)
                 
                 # Move to ENRICHING state (which keeps the nutrition data)
                 enriched_meal = ready_meal.mark_enriching(raw_gpt_json)

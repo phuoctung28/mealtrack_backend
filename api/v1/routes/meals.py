@@ -23,7 +23,7 @@ router = APIRouter(
 
 MAX_FILE_SIZE = 8 * 1024 * 1024
 
-ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png"]
+ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/jpg", "image/png"]
 
 @router.post("/image", status_code=status.HTTP_201_CREATED, response_model=Dict)
 async def upload_meal_image(

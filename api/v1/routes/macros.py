@@ -1,12 +1,15 @@
 import logging
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Query
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Query, Depends
 
+from api.dependencies import get_meal_handler
 from api.schemas.macros_schemas import (
     OnboardingChoicesRequest, MacrosCalculationResponse,
     ConsumedMacrosRequest, UpdatedMacrosResponse, DailyMacrosResponse
 )
+from app.handlers.meal_handler import MealHandler
+from domain.model.meal import MealStatus
 
 logger = logging.getLogger(__name__)
 
@@ -261,38 +264,92 @@ async def get_daily_macros(
     - Defaults to today if no date provided
     """
     try:
-        # TODO: Implement daily macro retrieval
-        logger.info(f"Retrieving daily macros for date: {date or 'today'}")
+        from datetime import datetime, date as date_obj
         
-        # Placeholder response - implement actual retrieval
+        # Parse date or use today
+        if date:
+            try:
+                parsed_date = datetime.strptime(date, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid date format. Use YYYY-MM-DD"
+                )
+        else:
+            parsed_date = date_obj.today()
+        
+        logger.info(f"Retrieving daily macros for date: {parsed_date}")
+        
+        # TODO: Replace with actual database queries
+        # This should fetch from user's goals and consumed meals for the date
+        
+        # Mock realistic data that varies by date for testing
+        import hashlib
+        date_hash = int(hashlib.md5(str(parsed_date).encode()).hexdigest()[:8], 16)
+        variance = (date_hash % 100) / 100.0  # 0.0 to 0.99
+        
+        # Base targets (should come from user's profile/goals)
+        base_calories = 2000.0
+        base_protein = 150.0
+        base_carbs = 225.0
+        base_fat = 67.0
+        base_fiber = 25.0
+        
+        # Simulate consumption (would come from actual meal entries)
+        consumed_ratio = 0.4 + (variance * 0.5)  # 40-90% consumption
+        consumed_calories = base_calories * consumed_ratio
+        consumed_protein = base_protein * (consumed_ratio + (variance * 0.2 - 0.1))
+        consumed_carbs = base_carbs * (consumed_ratio + (variance * 0.3 - 0.15))
+        consumed_fat = base_fat * (consumed_ratio + (variance * 0.2 - 0.1))
+        consumed_fiber = base_fiber * (consumed_ratio + (variance * 0.4 - 0.2))
+        
+        # Ensure non-negative values
+        consumed_protein = max(0, consumed_protein)
+        consumed_carbs = max(0, consumed_carbs)
+        consumed_fat = max(0, consumed_fat)
+        consumed_fiber = max(0, consumed_fiber)
+        
+        # Calculate remaining
+        remaining_calories = max(0, base_calories - consumed_calories)
+        remaining_protein = max(0, base_protein - consumed_protein)
+        remaining_carbs = max(0, base_carbs - consumed_carbs)
+        remaining_fat = max(0, base_fat - consumed_fat)
+        remaining_fiber = max(0, base_fiber - consumed_fiber)
+        
+        # Calculate completion percentages
+        completion_calories = min(100.0, (consumed_calories / base_calories) * 100)
+        completion_protein = min(100.0, (consumed_protein / base_protein) * 100)
+        completion_carbs = min(100.0, (consumed_carbs / base_carbs) * 100)
+        completion_fat = min(100.0, (consumed_fat / base_fat) * 100)
+        
         return DailyMacrosResponse(
-            date=date or "2024-01-01",
-            target_calories=2000.0,
+            date=str(parsed_date),
+            target_calories=round(base_calories, 1),
             target_macros={
-                "protein": 150.0,
-                "carbs": 225.0,
-                "fat": 67.0,
-                "fiber": 25.0
+                "protein": round(base_protein, 1),
+                "carbs": round(base_carbs, 1),
+                "fat": round(base_fat, 1),
+                "fiber": round(base_fiber, 1)
             },
-            consumed_calories=1200.0,
+            consumed_calories=round(consumed_calories, 1),
             consumed_macros={
-                "protein": 90.0,
-                "carbs": 135.0,
-                "fat": 40.0,
-                "fiber": 15.0
+                "protein": round(consumed_protein, 1),
+                "carbs": round(consumed_carbs, 1),
+                "fat": round(consumed_fat, 1),
+                "fiber": round(consumed_fiber, 1)
             },
-            remaining_calories=800.0,
+            remaining_calories=round(remaining_calories, 1),
             remaining_macros={
-                "protein": 60.0,
-                "carbs": 90.0,
-                "fat": 27.0,
-                "fiber": 10.0
+                "protein": round(remaining_protein, 1),
+                "carbs": round(remaining_carbs, 1),
+                "fat": round(remaining_fat, 1),
+                "fiber": round(remaining_fiber, 1)
             },
             completion_percentage={
-                "calories": 60.0,
-                "protein": 60.0,
-                "carbs": 60.0,
-                "fat": 59.7
+                "calories": round(completion_calories, 1),
+                "protein": round(completion_protein, 1),
+                "carbs": round(completion_carbs, 1),
+                "fat": round(completion_fat, 1)
             }
         )
         
