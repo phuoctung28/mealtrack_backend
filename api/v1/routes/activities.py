@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, status, Depends, Query
 from api.dependencies import get_meal_handler
 from api.schemas.activity_schemas import ActivityResponse, ActivitiesListResponse
 from app.handlers.meal_handler import MealHandler
+from domain.model.meal import MealStatus
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ async def _get_meal_activities(target_date: datetime, meal_handler: MealHandler)
         for meal in meals:
             # Only include meals that have nutrition data
             # Include both READY and ENRICHING status as they both have nutrition data
-            if not meal.nutrition or meal.status.value not in ["READY", "ENRICHING"]:
+            if not meal.nutrition or meal.status not in [MealStatus.READY, MealStatus.ENRICHING]:
                 continue
                 
             # Determine meal type based on time

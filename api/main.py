@@ -54,7 +54,7 @@ app.include_router(activities_router, prefix="/v1")
 
 # Serve static files from uploads directory (development)
 if os.environ.get('ENVIRONMENT') == 'development':
-    uploads_path = "/Users/tonytran/Projects/mealtrack_backend/uploads"
+    uploads_path = os.getenv("UPLOADS_DIR", "./uploads")  # Default to './uploads' if UPLOADS_DIR is not set
     if os.path.exists(uploads_path):
         app.mount("/uploads", StaticFiles(directory=uploads_path), name="uploads")
 
