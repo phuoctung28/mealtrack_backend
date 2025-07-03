@@ -15,10 +15,10 @@ A FastAPI-based backend service for meal tracking and nutritional analysis with 
 
 The application follows an n-layer (Clean Architecture) pattern:
 
-- **Presentation Layer (`api/`)**: HTTP endpoints, routers, and request/response handling
-- **Application Layer (`app/`)**: Use cases, handlers, and application services
-- **Domain Layer (`domain/`)**: Core business logic, entities, and domain services
-- **Infrastructure Layer (`infra/`)**: External services, repositories, database, and adapters
+- **Presentation Layer (`src/api/`)**: HTTP endpoints, routers, and request/response handling
+- **Application Layer (`src/app/`)**: Use cases, handlers, and application services
+- **Domain Layer (`src/domain/`)**: Core business logic, entities, and domain services
+- **Infrastructure Layer (`src/infra/`)**: External services, repositories, database, and adapters
 
 ## API Endpoints
 
@@ -64,12 +64,12 @@ The application will automatically create the SQLite database on first run. For 
 
 ### Development Server
 ```bash
-uvicorn api.main:app --reload
+uvicorn src.api.main:app --reload
 ```
 
 ### Production Server
 ```bash
-uvicorn api.main:app --host 0.0.0.0 --port 8000
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 ```
 
 The API will be available at:

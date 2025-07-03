@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from infra.adapters.vision_ai_service import VisionAIService
+from src.infra.adapters.vision_ai_service import VisionAIService
 
 
 class TestVisionAIService:

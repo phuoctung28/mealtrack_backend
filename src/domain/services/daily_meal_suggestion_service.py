@@ -1,0 +1,341 @@
+import logging
+from typing import List, Dict, Optional
+from datetime import date
+import random
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+import os
+import json
+import re
+
+from src.domain.model.meal_plan import PlannedMeal, MealType
+from src.domain.model.macro_targets import SimpleMacroTargets
+
+logger = logging.getLogger(__name__)
+
+
+class DailyMealSuggestionService:
+    """Service for generating daily meal suggestions based on user preferences from onboarding"""
+    
+    def __init__(self):
+        self.google_api_key = os.getenv("GOOGLE_API_KEY")
+        if not self.google_api_key:
+            raise ValueError("GOOGLE_API_KEY environment variable not set")
+        
+        self.model = ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash",
+            temperature=0.7,
+            max_output_tokens=2000,
+            google_api_key=self.google_api_key,
+            convert_system_message_to_human=True
+        )
+    
+    def generate_daily_suggestions(self, user_preferences: Dict) -> List[PlannedMeal]:
+        """
+        Generate 3-5 meal suggestions for a day based on user onboarding data
+        
+        Args:
+            user_preferences: Dictionary containing user data from onboarding
+                - age, gender, height, weight
+                - activity_level: sedentary/lightly_active/moderately_active/very_active/extra_active
+                - goal: lose_weight/maintain_weight/gain_weight/build_muscle
+                - dietary_preferences: List of dietary restrictions
+                - health_conditions: List of health conditions
+                - target_calories: Daily calorie target
+                - target_macros: Daily macro targets (protein, carbs, fat)
+        
+        Returns:
+            List of 3-5 PlannedMeal objects
+        """
+        logger.info(f"Generating daily meal suggestions for user preferences")
+        
+        # Determine meal distribution based on calories
+        target_calories = user_preferences.get('target_calories', 2000)
+        meal_distribution = self._calculate_meal_distribution(target_calories)
+        
+        # Generate meals
+        suggested_meals = []
+        
+        for meal_type, calorie_target in meal_distribution.items():
+            try:
+                meal = self._generate_meal_for_type(
+                    meal_type=meal_type,
+                    calorie_target=calorie_target,
+                    user_preferences=user_preferences
+                )
+                suggested_meals.append(meal)
+            except Exception as e:
+                logger.error(f"Error generating {meal_type.value} meal: {str(e)}")
+                # Add a fallback meal
+                suggested_meals.append(self._get_fallback_meal(meal_type, calorie_target))
+        
+        return suggested_meals
+    
+    def _calculate_meal_distribution(self, total_calories: float) -> Dict[MealType, float]:
+        """Calculate calorie distribution across meals"""
+        # Standard distribution: Breakfast 25%, Lunch 35%, Dinner 30%, Snack 10%
+        distribution = {
+            MealType.BREAKFAST: total_calories * 0.25,
+            MealType.LUNCH: total_calories * 0.35,
+            MealType.DINNER: total_calories * 0.30,
+        }
+        
+        # Add snack if total calories > 1800
+        if total_calories > 1800:
+            distribution[MealType.SNACK] = total_calories * 0.10
+            # Adjust other meals
+            for meal_type in [MealType.BREAKFAST, MealType.LUNCH, MealType.DINNER]:
+                distribution[meal_type] *= 0.9
+        
+        return distribution
+    
+    def _generate_meal_for_type(self, meal_type: MealType, calorie_target: float, 
+                                user_preferences: Dict) -> PlannedMeal:
+        """Generate a single meal based on type and preferences"""
+        
+        prompt = self._build_meal_suggestion_prompt(meal_type, calorie_target, user_preferences)
+        
+        try:
+            messages = [
+                SystemMessage(content="You are a professional nutritionist creating personalized meal suggestions."),
+                HumanMessage(content=prompt)
+            ]
+            
+            response = self.model.invoke(messages)
+            content = response.content
+            
+            # Extract JSON from response
+            meal_data = self._extract_json(content)
+            
+            # Create PlannedMeal object
+            return PlannedMeal(
+                meal_type=meal_type,
+                name=meal_data["name"],
+                description=meal_data["description"],
+                prep_time=meal_data.get("prep_time", 10),
+                cook_time=meal_data.get("cook_time", 15),
+                calories=meal_data["calories"],
+                protein=meal_data["protein"],
+                carbs=meal_data["carbs"],
+                fat=meal_data["fat"],
+                ingredients=meal_data["ingredients"],
+                instructions=meal_data.get("instructions", ["Prepare and cook as desired"]),
+                is_vegetarian=meal_data.get("is_vegetarian", False),
+                is_vegan=meal_data.get("is_vegan", False),
+                is_gluten_free=meal_data.get("is_gluten_free", False),
+                cuisine_type=meal_data.get("cuisine_type", "International")
+            )
+            
+        except Exception as e:
+            logger.error(f"Error generating meal: {str(e)}")
+            raise
+    
+    def _build_meal_suggestion_prompt(self, meal_type: MealType, calorie_target: float, 
+                                     user_preferences: Dict) -> str:
+        """Build prompt for meal generation"""
+        
+        # Extract user data
+        goal = user_preferences.get('goal', 'maintain_weight')
+        dietary_prefs = user_preferences.get('dietary_preferences', [])
+        health_conditions = user_preferences.get('health_conditions', [])
+        target_macros = user_preferences.get('target_macros', {})
+        activity_level = user_preferences.get('activity_level', 'moderately_active')
+        
+        # Calculate macro targets for this meal
+        meal_percentage = calorie_target / user_preferences.get('target_calories', 2000)
+        
+        # Handle both MacroTargets object and dict format
+        if isinstance(target_macros, SimpleMacroTargets):
+            protein_target = target_macros.protein * meal_percentage
+            carbs_target = target_macros.carbs * meal_percentage
+            fat_target = target_macros.fat * meal_percentage
+        else:
+            # Legacy dict format
+            protein_target = target_macros.get('protein_grams', 50) * meal_percentage
+            carbs_target = target_macros.get('carbs_grams', 250) * meal_percentage
+            fat_target = target_macros.get('fat_grams', 65) * meal_percentage
+        
+        # Build dietary restrictions string
+        dietary_str = ", ".join(dietary_prefs) if dietary_prefs else "none"
+        health_str = ", ".join(health_conditions) if health_conditions else "none"
+        
+        # Goal-specific guidance
+        goal_guidance = {
+            'lose_weight': "Focus on high-volume, low-calorie foods with plenty of fiber and protein for satiety",
+            'gain_weight': "Include calorie-dense, nutritious foods with healthy fats and complex carbs",
+            'build_muscle': "Emphasize high protein content with complete amino acids",
+            'maintain_weight': "Create balanced meals with appropriate portions"
+        }
+        
+        prompt = f"""Generate a {meal_type.value} meal suggestion with these requirements:
+
+User Profile:
+- Fitness Goal: {goal} - {goal_guidance.get(goal, 'balanced nutrition')}
+- Activity Level: {activity_level}
+- Dietary Restrictions: {dietary_str}
+- Health Conditions: {health_str}
+
+Nutritional Targets for this meal:
+- Calories: {int(calorie_target)} (±50 calories)
+- Protein: {int(protein_target)}g
+- Carbs: {int(carbs_target)}g
+- Fat: {int(fat_target)}g
+
+Requirements:
+1. The meal should be practical and use common ingredients
+2. Cooking time should be reasonable for {meal_type.value}
+3. Must respect all dietary restrictions
+4. Should support the user's fitness goal
+5. Include variety and flavor
+
+Return ONLY a JSON object with this structure:
+{{
+    "name": "Meal name",
+    "description": "Brief appealing description",
+    "prep_time": 10,
+    "cook_time": 20,
+    "calories": {int(calorie_target)},
+    "protein": {int(protein_target)},
+    "carbs": {int(carbs_target)},
+    "fat": {int(fat_target)},
+    "ingredients": ["ingredient 1 with amount", "ingredient 2 with amount"],
+    "instructions": ["Step 1", "Step 2"],
+    "is_vegetarian": true/false,
+    "is_vegan": true/false,
+    "is_gluten_free": true/false,
+    "cuisine_type": "cuisine type"
+}}"""
+        
+        return prompt
+    
+    def _extract_json(self, content: str) -> Dict:
+        """Extract JSON from AI response"""
+        try:
+            # Try direct parsing
+            return json.loads(content)
+        except json.JSONDecodeError:
+            # Try to find JSON in markdown code block
+            json_match = re.search(r'```json(.*?)```', content, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(1).strip())
+            
+            # Try to find any JSON-like structure
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(0))
+            
+            raise ValueError("Could not extract JSON from response")
+    
+    def _get_fallback_meal(self, meal_type: MealType, calorie_target: float) -> PlannedMeal:
+        """Return a simple fallback meal if generation fails"""
+        
+        # Scale portions based on calorie target
+        scale_factor = calorie_target / 400  # Base meals are ~400 calories
+        
+        fallback_meals = {
+            MealType.BREAKFAST: {
+                "name": "Protein Oatmeal Bowl",
+                "description": "Hearty oatmeal with protein powder and fruits",
+                "prep_time": 5,
+                "cook_time": 5,
+                "calories": int(400 * scale_factor),
+                "protein": int(25 * scale_factor),
+                "carbs": int(55 * scale_factor),
+                "fat": int(10 * scale_factor),
+                "ingredients": [
+                    f"{int(60 * scale_factor)}g rolled oats",
+                    f"{int(30 * scale_factor)}g protein powder",
+                    "1 medium banana",
+                    "1 tbsp almond butter",
+                    "Cinnamon to taste"
+                ],
+                "instructions": [
+                    "Cook oats with water or milk",
+                    "Stir in protein powder",
+                    "Top with sliced banana and almond butter",
+                    "Sprinkle with cinnamon"
+                ],
+                "is_vegetarian": True,
+                "is_vegan": False,
+                "is_gluten_free": False
+            },
+            MealType.LUNCH: {
+                "name": "Grilled Chicken Salad Bowl",
+                "description": "Fresh salad with grilled chicken and vegetables",
+                "prep_time": 15,
+                "cook_time": 15,
+                "calories": int(450 * scale_factor),
+                "protein": int(35 * scale_factor),
+                "carbs": int(30 * scale_factor),
+                "fat": int(20 * scale_factor),
+                "ingredients": [
+                    f"{int(150 * scale_factor)}g grilled chicken breast",
+                    "Mixed greens",
+                    "Cherry tomatoes",
+                    "Cucumber",
+                    "Avocado",
+                    "Olive oil vinaigrette"
+                ],
+                "instructions": [
+                    "Grill chicken breast",
+                    "Prepare salad greens and vegetables",
+                    "Slice grilled chicken",
+                    "Assemble bowl and dress"
+                ],
+                "is_vegetarian": False,
+                "is_vegan": False,
+                "is_gluten_free": True
+            },
+            MealType.DINNER: {
+                "name": "Baked Salmon with Vegetables",
+                "description": "Omega-3 rich salmon with roasted vegetables",
+                "prep_time": 10,
+                "cook_time": 25,
+                "calories": int(500 * scale_factor),
+                "protein": int(40 * scale_factor),
+                "carbs": int(35 * scale_factor),
+                "fat": int(22 * scale_factor),
+                "ingredients": [
+                    f"{int(180 * scale_factor)}g salmon fillet",
+                    "Broccoli",
+                    "Sweet potato",
+                    "Olive oil",
+                    "Lemon",
+                    "Herbs"
+                ],
+                "instructions": [
+                    "Season salmon with herbs",
+                    "Prepare vegetables",
+                    "Bake everything at 400°F for 20-25 minutes",
+                    "Serve with lemon"
+                ],
+                "is_vegetarian": False,
+                "is_vegan": False,
+                "is_gluten_free": True
+            },
+            MealType.SNACK: {
+                "name": "Greek Yogurt with Berries",
+                "description": "High-protein snack with antioxidants",
+                "prep_time": 2,
+                "cook_time": 0,
+                "calories": int(200 * scale_factor),
+                "protein": int(15 * scale_factor),
+                "carbs": int(20 * scale_factor),
+                "fat": int(5 * scale_factor),
+                "ingredients": [
+                    f"{int(170 * scale_factor)}g Greek yogurt",
+                    "Mixed berries",
+                    "Honey (optional)"
+                ],
+                "instructions": [
+                    "Add berries to yogurt",
+                    "Drizzle with honey if desired"
+                ],
+                "is_vegetarian": True,
+                "is_vegan": False,
+                "is_gluten_free": True
+            }
+        }
+        
+        meal_data = fallback_meals.get(meal_type, fallback_meals[MealType.LUNCH])
+        return PlannedMeal(meal_type=meal_type, **meal_data)
