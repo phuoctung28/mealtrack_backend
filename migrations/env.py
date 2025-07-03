@@ -53,7 +53,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Add model MetaData objects here
-from infra.database.config import Base
+from src.infra.database.config import Base
 
 # Register the models with Alembic
 target_metadata = Base.metadata

@@ -1,9 +1,9 @@
 from unittest.mock import Mock
 
-from domain.model.macros import Macros
-from domain.model.nutrition import Nutrition, FoodItem
-from domain.ports.food_database_port import FoodDatabasePort
-from domain.services.nutrition_service import NutritionService, EnrichmentResult
+from src.domain.model.macros import Macros
+from src.domain.model.nutrition import Nutrition, FoodItem
+from src.domain.ports.food_database_port import FoodDatabasePort
+from src.domain.services.nutrition_service import NutritionService, EnrichmentResult
 
 
 class TestNutritionService:
