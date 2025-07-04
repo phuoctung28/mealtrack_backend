@@ -1,12 +1,12 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
 from datetime import date
+from typing import List, Optional
+
+from pydantic import BaseModel, Field
 
 from ..common.meal_plan_enums import (
     DietaryPreferenceSchema,
     FitnessGoalSchema,
-    PlanDurationSchema,
-    MealTypeSchema
+    PlanDurationSchema
 )
 
 

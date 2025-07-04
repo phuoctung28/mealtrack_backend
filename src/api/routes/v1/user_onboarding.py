@@ -1,12 +1,12 @@
 """User onboarding endpoints with database persistence."""
-from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
-from typing import Dict
 import logging
 
-from src.infra.database.config import get_db
-from src.app.services.user_onboarding_service import UserOnboardingService
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+
 from src.api.schemas.request import OnboardingCompleteRequest
+from src.app.services.user_onboarding_service import UserOnboardingService
+from src.infra.database.config import get_db
 
 router = APIRouter(prefix="/v1/user-onboarding", tags=["User Onboarding"])
 logger = logging.getLogger(__name__)

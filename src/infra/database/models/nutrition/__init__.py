@@ -1,7 +1,7 @@
 """Nutrition-related database models."""
-from .nutrition import Nutrition
-from .macros import Macros
 from .food_item import FoodItem
+from .macros import Macros
+from .nutrition import Nutrition
 
 __all__ = [
     "Nutrition",

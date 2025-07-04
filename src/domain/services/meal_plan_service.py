@@ -1,18 +1,15 @@
 import json
 import logging
-from typing import List, Dict, Optional
-from datetime import date, timedelta
 import os
+from datetime import date, timedelta
+from typing import List, Dict, Optional
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from src.domain.model.meal_plan import (
     MealPlan, PlannedMeal, DayPlan, UserPreferences,
-    DietaryPreference, FitnessGoal, MealType, PlanDuration
-)
-from src.domain.model.conversation import (
-    Conversation, ConversationContext, ConversationState,
-    Message, MessageRole
+    FitnessGoal, MealType, PlanDuration
 )
 
 logger = logging.getLogger(__name__)

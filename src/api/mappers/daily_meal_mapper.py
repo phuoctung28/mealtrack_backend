@@ -1,18 +1,17 @@
 """
 Mapper for daily meal suggestion DTOs and domain models.
 """
-from typing import Dict, List, Any
 from datetime import date
+from typing import Dict, Any
 
-from src.api.mappers.base_mapper import BaseMapper
 from src.api.schemas.request import UserPreferencesRequest
 from src.api.schemas.response import (
     SuggestedMealResponse,
     DailyMealSuggestionsResponse,
     NutritionTotalsResponse
 )
-from src.domain.model.meal_plan import PlannedMeal
 from src.domain.model.macro_targets import SimpleMacroTargets
+from src.domain.model.meal_plan import PlannedMeal
 
 
 class DailyMealMapper:

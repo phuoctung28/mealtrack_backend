@@ -1,15 +1,12 @@
 import logging
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Query, Depends
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Query
 
-from src.api.dependencies import get_meal_handler
 from src.api.schemas.request import OnboardingChoicesRequest, ConsumedMacrosRequest
 from src.api.schemas.response import (
     MacrosCalculationResponse, UpdatedMacrosResponse, DailyMacrosResponse
 )
-from src.app.handlers.meal_handler import MealHandler
-from src.domain.model.meal import MealStatus
 
 logger = logging.getLogger(__name__)
 

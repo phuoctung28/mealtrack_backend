@@ -1,11 +1,11 @@
 import logging
-from typing import Dict, List, Optional, Tuple
-from datetime import date
 from dataclasses import dataclass
+from datetime import date
+from typing import Dict, List
 
-from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
-from src.domain.model.meal_plan import PlannedMeal
 from src.domain.model.macro_targets import SimpleMacroTargets
+from src.domain.model.meal_plan import PlannedMeal
+from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
-from typing import Dict
+from fastapi import APIRouter, HTTPException
 
 from src.api.schemas.request import (
     ConversationMessageRequest,
@@ -11,13 +10,11 @@ from src.api.schemas.response import (
     StartConversationResponse,
     ConversationHistoryResponse,
     MealPlanResponse,
-    MealPlanSummaryResponse,
-    ReplaceMealResponse,
-    ErrorResponse
+    ReplaceMealResponse
 )
 from src.app.handlers.meal_plan_handler import MealPlanHandler, ConversationHandler
-from src.domain.services.meal_plan_service import MealPlanService
 from src.domain.services.conversation_service import ConversationService
+from src.domain.services.meal_plan_service import MealPlanService
 
 router = APIRouter(prefix="/v1/meal-plans", tags=["Meal Planning"])
 

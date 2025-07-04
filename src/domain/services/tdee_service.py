@@ -1,8 +1,5 @@
-import math
-from typing import Dict
-
-from src.domain.model.tdee import TdeeRequest, TdeeResponse, MacroTargets, ActivityLevel, Sex, Goal
 from src.domain.constants import TDEEConstants
+from src.domain.model.tdee import TdeeRequest, TdeeResponse, MacroTargets, ActivityLevel, Sex, Goal
 
 
 class TdeeCalculationService:

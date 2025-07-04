@@ -5,12 +5,12 @@ from typing import Dict
 from fastapi import APIRouter, UploadFile, HTTPException, status, Depends, File, BackgroundTasks
 
 from src.api.dependencies import get_upload_meal_image_handler, get_meal_handler
+from src.api.mappers.meal_mapper import MealMapper
 from src.api.schemas.request import UpdateMealMacrosRequest
 from src.api.schemas.response import (
-    SimpleMealResponse, DetailedMealResponse, 
-    MealStatusResponse, MacrosResponse
+    DetailedMealResponse,
+    MealStatusResponse
 )
-from src.api.mappers.meal_mapper import MealMapper
 from src.app.handlers.meal_handler import MealHandler
 from src.app.handlers.upload_meal_image_handler import UploadMealImageHandler
 from src.domain.model.meal import MealStatus, Meal

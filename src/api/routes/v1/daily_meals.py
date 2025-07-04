@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
 import logging
+
+from fastapi import APIRouter, HTTPException
 
 from src.api.schemas.request import (
     UserPreferencesRequest,
@@ -8,16 +8,15 @@ from src.api.schemas.request import (
 )
 from src.api.schemas.response import (
     DailyMealSuggestionsResponse,
-    SingleMealSuggestionResponse,
-    MealSuggestionErrorResponse
+    SingleMealSuggestionResponse
 )
 from src.app.handlers.daily_meal_suggestion_handler import DailyMealSuggestionHandler
-from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
-from src.domain.services.tdee_service import TdeeCalculationService
+from src.domain.model.macro_targets import SimpleMacroTargets
 from src.domain.model.tdee import (
     TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 )
-from src.domain.model.macro_targets import SimpleMacroTargets
+from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
+from src.domain.services.tdee_service import TdeeCalculationService
 
 router = APIRouter(prefix="/v1/daily-meals", tags=["Daily Meal Suggestions"])
 logger = logging.getLogger(__name__)

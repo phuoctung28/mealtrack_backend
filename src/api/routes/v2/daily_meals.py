@@ -1,20 +1,20 @@
-from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
-from typing import Optional
 import logging
 
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+
+from src.api.mappers.daily_meal_mapper import DailyMealMapper
 from src.api.schemas.response import (
     DailyMealSuggestionsResponse,
     SingleMealSuggestionResponse,
     MealTypeEnum
 )
-from src.api.mappers.daily_meal_mapper import DailyMealMapper
 from src.app.handlers.daily_meal_suggestion_handler import DailyMealSuggestionHandler
+from src.app.services.user_onboarding_service import UserOnboardingService
+from src.domain.model.macro_targets import SimpleMacroTargets
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
 from src.infra.database.config import get_db
 from src.infra.repositories.user_repository import UserRepository
-from src.app.services.user_onboarding_service import UserOnboardingService
-from src.domain.model.macro_targets import SimpleMacroTargets
 
 router = APIRouter(prefix="/v2/daily-meals", tags=["Daily Meal Suggestions V2"])
 logger = logging.getLogger(__name__)

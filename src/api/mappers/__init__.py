@@ -11,8 +11,8 @@ separation between layers and consistent data transformation.
 
 from .base_mapper import BaseMapper
 from .daily_meal_mapper import DailyMealMapper
-from .tdee_mapper import TdeeMapper
 from .meal_mapper import MealMapper
+from .tdee_mapper import TdeeMapper
 
 __all__ = [
     'BaseMapper',

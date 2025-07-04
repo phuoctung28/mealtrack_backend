@@ -1,18 +1,17 @@
-import os
 import logging
+import os
 from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect
 
+from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.macros import router as macros_router
 from src.api.routes.v1.meals import router as meals_router
-from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.tdee import router as tdee_router
-from src.api.routes.v1.meal_plans import router as meal_plans_router
-from src.api.routes.v1.daily_meals import router as daily_meals_router
 from src.api.routes.v1.user_onboarding import router as user_onboarding_router
 from src.api.routes.v2.daily_meals import router as daily_meals_v2_router
 
@@ -28,13 +27,7 @@ def init_database():
     from src.infra.database.config import engine, Base
     
     # Import all models to ensure they're registered
-    from src.infra.database.models import (
-        Meal, MealImage, MealPlan, MealPlanDay, PlannedMeal,
-        TdeeCalculation, User, UserProfile, UserPreference, 
-        UserDietaryPreference, UserHealthCondition, UserAllergy, UserGoal,
-        Nutrition, Macros, FoodItem, Conversation, ConversationMessage
-    )
-    
+
     # Check if we should recreate tables (development mode)
     RECREATE_TABLES = os.getenv("RECREATE_TABLES", "false").lower() == "true"
     

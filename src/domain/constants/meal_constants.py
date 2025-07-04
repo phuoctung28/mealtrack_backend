@@ -4,8 +4,6 @@ Constants for meal-related domain operations.
 This module centralizes all meal-related constants, magic numbers,
 and configuration values used throughout the domain layer.
 """
-from typing import Dict
-from enum import Enum
 
 
 class MealDistribution:

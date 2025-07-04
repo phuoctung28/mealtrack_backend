@@ -2,6 +2,11 @@
 Response DTOs for API endpoints.
 """
 
+# Activity responses
+from .activity_responses import (
+    ActivityResponse,
+    ActivitiesListResponse
+)
 # Daily meal responses
 from .daily_meal_responses import (
     DailyMealSuggestionsResponse,
@@ -12,7 +17,33 @@ from .daily_meal_responses import (
     UserMealPlanSummaryResponse,
     MealTypeEnum
 )
-
+# Ingredient responses
+from .ingredient_responses import (
+    IngredientResponse,
+    IngredientListResponse,
+    IngredientCreatedResponse,
+    IngredientUpdatedResponse,
+    IngredientDeletedResponse
+)
+# Macros responses
+from .macros_responses import (
+    MacrosCalculationResponse,
+    UpdatedMacrosResponse,
+    DailyMacrosResponse
+)
+# Meal plan responses
+from .meal_plan_responses import (
+    MessageSchema,
+    ConversationMessageResponse,
+    StartConversationResponse,
+    ConversationHistoryResponse,
+    PlannedMealSchema,
+    DayPlanSchema,
+    MealPlanResponse,
+    MealPlanSummaryResponse,
+    ReplaceMealResponse,
+    ErrorResponse
+)
 # Meal responses
 from .meal_responses import (
     SimpleMealResponse,
@@ -27,7 +58,13 @@ from .meal_responses import (
     FoodItemResponse,
     MealStatusEnum
 )
-
+# Onboarding responses
+from .onboarding_responses import (
+    OnboardingFieldResponse,
+    OnboardingSectionResponse,
+    OnboardingSectionsResponse,
+    OnboardingResponseResponse
+)
 # TDEE responses
 from .tdee_responses import (
     TdeeCalculationResponse,
@@ -36,50 +73,6 @@ from .tdee_responses import (
     TdeeHistoryResponse,
     TdeeErrorResponse,
     MacroTargetsResponse
-)
-
-# Activity responses
-from .activity_responses import (
-    ActivityResponse,
-    ActivitiesListResponse
-)
-
-# Macros responses
-from .macros_responses import (
-    MacrosCalculationResponse,
-    UpdatedMacrosResponse,
-    DailyMacrosResponse
-)
-
-# Ingredient responses
-from .ingredient_responses import (
-    IngredientResponse,
-    IngredientListResponse,
-    IngredientCreatedResponse,
-    IngredientUpdatedResponse,
-    IngredientDeletedResponse
-)
-
-# Meal plan responses
-from .meal_plan_responses import (
-    MessageSchema,
-    ConversationMessageResponse,
-    StartConversationResponse,
-    ConversationHistoryResponse,
-    PlannedMealSchema,
-    DayPlanSchema,
-    MealPlanResponse,
-    MealPlanSummaryResponse,
-    ReplaceMealResponse,
-    ErrorResponse
-)
-
-# Onboarding responses
-from .onboarding_responses import (
-    OnboardingFieldResponse,
-    OnboardingSectionResponse,
-    OnboardingSectionsResponse,
-    OnboardingResponseResponse
 )
 
 __all__ = [

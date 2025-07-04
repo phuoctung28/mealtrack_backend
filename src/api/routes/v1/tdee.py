@@ -1,10 +1,11 @@
 import logging
+
 from fastapi import APIRouter, HTTPException, status, Depends
 
 from src.api.dependencies import get_tdee_handler
+from src.api.mappers.tdee_mapper import TdeeMapper
 from src.api.schemas.request import TdeeCalculationRequest
 from src.api.schemas.response import TdeeCalculationResponse
-from src.api.mappers.tdee_mapper import TdeeMapper
 from src.app.handlers.tdee_handler import TdeeHandler
 
 logger = logging.getLogger(__name__)

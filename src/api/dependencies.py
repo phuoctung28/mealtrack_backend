@@ -4,18 +4,18 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from src.app.handlers.meal_handler import MealHandler
+from src.app.handlers.tdee_handler import TdeeHandler
 from src.app.handlers.upload_meal_image_handler import UploadMealImageHandler
 from src.app.services.meal_ingredient_service import MealIngredientService
+from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.adapters.image_store import ImageStore
 from src.infra.adapters.mock_vision_ai_service import MockVisionAIService
 from src.infra.database.config import get_db
 from src.infra.repositories.meal_repository import MealRepository
-from src.app.handlers.tdee_handler import TdeeHandler
-from src.domain.services.tdee_service import TdeeCalculationService
 
 try:
     from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore

@@ -1,8 +1,8 @@
 """User-related database models."""
-from .user import User
-from .profile import UserProfile
-from .preferences import UserPreference, UserDietaryPreference, UserHealthCondition, UserAllergy
 from .goals import UserGoal
+from .preferences import UserPreference, UserDietaryPreference, UserHealthCondition, UserAllergy
+from .profile import UserProfile
+from .user import User
 
 __all__ = [
     "User",

@@ -1,9 +1,10 @@
 """
 TDEE calculation request DTOs.
 """
-from typing import Optional, List
-from pydantic import BaseModel, Field, root_validator
 from enum import Enum
+from typing import Optional, List
+
+from pydantic import BaseModel, Field, root_validator
 
 
 class SexEnum(str, Enum):

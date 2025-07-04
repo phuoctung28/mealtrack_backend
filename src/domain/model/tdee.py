@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Dict
+from typing import Optional
 
 
 class Sex(Enum):

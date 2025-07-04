@@ -2,9 +2,10 @@
 Meal-related response DTOs.
 """
 from datetime import datetime
-from typing import Optional, List, Union
-from pydantic import BaseModel, Field
 from enum import Enum
+from typing import Optional, List, Union
+
+from pydantic import BaseModel, Field
 
 
 class MealStatusEnum(str, Enum):

@@ -1,11 +1,12 @@
 """Service for handling user onboarding and data persistence."""
-from typing import Dict, Optional, List
+from typing import Dict, Optional
+
 from sqlalchemy.orm import Session
 
-from src.infra.repositories.user_repository import UserRepository
-from src.domain.services.tdee_service import TdeeCalculationService
-from src.domain.model.tdee import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 from src.domain.model.macro_targets import SimpleMacroTargets
+from src.domain.model.tdee import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
+from src.domain.services.tdee_service import TdeeCalculationService
+from src.infra.repositories.user_repository import UserRepository
 
 
 class UserOnboardingService:

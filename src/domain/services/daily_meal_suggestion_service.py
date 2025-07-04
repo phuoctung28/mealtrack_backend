@@ -1,15 +1,14 @@
+import json
 import logging
-from typing import List, Dict, Optional
-from datetime import date
-import random
+import os
+import re
+from typing import List, Dict
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-import os
-import json
-import re
 
-from src.domain.model.meal_plan import PlannedMeal, MealType
 from src.domain.model.macro_targets import SimpleMacroTargets
+from src.domain.model.meal_plan import PlannedMeal, MealType
 
 logger = logging.getLogger(__name__)
 

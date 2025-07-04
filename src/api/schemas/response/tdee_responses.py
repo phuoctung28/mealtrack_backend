@@ -2,7 +2,9 @@
 TDEE calculation response DTOs.
 """
 from typing import Optional, List, Dict
+
 from pydantic import BaseModel, Field
+
 from src.api.schemas.request.tdee_requests import GoalEnum
 
 

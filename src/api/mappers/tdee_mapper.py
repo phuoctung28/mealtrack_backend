@@ -15,7 +15,6 @@ from src.domain.model.tdee import (
     Goal,
     UnitSystem
 )
-from src.domain.model.macro_targets import SimpleMacroTargets
 
 
 class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculationResponse]):

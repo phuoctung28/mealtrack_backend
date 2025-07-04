@@ -1,9 +1,10 @@
 """
 Daily meal suggestion response DTOs.
 """
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
 from enum import Enum
+from typing import List, Optional, Dict
+
+from pydantic import BaseModel, Field
 
 
 class MealTypeEnum(str, Enum):

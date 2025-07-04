@@ -2,7 +2,7 @@
 Base mapper class for API data transformation.
 """
 from abc import ABC, abstractmethod
-from typing import TypeVar, Generic, Optional, List
+from typing import TypeVar, Generic, List
 
 # Type variables for domain and DTO types
 DomainModel = TypeVar('DomainModel')

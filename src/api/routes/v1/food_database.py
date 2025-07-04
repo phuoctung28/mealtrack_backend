@@ -4,7 +4,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException, status, Query
 
 from src.api.schemas.response import (
-    SimpleMealResponse, MealListResponse
+    MealListResponse
 )
 
 logger = logging.getLogger(__name__)

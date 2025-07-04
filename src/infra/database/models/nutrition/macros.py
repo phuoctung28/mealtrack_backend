@@ -1,7 +1,7 @@
 """
 Macronutrient model for storing protein, carbs, fat, and fiber data.
 """
-from sqlalchemy import Column, String, Float, Integer, ForeignKey
+from sqlalchemy import Column, Float, Integer, ForeignKey
 
 from src.infra.database.config import Base
 from src.infra.database.models.base import SecondaryEntityMixin

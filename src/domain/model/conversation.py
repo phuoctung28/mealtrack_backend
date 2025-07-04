@@ -1,8 +1,8 @@
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional, Dict
 from enum import Enum
-import uuid
+from typing import List, Optional, Dict
 
 
 class ConversationState(str, Enum):

@@ -1,10 +1,10 @@
 import logging
-from typing import Dict, Optional
 from datetime import date
+from typing import Dict, Optional
 
-from src.domain.services.meal_plan_service import MealPlanService
-from src.domain.services.conversation_service import ConversationService
 from src.domain.model.meal_plan import UserPreferences
+from src.domain.services.conversation_service import ConversationService
+from src.domain.services.meal_plan_service import MealPlanService
 
 logger = logging.getLogger(__name__)
 

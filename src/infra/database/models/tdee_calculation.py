@@ -1,6 +1,7 @@
+from datetime import date as date_type
+
 from sqlalchemy import Column, String, Integer, Float, Date, ForeignKey, Index, CheckConstraint
 from sqlalchemy.orm import relationship
-from datetime import date as date_type
 
 from src.infra.database.config import Base
 from src.infra.database.models.base import BaseMixin

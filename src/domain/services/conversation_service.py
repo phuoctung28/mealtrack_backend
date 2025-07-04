@@ -1,11 +1,10 @@
 import logging
 import re
 from typing import Optional, List, Tuple
-from datetime import datetime
 
 from src.domain.model.conversation import (
-    Conversation, ConversationContext, ConversationState, 
-    Message, MessageRole
+    Conversation, ConversationContext, ConversationState,
+    MessageRole
 )
 from src.domain.model.meal_plan import (
     UserPreferences, DietaryPreference, FitnessGoal, PlanDuration, MealPlan, MealType

@@ -2,17 +2,15 @@
 Mapper for meal-related DTOs and domain models.
 """
 from typing import List, Optional
-from datetime import datetime
 
 from src.api.schemas.response import (
     SimpleMealResponse,
     DetailedMealResponse,
     MealListResponse,
     FoodItemResponse,
-    NutritionResponse,
-    MacrosResponse
+    NutritionResponse
 )
-from src.domain.model.meal import Meal, MealStatus
+from src.domain.model.meal import Meal
 from src.domain.model.nutrition import FoodItem, Nutrition
 
 

@@ -4,10 +4,10 @@ from typing import Optional
 
 from src.domain.model.meal import Meal
 from src.domain.model.meal_image import MealImage
+from src.domain.parsers.gpt_response_parser import GPTResponseParser, GPTResponseParsingError
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.parsers.gpt_response_parser import GPTResponseParser, GPTResponseParsingError
 
 logger = logging.getLogger(__name__)
 
