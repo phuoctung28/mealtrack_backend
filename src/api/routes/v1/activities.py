@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 
 from src.api.dependencies import get_meal_handler
-from src.api.schemas.activity_schemas import ActivityResponse, ActivitiesListResponse
+from src.api.schemas.response import ActivityResponse, ActivitiesListResponse
 from src.app.handlers.meal_handler import MealHandler
 from src.domain.model.meal import MealStatus
 

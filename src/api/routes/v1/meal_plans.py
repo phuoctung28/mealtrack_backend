@@ -1,15 +1,17 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict
 
-from src.api.schemas.meal_plan_schemas import (
+from src.api.schemas.request import (
     ConversationMessageRequest,
+    GenerateMealPlanRequest,
+    ReplaceMealRequest
+)
+from src.api.schemas.response import (
     ConversationMessageResponse,
     StartConversationResponse,
     ConversationHistoryResponse,
-    GenerateMealPlanRequest,
     MealPlanResponse,
     MealPlanSummaryResponse,
-    ReplaceMealRequest,
     ReplaceMealResponse,
     ErrorResponse
 )

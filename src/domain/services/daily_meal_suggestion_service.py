@@ -73,19 +73,22 @@ class DailyMealSuggestionService:
     
     def _calculate_meal_distribution(self, total_calories: float) -> Dict[MealType, float]:
         """Calculate calorie distribution across meals"""
-        # Standard distribution: Breakfast 25%, Lunch 35%, Dinner 30%, Snack 10%
+        from src.domain.constants import MealDistribution
+        
+        # Standard distribution
         distribution = {
-            MealType.BREAKFAST: total_calories * 0.25,
-            MealType.LUNCH: total_calories * 0.35,
-            MealType.DINNER: total_calories * 0.30,
+            MealType.BREAKFAST: total_calories * MealDistribution.BREAKFAST_PERCENT,
+            MealType.LUNCH: total_calories * MealDistribution.LUNCH_PERCENT,
+            MealType.DINNER: total_calories * MealDistribution.DINNER_PERCENT,
         }
         
-        # Add snack if total calories > 1800
-        if total_calories > 1800:
-            distribution[MealType.SNACK] = total_calories * 0.10
+        # Add snack if total calories > threshold
+        if total_calories > MealDistribution.MIN_CALORIES_FOR_SNACK:
+            distribution[MealType.SNACK] = total_calories * MealDistribution.SNACK_PERCENT
             # Adjust other meals
-            for meal_type in [MealType.BREAKFAST, MealType.LUNCH, MealType.DINNER]:
-                distribution[meal_type] *= 0.9
+            distribution[MealType.BREAKFAST] = total_calories * MealDistribution.BREAKFAST_WITH_SNACK
+            distribution[MealType.LUNCH] = total_calories * MealDistribution.LUNCH_WITH_SNACK
+            distribution[MealType.DINNER] = total_calories * MealDistribution.DINNER_WITH_SNACK
         
         return distribution
     

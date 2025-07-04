@@ -9,7 +9,7 @@ from src.app.services.meal_ingredient_service import MealIngredientService
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.gpt_response_parser import GPTResponseParser
+from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.infra.adapters.image_store import ImageStore
 from src.infra.adapters.mock_vision_ai_service import MockVisionAIService
 from src.infra.database.config import get_db

@@ -4,10 +4,12 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from src.infra.database.models.user import (
-    User, UserProfile, UserPreference, UserDietaryPreference,
-    UserHealthCondition, UserAllergy, UserGoal
+from src.infra.database.models.user.user import User
+from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.user.preferences import (
+    UserPreference, UserDietaryPreference, UserHealthCondition, UserAllergy
 )
+from src.infra.database.models.user.goals import UserGoal
 from src.infra.database.models.tdee_calculation import TdeeCalculation
 from src.domain.model.macro_targets import SimpleMacroTargets
 

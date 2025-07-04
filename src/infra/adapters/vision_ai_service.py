@@ -8,7 +8,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.analysis_strategy import (
+from src.domain.strategies.meal_analysis_strategy import (
     MealAnalysisStrategy,
     AnalysisStrategyFactory
 )

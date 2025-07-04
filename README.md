@@ -8,7 +8,7 @@ A FastAPI-based backend service for meal tracking and nutritional analysis with 
 - **AI-Powered Analysis**: Automatic nutritional analysis using OpenAI's GPT-4 Vision
 - **Background Processing**: Asynchronous meal analysis using FastAPI background tasks
 - **RESTful API**: Clean REST endpoints for meal management
-- **Database Support**: SQLite for development, MySQL for production
+- **Database Support**: MySQL
 - **Clean Architecture**: 4-layer architecture with clear separation of concerns
 
 ## Architecture
@@ -53,12 +53,11 @@ pip install -r requirements.txt
 - `CLOUDINARY_API_SECRET`: Your Cloudinary API secret
 
 **Optional Variables:**
-- `USE_SQLITE=1`: Use SQLite (default for development)
 - `USE_MOCK_STORAGE=0`: Use Cloudinary (set to 1 for local storage)
 
 ### Database Setup
 
-The application will automatically create the SQLite database on first run. For production MySQL setup, update the database environment variables in `.env`.
+For MySQL setup, update the database environment variables in `.env`.
 
 ## Running the Application
 

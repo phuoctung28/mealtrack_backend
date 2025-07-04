@@ -7,19 +7,18 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from src.infra.database.config import SessionLocal, SQLALCHEMY_DATABASE_URL
 from populate_mock_data import MockDataGenerator, USER_PROFILES
 
 def create_quick_test_users():
     """Create 3 test users quickly."""
-    db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'mealtrack.db')
-    engine = create_engine(f'sqlite:///{db_path}')
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = SessionLocal()
     
     print("🚀 Creating Quick Test Users")
     print("=" * 60)
+    print(f"Database Type: MySQL")
+    print(f"Database URL: {SQLALCHEMY_DATABASE_URL.split('@')[1] if '@' in SQLALCHEMY_DATABASE_URL else SQLALCHEMY_DATABASE_URL}")
+    print()
     
     generator = MockDataGenerator(session)
     
@@ -78,7 +77,7 @@ def create_quick_test_users():
     print("🔑 PROFILE IDs FOR TESTING:")
     print("=" * 60)
     
-    from src.infra.database.models.user import UserProfile
+    from src.infra.database.models.user.profile import UserProfile
     
     for i, user in enumerate(created_users):
         profile = session.query(UserProfile).filter(

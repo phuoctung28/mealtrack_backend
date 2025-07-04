@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import logging
 
-from src.api.schemas.daily_meal_schemas import (
+from src.api.schemas.response import (
     DailyMealSuggestionsResponse,
     SingleMealSuggestionResponse,
     MealTypeEnum
 )
+from src.api.mappers.daily_meal_mapper import DailyMealMapper
 from src.app.handlers.daily_meal_suggestion_handler import DailyMealSuggestionHandler
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
 from src.infra.database.config import get_db
@@ -45,7 +46,7 @@ async def get_daily_meal_suggestions_by_profile(
         user_repo = UserRepository(db)
         
         # Get user profile
-        from src.infra.database.models.user import UserProfile
+        from src.infra.database.models.user.profile import UserProfile
         profile = db.query(UserProfile).filter(
             UserProfile.id == user_profile_id
         ).first()
@@ -112,15 +113,31 @@ async def get_daily_meal_suggestions_by_profile(
         # Get meal suggestions
         result = suggestion_handler.get_daily_suggestions(user_data)
         
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["message"])
+        # Map to response DTO
+        target_calories = user_data['target_calories'] or 2000
+        target_macros = user_data['target_macros'] or SimpleMacroTargets(
+            protein=50.0,
+            carbs=250.0,
+            fat=65.0
+        )
         
-        return DailyMealSuggestionsResponse(
-            date=result["date"],
-            meal_count=result["meal_count"],
-            meals=result["meals"],
-            daily_totals=result["daily_totals"],
-            target_totals=result["target_totals"]
+        # Create handler response format for mapper
+        handler_response = {
+            "date": result.date,
+            "meal_count": len(result.meals),
+            "meals": [meal.to_dict() for meal in result.meals],
+            "daily_totals": {
+                "calories": result.daily_calories,
+                "protein": result.daily_totals.protein,
+                "carbs": result.daily_totals.carbs,
+                "fat": result.daily_totals.fat
+            }
+        }
+        
+        return DailyMealMapper.map_handler_response_to_dto(
+            handler_response,
+            target_calories,
+            target_macros
         )
         
     except HTTPException:
@@ -148,7 +165,7 @@ async def get_single_meal_suggestion_by_profile(
         user_repo = UserRepository(db)
         
         # Get user profile
-        from src.infra.database.models.user import UserProfile
+        from src.infra.database.models.user.profile import UserProfile
         profile = db.query(UserProfile).filter(
             UserProfile.id == user_profile_id
         ).first()
@@ -201,12 +218,12 @@ async def get_single_meal_suggestion_by_profile(
             user_data['target_macros'] = tdee_result['macros']
         
         # Get specific meal suggestion
-        result = suggestion_handler.get_meal_by_type(user_data, meal_type.value)
+        meal = suggestion_handler.get_meal_by_type(user_data, meal_type.value)
         
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["message"])
+        # Map to response DTO
+        meal_response = DailyMealMapper.map_planned_meal_to_schema(meal)
         
-        return SingleMealSuggestionResponse(meal=result["meal"])
+        return SingleMealSuggestionResponse(meal=meal_response)
         
     except HTTPException:
         raise
@@ -229,7 +246,7 @@ async def get_meal_planning_data(
         user_repo = UserRepository(db)
         
         # Get user profile
-        from src.infra.database.models.user import UserProfile
+        from src.infra.database.models.user.profile import UserProfile
         profile = db.query(UserProfile).filter(
             UserProfile.id == user_profile_id
         ).first()

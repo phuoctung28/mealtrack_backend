@@ -20,15 +20,16 @@ import uuid
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from src.infra.database.config import get_db, Base
-from src.infra.database.models.user import (
-    User, UserProfile, UserPreference, UserDietaryPreference,
-    UserHealthCondition, UserAllergy, UserGoal
+from src.infra.database.config import engine, SessionLocal, SQLALCHEMY_DATABASE_URL
+from src.infra.database.models.user.user import User
+from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.user.preferences import (
+    UserPreference, UserDietaryPreference, UserHealthCondition, UserAllergy
 )
+from src.infra.database.models.user.goals import UserGoal
 from src.infra.database.models.tdee_calculation import TdeeCalculation
-from src.infra.database.models.meal_plan import MealPlan, Conversation
+from src.infra.database.models.meal_planning.meal_plan import MealPlan
+from src.infra.database.models.conversation.conversation import Conversation
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.model.tdee import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 from src.domain.model.macro_targets import SimpleMacroTargets
@@ -203,6 +204,8 @@ class MockDataGenerator:
         user = User(
             email=email,
             username=username,
+            first_name=first_name,
+            last_name=last_name,
             password_hash="hashed_password_123",  # In real app, use proper hashing
             is_active=True
         )
@@ -471,11 +474,11 @@ def main():
     """Main function."""
     print("🗄️  MealTrack Mock Data Generator")
     print("=" * 60)
+    print(f"Database Type: MySQL")
+    print(f"Database URL: {SQLALCHEMY_DATABASE_URL.split('@')[1] if '@' in SQLALCHEMY_DATABASE_URL else SQLALCHEMY_DATABASE_URL}")
+    print()
     
     # Create database session
-    db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'mealtrack.db')
-    engine = create_engine(f'sqlite:///{db_path}')
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = SessionLocal()
     
     try:

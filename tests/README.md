@@ -29,16 +29,24 @@ python run_tests.py validation   # Validation tests
 
 ```
 tests/
-├── README.md                 # This documentation
-├── conftest.py              # Shared fixtures and configuration
-├── test_api_endpoints.py    # Main API endpoint tests
-├── test_performance.py      # Performance and load tests
-└── test_validation.py       # Validation and error handling tests
+├── README.md                        # This documentation
+├── conftest.py                     # Shared fixtures and configuration
+├── test_api_endpoints.py           # Main API endpoint tests
+├── test_performance.py             # Performance and load tests
+├── test_validation.py              # Validation and error handling tests
+├── test_daily_meals_v2.py          # Daily meals V2 API tests
+├── test_tdee_endpoint.py           # TDEE calculation endpoint tests
+├── domain/
+│   └── parsers/
+│       └── test_gpt_response_parser.py  # GPT response parser tests
+└── infra/
+    └── adapters/
+        └── test_vision_ai_service.py    # Vision AI service tests
 
 Root files:
-├── run_tests.py             # Test runner script
-├── pytest.ini              # Pytest configuration
-└── requirements.txt         # Updated with test dependencies
+├── scripts/run_tests.py            # Test runner script
+├── pytest.ini                      # Pytest configuration
+└── requirements.txt                # Updated with test dependencies
 ```
 
 ## 🧪 Test Categories
@@ -51,38 +59,35 @@ Root files:
 - `GET /health` - Health check
 - `GET /` - API information
 
-#### Onboarding System 
-- `GET /v1/onboarding/sections` - Retrieve form sections
-- `POST /v1/onboarding/responses` - Submit form responses
+#### Meals Management
+- `POST /v1/meals/image` - Upload meal image for analysis
+- `GET /v1/meals/{meal_id}` - Get meal details
+- `GET /v1/meals/{meal_id}/status` - Get meal processing status
+
+#### Macros & Nutrition  
+- `GET /v1/macros/daily` - Get daily macro targets
+- `GET /v1/macros/consumed` - Get consumed macros
 
 #### Activity Tracking
-- `GET /v1/activities/` - List activities with filtering/pagination
-- `GET /v1/activities/types` - Available activity types
-- `GET /v1/activities/{id}` - Specific activity details
+- `GET /v1/activities/` - List activities
+- `POST /v1/activities/` - Log new activity
+- `GET /v1/activities/types` - Get activity types
 
-#### Food Management
-- `POST /v1/food/photo` - Food photo analysis
-- `POST /v1/food/` - Create food item
-- `GET /v1/food/{id}` - Retrieve food by ID
-- `PUT /v1/food/{id}` - Update food information
-- `POST /v1/food/{id}/macros` - Update macros by portion
+#### TDEE Calculations
+- `POST /v1/tdee/calculate` - Calculate TDEE
+- `POST /v1/tdee/simple-macros` - Calculate simple macro targets
 
-#### Ingredients Management
-- `POST /v1/food/{id}/ingredients/` - Add ingredient
-- `GET /v1/food/{id}/ingredients/` - List ingredients
-- `PUT /v1/food/{id}/ingredients/{id}` - Update ingredient
-- `DELETE /v1/food/{id}/ingredients/{id}` - Delete ingredient
+#### User Onboarding
+- `POST /v1/user-onboarding/save` - Save user onboarding data
 
-#### Macros & Nutrition
-- `POST /v1/macros/calculate` - Calculate from onboarding
-- `POST /v1/macros/consumed` - Update consumption
-- `GET /v1/macros/daily` - Daily macro status
+#### Daily Meals V2
+- `POST /v2/daily-meals/suggestions/{profile_id}` - Get meal suggestions
+- `POST /v2/daily-meals/suggestions/{profile_id}/{meal_type}` - Get specific meal suggestion
+- `GET /v2/daily-meals/profile/{profile_id}/summary` - Get profile summary
 
 #### Food Database
-- `GET /v1/food-database/` - List foods (paginated)
-- `POST /v1/food-database/` - Add food to database
-- `POST /v1/food-database/search` - Search foods
-- `GET /v1/food-database/popular` - Popular foods
+- `GET /v1/food-database/search` - Search food database
+- `GET /v1/food-database/nutrients` - Get nutrient info
 
 ### 2. Performance Tests (`test_performance.py`)
 

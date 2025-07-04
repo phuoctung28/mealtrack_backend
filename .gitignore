@@ -48,4 +48,10 @@ coverage.xml
 *,cover
 
 # Cloudinary uploads (if stored locally)
-uploads/ 
+uploads/
+
+# Database files
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3 

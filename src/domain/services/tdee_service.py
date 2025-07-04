@@ -2,19 +2,11 @@ import math
 from typing import Dict
 
 from src.domain.model.tdee import TdeeRequest, TdeeResponse, MacroTargets, ActivityLevel, Sex, Goal
+from src.domain.constants import TDEEConstants
 
 
 class TdeeCalculationService:
     """Domain service for TDEE and macro calculations."""
-    
-    # Activity multipliers from specification - updated to match Flutter enum
-    ACTIVITY_MULTIPLIERS = {
-        ActivityLevel.SEDENTARY: 1.2,
-        ActivityLevel.LIGHT: 1.375,
-        ActivityLevel.MODERATE: 1.55,
-        ActivityLevel.ACTIVE: 1.725,    # Changed from VERY to ACTIVE
-        ActivityLevel.EXTRA: 1.9
-    }
     
     def calculate_tdee(self, request: TdeeRequest) -> TdeeResponse:
         """Calculate BMR, TDEE and macros based on the request."""
@@ -44,7 +36,15 @@ class TdeeCalculationService:
     
     def _calculate_tdee_from_bmr(self, bmr: float, activity_level: ActivityLevel) -> float:
         """Calculate TDEE from BMR using activity multiplier."""
-        multiplier = self.ACTIVITY_MULTIPLIERS[activity_level]
+        # Map ActivityLevel enum to string for constants lookup
+        activity_map = {
+            ActivityLevel.SEDENTARY: "sedentary",
+            ActivityLevel.LIGHT: "light",
+            ActivityLevel.MODERATE: "moderate",
+            ActivityLevel.ACTIVE: "active",
+            ActivityLevel.EXTRA: "extra"
+        }
+        multiplier = TDEEConstants.ACTIVITY_MULTIPLIERS[activity_map[activity_level]]
         return bmr * multiplier
     
     def _calculate_all_macro_targets(self, tdee: float, weight_kg: float, goal: Goal) -> MacroTargets:
@@ -52,15 +52,15 @@ class TdeeCalculationService:
         calories = 0
 
         if goal == Goal.MAINTENANCE:
-            calories = tdee
+            calories = tdee * TDEEConstants.MAINTENANCE_MULTIPLIER
         elif goal == Goal.CUTTING:
-            calories = tdee * 0.8
+            calories = tdee * TDEEConstants.CUTTING_MULTIPLIER
         elif goal == Goal.BULKING:
-            calories = tdee * 1.15
+            calories = tdee * TDEEConstants.BULKING_MULTIPLIER
         
-        protein_g = weight_kg * 2.205 * 0.8
+        protein_g = weight_kg * TDEEConstants.LBS_PER_KG * TDEEConstants.PROTEIN_PER_LB_BODYWEIGHT
 
-        fat_percentage = 0.20 if goal == Goal.CUTTING else 0.25
+        fat_percentage = TDEEConstants.CUTTING_FAT_PERCENT if goal == Goal.CUTTING else TDEEConstants.DEFAULT_FAT_PERCENT
         fat_calories = calories * fat_percentage
         fat_g = fat_calories / 9
 

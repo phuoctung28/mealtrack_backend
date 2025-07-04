@@ -2,12 +2,14 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 import logging
 
-from src.api.schemas.daily_meal_schemas import (
+from src.api.schemas.request import (
     UserPreferencesRequest,
+    MealTypeEnum
+)
+from src.api.schemas.response import (
     DailyMealSuggestionsResponse,
     SingleMealSuggestionResponse,
-    MealTypeEnum,
-    ErrorResponse
+    MealSuggestionErrorResponse
 )
 from src.app.handlers.daily_meal_suggestion_handler import DailyMealSuggestionHandler
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Date, ForeignKey, Index, CheckConstraint
+from sqlalchemy import Column, String, Integer, Float, Date, ForeignKey, Index, CheckConstraint
 from sqlalchemy.orm import relationship
 from datetime import date as date_type
 
@@ -12,7 +12,7 @@ class TdeeCalculation(Base, BaseMixin):
     
     user_id = Column(String(36), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     user_profile_id = Column(String(36), ForeignKey('user_profiles.id'), nullable=False)
-    user_goal_id = Column(String(36), ForeignKey('user_goals.id'), nullable=False)
+    user_goal_id = Column(Integer, ForeignKey('user_goals.id'), nullable=False)
     
     # Calculation results
     bmr = Column(Float, nullable=False)

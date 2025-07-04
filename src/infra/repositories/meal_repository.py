@@ -10,9 +10,9 @@ from src.domain.model.micros import Micros
 from src.domain.model.nutrition import Nutrition, FoodItem
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.infra.database.config import SessionLocal
-from src.infra.database.models.meal import Meal as DBMeal
-from src.infra.database.models.meal_image import MealImage as DBMealImage
-from src.infra.database.models.nutrition import Nutrition as DBNutrition
+from src.infra.database.models.meal.meal import Meal as DBMeal
+from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
+from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
 
 
 # For development, we'll use an in-memory store
@@ -118,7 +118,7 @@ class MealRepository(MealRepositoryPort):
         db = self._get_db()
         
         try:
-            from src.infra.database.models.meal import MealStatusEnum
+            from src.infra.database.models.enums import MealStatusEnum
             
             status_mapping = {
                 MealStatus.PROCESSING: MealStatusEnum.PROCESSING,
