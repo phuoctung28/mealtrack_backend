@@ -6,7 +6,7 @@ import logging
 
 from src.infra.database.config import get_db
 from src.app.services.user_onboarding_service import UserOnboardingService
-from src.api.schemas.onboarding_schemas import OnboardingCompleteRequest
+from src.api.schemas.request import OnboardingCompleteRequest
 
 router = APIRouter(prefix="/v1/user-onboarding", tags=["User Onboarding"])
 logger = logging.getLogger(__name__)

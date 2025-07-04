@@ -5,11 +5,12 @@ from typing import Dict
 from fastapi import APIRouter, UploadFile, HTTPException, status, Depends, File, BackgroundTasks
 
 from src.api.dependencies import get_upload_meal_image_handler, get_meal_handler
-from src.api.schemas.meal_schemas import (
-    UpdateMealMacrosRequest,
-    MealResponse, MealStatusResponse,
-    DetailedMealResponse, MacrosSchema
+from src.api.schemas.request import UpdateMealMacrosRequest
+from src.api.schemas.response import (
+    SimpleMealResponse, DetailedMealResponse, 
+    MealStatusResponse, MacrosResponse
 )
+from src.api.mappers.meal_mapper import MealMapper
 from src.app.handlers.meal_handler import MealHandler
 from src.app.handlers.upload_meal_image_handler import UploadMealImageHandler
 from src.domain.model.meal import MealStatus, Meal
@@ -126,8 +127,8 @@ async def analyze_meal_image_immediate(
                 detail=f"Failed to analyze meal image: {error_message}"
             )
         
-        # Return the detailed meal response
-        return DetailedMealResponse.from_domain(meal)
+        # Return the detailed meal response using mapper
+        return MealMapper.to_detailed_response(meal)
 
     except HTTPException:
         raise
@@ -151,9 +152,9 @@ async def get_meal(
     if not meal:
         raise HTTPException(status_code=404, detail=f"Meal with ID {meal_id} not found")
     
-    return DetailedMealResponse.from_domain(meal)
+    return MealMapper.to_detailed_response(meal)
 
-@router.post("/{meal_id}/macros", response_model=MealResponse)
+@router.post("/{meal_id}/macros", response_model=DetailedMealResponse)
 async def update_meal_macros(
     meal_id: str,
     macros_request: UpdateMealMacrosRequest,
@@ -230,21 +231,8 @@ async def update_meal_macros(
         logger.info(f"Calculated macros for {new_weight_grams}g: {total_macros.protein}p, {total_macros.carbs}c, {total_macros.fat}f")
         logger.info(f"LLM recalculation scheduled in background for more accurate results")
         
-        # Return response with the updated meal data
-        return MealResponse(
-            meal_id=meal_id,
-            name=meal.name if hasattr(meal, 'name') else "Meal",
-            dish_name=meal.dish_name,
-            description=f"Weight updated to {new_weight_grams}g - LLM recalculation in progress",
-            weight_grams=new_weight_grams,
-            total_calories=total_calories,
-            calories_per_100g=calories_per_100g,
-            macros_per_100g=macros_per_100g,
-            total_macros=total_macros,
-            status=updated_meal.status.value,  # Use the updated meal's status
-            created_at=updated_meal.created_at.isoformat() if updated_meal.created_at else "2024-01-01T00:00:00Z",
-            updated_at=updated_meal.updated_at.isoformat() if hasattr(updated_meal, 'updated_at') and updated_meal.updated_at else "2024-01-01T12:00:00Z"
-        )
+        # Return response with the updated meal data using mapper
+        return MealMapper.to_detailed_response(updated_meal)
         
     except HTTPException:
         raise

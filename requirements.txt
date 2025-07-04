@@ -1,21 +1,28 @@
-fastapi==0.115.0
-uvicorn[standard]==0.27.0
-gunicorn==21.2.0
-pydantic==2.7.4
-python-multipart==0.0.7
-langchain==0.3.25
-langchain-openai==0.3.23
-langchain-google-genai==2.0.5
+# Web framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.7.4
+python-multipart>=0.0.19
+
+# AI/LLM dependencies
+langchain-core>=0.1.0
+langchain-google-genai
+
+# Cloud storage
 cloudinary==1.37.0
-requests==2.31.0
-python-dotenv==1.0.0
-uuid==1.30
-pillow==10.2.0
-google-generativeai>=0.3.0
+
+# HTTP client
+requests==2.32.4
+
+# Image processing
+pillow==10.3.0
+
+# Database
 sqlalchemy==2.0.41
-mysql-connector-python==8.3.0
-pymysql==1.1.0
-alembic==1.13.1
+pymysql==1.1.1
+
+# Environment management
+python-dotenv==1.0.0
 
 # Testing dependencies
 pytest==8.0.0
@@ -24,6 +31,9 @@ pytest-cov==4.0.0
 pytest-xdist==3.5.0
 pytest-asyncio==0.23.2
 httpx==0.26.0
-coverage==7.4.0
 pytest-mock==3.12.0
 pytest-timeout==2.2.0
+
+# Requirements for Gradio UI
+gradio>=4.0.0
+requests>=2.31.0

@@ -1,8 +1,11 @@
 import os
+import logging
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect
 
 from src.api.routes.v1.macros import router as macros_router
 from src.api.routes.v1.meals import router as meals_router
@@ -15,10 +18,74 @@ from src.api.routes.v2.daily_meals import router as daily_meals_v2_router
 
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def init_database():
+    """Initialize database tables if they don't exist."""
+    from src.infra.database.config import engine, Base
+    
+    # Import all models to ensure they're registered
+    from src.infra.database.models import (
+        Meal, MealImage, MealPlan, MealPlanDay, PlannedMeal,
+        TdeeCalculation, User, UserProfile, UserPreference, 
+        UserDietaryPreference, UserHealthCondition, UserAllergy, UserGoal,
+        Nutrition, Macros, FoodItem, Conversation, ConversationMessage
+    )
+    
+    # Check if we should recreate tables (development mode)
+    RECREATE_TABLES = os.getenv("RECREATE_TABLES", "false").lower() == "true"
+    
+    try:
+        # Check existing tables
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+        
+        # Count non-system tables
+        app_tables = [t for t in existing_tables if t != 'alembic_version']
+        
+        if RECREATE_TABLES and app_tables:
+            logger.warning("RECREATE_TABLES=true. Dropping all tables...")
+            Base.metadata.drop_all(bind=engine)
+            logger.info("All tables dropped.")
+            app_tables = []
+        
+        if len(app_tables) == 0:
+            logger.info("Creating database schema...")
+            Base.metadata.create_all(bind=engine)
+            logger.info("✅ Database schema created successfully!")
+        else:
+            logger.info(f"✅ Database ready with {len(app_tables)} existing tables")
+            
+    except Exception as e:
+        logger.error(f"Database initialization error: {e}")
+        logger.error("If using MySQL, ensure it's running: ./local.sh")
+        raise
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle application startup and shutdown events."""
+    # Startup
+    logger.info("Starting MealTrack API...")
+    
+    # Initialize database
+    init_database()
+    
+    logger.info("MealTrack API started successfully!")
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down MealTrack API...")
+
+
 app = FastAPI(
     title="MealTrack API",
     description="API for meal tracking, nutritional analysis with AI vision capabilities, and smart meal planning",
     version="0.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -35,52 +102,14 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    return {
-        "name": "MealTrack API",
-        "version": "0.1.0",
-        "status": "running",
-        "docs": "/docs",
-        "available_endpoints": {
-            "onboarding": "/v1/onboarding/sections",
-            "activities": "/v1/activities",
-            "meals": "/v1/meals",
-            "meal_photo_analysis": "/v1/meals/photo",
-            "meal_management": "/v1/meals/{meal_id}",
-            "meal_search": "/v1/meals/search",
-            "meal_macros": "/v1/meals/{meal_id}/macros",
-            "ingredients": "/v1/meals/{meal_id}/ingredients",
-            "macros": "/v1/macros",
-            "tdee": "/v1/tdee",
-            "meal_planning": {
-                "start_conversation": "/v1/meal-plans/conversations/start",
-                "send_message": "/v1/meal-plans/conversations/{conversation_id}/messages",
-                "generate_plan": "/v1/meal-plans/generate",
-                "get_plan": "/v1/meal-plans/{plan_id}",
-                "replace_meal": "/v1/meal-plans/{plan_id}/meals/replace"
-            },
-            "daily_meal_suggestions": {
-                "get_suggestions": "/v1/daily-meals/suggestions",
-                "get_single_meal": "/v1/daily-meals/suggestions/{meal_type}"
-            },
-            "user_onboarding": {
-                "save_data": "/v1/user-onboarding/save",
-                "get_summary": "/v1/user-onboarding/summary/{user_id}",
-                "recalculate_tdee": "/v1/user-onboarding/calculate-tdee/{user_id}"
-            },
-            "daily_meals_v2": {
-                "get_suggestions_by_profile": "/v2/daily-meals/suggestions/{user_profile_id}",
-                "get_single_meal_by_profile": "/v2/daily-meals/suggestions/{user_profile_id}/{meal_type}",
-                "get_meal_planning_data": "/v2/daily-meals/profile/{user_profile_id}/summary"
-            }
-        }
-    }
+    return "MealTrack API is running! Visit /docs for API documentation."
 
 app.include_router(meals_router, prefix="/v1")
 app.include_router(macros_router, prefix="/v1")
 app.include_router(activities_router, prefix="/v1")
 app.include_router(tdee_router, prefix="/v1")
-app.include_router(meal_plans_router)
-app.include_router(daily_meals_router)
+# app.include_router(meal_plans_router)
+# app.include_router(daily_meals_router)
 app.include_router(user_onboarding_router)
 app.include_router(daily_meals_v2_router)
 

@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
+Don't change .env file
 ## Development Commands
 
 ### Running the Application
@@ -31,8 +31,7 @@ pytest tests/test_api_endpoints.py::TestHealthAndRoot  # Specific test
 
 ### Database
 ```bash
-python scripts/setup_db.py     # Setup MySQL database (production)
-# SQLite database is auto-created for development
+python scripts/setup_db.py     # Setup MySQL database
 ```
 
 ## Architecture Overview
@@ -66,7 +65,7 @@ This is a FastAPI-based meal tracking application following Clean Architecture (
 - **Background Processing**: Asynchronous meal analysis with status tracking
 - **TDEE Calculation**: Total Daily Energy Expenditure based on user activity
 - **Cloud Storage**: Cloudinary integration for image storage
-- **Database Support**: SQLite (development) and MySQL (production)
+- **Database Support**: MySQL
 
 ### API Endpoints
 - `/v1/meals/` - Meal management and photo analysis
@@ -85,7 +84,6 @@ Uses Alembic for database migrations:
 Required environment variables:
 - `OPENAI_API_KEY` - For GPT-4 Vision analysis
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` - For image storage
-- `USE_SQLITE=1` - Use SQLite for development
 - `USE_MOCK_STORAGE=1` - Use local storage instead of Cloudinary
 
 ### Testing Strategy

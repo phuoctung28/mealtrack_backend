@@ -3,8 +3,8 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException, status, Query
 
-from src.api.schemas.meal_schemas import (
-    MealResponse, PaginatedMealResponse
+from src.api.schemas.response import (
+    SimpleMealResponse, MealListResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ router = APIRouter(
     tags=["food-database"],
 )
 
-@router.get("/", response_model=PaginatedMealResponse)
+@router.get("/", response_model=MealListResponse)
 async def get_meals_list(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),

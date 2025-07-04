@@ -1,0 +1,1 @@
+# Common enums and shared schemas

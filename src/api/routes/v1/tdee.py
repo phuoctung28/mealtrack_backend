@@ -2,7 +2,9 @@ import logging
 from fastapi import APIRouter, HTTPException, status, Depends
 
 from src.api.dependencies import get_tdee_handler
-from src.api.schemas.tdee_schemas import TdeeCalculationRequest, TdeeCalculationResponse
+from src.api.schemas.request import TdeeCalculationRequest
+from src.api.schemas.response import TdeeCalculationResponse
+from src.api.mappers.tdee_mapper import TdeeMapper
 from src.app.handlers.tdee_handler import TdeeHandler
 
 logger = logging.getLogger(__name__)
@@ -29,24 +31,28 @@ async def calculate_tdee(
     - Supports both metric (kg/cm) and imperial (lbs/inches) unit systems
     """
     try:
+        # Initialize mapper
+        mapper = TdeeMapper()
+        
+        # Convert request DTO to domain model
+        domain_request = mapper.to_domain(request)
+        
         # Delegate to application layer handler
         result = await handler.calculate_tdee(
-            age=request.age,
-            sex=request.sex,
-            height=request.height,
-            weight=request.weight,
-            body_fat_percentage=request.body_fat_percentage,
-            activity_level=request.activity_level,
-            goal=request.goal,
-            unit_system=request.unit_system
+            age=domain_request.age,
+            sex=domain_request.sex.value,
+            height=domain_request.height,
+            weight=domain_request.weight,
+            body_fat_percentage=domain_request.body_fat_pct,
+            activity_level=domain_request.activity_level.value,
+            goal=domain_request.goal.value,
+            unit_system=domain_request.unit_system.value
         )
-        
-        # Convert domain response to API response format
-        response_dict = result.to_dict()
         
         logger.info(f"TDEE calculation successful: BMR={result.bmr}, TDEE={result.tdee} ({request.unit_system})")
         
-        return TdeeCalculationResponse(**response_dict)
+        # Convert domain response to API response DTO
+        return mapper.to_response_dto(result)
         
     except ValueError as e:
         logger.warning(f"Validation error in TDEE calculation: {str(e)}")
