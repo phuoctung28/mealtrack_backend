@@ -77,7 +77,7 @@ class GPTAnalysisResponse(BaseModel):
     
     class Config:
         """Pydantic configuration."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "dish_name": "Chicken Caesar Salad",
                 "foods": [
