@@ -20,7 +20,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
     
     - name: Cache pip packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -42,12 +42,13 @@ jobs:
         USE_MOCK_STORAGE: "1"
         USE_MOCK_VISION_SERVICE: "1"
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY || 'mock-key-for-testing' }}
+        DATABASE_URL: "sqlite:///:memory:"
         CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'mock-cloud' }}
         CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || 'mock-api-key' }}
         CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || 'mock-api-secret' }}
     
     - name: Upload coverage reports
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
         flags: unittests
@@ -55,7 +56,7 @@ jobs:
         fail_ci_if_error: false
     
     - name: Upload coverage HTML report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-report
         path: htmlcov/
@@ -118,7 +119,7 @@ jobs:
       continue-on-error: true
     
     - name: Upload bandit report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: bandit-report
         path: bandit-report.json
