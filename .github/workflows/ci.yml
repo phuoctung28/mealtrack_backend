@@ -57,7 +57,7 @@ jobs:
       run: |
         pytest --cov=src --cov-report=xml --cov-report=term-missing -n auto --maxfail=5
       env:
-        DATABASE_URL: "mysql://test_user:test_password@localhost:3306/mealtrack_test"
+        DATABASE_URL: "mysql://test_user:test_password@127.0.0.1:3306/mealtrack_test"
         CI: true
         TESTING: true
         PYTHONPATH: .
