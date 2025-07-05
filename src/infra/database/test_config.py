@@ -49,7 +49,11 @@ def create_test_engine():
 
 def create_test_tables(engine):
     """Create all tables in test database."""
-    Base.metadata.create_all(bind=engine)
+    # Import to ensure all models are loaded
+    import src.infra.database.models
+    
+    # For MySQL, we can use checkfirst=True to avoid errors
+    Base.metadata.create_all(bind=engine, checkfirst=True)
 
 
 def drop_test_tables(engine):

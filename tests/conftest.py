@@ -49,24 +49,12 @@ def test_engine():
         conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
     temp_engine.dispose()
     
-    # Drop existing tables and create fresh ones
-    # First, disable foreign key checks for MySQL
-    with engine.connect() as conn:
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
-        conn.commit()
-    
-    drop_test_tables(engine)
+    # Create tables if they don't exist (checkfirst=True handles this)
     create_test_tables(engine)
-    
-    # Re-enable foreign key checks
-    with engine.connect() as conn:
-        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
-        conn.commit()
     
     yield engine
     
-    # Clean up
-    drop_test_tables(engine)
+    # Don't drop tables at the end - let next run handle cleanup
     engine.dispose()
 
 
