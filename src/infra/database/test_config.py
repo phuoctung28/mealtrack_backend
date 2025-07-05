@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from .config import Base
+from src.infra.database.config import Base
 
 
 def get_test_database_url() -> str:

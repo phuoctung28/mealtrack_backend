@@ -6,7 +6,6 @@ from datetime import datetime
 from unittest.mock import Mock
 
 from src.app.commands.user import SaveUserOnboardingCommand
-from src.domain.model.user.user_profile import UserProfile
 from src.api.exceptions import ValidationException
 
 

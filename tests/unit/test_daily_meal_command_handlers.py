@@ -2,12 +2,9 @@
 Unit tests for daily meal command handlers.
 """
 import pytest
-from datetime import date, datetime
-from unittest.mock import Mock
 
-from src.app.commands.daily_meal import GenerateDailyMealSuggestionsCommand
-from src.domain.model.meal_suggestion import MealType
 from src.api.exceptions import ResourceNotFoundException, ValidationException
+from src.app.commands.daily_meal import GenerateDailyMealSuggestionsCommand
 
 
 @pytest.mark.unit
