@@ -44,17 +44,21 @@ def test_engine():
         get_test_database_url().rsplit('/', 1)[0],
         isolation_level='AUTOCOMMIT'
     )
-    with temp_engine.connect() as conn:
-        db_name = get_test_database_url().rsplit('/', 1)[1].split('?')[0]
-        conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
-    temp_engine.dispose()
+    try:
+        with temp_engine.connect() as conn:
+            db_name = get_test_database_url().rsplit('/', 1)[1].split('?')[0]
+            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
+    finally:
+        temp_engine.dispose()
     
-    # Create tables if they don't exist (checkfirst=True handles this)
-    create_test_tables(engine)
+    # Import models to ensure they're registered
+    import src.infra.database.models
+    
+    # Create tables using checkfirst=True
+    # This is safe for parallel execution as SQLAlchemy will check before creating
+    Base.metadata.create_all(bind=engine, checkfirst=True)
     
     yield engine
-    
-    # Don't drop tables at the end - let next run handle cleanup
     engine.dispose()
 
 
