@@ -1,7 +1,8 @@
-import gradio as gr
-from typing import List, Tuple, Dict
 import uuid
-from datetime import datetime
+from typing import List, Tuple
+
+import gradio as gr
+
 
 # Simulated conversation flow for testing without the API
 class MockMealPlanChatbot:

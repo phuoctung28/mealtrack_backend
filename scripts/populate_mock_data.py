@@ -11,28 +11,22 @@ This script creates:
 """
 
 import os
-import sys
 import random
+import sys
 from datetime import datetime, timedelta
-from typing import List, Dict
-import uuid
+from typing import Dict
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.infra.database.config import engine, SessionLocal, SQLALCHEMY_DATABASE_URL
+from src.infra.database.config import SessionLocal, SQLALCHEMY_DATABASE_URL
 from src.infra.database.models.user.user import User
 from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.models.user.preferences import (
-    UserPreference, UserDietaryPreference, UserHealthCondition, UserAllergy
-)
-from src.infra.database.models.user.goals import UserGoal
-from src.infra.database.models.tdee_calculation import TdeeCalculation
+# Removed models are now part of UserProfile
 from src.infra.database.models.meal_planning.meal_plan import MealPlan
 from src.infra.database.models.conversation.conversation import Conversation
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.model.tdee import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
-from src.domain.model.macro_targets import SimpleMacroTargets
 
 # Mock data templates
 FIRST_NAMES = ["John", "Jane", "Michael", "Sarah", "David", "Emma", "James", "Lisa", "Robert", "Maria"]
@@ -225,64 +219,33 @@ class MockDataGenerator:
         self.session.add(profile)
         self.session.flush()
         
-        # Create preferences
-        preference = UserPreference(user_id=user.id)
-        self.session.add(preference)
-        self.session.flush()
-        
-        # Add dietary preferences
-        for diet_pref in profile_template.get("dietary_preferences", []):
-            dietary = UserDietaryPreference(
-                user_preference_id=preference.id,
-                preference=diet_pref
-            )
-            self.session.add(dietary)
-        
-        # Add health conditions
-        for condition in profile_template.get("health_conditions", []):
-            health = UserHealthCondition(
-                user_preference_id=preference.id,
-                condition=condition
-            )
-            self.session.add(health)
-        
-        # Add allergies
-        for allergen in profile_template.get("allergies", []):
-            allergy = UserAllergy(
-                user_preference_id=preference.id,
-                allergen=allergen
-            )
-            self.session.add(allergy)
-        
-        # Create goal
+        # Update profile with all data including goals and preferences
         meals_per_day = random.choice([3, 4, 5])
         snacks_per_day = random.choice([0, 1, 2])
         
-        goal = UserGoal(
-            user_id=user.id,
-            activity_level=profile_template["activity_level"],
-            fitness_goal=profile_template["fitness_goal"],
-            target_weight_kg=profile_template["weight_kg"] + random.randint(-5, 5),
-            meals_per_day=meals_per_day,
-            snacks_per_day=snacks_per_day,
-            is_current=True
-        )
-        self.session.add(goal)
+        profile.activity_level = profile_template["activity_level"]
+        profile.fitness_goal = profile_template["fitness_goal"]
+        profile.target_weight_kg = profile_template["weight_kg"] + random.randint(-5, 5)
+        profile.meals_per_day = meals_per_day
+        profile.snacks_per_day = snacks_per_day
+        profile.dietary_preferences = profile_template.get("dietary_preferences", [])
+        profile.health_conditions = profile_template.get("health_conditions", [])
+        profile.allergies = profile_template.get("allergies", [])
         self.session.flush()
         
-        # Calculate and save TDEE
-        self.create_tdee_calculation(user, profile, goal)
+        # Calculate TDEE (no longer saved to DB)
+        self.calculate_tdee_for_profile(user, profile)
         
         # Create some historical data
-        self.create_historical_data(user, profile, goal)
+        self.create_historical_data(user, profile)
         
         self.session.commit()
         
         print(f"✅ Created user: {username} ({profile_template['name']})")
         return user
     
-    def create_tdee_calculation(self, user: User, profile: UserProfile, goal: UserGoal):
-        """Calculate and save TDEE."""
+    def calculate_tdee_for_profile(self, user: User, profile: UserProfile):
+        """Calculate TDEE for profile (no longer saved to DB)."""
         # Map to domain enums
         sex = Sex.MALE if profile.gender == "male" else Sex.FEMALE
         
@@ -307,30 +270,20 @@ class MockDataGenerator:
             height=profile.height_cm,
             weight=profile.weight_kg,
             body_fat_pct=profile.body_fat_percentage,
-            activity_level=activity_map[goal.activity_level],
-            goal=goal_map[goal.fitness_goal],
+            activity_level=activity_map[profile.activity_level],
+            goal=goal_map[profile.fitness_goal],
             unit_system=UnitSystem.METRIC
         )
         
         # Calculate TDEE
         tdee_result = self.tdee_service.calculate_tdee(tdee_request)
         
-        # Save calculation
-        tdee_calc = TdeeCalculation(
-            user_id=user.id,
-            user_profile_id=profile.id,
-            user_goal_id=goal.id,
-            bmr=tdee_result.bmr,
-            tdee=tdee_result.tdee,
-            target_calories=tdee_result.tdee,
-            protein_grams=tdee_result.macros.protein,
-            carbs_grams=tdee_result.macros.carbs,
-            fat_grams=tdee_result.macros.fat
-        )
-        self.session.add(tdee_calc)
+        # Log the calculation result
+        print(f"  - BMR: {tdee_result.bmr:.0f}, TDEE: {tdee_result.tdee:.0f}")
+        print(f"  - Macros - Protein: {tdee_result.macros.protein:.0f}g, Carbs: {tdee_result.macros.carbs:.0f}g, Fat: {tdee_result.macros.fat:.0f}g")
     
-    def create_historical_data(self, user: User, current_profile: UserProfile, current_goal: UserGoal):
-        """Create some historical weight and TDEE data."""
+    def create_historical_data(self, user: User, current_profile: UserProfile):
+        """Create some historical weight data."""
         # Create 3-5 historical profiles (weight changes)
         num_historical = random.randint(3, 5)
         
@@ -349,28 +302,19 @@ class MockDataGenerator:
                 height_cm=current_profile.height_cm,
                 weight_kg=historical_weight,
                 body_fat_percentage=current_profile.body_fat_percentage,
+                activity_level=current_profile.activity_level,
+                fitness_goal=current_profile.fitness_goal,
+                target_weight_kg=current_profile.target_weight_kg,
+                meals_per_day=current_profile.meals_per_day,
+                snacks_per_day=current_profile.snacks_per_day,
+                dietary_preferences=current_profile.dietary_preferences,
+                health_conditions=current_profile.health_conditions,
+                allergies=current_profile.allergies,
                 is_current=False,
                 created_at=historical_date,
                 updated_at=historical_date
             )
             self.session.add(hist_profile)
-            self.session.flush()
-            
-            # Create TDEE calculation for historical data
-            hist_tdee = TdeeCalculation(
-                user_id=user.id,
-                user_profile_id=hist_profile.id,
-                user_goal_id=current_goal.id,
-                bmr=current_profile.weight_kg * 24 * 0.9,  # Simple approximation
-                tdee=current_profile.weight_kg * 24 * 0.9 * 1.5,
-                target_calories=current_profile.weight_kg * 24 * 0.9 * 1.5,
-                protein_grams=historical_weight * 2,
-                carbs_grams=historical_weight * 4,
-                fat_grams=historical_weight * 0.8,
-                calculation_date=historical_date.date(),
-                created_at=historical_date
-            )
-            self.session.add(hist_tdee)
     
     def create_meal_plans_and_conversations(self):
         """Create some meal plans and conversations for users."""
@@ -441,19 +385,9 @@ class MockDataGenerator:
         
         # Count statistics
         total_profiles = self.session.query(UserProfile).count()
-        total_goals = self.session.query(UserGoal).count()
-        total_tdee = self.session.query(TdeeCalculation).count()
-        total_dietary_prefs = self.session.query(UserDietaryPreference).count()
-        total_health_conditions = self.session.query(UserHealthCondition).count()
-        total_allergies = self.session.query(UserAllergy).count()
         
         print(f"Total Users: {len(self.created_users)}")
         print(f"Total Profiles: {total_profiles}")
-        print(f"Total Goals: {total_goals}")
-        print(f"Total TDEE Calculations: {total_tdee}")
-        print(f"Total Dietary Preferences: {total_dietary_prefs}")
-        print(f"Total Health Conditions: {total_health_conditions}")
-        print(f"Total Allergies: {total_allergies}")
         
         print("\n📝 Sample Users Created:")
         for i, user in enumerate(self.created_users[:5]):
@@ -468,6 +402,9 @@ class MockDataGenerator:
                 print(f"   Profile ID: {profile.id}")
                 print(f"   Age: {profile.age}, Gender: {profile.gender}")
                 print(f"   Height: {profile.height_cm}cm, Weight: {profile.weight_kg}kg")
+                print(f"   Activity: {profile.activity_level}, Goal: {profile.fitness_goal}")
+                if profile.dietary_preferences:
+                    print(f"   Dietary Preferences: {', '.join(profile.dietary_preferences)}")
 
 
 def main():

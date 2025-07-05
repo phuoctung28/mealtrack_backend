@@ -1,7 +1,7 @@
+from typing import List, Tuple
+
 import gradio as gr
 import requests
-import json
-from typing import List, Tuple
 
 # Base URL for the API
 BASE_URL = "http://localhost:8000"

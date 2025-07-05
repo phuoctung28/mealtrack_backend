@@ -6,7 +6,6 @@ from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
 from src.infra.database.models.base import SecondaryEntityMixin
-from .macros import Macros
 
 
 class Nutrition(Base, SecondaryEntityMixin):
@@ -16,11 +15,13 @@ class Nutrition(Base, SecondaryEntityMixin):
     confidence_score = Column(Float, nullable=True)
     raw_ai_response = Column(Text, nullable=True)
     
+    # Macro fields (previously in separate Macros table)
+    protein = Column(Float, default=0, nullable=False)
+    carbs = Column(Float, default=0, nullable=False)
+    fat = Column(Float, default=0, nullable=False)
+    fiber = Column(Float, nullable=True)
+    
     # Relationships
-    macros = relationship("Macros", 
-                         uselist=False, 
-                         foreign_keys=[Macros.nutrition_id], 
-                         cascade="all, delete-orphan")
     food_items = relationship("FoodItem", 
                              back_populates="nutrition", 
                              cascade="all, delete-orphan")
@@ -34,9 +35,18 @@ class Nutrition(Base, SecondaryEntityMixin):
         # Convert food items if they exist
         food_items = [item.to_domain() for item in self.food_items] if self.food_items else None
         
+        # Create macros domain object from our fields
+        from src.domain.model.nutrition import Macros as DomainMacros
+        macros = DomainMacros(
+            protein=self.protein,
+            carbs=self.carbs,
+            fat=self.fat,
+            fiber=self.fiber
+        )
+        
         return DomainNutrition(
             calories=self.calories,
-            macros=self.macros.to_domain() if self.macros else None,
+            macros=macros,
             micros=None,  # Not implemented yet
             food_items=food_items,
             confidence_score=self.confidence_score
@@ -51,10 +61,12 @@ class Nutrition(Base, SecondaryEntityMixin):
             meal_id=meal_id
         )
         
-        # Add macros if they exist
+        # Set macro fields directly
         if domain_model.macros:
-            # nutrition_id will be available after flush
-            nutrition.macros = Macros.from_domain(domain_model.macros)
+            nutrition.protein = domain_model.macros.protein
+            nutrition.carbs = domain_model.macros.carbs
+            nutrition.fat = domain_model.macros.fat
+            nutrition.fiber = domain_model.macros.fiber
             
         # Add food items if they exist
         if domain_model.food_items:

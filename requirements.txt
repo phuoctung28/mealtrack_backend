@@ -25,6 +25,9 @@ cryptography>=45.0.0
 # Environment management
 python-dotenv==1.0.0
 
+# Event-driven architecture
+pymediator==0.3.0
+
 # Testing dependencies
 pytest==8.0.0
 pytest-html==4.1.1

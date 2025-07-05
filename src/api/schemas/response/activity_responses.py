@@ -1,20 +1,54 @@
-from typing import Optional, List, Dict, Any
+"""
+Response schemas for activity endpoints.
+"""
+from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+
+
+class MacrosResponse(BaseModel):
+    """Macronutrient information."""
+    protein: float
+    carbs: float
+    fat: float
+    fiber: float = 0.0
+
+
+class MealActivityResponse(BaseModel):
+    """Response schema for meal activity."""
+    id: str
+    type: str = "meal"
+    timestamp: str
+    title: str
+    meal_type: str
+    calories: float
+    macros: MacrosResponse
+    quantity: float
+    status: str
+    image_url: Optional[str] = None
+
+
+class WorkoutActivityResponse(BaseModel):
+    """Response schema for workout activity."""
+    id: str
+    type: str = "workout"
+    timestamp: str
+    title: str
+    description: str
+    exercise_type: str
+    duration_minutes: int
+    calories_burned: float
+    notes: Optional[str] = None
 
 
 class ActivityResponse(BaseModel):
-    activity_id: str
-    user_id: Optional[str] = None
-    activity_type: str
+    """Generic activity response that can be either meal or workout."""
+    id: str
+    type: str
+    timestamp: str
     title: str
-    description: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    created_at: Optional[str] = None
-
-class ActivitiesListResponse(BaseModel):
-    activities: List[ActivityResponse]
-    total_count: int
-    page: int = Field(..., ge=1)
-    page_size: int = Field(..., ge=1, le=100)
-    total_pages: int
+    
+    # Additional fields stored as dict for flexibility
+    # This allows both meal and workout activities to use same response
+    class Config:
+        extra = "allow"

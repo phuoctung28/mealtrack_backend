@@ -36,3 +36,11 @@ class OnboardingResponseResponse(BaseModel):
     field_responses: Dict[str, Any]
     completed_at: Optional[str] = None
     created_at: Optional[str] = None
+
+
+class OnboardingResponse(BaseModel):
+    """Response for successful onboarding data save."""
+    message: str
+    user_id: str
+    profile_id: str
+    tdee_calculation: Dict[str, Any]

@@ -1,69 +1,81 @@
-import logging
+"""
+TDEE API endpoints - Event-driven architecture.
+"""
+from fastapi import APIRouter, Depends
 
-from fastapi import APIRouter, HTTPException, status, Depends
-
-from src.api.dependencies import get_tdee_handler
+from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.exceptions import handle_exception
 from src.api.mappers.tdee_mapper import TdeeMapper
 from src.api.schemas.request import TdeeCalculationRequest
-from src.api.schemas.response import TdeeCalculationResponse
-from src.app.handlers.tdee_handler import TdeeHandler
-
-logger = logging.getLogger(__name__)
-
-router = APIRouter(
-    prefix="",
-    tags=["tdee"],
+from src.api.schemas.response import (
+    TdeeCalculationResponse
 )
+from src.app.commands.tdee import (
+    CalculateTdeeCommand
+)
+from src.infra.event_bus import EventBus
+
+router = APIRouter(prefix="", tags=["tdee"])
 
 
-@router.post("/tdee", status_code=status.HTTP_200_OK, response_model=TdeeCalculationResponse)
+@router.post("/tdee", response_model=TdeeCalculationResponse)
 async def calculate_tdee(
     request: TdeeCalculationRequest,
-    handler: TdeeHandler = Depends(get_tdee_handler)
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
-    Calculate BMR, TDEE, and macro targets based on Flutter onboarding data.
+    Calculate BMR, TDEE, and macro targets.
     
-    This endpoint supports both metric and imperial units and returns data
-    in the format expected by Flutter TdeeResult class:
-    - Uses Mifflin-St Jeor formula when body_fat_percentage is absent
-    - Uses Katch-McArdle formula when body_fat_percentage is present
-    - Returns BMR, TDEE, and macro targets for maintenance/cutting/bulking goals
-    - Supports both metric (kg/cm) and imperial (lbs/inches) unit systems
+    Features:
+    - Mifflin-St Jeor formula (without body fat %)
+    - Katch-McArdle formula (with body fat %)
+    - Supports metric (kg/cm) and imperial (lbs/inches)
+    - Returns macro targets for maintenance/cutting/bulking
     """
     try:
-        # Initialize mapper
+        # Create command
+        command = CalculateTdeeCommand(
+            age=request.age,
+            sex=request.sex,
+            height_cm=request.height,
+            weight_kg=request.weight,
+            activity_level=request.activity_level,
+            goal=request.goal,
+            body_fat_percentage=request.body_fat_percentage,
+            unit_system=request.unit_system
+        )
+        
+        # Send command
+        result = await event_bus.send(command)
+        
+        # Create a domain response object for the mapper
+        from src.domain.model.tdee import TdeeResponse, Macros, Goal
+        from src.domain.model.macros import Macros as DomainMacros
+        
+        # Map goal string to enum
+        goal_map = {
+            'maintenance': Goal.MAINTENANCE,
+            'cutting': Goal.CUTTING,
+            'bulking': Goal.BULKING
+        }
+        
+        # Create domain response
+        domain_response = TdeeResponse(
+            bmr=result["bmr"],
+            tdee=result["tdee"],
+            macros=DomainMacros(
+                protein=result["macros"]["protein"],
+                carbs=result["macros"]["carbs"],
+                fat=result["macros"]["fat"]
+            ),
+            goal=goal_map[request.goal],
+            activity_multiplier=result.get("activity_multiplier", 1.2),
+            formula_used=result.get("formula_used", "Mifflin-St Jeor")
+        )
+        
+        # Use mapper to convert to response DTO
         mapper = TdeeMapper()
+        return mapper.to_response_dto(domain_response)
         
-        # Convert request DTO to domain model
-        domain_request = mapper.to_domain(request)
-        
-        # Delegate to application layer handler
-        result = await handler.calculate_tdee(
-            age=domain_request.age,
-            sex=domain_request.sex.value,
-            height=domain_request.height,
-            weight=domain_request.weight,
-            body_fat_percentage=domain_request.body_fat_pct,
-            activity_level=domain_request.activity_level.value,
-            goal=domain_request.goal.value,
-            unit_system=domain_request.unit_system.value
-        )
-        
-        logger.info(f"TDEE calculation successful: BMR={result.bmr}, TDEE={result.tdee} ({request.unit_system})")
-        
-        # Convert domain response to API response DTO
-        return mapper.to_response_dto(result)
-        
-    except ValueError as e:
-        logger.warning(f"Validation error in TDEE calculation: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
     except Exception as e:
-        logger.error(f"Error calculating TDEE: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error during TDEE calculation"
-        ) 
+        raise handle_exception(e)

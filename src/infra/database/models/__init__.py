@@ -29,13 +29,8 @@ from .meal_planning.meal_plan import MealPlan
 from .meal_planning.meal_plan_day import MealPlanDay
 from .meal_planning.planned_meal import PlannedMeal
 from .nutrition.food_item import FoodItem
-from .nutrition.macros import Macros
 # Nutrition models
 from .nutrition.nutrition import Nutrition
-# Other models (keep as-is for now)
-from .tdee_calculation import TdeeCalculation
-from .user.goals import UserGoal
-from .user.preferences import UserPreference, UserDietaryPreference, UserHealthCondition, UserAllergy
 from .user.profile import UserProfile
 # User models
 from .user.user import User
@@ -60,15 +55,9 @@ __all__ = [
     # User models
     "User",
     "UserProfile",
-    "UserPreference",
-    "UserDietaryPreference",
-    "UserHealthCondition",
-    "UserAllergy",
-    "UserGoal",
     
     # Nutrition models
     "Nutrition",
-    "Macros",
     "FoodItem",
     
     # Meal models
@@ -83,7 +72,4 @@ __all__ = [
     # Conversation models
     "Conversation",
     "ConversationMessage",
-    
-    # Other models
-    "TdeeCalculation",
 ]

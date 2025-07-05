@@ -7,8 +7,6 @@ all user data automatically based on user_profile_id.
 """
 
 import requests
-import json
-from typing import Dict
 
 # API Base URL
 BASE_URL = "http://localhost:8000"
