@@ -11,11 +11,16 @@ from .config import Base
 
 def get_test_database_url() -> str:
     """Get database URL for testing."""
-    # Check if we're in CI environment
-    if os.getenv("CI"):
-        return "mysql+pymysql://test_user:test_password@localhost:3306/mealtrack_test"
+    # Check for DATABASE_URL first (same pattern as production)
+    database_url = os.getenv("DATABASE_URL")
     
-    # Local testing database
+    if database_url:
+        # Replace mysql:// with mysql+pymysql:// if needed
+        if database_url.startswith("mysql://"):
+            database_url = database_url.replace("mysql://", "mysql+pymysql://", 1)
+        return database_url
+    
+    # Fall back to individual variables for local testing
     return (
         f"mysql+pymysql://{os.getenv('TEST_DB_USER', 'root')}:"
         f"{os.getenv('TEST_DB_PASSWORD', '')}@"
