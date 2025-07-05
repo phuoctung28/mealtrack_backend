@@ -152,9 +152,7 @@ def event_bus(
         UploadMealImageCommand,
         UploadMealImageCommandHandler(
             image_store=mock_image_store,
-            meal_repository=meal_repository,
-            vision_service=mock_vision_service,
-            gpt_parser=gpt_parser
+            meal_repository=meal_repository
         )
     )
     
