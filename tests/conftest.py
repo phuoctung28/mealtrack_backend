@@ -126,7 +126,7 @@ def event_bus(
         GetUserProfileQueryHandler
     )
     from src.infra.repositories.user_repository import UserRepository
-    from src.domain.services.tdee_service import TdeeService
+    from src.domain.services.tdee_service import TdeeCalculationService
     from src.infra.adapters.mock_meal_suggestion_service import MockMealSuggestionService
     
     event_bus = PyMediatorEventBus()
@@ -190,7 +190,7 @@ def event_bus(
         "SaveUserOnboardingCommand",
         SaveUserOnboardingCommandHandler(
             user_repository=user_repository,
-            tdee_service=TdeeService()
+            tdee_service=TdeeCalculationService()
         )
     )
     
