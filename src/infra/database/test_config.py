@@ -54,10 +54,17 @@ def create_test_tables(engine):
 
 def drop_test_tables(engine):
     """Drop all tables in test database."""
+    from sqlalchemy import MetaData
+    
     # Import to ensure all models are loaded
     import src.infra.database.models
     
-    # Drop all tables with cascade to handle foreign keys
+    # Use reflection to find and drop ALL tables in the database
+    meta = MetaData()
+    meta.reflect(bind=engine)
+    meta.drop_all(bind=engine)
+    
+    # Also try to drop using Base metadata in case reflection missed any
     Base.metadata.drop_all(bind=engine)
 
 

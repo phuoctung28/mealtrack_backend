@@ -6,9 +6,6 @@ to provide a centralized access point.
 """
 # Base models
 from .base import BaseMixin, PrimaryEntityMixin, SecondaryEntityMixin, TimestampMixin
-# Conversation models
-from .conversation.conversation import Conversation
-from .conversation.message import ConversationMessage
 # Enums
 from .enums import (
     MealStatusEnum,
@@ -16,7 +13,6 @@ from .enums import (
     FitnessGoalEnum,
     MealTypeEnum,
     PlanDurationEnum,
-    ConversationStateEnum,
     ActivityLevelEnum,
     SexEnum,
     GoalEnum,
@@ -48,7 +44,6 @@ __all__ = [
     "FitnessGoalEnum",
     "MealTypeEnum",
     "PlanDurationEnum",
-    "ConversationStateEnum",
     "ActivityLevelEnum",
     "SexEnum",
     "GoalEnum",
@@ -69,8 +64,4 @@ __all__ = [
     "MealPlan",
     "MealPlanDay",
     "PlannedMeal",
-    
-    # Conversation models
-    "Conversation",
-    "ConversationMessage",
 ]
