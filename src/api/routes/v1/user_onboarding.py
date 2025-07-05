@@ -1,178 +1,117 @@
-"""User onboarding endpoints with database persistence."""
-import logging
+"""
+User onboarding API endpoints - Event-driven architecture.
+"""
+from fastapi import APIRouter, Depends
 
-from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
-
+from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.exceptions import handle_exception
 from src.api.schemas.request import OnboardingCompleteRequest
-from src.app.services.user_onboarding_service import UserOnboardingService
-from src.infra.database.config import get_db
+from src.api.schemas.response import OnboardingResponse, TdeeCalculationResponse
+from src.app.commands.user import (
+    SaveUserOnboardingCommand
+)
+from src.app.queries.user import (
+    GetUserProfileQuery
+)
+from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/user-onboarding", tags=["User Onboarding"])
-logger = logging.getLogger(__name__)
 
 
-@router.post("/save")
+@router.post("/save", response_model=OnboardingResponse)
 async def save_onboarding_data(
     request: OnboardingCompleteRequest,
-    user_id: str = "test_user",  # TODO: Get from auth header
-    db: Session = Depends(get_db)
+    user_id: str = "test_user",  # TODO: Get from auth context
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
-    Save user onboarding data to the database.
+    Save user onboarding data.
     
-    This endpoint:
-    1. Creates/updates user profile with physical attributes
-    2. Saves dietary preferences, health conditions, and allergies
-    3. Records fitness goals and activity level
-    4. Calculates and stores TDEE and macro targets
-    
-    Note: Currently uses a test user ID. In production, this should
-    come from authentication headers.
+    Creates/updates:
+    - User profile with physical attributes
+    - Dietary preferences, health conditions, allergies
+    - Fitness goals and activity level
+    - Calculates TDEE and macro targets
     """
     try:
-        logger.info(f"Saving onboarding data for user: {user_id}")
+        # Create command
+        command = SaveUserOnboardingCommand(
+            user_id=user_id,
+            age=request.personal_info.age,
+            gender=request.personal_info.gender,
+            height_cm=request.personal_info.height_cm,
+            weight_kg=request.personal_info.weight_kg,
+            body_fat_percentage=request.personal_info.body_fat_percentage,
+            activity_level=request.goals.activity_level,
+            fitness_goal=request.goals.fitness_goal,
+            target_weight_kg=request.goals.target_weight_kg,
+            meals_per_day=request.goals.meals_per_day,
+            snacks_per_day=request.goals.snacks_per_day,
+            dietary_preferences=request.preferences.dietary_preferences,
+            health_conditions=request.preferences.health_conditions,
+            allergies=request.preferences.allergies
+        )
         
-        # Initialize service
-        service = UserOnboardingService(db)
+        # Send command
+        result = await event_bus.send(command)
         
-        # Prepare data in expected format
-        onboarding_data = {
-            'personal_info': {
-                'age': request.age,
-                'gender': request.gender,
-                'height': request.height,
-                'weight': request.weight,
-                'body_fat_percentage': getattr(request, 'body_fat_percentage', None)
-            },
-            'activity_level': {
-                'activity_level': request.activity_level
-            },
-            'fitness_goals': {
-                'fitness_goal': request.goal,
-                'target_weight': getattr(request, 'target_weight', None)
-            },
-            'dietary_preferences': {
-                'preferences': request.dietary_preferences or []
-            },
-            'health_conditions': {
-                'conditions': request.health_conditions or []
-            },
-            'allergies': {
-                'allergies': getattr(request, 'allergies', [])
-            },
-            'meal_preferences': {
-                'meals_per_day': getattr(request, 'meals_per_day', 3),
-                'snacks_per_day': getattr(request, 'snacks_per_day', 1)
+        return OnboardingResponse(
+            message="Onboarding data saved successfully",
+            user_id=user_id,
+            profile_id=result['profile']['id'],
+            tdee_calculation={
+                "bmr": result['tdee']['bmr'],
+                "tdee": result['tdee']['tdee'],
+                "target_calories": result['tdee']['target_calories'],
+                "macros": result['tdee']['macros']
             }
-        }
-        
-        # Save to database
-        result = service.save_onboarding_data(user_id, onboarding_data)
-        
-        if not result['success']:
-            raise HTTPException(status_code=400, detail=result.get('error', 'Failed to save data'))
-        
-        return {
-            "message": "Onboarding data saved successfully",
-            "user_id": result['user_id'],
-            "profile_id": result['profile_id'],
-            "goal_id": result['goal_id'],
-            "tdee_calculation": result['tdee_calculation']
-        }
+        )
         
     except Exception as e:
-        logger.error(f"Error saving onboarding data: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise handle_exception(e)
 
 
 @router.get("/summary/{user_id}")
 async def get_onboarding_summary(
     user_id: str,
-    db: Session = Depends(get_db)
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """
-    Get a summary of user's onboarding data.
-    
-    Returns:
-    - Personal info (age, gender, height, weight)
-    - Fitness info (activity level, goals)
-    - Preferences (dietary, health conditions, allergies)
-    - Latest TDEE calculation
-    """
+    """Get user's onboarding data summary."""
     try:
-        service = UserOnboardingService(db)
-        summary = service.get_user_onboarding_summary(user_id)
+        # Create query
+        query = GetUserProfileQuery(user_id=user_id)
         
-        if not summary:
-            raise HTTPException(status_code=404, detail="User data not found")
+        # Send query
+        result = await event_bus.send(query)
         
-        return summary
+        return result
         
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error getting user summary: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise handle_exception(e)
 
 
-@router.post("/calculate-tdee/{user_id}")
+@router.post("/{user_id}/recalculate-tdee", response_model=TdeeCalculationResponse) 
 async def recalculate_tdee(
     user_id: str,
-    db: Session = Depends(get_db)
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """
-    Recalculate TDEE based on current user profile and goals.
-    
-    Useful when user updates their weight or activity level.
-    """
+    """Recalculate TDEE based on current profile."""
     try:
-        from src.infra.repositories.user_repository import UserRepository
+        # Get user profile first
+        query = GetUserProfileQuery(user_id=user_id)
+        profile_result = await event_bus.send(query)
         
-        repo = UserRepository(db)
-        service = UserOnboardingService(db)
+        # Use TDEE result from profile query
+        tdee_data = profile_result['tdee']
         
-        # Get current data
-        profile = repo.get_current_user_profile(user_id)
-        goal = repo.get_current_user_goal(user_id)
-        
-        if not profile or not goal:
-            raise HTTPException(status_code=404, detail="User profile or goal not found")
-        
-        # Calculate new TDEE
-        tdee_result = service._calculate_tdee_and_macros(profile, goal)
-        
-        # Save calculation
-        tdee_calc = repo.save_tdee_calculation(
-            user_id=user_id,
-            user_profile_id=profile.id,
-            user_goal_id=goal.id,
-            bmr=tdee_result['bmr'],
-            tdee=tdee_result['tdee'],
-            target_calories=tdee_result['target_calories'],
-            macros=tdee_result['macros']
+        return TdeeCalculationResponse(
+            bmr=tdee_data['bmr'],
+            tdee=tdee_data['tdee'],
+            target_calories=tdee_data['target_calories'],
+            activity_multiplier=tdee_data.get('activity_multiplier', 1.2),
+            formula_used=tdee_data.get('formula_used', 'Mifflin-St Jeor'),
+            macros=tdee_data['macros']
         )
         
-        return {
-            "message": "TDEE recalculated successfully",
-            "calculation": {
-                "id": tdee_calc.id,
-                "date": tdee_calc.calculation_date.isoformat(),
-                "bmr": tdee_calc.bmr,
-                "tdee": tdee_calc.tdee,
-                "target_calories": tdee_calc.target_calories,
-                "macros": {
-                    "protein": tdee_calc.protein_grams,
-                    "carbs": tdee_calc.carbs_grams,
-                    "fat": tdee_calc.fat_grams
-                }
-            }
-        }
-        
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error recalculating TDEE: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+        raise handle_exception(e)

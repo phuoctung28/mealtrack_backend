@@ -11,15 +11,16 @@ This will:
 3. Optionally populate with mock data
 """
 
+import argparse
 import os
 import sys
-import argparse
+
 from sqlalchemy import text, inspect
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.infra.database.config import engine, Base, SessionLocal, SQLALCHEMY_DATABASE_URL
+from src.infra.database.config import engine, Base, SQLALCHEMY_DATABASE_URL
 
 
 def drop_all_tables():
@@ -109,14 +110,7 @@ def create_all_tables():
     print("\n🔨 Creating database schema...")
     
     # Import all models to ensure they're registered
-    from src.infra.database.models import (
-        User, UserProfile, UserPreference, UserDietaryPreference,
-        UserHealthCondition, UserAllergy, UserGoal,
-        Meal, MealImage, Nutrition, FoodItem, Macros,
-        TdeeCalculation, MealPlan, MealPlanDay, PlannedMeal,
-        Conversation, ConversationMessage
-    )
-    
+
     # Create all tables
     Base.metadata.create_all(bind=engine)
     
@@ -187,12 +181,6 @@ def main():
         else:
             # Drop and recreate tables
             drop_all_tables()
-            create_all_tables()
-            
-            # Populate mock data if not disabled
-            if not args.no_mock_data:
-                populate_mock_data()
-        
         print("\n✨ Database cleanup complete!")
         
     except Exception as e:

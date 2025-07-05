@@ -1,7 +1,7 @@
 """
 User profile model for physical attributes and personal information.
 """
-from sqlalchemy import Column, String, Boolean, Integer, Float, ForeignKey, Index, CheckConstraint
+from sqlalchemy import Column, String, Boolean, Integer, Float, ForeignKey, Index, CheckConstraint, JSON
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -20,6 +20,18 @@ class UserProfile(Base, BaseMixin):
     body_fat_percentage = Column(Float, nullable=True)
     is_current = Column(Boolean, default=True, nullable=False)
     
+    # Goal fields (from UserGoal)
+    activity_level = Column(String(30), nullable=False, default='sedentary')  # sedentary, light, moderate, active, extra
+    fitness_goal = Column(String(30), nullable=False, default='maintenance')  # maintenance, cutting, bulking
+    target_weight_kg = Column(Float, nullable=True)
+    meals_per_day = Column(Integer, default=3, nullable=False)
+    snacks_per_day = Column(Integer, default=1, nullable=False)
+    
+    # Preference fields (from UserPreferences)
+    dietary_preferences = Column(JSON, default=[], nullable=False)  # ['vegan', 'vegetarian', 'gluten_free', etc.]
+    health_conditions = Column(JSON, default=[], nullable=False)    # ['diabetes', 'hypertension', etc.]
+    allergies = Column(JSON, default=[], nullable=False)           # ['nuts', 'dairy', 'shellfish', etc.]
+    
     # Constraints
     __table_args__ = (
         CheckConstraint('age >= 13 AND age <= 120', name='check_age_range'),
@@ -32,4 +44,3 @@ class UserProfile(Base, BaseMixin):
     
     # Relationships
     user = relationship("User", back_populates="profiles")
-    tdee_calculations = relationship("TdeeCalculation", back_populates="profile")

@@ -1,192 +1,168 @@
-import logging
+"""
+Daily meal suggestions API endpoints - Event-driven architecture.
+"""
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends
 
-from src.api.schemas.request import (
-    UserPreferencesRequest,
-    MealTypeEnum
-)
+from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.exceptions import handle_exception
+from src.api.mappers.daily_meal_mapper import DailyMealMapper
+from src.api.schemas.request import UserPreferencesRequest, MealTypeEnum
 from src.api.schemas.response import (
     DailyMealSuggestionsResponse,
     SingleMealSuggestionResponse
 )
-from src.app.handlers.daily_meal_suggestion_handler import DailyMealSuggestionHandler
-from src.domain.model.macro_targets import SimpleMacroTargets
-from src.domain.model.tdee import (
-    TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
+from src.app.commands.daily_meal import (
+    GenerateDailyMealSuggestionsCommand,
+    GenerateSingleMealCommand
 )
-from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
-from src.domain.services.tdee_service import TdeeCalculationService
+from src.app.queries.daily_meal import (
+    GetMealSuggestionsForProfileQuery,
+    GetSingleMealForProfileQuery,
+    GetMealPlanningSummaryQuery
+)
+from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/daily-meals", tags=["Daily Meal Suggestions"])
-logger = logging.getLogger(__name__)
-
-# Initialize services
-suggestion_service = DailyMealSuggestionService()
-suggestion_handler = DailyMealSuggestionHandler(suggestion_service)
-tdee_service = TdeeCalculationService()
 
 
 @router.post("/suggestions", response_model=DailyMealSuggestionsResponse)
-async def get_daily_meal_suggestions(request: UserPreferencesRequest):
+async def get_daily_meal_suggestions(
+    request: Optional[UserPreferencesRequest] = None,
+    user_profile_id: Optional[str] = None,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
     """
-    Get 3-5 meal suggestions for a day based on user onboarding preferences.
+    Get 3-5 meal suggestions for a day.
     
-    This endpoint generates personalized meal suggestions considering:
-    - User's physical attributes (age, gender, height, weight)
-    - Activity level and fitness goals
-    - Dietary preferences and restrictions
-    - Health conditions
-    - Calculated or provided calorie/macro targets
+    Two modes supported:
+    1. Profile-based (preferred): Provide user_profile_id
+    2. Direct preferences: Provide full UserPreferencesRequest
+    
+    Profile-based suggestions use stored user data including:
+    - User profile (age, gender, height, weight)
+    - Preferences (dietary, health conditions, allergies)
+    - Goals (activity level, fitness goal)
+    - Calculated TDEE and macros
     """
     try:
-        # Calculate TDEE and macros if not provided
-        if not request.target_calories or not request.target_macros:
-            # Convert to TDEE request format
-            sex = Sex.MALE if request.gender.lower() == "male" else Sex.FEMALE
-            
-            activity_map = {
-                "sedentary": ActivityLevel.SEDENTARY,
-                "lightly_active": ActivityLevel.LIGHT,
-                "moderately_active": ActivityLevel.MODERATE,
-                "very_active": ActivityLevel.ACTIVE,
-                "extra_active": ActivityLevel.EXTRA
-            }
-            
-            goal_map = {
-                "lose_weight": Goal.CUTTING,
-                "maintain_weight": Goal.MAINTENANCE,
-                "gain_weight": Goal.BULKING,
-                "build_muscle": Goal.BULKING
-            }
-            
-            tdee_request = TdeeRequest(
+        if user_profile_id:
+            # Use profile-based query (preferred v2 approach)
+            query = GetMealSuggestionsForProfileQuery(user_profile_id=user_profile_id)
+            result = await event_bus.send(query)
+        elif request:
+            # Use direct command (legacy v1 approach)
+            command = GenerateDailyMealSuggestionsCommand(
                 age=request.age,
-                sex=sex,
-                height_cm=request.height,
-                weight_kg=request.weight,
-                activity_level=activity_map.get(request.activity_level, ActivityLevel.MODERATE),
-                goal=goal_map.get(request.goal, Goal.MAINTENANCE),
-                unit_system=UnitSystem.METRIC
+                gender=request.gender,
+                height=request.height,
+                weight=request.weight,
+                activity_level=request.activity_level,
+                goal=request.goal,
+                dietary_preferences=request.dietary_preferences,
+                health_conditions=request.health_conditions,
+                target_calories=request.target_calories,
+                target_macros=request.target_macros.dict() if request.target_macros else None
             )
-            
-            tdee_result = tdee_service.calculate_tdee(tdee_request)
-            
-            # Add calculated values to user data
-            user_data = request.dict(exclude={'target_macros'})
-            user_data['target_calories'] = tdee_result.tdee
-            user_data['target_macros'] = SimpleMacroTargets(
-                protein=tdee_result.macros.protein,
-                carbs=tdee_result.macros.carbs,
-                fat=tdee_result.macros.fat
-            )
+            result = await event_bus.send(command)
         else:
-            user_data = request.dict(exclude={'target_macros'})
-            if request.target_macros:
-                user_data['target_macros'] = request.target_macros
+            raise ValueError("Either user_profile_id or request data must be provided")
         
-        # Get meal suggestions
-        result = suggestion_handler.get_daily_suggestions(user_data)
+        # Use mapper to convert to response
+        return DailyMealMapper.map_to_suggestions_response(result)
         
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["message"])
-        
-        return DailyMealSuggestionsResponse(
-            date=result["date"],
-            meal_count=result["meal_count"],
-            meals=result["meals"],
-            daily_totals=result["daily_totals"],
-            target_totals=result["target_totals"]
-        )
-        
-    except ValueError as e:
-        logger.warning(f"Validation error in daily meal suggestions: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error generating daily meal suggestions: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to generate meal suggestions")
+        raise handle_exception(e)
 
 
 @router.post("/suggestions/{meal_type}", response_model=SingleMealSuggestionResponse)
 async def get_single_meal_suggestion(
     meal_type: MealTypeEnum,
-    request: UserPreferencesRequest
+    request: Optional[UserPreferencesRequest] = None,
+    user_profile_id: Optional[str] = None,
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
     Get a single meal suggestion for a specific meal type.
     
     Meal types: breakfast, lunch, dinner, snack
+    
+    Two modes supported:
+    1. Profile-based (preferred): Provide user_profile_id
+    2. Direct preferences: Provide full UserPreferencesRequest
     """
     try:
-        # Calculate TDEE and macros if not provided
-        if not request.target_calories or not request.target_macros:
-            # Similar calculation as above
-            sex = Sex.MALE if request.gender.lower() == "male" else Sex.FEMALE
-            
-            activity_map = {
-                "sedentary": ActivityLevel.SEDENTARY,
-                "lightly_active": ActivityLevel.LIGHT,
-                "moderately_active": ActivityLevel.MODERATE,
-                "very_active": ActivityLevel.ACTIVE,
-                "extra_active": ActivityLevel.EXTRA
-            }
-            
-            goal_map = {
-                "lose_weight": Goal.CUTTING,
-                "maintain_weight": Goal.MAINTENANCE,
-                "gain_weight": Goal.BULKING,
-                "build_muscle": Goal.BULKING
-            }
-            
-            tdee_request = TdeeRequest(
+        if user_profile_id:
+            # Use profile-based query (preferred v2 approach)
+            query = GetSingleMealForProfileQuery(
+                user_profile_id=user_profile_id,
+                meal_type=meal_type.value
+            )
+            result = await event_bus.send(query)
+            # Direct response for profile-based query
+            return SingleMealSuggestionResponse(meal=result["meal"])
+        elif request:
+            # Use direct command (legacy v1 approach)
+            command = GenerateSingleMealCommand(
+                meal_type=meal_type.value,
                 age=request.age,
-                sex=sex,
-                height_cm=request.height,
-                weight_kg=request.weight,
-                activity_level=activity_map.get(request.activity_level, ActivityLevel.MODERATE),
-                goal=goal_map.get(request.goal, Goal.MAINTENANCE),
-                unit_system=UnitSystem.METRIC
+                gender=request.gender,
+                height=request.height,
+                weight=request.weight,
+                activity_level=request.activity_level,
+                goal=request.goal,
+                dietary_preferences=request.dietary_preferences,
+                health_conditions=request.health_conditions,
+                target_calories=request.target_calories,
+                target_macros=request.target_macros.dict() if request.target_macros else None
             )
-            
-            tdee_result = tdee_service.calculate_tdee(tdee_request)
-            
-            user_data = request.dict(exclude={'target_macros'})
-            user_data['target_calories'] = tdee_result.tdee
-            user_data['target_macros'] = SimpleMacroTargets(
-                protein=tdee_result.macros.protein,
-                carbs=tdee_result.macros.carbs,
-                fat=tdee_result.macros.fat
-            )
+            result = await event_bus.send(command)
+            # Use mapper for command-based response
+            mapped_result = DailyMealMapper.map_to_single_meal_response(result)
+            return SingleMealSuggestionResponse(**mapped_result)
         else:
-            user_data = request.dict(exclude={'target_macros'})
-            if request.target_macros:
-                user_data['target_macros'] = request.target_macros
+            raise ValueError("Either user_profile_id or request data must be provided")
         
-        # Get specific meal suggestion
-        result = suggestion_handler.get_meal_by_type(user_data, meal_type.value)
-        
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["message"])
-        
-        return SingleMealSuggestionResponse(meal=result["meal"])
-        
-    except ValueError as e:
-        logger.warning(f"Validation error in meal suggestion: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error generating meal suggestion: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to generate meal suggestion")
+        raise handle_exception(e)
+
+
+@router.get("/profile/{user_profile_id}/summary")
+async def get_meal_planning_summary(
+    user_profile_id: str,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Get meal planning data summary for a user profile.
+    
+    Returns user profile data, preferences, and calculated targets.
+    Useful for debugging and verifying meal planning inputs.
+    """
+    try:
+        # Create query
+        query = GetMealPlanningSummaryQuery(user_profile_id=user_profile_id)
+        
+        # Send query
+        result = await event_bus.send(query)
+        
+        return result
+        
+    except Exception as e:
+        raise handle_exception(e)
 
 
 @router.get("/health")
 async def daily_meals_health():
-    """Check if daily meal suggestions service is healthy"""
+    """Check if daily meal suggestions service is healthy."""
     return {
         "status": "healthy",
         "service": "daily_meal_suggestions",
         "features": [
             "personalized_daily_suggestions",
             "single_meal_generation",
+            "profile_based_suggestions",
+            "direct_preferences_support",
             "onboarding_integration",
             "macro_calculation"
         ]

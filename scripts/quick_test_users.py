@@ -8,7 +8,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.infra.database.config import SessionLocal, SQLALCHEMY_DATABASE_URL
-from populate_mock_data import MockDataGenerator, USER_PROFILES
+from populate_mock_data import MockDataGenerator
+
 
 def create_quick_test_users():
     """Create 3 test users quickly."""

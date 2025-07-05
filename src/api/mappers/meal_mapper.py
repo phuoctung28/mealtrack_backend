@@ -8,10 +8,21 @@ from src.api.schemas.response import (
     DetailedMealResponse,
     MealListResponse,
     FoodItemResponse,
-    NutritionResponse
+    NutritionResponse,
+    MealStatusResponse
 )
+from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
 from src.domain.model.nutrition import FoodItem, Nutrition
+
+# Status mapping from domain to API
+STATUS_MAPPING = {
+    "PROCESSING": "pending",
+    "ANALYZING": "analyzing", 
+    "ENRICHING": "analyzing",
+    "READY": "ready",
+    "FAILED": "failed"
+}
 
 
 class MealMapper:
@@ -30,12 +41,11 @@ class MealMapper:
         """
         return SimpleMealResponse(
             meal_id=meal.meal_id,
-            status=meal.status.value,
+            status=STATUS_MAPPING.get(meal.status.value, meal.status.value.lower()),
             dish_name=meal.dish_name,
             ready_at=meal.ready_at,
             error_message=meal.error_message,
-            created_at=meal.created_at,
-            updated_at=meal.updated_at
+            created_at=meal.created_at
         )
     
     @staticmethod
@@ -50,43 +60,73 @@ class MealMapper:
         Returns:
             DetailedMealResponse DTO
         """
-        # Map food items
+        from src.api.schemas.response.meal_responses import MacrosResponse
+        
+        # Map food items from nutrition if available
         food_items = []
-        for item in meal.food_items:
-            nutrition_dto = None
-            if item.nutrition:
-                nutrition_dto = NutritionResponse(
-                    nutrition_id=item.nutrition.nutrition_id,
-                    calories=item.nutrition.calories,
-                    protein_g=item.nutrition.protein_g,
-                    carbs_g=item.nutrition.carbs_g,
-                    fat_g=item.nutrition.fat_g,
-                    fiber_g=item.nutrition.fiber_g,
-                    sugar_g=item.nutrition.sugar_g,
-                    sodium_mg=item.nutrition.sodium_mg
+        total_calories = 0
+        total_nutrition = None
+        
+        if meal.nutrition:
+            total_calories = meal.nutrition.calories
+            
+            # Map total nutrition macros
+            if hasattr(meal.nutrition, 'macros') and meal.nutrition.macros:
+                total_nutrition = MacrosResponse(
+                    protein=meal.nutrition.macros.protein,
+                    carbs=meal.nutrition.macros.carbs,
+                    fat=meal.nutrition.macros.fat,
+                    fiber=meal.nutrition.macros.fiber if meal.nutrition.macros.fiber is not None else 0
+                )
+            # Handle legacy structure where nutrition has direct properties
+            elif hasattr(meal.nutrition, 'protein'):
+                total_nutrition = MacrosResponse(
+                    protein=meal.nutrition.protein,
+                    carbs=meal.nutrition.carbs,
+                    fat=meal.nutrition.fat,
+                    fiber=meal.nutrition.fiber if hasattr(meal.nutrition, 'fiber') else 0
                 )
             
-            food_item_dto = FoodItemResponse(
-                fooditem_id=item.fooditem_id,
-                name=item.name,
-                category=item.category,
-                quantity=item.quantity,
-                unit=item.unit,
-                description=item.description,
-                nutrition=nutrition_dto
-            )
-            food_items.append(food_item_dto)
+            # Map food items
+            if meal.nutrition.food_items:
+                for item in meal.nutrition.food_items:
+                    nutrition_dto = None
+                    if hasattr(item, 'macros') and item.macros:
+                        nutrition_dto = NutritionResponse(
+                            nutrition_id=str(item.name),  # Use name as ID since FoodItem doesn't have ID
+                            calories=item.calories,
+                            protein_g=item.macros.protein,
+                            carbs_g=item.macros.carbs,
+                            fat_g=item.macros.fat,
+                            fiber_g=item.macros.fiber if item.macros.fiber is not None else 0,
+                            sugar_g=None,
+                            sodium_mg=None
+                        )
+                    
+                    food_item_dto = FoodItemResponse(
+                        fooditem_id=str(item.name),  # Use name as ID
+                        name=item.name,
+                        category=None,
+                        quantity=item.quantity,
+                        unit=item.unit,
+                        description=None,
+                        nutrition=nutrition_dto
+                    )
+                    food_items.append(food_item_dto)
         
         return DetailedMealResponse(
             meal_id=meal.meal_id,
-            status=meal.status.value,
+            status=STATUS_MAPPING.get(meal.status.value, meal.status.value.lower()),
             dish_name=meal.dish_name,
             ready_at=meal.ready_at,
             error_message=meal.error_message,
             created_at=meal.created_at,
-            updated_at=meal.updated_at,
+            updated_at=None,  # Meal domain model doesn't have updated_at
             food_items=food_items,
-            image_url=image_url
+            image_url=image_url,
+            total_calories=total_calories,
+            total_weight_grams=meal.weight_grams if hasattr(meal, 'weight_grams') else None,
+            total_nutrition=total_nutrition
         )
     
     @staticmethod
@@ -114,7 +154,7 @@ class MealMapper:
         
         meal_responses = []
         for meal in meals:
-            if meal.food_items:  # Has detailed info
+            if meal.nutrition and meal.nutrition.food_items:  # Has detailed info
                 response = MealMapper.to_detailed_response(
                     meal, 
                     image_urls.get(meal.meal_id)
@@ -176,4 +216,53 @@ class MealMapper:
             unit=item_dict.get("unit", ""),
             description=item_dict.get("description"),
             nutrition=nutrition
+        )
+    
+    @staticmethod
+    def to_status_response(meal: Meal) -> MealStatusResponse:
+        """
+        Convert Meal domain model to MealStatusResponse DTO.
+        
+        Args:
+            meal: Meal domain model
+            
+        Returns:
+            MealStatusResponse DTO
+        """
+        # Get user-friendly status message
+        status_messages = {
+            "PROCESSING": "Your meal is being processed",
+            "ANALYZING": "AI is analyzing your meal",
+            "ENRICHING": "Enhancing your meal data",
+            "READY": "Your meal analysis is ready",
+            "FAILED": "Analysis failed"
+        }
+        
+        return MealStatusResponse(
+            meal_id=meal.meal_id,
+            status=STATUS_MAPPING.get(meal.status.value, meal.status.value.lower()),
+            status_message=status_messages.get(meal.status.value, "Unknown status"),
+            error_message=meal.error_message
+        )
+    
+    @staticmethod
+    def to_daily_nutrition_response(daily_macros_data: dict) -> DailyNutritionResponse:
+        """
+        Convert daily macros query result to DailyNutritionResponse DTO.
+        
+        Args:
+            daily_macros_data: Dictionary with daily macros data from query
+            
+        Returns:
+            DailyNutritionResponse DTO
+        """
+        return DailyNutritionResponse(
+            date=daily_macros_data["date"],
+            total_meals=daily_macros_data["meal_count"],
+            totals={
+                "calories": daily_macros_data["total_calories"],
+                "protein": daily_macros_data["total_protein"],
+                "carbs": daily_macros_data["total_carbs"],
+                "fat": daily_macros_data["total_fat"]
+            }
         )

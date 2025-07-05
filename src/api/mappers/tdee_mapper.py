@@ -109,35 +109,3 @@ class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculation
             "weight_kg": dto.weight if dto.unit_system == "metric" else dto.weight * 0.453592,
             "body_fat_percentage": dto.body_fat_percentage
         }
-    
-    @staticmethod
-    def map_to_goal_dict(dto: TdeeCalculationRequest) -> dict:
-        """
-        Convert TdeeCalculationRequest to goal dictionary for database.
-        
-        Args:
-            dto: TDEE calculation request DTO
-            
-        Returns:
-            Dictionary suitable for UserGoal creation
-        """
-        # Map activity levels for database
-        activity_db_map = {
-            'sedentary': 'sedentary',
-            'light': 'light',
-            'moderate': 'moderate',
-            'active': 'active',
-            'extra': 'extra'
-        }
-        
-        # Map goals for database
-        goal_db_map = {
-            'maintenance': 'maintenance',
-            'cutting': 'cutting',
-            'bulking': 'bulking'
-        }
-        
-        return {
-            "activity_level": activity_db_map[dto.activity_level],
-            "fitness_goal": goal_db_map[dto.goal]
-        }

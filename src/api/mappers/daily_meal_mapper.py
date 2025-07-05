@@ -165,3 +165,48 @@ class DailyMealMapper:
             daily_totals=daily_totals,
             target_totals=target_totals
         )
+    
+    @staticmethod
+    def map_to_suggestions_response(result: Dict[str, Any]) -> DailyMealSuggestionsResponse:
+        """
+        Map handler result to suggestions response.
+        
+        Args:
+            result: Result from handler with meals and targets
+            
+        Returns:
+            DailyMealSuggestionsResponse DTO
+        """
+        target_calories = result.get('target_calories', 2000)
+        target_macros = result.get('target_macros')
+        
+        if target_macros and hasattr(target_macros, 'protein'):
+            # It's already a SimpleMacroTargets object
+            pass
+        else:
+            # Create default if not provided
+            from src.domain.model.macro_targets import SimpleMacroTargets
+            target_macros = SimpleMacroTargets(
+                protein=50.0,
+                carbs=250.0,
+                fat=65.0
+            )
+        
+        return DailyMealMapper.map_handler_response_to_dto(
+            result,
+            target_calories,
+            target_macros
+        )
+    
+    @staticmethod
+    def map_to_single_meal_response(result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Map handler result to single meal response.
+        
+        Args:
+            result: Result from handler with single meal
+            
+        Returns:
+            Dictionary with meal data for SingleMealSuggestionResponse
+        """
+        return {"meal": result.get("meal", {})}

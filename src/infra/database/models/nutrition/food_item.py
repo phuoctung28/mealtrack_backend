@@ -6,7 +6,6 @@ from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
 from src.infra.database.models.base import SecondaryEntityMixin
-from .macros import Macros
 
 
 class FoodItem(Base, SecondaryEntityMixin):
@@ -18,23 +17,37 @@ class FoodItem(Base, SecondaryEntityMixin):
     calories = Column(Float, nullable=False)
     confidence = Column(Float, nullable=True)
     
+    # Macro fields (previously in separate Macros table)
+    protein = Column(Float, default=0, nullable=False)
+    carbs = Column(Float, default=0, nullable=False)
+    fat = Column(Float, default=0, nullable=False)
+    fiber = Column(Float, nullable=True)
+    
     # Foreign keys
     nutrition_id = Column(Integer, ForeignKey("nutrition.id"), nullable=False)
     
     # Relationships
     nutrition = relationship("Nutrition", back_populates="food_items")
-    macros = relationship("Macros", uselist=False, cascade="all, delete-orphan")
     
     def to_domain(self):
         """Convert DB model to domain model."""
         from src.domain.model.nutrition import FoodItem as DomainFoodItem
+        
+        # Create macros domain object from our fields
+        from src.domain.model.nutrition import Macros as DomainMacros
+        macros = DomainMacros(
+            protein=self.protein,
+            carbs=self.carbs,
+            fat=self.fat,
+            fiber=self.fiber
+        )
         
         return DomainFoodItem(
             name=self.name,
             quantity=self.quantity,
             unit=self.unit,
             calories=self.calories,
-            macros=self.macros.to_domain() if self.macros else None,
+            macros=macros,
             micros=None,  # Not implemented yet
             confidence=self.confidence
         )
@@ -51,8 +64,11 @@ class FoodItem(Base, SecondaryEntityMixin):
             nutrition_id=nutrition_id
         )
         
+        # Set macro fields directly
         if domain_model.macros:
-            # food_item_id will be available after flush
-            item.macros = Macros.from_domain(domain_model.macros)
+            item.protein = domain_model.macros.protein
+            item.carbs = domain_model.macros.carbs
+            item.fat = domain_model.macros.fat
+            item.fiber = domain_model.macros.fiber
             
         return item

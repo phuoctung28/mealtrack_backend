@@ -21,16 +21,8 @@ class User(Base, BaseMixin):
     
     # Relationships
     profiles = relationship("UserProfile", back_populates="user", cascade="all, delete-orphan")
-    preferences = relationship("UserPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    goals = relationship("UserGoal", back_populates="user", cascade="all, delete-orphan")
-    tdee_calculations = relationship("TdeeCalculation", back_populates="user", cascade="all, delete-orphan")
     
     @property
     def current_profile(self):
         """Get the current active profile."""
         return next((p for p in self.profiles if p.is_current), None)
-    
-    @property
-    def current_goal(self):
-        """Get the current active goal."""
-        return next((g for g in self.goals if g.is_current), None)

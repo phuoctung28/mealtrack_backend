@@ -2,25 +2,11 @@
 Request DTOs for API endpoints.
 """
 
-# Activity requests
-from .activity_requests import (
-    ActivityFilterRequest
-)
 # Daily meal requests
 from .daily_meal_requests import (
     UserPreferencesRequest,
     MealSuggestionFilterRequest,
     MealTypeEnum
-)
-# Ingredient requests
-from .ingredient_requests import (
-    CreateIngredientRequest,
-    UpdateIngredientRequest
-)
-# Macros requests
-from .macros_requests import (
-    OnboardingChoicesRequest,
-    ConsumedMacrosRequest
 )
 # Meal plan requests
 from .meal_plan_requests import (
@@ -74,17 +60,6 @@ __all__ = [
     'ActivityLevelEnum',
     'GoalEnum',
     'UnitSystemEnum',
-    
-    # Activity
-    'ActivityFilterRequest',
-    
-    # Macros
-    'OnboardingChoicesRequest',
-    'ConsumedMacrosRequest',
-    
-    # Ingredient
-    'CreateIngredientRequest',
-    'UpdateIngredientRequest',
     
     # Meal plan
     'UserPreferencesSchema',

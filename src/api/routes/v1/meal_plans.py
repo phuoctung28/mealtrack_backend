@@ -1,5 +1,10 @@
-from fastapi import APIRouter, HTTPException
+"""
+Meal planning API endpoints - Event-driven architecture.
+"""
+from fastapi import APIRouter, Depends
 
+from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.exceptions import handle_exception
 from src.api.schemas.request import (
     ConversationMessageRequest,
     GenerateMealPlanRequest,
@@ -12,123 +17,167 @@ from src.api.schemas.response import (
     MealPlanResponse,
     ReplaceMealResponse
 )
-from src.app.handlers.meal_plan_handler import MealPlanHandler, ConversationHandler
-from src.domain.services.conversation_service import ConversationService
-from src.domain.services.meal_plan_service import MealPlanService
+from src.app.commands.meal_plan import (
+    StartMealPlanConversationCommand,
+    SendConversationMessageCommand,
+    GenerateMealPlanCommand,
+    ReplaceMealInPlanCommand
+)
+from src.app.queries.meal_plan import (
+    GetConversationHistoryQuery,
+    GetMealPlanQuery
+)
+from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/meal-plans", tags=["Meal Planning"])
-
-# Initialize services and handlers
-meal_plan_service = MealPlanService()
-conversation_service = ConversationService(meal_plan_service)
-meal_plan_handler = MealPlanHandler(meal_plan_service)
-conversation_handler = ConversationHandler(conversation_service)
 
 
 # Conversation endpoints
 @router.post("/conversations/start", response_model=StartConversationResponse)
-async def start_conversation(user_id: str = "default_user"):
-    """Start a new meal planning conversation"""
-    result = conversation_handler.start_conversation(user_id)
-    
-    if not result["success"]:
-        raise HTTPException(status_code=500, detail=result["message"])
-    
-    return StartConversationResponse(
-        conversation_id=result["conversation_id"],
-        state=result["state"],
-        assistant_message=result["assistant_message"]
-    )
+async def start_conversation(
+    user_id: str = "default_user",
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """Start a new meal planning conversation."""
+    try:
+        # Create command
+        command = StartMealPlanConversationCommand(user_id=user_id)
+        
+        # Send command
+        result = await event_bus.send(command)
+        
+        return StartConversationResponse(
+            conversation_id=result["conversation_id"],
+            state=result["state"],
+            assistant_message=result["assistant_message"]
+        )
+    except Exception as e:
+        raise handle_exception(e)
 
 
 @router.post("/conversations/{conversation_id}/messages", response_model=ConversationMessageResponse)
-async def send_message(conversation_id: str, request: ConversationMessageRequest):
-    """Send a message to the meal planning assistant"""
-    result = conversation_handler.process_message(
-        conversation_id=conversation_id,
-        user_message=request.message
-    )
-    
-    if not result["success"]:
-        raise HTTPException(status_code=404 if result["error"] == "Conversation not found" else 500, 
-                          detail=result["message"])
-    
-    return ConversationMessageResponse(
-        conversation_id=conversation_id,
-        state=result["state"],
-        assistant_message=result["assistant_message"],
-        requires_input=result["requires_input"],
-        meal_plan_id=result.get("meal_plan_id")
-    )
+async def send_message(
+    conversation_id: str,
+    request: ConversationMessageRequest,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """Send a message to the meal planning assistant."""
+    try:
+        # Create command
+        command = SendConversationMessageCommand(
+            conversation_id=conversation_id,
+            message=request.message
+        )
+        
+        # Send command
+        result = await event_bus.send(command)
+        
+        return ConversationMessageResponse(
+            conversation_id=conversation_id,
+            state=result["state"],
+            assistant_message=result["assistant_message"],
+            requires_input=result["requires_input"],
+            meal_plan_id=result.get("meal_plan_id")
+        )
+    except Exception as e:
+        raise handle_exception(e)
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationHistoryResponse)
-async def get_conversation(conversation_id: str):
-    """Get conversation history"""
-    result = conversation_handler.get_conversation_history(conversation_id)
-    
-    if not result["success"]:
-        raise HTTPException(status_code=404, detail=result["message"])
-    
-    conversation_data = result["conversation"]
-    return ConversationHistoryResponse(**conversation_data)
+async def get_conversation(
+    conversation_id: str,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """Get conversation history."""
+    try:
+        # Create query
+        query = GetConversationHistoryQuery(conversation_id=conversation_id)
+        
+        # Send query
+        result = await event_bus.send(query)
+        
+        conversation_data = result["conversation"]
+        return ConversationHistoryResponse(**conversation_data)
+    except Exception as e:
+        raise handle_exception(e)
 
 
 # Direct meal plan generation endpoints
 @router.post("/generate", response_model=MealPlanResponse)
-async def generate_meal_plan(request: GenerateMealPlanRequest, user_id: str = "default_user"):
-    """Generate a meal plan directly without conversation"""
-    result = meal_plan_handler.generate_meal_plan(
-        user_id=user_id,
-        preferences=request.preferences
-    )
-    
-    if not result["success"]:
-        raise HTTPException(status_code=500, detail=result["message"])
-    
-    meal_plan_data = result["meal_plan"]
-    return MealPlanResponse(**meal_plan_data)
+async def generate_meal_plan(
+    request: GenerateMealPlanRequest,
+    user_id: str = "default_user",
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """Generate a meal plan directly without conversation."""
+    try:
+        # Create command
+        command = GenerateMealPlanCommand(
+            user_id=user_id,
+            preferences=request.preferences
+        )
+        
+        # Send command
+        result = await event_bus.send(command)
+        
+        meal_plan_data = result["meal_plan"]
+        return MealPlanResponse(**meal_plan_data)
+    except Exception as e:
+        raise handle_exception(e)
 
 
 @router.get("/{plan_id}", response_model=MealPlanResponse)
-async def get_meal_plan(plan_id: str):
-    """Get an existing meal plan"""
-    result = meal_plan_handler.get_meal_plan(plan_id)
-    
-    if not result["success"]:
-        raise HTTPException(status_code=404, detail=result["message"])
-    
-    return MealPlanResponse(**result["meal_plan"])
+async def get_meal_plan(
+    plan_id: str,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """Get an existing meal plan."""
+    try:
+        # Create query
+        query = GetMealPlanQuery(plan_id=plan_id)
+        
+        # Send query
+        result = await event_bus.send(query)
+        
+        return MealPlanResponse(**result["meal_plan"])
+    except Exception as e:
+        raise handle_exception(e)
 
 
 @router.post("/{plan_id}/meals/replace", response_model=ReplaceMealResponse)
-async def replace_meal(plan_id: str, request: ReplaceMealRequest):
-    """Replace a specific meal in a plan"""
-    result = meal_plan_handler.regenerate_meal(
-        plan_id=plan_id,
-        date=request.date,
-        meal_id=request.meal_id,
-        additional_preferences={
-            "dietary_preferences": request.dietary_preferences,
-            "exclude_ingredients": request.exclude_ingredients,
-            "preferred_cuisine": request.preferred_cuisine
-        }
-    )
-    
-    if not result["success"]:
-        raise HTTPException(status_code=500, detail=result["message"])
-    
-    return ReplaceMealResponse(
-        success=True,
-        new_meal=result["new_meal"],
-        message="Meal replaced successfully"
-    )
+async def replace_meal(
+    plan_id: str,
+    request: ReplaceMealRequest,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """Replace a specific meal in a plan."""
+    try:
+        # Create command
+        command = ReplaceMealInPlanCommand(
+            plan_id=plan_id,
+            date=request.date,
+            meal_id=request.meal_id,
+            dietary_preferences=request.dietary_preferences,
+            exclude_ingredients=request.exclude_ingredients,
+            preferred_cuisine=request.preferred_cuisine
+        )
+        
+        # Send command
+        result = await event_bus.send(command)
+        
+        return ReplaceMealResponse(
+            success=True,
+            new_meal=result["new_meal"],
+            message="Meal replaced successfully"
+        )
+    except Exception as e:
+        raise handle_exception(e)
 
 
 # Health check for meal planning
 @router.get("/health")
 async def meal_plan_health():
-    """Check if meal planning service is healthy"""
+    """Check if meal planning service is healthy."""
     return {
         "status": "healthy",
         "service": "meal_planning",
