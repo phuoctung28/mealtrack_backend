@@ -5,11 +5,17 @@ import os
 import pytest
 from typing import Generator, Any
 from datetime import datetime, date
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from src.infra.database.config import Base
+from src.infra.database.test_config import (
+    get_test_database_url, 
+    create_test_engine,
+    create_test_tables,
+    drop_test_tables
+)
 from src.infra.database.models.meal import Meal as MealModel
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
@@ -24,21 +30,29 @@ from src.infra.adapters.mock_vision_ai_service import MockVisionAIService
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 
 
-# Test database URL - using SQLite for tests
-TEST_DATABASE_URL = "sqlite:///:memory:"
-
-
 @pytest.fixture(scope="session")
 def test_engine():
     """Create a test database engine."""
-    engine = create_engine(
-        TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+    engine = create_test_engine()
+    
+    # Create test database if it doesn't exist
+    temp_engine = create_engine(
+        get_test_database_url().rsplit('/', 1)[0],
+        isolation_level='AUTOCOMMIT'
     )
-    Base.metadata.create_all(bind=engine)
+    with temp_engine.connect() as conn:
+        db_name = get_test_database_url().rsplit('/', 1)[1].split('?')[0]
+        conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
+    temp_engine.dispose()
+    
+    # Create tables
+    create_test_tables(engine)
+    
     yield engine
-    Base.metadata.drop_all(bind=engine)
+    
+    # Clean up
+    drop_test_tables(engine)
+    engine.dispose()
 
 
 @pytest.fixture(scope="function")

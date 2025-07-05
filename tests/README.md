@@ -43,7 +43,29 @@ tests/
 ### 1. Database Isolation
 - Each test runs in a transaction that's rolled back
 - No test data pollution between tests
-- SQLite in-memory database for speed
+- MySQL test database with automatic cleanup
+- CI uses MySQL service container
+
+#### GitHub Actions MySQL Service Container
+The CI pipeline uses a Docker service container for MySQL:
+```yaml
+services:
+  mysql:
+    image: mysql:8.0
+    env:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mealtrack_test
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
+    ports:
+      - 3306:3306
+```
+
+This container:
+- Runs alongside the test job
+- Is accessible at `localhost:3306`
+- Automatically creates the test database
+- Is destroyed after tests complete
 
 ### 2. Mock Services
 - `MockImageStore`: In-memory image storage

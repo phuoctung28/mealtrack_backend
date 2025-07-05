@@ -1,6 +1,6 @@
 # Testing dependencies
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
+pytest>=7.4.0,<8.0.0
+pytest-asyncio==0.21.1  # Pin to stable version to avoid compatibility issues
 pytest-cov>=4.1.0
 pytest-mock>=3.11.0
 pytest-timeout>=2.1.0
