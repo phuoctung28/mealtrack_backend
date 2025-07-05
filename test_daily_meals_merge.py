@@ -16,11 +16,16 @@ direct_request = {
     "gender": "male", 
     "height": 175,
     "weight": 70,
-    "activity_level": "moderate",
-    "goal": "maintenance",
+    "activity_level": "moderately_active",
+    "goal": "maintain_weight",
     "dietary_preferences": ["vegetarian"],
     "health_conditions": [],
-    "target_calories": 2500
+    "target_calories": 2500,
+    "target_macros": {
+        "protein": 150,
+        "carbs": 250,
+        "fat": 80
+    }
 }
 
 try:
@@ -33,21 +38,28 @@ try:
 except Exception as e:
     print(f"   ❌ Error: {e}")
 
-# Test 2: Profile-based approach (merged from v2)
+# Test 2: Profile-based approach (merged from v2)  
 print("\n2. Testing profile-based approach:")
-profile_request = {
-    "user_profile_id": "test-profile-123"
-}
+# For profile-based, we need to pass user_profile_id as a query parameter
+profile_url = f"{BASE_URL}/suggestions?user_profile_id=test-profile-123"
 
 try:
-    response = requests.post(f"{BASE_URL}/suggestions", json=profile_request)
+    response = requests.post(profile_url)
     print(f"   Status: {response.status_code}")
     if response.status_code == 200:
         print("   ✅ Profile-based approach works!")
     elif response.status_code == 404:
         print("   ⚠️  Profile not found (expected for test profile)")
+    elif response.status_code == 422:
+        # Try with both request body and query param
+        response2 = requests.post(f"{BASE_URL}/suggestions", params={"user_profile_id": "test-profile-123"})
+        print(f"   Retry status: {response2.status_code}")
+        if response2.status_code in [200, 404]:
+            print("   ✅ Profile-based approach works with params!")
+        else:
+            print(f"   ❌ Error: {response2.text[:200]}")
     else:
-        print(f"   ❌ Error: {response.text}")
+        print(f"   ❌ Error: {response.text[:200]}")
 except Exception as e:
     print(f"   ❌ Error: {e}")
 

@@ -11,7 +11,7 @@ class SimpleMacroTargets(BaseModel):
     fat: float = Field(..., description="Fat target in grams", ge=0)
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "protein": 150.0,
                 "carbs": 200.0,

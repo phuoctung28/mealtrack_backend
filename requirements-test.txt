@@ -1,0 +1,26 @@
+# Testing dependencies
+pytest>=7.4.0,<8.0.0
+pytest-asyncio==0.21.1  # Pin to stable version to avoid compatibility issues
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+pytest-timeout>=2.1.0
+pytest-xdist>=3.3.0  # For parallel test execution
+
+# Code quality tools
+ruff>=0.1.0
+black>=23.0.0
+isort>=5.12.0
+mypy>=1.5.0
+
+# Security tools
+bandit>=1.7.0
+safety>=2.3.0
+
+# Testing utilities
+factory-boy>=3.3.0  # For test data factories
+faker>=19.0.0  # For generating fake data
+httpx>=0.24.0  # For testing HTTP clients
+respx>=0.20.0  # For mocking httpx
+
+# Coverage
+coverage[toml]>=7.3.0

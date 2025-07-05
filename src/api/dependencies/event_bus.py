@@ -31,7 +31,7 @@ from src.app.handlers.command_handlers.tdee_command_handlers import CalculateTde
 from src.app.handlers.command_handlers.upload_meal_image_immediately_handler import (
     UploadMealImageImmediatelyHandler
 )
-from src.app.handlers.command_handlers import (
+from src.app.handlers.command_handlers.user_command_handlers import (
     SaveUserOnboardingCommandHandler,
     UpdateUserProfileCommandHandler
 )
@@ -83,7 +83,7 @@ from src.app.queries.user import (
     GetUserProfileQuery
 )
 from src.app.handlers.query_handlers.activity_query_handlers import GetDailyActivitiesQueryHandler
-from src.app.handlers.query_handlers import (
+from src.app.handlers.query_handlers.daily_meal_query_handlers import (
     GetMealSuggestionsForProfileQueryHandler,
     GetSingleMealForProfileQueryHandler,
     GetMealPlanningSummaryQueryHandler
