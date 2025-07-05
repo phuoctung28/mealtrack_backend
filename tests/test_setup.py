@@ -18,7 +18,7 @@ def test_database_rollback(test_session):
     
     # Create a user
     user = User(
-        user_id="test-rollback",
+        id="test-rollback",
         email="rollback@test.com",
         username="rollbacktest",
         password_hash="dummy_hash_for_test",
@@ -29,7 +29,7 @@ def test_database_rollback(test_session):
     test_session.commit()
     
     # Verify user exists in this session
-    found = test_session.query(User).filter_by(user_id="test-rollback").first()
+    found = test_session.query(User).filter_by(id="test-rollback").first()
     assert found is not None
     assert found.email == "rollback@test.com"
     

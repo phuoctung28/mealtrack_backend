@@ -15,10 +15,10 @@ from src.app.commands.tdee import (
 )
 from src.infra.event_bus import EventBus
 
-router = APIRouter(prefix="", tags=["tdee"])
+router = APIRouter(prefix="/v1/tdee", tags=["tdee"])
 
 
-@router.post("/tdee", response_model=TdeeCalculationResponse)
+@router.post("/", response_model=TdeeCalculationResponse)
 async def calculate_tdee(
     request: TdeeCalculationRequest,
     event_bus: EventBus = Depends(get_configured_event_bus)
@@ -49,7 +49,7 @@ async def calculate_tdee(
         result = await event_bus.send(command)
         
         # Create a domain response object for the mapper
-        from src.domain.model.tdee import TdeeResponse, Macros, Goal
+        from src.domain.model.tdee import TdeeResponse, Goal
         from src.domain.model.macros import Macros as DomainMacros
         
         # Map goal string to enum
@@ -60,17 +60,18 @@ async def calculate_tdee(
         }
         
         # Create domain response
+        from src.domain.model.tdee import MacroTargets
+        
         domain_response = TdeeResponse(
             bmr=result["bmr"],
             tdee=result["tdee"],
-            macros=DomainMacros(
+            goal=goal_map[request.goal],
+            macros=MacroTargets(
+                calories=result["macros"]["calories"],
                 protein=result["macros"]["protein"],
                 carbs=result["macros"]["carbs"],
                 fat=result["macros"]["fat"]
-            ),
-            goal=goal_map[request.goal],
-            activity_multiplier=result.get("activity_multiplier", 1.2),
-            formula_used=result.get("formula_used", "Mifflin-St Jeor")
+            )
         )
         
         # Use mapper to convert to response DTO

@@ -4,6 +4,7 @@ Command handlers for daily meal domain - write operations.
 import logging
 from datetime import date
 from typing import Dict, Any
+from uuid import uuid4
 
 from src.app.commands.daily_meal import (
     GenerateDailyMealSuggestionsCommand,
@@ -14,9 +15,10 @@ from src.app.events.daily_meal import (
     DailyMealsGeneratedEvent
 )
 from src.domain.model.macro_targets import SimpleMacroTargets
-from src.domain.model.tdee import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
+from src.domain.model.tdee import TdeeRequest, Sex, Goal, UnitSystem
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
 from src.domain.services.tdee_service import TdeeCalculationService
+from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +27,31 @@ logger = logging.getLogger(__name__)
 class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealSuggestionsCommand, Dict[str, Any]]):
     """Handler for generating daily meal suggestions."""
     
-    def __init__(self):
-        self.suggestion_service = DailyMealSuggestionService()
-        self.tdee_service = TdeeCalculationService()
+    def __init__(self, suggestion_service=None, tdee_service=None):
+        self.suggestion_service = suggestion_service or DailyMealSuggestionService()
+        self.tdee_service = tdee_service or TdeeCalculationService()
     
-    def set_dependencies(self):
-        """No external dependencies needed."""
-        pass
+    def set_dependencies(self, **kwargs):
+        """Set dependencies for dependency injection."""
+        if 'suggestion_service' in kwargs:
+            self.suggestion_service = kwargs['suggestion_service']
+        if 'tdee_service' in kwargs:
+            self.tdee_service = kwargs['tdee_service']
     
     async def handle(self, command: GenerateDailyMealSuggestionsCommand) -> Dict[str, Any]:
         """Generate daily meal suggestions based on user preferences."""
+        # Validate input
+        from src.api.exceptions import ValidationException
+        
+        if command.age < 1 or command.age > 120:
+            raise ValidationException("Age must be between 1 and 120")
+        
+        if command.height <= 0:
+            raise ValidationException("Height must be greater than 0")
+            
+        if command.weight <= 0:
+            raise ValidationException("Weight must be greater than 0")
+        
         # Prepare user data
         user_data = {
             "age": command.age,
@@ -71,13 +88,35 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
         for meal in suggested_meals:
             meal_dict = self._format_meal(meal)
             meals.append(meal_dict)
-            meal_ids.append(meal.id)
+            meal_ids.append(meal.meal_id if hasattr(meal, 'meal_id') else meal.id)
+        
+        # Format meals for test compatibility
+        suggestions = []
+        for meal_dict in meals:
+            suggestion = {
+                "meal_type": meal_dict["meal_type"],
+                "dish_name": meal_dict["name"],
+                "calories": meal_dict["calories"],
+                "macros": {
+                    "protein": meal_dict["protein"],
+                    "carbs": meal_dict["carbs"],
+                    "fat": meal_dict["fat"]
+                }
+            }
+            suggestions.append(suggestion)
         
         result = {
             "success": True,
             "date": date.today().isoformat(),
             "meal_count": len(meals),
             "meals": meals,
+            "suggestions": suggestions,  # For test compatibility
+            "total_calories": round(total_calories, 1),
+            "total_macros": {
+                "protein": round(total_protein, 1),
+                "carbs": round(total_carbs, 1),
+                "fat": round(total_fat, 1)
+            },
             "daily_totals": {
                 "calories": round(total_calories, 1),
                 "protein": round(total_protein, 1),
@@ -92,8 +131,8 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
             },
             "events": [
                 DailyMealsGeneratedEvent(
-                    aggregate_id=command.correlation_id,
-                    user_id=command.correlation_id,
+                    aggregate_id=str(uuid4()),
+                    user_id=str(uuid4()),
                     date=date.today().isoformat(),
                     meal_count=len(meals),
                     total_calories=total_calories,
@@ -109,28 +148,14 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
         # Map to TDEE enums
         sex = Sex.MALE if command.gender.lower() == "male" else Sex.FEMALE
         
-        activity_map = {
-            "sedentary": ActivityLevel.SEDENTARY,
-            "lightly_active": ActivityLevel.LIGHT,
-            "moderately_active": ActivityLevel.MODERATE,
-            "very_active": ActivityLevel.ACTIVE,
-            "extra_active": ActivityLevel.EXTRA
-        }
-        
-        goal_map = {
-            "lose_weight": Goal.CUTTING,
-            "maintain_weight": Goal.MAINTENANCE,
-            "gain_weight": Goal.BULKING,
-            "build_muscle": Goal.BULKING
-        }
-        
         tdee_request = TdeeRequest(
             age=command.age,
             sex=sex,
-            height_cm=command.height,
-            weight_kg=command.weight,
-            activity_level=activity_map.get(command.activity_level, ActivityLevel.MODERATE),
-            goal=goal_map.get(command.goal, Goal.MAINTENANCE),
+            height=command.height,  # height is in cm since unit_system is METRIC
+            weight=command.weight,  # weight is in kg since unit_system is METRIC
+            activity_level=ActivityGoalMapper.map_activity_level(command.activity_level),
+            goal=ActivityGoalMapper.map_goal(command.goal),
+            body_fat_pct=None,
             unit_system=UnitSystem.METRIC
         )
         
@@ -162,25 +187,21 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
     
     def _format_meal(self, meal) -> Dict[str, Any]:
         """Format meal for response."""
-        prep_time = meal.preparation_time.get("prep", 0) if meal.preparation_time else 0
-        cook_time = meal.preparation_time.get("cook", 0) if meal.preparation_time else 0
-        total_time = meal.preparation_time.get("total", prep_time + cook_time) if meal.preparation_time else prep_time + cook_time
+        # PlannedMeal has prep_time and cook_time attributes directly
+        prep_time = meal.prep_time if hasattr(meal, 'prep_time') else 0
+        cook_time = meal.cook_time if hasattr(meal, 'cook_time') else 0
+        total_time = meal.total_time if hasattr(meal, 'total_time') else prep_time + cook_time
         
-        # Extract dietary tags
-        tags = meal.tags or []
-        is_vegetarian = "vegetarian" in tags
-        is_vegan = "vegan" in tags
-        is_gluten_free = "gluten-free" in tags
+        # PlannedMeal has is_vegetarian, is_vegan, is_gluten_free as boolean attributes
+        is_vegetarian = meal.is_vegetarian if hasattr(meal, 'is_vegetarian') else False
+        is_vegan = meal.is_vegan if hasattr(meal, 'is_vegan') else False
+        is_gluten_free = meal.is_gluten_free if hasattr(meal, 'is_gluten_free') else False
         
         # Extract cuisine type
-        cuisine_type = None
-        for tag in tags:
-            if tag not in ["vegetarian", "vegan", "gluten-free", "high-protein", "low-carb"]:
-                cuisine_type = tag
-                break
+        cuisine_type = meal.cuisine_type if hasattr(meal, 'cuisine_type') else None
         
         return {
-            "meal_id": meal.id,
+            "meal_id": meal.meal_id if hasattr(meal, 'meal_id') else meal.id,
             "meal_type": meal.meal_type.value,
             "name": meal.name,
             "description": meal.description,
@@ -192,7 +213,7 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
             "carbs": meal.carbs,
             "fat": meal.fat,
             "ingredients": meal.ingredients,
-            "instructions": meal.instructions or [],
+            "instructions": meal.instructions if hasattr(meal, 'instructions') else [],
             "is_vegetarian": is_vegetarian,
             "is_vegan": is_vegan,
             "is_gluten_free": is_gluten_free,

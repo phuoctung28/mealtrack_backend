@@ -53,16 +53,29 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                 command.content_type
             )
             
+            # Extract image_id from URL
+            # For mock store: mock://images/{uuid}
+            # For cloudinary: https://res.cloudinary.com/.../v123/{public_id}.jpg
+            image_id = image_url
+            if image_url.startswith("mock://images/"):
+                image_id = image_url.replace("mock://images/", "")
+            elif "cloudinary.com" in image_url:
+                # Extract public_id from cloudinary URL
+                parts = image_url.split("/")
+                if len(parts) > 1:
+                    # Get the last part and remove file extension
+                    image_id = parts[-1].split(".")[0]
+            
             # Create meal record with ANALYZING status
             meal = Meal(
                 meal_id=str(uuid4()),
                 status=MealStatus.ANALYZING,
                 created_at=datetime.now(),
                 image=MealImage(
-                    image_id=image_url,  # CloudinaryImageStore returns the image_id
+                    image_id=image_id,
                     format="jpeg" if "jpeg" in command.content_type else "png",
                     size_bytes=len(command.file_contents),
-                    url=None  # Will be populated later if needed
+                    url=image_url
                 )
             )
             

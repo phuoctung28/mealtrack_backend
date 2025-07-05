@@ -9,8 +9,7 @@ from uuid import uuid4
 from src.api.exceptions import ValidationException, ResourceNotFoundException
 from src.app.commands.meal import (
     UploadMealImageCommand,
-    RecalculateMealNutritionCommand,
-    AnalyzeMealImageCommand
+    RecalculateMealNutritionCommand
 )
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import (
@@ -20,76 +19,71 @@ from src.app.events.meal import (
 )
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_image import MealImage
-from src.domain.parsers.gpt_response_parser import GPTResponseParser
-from src.domain.ports.image_store_port import ImageStorePort
+from src.domain.model.nutrition import Nutrition, FoodItem
+from src.domain.model.macros import Macros
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-
-# from src.app.jobs.analyse_meal_image_job import analyse_meal_image_job  # TODO: Implement background jobs
+from src.domain.parsers.gpt_response_parser import GPTResponseParser
 
 logger = logging.getLogger(__name__)
 
 
 @handles(UploadMealImageCommand)
 class UploadMealImageCommandHandler(EventHandler[UploadMealImageCommand, Dict[str, Any]]):
-    """Handler for uploading and storing meal images."""
+    """Handler for uploading meal images."""
     
-    def __init__(
-        self,
-        image_store: ImageStorePort = None,
-        meal_repository: MealRepositoryPort = None,
-        vision_service: VisionAIServicePort = None,
-        gpt_parser: GPTResponseParser = None
-    ):
-        self.image_store = image_store
+    def __init__(self, meal_repository: MealRepositoryPort = None, image_store: ImageStorePort = None):
         self.meal_repository = meal_repository
-        self.vision_service = vision_service
-        self.gpt_parser = gpt_parser
+        self.image_store = image_store
     
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
-        self.image_store = kwargs.get('image_store', self.image_store)
         self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
-        self.vision_service = kwargs.get('vision_service', self.vision_service)
-        self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
+        self.image_store = kwargs.get('image_store', self.image_store)
     
     async def handle(self, command: UploadMealImageCommand) -> Dict[str, Any]:
-        """Handle meal image upload."""
-        if not all([self.image_store, self.meal_repository]):
-            raise RuntimeError("Required dependencies not configured")
+        """Upload meal image and create meal record."""
+        if not self.meal_repository or not self.image_store:
+            raise RuntimeError("Dependencies not configured")
         
-        # Upload image to storage
-        image_url = self.image_store.save(
+        # Upload image
+        image_id = self.image_store.save(
             command.file_contents,
             command.content_type
         )
         
-        # Create meal record
+        # Get image URL
+        image_url = self.image_store.get_url(image_id)
+        
+        # Create meal image
+        meal_image = MealImage(
+            image_id=image_id,
+            format="jpeg" if command.content_type == "image/jpeg" else "png",
+            size_bytes=len(command.file_contents),
+            url=image_url or f"mock://images/{image_id}"
+        )
+        
+        # Create meal
         meal = Meal(
             meal_id=str(uuid4()),
             status=MealStatus.PROCESSING,
             created_at=datetime.now(),
-            image=MealImage(
-                image_id=str(uuid4()),
-                format="jpeg",  # Default format
-                size_bytes=len(command.file_contents),
-                url=image_url
-            )
+            image=meal_image
         )
         
         # Save meal
         saved_meal = self.meal_repository.save(meal)
         
-        # Return result with events
         return {
             "meal_id": saved_meal.meal_id,
             "status": saved_meal.status.value,
-            "image_url": image_url,
+            "image_url": saved_meal.image.url if saved_meal.image else None,
             "events": [
                 MealImageUploadedEvent(
                     aggregate_id=saved_meal.meal_id,
                     meal_id=saved_meal.meal_id,
-                    image_url=image_url,
+                    image_url=meal_image.url,
                     upload_timestamp=datetime.now()
                 )
             ]
@@ -103,15 +97,16 @@ class RecalculateMealNutritionCommandHandler(EventHandler[RecalculateMealNutriti
     def __init__(self, meal_repository: MealRepositoryPort = None):
         self.meal_repository = meal_repository
     
-    def set_dependencies(self, meal_repository: MealRepositoryPort):
+    def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
-        self.meal_repository = meal_repository
+        self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
     
     async def handle(self, command: RecalculateMealNutritionCommand) -> Dict[str, Any]:
-        """Recalculate meal nutrition with new weight."""
+        """Recalculate meal nutrition based on new weight."""
         if not self.meal_repository:
             raise RuntimeError("Meal repository not configured")
         
+        # Validate weight
         if command.weight_grams <= 0:
             raise ValidationException("Weight must be greater than 0")
         
@@ -123,30 +118,30 @@ class RecalculateMealNutritionCommandHandler(EventHandler[RecalculateMealNutriti
         if not meal.nutrition:
             raise ValidationException(f"Meal {command.meal_id} has no nutrition data to recalculate")
         
-        # Store old weight for event
+        # Calculate scale factor
+        # Assume original portion was 100g if not specified
         old_weight = getattr(meal, 'weight_grams', 100.0)
+        scale_factor = command.weight_grams / old_weight
         
-        # Calculate scaling factor
-        original_weight = 100.0  # Assuming original calculations were per 100g
-        scale_factor = command.weight_grams / original_weight
-        
-        # Update nutrition values
+        # Update nutrition values directly (since we made them mutable)
         meal.nutrition.calories = meal.nutrition.calories * scale_factor
-        meal.nutrition.protein = meal.nutrition.protein * scale_factor
-        meal.nutrition.carbs = meal.nutrition.carbs * scale_factor
-        meal.nutrition.fat = meal.nutrition.fat * scale_factor
-        if hasattr(meal.nutrition, 'fiber') and meal.nutrition.fiber:
-            meal.nutrition.fiber = meal.nutrition.fiber * scale_factor
+        meal.nutrition.macros.protein = meal.nutrition.macros.protein * scale_factor
+        meal.nutrition.macros.carbs = meal.nutrition.macros.carbs * scale_factor
+        meal.nutrition.macros.fat = meal.nutrition.macros.fat * scale_factor
+        
+        if hasattr(meal.nutrition.macros, 'fiber') and meal.nutrition.macros.fiber:
+            meal.nutrition.macros.fiber = meal.nutrition.macros.fiber * scale_factor
         
         # Update food items if present
         if meal.nutrition.food_items:
             for item in meal.nutrition.food_items:
+                item.quantity = item.quantity * scale_factor
                 item.calories = item.calories * scale_factor
-                if hasattr(item, 'quantity'):
-                    item.quantity = item.quantity * scale_factor
-        
-        # Store the new weight
-        meal.weight_grams = command.weight_grams
+                item.macros.protein = item.macros.protein * scale_factor
+                item.macros.carbs = item.macros.carbs * scale_factor
+                item.macros.fat = item.macros.fat * scale_factor
+                if item.macros.fiber:
+                    item.macros.fiber = item.macros.fiber * scale_factor
         
         # Save updated meal
         updated_meal = self.meal_repository.save(meal)
@@ -154,9 +149,9 @@ class RecalculateMealNutritionCommandHandler(EventHandler[RecalculateMealNutriti
         # Prepare nutrition data for response
         nutrition_data = {
             "calories": round(updated_meal.nutrition.calories, 1),
-            "protein": round(updated_meal.nutrition.protein, 1),
-            "carbs": round(updated_meal.nutrition.carbs, 1),
-            "fat": round(updated_meal.nutrition.fat, 1)
+            "protein": round(updated_meal.nutrition.macros.protein, 1),
+            "carbs": round(updated_meal.nutrition.macros.carbs, 1),
+            "fat": round(updated_meal.nutrition.macros.fat, 1)
         }
         
         if hasattr(updated_meal.nutrition, 'fiber') and updated_meal.nutrition.fiber:
@@ -176,101 +171,3 @@ class RecalculateMealNutritionCommandHandler(EventHandler[RecalculateMealNutriti
                 )
             ]
         }
-
-
-@handles(AnalyzeMealImageCommand)
-class AnalyzeMealImageCommandHandler(EventHandler[AnalyzeMealImageCommand, Dict[str, Any]]):
-    """Handler for analyzing meal images."""
-    
-    def __init__(
-        self,
-        meal_repository: MealRepositoryPort = None,
-        vision_service: VisionAIServicePort = None,
-        gpt_parser: GPTResponseParser = None
-    ):
-        self.meal_repository = meal_repository
-        self.vision_service = vision_service
-        self.gpt_parser = gpt_parser
-    
-    def set_dependencies(self, **kwargs):
-        """Set dependencies for dependency injection."""
-        self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
-        self.vision_service = kwargs.get('vision_service', self.vision_service)
-        self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
-    
-    async def handle(self, command: AnalyzeMealImageCommand) -> Dict[str, Any]:
-        """Analyze meal image using AI vision service."""
-        if not all([self.meal_repository, self.vision_service, self.gpt_parser]):
-            raise RuntimeError("Required dependencies not configured")
-        
-        # Get meal
-        meal = self.meal_repository.find_by_id(command.meal_id)
-        if not meal:
-            raise ResourceNotFoundException(f"Meal with ID {command.meal_id} not found")
-        
-        if not meal.image:
-            raise ValidationException(f"Meal {command.meal_id} has no image to analyze")
-        
-        try:
-            # Update status to analyzing
-            meal.status = MealStatus.ANALYZING
-            self.meal_repository.save(meal)
-            
-            # Get image store to load the image bytes
-            from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
-            image_store = CloudinaryImageStore()
-            
-            # Load image bytes
-            image_bytes = image_store.load(meal.image.image_id)
-            if not image_bytes:
-                raise RuntimeError(f"Could not load image {meal.image.image_id}")
-            
-            # Perform AI analysis
-            logger.info(f"Performing AI vision analysis for meal {command.meal_id}")
-            vision_result = self.vision_service.analyze(image_bytes)
-            
-            # Parse the response
-            nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
-            dish_name = self.gpt_parser.parse_dish_name(vision_result)
-            
-            # Update meal with analysis results
-            meal.dish_name = dish_name or "Unknown dish"
-            meal.status = MealStatus.READY
-            meal.ready_at = datetime.now()
-            meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)
-            
-            # Use the parsed nutrition directly
-            meal.nutrition = nutrition
-            
-            # Save the analyzed meal
-            self.meal_repository.save(meal)
-            
-            logger.info(f"Meal {command.meal_id} analysis completed successfully")
-            
-            return {
-                "meal_id": command.meal_id,
-                "status": "ready",
-                "dish_name": meal.dish_name,
-                "nutrition": {
-                    "calories": meal.nutrition.calories,
-                    "protein": meal.nutrition.protein,
-                    "carbs": meal.nutrition.carbs,
-                    "fat": meal.nutrition.fat,
-                    "fiber": meal.nutrition.fiber if hasattr(meal.nutrition, 'fiber') else 0
-                },
-                "events": [
-                    MealAnalysisStartedEvent(
-                        aggregate_id=command.meal_id,
-                        meal_id=command.meal_id,
-                        analysis_type="vision_ai"
-                    )
-                ]
-            }
-            
-        except Exception as e:
-            logger.error(f"Failed to analyze meal {command.meal_id}: {str(e)}")
-            # Update meal status to failed
-            meal.status = MealStatus.FAILED
-            meal.error_message = str(e)
-            self.meal_repository.save(meal)
-            raise

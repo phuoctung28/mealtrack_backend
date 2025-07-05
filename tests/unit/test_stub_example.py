@@ -16,50 +16,71 @@ class TestWithStubs:
     
     def test_meal_creation_with_stub(self):
         """Test meal creation using stubs."""
-        # Create stub meal
-        meal = Meal(
-            meal_id="test-123",
-            status=MealStatus.READY,
-            created_at=datetime.now()
-        )
-        
-        # Add stub image
-        meal.image = MealImage(
-            image_id="img-123",
+        # Create stub image first
+        stub_image = MealImage(
+            image_id="123e4567-e89b-12d3-a456-426614174000",
             format="jpeg",
             size_bytes=1000,
             url="https://example.com/test.jpg"
         )
         
-        # Add stub nutrition
-        meal.nutrition = Nutrition(
+        # Create stub nutrition
+        stub_nutrition = Nutrition(
             calories=500,
             macros=Macros(protein=30, carbs=50, fat=20, fiber=5),
             food_items=[],
             confidence_score=0.95
         )
         
+        # Create stub meal with all required fields
+        meal = Meal(
+            meal_id="123e4567-e89b-12d3-a456-426614174001",
+            status=MealStatus.READY,
+            created_at=datetime.now(),
+            image=stub_image,
+            nutrition=stub_nutrition,
+            dish_name="Test Meal",
+            ready_at=datetime.now()
+        )
+        
         # Verify
-        assert meal.meal_id == "test-123"
+        assert meal.meal_id == "123e4567-e89b-12d3-a456-426614174001"
         assert meal.status == MealStatus.READY
         assert meal.nutrition.calories == 500
     
     def test_repository_with_mock(self):
         """Test repository interactions with mock."""
+        # Create stub image
+        stub_image = MealImage(
+            image_id="123e4567-e89b-12d3-a456-426614174000",
+            format="jpeg",
+            size_bytes=1000,
+            url="https://example.com/test.jpg"
+        )
+        
         # Create mock repository
         mock_repo = Mock()
         mock_repo.find_by_id.return_value = Meal(
-            meal_id="test-123",
+            meal_id="123e4567-e89b-12d3-a456-426614174001",
             status=MealStatus.READY,
-            created_at=datetime.now()
+            created_at=datetime.now(),
+            image=stub_image,
+            nutrition=Nutrition(
+                calories=500,
+                macros=Macros(protein=30, carbs=50, fat=20, fiber=5),
+                food_items=[],
+                confidence_score=0.95
+            ),
+            dish_name="Test Meal",
+            ready_at=datetime.now()
         )
         
         # Test
-        meal = mock_repo.find_by_id("test-123")
+        meal = mock_repo.find_by_id("123e4567-e89b-12d3-a456-426614174001")
         
         # Verify
-        assert meal.meal_id == "test-123"
-        mock_repo.find_by_id.assert_called_once_with("test-123")
+        assert meal.meal_id == "123e4567-e89b-12d3-a456-426614174001"
+        mock_repo.find_by_id.assert_called_once_with("123e4567-e89b-12d3-a456-426614174001")
     
     def test_service_with_stub(self):
         """Test service with stubbed dependencies."""
@@ -98,21 +119,12 @@ class TestHandlerStubs:
         stub_meal_repo = Mock()
         stub_meal_repo.save.return_value = None
         
-        stub_vision_service = Mock()
-        stub_vision_service.analyze.return_value = {"test": "data"}
-        
-        stub_parser = Mock()
-        
         # Create handler with stubs
         handler = UploadMealImageCommandHandler(
             image_store=stub_image_store,
-            meal_repository=stub_meal_repo,
-            vision_service=stub_vision_service,
-            gpt_parser=stub_parser
+            meal_repository=stub_meal_repo
         )
         
         # Verify handler is created with stubs
         assert handler.image_store == stub_image_store
         assert handler.meal_repository == stub_meal_repo
-        assert handler.vision_service == stub_vision_service
-        assert handler.gpt_parser == stub_parser

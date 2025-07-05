@@ -10,10 +10,7 @@ from .daily_meal import (
 
 # Meal events
 from .meal import (
-    MealAnalysisCompletedEvent,
     MealAnalysisStartedEvent,
-    MealEnrichmentCompletedEvent,
-    MealEnrichmentStartedEvent,
     MealImageUploadedEvent,
     MealNutritionUpdatedEvent,
 )
@@ -44,10 +41,7 @@ __all__ = [
     "DailyMealsGeneratedEvent",
     
     # Meal events
-    "MealAnalysisCompletedEvent",
     "MealAnalysisStartedEvent",
-    "MealEnrichmentCompletedEvent",
-    "MealEnrichmentStartedEvent",
     "MealImageUploadedEvent",
     "MealNutritionUpdatedEvent",
     

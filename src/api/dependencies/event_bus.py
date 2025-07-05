@@ -18,8 +18,7 @@ from src.app.handlers.command_handlers.daily_meal_command_handlers import (
 # Import all handlers
 from src.app.handlers.command_handlers.meal_command_handlers import (
     UploadMealImageCommandHandler,
-    RecalculateMealNutritionCommandHandler,
-    AnalyzeMealImageCommandHandler
+    RecalculateMealNutritionCommandHandler
 )
 from src.app.handlers.command_handlers.meal_plan_command_handlers import (
     StartMealPlanConversationCommandHandler,
@@ -32,8 +31,7 @@ from src.app.handlers.command_handlers.upload_meal_image_immediately_handler imp
     UploadMealImageImmediatelyHandler
 )
 from src.app.handlers.command_handlers.user_command_handlers import (
-    SaveUserOnboardingCommandHandler,
-    UpdateUserProfileCommandHandler
+    SaveUserOnboardingCommandHandler
 )
 from src.app.commands.daily_meal import (
     GenerateDailyMealSuggestionsCommand,
@@ -43,7 +41,6 @@ from src.app.commands.daily_meal import (
 from src.app.commands.meal import (
     UploadMealImageCommand,
     RecalculateMealNutritionCommand,
-    AnalyzeMealImageCommand,
     UploadMealImageImmediatelyCommand
 )
 from src.app.commands.meal_plan import (
@@ -54,8 +51,7 @@ from src.app.commands.meal_plan import (
 )
 from src.app.commands.tdee import CalculateTdeeCommand
 from src.app.commands.user import (
-    SaveUserOnboardingCommand,
-    UpdateUserProfileCommand
+    SaveUserOnboardingCommand
 )
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.daily_meal import (
@@ -67,19 +63,14 @@ from src.app.queries.daily_meal import (
 from src.app.queries.meal import (
     GetMealByIdQuery,
     GetMealsByDateQuery,
-    GetDailyMacrosQuery,
-    SearchMealsQuery
+    GetDailyMacrosQuery
 )
 from src.app.queries.meal_plan import (
     GetConversationHistoryQuery,
     GetMealPlanQuery
 )
-from src.app.queries.tdee import (
-    GetMacroTargetsQuery,
-    CompareTdeeMethodsQuery
-)
+# No TDEE queries - all removed
 from src.app.queries.user import (
-    GetOnboardingSectionsQuery,
     GetUserProfileQuery
 )
 from src.app.handlers.query_handlers.activity_query_handlers import GetDailyActivitiesQueryHandler
@@ -95,15 +86,10 @@ from src.app.handlers.query_handlers.meal_plan_query_handlers import (
 from src.app.handlers.query_handlers.meal_query_handlers import (
     GetMealByIdQueryHandler,
     GetMealsByDateQueryHandler,
-    GetDailyMacrosQueryHandler,
-    SearchMealsQueryHandler
+    GetDailyMacrosQueryHandler
 )
-from src.app.handlers.query_handlers.tdee_query_handlers import (
-    GetMacroTargetsQueryHandler,
-    CompareTdeeMethodsQueryHandler
-)
+# No TDEE query handlers - all removed
 from src.app.handlers.query_handlers.user_query_handlers import (
-    GetOnboardingSectionsQueryHandler,
     GetUserProfileQueryHandler
 )
 from src.infra.event_bus import PyMediatorEventBus, EventBus
@@ -126,9 +112,7 @@ async def get_configured_event_bus(
         UploadMealImageCommand,
         UploadMealImageCommandHandler(
             image_store=image_store,
-            meal_repository=meal_repository,
-            vision_service=vision_service,
-            gpt_parser=gpt_parser
+            meal_repository=meal_repository
         )
     )
     
@@ -137,14 +121,6 @@ async def get_configured_event_bus(
         RecalculateMealNutritionCommandHandler(meal_repository)
     )
     
-    event_bus.register_handler(
-        AnalyzeMealImageCommand,
-        AnalyzeMealImageCommandHandler(
-            meal_repository=meal_repository,
-            vision_service=vision_service,
-            gpt_parser=gpt_parser
-        )
-    )
     
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
@@ -172,10 +148,6 @@ async def get_configured_event_bus(
         GetDailyMacrosQueryHandler(meal_repository)
     )
     
-    event_bus.register_handler(
-        SearchMealsQuery,
-        SearchMealsQueryHandler(meal_repository)
-    )
     
     # Register activity query handlers
     event_bus.register_handler(
@@ -189,15 +161,6 @@ async def get_configured_event_bus(
         CalculateTdeeCommandHandler()
     )
     
-    event_bus.register_handler(
-        GetMacroTargetsQuery,
-        GetMacroTargetsQueryHandler()
-    )
-    
-    event_bus.register_handler(
-        CompareTdeeMethodsQuery,
-        CompareTdeeMethodsQueryHandler()
-    )
     
     # Register daily meal handlers
     event_bus.register_handler(
@@ -262,15 +225,6 @@ async def get_configured_event_bus(
         SaveUserOnboardingCommandHandler(db)
     )
     
-    event_bus.register_handler(
-        UpdateUserProfileCommand,
-        UpdateUserProfileCommandHandler(db)
-    )
-    
-    event_bus.register_handler(
-        GetOnboardingSectionsQuery,
-        GetOnboardingSectionsQueryHandler()
-    )
     
     event_bus.register_handler(
         GetUserProfileQuery,

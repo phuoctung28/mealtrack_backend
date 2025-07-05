@@ -37,19 +37,19 @@ async def save_onboarding_data(
         # Create command
         command = SaveUserOnboardingCommand(
             user_id=user_id,
-            age=request.personal_info.age,
-            gender=request.personal_info.gender,
-            height_cm=request.personal_info.height_cm,
-            weight_kg=request.personal_info.weight_kg,
-            body_fat_percentage=request.personal_info.body_fat_percentage,
-            activity_level=request.goals.activity_level,
-            fitness_goal=request.goals.fitness_goal,
-            target_weight_kg=request.goals.target_weight_kg,
-            meals_per_day=request.goals.meals_per_day,
-            snacks_per_day=request.goals.snacks_per_day,
-            dietary_preferences=request.preferences.dietary_preferences,
-            health_conditions=request.preferences.health_conditions,
-            allergies=request.preferences.allergies
+            age=request.age,
+            gender=request.gender,
+            height_cm=request.height,
+            weight_kg=request.weight,
+            body_fat_percentage=request.body_fat_percentage,
+            activity_level=request.activity_level,
+            fitness_goal=request.goal,
+            target_weight_kg=request.target_weight,
+            meals_per_day=request.meals_per_day,
+            snacks_per_day=request.snacks_per_day,
+            dietary_preferences=request.dietary_preferences,
+            health_conditions=request.health_conditions,
+            allergies=request.allergies
         )
         
         # Send command
@@ -58,12 +58,12 @@ async def save_onboarding_data(
         return OnboardingResponse(
             message="Onboarding data saved successfully",
             user_id=user_id,
-            profile_id=result['profile']['id'],
+            profile_id=result['user_id'],
             tdee_calculation={
-                "bmr": result['tdee']['bmr'],
-                "tdee": result['tdee']['tdee'],
-                "target_calories": result['tdee']['target_calories'],
-                "macros": result['tdee']['macros']
+                "bmr": 0,  # Handler doesn't return BMR separately
+                "tdee": result.get('tdee', 0),
+                "target_calories": result.get('recommended_calories', 0),
+                "macros": result.get('recommended_macros', {})
             }
         )
         

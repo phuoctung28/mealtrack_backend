@@ -16,7 +16,6 @@ from .meal import (
     GetDailyMacrosQuery,
     GetMealByIdQuery,
     GetMealsByDateQuery,
-    SearchMealsQuery,
 )
 # Import from meal_plan module
 from .meal_plan import (
@@ -24,13 +23,9 @@ from .meal_plan import (
     GetMealPlanQuery,
 )
 # Import from tdee module
-from .tdee import (
-    GetMacroTargetsQuery,
-    CompareTdeeMethodsQuery,
-)
+# No TDEE queries imported - all removed
 # Import from user module
 from .user import (
-    GetOnboardingSectionsQuery,
     GetUserProfileQuery,
 )
 
@@ -39,16 +34,11 @@ __all__ = [
     "GetDailyMacrosQuery",
     "GetMealByIdQuery",
     "GetMealsByDateQuery",
-    "SearchMealsQuery",
-    # TDEE queries
-    "GetMacroTargetsQuery",
-    "CompareTdeeMethodsQuery",
     # Daily meal queries
     "GetMealSuggestionsForProfileQuery",
     "GetSingleMealForProfileQuery",
     "GetMealPlanningSummaryQuery",
     # User queries
-    "GetOnboardingSectionsQuery",
     "GetUserProfileQuery",
     # Meal plan queries
     "GetConversationHistoryQuery",

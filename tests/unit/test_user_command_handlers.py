@@ -13,8 +13,22 @@ from src.api.exceptions import ValidationException
 class TestSaveUserOnboardingCommandHandler:
     """Test SaveUserOnboardingCommand handler."""
     
-    async def test_save_user_onboarding_success(self, event_bus):
+    @pytest.mark.asyncio
+    async def test_save_user_onboarding_success(self, event_bus, test_session):
         """Test successful user onboarding save."""
+        # Create user first
+        from src.infra.database.models.user.user import User
+        user = User(
+            id="test-user-123",
+            email="test@example.com",
+            username="testuser",
+            password_hash="dummy_hash",
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        test_session.add(user)
+        test_session.commit()
+        
         # Arrange
         command = SaveUserOnboardingCommand(
             user_id="test-user-123",
@@ -22,8 +36,8 @@ class TestSaveUserOnboardingCommandHandler:
             gender="male",
             height_cm=175,
             weight_kg=70,
-            activity_level="moderately_active",
-            goal="maintain_weight",
+            activity_level="moderate",
+            fitness_goal="maintenance",
             dietary_preferences=["vegetarian"],
             health_conditions=["diabetes"]
         )
@@ -39,8 +53,22 @@ class TestSaveUserOnboardingCommandHandler:
         assert "recommended_calories" in result
         assert "recommended_macros" in result
     
-    async def test_save_user_onboarding_invalid_age(self, event_bus):
+    @pytest.mark.asyncio
+    async def test_save_user_onboarding_invalid_age(self, event_bus, test_session):
         """Test onboarding with invalid age."""
+        # Create user first
+        from src.infra.database.models.user.user import User
+        user = User(
+            id="test-user-123",
+            email="test@example.com",
+            username="testuser",
+            password_hash="dummy_hash",
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        test_session.add(user)
+        test_session.commit()
+        
         # Arrange
         command = SaveUserOnboardingCommand(
             user_id="test-user-123",
@@ -48,16 +76,30 @@ class TestSaveUserOnboardingCommandHandler:
             gender="male",
             height_cm=175,
             weight_kg=70,
-            activity_level="moderately_active",
-            goal="maintain_weight"
+            activity_level="moderate",
+            fitness_goal="maintenance"
         )
         
         # Act & Assert
         with pytest.raises(ValidationException):
             await event_bus.send(command)
     
-    async def test_save_user_onboarding_invalid_weight(self, event_bus):
+    @pytest.mark.asyncio
+    async def test_save_user_onboarding_invalid_weight(self, event_bus, test_session):
         """Test onboarding with invalid weight."""
+        # Create user first
+        from src.infra.database.models.user.user import User
+        user = User(
+            id="test-user-123",
+            email="test@example.com",
+            username="testuser",
+            password_hash="dummy_hash",
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        test_session.add(user)
+        test_session.commit()
+        
         # Arrange
         command = SaveUserOnboardingCommand(
             user_id="test-user-123",
@@ -65,14 +107,15 @@ class TestSaveUserOnboardingCommandHandler:
             gender="male",
             height_cm=175,
             weight_kg=0,  # Invalid weight
-            activity_level="moderately_active",
-            goal="maintain_weight"
+            activity_level="moderate",
+            fitness_goal="maintenance"
         )
         
         # Act & Assert
         with pytest.raises(ValidationException):
             await event_bus.send(command)
     
+    @pytest.mark.asyncio
     async def test_save_user_onboarding_updates_existing_profile(
         self, event_bus, test_session, sample_user_profile
     ):
@@ -84,8 +127,8 @@ class TestSaveUserOnboardingCommandHandler:
             gender="male",
             height_cm=180,  # Different height
             weight_kg=75,  # Different weight
-            activity_level="very_active",  # Different activity
-            goal="lose_weight",  # Different goal
+            activity_level="active",  # Different activity
+            fitness_goal="cutting",  # Different goal
             dietary_preferences=["vegan"],
             health_conditions=[]
         )
@@ -97,9 +140,10 @@ class TestSaveUserOnboardingCommandHandler:
         assert result["user_id"] == sample_user_profile.user_id
         assert result["profile_created"] is True
         # Verify profile was updated
-        from src.infra.repositories.user_repository import UserRepository
-        repo = UserRepository(test_session)
-        updated_profile = repo.get_user_profile(sample_user_profile.user_id)
+        from src.infra.database.models.user.profile import UserProfile
+        updated_profile = test_session.query(UserProfile).filter(
+            UserProfile.user_id == sample_user_profile.user_id
+        ).first()
         assert updated_profile.age == 35
         assert updated_profile.height_cm == 180
         assert updated_profile.weight_kg == 75

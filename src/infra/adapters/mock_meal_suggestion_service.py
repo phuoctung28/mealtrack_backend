@@ -3,8 +3,9 @@ Mock Meal Suggestion Service for testing.
 """
 from typing import List, Dict, Any
 from datetime import date
+import uuid
 
-from src.domain.model.meal_plan import MealType
+from src.domain.model.meal_plan import MealType, PlannedMeal
 from src.domain.model.macros import Macros
 
 
@@ -122,10 +123,47 @@ class MockMealSuggestionService:
         if dietary_preferences:
             if "vegetarian" in dietary_preferences:
                 # Replace chicken with tofu in lunch
-                suggestions[1].dish_name = "Tofu Salad"
-                suggestions[1].ingredients[0] = "Tofu"
+                suggestions[1]["dish_name"] = "Tofu Salad"
+                suggestions[1]["ingredients"][0] = "Tofu"
                 # Replace salmon with lentils in dinner
-                suggestions[2].dish_name = "Lentil Curry with Quinoa"
-                suggestions[2].ingredients[0] = "Red lentils"
+                suggestions[2]["dish_name"] = "Lentil Curry with Quinoa"
+                suggestions[2]["ingredients"][0] = "Red lentils"
         
         return suggestions
+    
+    def generate_daily_suggestions(self, user_data: Dict[str, Any]) -> List[PlannedMeal]:
+        """Generate daily meal suggestions based on user data."""
+        target_calories = user_data.get('target_calories', 2000)
+        dietary_preferences = user_data.get('dietary_preferences', [])
+        
+        # Get suggestions in dict format
+        suggestions_data = self.generate_suggestions(
+            target_calories,
+            dietary_preferences,
+            user_data.get('health_conditions', [])
+        )
+        
+        # Convert to PlannedMeal objects
+        planned_meals = []
+        for suggestion in suggestions_data:
+            meal = PlannedMeal(
+                meal_id=str(uuid.uuid4()),
+                meal_type=MealType(suggestion['meal_type']),
+                name=suggestion['dish_name'],
+                description=suggestion['description'],
+                prep_time=suggestion['prep_time_minutes'],
+                cook_time=suggestion['prep_time_minutes'],  # Using same as prep for mock
+                calories=int(suggestion['calories']),
+                protein=suggestion['macros']['protein'],
+                carbs=suggestion['macros']['carbs'],
+                fat=suggestion['macros']['fat'],
+                ingredients=suggestion['ingredients'],
+                instructions=suggestion['cooking_instructions'],
+                is_vegetarian='vegetarian' in dietary_preferences,
+                is_vegan='vegan' in dietary_preferences,
+                is_gluten_free='gluten_free' in dietary_preferences,
+                cuisine_type='American'
+            )
+            planned_meals.append(meal)
+        
+        return planned_meals

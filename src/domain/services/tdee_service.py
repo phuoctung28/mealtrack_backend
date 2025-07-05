@@ -73,4 +73,8 @@ class TdeeCalculationService:
             carbs=round(carb_g, 1)
         )
 
-        return macro_targets 
+        return macro_targets
+    
+    def calculate_macros(self, tdee: float, goal: Goal, weight_kg: float) -> MacroTargets:
+        """Calculate macros based on TDEE, goal, and weight."""
+        return self._calculate_all_macro_targets(tdee, weight_kg, goal) 
