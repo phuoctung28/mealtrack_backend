@@ -15,10 +15,10 @@ class MockImageStore(ImageStorePort):
         self.storage: Dict[str, bytes] = {}
     
     def save(self, image_data: bytes, content_type: str) -> str:
-        """Save image data and return mock URL."""
+        """Save image data and return image ID."""
         image_id = str(uuid.uuid4())
         self.storage[image_id] = image_data
-        return f"mock://images/{image_id}"
+        return image_id
     
     def load(self, image_id: str) -> Optional[bytes]:
         """Load image data from storage."""

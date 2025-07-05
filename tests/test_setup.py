@@ -14,18 +14,22 @@ def test_database_connection(test_session):
 def test_database_rollback(test_session):
     """Test that database changes are rolled back."""
     from src.infra.database.models.user.user import User
+    from datetime import datetime
     
     # Create a user
     user = User(
-        user_id="test-rollback",
+        id="test-rollback",
         email="rollback@test.com",
-        username="rollbacktest"
+        username="rollbacktest",
+        password_hash="dummy_hash_for_test",
+        created_at=datetime.now(),
+        updated_at=datetime.now()
     )
     test_session.add(user)
     test_session.commit()
     
     # Verify user exists in this session
-    found = test_session.query(User).filter_by(user_id="test-rollback").first()
+    found = test_session.query(User).filter_by(id="test-rollback").first()
     assert found is not None
     assert found.email == "rollback@test.com"
     
@@ -35,7 +39,13 @@ def test_database_rollback(test_session):
 def test_mock_services(mock_image_store, mock_vision_service):
     """Test that mock services are available."""
     # Test image store
-    image_url = mock_image_store.save(b"test-image", "image/jpeg")
+    image_id = mock_image_store.save(b"test-image", "image/jpeg")
+    # Now save returns just the UUID
+    assert len(image_id) == 36  # UUID length
+    assert "-" in image_id  # UUID format
+    
+    # Test get_url returns the full mock URL
+    image_url = mock_image_store.get_url(image_id)
     assert image_url.startswith("mock://images/")
     
     # Test vision service

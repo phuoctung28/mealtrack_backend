@@ -8,18 +8,18 @@ from sqlalchemy.orm import Session
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user import (
-    SaveUserOnboardingCommand,
-    UpdateUserProfileCommand
+    SaveUserOnboardingCommand
 )
 from src.app.events.base import EventHandler, handles
 from src.app.events.user import (
     UserOnboardedEvent,
     UserProfileUpdatedEvent
 )
-from src.domain.model.tdee import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
+from src.domain.model.tdee import TdeeRequest, Sex, Goal, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.database.models.user import User
 from src.infra.database.models.user.profile import UserProfile
+from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +41,23 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, D
         if not self.db:
             raise RuntimeError("Database session not configured")
         
+        # Validate input
+        from src.api.exceptions import ValidationException
+        
+        if command.age < 1 or command.age > 120:
+            raise ValidationException("Age must be between 1 and 120")
+        
+        if command.weight_kg <= 0:
+            raise ValidationException("Weight must be greater than 0")
+        
+        if command.height_cm <= 0:
+            raise ValidationException("Height must be greater than 0")
+        
         try:
-            # Get or create user
+            # Get existing user
             user = self.db.query(User).filter(User.id == command.user_id).first()
             if not user:
-                user = User(id=command.user_id)
-                self.db.add(user)
-                self.db.flush()
+                raise ResourceNotFoundException(f"User {command.user_id} not found. User must be created before onboarding.")
             
             # Get or create user profile
             profile = self.db.query(UserProfile).filter(
@@ -87,27 +97,10 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, D
             # Prepare response
             return {
                 "user_id": command.user_id,
-                "profile": {
-                    "id": profile.id,
-                    "user_id": profile.user_id,
-                    "age": profile.age,
-                    "gender": profile.gender,
-                    "height_cm": profile.height_cm,
-                    "weight_kg": profile.weight_kg,
-                    "body_fat_percentage": profile.body_fat_percentage,
-                    "activity_level": profile.activity_level,
-                    "fitness_goal": profile.fitness_goal
-                },
-                "tdee": tdee_result,
-                "events": [
-                    UserOnboardedEvent(
-                        aggregate_id=profile.id,
-                        user_id=command.user_id,
-                        profile_id=profile.id,
-                        tdee=tdee_result["tdee"],
-                        target_calories=tdee_result["target_calories"]
-                    )
-                ]
+                "profile_created": True,
+                "tdee": tdee_result["tdee"],
+                "recommended_calories": tdee_result["target_calories"],
+                "recommended_macros": tdee_result["macros"]
             }
             
         except Exception as e:
@@ -120,31 +113,15 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, D
         # Map database values to domain enums
         sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
         
-        activity_map = {
-            "sedentary": ActivityLevel.SEDENTARY,
-            "lightly_active": ActivityLevel.LIGHT,
-            "moderately_active": ActivityLevel.MODERATE,
-            "very_active": ActivityLevel.ACTIVE,
-            "extra_active": ActivityLevel.EXTRA
-        }
-        
-        goal_map = {
-            "lose_weight": Goal.CUTTING,
-            "maintain": Goal.MAINTENANCE,
-            "maintenance": Goal.MAINTENANCE,
-            "gain_weight": Goal.BULKING,
-            "build_muscle": Goal.BULKING
-        }
-        
         # Create TDEE request
         tdee_request = TdeeRequest(
             age=profile.age,
             sex=sex,
-            height_cm=profile.height_cm,
-            weight_kg=profile.weight_kg,
-            activity_level=activity_map.get(profile.activity_level, ActivityLevel.MODERATE),
-            goal=goal_map.get(profile.fitness_goal, Goal.MAINTENANCE),
-            body_fat_percentage=profile.body_fat_percentage,
+            height=profile.height_cm,  # Using cm since unit_system is METRIC
+            weight=profile.weight_kg,  # Using kg since unit_system is METRIC
+            activity_level=ActivityGoalMapper.map_activity_level(profile.activity_level),
+            goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
+            body_fat_pct=profile.body_fat_percentage,
             unit_system=UnitSystem.METRIC
         )
         
@@ -170,8 +147,6 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, D
             "bmr": result.bmr,
             "tdee": result.tdee,
             "target_calories": round(target_calories, 0),
-            "activity_multiplier": result.activity_multiplier,
-            "formula_used": result.formula_used,
             "macros": {
                 "protein": round(macros.protein, 1),
                 "carbs": round(macros.carbs, 1),
@@ -181,81 +156,3 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, D
         }
 
 
-@handles(UpdateUserProfileCommand)
-class UpdateUserProfileCommandHandler(EventHandler[UpdateUserProfileCommand, Dict[str, Any]]):
-    """Handler for updating user profile."""
-    
-    def __init__(self, db: Session = None):
-        self.db = db
-        self.tdee_service = TdeeCalculationService()
-    
-    def set_dependencies(self, db: Session):
-        """Set dependencies for dependency injection."""
-        self.db = db
-    
-    async def handle(self, command: UpdateUserProfileCommand) -> Dict[str, Any]:
-        """Update user profile with new data."""
-        if not self.db:
-            raise RuntimeError("Database session not configured")
-        
-        try:
-            # Get profile
-            profile = self.db.query(UserProfile).filter(
-                UserProfile.id == command.user_profile_id
-            ).first()
-            
-            if not profile:
-                raise ResourceNotFoundException(f"Profile {command.user_profile_id} not found")
-            
-            # Track old TDEE for event
-            old_tdee_result = self._calculate_tdee_and_macros(profile)
-            old_tdee = old_tdee_result["tdee"]
-            
-            # Update profile fields
-            updated_fields = []
-            for field, value in command.updates.items():
-                if hasattr(profile, field):
-                    setattr(profile, field, value)
-                    updated_fields.append(field)
-            
-            # Save changes
-            self.db.commit()
-            self.db.refresh(profile)
-            
-            # Check if TDEE needs recalculation
-            tdee_fields = {"age", "height_cm", "weight_kg", "activity_level", "fitness_goal", "body_fat_percentage"}
-            new_tdee = None
-            new_tdee_result = None
-            
-            if any(field in updated_fields for field in tdee_fields):
-                new_tdee_result = self._calculate_tdee_and_macros(profile)
-                new_tdee = new_tdee_result["tdee"]
-            
-            return {
-                "profile": {
-                    "id": profile.id,
-                    "user_id": profile.user_id,
-                    "updated_fields": updated_fields
-                },
-                "tdee": new_tdee_result if new_tdee_result else old_tdee_result,
-                "events": [
-                    UserProfileUpdatedEvent(
-                        aggregate_id=profile.id,
-                        profile_id=profile.id,
-                        updated_fields=updated_fields,
-                        old_tdee=old_tdee if new_tdee else None,
-                        new_tdee=new_tdee
-                    )
-                ]
-            }
-            
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"Error updating profile: {str(e)}")
-            raise
-    
-    def _calculate_tdee_and_macros(self, profile: UserProfile) -> Dict[str, Any]:
-        """Calculate TDEE and macros for a user profile."""
-        # Reuse the method from SaveUserOnboardingCommandHandler
-        handler = SaveUserOnboardingCommandHandler(self.db)
-        return handler._calculate_tdee_and_macros(profile)

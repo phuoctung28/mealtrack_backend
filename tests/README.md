@@ -72,6 +72,27 @@ This container:
 - `MockVisionAIService`: Returns consistent test data
 - `MockMealSuggestionService`: Generates test meal suggestions
 
+### 3. Unit Testing with Stubs
+For true unit testing isolation, use stubs instead of integration:
+```python
+# Create stub/mock dependencies
+stub_repo = Mock()
+stub_repo.find_by_id.return_value = test_meal
+
+# Test handler with stubs
+handler = MealHandler(repository=stub_repo)
+result = handler.get_meal("test-id")
+
+# Verify interactions
+stub_repo.find_by_id.assert_called_once_with("test-id")
+```
+
+Benefits of stubs:
+- Complete isolation of units under test
+- No database dependencies
+- Faster test execution
+- Easier to test edge cases
+
 ### 3. Test Data Factories
 - `UserFactory`: Creates test users
 - `MealFactory`: Creates test meals

@@ -4,22 +4,21 @@ Meal image model for storing image metadata.
 from sqlalchemy import Column, String, Integer
 
 from src.infra.database.config import Base
-from src.infra.database.models.base import SecondaryEntityMixin
+from src.infra.database.models.base import TimestampMixin
 
 
-class MealImage(Base, SecondaryEntityMixin):
+class MealImage(Base, TimestampMixin):
     """Database model for meal images."""
     
-    # Rename primary key from 'id' to 'image_id' to match domain model
+    __tablename__ = 'mealimage'
+    
+    # Primary key
     image_id = Column(String(36), primary_key=True)
     format = Column(String(10), nullable=False)  # jpeg, png, etc.
     size_bytes = Column(Integer, nullable=False)
     width = Column(Integer, nullable=True)  # Changed to nullable
     height = Column(Integer, nullable=True)  # Changed to nullable
     url = Column(String(255), nullable=True)  # Optional URL to the image
-    
-    # Override to remove the default id column from BaseMixin
-    id = None
     
     def to_domain(self):
         """Convert DB model to domain model."""

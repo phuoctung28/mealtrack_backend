@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-@dataclass(frozen=True)
+@dataclass
 class Macros:
     """
     Value object representing macronutrient breakdown of a meal.

@@ -5,14 +5,16 @@ from sqlalchemy import Column, String, Text, Enum, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
-from src.infra.database.models.base import BaseMixin
+from src.infra.database.models.base import TimestampMixin
 from src.infra.database.models.enums import MealStatusEnum
 
 
-class Meal(Base, BaseMixin):
+class Meal(Base, TimestampMixin):
     """Database model for meals."""
     
-    # Rename id to meal_id to match domain model
+    __tablename__ = 'meal'
+    
+    # Primary key
     meal_id = Column(String(36), primary_key=True)
     status = Column(Enum(MealStatusEnum), nullable=False)
     dish_name = Column(String(255), nullable=True)  # The name of the dish
@@ -24,9 +26,6 @@ class Meal(Base, BaseMixin):
     image_id = Column(String(36), ForeignKey("mealimage.image_id"), nullable=False)
     image = relationship("MealImage", uselist=False, lazy="joined")
     nutrition = relationship("Nutrition", uselist=False, back_populates="meal", cascade="all, delete-orphan")
-    
-    # Override to remove the default id column from BaseMixin
-    id = None
     
     def to_domain(self):
         """Convert DB model to domain model."""

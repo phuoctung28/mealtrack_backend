@@ -32,5 +32,12 @@ class SecondaryEntityMixin:
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
 
 
+@declarative_mixin
+class TimestampMixin:
+    """Mixin that only provides timestamp fields without ID."""
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+
+
 # Maintain backward compatibility
 BaseMixin = PrimaryEntityMixin 

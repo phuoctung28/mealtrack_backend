@@ -49,11 +49,19 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-cov pytest-asyncio==0.21.1 pytest-mock
     
+    - name: Verify MySQL is ready
+      run: |
+        mysql -h 127.0.0.1 -P 3306 -u test_user -ptest_password -e "SELECT 1" mealtrack_test
+    
+    - name: Clean test database
+      run: |
+        mysql -h 127.0.0.1 -P 3306 -u test_user -ptest_password -e "DROP DATABASE IF EXISTS mealtrack_test; CREATE DATABASE mealtrack_test;" || true
+    
     - name: Run all tests with coverage
       run: |
-        pytest --cov=src --cov-report=xml --cov-report=html --cov-report=term-missing
+        pytest --cov=src --cov-report=xml --cov-report=term-missing -n auto --maxfail=5
       env:
-        DATABASE_URL: "mysql://test_user:test_password@localhost:3306/mealtrack_test"
+        DATABASE_URL: "mysql://test_user:test_password@127.0.0.1:3306/mealtrack_test"
         CI: true
         TESTING: true
         PYTHONPATH: .

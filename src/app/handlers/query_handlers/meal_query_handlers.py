@@ -10,8 +10,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import (
     GetMealByIdQuery,
     GetMealsByDateQuery,
-    GetDailyMacrosQuery,
-    SearchMealsQuery
+    GetDailyMacrosQuery
 )
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.ports.meal_repository_port import MealRepositoryPort
@@ -96,11 +95,12 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             if meal.nutrition and meal.status in [MealStatus.READY, MealStatus.ENRICHING]:
                 meals_with_nutrition += 1
                 total_calories += meal.nutrition.calories or 0
-                total_protein += meal.nutrition.protein or 0
-                total_carbs += meal.nutrition.carbs or 0
-                total_fat += meal.nutrition.fat or 0
-                if hasattr(meal.nutrition, 'fiber'):
-                    total_fiber += meal.nutrition.fiber or 0
+                if meal.nutrition.macros:
+                    total_protein += meal.nutrition.macros.protein or 0
+                    total_carbs += meal.nutrition.macros.carbs or 0
+                    total_fat += meal.nutrition.macros.fat or 0
+                    if hasattr(meal.nutrition.macros, 'fiber') and meal.nutrition.macros.fiber:
+                        total_fiber += meal.nutrition.macros.fiber
         
         return {
             "date": target_date.isoformat(),
@@ -114,49 +114,3 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
         }
 
 
-@handles(SearchMealsQuery)
-class SearchMealsQueryHandler(EventHandler[SearchMealsQuery, List[Meal]]):
-    """Handler for searching meals."""
-    
-    def __init__(self, meal_repository: MealRepositoryPort = None):
-        self.meal_repository = meal_repository
-    
-    def set_dependencies(self, meal_repository: MealRepositoryPort):
-        """Set dependencies for dependency injection."""
-        self.meal_repository = meal_repository
-    
-    async def handle(self, query: SearchMealsQuery) -> List[Meal]:
-        """Search meals based on criteria."""
-        if not self.meal_repository:
-            raise RuntimeError("Meal repository not configured")
-        
-        # Get all meals first (in a real implementation, this would be filtered at DB level)
-        # For now, we'll use find_all_paginated with a large limit
-        all_meals = self.meal_repository.find_all_paginated(offset=0, limit=1000)
-        
-        # Apply filters
-        filtered_meals = []
-        for meal in all_meals:
-            # Filter by dish name
-            if query.dish_name and meal.dish_name:
-                if query.dish_name.lower() not in meal.dish_name.lower():
-                    continue
-            
-            # Filter by date range
-            if meal.created_at:
-                meal_date = meal.created_at.date()
-                if query.start_date and meal_date < query.start_date:
-                    continue
-                if query.end_date and meal_date > query.end_date:
-                    continue
-            
-            # Filter by calories
-            if meal.nutrition:
-                if query.min_calories and meal.nutrition.calories < query.min_calories:
-                    continue
-                if query.max_calories and meal.nutrition.calories > query.max_calories:
-                    continue
-            
-            filtered_meals.append(meal)
-        
-        return filtered_meals

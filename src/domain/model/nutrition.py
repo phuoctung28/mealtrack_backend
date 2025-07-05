@@ -5,7 +5,7 @@ from .macros import Macros
 from .micros import Micros
 
 
-@dataclass(frozen=True)
+@dataclass
 class FoodItem:
     """Represents a single food item in a meal with nutritional information."""
     name: str
@@ -39,7 +39,7 @@ class FoodItem:
             result["micros"] = self.micros.to_dict()
         return result
 
-@dataclass(frozen=True)
+@dataclass
 class Nutrition:
     """Value object representing full nutritional information for a meal."""
     calories: float

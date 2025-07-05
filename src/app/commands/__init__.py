@@ -8,7 +8,6 @@ from .daily_meal import (
 )
 # Import from meal module
 from .meal import (
-    AnalyzeMealImageCommand,
     RecalculateMealNutritionCommand,
     UploadMealImageCommand,
 )
@@ -26,12 +25,10 @@ from .tdee import (
 # Import from user module
 from .user import (
     SaveUserOnboardingCommand,
-    UpdateUserProfileCommand,
 )
 
 __all__ = [
     # Meal commands
-    "AnalyzeMealImageCommand",
     "RecalculateMealNutritionCommand",
     "UploadMealImageCommand",
     # TDEE commands
@@ -41,7 +38,6 @@ __all__ = [
     "GenerateSingleMealCommand",
     # User commands
     "SaveUserOnboardingCommand",
-    "UpdateUserProfileCommand",
     # Meal plan commands
     "StartMealPlanConversationCommand",
     "SendConversationMessageCommand",

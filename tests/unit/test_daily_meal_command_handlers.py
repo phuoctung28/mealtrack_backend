@@ -11,13 +11,21 @@ from src.app.commands.daily_meal import GenerateDailyMealSuggestionsCommand
 class TestGenerateDailyMealSuggestionsCommandHandler:
     """Test GenerateDailyMealSuggestionsCommand handler."""
     
+    @pytest.mark.asyncio
     async def test_generate_suggestions_with_profile_id(
         self, event_bus, sample_user_profile
     ):
         """Test generating meal suggestions with user profile ID."""
         # Arrange
         command = GenerateDailyMealSuggestionsCommand(
-            user_profile_id=sample_user_profile.user_id
+            age=sample_user_profile.age,
+            gender=sample_user_profile.gender,
+            height=sample_user_profile.height_cm,
+            weight=sample_user_profile.weight_kg,
+            activity_level=sample_user_profile.activity_level,
+            goal=sample_user_profile.fitness_goal,
+            dietary_preferences=sample_user_profile.dietary_preferences,
+            health_conditions=sample_user_profile.health_conditions
         )
         
         # Act
@@ -37,16 +45,17 @@ class TestGenerateDailyMealSuggestionsCommandHandler:
             assert "macros" in suggestion
             assert suggestion["meal_type"] in ["breakfast", "lunch", "dinner", "snack"]
     
+    @pytest.mark.asyncio
     async def test_generate_suggestions_with_custom_preferences(self, event_bus):
         """Test generating meal suggestions with custom preferences."""
         # Arrange
         command = GenerateDailyMealSuggestionsCommand(
             age=25,
             gender="female",
-            height_cm=165,
-            weight_kg=60,
+            height=165,
+            weight=60,
             activity_level="active",
-            goal="lose_weight",
+            goal="cutting",
             dietary_preferences=["vegetarian", "gluten-free"],
             health_conditions=["lactose_intolerant"]
         )
@@ -62,37 +71,57 @@ class TestGenerateDailyMealSuggestionsCommandHandler:
             # Mock should respect preferences in real implementation
             assert suggestion["dish_name"] is not None
     
+    @pytest.mark.asyncio
     async def test_generate_suggestions_invalid_profile_id(self, event_bus):
-        """Test generating suggestions with non-existent profile."""
+        """Test generating suggestions with valid data (no profile lookup)."""
         # Arrange
         command = GenerateDailyMealSuggestionsCommand(
-            user_profile_id="non-existent-user"
+            age=25,
+            gender="male",
+            height=175,
+            weight=70,
+            activity_level="moderate",
+            goal="maintenance"
         )
         
-        # Act & Assert
-        with pytest.raises(ResourceNotFoundException):
-            await event_bus.send(command)
+        # Act - Since we provide all required fields, this should succeed
+        result = await event_bus.send(command)
+        
+        # Assert
+        assert "suggestions" in result
     
+    @pytest.mark.asyncio
     async def test_generate_suggestions_missing_required_fields(self, event_bus):
-        """Test generating suggestions without required fields."""
-        # Arrange - no profile ID and incomplete custom preferences
+        """Test generating suggestions with invalid data."""
+        # Arrange - invalid values that should fail validation
         command = GenerateDailyMealSuggestionsCommand(
-            age=25,
-            gender="female"
-            # Missing height, weight, activity_level, goal
+            age=-5,  # Invalid age
+            gender="female",
+            height=165,
+            weight=60,
+            activity_level="moderate",
+            goal="maintenance"
         )
         
         # Act & Assert
         with pytest.raises(ValidationException):
             await event_bus.send(command)
     
+    @pytest.mark.asyncio
     async def test_generate_suggestions_calorie_distribution(
         self, event_bus, sample_user_profile
     ):
         """Test that generated suggestions have proper calorie distribution."""
         # Arrange
         command = GenerateDailyMealSuggestionsCommand(
-            user_profile_id=sample_user_profile.user_id
+            age=sample_user_profile.age,
+            gender=sample_user_profile.gender,
+            height=sample_user_profile.height_cm,
+            weight=sample_user_profile.weight_kg,
+            activity_level=sample_user_profile.activity_level,
+            goal=sample_user_profile.fitness_goal,
+            dietary_preferences=sample_user_profile.dietary_preferences,
+            health_conditions=sample_user_profile.health_conditions
         )
         
         # Act

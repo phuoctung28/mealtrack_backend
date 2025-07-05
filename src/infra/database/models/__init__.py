@@ -5,10 +5,7 @@ This module imports all database models from their respective submodules
 to provide a centralized access point.
 """
 # Base models
-from .base import BaseMixin, PrimaryEntityMixin, SecondaryEntityMixin
-# Conversation models
-from .conversation.conversation import Conversation
-from .conversation.message import ConversationMessage
+from .base import BaseMixin, PrimaryEntityMixin, SecondaryEntityMixin, TimestampMixin
 # Enums
 from .enums import (
     MealStatusEnum,
@@ -16,7 +13,6 @@ from .enums import (
     FitnessGoalEnum,
     MealTypeEnum,
     PlanDurationEnum,
-    ConversationStateEnum,
     ActivityLevelEnum,
     SexEnum,
     GoalEnum,
@@ -40,6 +36,7 @@ __all__ = [
     "BaseMixin",
     "PrimaryEntityMixin", 
     "SecondaryEntityMixin",
+    "TimestampMixin",
     
     # Enums
     "MealStatusEnum",
@@ -47,7 +44,6 @@ __all__ = [
     "FitnessGoalEnum",
     "MealTypeEnum",
     "PlanDurationEnum",
-    "ConversationStateEnum",
     "ActivityLevelEnum",
     "SexEnum",
     "GoalEnum",
@@ -68,8 +64,4 @@ __all__ = [
     "MealPlan",
     "MealPlanDay",
     "PlannedMeal",
-    
-    # Conversation models
-    "Conversation",
-    "ConversationMessage",
 ]

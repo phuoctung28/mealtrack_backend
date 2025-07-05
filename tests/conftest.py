@@ -16,7 +16,11 @@ from src.infra.database.test_config import (
     create_test_tables,
     drop_test_tables
 )
-from src.infra.database.models.meal import Meal as MealModel
+# Import all models to ensure they're registered with Base metadata
+import src.infra.database.models
+from src.infra.database.models.meal.meal import Meal as MealModel
+from src.infra.database.models.meal.meal_image import MealImage as MealImageModel  
+from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
 from src.infra.event_bus import PyMediatorEventBus, EventBus
@@ -31,7 +35,16 @@ from src.domain.parsers.gpt_response_parser import GPTResponseParser
 
 
 @pytest.fixture(scope="session")
-def test_engine():
+def event_loop():
+    """Create an event loop for the test session."""
+    import asyncio
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture(scope="session")
+def test_engine(worker_id):
     """Create a test database engine."""
     engine = create_test_engine()
     
@@ -40,34 +53,65 @@ def test_engine():
         get_test_database_url().rsplit('/', 1)[0],
         isolation_level='AUTOCOMMIT'
     )
-    with temp_engine.connect() as conn:
-        db_name = get_test_database_url().rsplit('/', 1)[1].split('?')[0]
-        conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
-    temp_engine.dispose()
+    try:
+        with temp_engine.connect() as conn:
+            db_name = get_test_database_url().rsplit('/', 1)[1].split('?')[0]
+            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
+    finally:
+        temp_engine.dispose()
     
-    # Create tables
-    create_test_tables(engine)
+    # Import models to ensure they're registered
+    import src.infra.database.models
+    
+    # Only one worker should create tables to avoid race conditions
+    if worker_id in ("master", "gw0"):
+        # Drop all tables first to ensure clean state
+        with engine.begin() as conn:
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+            Base.metadata.drop_all(bind=engine)
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+        
+        # Create all tables
+        Base.metadata.create_all(bind=engine)
+        
+    # Other workers wait a bit for tables to be created
+    elif worker_id != "master":
+        import time
+        time.sleep(2)
     
     yield engine
-    
-    # Clean up
-    drop_test_tables(engine)
     engine.dispose()
 
 
 @pytest.fixture(scope="function")
 def test_session(test_engine) -> Generator[Session, None, None]:
     """Create a test database session with rollback after each test."""
+    # Create a new connection for each test
     connection = test_engine.connect()
+    
+    # Start a transaction
     transaction = connection.begin()
+    
+    # Create a session bound to this connection
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
     session = SessionLocal()
     
-    yield session
+    # Configure the session to use this specific connection
+    session.connection = connection
     
-    session.close()
-    transaction.rollback()
-    connection.close()
+    try:
+        yield session
+    finally:
+        # Always clean up, even if test fails
+        session.close()
+        try:
+            transaction.rollback()
+        except Exception:
+            pass  # Transaction might already be closed
+        try:
+            connection.close()
+        except Exception:
+            pass  # Connection might already be closed
 
 
 @pytest.fixture
@@ -103,10 +147,10 @@ def event_bus(
     meal_repository
 ) -> EventBus:
     """Configured event bus for testing."""
+    # Import handlers
     from src.app.handlers.command_handlers.meal_command_handlers import (
         UploadMealImageCommandHandler,
-        RecalculateMealNutritionCommandHandler,
-        AnalyzeMealImageCommandHandler
+        RecalculateMealNutritionCommandHandler
     )
     from src.app.handlers.command_handlers.upload_meal_image_immediately_handler import (
         UploadMealImageImmediatelyHandler
@@ -125,8 +169,19 @@ def event_bus(
     from src.app.handlers.query_handlers.user_query_handlers import (
         GetUserProfileQueryHandler
     )
+    
+    # Import commands and queries
+    from src.app.commands.meal.upload_meal_image_command import UploadMealImageCommand
+    from src.app.commands.meal.recalculate_meal_nutrition_command import RecalculateMealNutritionCommand
+    from src.app.commands.meal.upload_meal_image_immediately_command import UploadMealImageImmediatelyCommand
+    from src.app.queries.meal.get_meal_by_id_query import GetMealByIdQuery
+    from src.app.queries.meal.get_meals_by_date_query import GetMealsByDateQuery
+    from src.app.queries.meal.get_daily_macros_query import GetDailyMacrosQuery
+    from src.app.commands.user.save_user_onboarding_command import SaveUserOnboardingCommand
+    from src.app.queries.user.get_user_profile_query import GetUserProfileQuery
+    from src.app.commands.daily_meal.generate_daily_meal_suggestions_command import GenerateDailyMealSuggestionsCommand
     from src.infra.repositories.user_repository import UserRepository
-    from src.domain.services.tdee_service import TdeeService
+    from src.domain.services.tdee_service import TdeeCalculationService
     from src.infra.adapters.mock_meal_suggestion_service import MockMealSuggestionService
     
     event_bus = PyMediatorEventBus()
@@ -136,31 +191,21 @@ def event_bus(
     
     # Register command handlers
     event_bus.register_handler(
-        "UploadMealImageCommand",
+        UploadMealImageCommand,
         UploadMealImageCommandHandler(
             image_store=mock_image_store,
-            meal_repository=meal_repository,
-            vision_service=mock_vision_service,
-            gpt_parser=gpt_parser
+            meal_repository=meal_repository
         )
     )
     
     event_bus.register_handler(
-        "RecalculateMealNutritionCommand",
+        RecalculateMealNutritionCommand,
         RecalculateMealNutritionCommandHandler(meal_repository)
     )
     
-    event_bus.register_handler(
-        "AnalyzeMealImageCommand",
-        AnalyzeMealImageCommandHandler(
-            meal_repository=meal_repository,
-            vision_service=mock_vision_service,
-            gpt_parser=gpt_parser
-        )
-    )
     
     event_bus.register_handler(
-        "UploadMealImageImmediatelyCommand",
+        UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
             image_store=mock_image_store,
             meal_repository=meal_repository,
@@ -171,40 +216,39 @@ def event_bus(
     
     # Register query handlers
     event_bus.register_handler(
-        "GetMealByIdQuery",
+        GetMealByIdQuery,
         GetMealByIdQueryHandler(meal_repository)
     )
     
     event_bus.register_handler(
-        "GetMealsByDateQuery",
+        GetMealsByDateQuery,
         GetMealsByDateQueryHandler(meal_repository)
     )
     
     event_bus.register_handler(
-        "GetDailyMacrosQuery",
+        GetDailyMacrosQuery,
         GetDailyMacrosQueryHandler(meal_repository)
     )
     
     # Register user handlers
+    save_user_handler = SaveUserOnboardingCommandHandler(db=test_session)
     event_bus.register_handler(
-        "SaveUserOnboardingCommand",
-        SaveUserOnboardingCommandHandler(
-            user_repository=user_repository,
-            tdee_service=TdeeService()
-        )
+        SaveUserOnboardingCommand,
+        save_user_handler
     )
     
     event_bus.register_handler(
-        "GetUserProfileQuery",
-        GetUserProfileQueryHandler(user_repository)
+        GetUserProfileQuery,
+        GetUserProfileQueryHandler(test_session)
     )
     
     # Register daily meal handlers
+    mock_suggestion_service = MockMealSuggestionService()
     event_bus.register_handler(
-        "GenerateDailyMealSuggestionsCommand",
+        GenerateDailyMealSuggestionsCommand,
         GenerateDailyMealSuggestionsCommandHandler(
-            user_repository=user_repository,
-            meal_suggestion_service=MockMealSuggestionService()
+            suggestion_service=mock_suggestion_service,
+            tdee_service=TdeeCalculationService()
         )
     )
     
@@ -216,10 +260,12 @@ def event_bus(
 def sample_user(test_session) -> User:
     """Create a sample user for testing."""
     user = User(
-        user_id="test-user-123",
+        id="test-user-123",
         email="test@example.com",
         username="testuser",
-        created_at=datetime.now()
+        password_hash="dummy_hash_for_test",
+        created_at=datetime.now(),
+        updated_at=datetime.now()
     )
     test_session.add(user)
     test_session.commit()
@@ -230,16 +276,17 @@ def sample_user(test_session) -> User:
 def sample_user_profile(test_session, sample_user) -> UserProfile:
     """Create a sample user profile for testing."""
     profile = UserProfile(
-        user_id=sample_user.user_id,
+        user_id=sample_user.id,
         age=30,
         gender="male",
         height_cm=175,
         weight_kg=70,
-        activity_level="moderately_active",
-        goal="maintain_weight",
+        activity_level="moderate",
+        fitness_goal="maintenance",
         dietary_preferences=["vegetarian"],
         health_conditions=[],
-        created_at=datetime.now()
+        created_at=datetime.now(),
+        updated_at=datetime.now()
     )
     test_session.add(profile)
     test_session.commit()
@@ -250,11 +297,11 @@ def sample_user_profile(test_session, sample_user) -> UserProfile:
 def sample_meal_domain() -> Meal:
     """Create a sample meal domain object."""
     return Meal(
-        meal_id="test-meal-123",
+        meal_id="123e4567-e89b-12d3-a456-426614174001",
         status=MealStatus.READY,
         created_at=datetime.now(),
         image=MealImage(
-            image_id="test-image-123",
+            image_id="123e4567-e89b-12d3-a456-426614174002",
             format="jpeg",
             size_bytes=100000,
             url="https://example.com/image.jpg"
@@ -303,20 +350,13 @@ def sample_meal_domain() -> Meal:
 @pytest.fixture
 def sample_meal_db(test_session, sample_meal_domain) -> MealModel:
     """Create a sample meal in the database."""
-    meal_model = MealModel(
-        meal_id=sample_meal_domain.meal_id,
-        status=sample_meal_domain.status.value,
-        dish_name=sample_meal_domain.dish_name,
-        created_at=sample_meal_domain.created_at,
-        ready_at=sample_meal_domain.ready_at,
-        image_url=sample_meal_domain.image.url,
-        image_id=sample_meal_domain.image.image_id,
-        total_calories=sample_meal_domain.nutrition.calories,
-        total_protein=sample_meal_domain.nutrition.macros.protein,
-        total_carbs=sample_meal_domain.nutrition.macros.carbs,
-        total_fat=sample_meal_domain.nutrition.macros.fat,
-        total_fiber=sample_meal_domain.nutrition.macros.fiber
-    )
+    # First create the meal image
+    meal_image = MealImageModel.from_domain(sample_meal_domain.image)
+    test_session.add(meal_image)
+    test_session.flush()
+    
+    # Create meal using from_domain method
+    meal_model = MealModel.from_domain(sample_meal_domain)
     test_session.add(meal_model)
     test_session.commit()
     return meal_model
