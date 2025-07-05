@@ -84,7 +84,14 @@ class TestCompleteUserFlow:
         
         # Step 6: Generate meal suggestions based on profile
         suggestions_command = GenerateDailyMealSuggestionsCommand(
-            user_profile_id="flow-test-user"
+            age=30,
+            gender="male",
+            height=175,
+            weight=70,
+            activity_level="moderately_active",
+            goal="maintain_weight",
+            dietary_preferences=["vegetarian"],
+            health_conditions=[]
         )
         
         suggestions_result = await event_bus.send(suggestions_command)
