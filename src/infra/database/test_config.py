@@ -54,6 +54,10 @@ def create_test_tables(engine):
 
 def drop_test_tables(engine):
     """Drop all tables in test database."""
+    # Import to ensure all models are loaded
+    import src.infra.database.models
+    
+    # Drop all tables with cascade to handle foreign keys
     Base.metadata.drop_all(bind=engine)
 
 

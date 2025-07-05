@@ -50,8 +50,18 @@ def test_engine():
     temp_engine.dispose()
     
     # Drop existing tables and create fresh ones
+    # First, disable foreign key checks for MySQL
+    with engine.connect() as conn:
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        conn.commit()
+    
     drop_test_tables(engine)
     create_test_tables(engine)
+    
+    # Re-enable foreign key checks
+    with engine.connect() as conn:
+        conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+        conn.commit()
     
     yield engine
     
