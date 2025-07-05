@@ -49,7 +49,8 @@ def test_engine():
         conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
     temp_engine.dispose()
     
-    # Create tables
+    # Drop existing tables and create fresh ones
+    drop_test_tables(engine)
     create_test_tables(engine)
     
     yield engine
