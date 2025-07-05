@@ -16,6 +16,8 @@ from src.infra.database.test_config import (
     create_test_tables,
     drop_test_tables
 )
+# Import all models to ensure they're registered with Base metadata
+import src.infra.database.models
 from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.meal.meal_image import MealImage as MealImageModel  
 from src.infra.database.models.enums import MealStatusEnum
