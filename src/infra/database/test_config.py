@@ -34,14 +34,15 @@ def create_test_engine():
     """Create test database engine with appropriate settings."""
     database_url = get_test_database_url()
     
-    # Use smaller pool size for tests
+    # Use larger pool size for concurrent tests
     engine = create_engine(
         database_url,
         pool_pre_ping=True,
-        pool_size=5,
-        max_overflow=0,
-        pool_recycle=3600,
-        echo=False  # Set to True for SQL debugging
+        pool_size=20,  # Increased for concurrent tests
+        max_overflow=10,  # Allow overflow connections
+        pool_recycle=300,  # Recycle connections more frequently
+        echo=False,  # Set to True for SQL debugging
+        pool_timeout=30,  # Timeout waiting for connection
     )
     
     return engine

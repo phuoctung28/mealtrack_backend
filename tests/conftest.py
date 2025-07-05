@@ -35,7 +35,16 @@ from src.domain.parsers.gpt_response_parser import GPTResponseParser
 
 
 @pytest.fixture(scope="session")
-def test_engine():
+def event_loop():
+    """Create an event loop for the test session."""
+    import asyncio
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture(scope="session")
+def test_engine(worker_id):
     """Create a test database engine."""
     engine = create_test_engine()
     
@@ -54,9 +63,21 @@ def test_engine():
     # Import models to ensure they're registered
     import src.infra.database.models
     
-    # Create tables using checkfirst=True
-    # This is safe for parallel execution as SQLAlchemy will check before creating
-    Base.metadata.create_all(bind=engine, checkfirst=True)
+    # Only one worker should create tables to avoid race conditions
+    if worker_id in ("master", "gw0"):
+        # Drop all tables first to ensure clean state
+        with engine.begin() as conn:
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+            Base.metadata.drop_all(bind=engine)
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+        
+        # Create all tables
+        Base.metadata.create_all(bind=engine)
+        
+    # Other workers wait a bit for tables to be created
+    elif worker_id != "master":
+        import time
+        time.sleep(2)
     
     yield engine
     engine.dispose()
@@ -65,16 +86,32 @@ def test_engine():
 @pytest.fixture(scope="function")
 def test_session(test_engine) -> Generator[Session, None, None]:
     """Create a test database session with rollback after each test."""
+    # Create a new connection for each test
     connection = test_engine.connect()
+    
+    # Start a transaction
     transaction = connection.begin()
+    
+    # Create a session bound to this connection
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
     session = SessionLocal()
     
-    yield session
+    # Configure the session to use this specific connection
+    session.connection = connection
     
-    session.close()
-    transaction.rollback()
-    connection.close()
+    try:
+        yield session
+    finally:
+        # Always clean up, even if test fails
+        session.close()
+        try:
+            transaction.rollback()
+        except Exception:
+            pass  # Transaction might already be closed
+        try:
+            connection.close()
+        except Exception:
+            pass  # Connection might already be closed
 
 
 @pytest.fixture
