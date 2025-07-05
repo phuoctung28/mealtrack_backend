@@ -63,10 +63,10 @@ jobs:
         PYTHONPATH: .
         USE_MOCK_STORAGE: "1"
         USE_MOCK_VISION_SERVICE: "1"
-        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY || 'mock-key-for-testing' }}
-        CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'mock-cloud' }}
-        CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || 'mock-api-key' }}
-        CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || 'mock-api-secret' }}
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+        CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+        CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
     
     - name: Upload coverage reports
       uses: codecov/codecov-action@v4
