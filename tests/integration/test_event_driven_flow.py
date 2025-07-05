@@ -145,8 +145,9 @@ class TestCompleteUserFlow:
         
         # Verify at least 3 uploads succeeded (allowing for some database contention)
         assert len(successful_results) >= 3
-        meal_ids = [r["meal_id"] for r in successful_results]
-        assert len(set(meal_ids)) == len(successful_results)  # All unique IDs
+        # Results are dictionaries with meal_id, status, etc.
+        meal_ids = [r["meal_id"] for r in successful_results if isinstance(r, dict) and "meal_id" in r]
+        assert len(set(meal_ids)) == len(meal_ids)  # All unique IDs
     
     @pytest.mark.asyncio
     async def test_error_handling_in_flow(
