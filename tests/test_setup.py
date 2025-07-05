@@ -14,12 +14,16 @@ def test_database_connection(test_session):
 def test_database_rollback(test_session):
     """Test that database changes are rolled back."""
     from src.infra.database.models.user.user import User
+    from datetime import datetime
     
     # Create a user
     user = User(
         user_id="test-rollback",
         email="rollback@test.com",
-        username="rollbacktest"
+        username="rollbacktest",
+        password_hash="dummy_hash_for_test",
+        created_at=datetime.now(),
+        updated_at=datetime.now()
     )
     test_session.add(user)
     test_session.commit()

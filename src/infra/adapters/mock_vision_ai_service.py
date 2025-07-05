@@ -1,7 +1,7 @@
 """
 Mock Vision AI Service for testing.
 """
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 
@@ -16,6 +16,37 @@ class MockVisionAIService(VisionAIServicePort):
     def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
         """Return mock analysis result."""
         return self.mock_response
+    
+    def analyze_with_ingredients_context(self, image_bytes: bytes, ingredients: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Return mock analysis result with ingredients context."""
+        response = self.mock_response.copy()
+        # Add ingredients to the response if provided
+        if ingredients:
+            response["ingredients_context"] = ingredients
+        return response
+    
+    def analyze_with_portion_context(self, image_bytes: bytes, portion_size: float, unit: str) -> Dict[str, Any]:
+        """Return mock analysis result with portion context."""
+        response = self.mock_response.copy()
+        response["portion_context"] = {
+            "portion_size": portion_size,
+            "unit": unit
+        }
+        return response
+    
+    def analyze_with_weight_context(self, image_bytes: bytes, weight_grams: float) -> Dict[str, Any]:
+        """Return mock analysis result with weight context."""
+        response = self.mock_response.copy()
+        response["weight_context"] = {
+            "weight_grams": weight_grams
+        }
+        # Adjust calories based on weight (100g baseline)
+        if "structured_data" in response:
+            weight_factor = weight_grams / 100.0
+            response["structured_data"]["total_calories"] = int(response["structured_data"]["total_calories"] * weight_factor)
+            for food in response["structured_data"].get("foods", []):
+                food["calories"] = int(food["calories"] * weight_factor)
+        return response
     
     def _default_response(self) -> Dict[str, Any]:
         """Default mock response for meal analysis."""
