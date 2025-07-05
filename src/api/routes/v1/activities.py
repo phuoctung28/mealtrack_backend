@@ -12,7 +12,7 @@ from src.app.queries.activity import GetDailyActivitiesQuery
 from src.infra.event_bus import EventBus
 
 router = APIRouter(
-    prefix="v1/activities",
+    prefix="/v1/activities",
     tags=["activities"],
 )
 
