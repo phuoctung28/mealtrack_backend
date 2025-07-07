@@ -62,12 +62,13 @@ class MealRepository(MealRepositoryPort):
                     existing_meal.nutrition = db_nutrition
                 
                 # Update other fields
+                from src.infra.database.models.enums import MealStatusEnum
                 status_mapping = {
-                    MealStatus.PROCESSING: "PROCESSING",
-                    MealStatus.ANALYZING: "ANALYZING", 
-                    MealStatus.ENRICHING: "ENRICHING",
-                    MealStatus.READY: "READY",
-                    MealStatus.FAILED: "FAILED",
+                    MealStatus.PROCESSING: MealStatusEnum.PROCESSING,
+                    MealStatus.ANALYZING: MealStatusEnum.ANALYZING, 
+                    MealStatus.ENRICHING: MealStatusEnum.ENRICHING,
+                    MealStatus.READY: MealStatusEnum.READY,
+                    MealStatus.FAILED: MealStatusEnum.FAILED,
                 }
                 
                 existing_meal.status = status_mapping[meal.status]
