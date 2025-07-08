@@ -92,6 +92,8 @@ from src.app.handlers.query_handlers.meal_query_handlers import (
 from src.app.handlers.query_handlers.user_query_handlers import (
     GetUserProfileQueryHandler
 )
+from src.app.handlers.event_handlers.meal_analysis_event_handler import MealAnalysisEventHandler
+from src.app.events.meal import MealImageUploadedEvent
 from src.infra.event_bus import PyMediatorEventBus, EventBus
 
 
@@ -229,6 +231,19 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         GetUserProfileQuery,
         GetUserProfileQueryHandler(db)
+    )
+    
+    # Register domain event subscribers
+    meal_analysis_handler = MealAnalysisEventHandler(
+        meal_repository=meal_repository,
+        vision_service=vision_service,
+        gpt_parser=gpt_parser,
+        image_store=image_store
+    )
+    
+    event_bus.subscribe(
+        MealImageUploadedEvent,
+        meal_analysis_handler.handle_meal_image_uploaded
     )
     
     return event_bus

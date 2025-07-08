@@ -52,10 +52,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                 command.file_contents,
                 command.content_type
             )
-            
-            # Extract image_id from URL
-            # For mock store: mock://images/{uuid}
-            # For cloudinary: https://res.cloudinary.com/.../v123/{public_id}.jpg
+
             image_id = image_url
             if image_url.startswith("mock://images/"):
                 image_id = image_url.replace("mock://images/", "")

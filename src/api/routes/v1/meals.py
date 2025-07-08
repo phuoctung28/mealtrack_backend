@@ -15,6 +15,7 @@ from src.api.schemas.response import (
     DetailedMealResponse,
     MealListResponse
 )
+from src.api.schemas.response.meal_responses import MealStatusResponse
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.api.utils.file_validator import FileValidator
 from src.app.commands.meal import (
@@ -30,6 +31,8 @@ from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/meals", tags=["Meals"])
+
+
 
 # File upload constraints
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -76,11 +79,8 @@ async def upload_meal_image(
         
         result = await event_bus.send(command)
         
-        # Schedule background analysis if available
-        if background_tasks and result.get("meal_id"):
-            # Note: In a real system, this would publish an event
-            # that triggers the analysis workflow
-            pass
+        # Background processing is handled by the event system
+        # The MealImageUploadedEvent will trigger background analysis
         
         # Return a simple upload response
         return {
@@ -169,6 +169,27 @@ async def analyze_meal_image_immediate(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error analyzing meal photo: {str(e)}"
         )
+
+
+@router.get("/{meal_id}/status", response_model=MealStatusResponse)
+async def get_meal_status(
+    meal_id: str,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """Get the processing status of a specific meal."""
+    try:
+        # Send query
+        query = GetMealByIdQuery(meal_id=meal_id)
+        meal = await event_bus.send(query)
+        
+        # Return lightweight status information
+        return MealStatusResponse(
+            meal_id=meal.meal_id,
+            status=STATUS_MAPPING.get(meal.status.value, meal.status.value)
+        )
+        
+    except Exception as e:
+        raise handle_exception(e)
 
 
 @router.get("/{meal_id}", response_model=DetailedMealResponse)

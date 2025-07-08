@@ -16,6 +16,8 @@ class MealStatusEnum(str, Enum):
     failed = "failed"
 
 
+
+
 class MacrosResponse(BaseModel):
     """Response DTO for macronutrient information."""
     protein: float = Field(..., ge=0, description="Protein in grams")
@@ -101,17 +103,9 @@ class MealSearchResponse(BaseModel):
 
 
 class MealStatusResponse(BaseModel):
-    """Response DTO for meal processing status."""
+    """Lightweight response DTO for meal processing status."""
     meal_id: str = Field(..., description="Meal ID")
     status: MealStatusEnum = Field(..., description="Current status")
-    status_message: str = Field(..., description="Human-readable status")
-    progress_percentage: Optional[int] = Field(
-        None, 
-        ge=0, 
-        le=100,
-        description="Processing progress"
-    )
-    error_message: Optional[str] = Field(None, description="Error details if failed")
 
 
 class NutritionSummaryResponse(BaseModel):
