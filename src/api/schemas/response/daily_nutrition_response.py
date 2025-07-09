@@ -5,7 +5,7 @@ from typing import Dict
 
 from pydantic import BaseModel, Field
 
-
+# TODO (tony): remove fiber field
 class MacrosResponse(BaseModel):
     """Macronutrient response model."""
     protein: float = Field(..., description="Protein in grams")

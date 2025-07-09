@@ -4,8 +4,8 @@ Test script for the enhanced nutrition tracking API endpoints.
 """
 import sys
 import os
-sys.path.append('/Users/tonytran/Projects/mealtrack_backend')
-os.chdir('/Users/tonytran/Projects/mealtrack_backend')
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(project_root)
 
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse, MacrosResponse
 
