@@ -256,13 +256,50 @@ class MealMapper:
         Returns:
             DailyNutritionResponse DTO
         """
+        from src.api.schemas.response.daily_nutrition_response import MacrosResponse
+        
+        # Extract data with defaults
+        target_calories = daily_macros_data.get("target_calories", 2000.0)
+        consumed_calories = daily_macros_data.get("total_calories", 0.0)
+        
+        target_macros = MacrosResponse(
+            protein=daily_macros_data.get("target_protein", 150.0),
+            carbs=daily_macros_data.get("target_carbs", 250.0),
+            fat=daily_macros_data.get("target_fat", 67.0),
+            fiber=daily_macros_data.get("target_fiber", 25.0)
+        )
+        
+        consumed_macros = MacrosResponse(
+            protein=daily_macros_data.get("total_protein", 0.0),
+            carbs=daily_macros_data.get("total_carbs", 0.0),
+            fat=daily_macros_data.get("total_fat", 0.0),
+            fiber=daily_macros_data.get("total_fiber", 0.0)
+        )
+        
+        # Calculate remaining macros
+        remaining_calories = max(0, target_calories - consumed_calories)
+        remaining_macros = MacrosResponse(
+            protein=max(0, target_macros.protein - consumed_macros.protein),
+            carbs=max(0, target_macros.carbs - consumed_macros.carbs),
+            fat=max(0, target_macros.fat - consumed_macros.fat),
+            fiber=max(0, target_macros.fiber - consumed_macros.fiber)
+        )
+        
+        # Calculate completion percentages
+        completion_percentage = {
+            "calories": (consumed_calories / target_calories * 100) if target_calories > 0 else 0,
+            "protein": (consumed_macros.protein / target_macros.protein * 100) if target_macros.protein > 0 else 0,
+            "carbs": (consumed_macros.carbs / target_macros.carbs * 100) if target_macros.carbs > 0 else 0,
+            "fat": (consumed_macros.fat / target_macros.fat * 100) if target_macros.fat > 0 else 0
+        }
+        
         return DailyNutritionResponse(
-            date=daily_macros_data["date"],
-            total_meals=daily_macros_data["meal_count"],
-            totals={
-                "calories": daily_macros_data["total_calories"],
-                "protein": daily_macros_data["total_protein"],
-                "carbs": daily_macros_data["total_carbs"],
-                "fat": daily_macros_data["total_fat"]
-            }
+            date=daily_macros_data.get("date", ""),
+            target_calories=target_calories,
+            target_macros=target_macros,
+            consumed_calories=consumed_calories,
+            consumed_macros=consumed_macros,
+            remaining_calories=remaining_calories,
+            remaining_macros=remaining_macros,
+            completion_percentage=completion_percentage,
         )

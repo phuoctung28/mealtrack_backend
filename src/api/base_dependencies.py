@@ -1,3 +1,4 @@
+from asyncio.log import logger
 import os
 
 from fastapi import Depends
@@ -42,8 +43,7 @@ def get_image_store() -> ImageStorePort:
     Returns:
         ImageStorePort: The image store adapter (Cloudinary or Mock)
     """
-    use_mock = os.getenv("USE_MOCK_STORAGE", "false").lower() == "true"
-    
+    use_mock = bool(int(os.getenv("USE_MOCK_STORAGE", "0")))
     if use_mock:
         return ImageStore()
     else:

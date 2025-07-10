@@ -51,7 +51,7 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         """Get meal activities for a specific date."""
         try:
             date_obj = target_date.date()
-            meals = self.meal_repository.get_by_date(date_obj)
+            meals = self.meal_repository.find_by_date(date_obj)
             
             meal_activities = []
             for meal in meals:
@@ -91,10 +91,10 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
             "meal_type": meal_type,
             "calories": round(meal.nutrition.calories, 1) if meal.nutrition else 0,
             "macros": {
-                "protein": round(meal.nutrition.protein, 1) if meal.nutrition else 0,
-                "carbs": round(meal.nutrition.carbs, 1) if meal.nutrition else 0,
-                "fat": round(meal.nutrition.fat, 1) if meal.nutrition else 0,
-                "fiber": round(meal.nutrition.fiber, 1) if meal.nutrition and hasattr(meal.nutrition, 'fiber') else 0,
+                "protein": round(meal.nutrition.macros.protein, 1) if meal.nutrition else 0,
+                "carbs": round(meal.nutrition.macros.carbs, 1) if meal.nutrition else 0,
+                "fat": round(meal.nutrition.macros.fat, 1) if meal.nutrition else 0,
+                "fiber": round(meal.nutrition.macros.fiber, 1) if meal.nutrition and hasattr(meal.nutrition.macros, 'fiber') else 0,
             },
             "quantity": estimated_weight,
             "status": meal.status.value if meal.status else "unknown",

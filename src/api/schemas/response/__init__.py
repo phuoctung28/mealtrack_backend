@@ -59,6 +59,11 @@ from .tdee_responses import (
     TdeeErrorResponse,
     MacroTargetsResponse
 )
+# Daily nutrition responses
+from .daily_nutrition_response import (
+    DailyNutritionResponse,
+    MacrosResponse as DailyMacrosResponse
+)
 
 __all__ = [
     # Daily meal
@@ -108,6 +113,10 @@ __all__ = [
     'OnboardingSectionsResponse',
     'OnboardingResponseResponse',
     'OnboardingResponse',
+    
+    # Daily nutrition
+    'DailyNutritionResponse',
+    'DailyMacrosResponse',
     
     # Enums
     'MealTypeEnum'
