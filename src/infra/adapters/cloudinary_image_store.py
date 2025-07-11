@@ -34,7 +34,7 @@ class CloudinaryImageStore(ImageStorePort):
         
         logger.info(f"Initializing CloudinaryImageStore with cloud_name: {cloud_name}")
         
-        use_mock = bool(int(os.getenv("USE_MOCK_STORAGE", "1")))
+        use_mock = bool(int(os.getenv("USE_MOCK_STORAGE", "0")))
         logger.info(f"USE_MOCK_STORAGE is set to: {use_mock}")
         
         if not all([cloud_name, api_key, api_secret]):
@@ -95,11 +95,14 @@ class CloudinaryImageStore(ImageStorePort):
                 format=file_extension,  # Explicitly set the format
                 overwrite=True
             )
+            response_url = response.get('secure_url')
             
-            logger.info(f"Upload successful. Cloudinary URL: {response.get('secure_url')}")
-            
-            # Return the image ID
-            return image_id
+            if (response_url):
+                logger.info(f"Upload successful. Cloudinary URL: {response_url}")
+                return response_url
+            else:
+                return image_id
+
         except Exception as e:
             logger.error(f"Error uploading to Cloudinary: {str(e)}")
             raise
