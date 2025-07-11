@@ -101,6 +101,7 @@ class CloudinaryImageStore(ImageStorePort):
                 logger.info(f"Upload successful. Cloudinary URL: {response_url}")
                 return response_url
             else:
+                logger.info(f"'secure_url' not found in Cloudinary response. Returning fallback image_id: {image_id}")
                 return image_id
 
         except Exception as e:
