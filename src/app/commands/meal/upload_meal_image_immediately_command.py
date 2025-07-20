@@ -2,6 +2,8 @@
 Command for immediate meal image upload and analysis.
 """
 from dataclasses import dataclass
+from datetime import date
+from typing import Optional
 
 from src.app.events.base import Command
 
@@ -16,3 +18,4 @@ class UploadMealImageImmediatelyCommand(Command):
     """
     file_contents: bytes
     content_type: str
+    target_date: Optional[date] = None
