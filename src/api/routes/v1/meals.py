@@ -95,6 +95,7 @@ async def upload_meal_image(
 @router.post("/image/analyze", status_code=status.HTTP_200_OK, response_model=DetailedMealResponse)
 async def analyze_meal_image_immediate(
     file: UploadFile = File(...),
+    target_date: Optional[str] = Query(None, description="Target date in YYYY-MM-DD format for meal association"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -127,13 +128,26 @@ async def analyze_meal_image_immediate(
                 detail=f"File size exceeds maximum allowed (8MB)"
             )
         
+        # Parse target date if provided
+        parsed_target_date = None
+        if target_date:
+            try:
+                parsed_target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+                logger.info(f"Target date specified: {parsed_target_date}")
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid date format. Use YYYY-MM-DD format."
+                )
+        
         # Process the upload and analysis immediately
-        logger.info("Processing meal photo for immediate analysis")
+        logger.info(f"Processing meal photo for immediate analysis (target_date: {parsed_target_date})")
         from src.app.commands.meal import UploadMealImageImmediatelyCommand
         
         command = UploadMealImageImmediatelyCommand(
             file_contents=contents,
-            content_type=file.content_type
+            content_type=file.content_type,
+            target_date=parsed_target_date
         )
         
         logger.info("Uploading and analyzing meal immediately")

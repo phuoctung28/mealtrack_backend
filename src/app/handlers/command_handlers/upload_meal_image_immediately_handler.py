@@ -63,11 +63,17 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     # Get the last part and remove file extension
                     image_id = parts[-1].split(".")[0]
             
+            # Determine the meal date - use target_date if provided, otherwise use now
+            meal_date = command.target_date if command.target_date else datetime.now().date()
+            meal_datetime = datetime.combine(meal_date, datetime.now().time())
+            
+            logger.info(f"Creating meal record for date: {meal_date}")
+            
             # Create meal record with ANALYZING status
             meal = Meal(
                 meal_id=str(uuid4()),
                 status=MealStatus.ANALYZING,
-                created_at=datetime.now(),
+                created_at=meal_datetime,
                 image=MealImage(
                     image_id=image_id,
                     format="jpeg" if "jpeg" in command.content_type else "png",
