@@ -113,9 +113,7 @@ class PyMediatorEventBus(EventBus):
         
         # Register with pymediator
         self._mediator.registry.register(wrapper_class, adapter_class)
-        
-        logger.info(f"Registered {handler.__class__.__name__} for {event_type.__name__}")
-    
+
     def subscribe(self, event_type: Type[DomainEvent], handler) -> None:
         """Subscribe to domain events."""
         if event_type not in self._domain_event_subscribers:

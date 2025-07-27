@@ -8,9 +8,9 @@ from typing import Dict, Any
 from sqlalchemy.orm import Session
 
 from src.api.exceptions import ResourceNotFoundException
+from src.app.events.base import EventHandler, handles
 from src.app.handlers.command_handlers.daily_meal_command_handlers import GenerateDailyMealSuggestionsCommandHandler
 from src.app.handlers.command_handlers.user_command_handlers import SaveUserOnboardingCommandHandler
-from src.app.events.base import EventHandler, handles
 from src.app.queries.daily_meal import (
     GetMealSuggestionsForProfileQuery,
     GetSingleMealForProfileQuery,

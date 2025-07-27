@@ -7,8 +7,8 @@ from typing import Dict, Any
 from sqlalchemy.orm import Session
 
 from src.api.exceptions import ResourceNotFoundException
-from src.app.handlers.command_handlers.user_command_handlers import SaveUserOnboardingCommandHandler
 from src.app.events.base import EventHandler, handles
+from src.app.handlers.command_handlers.user_command_handlers import SaveUserOnboardingCommandHandler
 from src.app.queries.user import (
     GetUserProfileQuery
 )

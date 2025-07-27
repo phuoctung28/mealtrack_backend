@@ -1,4 +1,3 @@
-from asyncio.log import logger
 import os
 
 from fastapi import Depends

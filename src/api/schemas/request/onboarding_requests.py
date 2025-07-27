@@ -1,11 +1,6 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 
 from pydantic import BaseModel, Field
-
-
-class OnboardingResponseRequest(BaseModel):
-    section_id: str = Field(..., description="ID of the onboarding section")
-    field_responses: Dict[str, Any] = Field(..., description="Mapping of field_id to response value")
 
 class OnboardingCompleteRequest(BaseModel):
     """Complete onboarding data request for saving to database."""

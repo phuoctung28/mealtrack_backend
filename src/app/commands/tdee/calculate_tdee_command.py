@@ -18,3 +18,4 @@ class CalculateTdeeCommand(Command):
     goal: str
     body_fat_percentage: Optional[float] = None
     unit_system: str = "metric"
+    user_id: Optional[str] = None  # If provided, save to user profile

@@ -14,17 +14,12 @@ from src.app.commands.meal import (
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import (
     MealImageUploadedEvent,
-    MealNutritionUpdatedEvent,
-    MealAnalysisStartedEvent
+    MealNutritionUpdatedEvent
 )
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_image import MealImage
-from src.domain.model.nutrition import Nutrition, FoodItem
-from src.domain.model.macros import Macros
-from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.image_store_port import ImageStorePort
-from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.ports.meal_repository_port import MealRepositoryPort
 
 logger = logging.getLogger(__name__)
 

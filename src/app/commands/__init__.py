@@ -15,13 +15,9 @@ from .meal import (
 from .meal_plan import (
     StartMealPlanConversationCommand,
     SendConversationMessageCommand,
-    GenerateMealPlanCommand,
     ReplaceMealInPlanCommand,
 )
-# Import from tdee module
-from .tdee import (
-    CalculateTdeeCommand,
-)
+# TDEE commands removed - not used in API
 # Import from user module
 from .user import (
     SaveUserOnboardingCommand,
@@ -31,8 +27,7 @@ __all__ = [
     # Meal commands
     "RecalculateMealNutritionCommand",
     "UploadMealImageCommand",
-    # TDEE commands
-    "CalculateTdeeCommand",
+
     # Daily meal commands
     "GenerateDailyMealSuggestionsCommand",
     "GenerateSingleMealCommand",
@@ -41,6 +36,6 @@ __all__ = [
     # Meal plan commands
     "StartMealPlanConversationCommand",
     "SendConversationMessageCommand",
-    "GenerateMealPlanCommand",
+    "GenerateDailyMealPlanCommand",
     "ReplaceMealInPlanCommand",
 ]

@@ -1,14 +1,15 @@
 """
 Example of unit tests with stubs for isolated testing.
 """
-import pytest
-from unittest.mock import Mock, MagicMock
 from datetime import datetime
+from unittest.mock import Mock, MagicMock
 
+import pytest
+
+from src.domain.model.macros import Macros
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_image import MealImage
 from src.domain.model.nutrition import Nutrition
-from src.domain.model.macros import Macros
 
 
 class TestWithStubs:

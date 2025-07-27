@@ -1,12 +1,12 @@
 """
 Unit tests for user command handlers.
 """
-import pytest
 from datetime import datetime
-from unittest.mock import Mock
 
-from src.app.commands.user import SaveUserOnboardingCommand
+import pytest
+
 from src.api.exceptions import ValidationException
+from src.app.commands.user import SaveUserOnboardingCommand
 
 
 @pytest.mark.unit

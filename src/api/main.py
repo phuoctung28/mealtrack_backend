@@ -10,9 +10,9 @@ from sqlalchemy import inspect
 
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.daily_meals import router as daily_meals_router
+from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meals import router as meals_router
-from src.api.routes.v1.tdee import router as tdee_router
-from src.api.routes.v1.user_onboarding import router as user_onboarding_router
+from src.api.routes.v1.user_profiles import router as user_profiles_router
 
 load_dotenv()
 
@@ -98,10 +98,9 @@ async def root():
 
 app.include_router(meals_router)
 app.include_router(activities_router)
-app.include_router(tdee_router)
-# app.include_router(meal_plans_router)
+app.include_router(meal_plans_router)
 app.include_router(daily_meals_router)
-app.include_router(user_onboarding_router)
+app.include_router(user_profiles_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get('ENVIRONMENT') == 'development':

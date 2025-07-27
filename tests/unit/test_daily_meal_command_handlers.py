@@ -3,7 +3,7 @@ Unit tests for daily meal command handlers.
 """
 import pytest
 
-from src.api.exceptions import ResourceNotFoundException, ValidationException
+from src.api.exceptions import ValidationException
 from src.app.commands.daily_meal import GenerateDailyMealSuggestionsCommand
 
 

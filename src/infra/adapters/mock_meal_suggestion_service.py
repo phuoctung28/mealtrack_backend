@@ -1,12 +1,10 @@
 """
 Mock Meal Suggestion Service for testing.
 """
-from typing import List, Dict, Any
-from datetime import date
 import uuid
+from typing import List, Dict, Any
 
 from src.domain.model.meal_plan import MealType, PlannedMeal
-from src.domain.model.macros import Macros
 
 
 class MockMealSuggestionService:

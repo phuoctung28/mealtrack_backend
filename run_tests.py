@@ -23,15 +23,16 @@ Examples:
     python run_tests.py unit --verbose
 """
 
-import os
-import sys
-import subprocess
-import shutil
-import time
 import argparse
+import os
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
+from typing import List
+
 import requests
-from typing import List, Optional
 
 
 class TestRunner:

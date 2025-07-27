@@ -2,16 +2,14 @@
 Unit tests for meal command handlers.
 """
 import pytest
-from datetime import datetime
-from unittest.mock import Mock, patch
 
+from src.api.exceptions import ValidationException, ResourceNotFoundException
 from src.app.commands.meal import (
     UploadMealImageCommand,
     RecalculateMealNutritionCommand,
     UploadMealImageImmediatelyCommand
 )
 from src.domain.model.meal import MealStatus
-from src.api.exceptions import ValidationException, ResourceNotFoundException
 
 
 @pytest.mark.unit

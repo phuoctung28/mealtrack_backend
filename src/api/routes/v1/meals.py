@@ -15,8 +15,8 @@ from src.api.schemas.response import (
     DetailedMealResponse,
     MealListResponse
 )
-from src.api.schemas.response.meal_responses import MealStatusResponse
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
+from src.api.schemas.response.meal_responses import MealStatusResponse
 from src.api.utils.file_validator import FileValidator
 from src.app.commands.meal import (
     UploadMealImageCommand,

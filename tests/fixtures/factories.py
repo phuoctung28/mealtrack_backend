@@ -1,16 +1,17 @@
 """
 Test data factories for creating test objects.
 """
+import uuid
+from datetime import datetime, date
+
 import factory
 from factory.alchemy import SQLAlchemyModelFactory
-from datetime import datetime, date
-import uuid
-
-from src.infra.database.models.meal import Meal as MealModel
 from src.infra.database.models.meal_food_item import MealFoodItem
-from src.infra.database.models.user.user import User
-from src.infra.database.models.user.profile import UserProfile
+
 from src.domain.model.meal import MealStatus
+from src.infra.database.models.meal import Meal as MealModel
+from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.user.user import User
 
 
 class UserFactory(SQLAlchemyModelFactory):

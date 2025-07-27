@@ -14,11 +14,11 @@ from src.app.events.base import EventHandler, handles
 from src.app.events.daily_meal import (
     DailyMealsGeneratedEvent
 )
+from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.model.macro_targets import SimpleMacroTargets
 from src.domain.model.tdee import TdeeRequest, Sex, Goal, UnitSystem
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 
 logger = logging.getLogger(__name__)
 

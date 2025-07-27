@@ -68,15 +68,6 @@ class DayPlanSchema(BaseModel):
     total_nutrition: Dict[str, float] = Field(..., description="Total daily nutrition values")
 
 
-class MealPlanResponse(BaseModel):
-    plan_id: str
-    user_id: str
-    preferences: UserPreferencesSchema
-    days: List[DayPlanSchema]
-    created_at: datetime
-    updated_at: datetime
-
-
 class MealPlanSummaryResponse(BaseModel):
     plan_id: str
     user_id: str
@@ -97,3 +88,79 @@ class ErrorResponse(BaseModel):
     error: str
     message: str
     details: Optional[Dict] = None
+
+
+class NutritionSummarySchema(BaseModel):
+    calories: int
+    protein: float = Field(..., description="Protein in grams")
+    carbs: float = Field(..., description="Carbohydrates in grams")
+    fat: float = Field(..., description="Fat in grams")
+
+
+class UserPreferenceSummarySchema(BaseModel):
+    dietary_preferences: List[str]
+    health_conditions: List[str]
+    allergies: List[str]
+    activity_level: str
+    fitness_goal: str
+    meals_per_day: int
+    snacks_per_day: int
+
+
+class DailyMealPlanResponse(BaseModel):
+    user_id: str
+    date: str = Field(..., description="Date of the meal plan (e.g., 'today')")
+    meals: List[PlannedMealSchema]
+    total_nutrition: NutritionSummarySchema
+    target_nutrition: NutritionSummarySchema
+    user_preferences: UserPreferenceSummarySchema
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_id": "user123",
+                "date": "today",
+                "meals": [
+                    {
+                        "meal_id": "meal_001",
+                        "meal_type": "breakfast",
+                        "name": "Greek Yogurt Parfait",
+                        "description": "Healthy breakfast with berries and granola",
+                        "prep_time": 5,
+                        "cook_time": 0,
+                        "total_time": 5,
+                        "calories": 350,
+                        "protein": 20.5,
+                        "carbs": 35.2,
+                        "fat": 12.8,
+                        "ingredients": ["Greek yogurt", "Mixed berries", "Granola", "Honey"],
+                        "instructions": ["Layer yogurt in bowl", "Add berries", "Top with granola"],
+                        "is_vegetarian": True,
+                        "is_vegan": False,
+                        "is_gluten_free": True,
+                        "cuisine_type": "Mediterranean"
+                    }
+                ],
+                "total_nutrition": {
+                    "calories": 2100,
+                    "protein": 120.5,
+                    "carbs": 250.2,
+                    "fat": 85.8
+                },
+                "target_nutrition": {
+                    "calories": 2200,
+                    "protein": 125.0,
+                    "carbs": 275.0,
+                    "fat": 85.0
+                },
+                "user_preferences": {
+                    "dietary_preferences": ["vegetarian"],
+                    "health_conditions": [],
+                    "allergies": ["nuts"],
+                    "activity_level": "moderate",
+                    "fitness_goal": "maintenance",
+                    "meals_per_day": 3,
+                    "snacks_per_day": 1
+                }
+            }
+        }

@@ -2,10 +2,9 @@
 Integration tests for user query handlers.
 """
 import pytest
-from datetime import datetime
 
-from src.app.queries.user import GetUserProfileQuery
 from src.api.exceptions import ResourceNotFoundException
+from src.app.queries.user import GetUserProfileQuery
 
 
 @pytest.mark.integration

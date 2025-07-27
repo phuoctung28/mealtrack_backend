@@ -11,28 +11,6 @@ from src.api.base_dependencies import (
     get_vision_service,
     get_gpt_parser
 )
-from src.app.handlers.command_handlers.daily_meal_command_handlers import (
-    GenerateDailyMealSuggestionsCommandHandler,
-    GenerateSingleMealCommandHandler
-)
-# Import all handlers
-from src.app.handlers.command_handlers.meal_command_handlers import (
-    UploadMealImageCommandHandler,
-    RecalculateMealNutritionCommandHandler
-)
-from src.app.handlers.command_handlers.meal_plan_command_handlers import (
-    StartMealPlanConversationCommandHandler,
-    SendConversationMessageCommandHandler,
-    GenerateMealPlanCommandHandler,
-    ReplaceMealInPlanCommandHandler
-)
-from src.app.handlers.command_handlers.tdee_command_handlers import CalculateTdeeCommandHandler
-from src.app.handlers.command_handlers.upload_meal_image_immediately_handler import (
-    UploadMealImageImmediatelyHandler
-)
-from src.app.handlers.command_handlers.user_command_handlers import (
-    SaveUserOnboardingCommandHandler
-)
 from src.app.commands.daily_meal import (
     GenerateDailyMealSuggestionsCommand,
     GenerateSingleMealCommand
@@ -46,12 +24,57 @@ from src.app.commands.meal import (
 from src.app.commands.meal_plan import (
     StartMealPlanConversationCommand,
     SendConversationMessageCommand,
-    GenerateMealPlanCommand,
+    GenerateDailyMealPlanCommand,
     ReplaceMealInPlanCommand
 )
-from src.app.commands.tdee import CalculateTdeeCommand
+
 from src.app.commands.user import (
     SaveUserOnboardingCommand
+)
+from src.app.events.meal import MealImageUploadedEvent
+from src.app.handlers.command_handlers.daily_meal_command_handlers import (
+    GenerateDailyMealSuggestionsCommandHandler,
+    GenerateSingleMealCommandHandler
+)
+# Import all handlers
+from src.app.handlers.command_handlers.meal_command_handlers import (
+    UploadMealImageCommandHandler,
+    RecalculateMealNutritionCommandHandler
+)
+from src.app.handlers.command_handlers.meal_plan_command_handlers import (
+    StartMealPlanConversationCommandHandler,
+    SendConversationMessageCommandHandler,
+    GenerateDailyMealPlanCommandHandler,
+    ReplaceMealInPlanCommandHandler
+)
+
+from src.app.handlers.command_handlers.upload_meal_image_immediately_handler import (
+    UploadMealImageImmediatelyHandler
+)
+from src.app.handlers.command_handlers.user_command_handlers import (
+    SaveUserOnboardingCommandHandler
+)
+from src.app.handlers.event_handlers.meal_analysis_event_handler import MealAnalysisEventHandler
+from src.app.handlers.query_handlers.activity_query_handlers import GetDailyActivitiesQueryHandler
+from src.app.handlers.query_handlers.daily_meal_query_handlers import (
+    GetMealSuggestionsForProfileQueryHandler,
+    GetSingleMealForProfileQueryHandler,
+    GetMealPlanningSummaryQueryHandler
+)
+from src.app.handlers.query_handlers.meal_plan_query_handlers import (
+    GetConversationHistoryQueryHandler,
+    GetMealPlanQueryHandler
+)
+from src.app.handlers.query_handlers.meal_query_handlers import (
+    GetMealByIdQueryHandler,
+    GetMealsByDateQueryHandler,
+    GetDailyMacrosQueryHandler
+)
+from src.app.handlers.query_handlers.tdee_query_handlers import (
+    GetUserTdeeQueryHandler
+)
+from src.app.handlers.query_handlers.user_query_handlers import (
+    GetUserProfileQueryHandler
 )
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.daily_meal import (
@@ -69,31 +92,10 @@ from src.app.queries.meal_plan import (
     GetConversationHistoryQuery,
     GetMealPlanQuery
 )
-# No TDEE queries - all removed
+from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import (
     GetUserProfileQuery
 )
-from src.app.handlers.query_handlers.activity_query_handlers import GetDailyActivitiesQueryHandler
-from src.app.handlers.query_handlers.daily_meal_query_handlers import (
-    GetMealSuggestionsForProfileQueryHandler,
-    GetSingleMealForProfileQueryHandler,
-    GetMealPlanningSummaryQueryHandler
-)
-from src.app.handlers.query_handlers.meal_plan_query_handlers import (
-    GetConversationHistoryQueryHandler,
-    GetMealPlanQueryHandler
-)
-from src.app.handlers.query_handlers.meal_query_handlers import (
-    GetMealByIdQueryHandler,
-    GetMealsByDateQueryHandler,
-    GetDailyMacrosQueryHandler
-)
-# No TDEE query handlers - all removed
-from src.app.handlers.query_handlers.user_query_handlers import (
-    GetUserProfileQueryHandler
-)
-from src.app.handlers.event_handlers.meal_analysis_event_handler import MealAnalysisEventHandler
-from src.app.events.meal import MealImageUploadedEvent
 from src.infra.event_bus import PyMediatorEventBus, EventBus
 
 
@@ -157,13 +159,6 @@ async def get_configured_event_bus(
         GetDailyActivitiesQueryHandler(meal_repository)
     )
     
-    # Register TDEE handlers
-    event_bus.register_handler(
-        CalculateTdeeCommand,
-        CalculateTdeeCommandHandler()
-    )
-    
-    
     # Register daily meal handlers
     event_bus.register_handler(
         GenerateDailyMealSuggestionsCommand,
@@ -202,8 +197,8 @@ async def get_configured_event_bus(
     )
     
     event_bus.register_handler(
-        GenerateMealPlanCommand,
-        GenerateMealPlanCommandHandler()
+        GenerateDailyMealPlanCommand,
+        GenerateDailyMealPlanCommandHandler(db)
     )
     
     event_bus.register_handler(
@@ -231,6 +226,11 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         GetUserProfileQuery,
         GetUserProfileQueryHandler(db)
+    )
+    
+    event_bus.register_handler(
+        GetUserTdeeQuery,
+        GetUserTdeeQueryHandler(db)
     )
     
     # Register domain event subscribers

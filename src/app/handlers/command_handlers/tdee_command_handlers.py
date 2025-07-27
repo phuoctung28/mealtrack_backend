@@ -5,6 +5,8 @@ import logging
 from typing import Dict, Any
 from uuid import uuid4
 
+from sqlalchemy.orm import Session
+
 from src.app.commands.tdee import (
     CalculateTdeeCommand
 )
@@ -14,6 +16,8 @@ from src.app.events.tdee import (
 )
 from src.domain.model.tdee import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
+from src.infra.database.models.user import User
+from src.infra.database.models.user.profile import UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +26,16 @@ logger = logging.getLogger(__name__)
 class CalculateTdeeCommandHandler(EventHandler[CalculateTdeeCommand, Dict[str, Any]]):
     """Handler for calculating TDEE."""
     
-    def __init__(self, tdee_service: TdeeCalculationService = None):
+    def __init__(self, tdee_service: TdeeCalculationService = None, db: Session = None):
         self.tdee_service = tdee_service or TdeeCalculationService()
+        self.db = db
     
-    def set_dependencies(self, tdee_service: TdeeCalculationService = None):
+    def set_dependencies(self, tdee_service: TdeeCalculationService = None, db: Session = None):
         """Set dependencies for dependency injection."""
         if tdee_service:
             self.tdee_service = tdee_service
+        if db:
+            self.db = db
     
     async def handle(self, command: CalculateTdeeCommand) -> Dict[str, Any]:
         """Calculate TDEE based on user parameters."""
@@ -81,6 +88,42 @@ class CalculateTdeeCommandHandler(EventHandler[CalculateTdeeCommand, Dict[str, A
         # Determine formula used
         formula_used = "Katch-McArdle" if tdee_request.body_fat_pct is not None else "Mifflin-St Jeor"
         
+        # Save to user profile if user_id is provided and db is available
+        if command.user_id and self.db:
+            try:
+                # Get existing user
+                user = self.db.query(User).filter(User.id == command.user_id).first()
+                if user:
+                    # Mark existing profiles as not current
+                    self.db.query(UserProfile).filter(
+                        UserProfile.user_id == command.user_id,
+                        UserProfile.is_current == True
+                    ).update({"is_current": False})
+                    
+                    # Create new profile with TDEE data
+                    profile = UserProfile(
+                        user_id=command.user_id,
+                        age=command.age,
+                        gender=command.sex,
+                        height_cm=command.height_cm,
+                        weight_kg=command.weight_kg,
+                        body_fat_percentage=command.body_fat_percentage,
+                        activity_level=command.activity_level,
+                        fitness_goal=command.goal,
+                        is_current=True
+                    )
+                    
+                    # Save profile
+                    self.db.add(profile)
+                    self.db.commit()
+                    self.db.refresh(profile)
+                    logger.info(f"Saved TDEE data to profile for user {command.user_id}")
+                else:
+                    logger.warning(f"User {command.user_id} not found, skipping profile save")
+            except Exception as save_error:
+                self.db.rollback()
+                logger.warning(f"Failed to save TDEE data to profile: {save_error}")
+
         response = {
             "bmr": result.bmr,
             "tdee": result.tdee,
@@ -95,8 +138,8 @@ class CalculateTdeeCommandHandler(EventHandler[CalculateTdeeCommand, Dict[str, A
             },
             "events": [
                 TdeeCalculatedEvent(
-                    aggregate_id=f"user_{str(uuid4())}",
-                    user_id=str(uuid4()),
+                    aggregate_id=f"user_{command.user_id or str(uuid4())}",
+                    user_id=command.user_id or str(uuid4()),
                     bmr=result.bmr,
                     tdee=result.tdee,
                     target_calories=round(result.macros.calories, 0),
