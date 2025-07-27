@@ -23,4 +23,4 @@ fi
 echo "✅ Ready! Starting at http://localhost:8000"
 echo "📚 Docs at http://localhost:8000/docs"
 echo ""
-uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn src.api.main:app --host 127.0.0.1 --port 8000 --reload
