@@ -1,20 +1,20 @@
 """
 Integration tests for meal query handlers.
 """
-import pytest
 from datetime import datetime, date, timedelta
-from sqlalchemy.orm import Session
 
+import pytest
+
+from src.api.exceptions import ResourceNotFoundException
 from src.app.queries.meal import (
     GetMealByIdQuery,
     GetMealsByDateQuery,
     GetDailyMacrosQuery
 )
 from src.domain.model.meal import MealStatus
+from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
-from src.infra.database.models.enums import MealStatusEnum
-from src.api.exceptions import ResourceNotFoundException
 
 
 def create_test_meal_in_db(session, meal_id, dish_name, created_at=None, 

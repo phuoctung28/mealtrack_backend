@@ -1,10 +1,9 @@
 """
 Event bus interface and in-memory implementation.
 """
-import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Type, TypeVar, Dict, List, Callable, Awaitable
+from typing import Any, Type, TypeVar, Callable, Awaitable
 
 from src.app.events.base import Event, DomainEvent, EventHandler
 

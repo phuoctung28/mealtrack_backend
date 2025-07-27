@@ -2,6 +2,9 @@
 Event bus infrastructure implementation.
 """
 from .event_bus import EventBus
-from .pymediator_event_bus import PyMediatorEventBus
+from .simple_event_bus import SimpleEventBus
 
-__all__ = ['EventBus', 'PyMediatorEventBus']
+# For compatibility, alias SimpleEventBus as PyMediatorEventBus
+PyMediatorEventBus = SimpleEventBus
+
+__all__ = ['EventBus', 'SimpleEventBus', 'PyMediatorEventBus']

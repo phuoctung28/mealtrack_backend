@@ -35,5 +35,3 @@ class ReplaceMealRequest(BaseModel):
     preferred_cuisine: Optional[str] = None
 
 
-class GenerateMealPlanRequest(BaseModel):
-    preferences: UserPreferencesSchema

@@ -1,37 +1,32 @@
 """
 Global pytest configuration and fixtures.
 """
-import os
+from datetime import datetime
+from typing import Generator
+
 import pytest
-from typing import Generator, Any
-from datetime import datetime, date
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from src.infra.database.config import Base
-from src.infra.database.test_config import (
-    get_test_database_url, 
-    create_test_engine,
-    create_test_tables,
-    drop_test_tables
-)
-# Import all models to ensure they're registered with Base metadata
-import src.infra.database.models
-from src.infra.database.models.meal.meal import Meal as MealModel
-from src.infra.database.models.meal.meal_image import MealImage as MealImageModel  
-from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.models.user.user import User
-from src.infra.event_bus import PyMediatorEventBus, EventBus
+from src.domain.model.macros import Macros
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_image import MealImage
 from src.domain.model.nutrition import Nutrition, FoodItem
-from src.domain.model.macros import Macros
-from src.infra.repositories.meal_repository import MealRepository
+from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.infra.adapters.mock_image_store import MockImageStore
 from src.infra.adapters.mock_vision_ai_service import MockVisionAIService
-from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.infra.database.config import Base
+# Import all models to ensure they're registered with Base metadata
+from src.infra.database.models.meal.meal import Meal as MealModel
+from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
+from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.user.user import User
+from src.infra.database.test_config import (
+    get_test_database_url,
+    create_test_engine
+)
+from src.infra.event_bus import PyMediatorEventBus, EventBus
+from src.infra.repositories.meal_repository import MealRepository
 
 
 @pytest.fixture(scope="session")
@@ -61,8 +56,7 @@ def test_engine(worker_id):
         temp_engine.dispose()
     
     # Import models to ensure they're registered
-    import src.infra.database.models
-    
+
     # Only one worker should create tables to avoid race conditions
     if worker_id in ("master", "gw0"):
         # Drop all tables first to ensure clean state

@@ -1,17 +1,17 @@
 """
 Integration tests for event-driven architecture flow.
 """
-import pytest
 from datetime import datetime, date
-import asyncio
 
+import pytest
+
+from src.app.commands.daily_meal import GenerateDailyMealSuggestionsCommand
 from src.app.commands.meal import (
     UploadMealImageCommand,
     UploadMealImageImmediatelyCommand
 )
-from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery
 from src.app.commands.user import SaveUserOnboardingCommand
-from src.app.commands.daily_meal import GenerateDailyMealSuggestionsCommand
+from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery
 from src.domain.model.meal import Meal, MealStatus
 
 

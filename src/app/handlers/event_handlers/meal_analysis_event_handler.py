@@ -7,12 +7,12 @@ from datetime import datetime
 from src.app.events.meal import MealImageUploadedEvent
 from src.domain.model.meal import MealStatus
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.ports.image_store_port import ImageStorePort
+from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.repositories.meal_repository import MealRepository
-from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 
 logger = logging.getLogger(__name__)
 

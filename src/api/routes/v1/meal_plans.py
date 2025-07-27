@@ -7,20 +7,19 @@ from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.schemas.request import (
     ConversationMessageRequest,
-    GenerateMealPlanRequest,
     ReplaceMealRequest
 )
 from src.api.schemas.response import (
     ConversationMessageResponse,
     StartConversationResponse,
     ConversationHistoryResponse,
-    MealPlanResponse,
-    ReplaceMealResponse
+    ReplaceMealResponse,
+    DailyMealPlanResponse
 )
 from src.app.commands.meal_plan import (
     StartMealPlanConversationCommand,
     SendConversationMessageCommand,
-    GenerateMealPlanCommand,
+    GenerateDailyMealPlanCommand,
     ReplaceMealInPlanCommand
 )
 from src.app.queries.meal_plan import (
@@ -103,30 +102,37 @@ async def get_conversation(
 
 
 # Direct meal plan generation endpoints
-@router.post("/generate", response_model=MealPlanResponse)
-async def generate_meal_plan(
-    request: GenerateMealPlanRequest,
-    user_id: str = "default_user",
+@router.post("/generate/daily", response_model=DailyMealPlanResponse)
+async def generate_daily_meal_plan(
+    user_id: str,
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """Generate a meal plan directly without conversation."""
+    """
+    Generate a daily meal plan based on user profile.
+    
+    Uses the user's stored profile including:
+    - Physical attributes (age, gender, height, weight)
+    - Dietary preferences and restrictions
+    - Health conditions and allergies
+    - Fitness goals and activity level
+    - Meal preferences (meals per day, snacks per day)
+    
+    Automatically calculates TDEE and macro targets, then generates
+    personalized meal suggestions for the day.
+    """
     try:
         # Create command
-        command = GenerateMealPlanCommand(
-            user_id=user_id,
-            preferences=request.preferences
-        )
+        command = GenerateDailyMealPlanCommand(user_id=user_id)
         
         # Send command
         result = await event_bus.send(command)
         
-        meal_plan_data = result["meal_plan"]
-        return MealPlanResponse(**meal_plan_data)
+        return DailyMealPlanResponse(**result)
     except Exception as e:
         raise handle_exception(e)
 
 
-@router.get("/{plan_id}", response_model=MealPlanResponse)
+@router.get("/{plan_id}")
 async def get_meal_plan(
     plan_id: str,
     event_bus: EventBus = Depends(get_configured_event_bus)
@@ -139,7 +145,7 @@ async def get_meal_plan(
         # Send query
         result = await event_bus.send(query)
         
-        return MealPlanResponse(**result["meal_plan"])
+        return result["meal_plan"]
     except Exception as e:
         raise handle_exception(e)
 

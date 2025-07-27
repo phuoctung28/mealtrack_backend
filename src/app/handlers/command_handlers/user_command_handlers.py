@@ -11,15 +11,11 @@ from src.app.commands.user import (
     SaveUserOnboardingCommand
 )
 from src.app.events.base import EventHandler, handles
-from src.app.events.user import (
-    UserOnboardedEvent,
-    UserProfileUpdatedEvent
-)
+from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.model.tdee import TdeeRequest, Sex, Goal, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.database.models.user import User
 from src.infra.database.models.user.profile import UserProfile
-from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 
 logger = logging.getLogger(__name__)
 
@@ -154,5 +150,4 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, D
                 "calories": round(macros.calories, 1)
             }
         }
-
 

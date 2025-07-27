@@ -13,6 +13,11 @@ from .daily_meal_responses import (
     UserMealPlanSummaryResponse,
     MealTypeEnum
 )
+# Daily nutrition responses
+from .daily_nutrition_response import (
+    DailyNutritionResponse,
+    MacrosResponse as DailyMacrosResponse
+)
 # Ingredient responses
 # Macros responses
 # Meal plan responses
@@ -23,10 +28,12 @@ from .meal_plan_responses import (
     ConversationHistoryResponse,
     PlannedMealSchema,
     DayPlanSchema,
-    MealPlanResponse,
     MealPlanSummaryResponse,
     ReplaceMealResponse,
-    ErrorResponse
+    ErrorResponse,
+    DailyMealPlanResponse,
+    NutritionSummarySchema,
+    UserPreferenceSummarySchema
 )
 # Meal responses
 from .meal_responses import (
@@ -58,11 +65,6 @@ from .tdee_responses import (
     TdeeHistoryResponse,
     TdeeErrorResponse,
     MacroTargetsResponse
-)
-# Daily nutrition responses
-from .daily_nutrition_response import (
-    DailyNutritionResponse,
-    MacrosResponse as DailyMacrosResponse
 )
 
 __all__ = [
@@ -102,10 +104,12 @@ __all__ = [
     'ConversationHistoryResponse',
     'PlannedMealSchema',
     'DayPlanSchema',
-    'MealPlanResponse',
     'MealPlanSummaryResponse',
     'ReplaceMealResponse',
     'ErrorResponse',
+    'DailyMealPlanResponse',
+    'NutritionSummarySchema',
+    'UserPreferenceSummarySchema',
     
     # Onboarding
     'OnboardingFieldResponse',

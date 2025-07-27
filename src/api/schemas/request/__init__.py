@@ -12,8 +12,7 @@ from .daily_meal_requests import (
 from .meal_plan_requests import (
     UserPreferencesSchema,
     ConversationMessageRequest,
-    ReplaceMealRequest,
-    GenerateMealPlanRequest
+    ReplaceMealRequest
 )
 # Meal requests
 from .meal_requests import (
@@ -26,7 +25,6 @@ from .meal_requests import (
 )
 # Onboarding requests
 from .onboarding_requests import (
-    OnboardingResponseRequest,
     OnboardingCompleteRequest
 )
 # TDEE requests
@@ -65,9 +63,7 @@ __all__ = [
     'UserPreferencesSchema',
     'ConversationMessageRequest',
     'ReplaceMealRequest',
-    'GenerateMealPlanRequest',
     
     # Onboarding
-    'OnboardingResponseRequest',
     'OnboardingCompleteRequest'
 ]

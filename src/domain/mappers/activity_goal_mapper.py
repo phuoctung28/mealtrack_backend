@@ -3,6 +3,7 @@ Centralized mapper for activity levels and fitness goals.
 Ensures consistent mapping across the entire application.
 """
 from typing import Dict
+
 from src.domain.model.tdee import ActivityLevel, Goal
 
 

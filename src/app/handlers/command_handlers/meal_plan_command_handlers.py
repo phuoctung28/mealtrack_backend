@@ -5,12 +5,17 @@ import logging
 from typing import Dict, Any
 from uuid import uuid4
 
+from sqlalchemy.orm import Session
+
+from src.api.exceptions import ResourceNotFoundException
+from src.infra.database.models.user.profile import UserProfile
+
 from src.app.commands.meal_plan import (
     StartMealPlanConversationCommand,
     SendConversationMessageCommand,
-    GenerateMealPlanCommand,
     ReplaceMealInPlanCommand
 )
+from src.app.commands.meal_plan.generate_daily_meal_plan_command import GenerateDailyMealPlanCommand
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal_plan import (
     ConversationStartedEvent,
@@ -90,123 +95,13 @@ class SendConversationMessageCommandHandler(EventHandler[SendConversationMessage
             "events": []
         }
         
-        # If conversation is complete, generate meal plan
+        # If conversation is complete, meal plan generation is disabled
         if response["state"] == "complete" and response.get("preferences"):
-            # Generate meal plan
-            handler = GenerateMealPlanCommandHandler()
-            meal_plan = handler._generate_simple_meal_plan(
-                user_id=response["user_id"],
-                preferences=response["preferences"]
-            )
-            
-            result["meal_plan_id"] = meal_plan["id"]
-            result["events"].append(
-                MealPlanGeneratedEvent(
-                    aggregate_id=meal_plan["id"],
-                    plan_id=meal_plan["id"],
-                    user_id=response["user_id"],
-                    days=meal_plan["days"],
-                    total_meals=meal_plan["total_meals"]
-                )
-            )
-            
-            logger.info(f"Generated meal plan {meal_plan['id']} from conversation {command.conversation_id}")
+            # Meal plan generation removed - conversation completes without generating plan
+            logger.info(f"Conversation {command.conversation_id} completed but meal plan generation is disabled")
         
         return result
 
-
-@handles(GenerateMealPlanCommand)
-class GenerateMealPlanCommandHandler(EventHandler[GenerateMealPlanCommand, Dict[str, Any]]):
-    """Handler for generating meal plans directly."""
-    
-    def __init__(self):
-        # Using a simplified implementation for now
-        self.suggestion_service = DailyMealSuggestionService()
-    
-    def set_dependencies(self):
-        """No external dependencies needed."""
-        pass
-    
-    async def handle(self, command: GenerateMealPlanCommand) -> Dict[str, Any]:
-        """Generate a meal plan directly without conversation."""
-        # Generate meal plan using daily meal suggestions
-        meal_plan = self._generate_simple_meal_plan(
-            user_id=command.user_id,
-            preferences=command.preferences
-        )
-        
-        result = {
-            "meal_plan": meal_plan,
-            "events": [
-                MealPlanGeneratedEvent(
-                    aggregate_id=meal_plan["id"],
-                    plan_id=meal_plan["id"],
-                    user_id=command.user_id,
-                    days=meal_plan["days"],
-                    total_meals=meal_plan["total_meals"]
-                )
-            ]
-        }
-        
-        logger.info(f"Generated meal plan {meal_plan['id']} for user {command.user_id}")
-        return result
-    
-    def _generate_simple_meal_plan(self, user_id: str, preferences: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate a simple meal plan."""
-        from datetime import date, timedelta
-        
-        plan_id = str(uuid4())
-        days = preferences.get("days", 7)
-        start_date = date.today()
-        
-        # Generate days
-        meal_days = []
-        for i in range(days):
-            current_date = start_date + timedelta(days=i)
-            
-            # Generate meals for the day
-            user_data = {
-                "age": preferences.get("age", 30),
-                "gender": preferences.get("gender", "male"),
-                "height": preferences.get("height", 175),
-                "weight": preferences.get("weight", 70),
-                "activity_level": preferences.get("activity_level", "moderate"),
-                "goal": preferences.get("fitness_goal", "maintenance"),
-                "dietary_preferences": preferences.get("dietary_preferences", []),
-                "health_conditions": preferences.get("health_conditions", [])
-            }
-            
-            daily_meals = self.suggestion_service.generate_daily_suggestions(user_data)
-            
-            meal_days.append({
-                "date": current_date.isoformat(),
-                "meals": [
-                    {
-                        "meal_id": meal.id,
-                        "meal_type": meal.meal_type.value,
-                        "name": meal.name,
-                        "description": meal.description,
-                        "calories": int(meal.calories),
-                        "protein": meal.protein,
-                        "carbs": meal.carbs,
-                        "fat": meal.fat,
-                        "prep_time": meal.preparation_time.get("prep", 0) if meal.preparation_time else 0,
-                        "ingredients": meal.ingredients
-                    }
-                    for meal in daily_meals
-                ]
-            })
-        
-        return {
-            "id": plan_id,
-            "user_id": user_id,
-            "start_date": start_date.isoformat(),
-            "end_date": (start_date + timedelta(days=days-1)).isoformat(),
-            "days": days,
-            "total_meals": sum(len(day["meals"]) for day in meal_days),
-            "preferences": preferences,
-            "days": meal_days
-        }
 
 
 @handles(ReplaceMealInPlanCommand)
@@ -272,3 +167,115 @@ class ReplaceMealInPlanCommandHandler(EventHandler[ReplaceMealInPlanCommand, Dic
                         return result
         
         raise ValueError(f"Meal {command.meal_id} not found in plan {command.plan_id} for date {command.date}")
+
+
+@handles(GenerateDailyMealPlanCommand)
+class GenerateDailyMealPlanCommandHandler(EventHandler[GenerateDailyMealPlanCommand, Dict[str, Any]]):
+    """Handler for generating daily meal plans based on user profile."""
+    
+    def __init__(self, db: Session = None):
+        self.db = db
+        self.suggestion_service = DailyMealSuggestionService()
+    
+    def set_dependencies(self, db: Session):
+        """Set dependencies for dependency injection."""
+        self.db = db
+    
+    async def handle(self, command: GenerateDailyMealPlanCommand) -> Dict[str, Any]:
+        """Generate a daily meal plan based on user profile."""
+        if not self.db:
+            raise RuntimeError("Database session not configured")
+        
+        # Get user profile
+        profile = self.db.query(UserProfile).filter(
+            UserProfile.user_id == command.user_id,
+            UserProfile.is_current == True
+        ).first()
+        
+        if not profile:
+            raise ResourceNotFoundException(
+                message="User profile not found",
+                details={"user_id": command.user_id}
+            )
+        
+        # Import the command handler to calculate TDEE
+        from src.app.handlers.command_handlers.user_command_handlers import SaveUserOnboardingCommandHandler
+        onboarding_handler = SaveUserOnboardingCommandHandler(self.db)
+        tdee_result = onboarding_handler._calculate_tdee_and_macros(profile)
+        
+        # Prepare user data for meal generation
+        user_data = {
+            'age': profile.age,
+            'gender': profile.gender,
+            'height': profile.height_cm,
+            'weight': profile.weight_kg,
+            'activity_level': profile.activity_level or 'moderate',
+            'goal': profile.fitness_goal or 'maintenance',
+            'dietary_preferences': profile.dietary_preferences or [],
+            'health_conditions': profile.health_conditions or [],
+            'allergies': profile.allergies or [],
+            'target_calories': tdee_result['target_calories'],
+            'target_macros': tdee_result['macros']
+        }
+        
+        # Generate daily meal suggestions
+        suggested_meals = self.suggestion_service.generate_daily_suggestions(user_data)
+        
+        # Calculate totals
+        total_calories = sum(meal.calories for meal in suggested_meals)
+        total_protein = sum(meal.protein for meal in suggested_meals)
+        total_carbs = sum(meal.carbs for meal in suggested_meals)
+        total_fat = sum(meal.fat for meal in suggested_meals)
+        
+        # Format meals for response
+        formatted_meals = []
+        for meal in suggested_meals:
+            formatted_meals.append({
+                "meal_id": meal.meal_id,
+                "meal_type": meal.meal_type.value,
+                "name": meal.name,
+                "description": meal.description,
+                "calories": int(meal.calories),
+                "protein": meal.protein,
+                "carbs": meal.carbs,
+                "fat": meal.fat,
+                "prep_time": meal.prep_time,
+                "cook_time": meal.cook_time,
+                "total_time": meal.prep_time + meal.cook_time,
+                "ingredients": meal.ingredients,
+                "instructions": meal.instructions if hasattr(meal, 'instructions') else [],
+                "is_vegetarian": meal.is_vegetarian if hasattr(meal, 'is_vegetarian') else False,
+                "is_vegan": meal.is_vegan if hasattr(meal, 'is_vegan') else False,
+                "is_gluten_free": meal.is_gluten_free if hasattr(meal, 'is_gluten_free') else False,
+                "cuisine_type": meal.cuisine_type if hasattr(meal, 'cuisine_type') else "International"
+            })
+        
+        result = {
+            "user_id": command.user_id,
+            "date": "today",
+            "meals": formatted_meals,
+            "total_nutrition": {
+                "calories": int(total_calories),
+                "protein": round(total_protein, 1),
+                "carbs": round(total_carbs, 1),
+                "fat": round(total_fat, 1)
+            },
+            "target_nutrition": {
+                "calories": tdee_result['target_calories'],
+                "protein": tdee_result['macros']['protein'],
+                "carbs": tdee_result['macros']['carbs'],
+                "fat": tdee_result['macros']['fat']
+            },
+            "user_preferences": {
+                "dietary_preferences": profile.dietary_preferences or [],
+                "health_conditions": profile.health_conditions or [],
+                "allergies": profile.allergies or [],
+                "activity_level": profile.activity_level,
+                "fitness_goal": profile.fitness_goal,
+                "meals_per_day": profile.meals_per_day,
+                "snacks_per_day": profile.snacks_per_day
+            }
+        }
+        
+        logger.info(f"Generated daily meal plan for user {command.user_id} with {len(formatted_meals)} meals")
+        return result

@@ -1,8 +1,8 @@
 """
 Mock Image Store for testing.
 """
-from typing import Dict, Optional
 import uuid
+from typing import Dict, Optional
 
 from src.domain.ports.image_store_port import ImageStorePort
 

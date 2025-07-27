@@ -2,9 +2,9 @@
 Test database configuration using MySQL.
 """
 import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from src.infra.database.config import Base
 
@@ -51,8 +51,7 @@ def create_test_engine():
 def create_test_tables(engine):
     """Create all tables in test database."""
     # Import to ensure all models are loaded
-    import src.infra.database.models
-    
+
     # For MySQL, we can use checkfirst=True to avoid errors
     Base.metadata.create_all(bind=engine, checkfirst=True)
 
@@ -62,8 +61,7 @@ def drop_test_tables(engine):
     from sqlalchemy import MetaData
     
     # Import to ensure all models are loaded
-    import src.infra.database.models
-    
+
     # Use reflection to find and drop ALL tables in the database
     meta = MetaData()
     meta.reflect(bind=engine)
