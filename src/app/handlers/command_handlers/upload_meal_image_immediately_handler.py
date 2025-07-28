@@ -2,7 +2,7 @@
 Handler for immediate meal image upload and analysis.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, time
 from uuid import uuid4
 
 from src.app.commands.meal import UploadMealImageImmediatelyCommand
@@ -65,7 +65,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             
             # Determine the meal date - use target_date if provided, otherwise use now
             meal_date = command.target_date if command.target_date else datetime.now().date()
-            meal_datetime = datetime.combine(meal_date, datetime.time(12, 0))
+            meal_datetime = datetime.combine(meal_date, time(12, 0))
             
             logger.info(f"Creating meal record for date: {meal_date}")
             
