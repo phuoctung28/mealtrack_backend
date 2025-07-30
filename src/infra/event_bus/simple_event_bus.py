@@ -35,6 +35,12 @@ class SimpleEventBus(EventBus):
             logger.debug(f"Sending event {event_type.__name__} to handler {handler.__class__.__name__}")
             result = await handler.handle(event)
             logger.debug(f"Event {event_type.__name__} handled successfully")
+            if isinstance(result, dict) and 'events' in result:
+                events = result.get('events', [])
+                logger.info(f"Publishing {len(events)} domain events from command result")
+                for domain_event in events:
+                    if isinstance(domain_event, DomainEvent):
+                        await self.publish(domain_event)
             return result
         except Exception as e:
             logger.error(f"Error handling event {event_type.__name__}: {str(e)}")
