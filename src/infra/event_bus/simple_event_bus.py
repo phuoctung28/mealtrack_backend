@@ -71,7 +71,7 @@ class SimpleEventBus(EventBus):
             logger.warning(f"Overriding existing handler for event type: {event_type.__name__}")
         
         self._handlers[event_type] = handler
-        logger.info(f"Registered handler {handler.__class__.__name__} for event type {event_type.__name__}")
+        logger.debug(f"Registered handler {handler.__class__.__name__} for event type {event_type.__name__}")
     
     def subscribe(self, event_type: Type[DomainEvent], handler: Callable[[DomainEvent], Awaitable[None]]) -> None:
         """Subscribe to domain events."""
@@ -79,7 +79,7 @@ class SimpleEventBus(EventBus):
             self._subscribers[event_type] = []
         
         self._subscribers[event_type].append(handler)
-        logger.info(f"Subscribed handler to domain event type {event_type.__name__}")
+        logger.debug(f"Subscribed handler to domain event type {event_type.__name__}")
     
     def get_handler_count(self) -> int:
         """Get the number of registered handlers (for debugging)."""
