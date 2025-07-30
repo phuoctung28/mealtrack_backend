@@ -95,14 +95,10 @@ class CloudinaryImageStore(ImageStorePort):
                 format=file_extension,  # Explicitly set the format
                 overwrite=True
             )
-            response_url = response.get('secure_url')
+            logger.info(f"Upload successful. Cloudinary URL: {response.get('secure_url')}")
             
-            if (response_url):
-                logger.info(f"Upload successful. Cloudinary URL: {response_url}")
-                return response_url
-            else:
-                logger.info(f"'secure_url' not found in Cloudinary response. Returning fallback image_id: {image_id}")
-                return image_id
+            # Return the image ID
+            return image_id
 
         except Exception as e:
             logger.error(f"Error uploading to Cloudinary: {str(e)}")
