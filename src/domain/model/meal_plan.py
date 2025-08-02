@@ -1,5 +1,5 @@
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, date
 from enum import Enum
 from typing import List, Optional, Dict
@@ -133,8 +133,8 @@ class PlannedMeal:
 class DayPlan:
     """Represents meals for a single day"""
     date: date
-    meals: List[PlannedMeal]
-    
+    meals: List[PlannedMeal] = field(default_factory=list)
+
     def get_meals_by_type(self, meal_type: MealType) -> List[PlannedMeal]:
         return [meal for meal in self.meals if meal.meal_type == meal_type]
     
@@ -154,15 +154,8 @@ class DayPlan:
         }
 
 
-@dataclass
 class MealPlan:
     """Represents a complete meal plan (daily or weekly)"""
-    plan_id: str
-    user_id: str
-    preferences: UserPreferences
-    days: List[DayPlan]
-    created_at: datetime
-    updated_at: datetime
     
     def __init__(self, user_id: str, preferences: UserPreferences, days: List[DayPlan]):
         self.plan_id = str(uuid.uuid4())

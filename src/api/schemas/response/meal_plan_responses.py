@@ -8,7 +8,6 @@ from ..common.meal_plan_enums import (
     MealTypeSchema,
     PlanDurationSchema
 )
-from ..request.meal_plan_requests import UserPreferencesSchema
 
 
 class MessageSchema(BaseModel):
@@ -162,5 +161,45 @@ class DailyMealPlanResponse(BaseModel):
                     "meals_per_day": 3,
                     "snacks_per_day": 1
                 }
+            }
+        }
+
+
+class MealsByDateResponse(BaseModel):
+    """Response for getting meals by specific date."""
+    date: str = Field(..., description="Date in ISO format (YYYY-MM-DD)")
+    day_formatted: str = Field(..., description="Human-readable date format (e.g., 'Monday, January 15, 2024')")
+    meals: List[PlannedMealSchema] = Field(..., description="List of meals for this date")
+    total_meals: int = Field(..., description="Total number of meals for this date")
+    user_id: str = Field(..., description="User ID")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2024-01-15",
+                "day_formatted": "Monday, January 15, 2024",
+                "meals": [
+                    {
+                        "meal_id": "meal_001",
+                        "meal_type": "breakfast",
+                        "name": "Greek Yogurt Parfait",
+                        "description": "Healthy breakfast with berries and granola",
+                        "prep_time": 5,
+                        "cook_time": 0,
+                        "total_time": 5,
+                        "calories": 350,
+                        "protein": 20.5,
+                        "carbs": 35.2,
+                        "fat": 12.8,
+                        "ingredients": ["Greek yogurt", "Mixed berries", "Granola", "Honey"],
+                        "instructions": ["Layer yogurt in bowl", "Add berries", "Top with granola"],
+                        "is_vegetarian": True,
+                        "is_vegan": False,
+                        "is_gluten_free": True,
+                        "cuisine_type": "Mediterranean"
+                    }
+                ],
+                "total_meals": 1,
+                "user_id": "user123"
             }
         }
