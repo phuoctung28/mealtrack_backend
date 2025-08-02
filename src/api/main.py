@@ -9,7 +9,6 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect
 
 from src.api.routes.v1.activities import router as activities_router
-from src.api.routes.v1.daily_meals import router as daily_meals_router
 from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router

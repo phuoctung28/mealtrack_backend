@@ -2,7 +2,7 @@
 Command for generating meal plans based on available ingredients and seasonings.
 """
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import List
 
 from src.app.events.base import Command
 

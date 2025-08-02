@@ -3,17 +3,19 @@ Command handler for ingredient-based meal plan generation.
 """
 import logging
 from datetime import date
+from datetime import datetime
 from typing import Dict, Any
+
 from sqlalchemy.orm import Session
 
 from src.app.commands.meal_plan import GenerateIngredientBasedMealPlanCommand
 from src.app.events.base import EventHandler, handles
 from src.app.handlers.command_handlers.user_command_handlers import SaveUserOnboardingCommandHandler
+from src.domain.model.meal_plan import MealPlan, UserPreferences, DayPlan, DietaryPreference, FitnessGoal, PlanDuration, \
+    PlannedMeal
 from src.domain.services.ingredient_based_meal_plan_service import IngredientBasedMealPlanService
 from src.infra.database.models.user import UserProfile
 from src.infra.repositories.meal_plan_repository import MealPlanRepository
-from src.domain.model.meal_plan import MealPlan, UserPreferences, DayPlan, DietaryPreference, FitnessGoal, PlanDuration, PlannedMeal
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 

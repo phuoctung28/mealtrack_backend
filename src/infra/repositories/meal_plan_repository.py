@@ -2,15 +2,16 @@
 Meal Plan Repository for persisting meal plans.
 """
 
-from typing import Optional, List
+from typing import Optional
+
 from sqlalchemy.orm import Session
 
-from src.domain.model.meal_plan import MealPlan, DayPlan, PlannedMeal
+from src.domain.model.meal_plan import MealPlan
 from src.infra.database.config import SessionLocal
+from src.infra.database.models.enums import FitnessGoalEnum, PlanDurationEnum, MealTypeEnum
 from src.infra.database.models.meal_planning.meal_plan import MealPlan as DBMealPlan
 from src.infra.database.models.meal_planning.meal_plan_day import MealPlanDay as DBMealPlanDay
 from src.infra.database.models.meal_planning.planned_meal import PlannedMeal as DBPlannedMeal
-from src.infra.database.models.enums import FitnessGoalEnum, PlanDurationEnum, MealTypeEnum
 
 
 class MealPlanRepository:

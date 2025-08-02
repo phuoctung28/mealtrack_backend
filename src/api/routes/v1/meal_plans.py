@@ -1,7 +1,8 @@
 """
 Meal planning API endpoints - Event-driven architecture.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from datetime import date
 
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
@@ -16,7 +17,8 @@ from src.api.schemas.response import (
     ConversationHistoryResponse,
     ReplaceMealResponse,
     DailyMealPlanResponse,
-    WeeklyMealPlanResponse
+    WeeklyMealPlanResponse,
+    MealsByDateResponse
 )
 from src.app.commands.meal_plan import (
     StartMealPlanConversationCommand,
@@ -28,7 +30,8 @@ from src.app.commands.meal_plan import (
 )
 from src.app.queries.meal_plan import (
     GetConversationHistoryQuery,
-    GetMealPlanQuery
+    GetMealPlanQuery,
+    GetMealsByDateQuery
 )
 from src.infra.event_bus import EventBus
 
@@ -245,6 +248,40 @@ async def replace_meal(
         raise handle_exception(e)
 
 
+# Query meals by date
+@router.get("/meals/by-date", response_model=MealsByDateResponse)
+async def get_meals_by_date(
+    user_id: str,
+    meal_date: date = Query(..., description="Date to get meals for (YYYY-MM-DD format)"),
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Get meals for a specific date.
+    
+    Retrieves all meals planned for the specified date. Can optionally filter by meal type.
+    This endpoint searches through all stored meal plans (both daily and weekly) to find
+    meals that match the requested date.
+    
+    Parameters:
+    - user_id: The user to get meals for
+    - meal_date: The specific date to retrieve meals for (YYYY-MM-DD format)
+    - meal_type: Optional filter to only return specific meal type (breakfast, lunch, dinner, snack)
+    """
+    try:
+        # Create query
+        query = GetMealsByDateQuery(
+            user_id=user_id,
+            meal_date=meal_date,
+        )
+        
+        # Send query
+        result = await event_bus.send(query)
+        
+        return MealsByDateResponse(**result)
+    except Exception as e:
+        raise handle_exception(e)
+
+
 # Health check for meal planning
 @router.get("/health")
 async def meal_plan_health():
@@ -255,6 +292,7 @@ async def meal_plan_health():
         "features": [
             "conversational_planning",
             "direct_generation",
-            "meal_replacement"
+            "meal_replacement",
+            "date_query"
         ]
     }

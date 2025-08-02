@@ -33,14 +33,8 @@ from .meal_plan_responses import (
     ErrorResponse,
     DailyMealPlanResponse,
     NutritionSummarySchema,
-    UserPreferenceSummarySchema
-)
-# Weekly meal plan responses
-from .weekly_meal_plan_responses import (
-    WeeklyMealPlanResponse,
-    WeeklyMealResponse,
-    NutritionInfo,
-    UserPreferencesResponse
+    UserPreferenceSummarySchema,
+    MealsByDateResponse
 )
 # Meal responses
 from .meal_responses import (
@@ -72,6 +66,13 @@ from .tdee_responses import (
     TdeeHistoryResponse,
     TdeeErrorResponse,
     MacroTargetsResponse
+)
+# Weekly meal plan responses
+from .weekly_meal_plan_responses import (
+    WeeklyMealPlanResponse,
+    WeeklyMealResponse,
+    NutritionInfo,
+    UserPreferencesResponse
 )
 
 __all__ = [
@@ -117,6 +118,7 @@ __all__ = [
     'DailyMealPlanResponse',
     'NutritionSummarySchema',
     'UserPreferenceSummarySchema',
+    'MealsByDateResponse',
     
     # Weekly meal plan
     'WeeklyMealPlanResponse',

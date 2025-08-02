@@ -2,6 +2,7 @@
 Response schemas for weekly meal plan generation.
 """
 from typing import Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 

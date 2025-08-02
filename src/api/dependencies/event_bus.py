@@ -29,7 +29,6 @@ from src.app.commands.meal_plan import (
     GenerateWeeklyIngredientBasedMealPlanCommand,
     ReplaceMealInPlanCommand
 )
-
 from src.app.commands.user import (
     SaveUserOnboardingCommand
 )
@@ -37,6 +36,9 @@ from src.app.events.meal import MealImageUploadedEvent
 from src.app.handlers.command_handlers.daily_meal_command_handlers import (
     GenerateDailyMealSuggestionsCommandHandler,
     GenerateSingleMealCommandHandler
+)
+from src.app.handlers.command_handlers.ingredient_based_meal_plan_command_handler import (
+    GenerateIngredientBasedMealPlanCommandHandler
 )
 # Import all handlers
 from src.app.handlers.command_handlers.meal_command_handlers import (
@@ -49,18 +51,14 @@ from src.app.handlers.command_handlers.meal_plan_command_handlers import (
     GenerateDailyMealPlanCommandHandler,
     ReplaceMealInPlanCommandHandler
 )
-from src.app.handlers.command_handlers.ingredient_based_meal_plan_command_handler import (
-    GenerateIngredientBasedMealPlanCommandHandler
-)
-from src.app.handlers.command_handlers.weekly_ingredient_based_meal_plan_command_handler import (
-    GenerateWeeklyIngredientBasedMealPlanCommandHandler
-)
-
 from src.app.handlers.command_handlers.upload_meal_image_immediately_handler import (
     UploadMealImageImmediatelyHandler
 )
 from src.app.handlers.command_handlers.user_command_handlers import (
     SaveUserOnboardingCommandHandler
+)
+from src.app.handlers.command_handlers.weekly_ingredient_based_meal_plan_command_handler import (
+    GenerateWeeklyIngredientBasedMealPlanCommandHandler
 )
 from src.app.handlers.event_handlers.meal_analysis_event_handler import MealAnalysisEventHandler
 from src.app.handlers.query_handlers.activity_query_handlers import GetDailyActivitiesQueryHandler
@@ -71,7 +69,8 @@ from src.app.handlers.query_handlers.daily_meal_query_handlers import (
 )
 from src.app.handlers.query_handlers.meal_plan_query_handlers import (
     GetConversationHistoryQueryHandler,
-    GetMealPlanQueryHandler
+    GetMealPlanQueryHandler,
+    GetMealsByDateQueryHandler as MealPlanGetMealsByDateQueryHandler
 )
 from src.app.handlers.query_handlers.meal_query_handlers import (
     GetMealByIdQueryHandler,
@@ -98,7 +97,8 @@ from src.app.queries.meal import (
 )
 from src.app.queries.meal_plan import (
     GetConversationHistoryQuery,
-    GetMealPlanQuery
+    GetMealPlanQuery,
+    GetMealsByDateQuery as MealPlanGetMealsByDateQuery
 )
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import (
@@ -232,6 +232,11 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         GetMealPlanQuery,
         GetMealPlanQueryHandler()
+    )
+    
+    event_bus.register_handler(
+        MealPlanGetMealsByDateQuery,
+        MealPlanGetMealsByDateQueryHandler(db)
     )
     
     # Register user handlers

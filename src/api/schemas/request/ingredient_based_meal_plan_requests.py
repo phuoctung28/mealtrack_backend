@@ -2,6 +2,7 @@
 Request schemas for ingredient-based meal plan generation.
 """
 from typing import List
+
 from pydantic import BaseModel, Field
 
 
