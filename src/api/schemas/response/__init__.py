@@ -35,6 +35,13 @@ from .meal_plan_responses import (
     NutritionSummarySchema,
     UserPreferenceSummarySchema
 )
+# Weekly meal plan responses
+from .weekly_meal_plan_responses import (
+    WeeklyMealPlanResponse,
+    WeeklyMealResponse,
+    NutritionInfo,
+    UserPreferencesResponse
+)
 # Meal responses
 from .meal_responses import (
     SimpleMealResponse,
@@ -110,6 +117,12 @@ __all__ = [
     'DailyMealPlanResponse',
     'NutritionSummarySchema',
     'UserPreferenceSummarySchema',
+    
+    # Weekly meal plan
+    'WeeklyMealPlanResponse',
+    'WeeklyMealResponse',
+    'NutritionInfo',
+    'UserPreferencesResponse',
     
     # Onboarding
     'OnboardingFieldResponse',

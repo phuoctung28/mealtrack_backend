@@ -25,6 +25,9 @@ from src.app.events.meal_plan import (
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
 from src.domain.services.meal_plan_conversation_service import MealPlanConversationService
 from src.domain.services.meal_plan_service import MealPlanService
+from src.infra.repositories.meal_plan_repository import MealPlanRepository
+from src.domain.model.meal_plan import MealPlan, UserPreferences, DayPlan, DietaryPreference, FitnessGoal, PlanDuration, PlannedMeal
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +179,7 @@ class GenerateDailyMealPlanCommandHandler(EventHandler[GenerateDailyMealPlanComm
     def __init__(self, db: Session = None):
         self.db = db
         self.suggestion_service = DailyMealSuggestionService()
+        self.meal_plan_repository = MealPlanRepository(db)
     
     def set_dependencies(self, db: Session):
         """Set dependencies for dependency injection."""
@@ -278,4 +282,51 @@ class GenerateDailyMealPlanCommandHandler(EventHandler[GenerateDailyMealPlanComm
         }
         
         logger.info(f"Generated daily meal plan for user {command.user_id} with {len(formatted_meals)} meals")
+        
+        # Save to database
+        try:
+            # Create UserPreferences from profile
+            preferences = UserPreferences(
+                dietary_preferences=[DietaryPreference(pref) for pref in (profile.dietary_preferences or [])],
+                allergies=profile.allergies or [],
+                fitness_goal=FitnessGoal(profile.fitness_goal or 'maintenance'),
+                meals_per_day=profile.meals_per_day or 3,
+                snacks_per_day=profile.snacks_per_day or 0,
+                cooking_time_weekday=30,  # Default
+                cooking_time_weekend=45,  # Default
+                favorite_cuisines=[],  # Default
+                disliked_ingredients=[],  # Default
+                plan_duration=PlanDuration.DAILY
+            )
+            
+            # Create PlannedMeal objects
+            planned_meals = []
+            for meal_data in formatted_meals:
+                planned_meal = PlannedMeal(**meal_data)
+                planned_meals.append(planned_meal)
+            
+            # Create DayPlan
+            day_plan = DayPlan(
+                date=datetime.now().date(),
+                meals=planned_meals
+            )
+            
+            # Create MealPlan
+            meal_plan = MealPlan(
+                user_id=command.user_id,
+                preferences=preferences,
+                days=[day_plan]
+            )
+            
+            # Save
+            self.meal_plan_repository.save(meal_plan)
+            
+            # Add plan_id to result
+            result['plan_id'] = meal_plan.plan_id
+            
+            logger.info(f"Saved meal plan {meal_plan.plan_id} to database")
+        except Exception as e:
+            logger.error(f"Failed to save meal plan to database: {e}")
+            # Continue without saving - don't fail the request
+        
         return result

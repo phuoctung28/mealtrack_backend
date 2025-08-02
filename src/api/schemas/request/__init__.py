@@ -14,6 +14,10 @@ from .meal_plan_requests import (
     ConversationMessageRequest,
     ReplaceMealRequest
 )
+# Ingredient-based meal plan requests
+from .ingredient_based_meal_plan_requests import (
+    IngredientBasedMealPlanRequest
+)
 # Meal requests
 from .meal_requests import (
     CreateMealRequest,
@@ -63,6 +67,9 @@ __all__ = [
     'UserPreferencesSchema',
     'ConversationMessageRequest',
     'ReplaceMealRequest',
+    
+    # Ingredient-based meal plan
+    'IngredientBasedMealPlanRequest',
     
     # Onboarding
     'OnboardingCompleteRequest'

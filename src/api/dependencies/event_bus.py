@@ -25,6 +25,8 @@ from src.app.commands.meal_plan import (
     StartMealPlanConversationCommand,
     SendConversationMessageCommand,
     GenerateDailyMealPlanCommand,
+    GenerateIngredientBasedMealPlanCommand,
+    GenerateWeeklyIngredientBasedMealPlanCommand,
     ReplaceMealInPlanCommand
 )
 
@@ -46,6 +48,12 @@ from src.app.handlers.command_handlers.meal_plan_command_handlers import (
     SendConversationMessageCommandHandler,
     GenerateDailyMealPlanCommandHandler,
     ReplaceMealInPlanCommandHandler
+)
+from src.app.handlers.command_handlers.ingredient_based_meal_plan_command_handler import (
+    GenerateIngredientBasedMealPlanCommandHandler
+)
+from src.app.handlers.command_handlers.weekly_ingredient_based_meal_plan_command_handler import (
+    GenerateWeeklyIngredientBasedMealPlanCommandHandler
 )
 
 from src.app.handlers.command_handlers.upload_meal_image_immediately_handler import (
@@ -199,6 +207,16 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         GenerateDailyMealPlanCommand,
         GenerateDailyMealPlanCommandHandler(db)
+    )
+    
+    event_bus.register_handler(
+        GenerateIngredientBasedMealPlanCommand,
+        GenerateIngredientBasedMealPlanCommandHandler(db)
+    )
+    
+    event_bus.register_handler(
+        GenerateWeeklyIngredientBasedMealPlanCommand,
+        GenerateWeeklyIngredientBasedMealPlanCommandHandler(db)
     )
     
     event_bus.register_handler(

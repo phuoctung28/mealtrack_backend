@@ -7,19 +7,23 @@ from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.schemas.request import (
     ConversationMessageRequest,
-    ReplaceMealRequest
+    ReplaceMealRequest,
+    IngredientBasedMealPlanRequest
 )
 from src.api.schemas.response import (
     ConversationMessageResponse,
     StartConversationResponse,
     ConversationHistoryResponse,
     ReplaceMealResponse,
-    DailyMealPlanResponse
+    DailyMealPlanResponse,
+    WeeklyMealPlanResponse
 )
 from src.app.commands.meal_plan import (
     StartMealPlanConversationCommand,
     SendConversationMessageCommand,
     GenerateDailyMealPlanCommand,
+    GenerateIngredientBasedMealPlanCommand,
+    GenerateWeeklyIngredientBasedMealPlanCommand,
     ReplaceMealInPlanCommand
 )
 from src.app.queries.meal_plan import (
@@ -128,6 +132,67 @@ async def generate_daily_meal_plan(
         result = await event_bus.send(command)
         
         return DailyMealPlanResponse(**result)
+    except Exception as e:
+        raise handle_exception(e)
+
+
+@router.post("/generate/ingredient-based", response_model=DailyMealPlanResponse)
+async def generate_ingredient_based_meal_plan(
+    request: IngredientBasedMealPlanRequest,
+    user_id: str = "default_user",
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Generate a daily meal plan based on available ingredients and seasonings.
+    
+    This endpoint creates comprehensive meal plans using only the ingredients you have available,
+    helping to minimize food waste and maximize ingredient utilization across the entire day.
+    """
+    try:
+        available_ingredients = request.available_ingredients
+        
+        command = GenerateIngredientBasedMealPlanCommand(
+            user_id=user_id,
+            available_ingredients=available_ingredients,
+            available_seasonings=request.available_seasonings
+        )
+        
+        result = await event_bus.send(command)
+        
+        return DailyMealPlanResponse(**result)
+        
+    except Exception as e:
+        raise handle_exception(e)
+
+
+@router.post("/generate/weekly-ingredient-based", response_model=WeeklyMealPlanResponse)
+async def generate_weekly_ingredient_based_meal_plan(
+    request: IngredientBasedMealPlanRequest,
+    user_id: str = "default_user",
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Generate a weekly meal plan (Monday to Sunday) based on available ingredients and seasonings.
+    
+    This endpoint creates comprehensive weekly meal plans using only the ingredients you have available,
+    helping to minimize food waste and maximize ingredient utilization across the entire week.
+    
+    The system generates all meals for the week in a single LLM call, ensuring better meal coordination
+    and variety across the week.
+    """
+    try:
+        available_ingredients = request.available_ingredients
+        
+        command = GenerateWeeklyIngredientBasedMealPlanCommand(
+            user_id=user_id,
+            available_ingredients=available_ingredients,
+            available_seasonings=request.available_seasonings
+        )
+        
+        result = await event_bus.send(command)
+        
+        return WeeklyMealPlanResponse(**result)
+        
     except Exception as e:
         raise handle_exception(e)
 

@@ -99,7 +99,7 @@ async def root():
 app.include_router(meals_router)
 app.include_router(activities_router)
 app.include_router(meal_plans_router)
-app.include_router(daily_meals_router)
+# app.include_router(daily_meals_router)
 app.include_router(user_profiles_router)
 
 # Serve static files from uploads directory (development)
