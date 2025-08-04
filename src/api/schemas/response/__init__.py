@@ -66,6 +66,13 @@ from .tdee_responses import (
     TdeeErrorResponse,
     MacroTargetsResponse
 )
+# User responses
+from .user_responses import (
+    UserProfileResponse,
+    UserSyncResponse,
+    UserStatusResponse,
+    UserUpdateResponse
+)
 
 __all__ = [
     # Daily meal
@@ -121,6 +128,12 @@ __all__ = [
     # Daily nutrition
     'DailyNutritionResponse',
     'DailyMacrosResponse',
+    
+    # User
+    'UserProfileResponse',
+    'UserSyncResponse',
+    'UserStatusResponse',
+    'UserUpdateResponse',
     
     # Enums
     'MealTypeEnum'

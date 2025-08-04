@@ -12,7 +12,12 @@ from src.app.handlers.command_handlers.user_command_handlers import SaveUserOnbo
 from src.app.queries.user import (
     GetUserProfileQuery
 )
+from src.app.queries.user.get_user_by_firebase_uid_query import (
+    GetUserByFirebaseUidQuery,
+    GetUserOnboardingStatusQuery
+)
 from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -66,4 +71,79 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
                 "updated_at": profile.updated_at.isoformat() if profile.updated_at else None
             },
             "tdee": tdee_result
+        }
+
+
+@handles(GetUserByFirebaseUidQuery)
+class GetUserByFirebaseUidQueryHandler(EventHandler[GetUserByFirebaseUidQuery, Dict[str, Any]]):
+    """Handler for getting user by Firebase UID."""
+    
+    def __init__(self, db: Session = None):
+        self.db = db
+    
+    def set_dependencies(self, db: Session):
+        """Set dependencies for dependency injection."""
+        self.db = db
+    
+    async def handle(self, query: GetUserByFirebaseUidQuery) -> Dict[str, Any]:
+        """Get user by Firebase UID."""
+        if not self.db:
+            raise RuntimeError("Database session not configured")
+        
+        # Get user by firebase_uid
+        user = self.db.query(User).filter(
+            User.firebase_uid == query.firebase_uid
+        ).first()
+        
+        if not user:
+            raise ResourceNotFoundException(f"User with Firebase UID {query.firebase_uid} not found")
+        
+        return {
+            "id": user.id,
+            "firebase_uid": user.firebase_uid,
+            "email": user.email,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "phone_number": user.phone_number,
+            "display_name": user.display_name,
+            "photo_url": user.photo_url,
+            "provider": user.provider,
+            "is_active": user.is_active,
+            "onboarding_completed": user.onboarding_completed,
+            "last_accessed": user.last_accessed,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at
+        }
+
+
+@handles(GetUserOnboardingStatusQuery)
+class GetUserOnboardingStatusQueryHandler(EventHandler[GetUserOnboardingStatusQuery, Dict[str, Any]]):
+    """Handler for getting user's onboarding status by Firebase UID."""
+    
+    def __init__(self, db: Session = None):
+        self.db = db
+    
+    def set_dependencies(self, db: Session):
+        """Set dependencies for dependency injection."""
+        self.db = db
+    
+    async def handle(self, query: GetUserOnboardingStatusQuery) -> Dict[str, Any]:
+        """Get user's onboarding status by Firebase UID."""
+        if not self.db:
+            raise RuntimeError("Database session not configured")
+        
+        # Get user by firebase_uid
+        user = self.db.query(User).filter(
+            User.firebase_uid == query.firebase_uid
+        ).first()
+        
+        if not user:
+            raise ResourceNotFoundException(f"User with Firebase UID {query.firebase_uid} not found")
+        
+        return {
+            "firebase_uid": user.firebase_uid,
+            "onboarding_completed": user.onboarding_completed,
+            "is_active": user.is_active,
+            "last_accessed": user.last_accessed
         }
