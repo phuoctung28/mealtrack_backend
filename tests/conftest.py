@@ -255,6 +255,7 @@ def sample_user(test_session) -> User:
     """Create a sample user for testing."""
     user = User(
         id="test-user-123",
+        firebase_uid="test-firebase-uid-123",
         email="test@example.com",
         username="testuser",
         password_hash="dummy_hash_for_test",

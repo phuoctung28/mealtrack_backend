@@ -28,6 +28,7 @@ class TestCompleteUserFlow:
         from src.infra.database.models.user.user import User
         user = User(
             id="flow-test-user",
+            firebase_uid="flow-test-firebase-uid",
             email="flowtest@example.com",
             username="flowtest",
             password_hash="dummy_hash",

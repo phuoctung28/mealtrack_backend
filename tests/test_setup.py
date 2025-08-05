@@ -19,6 +19,7 @@ def test_database_rollback(test_session):
     # Create a user
     user = User(
         id="test-rollback",
+        firebase_uid="test-rollback-firebase-uid",
         email="rollback@test.com",
         username="rollbacktest",
         password_hash="dummy_hash_for_test",
