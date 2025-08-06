@@ -58,7 +58,7 @@ async def save_user_onboarding(
         # Return TDEE calculation response  
         tdee_data = result.get('recommended_macros', {})
         return TdeeCalculationResponse(
-            bmr=result.get('tdee', {}).get('bmr', 0) if isinstance(result.get('tdee'), dict) else 0,
+            bmr=result.get('bmr', 0) if isinstance(result.get('bmr'), (int, float)) else 0,
             tdee=result.get('tdee', 0) if isinstance(result.get('tdee'), (int, float)) else result.get('tdee', {}).get('tdee', 0),
             macros=tdee_data,
             goal=GoalEnum(request.goal),

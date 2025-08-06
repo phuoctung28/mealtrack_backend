@@ -20,6 +20,7 @@ class TestSaveUserOnboardingCommandHandler:
         from src.infra.database.models.user.user import User
         user = User(
             id="test-user-123",
+            firebase_uid="test-firebase-uid-123",
             email="test@example.com",
             username="testuser",
             password_hash="dummy_hash",
@@ -60,6 +61,7 @@ class TestSaveUserOnboardingCommandHandler:
         from src.infra.database.models.user.user import User
         user = User(
             id="test-user-123",
+            firebase_uid="test-firebase-uid-123",
             email="test@example.com",
             username="testuser",
             password_hash="dummy_hash",
@@ -91,6 +93,7 @@ class TestSaveUserOnboardingCommandHandler:
         from src.infra.database.models.user.user import User
         user = User(
             id="test-user-123",
+            firebase_uid="test-firebase-uid-123",
             email="test@example.com",
             username="testuser",
             password_hash="dummy_hash",
