@@ -29,7 +29,8 @@ from src.app.commands.meal_plan import (
 )
 
 from src.app.commands.user import (
-    SaveUserOnboardingCommand
+    SaveUserOnboardingCommand,
+    CompleteOnboardingCommand
 )
 from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
@@ -58,7 +59,8 @@ from src.app.handlers.command_handlers.upload_meal_image_immediately_handler imp
 from src.app.handlers.command_handlers.user_command_handlers import (
     SaveUserOnboardingCommandHandler,
     SyncUserCommandHandler,
-    UpdateUserLastAccessedCommandHandler
+    UpdateUserLastAccessedCommandHandler,
+    CompleteOnboardingCommandHandler
 )
 from src.app.handlers.event_handlers.meal_analysis_event_handler import MealAnalysisEventHandler
 from src.app.handlers.query_handlers.activity_query_handlers import GetDailyActivitiesQueryHandler
@@ -242,6 +244,11 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         UpdateUserLastAccessedCommand,
         UpdateUserLastAccessedCommandHandler(db)
+    )
+    
+    event_bus.register_handler(
+        CompleteOnboardingCommand,
+        CompleteOnboardingCommandHandler(db)
     )
     
     event_bus.register_handler(

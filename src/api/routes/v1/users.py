@@ -14,8 +14,10 @@ from src.api.schemas.response.user_responses import (
     UserSyncResponse,
     UserProfileResponse,
     UserStatusResponse,
-    UserUpdateResponse
+    UserUpdateResponse,
+    OnboardingCompletionResponse
 )
+from src.app.commands.user import CompleteOnboardingCommand
 from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
     UpdateUserLastAccessedCommand
@@ -159,6 +161,33 @@ async def update_user_last_accessed(
         
         # Return update response
         return UserUpdateResponse(**result)
+        
+    except Exception as e:
+        raise handle_exception(e)
+
+
+@router.put("/firebase/{firebase_uid}/onboarding/complete", response_model=OnboardingCompletionResponse)
+async def complete_onboarding(
+    firebase_uid: str,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Mark user onboarding as completed.
+    
+    Sets the user's onboarding status to completed if it's currently false.
+    This endpoint is called when the user finishes the onboarding flow in the mobile app.
+    
+    - **firebase_uid**: Firebase user unique identifier
+    """
+    try:
+        # Create command
+        command = CompleteOnboardingCommand(firebase_uid=firebase_uid)
+        
+        # Send command
+        result = await event_bus.send(command)
+        
+        # Return completion response
+        return OnboardingCompletionResponse(**result)
         
     except Exception as e:
         raise handle_exception(e)

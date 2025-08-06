@@ -48,3 +48,11 @@ class UserUpdateResponse(BaseModel):
     updated: bool = Field(..., description="Whether update was successful")
     message: str = Field(..., description="Operation result message")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Update timestamp")
+
+
+class OnboardingCompletionResponse(BaseModel):
+    """Response from onboarding completion operation."""
+    firebase_uid: str = Field(..., description="Firebase user unique identifier")
+    onboarding_completed: bool = Field(..., description="Current onboarding completion status")
+    updated: bool = Field(..., description="Whether update was successful")
+    message: str = Field(..., description="Operation result message")
