@@ -101,6 +101,7 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, D
             return {
                 "user_id": command.user_id,
                 "profile_created": True,
+                "bmr": tdee_result["bmr"],
                 "tdee": tdee_result["tdee"],
                 "recommended_calories": tdee_result["target_calories"],
                 "recommended_macros": tdee_result["macros"]
