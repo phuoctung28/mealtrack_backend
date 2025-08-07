@@ -74,7 +74,6 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
         
         # Calculate TDEE
         result = self.tdee_service.calculate_tdee(tdee_request)
-        print(f"result {result}")
         # Determine activity multiplier for response
         activity_multipliers = {
             ActivityLevel.SEDENTARY: 1.2,
@@ -87,7 +86,7 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
         
         # Determine formula used
         formula_used = "Katch-McArdle" if tdee_request.body_fat_pct is not None else "Mifflin-St Jeor"
-        
+
         return {
             "user_id": query.user_id,
             "bmr": result.bmr,

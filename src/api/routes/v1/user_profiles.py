@@ -87,7 +87,6 @@ async def get_user_tdee(
         
         # Create domain response
         from src.domain.model.tdee import MacroTargets
-        print(f"res in api {result}")
         domain_response = TdeeResponse(
             bmr=result["bmr"],
             tdee=result["tdee"],

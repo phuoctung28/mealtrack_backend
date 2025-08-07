@@ -10,7 +10,6 @@ class TdeeCalculationService:
         bmr = self._calculate_bmr(request)
         tdee = self._calculate_tdee_from_bmr(bmr, request.activity_level)
         macro_targets = self._calculate_all_macro_targets(tdee, request.weight_kg, request.goal)
-        print(f"macro target: {macro_targets}")
         return TdeeResponse(
             bmr=round(bmr, 1),
             tdee=round(tdee, 1),

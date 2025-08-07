@@ -98,54 +98,6 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
             self.db.rollback()
             logger.error(f"Error saving onboarding data: {str(e)}")
             raise
-    
-    def _calculate_tdee_and_macros(self, profile: UserProfile) -> Dict[str, Any]:
-        """Calculate TDEE and macros for a user profile."""
-        # Map database values to domain enums
-        sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
-        
-        # Create TDEE request
-        tdee_request = TdeeRequest(
-            age=profile.age,
-            sex=sex,
-            height=profile.height_cm,  # Using cm since unit_system is METRIC
-            weight=profile.weight_kg,  # Using kg since unit_system is METRIC
-            activity_level=ActivityGoalMapper.map_activity_level(profile.activity_level),
-            goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
-            body_fat_pct=profile.body_fat_percentage,
-            unit_system=UnitSystem.METRIC
-        )
-        
-        # Calculate TDEE
-        result = self.tdee_service.calculate_tdee(tdee_request)
-        
-        # Calculate target calories based on goal
-        if tdee_request.goal == Goal.CUTTING:
-            target_calories = result.tdee * 0.8
-        elif tdee_request.goal == Goal.BULKING:
-            target_calories = result.tdee * 1.15
-        else:
-            target_calories = result.tdee
-        
-        # Calculate macros
-        macros = self.tdee_service.calculate_macros(
-            tdee=target_calories,
-            goal=tdee_request.goal,
-            weight_kg=profile.weight_kg
-        )
-        
-        return {
-            "bmr": result.bmr,
-            "tdee": result.tdee,
-            "target_calories": round(target_calories, 0),
-            "macros": {
-                "protein": round(macros.protein, 1),
-                "carbs": round(macros.carbs, 1),
-                "fat": round(macros.fat, 1),
-                "calories": round(macros.calories, 1)
-            }
-        }
-
 
 @handles(SyncUserCommand)
 class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
