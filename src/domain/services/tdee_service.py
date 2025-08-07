@@ -44,25 +44,24 @@ class TdeeCalculationService:
         return bmr * multiplier
     
     def _calculate_all_macro_targets(self, tdee: float, weight_kg: float, goal: Goal) -> MacroTargets:
-        """Calculate macro targets for all three goals."""
+        """Calculate macro targets using Moderate Carb (30/35/35) split."""
         calories = 0
 
         if goal == Goal.MAINTENANCE:
             calories = tdee
         elif goal == Goal.CUTTING:
-            calories = tdee - 500
+            calories = tdee - TDEEConstants.CUTTING_DEFICIT
         elif goal == Goal.BULKING:
-            calories = tdee + 500
+            calories = tdee + TDEEConstants.BULKING_SURPLUS
         
-        protein_g = weight_kg * TDEEConstants.LBS_PER_KG * TDEEConstants.PROTEIN_PER_LB_BODYWEIGHT
-
-        fat_percentage = TDEEConstants.CUTTING_FAT_PERCENT if goal == Goal.CUTTING else TDEEConstants.DEFAULT_FAT_PERCENT
-        fat_calories = calories * fat_percentage
+        # Calculate macros using 30/35/35 split (Protein/Fat/Carbs)
+        protein_calories = calories * TDEEConstants.PROTEIN_PERCENT
+        fat_calories = calories * TDEEConstants.FAT_PERCENT
+        carb_calories = calories * TDEEConstants.CARBS_PERCENT
+        
+        # Convert to grams (protein: 4 cal/g, fat: 9 cal/g, carbs: 4 cal/g)
+        protein_g = protein_calories / 4
         fat_g = fat_calories / 9
-
-        protein_calories = protein_g * 4
-
-        carb_calories = calories - protein_calories - fat_calories
         carb_g = carb_calories / 4
 
         macro_targets = MacroTargets(

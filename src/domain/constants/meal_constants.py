@@ -107,18 +107,15 @@ class TDEEConstants:
         "extra": 1.9
     }
     
-    # Goal adjustments
-    CUTTING_MULTIPLIER = 0.8      # 20% deficit
-    BULKING_MULTIPLIER = 1.15     # 15% surplus
-    MAINTENANCE_MULTIPLIER = 1.0
+    # Goal adjustments (calories)
+    CUTTING_DEFICIT = 500      # 500 calorie deficit
+    BULKING_SURPLUS = 500      # 500 calorie surplus
+    MAINTENANCE_ADJUSTMENT = 0
     
-    # Macro percentages by goal
-    CUTTING_FAT_PERCENT = 0.20
-    DEFAULT_FAT_PERCENT = 0.25
-    
-    # Protein calculations
-    PROTEIN_PER_LB_BODYWEIGHT = 0.8
-    LBS_PER_KG = 2.205
+    # Macro percentages - Moderate Carb (30/35/35) from tdeecalculator.net
+    PROTEIN_PERCENT = 0.30    # 30% of calories from protein
+    FAT_PERCENT = 0.35        # 35% of calories from fat  
+    CARBS_PERCENT = 0.35      # 35% of calories from carbs
     
     # Validation ranges
     MIN_AGE = 13
