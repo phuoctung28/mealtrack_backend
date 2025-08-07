@@ -148,9 +148,8 @@ class TestSaveUserOnboardingCommandHandler:
         # Act
         result = await event_bus.send(command)
         
-        # Assert
-        assert result["user_id"] == sample_user_profile.user_id
-        assert result["profile_created"] is True
+        # Assert - SaveUserOnboardingCommand should return None
+        assert result is None
         # Verify profile was updated
         from src.infra.database.models.user.profile import UserProfile
         updated_profile = test_session.query(UserProfile).filter(

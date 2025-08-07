@@ -68,7 +68,7 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
         if not command.target_calories or not command.target_macros:
             tdee_result = self._calculate_tdee_and_macros(command)
             user_data["target_calories"] = tdee_result["target_calories"]
-            user_data["target_macros"] = tdee_result["macros"]
+            user_data["target_macros"] = SimpleMacroTargets(**tdee_result["macros"])
         else:
             user_data["target_calories"] = command.target_calories
             user_data["target_macros"] = SimpleMacroTargets(**command.target_macros) if command.target_macros else None
@@ -239,7 +239,7 @@ class GenerateSingleMealCommandHandler(EventHandler[GenerateSingleMealCommand, D
         if not command.target_calories or not command.target_macros:
             tdee_result = daily_handler._calculate_tdee_and_macros(command)
             user_data["target_calories"] = tdee_result["target_calories"]
-            user_data["target_macros"] = tdee_result["macros"]
+            user_data["target_macros"] = SimpleMacroTargets(**tdee_result["macros"])
         else:
             user_data["target_calories"] = command.target_calories
             user_data["target_macros"] = SimpleMacroTargets(**command.target_macros) if command.target_macros else None
