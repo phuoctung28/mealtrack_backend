@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.handlers.command_handlers.daily_meal_command_handlers import GenerateDailyMealSuggestionsCommandHandler
-from src.app.handlers.command_handlers.user_command_handlers import SaveUserOnboardingCommandHandler
+
 from src.app.queries.daily_meal import (
     GetMealSuggestionsForProfileQuery,
     GetSingleMealForProfileQuery,
@@ -50,9 +50,12 @@ class GetMealSuggestionsForProfileQueryHandler(EventHandler[GetMealSuggestionsFo
                 details={"user_profile_id": query.user_profile_id}
             )
         
-        # Calculate TDEE
-        onboarding_handler = SaveUserOnboardingCommandHandler(self.db)
-        tdee_result = onboarding_handler._calculate_tdee_and_macros(profile)
+        # Calculate TDEE using the proper query handler
+        from src.app.handlers.query_handlers.tdee_query_handlers import GetUserTdeeQueryHandler
+        tdee_handler = GetUserTdeeQueryHandler(self.db)
+        from src.app.queries.tdee import GetUserTdeeQuery
+        tdee_query = GetUserTdeeQuery(user_id=profile.user_id)
+        tdee_result = await tdee_handler.handle(tdee_query)
         
         # Prepare user data
         user_data = {
@@ -154,9 +157,12 @@ class GetMealPlanningSummaryQueryHandler(EventHandler[GetMealPlanningSummaryQuer
                 details={"user_profile_id": query.user_profile_id}
             )
         
-        # Calculate TDEE
-        onboarding_handler = SaveUserOnboardingCommandHandler(self.db)
-        tdee_result = onboarding_handler._calculate_tdee_and_macros(profile)
+        # Calculate TDEE using the proper query handler
+        from src.app.handlers.query_handlers.tdee_query_handlers import GetUserTdeeQueryHandler
+        tdee_handler = GetUserTdeeQueryHandler(self.db)
+        from src.app.queries.tdee import GetUserTdeeQuery
+        tdee_query = GetUserTdeeQuery(user_id=profile.user_id)
+        tdee_result = await tdee_handler.handle(tdee_query)
         
         return {
             "profile": {

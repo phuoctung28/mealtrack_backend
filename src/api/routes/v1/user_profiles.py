@@ -51,21 +51,10 @@ async def save_user_onboarding(
             health_conditions=request.health_conditions,
             allergies=request.allergies
         )
-        
-        # Send command
-        result = await event_bus.send(command)
-        
-        # Return TDEE calculation response  
-        tdee_data = result.get('recommended_macros', {})
-        return TdeeCalculationResponse(
-            bmr=result.get('bmr', 0) if isinstance(result.get('bmr'), (int, float)) else 0,
-            tdee=result.get('tdee', 0) if isinstance(result.get('tdee'), (int, float)) else result.get('tdee', {}).get('tdee', 0),
-            macros=tdee_data,
-            goal=GoalEnum(request.goal),
-            activity_multiplier=1.55,  # Default moderate activity
-            formula_used="Mifflin-St Jeor"
-        )
-        
+
+        await event_bus.send(command)
+        return True
+
     except Exception as e:
         raise handle_exception(e)
 
@@ -98,7 +87,6 @@ async def get_user_tdee(
         
         # Create domain response
         from src.domain.model.tdee import MacroTargets
-        
         domain_response = TdeeResponse(
             bmr=result["bmr"],
             tdee=result["tdee"],
