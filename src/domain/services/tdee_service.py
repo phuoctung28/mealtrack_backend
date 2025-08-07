@@ -10,7 +10,7 @@ class TdeeCalculationService:
         bmr = self._calculate_bmr(request)
         tdee = self._calculate_tdee_from_bmr(bmr, request.activity_level)
         macro_targets = self._calculate_all_macro_targets(tdee, request.weight_kg, request.goal)
-        
+        print(f"macro target: {macro_targets}")
         return TdeeResponse(
             bmr=round(bmr, 1),
             tdee=round(tdee, 1),
@@ -49,11 +49,11 @@ class TdeeCalculationService:
         calories = 0
 
         if goal == Goal.MAINTENANCE:
-            calories = tdee * TDEEConstants.MAINTENANCE_MULTIPLIER
+            calories = tdee
         elif goal == Goal.CUTTING:
-            calories = tdee * TDEEConstants.CUTTING_MULTIPLIER
+            calories = tdee - 500
         elif goal == Goal.BULKING:
-            calories = tdee * TDEEConstants.BULKING_MULTIPLIER
+            calories = tdee + 500
         
         protein_g = weight_kg * TDEEConstants.LBS_PER_KG * TDEEConstants.PROTEIN_PER_LB_BODYWEIGHT
 

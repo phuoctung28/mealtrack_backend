@@ -78,7 +78,7 @@ class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculation
         """
         # Convert macro targets
         macros_dto = MacroTargetsResponse(
-            calories=domain.tdee,  # Use TDEE as daily calorie target
+            calories=domain.macros.calories,
             protein=domain.macros.protein,
             fat=domain.macros.fat,
             carbs=domain.macros.carbs

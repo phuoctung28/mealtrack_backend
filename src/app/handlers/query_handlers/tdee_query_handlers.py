@@ -74,7 +74,7 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
         
         # Calculate TDEE
         result = self.tdee_service.calculate_tdee(tdee_request)
-        
+        print(f"result {result}")
         # Determine activity multiplier for response
         activity_multipliers = {
             ActivityLevel.SEDENTARY: 1.2,
