@@ -51,8 +51,15 @@ class TestCompleteUserFlow:
         )
         
         onboarding_result = await event_bus.send(onboarding_command)
-        assert onboarding_result["profile_created"] is True
-        assert onboarding_result["tdee"] > 0
+        assert onboarding_result is None  # SaveUserOnboardingCommand returns None
+        
+        # Verify the profile was created by checking the database
+        from src.infra.database.models.user.profile import UserProfile
+        saved_profile = test_session.query(UserProfile).filter(
+            UserProfile.user_id == "flow-test-user"
+        ).first()
+        assert saved_profile is not None
+        assert saved_profile.age == 30
         
         # Step 2: Upload and analyze meal image immediately
         upload_command = UploadMealImageImmediatelyCommand(

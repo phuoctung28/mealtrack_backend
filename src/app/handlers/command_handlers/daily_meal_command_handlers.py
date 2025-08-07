@@ -161,28 +161,13 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
         
         tdee_result = self.tdee_service.calculate_tdee(tdee_request)
         
-        # Calculate target calories
-        if tdee_request.goal == Goal.CUTTING:
-            target_calories = tdee_result.tdee * 0.8
-        elif tdee_request.goal == Goal.BULKING:
-            target_calories = tdee_result.tdee * 1.15
-        else:
-            target_calories = tdee_result.tdee
-        
-        # Calculate macros
-        macros = self.tdee_service.calculate_macros(
-            tdee=target_calories,
-            goal=tdee_request.goal,
-            weight_kg=command.weight
-        )
-        
         return {
-            "target_calories": round(target_calories, 0),
-            "macros": SimpleMacroTargets(
-                protein=round(macros.protein, 1),
-                carbs=round(macros.carbs, 1),
-                fat=round(macros.fat, 1)
-            )
+            "target_calories": int(tdee_result.macros.calories),
+            "macros": {
+                "protein": tdee_result.macros.protein,
+                "carbs": tdee_result.macros.carbs,
+                "fat": tdee_result.macros.fat
+            }
         }
     
     def _format_meal(self, meal) -> Dict[str, Any]:

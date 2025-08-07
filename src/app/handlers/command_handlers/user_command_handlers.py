@@ -20,7 +20,7 @@ from src.app.commands.user.sync_user_command import (
 )
 from src.app.events.base import EventHandler, handles
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.tdee import TdeeRequest, Sex, Goal, UnitSystem
+from src.domain.model.tdee import TdeeRequest, Sex, Goal, UnitSystem, ActivityLevel
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.database.models.user import User
 from src.infra.database.models.user.profile import UserProfile
@@ -40,7 +40,7 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
         self.db = db
     
     async def handle(self, command: SaveUserOnboardingCommand) -> None:
-        """Save user onboarding data and calculate TDEE."""
+        """Save user onboarding data."""
         if not self.db:
             raise RuntimeError("Database session not configured")
         

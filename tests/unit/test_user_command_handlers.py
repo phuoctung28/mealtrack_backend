@@ -46,13 +46,22 @@ class TestSaveUserOnboardingCommandHandler:
         # Act
         result = await event_bus.send(command)
         
-        # Assert
-        assert result["user_id"] == "test-user-123"
-        assert result["profile_created"] is True
-        assert "tdee" in result
-        assert result["tdee"] > 0
-        assert "recommended_calories" in result
-        assert "recommended_macros" in result
+        # Assert - SaveUserOnboardingCommand should return None
+        assert result is None
+        
+        # Verify the profile was created/updated in the database
+        from src.infra.database.models.user.profile import UserProfile
+        saved_profile = test_session.query(UserProfile).filter(
+            UserProfile.user_id == "test-user-123"
+        ).first()
+        
+        assert saved_profile is not None
+        assert saved_profile.age == 30
+        assert saved_profile.gender == "male"
+        assert saved_profile.height_cm == 175
+        assert saved_profile.weight_kg == 70
+        assert saved_profile.activity_level == "moderate"
+        assert saved_profile.fitness_goal == "maintenance"
     
     @pytest.mark.asyncio
     async def test_save_user_onboarding_invalid_age(self, event_bus, test_session):
