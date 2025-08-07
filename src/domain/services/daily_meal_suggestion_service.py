@@ -49,7 +49,9 @@ class DailyMealSuggestionService:
         logger.info(f"Generating daily meal suggestions for user preferences")
         
         # Determine meal distribution based on calories
-        target_calories = user_preferences.get('target_calories', 2000)
+        target_calories = user_preferences.get('target_calories')
+        if not target_calories:
+            raise ValueError("target_calories is required for meal suggestions. Please provide user's calculated TDEE.")
         meal_distribution = self._calculate_meal_distribution(target_calories)
         
         # Generate meals
@@ -144,7 +146,10 @@ class DailyMealSuggestionService:
         activity_level = user_preferences.get('activity_level', 'moderately_active')
         
         # Calculate macro targets for this meal
-        meal_percentage = calorie_target / user_preferences.get('target_calories', 2000)
+        total_target_calories = user_preferences.get('target_calories')
+        if not total_target_calories:
+            raise ValueError("target_calories is required in user_preferences")
+        meal_percentage = calorie_target / total_target_calories
         
         # Handle both MacroTargets object and dict format
         if isinstance(target_macros, SimpleMacroTargets):

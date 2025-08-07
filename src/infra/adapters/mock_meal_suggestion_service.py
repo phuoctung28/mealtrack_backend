@@ -131,7 +131,9 @@ class MockMealSuggestionService:
     
     def generate_daily_suggestions(self, user_data: Dict[str, Any]) -> List[PlannedMeal]:
         """Generate daily meal suggestions based on user data."""
-        target_calories = user_data.get('target_calories', 2000)
+        target_calories = user_data.get('target_calories')
+        if not target_calories:
+            raise ValueError("target_calories is required in user_data for mock service")
         dietary_preferences = user_data.get('dietary_preferences', [])
         
         # Get suggestions in dict format

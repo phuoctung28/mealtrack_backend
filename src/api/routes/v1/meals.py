@@ -271,18 +271,19 @@ async def get_daily_meal_entries(
 
 @router.get("/daily/macros", response_model=DailyNutritionResponse)
 async def get_daily_macros(
+    user_id: str = Query(..., description="User ID to get TDEE targets for"),
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """Get daily macronutrient summary for all meals."""
+    """Get daily macronutrient summary for all meals with user targets from TDEE."""
     try:
         # Parse date
         target_date = None
         if date:
             target_date = datetime.strptime(date, "%Y-%m-%d").date()
         
-        # Send query
-        query = GetDailyMacrosQuery(target_date=target_date)
+        # Send query with user_id for TDEE targets
+        query = GetDailyMacrosQuery(user_id=user_id, target_date=target_date)
         result = await event_bus.send(query)
         
         # Use mapper to convert to response

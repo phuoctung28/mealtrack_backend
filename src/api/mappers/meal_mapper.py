@@ -258,24 +258,25 @@ class MealMapper:
         """
         from src.api.schemas.response.daily_nutrition_response import MacrosResponse
         
-        # Extract data with defaults
-        target_calories = daily_macros_data.get("target_calories", 2000.0)
-        consumed_calories = daily_macros_data.get("total_calories", 0.0)
+        # Extract data - require actual user targets, no hardcoded defaults
+        target_calories = daily_macros_data.get("target_calories")
+        if not target_calories:
+            raise ValueError("target_calories is required. Daily macros query must include user's calculated TDEE data.")
         
         target_macros = MacrosResponse(
-            protein=daily_macros_data.get("target_protein", 150.0),
-            carbs=daily_macros_data.get("target_carbs", 250.0),
-            fat=daily_macros_data.get("target_fat", 67.0),
-            fiber=daily_macros_data.get("target_fiber", 25.0)
+            protein=daily_macros_data.get("target_macros").get("protein") or 0.0,
+            carbs=daily_macros_data.get("target_macros").get("carbs") or 0.0, 
+            fat=daily_macros_data.get("target_macros").get("fat") or 0.0,
         )
         
         consumed_macros = MacrosResponse(
             protein=daily_macros_data.get("total_protein", 0.0),
             carbs=daily_macros_data.get("total_carbs", 0.0),
             fat=daily_macros_data.get("total_fat", 0.0),
-            fiber=daily_macros_data.get("total_fiber", 0.0)
         )
-        
+
+        consumed_calories = daily_macros_data.get("total_calories", 0.0)
+
         # Calculate remaining macros
         remaining_calories = max(0, target_calories - consumed_calories)
         remaining_macros = MacrosResponse(

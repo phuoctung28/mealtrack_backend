@@ -163,7 +163,7 @@ async def get_configured_event_bus(
     
     event_bus.register_handler(
         GetDailyMacrosQuery,
-        GetDailyMacrosQueryHandler(meal_repository)
+        GetDailyMacrosQueryHandler(meal_repository, db)
     )
     
     
