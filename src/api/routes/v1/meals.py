@@ -51,7 +51,6 @@ STATUS_MAPPING = {
 @router.post("/image", response_model=Dict[str, str])
 async def upload_meal_image(
     file: UploadFile = File(...),
-    background_tasks: BackgroundTasks = None,
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """

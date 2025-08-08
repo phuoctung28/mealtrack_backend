@@ -3,6 +3,7 @@ PyMediator-based event bus implementation.
 """
 import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Type, TypeVar, Dict, List
 
 from pymediator import Mediator as PyMediator, SingletonRegistry
@@ -33,24 +34,18 @@ class PyMediatorHandlerAdapter:
     
     def handle(self, request: Any) -> Any:
         """Handle the request by delegating to our event handler."""
-        # Extract the actual event from the wrapper
         if hasattr(request, 'event'):
             actual_event = request.event
         else:
             actual_event = request
             
-        # Check if the handler is async
         import inspect
         if inspect.iscoroutinefunction(self._event_handler.handle):
-            # Create a new event loop for this thread
             import asyncio
             try:
                 loop = asyncio.get_running_loop()
-                # We're in an async context but need to return sync
-                # This shouldn't happen with our current setup
                 return None
             except RuntimeError:
-                # No event loop, create one
                 return asyncio.run(self._event_handler.handle(actual_event))
         else:
             return self._event_handler.handle(actual_event)
@@ -87,6 +82,7 @@ class PyMediatorEventBus(EventBus):
         self._mediator = PyMediator(registry=registry)
         self._event_type_mapping: Dict[Type[Event], Type[EventRequest]] = {}
         self._domain_event_subscribers: Dict[Type[DomainEvent], List[Any]] = {}
+        self._thread_pool = ThreadPoolExecutor(max_workers=20, thread_name_prefix="EventBus")
         
     def register_handler(self, event_type: Type[Event], handler: EventHandler) -> None:
         """Register a handler for a specific event type."""
@@ -134,10 +130,8 @@ class PyMediatorEventBus(EventBus):
             wrapper_class = self._event_type_mapping[event_type]
             wrapped_request = wrapper_class(event)
             
-            # Send through pymediator
-            # Since pymediator is sync, we need to handle async carefully
             result = await asyncio.get_event_loop().run_in_executor(
-                None, 
+                self._thread_pool, 
                 self._mediator.send, 
                 wrapped_request
             )
@@ -199,3 +193,8 @@ class PyMediatorEventBus(EventBus):
             # Schedule the task to run in the background
             logger.info(f"Scheduling background task for {event_type.__name__}")
             asyncio.create_task(run_tasks_in_background())
+
+    def close(self):
+        if hasattr(self, '_thread_pool'):
+            self._thread_pool.shutdown(wait=True)
+            logger.info("Event bus thread pool shut down")

@@ -30,7 +30,7 @@ env/
 .vscode/
 *.swp
 *.swo
-
+.serena/
 # Environment variables
 .env
 
