@@ -74,6 +74,13 @@ from .weekly_meal_plan_responses import (
     NutritionInfo,
     UserPreferencesResponse
 )
+# User responses
+from .user_responses import (
+    UserProfileResponse,
+    UserSyncResponse,
+    UserStatusResponse,
+    UserUpdateResponse
+)
 
 __all__ = [
     # Daily meal
@@ -119,13 +126,13 @@ __all__ = [
     'NutritionSummarySchema',
     'UserPreferenceSummarySchema',
     'MealsByDateResponse',
-    
+
     # Weekly meal plan
     'WeeklyMealPlanResponse',
     'WeeklyMealResponse',
     'NutritionInfo',
     'UserPreferencesResponse',
-    
+
     # Onboarding
     'OnboardingFieldResponse',
     'OnboardingSectionResponse',
@@ -137,6 +144,12 @@ __all__ = [
     'DailyNutritionResponse',
     'DailyMacrosResponse',
     
+    # User
+    'UserProfileResponse',
+    'UserSyncResponse',
+    'UserStatusResponse',
+    'UserUpdateResponse',
+
     # Enums
     'MealTypeEnum'
 ]

@@ -1,7 +1,7 @@
 # Web framework
 fastapi>=0.115.0
 uvicorn[standard]>=0.27.0
-pydantic>=2.7.4
+pydantic[email]>=2.7.4
 python-multipart>=0.0.19
 
 # AI/LLM dependencies
@@ -27,6 +27,8 @@ python-dotenv==1.0.0
 
 # Event-driven architecture
 pymediator==0.3.0
+
+
 
 # Testing dependencies
 pytest==8.0.0

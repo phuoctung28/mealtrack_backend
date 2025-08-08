@@ -30,7 +30,12 @@ from src.app.commands.meal_plan import (
     ReplaceMealInPlanCommand
 )
 from src.app.commands.user import (
-    SaveUserOnboardingCommand
+    SaveUserOnboardingCommand,
+    CompleteOnboardingCommand
+)
+from src.app.commands.user.sync_user_command import (
+    SyncUserCommand,
+    UpdateUserLastAccessedCommand
 )
 from src.app.events.meal import MealImageUploadedEvent
 from src.app.handlers.command_handlers.daily_meal_command_handlers import (
@@ -55,7 +60,10 @@ from src.app.handlers.command_handlers.upload_meal_image_immediately_handler imp
     UploadMealImageImmediatelyHandler
 )
 from src.app.handlers.command_handlers.user_command_handlers import (
-    SaveUserOnboardingCommandHandler
+    SaveUserOnboardingCommandHandler,
+    SyncUserCommandHandler,
+    UpdateUserLastAccessedCommandHandler,
+    CompleteOnboardingCommandHandler
 )
 from src.app.handlers.command_handlers.weekly_ingredient_based_meal_plan_command_handler import (
     GenerateWeeklyIngredientBasedMealPlanCommandHandler
@@ -81,7 +89,9 @@ from src.app.handlers.query_handlers.tdee_query_handlers import (
     GetUserTdeeQueryHandler
 )
 from src.app.handlers.query_handlers.user_query_handlers import (
-    GetUserProfileQueryHandler
+    GetUserProfileQueryHandler,
+    GetUserByFirebaseUidQueryHandler,
+    GetUserOnboardingStatusQueryHandler
 )
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.daily_meal import (
@@ -103,6 +113,10 @@ from src.app.queries.meal_plan import (
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import (
     GetUserProfileQuery
+)
+from src.app.queries.user.get_user_by_firebase_uid_query import (
+    GetUserByFirebaseUidQuery,
+    GetUserOnboardingStatusQuery
 )
 from src.infra.event_bus import PyMediatorEventBus, EventBus
 
@@ -245,10 +259,34 @@ async def get_configured_event_bus(
         SaveUserOnboardingCommandHandler(db)
     )
     
+    event_bus.register_handler(
+        SyncUserCommand,
+        SyncUserCommandHandler(db)
+    )
+    
+    event_bus.register_handler(
+        UpdateUserLastAccessedCommand,
+        UpdateUserLastAccessedCommandHandler(db)
+    )
+    
+    event_bus.register_handler(
+        CompleteOnboardingCommand,
+        CompleteOnboardingCommandHandler(db)
+    )
     
     event_bus.register_handler(
         GetUserProfileQuery,
         GetUserProfileQueryHandler(db)
+    )
+    
+    event_bus.register_handler(
+        GetUserByFirebaseUidQuery,
+        GetUserByFirebaseUidQueryHandler(db)
+    )
+    
+    event_bus.register_handler(
+        GetUserOnboardingStatusQuery,
+        GetUserOnboardingStatusQueryHandler(db)
     )
     
     event_bus.register_handler(

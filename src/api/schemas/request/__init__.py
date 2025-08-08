@@ -31,6 +31,14 @@ from .meal_requests import (
 from .onboarding_requests import (
     OnboardingCompleteRequest
 )
+# User requests
+from .user_requests import (
+    UserSyncRequest,
+    UserUpdateLastAccessedRequest,
+    UserCreateRequest
+)
+# Common enums
+from ..common.auth_enums import AuthProviderEnum
 # TDEE requests
 from .tdee_requests import (
     TdeeCalculationRequest,
@@ -72,5 +80,13 @@ __all__ = [
     'IngredientBasedMealPlanRequest',
     
     # Onboarding
-    'OnboardingCompleteRequest'
+    'OnboardingCompleteRequest',
+    
+    # User
+    'UserSyncRequest',
+    'UserUpdateLastAccessedRequest',
+    'UserCreateRequest',
+    
+    # Common enums
+    'AuthProviderEnum'
 ]

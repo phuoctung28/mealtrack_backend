@@ -208,9 +208,12 @@ class GenerateDailyMealPlanCommandHandler(EventHandler[GenerateDailyMealPlanComm
             )
         
         # Import the command handler to calculate TDEE
-        from src.app.handlers.command_handlers.user_command_handlers import SaveUserOnboardingCommandHandler
-        onboarding_handler = SaveUserOnboardingCommandHandler(self.db)
-        tdee_result = onboarding_handler._calculate_tdee_and_macros(profile)
+        # Calculate TDEE using the proper query handler
+        from src.app.handlers.query_handlers.tdee_query_handlers import GetUserTdeeQueryHandler
+        tdee_handler = GetUserTdeeQueryHandler(self.db)
+        from src.app.queries.tdee import GetUserTdeeQuery
+        tdee_query = GetUserTdeeQuery(user_id=profile.user_id)
+        tdee_result = await tdee_handler.handle(tdee_query)
         
         # Get user profile data using shared service
         user_data = self.user_profile_service.get_user_profile_or_defaults(command.user_id)

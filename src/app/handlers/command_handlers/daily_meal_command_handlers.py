@@ -68,7 +68,7 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
         if not command.target_calories or not command.target_macros:
             tdee_result = self._calculate_tdee_and_macros(command)
             user_data["target_calories"] = tdee_result["target_calories"]
-            user_data["target_macros"] = tdee_result["macros"]
+            user_data["target_macros"] = SimpleMacroTargets(**tdee_result["macros"])
         else:
             user_data["target_calories"] = command.target_calories
             user_data["target_macros"] = SimpleMacroTargets(**command.target_macros) if command.target_macros else None
@@ -161,28 +161,13 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
         
         tdee_result = self.tdee_service.calculate_tdee(tdee_request)
         
-        # Calculate target calories
-        if tdee_request.goal == Goal.CUTTING:
-            target_calories = tdee_result.tdee * 0.8
-        elif tdee_request.goal == Goal.BULKING:
-            target_calories = tdee_result.tdee * 1.15
-        else:
-            target_calories = tdee_result.tdee
-        
-        # Calculate macros
-        macros = self.tdee_service.calculate_macros(
-            tdee=target_calories,
-            goal=tdee_request.goal,
-            weight_kg=command.weight
-        )
-        
         return {
-            "target_calories": round(target_calories, 0),
-            "macros": SimpleMacroTargets(
-                protein=round(macros.protein, 1),
-                carbs=round(macros.carbs, 1),
-                fat=round(macros.fat, 1)
-            )
+            "target_calories": int(tdee_result.macros.calories),
+            "macros": {
+                "protein": tdee_result.macros.protein,
+                "carbs": tdee_result.macros.carbs,
+                "fat": tdee_result.macros.fat
+            }
         }
     
     def _format_meal(self, meal) -> Dict[str, Any]:
@@ -254,7 +239,7 @@ class GenerateSingleMealCommandHandler(EventHandler[GenerateSingleMealCommand, D
         if not command.target_calories or not command.target_macros:
             tdee_result = daily_handler._calculate_tdee_and_macros(command)
             user_data["target_calories"] = tdee_result["target_calories"]
-            user_data["target_macros"] = tdee_result["macros"]
+            user_data["target_macros"] = SimpleMacroTargets(**tdee_result["macros"])
         else:
             user_data["target_calories"] = command.target_calories
             user_data["target_macros"] = SimpleMacroTargets(**command.target_macros) if command.target_macros else None
