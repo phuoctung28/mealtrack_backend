@@ -32,8 +32,12 @@ from .meal_plan_responses import (
     ReplaceMealResponse,
     ErrorResponse,
     DailyMealPlanResponse,
+    DailyMealPlanStrongResponse,
+    GeneratedMealResponse,
+    UserPreferencesStrongResponse,
     NutritionSummarySchema,
-    UserPreferenceSummarySchema
+    UserPreferenceSummarySchema,
+    MealsByDateResponse
 )
 # Meal responses
 from .meal_responses import (
@@ -65,6 +69,13 @@ from .tdee_responses import (
     TdeeHistoryResponse,
     TdeeErrorResponse,
     MacroTargetsResponse
+)
+# Weekly meal plan responses
+from .weekly_meal_plan_responses import (
+    WeeklyMealPlanResponse,
+    WeeklyMealResponse,
+    NutritionInfo,
+    UserPreferencesResponse
 )
 # User responses
 from .user_responses import (
@@ -115,9 +126,19 @@ __all__ = [
     'ReplaceMealResponse',
     'ErrorResponse',
     'DailyMealPlanResponse',
+    'DailyMealPlanStrongResponse',
+    'GeneratedMealResponse',
+    'UserPreferencesStrongResponse',
     'NutritionSummarySchema',
     'UserPreferenceSummarySchema',
-    
+    'MealsByDateResponse',
+
+    # Weekly meal plan
+    'WeeklyMealPlanResponse',
+    'WeeklyMealResponse',
+    'NutritionInfo',
+    'UserPreferencesResponse',
+
     # Onboarding
     'OnboardingFieldResponse',
     'OnboardingSectionResponse',
@@ -134,7 +155,7 @@ __all__ = [
     'UserSyncResponse',
     'UserStatusResponse',
     'UserUpdateResponse',
-    
+
     # Enums
     'MealTypeEnum'
 ]

@@ -2,6 +2,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
+
 class OnboardingCompleteRequest(BaseModel):
     """Complete onboarding data request for saving to database."""
     # Personal info

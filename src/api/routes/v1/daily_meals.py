@@ -34,7 +34,10 @@ async def get_daily_meal_suggestions(
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
-    Get 3-5 meal suggestions for a day.
+    Get 3-5 meal suggestions for a day in a single request.
+    
+    This endpoint generates all daily meals (breakfast, lunch, dinner, snack) 
+    in one unified API call, ensuring better meal coordination and variety.
     
     Two modes supported:
     1. Profile-based (preferred): Provide user_profile_id
