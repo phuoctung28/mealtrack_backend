@@ -177,20 +177,28 @@ class DailyMealMapper:
         Returns:
             DailyMealSuggestionsResponse DTO
         """
-        target_calories = result.get('target_calories', 2000)
-        target_macros = result.get('target_macros')
+        target_calories = result.get('target_calories')
+        if not target_calories:
+            raise ValueError("target_calories is required in result data. Ensure handler provides calculated TDEE data.")
         
+        target_macros = result.get('target_macros')
+        if not target_macros:
+            raise ValueError("target_macros is required in result data. Ensure handler provides calculated TDEE macros.")
+        
+        # Convert macros dict to SimpleMacroTargets if needed
         if target_macros and hasattr(target_macros, 'protein'):
             # It's already a SimpleMacroTargets object
             pass
-        else:
-            # Create default if not provided
+        elif isinstance(target_macros, dict):
+            # Convert dict to SimpleMacroTargets object
             from src.domain.model.macro_targets import SimpleMacroTargets
             target_macros = SimpleMacroTargets(
-                protein=50.0,
-                carbs=250.0,
-                fat=65.0
+                protein=target_macros.get('protein', 0.0),
+                carbs=target_macros.get('carbs', 0.0),
+                fat=target_macros.get('fat', 0.0)
             )
+        else:
+            raise ValueError("target_macros must be a dict or SimpleMacroTargets object with actual TDEE calculation data.")
         
         return DailyMealMapper.map_handler_response_to_dto(
             result,

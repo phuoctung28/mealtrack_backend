@@ -10,5 +10,6 @@ from src.app.events.base import Query
 
 @dataclass
 class GetDailyMacrosQuery(Query):
-    """Query to get daily macros summary."""
+    """Query to get daily macros summary with user targets."""
+    user_id: str
     target_date: Optional[date] = None

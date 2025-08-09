@@ -84,7 +84,7 @@ class TestCompleteUserFlow:
         assert len(meal.nutrition.food_items) == 3
         
         # Step 5: Get daily macros
-        daily_macros_query = GetDailyMacrosQuery(target_date=date.today())
+        daily_macros_query = GetDailyMacrosQuery(user_id="test_user", target_date=date.today())
         daily_summary = await event_bus.send(daily_macros_query)
         
         assert daily_summary["total_calories"] == 650.0

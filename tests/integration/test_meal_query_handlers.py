@@ -338,7 +338,7 @@ class TestGetDailyMacrosQueryHandler:
         
         test_session.commit()
         
-        query = GetDailyMacrosQuery(target_date=today)
+        query = GetDailyMacrosQuery(user_id="test_user", target_date=today)
         
         # Act
         result = await event_bus.send(query)
@@ -357,7 +357,7 @@ class TestGetDailyMacrosQueryHandler:
         """Test daily macros for date with no meals."""
         # Arrange
         future_date = date.today() + timedelta(days=365)
-        query = GetDailyMacrosQuery(target_date=future_date)
+        query = GetDailyMacrosQuery(user_id="test_user", target_date=future_date)
         
         # Act
         result = await event_bus.send(query)
