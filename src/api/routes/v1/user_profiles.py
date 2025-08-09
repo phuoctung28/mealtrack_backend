@@ -17,7 +17,7 @@ from src.infra.event_bus import EventBus
 router = APIRouter(prefix="/v1/user-profiles", tags=["User Profiles"])
 
 
-@router.post("/", response_model=TdeeCalculationResponse)
+@router.post("/", response_model=bool)
 async def save_user_onboarding(
     request: OnboardingCompleteRequest,
     user_id: str = "test_user",
