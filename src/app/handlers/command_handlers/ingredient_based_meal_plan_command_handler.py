@@ -6,13 +6,17 @@ from datetime import date
 from datetime import datetime
 from typing import Dict, Any
 
+from src.api.converters.meal_plan_converters import MealPlanConverter
+from src.api.schemas.response.meal_plan_responses import DailyMealPlanStrongResponse
+from src.domain.model.meal_generation_response import DailyMealPlan
+
 from sqlalchemy.orm import Session
 
 from src.app.commands.meal_plan import GenerateIngredientBasedMealPlanCommand
 from src.app.events.base import EventHandler, handles
 from src.app.handlers.command_handlers.user_command_handlers import SaveUserOnboardingCommandHandler
 from src.domain.model.meal_plan import MealPlan, UserPreferences, DayPlan, DietaryPreference, FitnessGoal, PlanDuration, \
-    PlannedMeal
+    PlannedMeal, MealType
 from src.domain.services.ingredient_based_meal_plan_service import IngredientBasedMealPlanService
 from src.infra.database.models.user import UserProfile
 from src.infra.repositories.meal_plan_repository import MealPlanRepository
@@ -22,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 @handles(GenerateIngredientBasedMealPlanCommand)
 class GenerateIngredientBasedMealPlanCommandHandler(
-    EventHandler[GenerateIngredientBasedMealPlanCommand, Dict[str, Any]]
+    EventHandler[GenerateIngredientBasedMealPlanCommand, DailyMealPlanStrongResponse]
 ):
     """Handler for generating meal plans based on available ingredients and user profile."""
 
@@ -35,7 +39,7 @@ class GenerateIngredientBasedMealPlanCommandHandler(
         """Set dependencies for dependency injection."""
         self.db = db
 
-    async def handle(self, command: GenerateIngredientBasedMealPlanCommand) -> Dict[str, Any]:
+    async def handle(self, command: GenerateIngredientBasedMealPlanCommand) -> DailyMealPlanStrongResponse:
         """Generate a comprehensive meal plan based on available ingredients and user profile."""
 
         if not self.db:
@@ -94,12 +98,12 @@ class GenerateIngredientBasedMealPlanCommandHandler(
         }
 
         try:
-            meal_plan_result = self.meal_plan_service.generate_ingredient_based_meal_plan(request_data)
+            # Generate the meal plan (now returns DailyMealPlan domain model)
+            daily_meal_plan = self.meal_plan_service.generate_ingredient_based_meal_plan(request_data)
 
-            logger.info(f"Successfully generated ingredient-based meal plan for user {command.user_id} with {len(meal_plan_result['meals'])} meals")
+            logger.info(f"Successfully generated ingredient-based meal plan for user {command.user_id} with {len(daily_meal_plan.meals)} meals")
 
             # Save to database
-
             # Create UserPreferences from request_data
             preferences = UserPreferences(
                 dietary_preferences=[DietaryPreference(pref) for pref in request_data.get('dietary_preferences', [])],
@@ -114,26 +118,85 @@ class GenerateIngredientBasedMealPlanCommandHandler(
                 plan_duration=PlanDuration.DAILY
             )
 
+            # Convert GeneratedMeal domain models to PlannedMeal entities for database
+            planned_meals = []
+            for generated_meal in daily_meal_plan.meals:
+                # Convert GeneratedMeal to PlannedMeal for database storage
+                planned_meal = PlannedMeal(
+                    meal_id=generated_meal.meal_id,
+                    meal_type=MealType(generated_meal.meal_type),
+                    name=generated_meal.name,
+                    description=generated_meal.description,
+                    prep_time=generated_meal.prep_time,
+                    cook_time=generated_meal.cook_time,
+                    calories=generated_meal.nutrition.calories,
+                    protein=generated_meal.nutrition.protein,
+                    carbs=generated_meal.nutrition.carbs,
+                    fat=generated_meal.nutrition.fat,
+                    ingredients=generated_meal.ingredients,
+                    instructions=generated_meal.instructions,
+                    is_vegetarian=generated_meal.is_vegetarian,
+                    is_vegan=generated_meal.is_vegan,
+                    is_gluten_free=generated_meal.is_gluten_free,
+                    cuisine_type=generated_meal.cuisine_type
+                )
+                planned_meals.append(planned_meal)
+            
             # Create DayPlan
             day_plan = DayPlan(
-                date=datetime.now().date(),
-                meals=[PlannedMeal(**meal) for meal in meal_plan_result['meals']]
+                date=daily_meal_plan.plan_date,
+                meals=planned_meals
             )
 
-            # Create MealPlan
+            # Create MealPlan entity for database
             meal_plan = MealPlan(
                 user_id=command.user_id,
                 preferences=preferences,
                 days=[day_plan]
             )
 
-            # Save
+            # Save to database
             self.meal_plan_repository.save(meal_plan)
 
-            # Add plan_id to result
-            meal_plan_result['plan_id'] = meal_plan.plan_id
+            # Build the generation request to pass to converter
+            from src.domain.model.meal_generation_request import (
+                MealGenerationRequest, UserDietaryProfile, UserNutritionTargets
+            )
+            
+            # Create the request object needed for the converter
+            user_profile = UserDietaryProfile(
+                user_id=command.user_id,
+                dietary_preferences=dietary_preferences,
+                health_conditions=[],
+                allergies=allergies,
+                activity_level=activity_level,
+                fitness_goal=fitness_goal,
+                meals_per_day=meals_per_day,
+                include_snacks=include_snacks
+            )
+            
+            nutrition_targets = UserNutritionTargets(
+                calories=target_calories,
+                protein=target_protein,
+                carbs=target_carbs,
+                fat=target_fat
+            )
+            
+            generation_request = MealGenerationRequest(
+                user_profile=user_profile,
+                nutrition_targets=nutrition_targets,
+                ingredient_constraints=None,  # Not needed for response conversion
+                generation_type=None  # Not needed for response conversion
+            )
 
-            return meal_plan_result
+            # Convert to API response model using the converter
+            response = MealPlanConverter.daily_meal_plan_to_response(
+                daily_meal_plan, 
+                generation_request,
+                plan_id=meal_plan.plan_id
+            )
+
+            return response
 
         except Exception as e:
             logger.error(f"Error generating ingredient-based meal plan: {str(e)}")

@@ -17,6 +17,7 @@ from src.api.schemas.response import (
     ConversationHistoryResponse,
     ReplaceMealResponse,
     DailyMealPlanResponse,
+    DailyMealPlanStrongResponse,
     WeeklyMealPlanResponse,
     MealsByDateResponse
 )
@@ -139,7 +140,7 @@ async def generate_daily_meal_plan(
         raise handle_exception(e)
 
 
-@router.post("/generate/ingredient-based", response_model=DailyMealPlanResponse)
+@router.post("/generate/ingredient-based", response_model=DailyMealPlanStrongResponse)
 async def generate_ingredient_based_meal_plan(
     request: IngredientBasedMealPlanRequest,
     user_id: str = "default_user",
@@ -162,7 +163,7 @@ async def generate_ingredient_based_meal_plan(
         
         result = await event_bus.send(command)
         
-        return DailyMealPlanResponse(**result)
+        return result
         
     except Exception as e:
         raise handle_exception(e)

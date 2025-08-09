@@ -29,24 +29,39 @@ class MealGenerationService(MealGenerationServicePort):
             logger.warning("GOOGLE_API_KEY not found. AI meal generation will not be available.")
             self.llm = None
         else:
-            # Single optimized LLM configuration for all meal generation
-            self.llm = ChatGoogleGenerativeAI(
-                model="gemini-1.5-flash",
-                temperature=0.2,  # Lower temperature for consistency
-                max_output_tokens=8000,  # Increased for weekly plans
-                google_api_key=self.api_key,
-                response_mime_type="application/json",  # Always expect JSON
-            )
+            # Base LLM configuration - will be customized per request
+            self.base_llm_config = {
+                "model": "gemini-1.5-flash",
+                "temperature": 0.2,  # Lower temperature for consistency
+                "google_api_key": self.api_key,
+                "response_mime_type": "application/json",  # Always expect JSON
+            }
     
-    def generate_meal_plan(self, prompt: str, system_message: str, response_type: str = "json") -> Dict[str, Any]:
+    def generate_meal_plan(self, prompt: str, system_message: str, response_type: str = "json", max_tokens: int = None) -> Dict[str, Any]:
         """
         Generate meal plan using provided prompt and system message.
         Single entry point for all meal generation.
+        
+        Args:
+            prompt: The generation prompt
+            system_message: System instructions
+            response_type: Response format ("json" or "text")
+            max_tokens: Optional max tokens override (defaults based on complexity)
         """
-        if not self.llm:
+        if not self.api_key:
             raise RuntimeError("GOOGLE_API_KEY missing — cannot call Gemini.")
         
         try:
+            # Determine optimal token limit based on content complexity
+            if max_tokens is None:
+                max_tokens = self._determine_optimal_tokens(prompt, system_message)
+            
+            # Create LLM instance with appropriate token limit
+            llm = ChatGoogleGenerativeAI(
+                **self.base_llm_config,
+                max_output_tokens=max_tokens
+            )
+            
             # Create messages
             messages = [
                 SystemMessage(content=system_message),
@@ -54,7 +69,7 @@ class MealGenerationService(MealGenerationServicePort):
             ]
             
             # Generate response
-            response = self.llm.invoke(messages)
+            response = llm.invoke(messages)
             content = response.content
             
             # Extract and validate JSON
@@ -67,6 +82,41 @@ class MealGenerationService(MealGenerationServicePort):
         except Exception as e:
             logger.error(f"Error generating meal plan: {str(e)}")
             raise
+    
+    def _determine_optimal_tokens(self, prompt: str, system_message: str) -> int:
+        """
+        Determine optimal token limit based on content complexity.
+        
+        Returns:
+            Appropriate max_output_tokens value
+        """
+        # Analyze prompt content to estimate complexity
+        content_indicators = {
+            # Weekly plans need more tokens
+            'weekly': ['week', '7 days', 'monday', 'tuesday', 'wednesday'],
+            # Multiple meals need moderate tokens  
+            'daily_multiple': ['breakfast', 'lunch', 'dinner', 'snack'],
+            # Single meals need fewer tokens
+            'single': ['single meal', 'one meal', 'generate a meal']
+        }
+        
+        combined_text = (prompt + " " + system_message).lower()
+        
+        # Check for weekly plan indicators
+        if any(indicator in combined_text for indicator in content_indicators['weekly']):
+            logger.debug("Detected weekly plan generation - using high token limit")
+            return 6000  # Reduced from 8000 for weekly plans
+        
+        # Check for daily multiple meals
+        meal_types_found = sum(1 for indicator in content_indicators['daily_multiple'] 
+                              if indicator in combined_text)
+        if meal_types_found >= 3:
+            logger.debug("Detected daily multiple meal generation - using medium token limit")
+            return 3000  # Medium for daily plans with multiple meals
+        
+        # Single meal or simple requests
+        logger.debug("Detected simple meal generation - using low token limit")
+        return 1500  # Conservative for single meals
     
     def _extract_json(self, content: str) -> Dict[str, Any]:
         """Extract and validate JSON from AI response with better error handling."""

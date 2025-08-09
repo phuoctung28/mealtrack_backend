@@ -72,7 +72,7 @@ class MealPlanOrchestrationService:
             fallback_meals = self._generate_weekly_fallback(context, generation_request, request_data)
             return fallback_meals
     
-    def generate_daily_ingredient_based_plan(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_daily_ingredient_based_plan(self, request_data: Dict[str, Any]) -> DailyMealPlan:
         """Generate daily meal plan based on ingredients."""
         # Convert request data to domain model
         generation_request = self._build_generation_request(
@@ -126,8 +126,8 @@ class MealPlanOrchestrationService:
             meals=generated_meals
         )
         
-        # Convert to API response format
-        return self._convert_daily_plan_to_response(daily_plan, generation_request)
+        # Return the domain model directly
+        return daily_plan
     
     def generate_daily_plan(self, user_preferences: Dict[str, Any]) -> Dict[str, Any]:
         """Generate daily meal plan based on user preferences (non-ingredient based)."""
@@ -278,56 +278,10 @@ class MealPlanOrchestrationService:
             cuisine_type=meal_data.get("cuisine_type", "International")
         )
     
-    def _convert_daily_plan_to_response(self, daily_plan: DailyMealPlan, request: MealGenerationRequest) -> Dict[str, Any]:
-        """Convert domain model to API response format."""
-        formatted_meals = []
-        for meal in daily_plan.meals:
-            formatted_meals.append({
-                "meal_id": meal.meal_id,
-                "meal_type": meal.meal_type,
-                "name": meal.name,
-                "description": meal.description,
-                "prep_time": meal.prep_time,
-                "cook_time": meal.cook_time,
-                "total_time": meal.prep_time + meal.cook_time,
-                "calories": meal.nutrition.calories,
-                "protein": meal.nutrition.protein,
-                "carbs": meal.nutrition.carbs,
-                "fat": meal.nutrition.fat,
-                "ingredients": meal.ingredients,
-                "instructions": meal.instructions,
-                "is_vegetarian": meal.is_vegetarian,
-                "is_vegan": meal.is_vegan,
-                "is_gluten_free": meal.is_gluten_free,
-                "cuisine_type": meal.cuisine_type
-            })
-        
-        return {
-            "user_id": daily_plan.user_id,
-            "date": daily_plan.plan_date.isoformat(),
-            "meals": formatted_meals,
-            "total_nutrition": {
-                "calories": daily_plan.total_nutrition.calories,
-                "protein": round(daily_plan.total_nutrition.protein, 1),
-                "carbs": round(daily_plan.total_nutrition.carbs, 1),
-                "fat": round(daily_plan.total_nutrition.fat, 1)
-            },
-            "target_nutrition": {
-                "calories": request.nutrition_targets.calories,
-                "protein": request.nutrition_targets.protein,
-                "carbs": request.nutrition_targets.carbs,
-                "fat": request.nutrition_targets.fat
-            },
-            "user_preferences": {
-                "dietary_preferences": request.user_profile.dietary_preferences,
-                "health_conditions": request.user_profile.health_conditions,
-                "allergies": request.user_profile.allergies,
-                "activity_level": request.user_profile.activity_level,
-                "fitness_goal": request.user_profile.fitness_goal,
-                "meals_per_day": request.user_profile.meals_per_day,
-                "snacks_per_day": 1 if request.user_profile.include_snacks else 0
-            }
-        }
+    def _convert_daily_plan_to_response(self, daily_plan: DailyMealPlan, request: MealGenerationRequest) -> DailyMealPlan:
+        """Convert domain model to API response format (now returns the domain model directly)."""
+        # Return the domain model directly - conversion to API response will happen at the API layer
+        return daily_plan
     
     def _validate_weekly_response(self, data: Dict[str, Any], request: Dict[str, Any]) -> None:
         """Validate weekly response structure."""
@@ -519,62 +473,60 @@ class MealPlanOrchestrationService:
         
         return self._format_weekly_response(validated_meals, request_data)
     
+    def _calculate_nutrition_totals(self, meals: List[Dict]) -> Dict[str, float]:
+        """Helper method to calculate nutrition totals from meals."""
+        return {
+            "calories": sum(meal["calories"] for meal in meals),
+            "protein": sum(meal["protein"] for meal in meals),
+            "carbs": sum(meal["carbs"] for meal in meals),
+            "fat": sum(meal["fat"] for meal in meals)
+        }
+    
     def _validate_and_adjust_weekly_nutrition(self, meals: List[Dict], generation_request: MealGenerationRequest) -> List[Dict]:
         """Validate and adjust weekly nutrition to match targets."""
         target_nutrition = generation_request.nutrition_targets
-        expected_weekly_calories = target_nutrition.calories * 7
-        expected_weekly_protein = target_nutrition.protein * 7
-        expected_weekly_carbs = target_nutrition.carbs * 7
-        expected_weekly_fat = target_nutrition.fat * 7
+        expected_weekly_totals = {
+            "calories": target_nutrition.calories * 7,
+            "protein": target_nutrition.protein * 7,
+            "carbs": target_nutrition.carbs * 7,
+            "fat": target_nutrition.fat * 7
+        }
         
-        # Calculate current totals
-        current_calories = sum(meal["calories"] for meal in meals)
-        current_protein = sum(meal["protein"] for meal in meals)
-        current_carbs = sum(meal["carbs"] for meal in meals)
-        current_fat = sum(meal["fat"] for meal in meals)
+        # Calculate current totals using helper method
+        current_totals = self._calculate_nutrition_totals(meals)
         
         # Check if adjustment is needed (allow 5% tolerance)
-        calorie_tolerance = expected_weekly_calories * 0.05
-        protein_tolerance = expected_weekly_protein * 0.05
-        carb_tolerance = expected_weekly_carbs * 0.05
-        fat_tolerance = expected_weekly_fat * 0.05
-        
-        needs_adjustment = (
-            abs(current_calories - expected_weekly_calories) > calorie_tolerance or
-            abs(current_protein - expected_weekly_protein) > protein_tolerance or
-            abs(current_carbs - expected_weekly_carbs) > carb_tolerance or
-            abs(current_fat - expected_weekly_fat) > fat_tolerance
+        tolerance = 0.05
+        needs_adjustment = any(
+            abs(current_totals[nutrient] - expected_weekly_totals[nutrient]) > expected_weekly_totals[nutrient] * tolerance
+            for nutrient in expected_weekly_totals
         )
         
         if not needs_adjustment:
             logger.info("Weekly nutrition targets are within acceptable range")
             return meals
         
-        logger.warning(f"Weekly nutrition adjustment needed. Current: {current_calories} cal, {current_protein}g protein, {current_carbs}g carbs, {current_fat}g fat")
-        logger.warning(f"Expected: {expected_weekly_calories} cal, {expected_weekly_protein}g protein, {expected_weekly_carbs}g carbs, {expected_weekly_fat}g fat")
+        logger.warning(f"Weekly nutrition adjustment needed. Current: {current_totals}")
+        logger.warning(f"Expected: {expected_weekly_totals}")
         
         # Calculate adjustment factors
-        calorie_factor = expected_weekly_calories / current_calories if current_calories > 0 else 1
-        protein_factor = expected_weekly_protein / current_protein if current_protein > 0 else 1
-        carb_factor = expected_weekly_carbs / current_carbs if current_carbs > 0 else 1
-        fat_factor = expected_weekly_fat / current_fat if current_fat > 0 else 1
+        adjustment_factors = {
+            nutrient: expected_weekly_totals[nutrient] / current_totals[nutrient] if current_totals[nutrient] > 0 else 1
+            for nutrient in expected_weekly_totals
+        }
         
         # Apply adjustments proportionally
         adjusted_meals = []
         for meal in meals:
             adjusted_meal = meal.copy()
-            adjusted_meal["calories"] = int(meal["calories"] * calorie_factor)
-            adjusted_meal["protein"] = round(meal["protein"] * protein_factor, 1)
-            adjusted_meal["carbs"] = round(meal["carbs"] * carb_factor, 1)
-            adjusted_meal["fat"] = round(meal["fat"] * fat_factor, 1)
+            adjusted_meal["calories"] = int(meal["calories"] * adjustment_factors["calories"])
+            adjusted_meal["protein"] = round(meal["protein"] * adjustment_factors["protein"], 1)
+            adjusted_meal["carbs"] = round(meal["carbs"] * adjustment_factors["carbs"], 1)
+            adjusted_meal["fat"] = round(meal["fat"] * adjustment_factors["fat"], 1)
             adjusted_meals.append(adjusted_meal)
         
-        # Verify final totals
-        final_calories = sum(meal["calories"] for meal in adjusted_meals)
-        final_protein = sum(meal["protein"] for meal in adjusted_meals)
-        final_carbs = sum(meal["carbs"] for meal in adjusted_meals)
-        final_fat = sum(meal["fat"] for meal in adjusted_meals)
-        
-        logger.info(f"Adjusted weekly nutrition: {final_calories} cal, {final_protein}g protein, {final_carbs}g carbs, {final_fat}g fat")
+        # Verify final totals using helper method
+        final_totals = self._calculate_nutrition_totals(adjusted_meals)
+        logger.info(f"Adjusted weekly nutrition: {final_totals}")
         
         return adjusted_meals

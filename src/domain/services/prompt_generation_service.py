@@ -119,9 +119,80 @@ class PromptGenerationService:
     
     def _generate_daily_ingredient_prompt(self, context: PromptContext) -> tuple[str, str]:
         """Generate daily ingredient-based meal plan prompt."""
-        # This would be used for unified daily generation
-        # For now, we use individual meal generation
-        raise NotImplementedError("Daily ingredient unified prompt not yet implemented")
+        meals_per_day = len(context.generation_context.meal_types)
+        
+        # Create schema for daily meal plan
+        schema = (
+            '{\\n'
+            '  "meals": [\\n'
+            '    {\\n'
+            '      "meal_type": "breakfast",\\n'
+            '      "name": "Meal Name",\\n'
+            '      "description": "Brief description",\\n'
+            '      "calories": 400,\\n'
+            '      "protein": 25.0,\\n'
+            '      "carbs": 45.0,\\n'
+            '      "fat": 15.0,\\n'
+            '      "prep_time": 10,\\n'
+            '      "cook_time": 15,\\n'
+            '      "ingredients": ["ingredient1", "ingredient2"],\\n'
+            '      "instructions": ["step1", "step2"],\\n'
+            '      "is_vegetarian": true,\\n'
+            '      "is_vegan": false,\\n'
+            '      "is_gluten_free": false,\\n'
+            '      "cuisine_type": "International"\\n'
+            '    }\\n'
+            '  ]\\n'
+            '}'
+        )
+        
+        snack_requirement = ""
+        if context.generation_context.request.user_profile.include_snacks:
+            snack_requirement = "\\n6. Include 1 healthy snack for the day."
+        
+        # Build detailed nutritional targets
+        nutrition_targets = context.generation_context.request.nutrition_targets
+        daily_targets = (
+            f"DAILY NUTRITION TARGETS (must be met exactly):\\n"
+            f"- Calories: {nutrition_targets.calories}\\n"
+            f"- Protein: {nutrition_targets.protein}g\\n"
+            f"- Carbs: {nutrition_targets.carbs}g\\n"
+            f"- Fat: {nutrition_targets.fat}g\\n"
+        )
+        
+        # Build meal-specific targets
+        meal_targets = []
+        for meal_type in context.generation_context.meal_types:
+            calorie_target = context.generation_context.calorie_distribution.get_calories_for_meal(meal_type)
+            meal_percentage = calorie_target / nutrition_targets.calories
+            protein_target = nutrition_targets.protein * meal_percentage
+            carbs_target = nutrition_targets.carbs * meal_percentage
+            fat_target = nutrition_targets.fat * meal_percentage
+            
+            meal_targets.append(
+                f"- {meal_type.value.title()}: {calorie_target} cal, {protein_target:.1f}g protein, {carbs_target:.1f}g carbs, {fat_target:.1f}g fat"
+            )
+        
+        meal_targets_text = "MEAL TARGETS FOR TODAY:\\n" + "\\n".join(meal_targets)
+        
+        prompt = (
+            f"Generate a daily meal plan using ONLY these ingredients.\\n\\n"
+            f"Available Ingredients: {context.get_ingredients_text()}\\n"
+            f"Available Seasonings: {context.get_seasonings_text()}{context.get_dietary_requirements_text()}\\n\\n"
+            f"{daily_targets}\\n"
+            f"{meal_targets_text}\\n\\n"
+            f"CRITICAL REQUIREMENTS:\\n"
+            f"- Generate exactly {meals_per_day} meals: {context.get_meal_types_text()}\\n"
+            f"- Use ONLY the listed ingredients above\\n"
+            f"- All meals must total EXACTLY {nutrition_targets.calories} calories, {nutrition_targets.protein}g protein, {nutrition_targets.carbs}g carbs, {nutrition_targets.fat}g fat\\n"
+            f"- Each meal must match its target nutrition values above\\n"
+            f"- Keep meal descriptions under 20 words\\n"
+            f"- Keep instructions to 3 steps maximum{snack_requirement}\\n\\n"
+            f"CRITICAL: Return ONLY valid JSON in this exact format:\\n{schema}\\n\\n"
+            f"Generate all meals with precise nutrition matching the targets above."
+        )
+        
+        return prompt, "You are a meal planning assistant. Return only valid JSON without any markdown formatting or explanations."
     
     def _generate_daily_profile_prompt(self, context: PromptContext) -> tuple[str, str]:
         """Generate daily profile-based meal plan prompt."""

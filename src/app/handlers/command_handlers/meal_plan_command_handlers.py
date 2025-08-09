@@ -37,12 +37,13 @@ logger = logging.getLogger(__name__)
 class StartMealPlanConversationCommandHandler(EventHandler[StartMealPlanConversationCommand, Dict[str, Any]]):
     """Handler for starting meal plan conversations."""
     
-    def __init__(self):
-        self.conversation_service = MealPlanConversationService()
+    def __init__(self, conversation_service: MealPlanConversationService = None):
+        self.conversation_service = conversation_service or MealPlanConversationService()
     
-    def set_dependencies(self):
-        """No external dependencies needed."""
-        pass
+    def set_dependencies(self, conversation_service: MealPlanConversationService = None):
+        """Set dependencies for dependency injection."""
+        if conversation_service:
+            self.conversation_service = conversation_service
     
     async def handle(self, command: StartMealPlanConversationCommand) -> Dict[str, Any]:
         """Start a new meal planning conversation."""
@@ -75,12 +76,13 @@ class StartMealPlanConversationCommandHandler(EventHandler[StartMealPlanConversa
 class SendConversationMessageCommandHandler(EventHandler[SendConversationMessageCommand, Dict[str, Any]]):
     """Handler for sending messages in meal plan conversations."""
     
-    def __init__(self):
-        self.conversation_service = MealPlanConversationService()
+    def __init__(self, conversation_service: MealPlanConversationService = None):
+        self.conversation_service = conversation_service or MealPlanConversationService()
     
-    def set_dependencies(self):
-        """No external dependencies needed."""
-        pass
+    def set_dependencies(self, conversation_service: MealPlanConversationService = None):
+        """Set dependencies for dependency injection."""
+        if conversation_service:
+            self.conversation_service = conversation_service
     
     async def handle(self, command: SendConversationMessageCommand) -> Dict[str, Any]:
         """Process a message in the conversation."""
@@ -111,15 +113,20 @@ class SendConversationMessageCommandHandler(EventHandler[SendConversationMessage
 class ReplaceMealInPlanCommandHandler(EventHandler[ReplaceMealInPlanCommand, Dict[str, Any]]):
     """Handler for replacing meals in plans."""
     
-    def __init__(self):
-        meal_generation_service = MealGenerationService()
-        self.orchestration_service = MealPlanOrchestrationService(meal_generation_service)
+    def __init__(self, orchestration_service: MealPlanOrchestrationService = None):
+        if orchestration_service:
+            self.orchestration_service = orchestration_service
+        else:
+            # Fallback to default instantiation for backward compatibility
+            meal_generation_service = MealGenerationService()
+            self.orchestration_service = MealPlanOrchestrationService(meal_generation_service)
         # In-memory storage for demo purposes
         self._meal_plans: Dict[str, Dict[str, Any]] = {}
     
-    def set_dependencies(self):
-        """No external dependencies needed."""
-        pass
+    def set_dependencies(self, orchestration_service: MealPlanOrchestrationService = None):
+        """Set dependencies for dependency injection."""
+        if orchestration_service:
+            self.orchestration_service = orchestration_service
     
     async def handle(self, command: ReplaceMealInPlanCommand) -> Dict[str, Any]:
         """Replace a meal in a meal plan."""
@@ -177,18 +184,42 @@ class ReplaceMealInPlanCommandHandler(EventHandler[ReplaceMealInPlanCommand, Dic
 class GenerateDailyMealPlanCommandHandler(EventHandler[GenerateDailyMealPlanCommand, Dict[str, Any]]):
     """Handler for generating daily meal plans based on user profile."""
     
-    def __init__(self, db: Session = None):
+    def __init__(self, 
+                 db: Session = None,
+                 orchestration_service: MealPlanOrchestrationService = None,
+                 user_profile_service: UserProfileService = None,
+                 persistence_service: MealPlanPersistenceService = None):
         self.db = db
-        meal_generation_service = MealGenerationService()
-        self.orchestration_service = MealPlanOrchestrationService(meal_generation_service)
-        self.user_profile_service = UserProfileService(db) if db else None
-        self.persistence_service = MealPlanPersistenceService(db) if db else None
+        
+        # Use injected services or create defaults
+        if orchestration_service:
+            self.orchestration_service = orchestration_service
+        else:
+            # Fallback to default instantiation for backward compatibility
+            meal_generation_service = MealGenerationService()
+            self.orchestration_service = MealPlanOrchestrationService(meal_generation_service)
+        
+        self.user_profile_service = user_profile_service or (UserProfileService(db) if db else None)
+        self.persistence_service = persistence_service or (MealPlanPersistenceService(db) if db else None)
     
-    def set_dependencies(self, db: Session):
+    def set_dependencies(self, 
+                        db: Session = None,
+                        orchestration_service: MealPlanOrchestrationService = None,
+                        user_profile_service: UserProfileService = None,
+                        persistence_service: MealPlanPersistenceService = None):
         """Set dependencies for dependency injection."""
-        self.db = db
-        self.user_profile_service = UserProfileService(db)
-        self.persistence_service = MealPlanPersistenceService(db)
+        if db:
+            self.db = db
+        if orchestration_service:
+            self.orchestration_service = orchestration_service
+        if user_profile_service:
+            self.user_profile_service = user_profile_service
+        elif db:
+            self.user_profile_service = UserProfileService(db)
+        if persistence_service:
+            self.persistence_service = persistence_service
+        elif db:
+            self.persistence_service = MealPlanPersistenceService(db)
     
     async def handle(self, command: GenerateDailyMealPlanCommand) -> Dict[str, Any]:
         """Generate a daily meal plan based on user profile."""

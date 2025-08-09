@@ -203,3 +203,53 @@ class MealsByDateResponse(BaseModel):
                 "user_id": "user123"
             }
         }
+
+
+# New strongly typed response models for meal generation
+class GeneratedMealResponse(BaseModel):
+    """Response model for a generated meal (strongly typed version)."""
+    meal_id: str = Field(..., description="Unique meal identifier")
+    meal_type: str = Field(..., description="Type of meal (breakfast, lunch, dinner, snack)")
+    name: str = Field(..., description="Name of the meal")
+    description: str = Field(..., description="Brief description of the meal")
+    prep_time: int = Field(..., description="Preparation time in minutes")
+    cook_time: int = Field(..., description="Cooking time in minutes")
+    total_time: int = Field(..., description="Total time (prep + cook) in minutes")
+    calories: int = Field(..., description="Calories for this meal")
+    protein: float = Field(..., description="Protein in grams")
+    carbs: float = Field(..., description="Carbohydrates in grams")
+    fat: float = Field(..., description="Fat in grams")
+    ingredients: List[str] = Field(..., description="List of ingredients")
+    instructions: List[str] = Field(..., description="Cooking instructions")
+    is_vegetarian: bool = Field(..., description="Whether meal is vegetarian")
+    is_vegan: bool = Field(..., description="Whether meal is vegan")
+    is_gluten_free: bool = Field(..., description="Whether meal is gluten-free")
+    cuisine_type: Optional[str] = Field(None, description="Type of cuisine")
+
+
+class UserPreferencesStrongResponse(BaseModel):
+    """User preferences in the response (strongly typed version)."""
+    dietary_preferences: List[str] = Field(default=[], description="Dietary preferences")
+    health_conditions: List[str] = Field(default=[], description="Health conditions")
+    allergies: List[str] = Field(default=[], description="Food allergies")
+    activity_level: str = Field(..., description="Activity level")
+    fitness_goal: str = Field(..., description="Fitness goal")
+    meals_per_day: int = Field(..., description="Number of meals per day")
+    snacks_per_day: int = Field(..., description="Number of snacks per day")
+
+
+class DailyMealPlanStrongResponse(BaseModel):
+    """Response model for a daily meal plan (strongly typed version)."""
+    user_id: str = Field(..., description="User identifier")
+    date: str = Field(..., description="Date of the meal plan (ISO format)")
+    plan_id: Optional[str] = Field(None, description="Plan identifier if saved")
+    meals: List[GeneratedMealResponse] = Field(..., description="List of generated meals")
+    total_nutrition: NutritionSummarySchema = Field(..., description="Total nutrition for the day")
+    target_nutrition: NutritionSummarySchema = Field(..., description="Target nutrition goals")
+    user_preferences: UserPreferencesStrongResponse = Field(..., description="User preferences used")
+
+    class Config:
+        """Pydantic config."""
+        json_encoders = {
+            date: lambda v: v.isoformat()
+        }
