@@ -2,7 +2,7 @@
 Handler for immediate meal image upload and analysis.
 """
 import logging
-from datetime import datetime, time
+from datetime import datetime
 from uuid import uuid4
 
 from src.app.commands.meal import UploadMealImageImmediatelyCommand

@@ -24,7 +24,7 @@ class DailyMealSuggestionService:
         self.model = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash",
             temperature=0.7,
-            max_output_tokens=2000,
+            max_output_tokens=4000,  # Increased for multiple meals
             google_api_key=self.google_api_key,
             convert_system_message_to_human=True
         )
@@ -48,13 +48,66 @@ class DailyMealSuggestionService:
         """
         logger.info(f"Generating daily meal suggestions for user preferences")
         
+        # Use the new unified generation method
+        return self._generate_all_meals_unified(user_preferences)
+    
+    def _generate_all_meals_unified(self, user_preferences: Dict) -> List[PlannedMeal]:
+        """Generate all daily meals in a single request"""
+        
         # Determine meal distribution based on calories
         target_calories = user_preferences.get('target_calories')
         if not target_calories:
             raise ValueError("target_calories is required for meal suggestions. Please provide user's calculated TDEE.")
         meal_distribution = self._calculate_meal_distribution(target_calories)
         
-        # Generate meals
+        # Build unified prompt for all meals
+        prompt = self._build_unified_meal_prompt(meal_distribution, user_preferences)
+        
+        try:
+            messages = [
+                SystemMessage(content="You are a professional nutritionist creating personalized daily meal plans."),
+                HumanMessage(content=prompt)
+            ]
+            
+            response = self.model.invoke(messages)
+            content = response.content
+            
+            # Extract JSON from response
+            daily_meals_data = self._extract_unified_meals_json(content)
+            
+            # Convert to PlannedMeal objects
+            suggested_meals = []
+            for meal_data in daily_meals_data["meals"]:
+                meal_type = MealType(meal_data["meal_type"])
+                meal = PlannedMeal(
+                    meal_type=meal_type,
+                    name=meal_data["name"],
+                    description=meal_data["description"],
+                    prep_time=meal_data.get("prep_time", 10),
+                    cook_time=meal_data.get("cook_time", 15),
+                    calories=meal_data["calories"],
+                    protein=meal_data["protein"],
+                    carbs=meal_data["carbs"],
+                    fat=meal_data["fat"],
+                    ingredients=meal_data["ingredients"],
+                    instructions=meal_data.get("instructions", ["Prepare and cook as desired"]),
+                    is_vegetarian=meal_data.get("is_vegetarian", False),
+                    is_vegan=meal_data.get("is_vegan", False),
+                    is_gluten_free=meal_data.get("is_gluten_free", False),
+                    cuisine_type=meal_data.get("cuisine_type", "International")
+                )
+                suggested_meals.append(meal)
+            
+            return suggested_meals
+            
+        except Exception as e:
+            logger.error(f"Error generating unified meals: {str(e)}")
+            # Fallback to individual meal generation
+            logger.info("Falling back to individual meal generation")
+            return self._generate_meals_individual(meal_distribution, user_preferences)
+    
+    def _generate_meals_individual(self, meal_distribution: Dict[MealType, float], user_preferences: Dict) -> List[PlannedMeal]:
+        """Fallback method: Generate meals individually (original method)"""
         suggested_meals = []
         
         for meal_type, calorie_target in meal_distribution.items():
@@ -232,6 +285,131 @@ Return ONLY a JSON object with this structure:
                 return json.loads(json_match.group(0))
             
             raise ValueError("Could not extract JSON from response")
+    
+    def _extract_unified_meals_json(self, content: str) -> Dict:
+        """Extract JSON from unified meal response"""
+        try:
+            # Try direct parsing
+            data = json.loads(content)
+            
+            # Validate structure
+            if "meals" not in data or not isinstance(data["meals"], list):
+                raise ValueError("Response missing 'meals' array")
+            
+            return data
+            
+        except json.JSONDecodeError:
+            # Try to find JSON in markdown code block
+            json_match = re.search(r'```json(.*?)```', content, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group(1).strip())
+                if "meals" not in data or not isinstance(data["meals"], list):
+                    raise ValueError("Response missing 'meals' array")
+                return data
+            
+            # Try to find any JSON-like structure
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group(0))
+                if "meals" not in data or not isinstance(data["meals"], list):
+                    raise ValueError("Response missing 'meals' array")
+                return data
+            
+            raise ValueError("Could not extract unified meals JSON from response")
+    
+    def _build_unified_meal_prompt(self, meal_distribution: Dict[MealType, float], user_preferences: Dict) -> str:
+        """Build a unified prompt for generating all daily meals at once"""
+        
+        # Extract user data
+        goal = user_preferences.get('goal', 'maintain_weight')
+        dietary_prefs = user_preferences.get('dietary_preferences', [])
+        health_conditions = user_preferences.get('health_conditions', [])
+        target_macros = user_preferences.get('target_macros', {})
+        activity_level = user_preferences.get('activity_level', 'moderately_active')
+        target_calories = user_preferences.get('target_calories', 2000)
+        
+        # Build dietary restrictions string
+        dietary_str = ", ".join(dietary_prefs) if dietary_prefs else "none"
+        health_str = ", ".join(health_conditions) if health_conditions else "none"
+        
+        # Goal-specific guidance
+        goal_guidance = {
+            'lose_weight': "Focus on high-volume, low-calorie foods with plenty of fiber and protein for satiety",
+            'gain_weight': "Include calorie-dense, nutritious foods with healthy fats and complex carbs",
+            'build_muscle': "Emphasize high protein content with complete amino acids",
+            'maintain_weight': "Create balanced meals with appropriate portions"
+        }
+        
+        # Build meal targets string
+        meal_targets = []
+        for meal_type, calorie_target in meal_distribution.items():
+            meal_percentage = calorie_target / target_calories
+            
+            # Handle both MacroTargets object and dict format
+            if isinstance(target_macros, SimpleMacroTargets):
+                protein_target = target_macros.protein * meal_percentage
+                carbs_target = target_macros.carbs * meal_percentage
+                fat_target = target_macros.fat * meal_percentage
+            else:
+                # Legacy dict format
+                protein_target = target_macros.get('protein_grams', 50) * meal_percentage
+                carbs_target = target_macros.get('carbs_grams', 250) * meal_percentage
+                fat_target = target_macros.get('fat_grams', 65) * meal_percentage
+            
+            meal_targets.append(f"""
+{meal_type.value.title()}:
+- Calories: {int(calorie_target)} (±50 calories)
+- Protein: {int(protein_target)}g
+- Carbs: {int(carbs_target)}g
+- Fat: {int(fat_target)}g""")
+        
+        meal_targets_str = "\n".join(meal_targets)
+        
+        prompt = f"""Generate a complete daily meal plan with these requirements:
+
+User Profile:
+- Fitness Goal: {goal} - {goal_guidance.get(goal, 'balanced nutrition')}
+- Activity Level: {activity_level}
+- Dietary Restrictions: {dietary_str}
+- Health Conditions: {health_str}
+- Total Daily Calories: {int(target_calories)}
+
+Nutritional Targets for each meal:
+{meal_targets_str}
+
+Requirements:
+1. All meals should be practical and use common ingredients
+2. Cooking times should be reasonable for each meal type
+3. Must respect all dietary restrictions across all meals
+4. Should support the user's fitness goal
+5. Include variety and flavor across the day
+6. Ensure meals complement each other for a balanced day
+
+Return ONLY a JSON object with this structure:
+{{
+    "meals": [
+        {{
+            "meal_type": "breakfast",
+            "name": "Meal name",
+            "description": "Brief appealing description",
+            "prep_time": 10,
+            "cook_time": 20,
+            "calories": 500,
+            "protein": 25,
+            "carbs": 60,
+            "fat": 15,
+            "ingredients": ["ingredient 1 with amount", "ingredient 2 with amount"],
+            "instructions": ["Step 1", "Step 2"],
+            "is_vegetarian": true/false,
+            "is_vegan": true/false,
+            "is_gluten_free": true/false,
+            "cuisine_type": "cuisine type"
+        }},
+        // ... repeat for each meal type
+    ]
+}}"""
+        
+        return prompt
     
     def _get_fallback_meal(self, meal_type: MealType, calorie_target: float) -> PlannedMeal:
         """Return a simple fallback meal if generation fails"""

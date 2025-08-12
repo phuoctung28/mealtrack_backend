@@ -15,6 +15,8 @@ from .meal import (
 from .meal_plan import (
     StartMealPlanConversationCommand,
     SendConversationMessageCommand,
+    GenerateIngredientBasedMealPlanCommand,
+    GenerateWeeklyIngredientBasedMealPlanCommand,
     ReplaceMealInPlanCommand,
 )
 # TDEE commands removed - not used in API
@@ -37,5 +39,7 @@ __all__ = [
     "StartMealPlanConversationCommand",
     "SendConversationMessageCommand",
     "GenerateDailyMealPlanCommand",
+    "GenerateIngredientBasedMealPlanCommand",
+    "GenerateWeeklyIngredientBasedMealPlanCommand",
     "ReplaceMealInPlanCommand",
 ]
