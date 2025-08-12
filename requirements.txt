@@ -28,8 +28,6 @@ python-dotenv==1.0.0
 # Event-driven architecture
 pymediator==0.3.0
 
-
-
 # Testing dependencies
 pytest==8.0.0
 pytest-html==4.1.1
@@ -39,7 +37,3 @@ pytest-asyncio==0.23.2
 httpx==0.26.0
 pytest-mock==3.12.0
 pytest-timeout==2.2.0
-
-# Requirements for Gradio UI
-gradio>=4.0.0
-requests>=2.31.0
