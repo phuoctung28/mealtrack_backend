@@ -18,10 +18,9 @@ class DietaryPreference(str, Enum):
 
 
 class FitnessGoal(str, Enum):
-    WEIGHT_LOSS = "weight_loss"
-    MUSCLE_GAIN = "muscle_gain"
     MAINTENANCE = "maintenance"
-    GENERAL_HEALTH = "general_health"
+    CUTTING = "cutting"
+    BULKING = "bulking"
 
 
 class MealType(str, Enum):

@@ -7,6 +7,8 @@ from typing import Dict, Any
 
 from sqlalchemy.orm import Session
 
+from src.app.handlers.query_handlers.tdee_query_handlers import GetUserTdeeQueryHandler
+from src.app.queries.tdee.get_user_tdee_query import GetUserTdeeQuery
 from src.domain.model.meal_plan import UserPreferences, DietaryPreference, FitnessGoal, PlanDuration
 from src.infra.database.models.user import UserProfile
 
@@ -19,7 +21,7 @@ class UserProfileService:
     def __init__(self, db: Session):
         self.db = db
     
-    def get_user_profile_or_defaults(self, user_id: str) -> Dict[str, Any]:
+    async def get_user_profile_or_defaults(self, user_id: str) -> Dict[str, Any]:
         """Get user profile data or provide sensible defaults."""
         profile = self.db.query(UserProfile).filter(
             UserProfile.user_id == user_id,
@@ -28,10 +30,10 @@ class UserProfileService:
         
         if profile:
             # Import here to avoid circular dependency
-            from src.app.handlers.command_handlers.user_command_handlers import SaveUserOnboardingCommandHandler
-            onboarding_handler = SaveUserOnboardingCommandHandler(self.db)
-            tdee_result = onboarding_handler._calculate_tdee_and_macros(profile)
-            
+            tdee_handler = GetUserTdeeQueryHandler(self.db)
+            tdee_query = GetUserTdeeQuery(user_id=user_id)
+            tdee_result = await tdee_handler.handle(tdee_query)
+
             return {
                 'dietary_preferences': profile.dietary_preferences or [],
                 'allergies': profile.allergies or [],
