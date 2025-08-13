@@ -58,7 +58,7 @@ class GenerateWeeklyIngredientBasedMealPlanCommandHandler(
         )
 
         # ── 1. get user profile data using shared service ──────────────
-        user_data = self.user_profile_service.get_user_profile_or_defaults(command.user_id)
+        user_data = await self.user_profile_service.get_user_profile_or_defaults(command.user_id)
         
         # ── 2. calculate next Monday-Sunday dates ───────────────────────
         from datetime import datetime, timedelta

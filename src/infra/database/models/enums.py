@@ -28,10 +28,9 @@ class DietaryPreferenceEnum(str, enum.Enum):
 
 class FitnessGoalEnum(str, enum.Enum):
     """Fitness goal options."""
-    weight_loss = "weight_loss"
-    muscle_gain = "muscle_gain"
     maintenance = "maintenance"
-    general_health = "general_health"
+    cutting = "cutting"
+    bulking = "bulking"
 
 
 class MealTypeEnum(str, enum.Enum):

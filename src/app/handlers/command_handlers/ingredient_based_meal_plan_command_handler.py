@@ -8,7 +8,8 @@ from typing import Dict, Any
 
 from src.api.converters.meal_plan_converters import MealPlanConverter
 from src.api.schemas.response.meal_plan_responses import DailyMealPlanStrongResponse
-from src.domain.model.meal_generation_response import DailyMealPlan
+from src.app.handlers.query_handlers.tdee_query_handlers import GetUserTdeeQueryHandler
+from src.app.queries.tdee.get_user_tdee_query import GetUserTdeeQuery
 
 from sqlalchemy.orm import Session
 
@@ -54,8 +55,9 @@ class GenerateIngredientBasedMealPlanCommandHandler(
         ).first()
 
         if profile:
-            onboarding_handler = SaveUserOnboardingCommandHandler(self.db)
-            tdee_result = onboarding_handler._calculate_tdee_and_macros(profile)
+            tdee_handler = GetUserTdeeQueryHandler(self.db)
+            tdee_query = GetUserTdeeQuery(user_id=command.user_id)
+            tdee_result = await tdee_handler.handle(tdee_query)
 
             dietary_preferences = profile.dietary_preferences or []
             allergies = profile.allergies or []

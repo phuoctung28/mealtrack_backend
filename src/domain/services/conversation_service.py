@@ -110,10 +110,9 @@ class ConversationService:
         conversation.context.fitness_goal = goal
         
         nutrition_focus = {
-            FitnessGoal.MUSCLE_GAIN.value: "I'll make sure to include high-protein options",
-            FitnessGoal.WEIGHT_LOSS.value: "I'll focus on balanced, calorie-controlled meals",
+            FitnessGoal.BULKING.value: "I'll make sure to include high-protein options",
+            FitnessGoal.CUTTING.value: "I'll focus on balanced, calorie-controlled meals",
             FitnessGoal.MAINTENANCE.value: "I'll create well-balanced meals",
-            FitnessGoal.GENERAL_HEALTH.value: "I'll focus on nutritious, varied meals"
         }
         
         default_msg = "I'll create appropriate meals for your goal"
