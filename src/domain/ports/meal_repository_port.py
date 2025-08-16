@@ -72,12 +72,13 @@ class MealRepositoryPort(ABC):
         pass
     
     @abstractmethod
-    def find_by_date(self, date, limit: int = 50) -> List[Meal]:
+    def find_by_date(self, date, user_id: str = None, limit: int = 50) -> List[Meal]:
         """
-        Finds meals created on a specific date.
+        Finds meals created on a specific date, optionally filtered by user.
         
         Args:
             date: The date to filter by (date object)
+            user_id: Optional user ID to filter meals by specific user
             limit: Maximum number of results
             
         Returns:

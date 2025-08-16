@@ -26,6 +26,7 @@ class Meal:
     This is the main entity in the domain.
     """
     meal_id: str  # UUID as string
+    user_id: str  # UUID as string - identifies the user who owns this meal
     status: MealStatus
     created_at: datetime
     image: MealImage
@@ -37,11 +38,16 @@ class Meal:
     
     def __post_init__(self):
         """Validate invariants."""
-        # Validate UUID format
+        # Validate UUID formats
         try:
             uuid.UUID(self.meal_id)
         except ValueError:
             raise ValueError(f"Invalid UUID format for meal_id: {self.meal_id}")
+        
+        try:
+            uuid.UUID(self.user_id)
+        except ValueError:
+            raise ValueError(f"Invalid UUID format for user_id: {self.user_id}")
         
         # Status-based validations
         if self.status == MealStatus.READY and self.nutrition is None:
@@ -54,10 +60,11 @@ class Meal:
             raise ValueError("Meal with FAILED status must have error_message")
     
     @classmethod
-    def create_new_processing(cls, image: MealImage) -> 'Meal':
+    def create_new_processing(cls, user_id: str, image: MealImage) -> 'Meal':
         """Factory method to create a new meal in PROCESSING status."""
         return cls(
             meal_id=str(uuid.uuid4()),
+            user_id=user_id,
             status=MealStatus.PROCESSING,
             created_at=datetime.now(),
             image=image
@@ -67,6 +74,7 @@ class Meal:
         """Transition to ANALYZING state."""
         return Meal(
             meal_id=self.meal_id,
+            user_id=self.user_id,
             status=MealStatus.ANALYZING,
             created_at=self.created_at,
             image=self.image,
@@ -81,6 +89,7 @@ class Meal:
         """Transition to ENRICHING state with GPT response."""
         return Meal(
             meal_id=self.meal_id,
+            user_id=self.user_id,
             status=MealStatus.ENRICHING,
             created_at=self.created_at,
             image=self.image,
@@ -95,6 +104,7 @@ class Meal:
         """Transition to READY state with final nutrition data."""
         return Meal(
             meal_id=self.meal_id,
+            user_id=self.user_id,
             status=MealStatus.READY,
             created_at=self.created_at,
             image=self.image,
@@ -109,6 +119,7 @@ class Meal:
         """Transition to FAILED state with error message."""
         return Meal(
             meal_id=self.meal_id,
+            user_id=self.user_id,
             status=MealStatus.FAILED,
             created_at=self.created_at,
             image=self.image,
@@ -123,6 +134,7 @@ class Meal:
         """Convert to dictionary format."""
         result = {
             "meal_id": self.meal_id,
+            "user_id": self.user_id,
             "status": str(self.status),
             "created_at": self.created_at.isoformat(),
             "image": self.image.to_dict()

@@ -54,11 +54,11 @@ class GetMealsByDateQueryHandler(EventHandler[GetMealsByDateQuery, List[Meal]]):
         self.meal_repository = meal_repository
     
     async def handle(self, query: GetMealsByDateQuery) -> List[Meal]:
-        """Get meals for a specific date."""
+        """Get meals for a specific date and user."""
         if not self.meal_repository:
             raise RuntimeError("Meal repository not configured")
         
-        return self.meal_repository.find_by_date(query.target_date)
+        return self.meal_repository.find_by_date(query.target_date, user_id=query.user_id)
 
 
 @handles(GetDailyMacrosQuery)
@@ -81,7 +81,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             raise RuntimeError("Meal repository not configured")
         
         target_date = query.target_date or date.today()
-        meals = self.meal_repository.find_by_date(target_date)
+        meals = self.meal_repository.find_by_date(target_date, user_id=query.user_id)
         
         # Initialize totals
         total_calories = 0.0

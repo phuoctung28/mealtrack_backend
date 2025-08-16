@@ -63,6 +63,7 @@ class TestCompleteUserFlow:
         
         # Step 2: Upload and analyze meal image immediately
         upload_command = UploadMealImageImmediatelyCommand(
+            user_id="flow-test-user",
             file_contents=sample_image_bytes,
             content_type="image/jpeg"
         )
@@ -117,6 +118,7 @@ class TestCompleteUserFlow:
         """Test immediate meal analysis flow."""
         # Upload and analyze immediately
         command = UploadMealImageImmediatelyCommand(
+            user_id="test-user-123",
             file_contents=sample_image_bytes,
             content_type="image/jpeg"
         )
@@ -145,6 +147,7 @@ class TestCompleteUserFlow:
         # Create multiple upload commands - reduce concurrency to avoid connection issues
         commands = [
             UploadMealImageCommand(
+                user_id="test-user-123",
                 file_contents=sample_image_bytes,
                 content_type="image/jpeg"
             )
@@ -181,6 +184,7 @@ class TestCompleteUserFlow:
         # Test with small image data - should still work with mocks
         result = await event_bus.send(
             UploadMealImageCommand(
+                user_id="test-user-123",
                 file_contents=b"small image data",
                 content_type="image/jpeg"
             )
@@ -246,6 +250,7 @@ class TestEventBusIntegration:
         
         # Upload a meal
         command = UploadMealImageCommand(
+            user_id="test-user-123",
             file_contents=sample_image_bytes,
             content_type="image/jpeg"
         )

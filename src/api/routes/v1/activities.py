@@ -19,6 +19,7 @@ router = APIRouter(
 
 @router.get("/daily", response_model=List[Dict])
 async def get_daily_activities(
+    user_id: str = Query(..., description="User ID to filter activities"),
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format, defaults to today"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
@@ -42,7 +43,7 @@ async def get_daily_activities(
             target_date = datetime.now()
         
         # Send query
-        query = GetDailyActivitiesQuery(target_date=target_date)
+        query = GetDailyActivitiesQuery(user_id=user_id, target_date=target_date)
         activities = await event_bus.send(query)
         
         return activities
