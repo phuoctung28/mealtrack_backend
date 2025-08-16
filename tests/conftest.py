@@ -293,6 +293,7 @@ def sample_meal_domain() -> Meal:
     """Create a sample meal domain object."""
     return Meal(
         meal_id="123e4567-e89b-12d3-a456-426614174001",
+        user_id="123e4567-e89b-12d3-a456-426614174000",
         status=MealStatus.READY,
         created_at=datetime.now(),
         image=MealImage(

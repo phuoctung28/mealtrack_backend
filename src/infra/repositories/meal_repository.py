@@ -187,8 +187,8 @@ class MealRepository(MealRepositoryPort):
         """
         return len(self._meals)
     
-    def find_by_date(self, date, limit: int = 50) -> List[Meal]:
-        """Find meals created on a specific date."""
+    def find_by_date(self, date, user_id: str = None, limit: int = 50) -> List[Meal]:
+        """Find meals created on a specific date, optionally filtered by user."""
         db = self._get_db()
         
         try:
@@ -199,10 +199,18 @@ class MealRepository(MealRepositoryPort):
             end_datetime = start_datetime + timedelta(days=1)
             
             # Query meals created within the date range
-            db_meals = (
+            query = (
                 db.query(DBMeal)
                 .filter(DBMeal.created_at >= start_datetime)
                 .filter(DBMeal.created_at < end_datetime)
+            )
+            
+            # Add user filter if provided
+            if user_id:
+                query = query.filter(DBMeal.user_id == user_id)
+            
+            db_meals = (
+                query
                 .order_by(DBMeal.created_at.desc())  # Newest first
                 .limit(limit)
                 .all()
@@ -282,6 +290,7 @@ class MealRepository(MealRepositoryPort):
         # Create Meal
         return Meal(
             meal_id=data["meal_id"],
+            user_id=data["user_id"],
             status=MealStatus(data["status"]),
             created_at=datetime.fromisoformat(data["created_at"]),
             image=image,

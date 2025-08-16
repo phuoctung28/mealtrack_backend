@@ -62,6 +62,7 @@ class UploadMealImageCommandHandler(EventHandler[UploadMealImageCommand, Dict[st
         # Create meal
         meal = Meal(
             meal_id=str(uuid4()),
+            user_id=command.user_id,
             status=MealStatus.PROCESSING,
             created_at=datetime.now(),
             image=meal_image

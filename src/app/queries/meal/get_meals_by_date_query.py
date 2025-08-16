@@ -10,4 +10,5 @@ from src.app.events.base import Query
 @dataclass
 class GetMealsByDateQuery(Query):
     """Query to get meals for a specific date."""
+    user_id: str
     target_date: date

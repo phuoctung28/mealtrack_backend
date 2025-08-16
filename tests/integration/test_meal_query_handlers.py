@@ -17,7 +17,7 @@ from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
 
 
-def create_test_meal_in_db(session, meal_id, dish_name, created_at=None, 
+def create_test_meal_in_db(session, meal_id, dish_name, user_id="test-user-123", created_at=None, 
                           calories=500, protein=30, carbs=50, fat=20, fiber=5):
     """Helper to create a test meal with proper structure."""
     import uuid
@@ -36,6 +36,7 @@ def create_test_meal_in_db(session, meal_id, dish_name, created_at=None,
     # Create meal
     meal = MealModel(
         meal_id=meal_id,
+        user_id=user_id,
         status=MealStatusEnum.READY,
         dish_name=dish_name,
         created_at=created_at or datetime.now(),
@@ -117,6 +118,7 @@ class TestGetMealByIdQueryHandler:
         meal_id = str(uuid.uuid4())
         meal_model = MealModel(
             meal_id=meal_id,
+            user_id="test-user-123",
             status=MealStatusEnum.READY,
             dish_name="Test Meal with Items",
             created_at=datetime.now(),
@@ -221,7 +223,7 @@ class TestGetMealsByDateQueryHandler:
         )
         test_session.commit()
         
-        query = GetMealsByDateQuery(target_date=today)
+        query = GetMealsByDateQuery(user_id="test-user-123", target_date=today)
         
         # Act
         meals = await event_bus.send(query)
@@ -238,7 +240,7 @@ class TestGetMealsByDateQueryHandler:
         """Test meals retrieval for date with no meals."""
         # Arrange
         future_date = date.today() + timedelta(days=365)
-        query = GetMealsByDateQuery(target_date=future_date)
+        query = GetMealsByDateQuery(user_id="test-user-123", target_date=future_date)
         
         # Act
         meals = await event_bus.send(query)
@@ -276,7 +278,7 @@ class TestGetMealsByDateQueryHandler:
         )
         test_session.commit()
         
-        query = GetMealsByDateQuery(target_date=today)
+        query = GetMealsByDateQuery(user_id="test-user-123", target_date=today)
         
         # Act
         meals = await event_bus.send(query)

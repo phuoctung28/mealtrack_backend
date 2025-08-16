@@ -16,6 +16,7 @@ class UploadMealImageImmediatelyCommand(Command):
     This command combines upload and analysis in a single synchronous operation,
     returning complete nutritional analysis without background processing.
     """
+    user_id: str
     file_contents: bytes
     content_type: str
     target_date: Optional[date] = None

@@ -16,6 +16,7 @@ class Meal(Base, TimestampMixin):
     
     # Primary key
     meal_id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), nullable=False, index=True)  # User who created this meal
     status = Column(Enum(MealStatusEnum), nullable=False)
     dish_name = Column(String(255), nullable=True)  # The name of the dish
     ready_at = Column(DateTime, nullable=True)  # When meal analysis was completed
@@ -43,6 +44,7 @@ class Meal(Base, TimestampMixin):
         
         return DomainMeal(
             meal_id=self.meal_id,
+            user_id=self.user_id,
             status=status_mapping[self.status],
             created_at=self.created_at,
             image=self.image.to_domain() if self.image else None,
@@ -70,6 +72,7 @@ class Meal(Base, TimestampMixin):
         # Create meal
         meal = cls(
             meal_id=domain_model.meal_id,
+            user_id=getattr(domain_model, "user_id", None),
             status=status_mapping[domain_model.status],
             created_at=domain_model.created_at,
             updated_at=getattr(domain_model, "updated_at", None),
