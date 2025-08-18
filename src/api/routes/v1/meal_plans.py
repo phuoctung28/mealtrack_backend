@@ -19,7 +19,8 @@ from src.api.schemas.response import (
     DailyMealPlanResponse,
     DailyMealPlanStrongResponse,
     WeeklyMealPlanResponse,
-    MealsByDateResponse
+    MealsByDateResponse,
+    MealPlanGenerationStatusResponse
 )
 from src.app.commands.meal_plan import (
     StartMealPlanConversationCommand,
@@ -169,33 +170,38 @@ async def generate_ingredient_based_meal_plan(
         raise handle_exception(e)
 
 
-@router.post("/generate/weekly-ingredient-based", response_model=WeeklyMealPlanResponse)
+@router.post("/generate/weekly-ingredient-based", response_model=MealPlanGenerationStatusResponse)
 async def generate_weekly_ingredient_based_meal_plan(
+    user_id: str,
     request: IngredientBasedMealPlanRequest,
-    user_id: str = "default_user",
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
-    Generate a weekly meal plan (Monday to Sunday) based on available ingredients and seasonings.
+    Generate a weekly meal plan based on provided ingredients and user preferences.
     
-    This endpoint creates comprehensive weekly meal plans using only the ingredients you have available,
-    helping to minimize food waste and maximize ingredient utilization across the entire week.
+    This endpoint generates a comprehensive weekly meal plan using the ingredients provided
+    in the request body, combined with the user's profile, preferences, and goals.
     
-    The system generates all meals for the week in a single LLM call, ensuring better meal coordination
-    and variety across the week.
+    The system generates the meal plan in the background and returns a simple success status,
+    allowing the frontend to show a loading screen and navigate to the home screen once complete.
     """
     try:
-        available_ingredients = request.available_ingredients
-        
+        # Generate weekly meal plan using ingredients from request
         command = GenerateWeeklyIngredientBasedMealPlanCommand(
             user_id=user_id,
-            available_ingredients=available_ingredients,
+            available_ingredients=request.available_ingredients,
             available_seasonings=request.available_seasonings
         )
         
+        # Execute the command - this generates the full meal plan and saves it to the database
         result = await event_bus.send(command)
         
-        return WeeklyMealPlanResponse(**result)
+        # Return simple status response instead of full meal plan data
+        return MealPlanGenerationStatusResponse(
+            success=True,
+            message="Weekly meal plan generated successfully!",
+            user_id=user_id
+        )
         
     except Exception as e:
         raise handle_exception(e)

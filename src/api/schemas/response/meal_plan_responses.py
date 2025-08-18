@@ -253,3 +253,19 @@ class DailyMealPlanStrongResponse(BaseModel):
         json_encoders = {
             date: lambda v: v.isoformat()
         }
+
+
+class MealPlanGenerationStatusResponse(BaseModel):
+    """Simple status response for meal plan generation operations."""
+    success: bool = Field(..., description="Whether the meal plan generation was successful")
+    message: str = Field(..., description="Status message for the user")
+    user_id: str = Field(..., description="User identifier")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "message": "Weekly meal plan generated successfully!",
+                "user_id": "user123"
+            }
+        }
