@@ -254,7 +254,7 @@ def event_bus(
 def sample_user(test_session) -> User:
     """Create a sample user for testing."""
     user = User(
-        id="test-user-123",
+        id="550e8400-e29b-41d4-a716-446655440001",
         firebase_uid="test-firebase-uid-123",
         email="test@example.com",
         username="testuser",
@@ -293,6 +293,7 @@ def sample_meal_domain() -> Meal:
     """Create a sample meal domain object."""
     return Meal(
         meal_id="123e4567-e89b-12d3-a456-426614174001",
+        user_id="123e4567-e89b-12d3-a456-426614174000",
         status=MealStatus.READY,
         created_at=datetime.now(),
         image=MealImage(

@@ -36,6 +36,7 @@ class TestWithStubs:
         # Create stub meal with all required fields
         meal = Meal(
             meal_id="123e4567-e89b-12d3-a456-426614174001",
+            user_id="123e4567-e89b-12d3-a456-426614174000",
             status=MealStatus.READY,
             created_at=datetime.now(),
             image=stub_image,
@@ -63,6 +64,7 @@ class TestWithStubs:
         mock_repo = Mock()
         mock_repo.find_by_id.return_value = Meal(
             meal_id="123e4567-e89b-12d3-a456-426614174001",
+            user_id="123e4567-e89b-12d3-a456-426614174000",
             status=MealStatus.READY,
             created_at=datetime.now(),
             image=stub_image,

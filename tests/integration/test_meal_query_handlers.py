@@ -17,7 +17,7 @@ from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
 
 
-def create_test_meal_in_db(session, meal_id, dish_name, created_at=None, 
+def create_test_meal_in_db(session, meal_id, dish_name, user_id="550e8400-e29b-41d4-a716-446655440001", created_at=None, 
                           calories=500, protein=30, carbs=50, fat=20, fiber=5):
     """Helper to create a test meal with proper structure."""
     import uuid
@@ -36,6 +36,7 @@ def create_test_meal_in_db(session, meal_id, dish_name, created_at=None,
     # Create meal
     meal = MealModel(
         meal_id=meal_id,
+        user_id=user_id,
         status=MealStatusEnum.READY,
         dish_name=dish_name,
         created_at=created_at or datetime.now(),
@@ -117,6 +118,7 @@ class TestGetMealByIdQueryHandler:
         meal_id = str(uuid.uuid4())
         meal_model = MealModel(
             meal_id=meal_id,
+            user_id="550e8400-e29b-41d4-a716-446655440001",
             status=MealStatusEnum.READY,
             dish_name="Test Meal with Items",
             created_at=datetime.now(),
@@ -200,7 +202,7 @@ class TestGetMealsByDateQueryHandler:
             test_session,
             meal1_id,
             "Breakfast",
-            datetime.combine(today, datetime.min.time()),
+            created_at=datetime.combine(today, datetime.min.time()),
             calories=300,
             protein=20,
             carbs=30,
@@ -212,7 +214,7 @@ class TestGetMealsByDateQueryHandler:
             test_session,
             meal2_id,
             "Lunch",
-            datetime.combine(today, datetime.min.time()) + timedelta(hours=4),
+            created_at=datetime.combine(today, datetime.min.time()) + timedelta(hours=4),
             calories=500,
             protein=30,
             carbs=50,
@@ -221,7 +223,7 @@ class TestGetMealsByDateQueryHandler:
         )
         test_session.commit()
         
-        query = GetMealsByDateQuery(target_date=today)
+        query = GetMealsByDateQuery(user_id="550e8400-e29b-41d4-a716-446655440001", target_date=today)
         
         # Act
         meals = await event_bus.send(query)
@@ -238,7 +240,7 @@ class TestGetMealsByDateQueryHandler:
         """Test meals retrieval for date with no meals."""
         # Arrange
         future_date = date.today() + timedelta(days=365)
-        query = GetMealsByDateQuery(target_date=future_date)
+        query = GetMealsByDateQuery(user_id="550e8400-e29b-41d4-a716-446655440001", target_date=future_date)
         
         # Act
         meals = await event_bus.send(query)
@@ -264,7 +266,7 @@ class TestGetMealsByDateQueryHandler:
             test_session,
             yesterday_meal_id,
             "Yesterday's Meal",
-            datetime.combine(yesterday, datetime.min.time())
+            created_at=datetime.combine(yesterday, datetime.min.time())
         )
         
         # Create meal for today
@@ -272,11 +274,11 @@ class TestGetMealsByDateQueryHandler:
             test_session,
             today_meal_id,
             "Today's Meal",
-            datetime.combine(today, datetime.min.time())
+            created_at=datetime.combine(today, datetime.min.time())
         )
         test_session.commit()
         
-        query = GetMealsByDateQuery(target_date=today)
+        query = GetMealsByDateQuery(user_id="550e8400-e29b-41d4-a716-446655440001", target_date=today)
         
         # Act
         meals = await event_bus.send(query)
@@ -302,7 +304,7 @@ class TestGetDailyMacrosQueryHandler:
             test_session,
             str(uuid.uuid4()),
             "Meal 0",
-            datetime.combine(today, datetime.min.time()),
+            created_at=datetime.combine(today, datetime.min.time()),
             calories=300,
             protein=20,
             carbs=30,
@@ -315,7 +317,7 @@ class TestGetDailyMacrosQueryHandler:
             test_session,
             str(uuid.uuid4()),
             "Meal 1",
-            datetime.combine(today, datetime.min.time()) + timedelta(hours=4),
+            created_at=datetime.combine(today, datetime.min.time()) + timedelta(hours=4),
             calories=400,
             protein=25,
             carbs=40,
@@ -328,7 +330,7 @@ class TestGetDailyMacrosQueryHandler:
             test_session,
             str(uuid.uuid4()),
             "Meal 2",
-            datetime.combine(today, datetime.min.time()) + timedelta(hours=8),
+            created_at=datetime.combine(today, datetime.min.time()) + timedelta(hours=8),
             calories=500,
             protein=30,
             carbs=50,
@@ -338,7 +340,7 @@ class TestGetDailyMacrosQueryHandler:
         
         test_session.commit()
         
-        query = GetDailyMacrosQuery(user_id="test_user", target_date=today)
+        query = GetDailyMacrosQuery(user_id="550e8400-e29b-41d4-a716-446655440001", target_date=today)
         
         # Act
         result = await event_bus.send(query)
@@ -357,7 +359,7 @@ class TestGetDailyMacrosQueryHandler:
         """Test daily macros for date with no meals."""
         # Arrange
         future_date = date.today() + timedelta(days=365)
-        query = GetDailyMacrosQuery(user_id="test_user", target_date=future_date)
+        query = GetDailyMacrosQuery(user_id="550e8400-e29b-41d4-a716-446655440001", target_date=future_date)
         
         # Act
         result = await event_bus.send(query)

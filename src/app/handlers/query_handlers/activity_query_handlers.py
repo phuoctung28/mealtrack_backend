@@ -32,13 +32,13 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         activities = []
         
         # Get meal activities
-        meal_activities = self._get_meal_activities(query.target_date)
-        logger.info(f"Found {len(meal_activities)} meal activities for date {query.target_date.strftime('%Y-%m-%d')}")
+        meal_activities = self._get_meal_activities(query.target_date, query.user_id)
+        logger.info(f"Found {len(meal_activities)} meal activities for user {query.user_id} on date {query.target_date.strftime('%Y-%m-%d')}")
         activities.extend(meal_activities)
         
         # Get workout activities (placeholder for now)
-        workout_activities = self._get_workout_activities(query.target_date)
-        logger.info(f"Found {len(workout_activities)} workout activities for date {query.target_date.strftime('%Y-%m-%d')}")
+        workout_activities = self._get_workout_activities(query.target_date, query.user_id)
+        logger.info(f"Found {len(workout_activities)} workout activities for user {query.user_id} on date {query.target_date.strftime('%Y-%m-%d')}")
         activities.extend(workout_activities)
         
         # Sort by timestamp (newest first)
@@ -47,11 +47,11 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         logger.info(f"Retrieved {len(activities)} total activities")
         return activities
     
-    def _get_meal_activities(self, target_date: datetime) -> List[Dict[str, Any]]:
-        """Get meal activities for a specific date."""
+    def _get_meal_activities(self, target_date: datetime, user_id: str) -> List[Dict[str, Any]]:
+        """Get meal activities for a specific date and user."""
         try:
             date_obj = target_date.date()
-            meals = self.meal_repository.find_by_date(date_obj)
+            meals = self.meal_repository.find_by_date(date_obj, user_id=user_id)
             
             meal_activities = []
             for meal in meals:
@@ -120,8 +120,8 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         
         return estimated_weight
     
-    def _get_workout_activities(self, target_date: datetime) -> List[Dict[str, Any]]:
-        """Get workout activities for a specific date."""
+    def _get_workout_activities(self, target_date: datetime, user_id: str) -> List[Dict[str, Any]]:
+        """Get workout activities for a specific date and user."""
         # TODO: When workout service is implemented, fetch from there
         # For now, return empty list
         return []

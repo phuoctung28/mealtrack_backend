@@ -51,6 +51,7 @@ STATUS_MAPPING = {
 @router.post("/image", response_model=Dict[str, str])
 async def upload_meal_image(
     file: UploadFile = File(...),
+    user_id: str = Query(..., description="User ID for meal association"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -72,6 +73,7 @@ async def upload_meal_image(
         
         # Send upload command
         command = UploadMealImageCommand(
+            user_id=user_id,
             file_contents=contents,
             content_type=file.content_type
         )
@@ -94,6 +96,7 @@ async def upload_meal_image(
 @router.post("/image/analyze", status_code=status.HTTP_200_OK, response_model=DetailedMealResponse)
 async def analyze_meal_image_immediate(
     file: UploadFile = File(...),
+    user_id: str = Query(..., description="User ID for meal association"),
     target_date: Optional[str] = Query(None, description="Target date in YYYY-MM-DD format for meal association"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
@@ -144,6 +147,7 @@ async def analyze_meal_image_immediate(
         from src.app.commands.meal import UploadMealImageImmediatelyCommand
         
         command = UploadMealImageImmediatelyCommand(
+            user_id=user_id,
             file_contents=contents,
             content_type=file.content_type,
             target_date=parsed_target_date
@@ -232,6 +236,7 @@ async def get_meal(
 
 @router.get("/daily/entries", response_model=MealListResponse)
 async def get_daily_meal_entries(
+    user_id: str = Query(..., description="User ID to get meals for"),
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
@@ -244,7 +249,7 @@ async def get_daily_meal_entries(
             target_date = datetime.now().date()
         
         # Send query
-        query = GetMealsByDateQuery(target_date=target_date)
+        query = GetMealsByDateQuery(user_id=user_id, target_date=target_date)
         meals = await event_bus.send(query)
         
         # Get image URLs if needed

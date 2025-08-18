@@ -72,6 +72,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             # Create meal record with ANALYZING status
             meal = Meal(
                 meal_id=str(uuid4()),
+                user_id=command.user_id,
                 status=MealStatus.ANALYZING,
                 created_at=meal_datetime,
                 image=MealImage(
