@@ -37,7 +37,8 @@ from .meal_plan_responses import (
     UserPreferencesStrongResponse,
     NutritionSummarySchema,
     UserPreferenceSummarySchema,
-    MealsByDateResponse
+    MealsByDateResponse,
+    MealPlanGenerationStatusResponse
 )
 # Meal responses
 from .meal_responses import (
@@ -132,6 +133,7 @@ __all__ = [
     'NutritionSummarySchema',
     'UserPreferenceSummarySchema',
     'MealsByDateResponse',
+    'MealPlanGenerationStatusResponse',
 
     # Weekly meal plan
     'WeeklyMealPlanResponse',
