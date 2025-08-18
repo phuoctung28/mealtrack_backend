@@ -22,7 +22,7 @@ class TestUploadMealImageCommandHandler:
         """Test successful meal image upload."""
         # Arrange
         command = UploadMealImageCommand(
-            user_id="test-user-123",
+            user_id="550e8400-e29b-41d4-a716-446655440001",
             file_contents=sample_image_bytes,
             content_type="image/jpeg"
         )
@@ -44,7 +44,7 @@ class TestUploadMealImageCommandHandler:
         """Test that uploaded meal is stored in repository."""
         # Arrange
         command = UploadMealImageCommand(
-            user_id="test-user-123",
+            user_id="550e8400-e29b-41d4-a716-446655440001",
             file_contents=sample_image_bytes,
             content_type="image/jpeg"
         )
@@ -119,7 +119,7 @@ class TestUploadMealImageImmediatelyHandler:
         """Test successful immediate upload and analysis."""
         # Arrange
         command = UploadMealImageImmediatelyCommand(
-            user_id="test-user-123",
+            user_id="550e8400-e29b-41d4-a716-446655440001",
             file_contents=sample_image_bytes,
             content_type="image/jpeg"
         )
@@ -142,7 +142,7 @@ class TestUploadMealImageImmediatelyHandler:
         """Test that immediately analyzed meal is stored correctly."""
         # Arrange
         command = UploadMealImageImmediatelyCommand(
-            user_id="test-user-123",
+            user_id="550e8400-e29b-41d4-a716-446655440001",
             file_contents=sample_image_bytes,
             content_type="image/jpeg"
         )

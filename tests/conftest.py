@@ -254,7 +254,7 @@ def event_bus(
 def sample_user(test_session) -> User:
     """Create a sample user for testing."""
     user = User(
-        id="test-user-123",
+        id="550e8400-e29b-41d4-a716-446655440001",
         firebase_uid="test-firebase-uid-123",
         email="test@example.com",
         username="testuser",

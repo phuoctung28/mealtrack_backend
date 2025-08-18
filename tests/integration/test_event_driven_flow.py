@@ -27,7 +27,7 @@ class TestCompleteUserFlow:
         # Step 0: Create user first
         from src.infra.database.models.user.user import User
         user = User(
-            id="flow-test-user",
+            id="550e8400-e29b-41d4-a716-446655440000",
             firebase_uid="flow-test-firebase-uid",
             email="flowtest@example.com",
             username="flowtest",
@@ -39,7 +39,7 @@ class TestCompleteUserFlow:
         
         # Step 1: User onboarding
         onboarding_command = SaveUserOnboardingCommand(
-            user_id="flow-test-user",
+            user_id="550e8400-e29b-41d4-a716-446655440000",
             age=30,
             gender="male",
             height_cm=175,
@@ -56,14 +56,14 @@ class TestCompleteUserFlow:
         # Verify the profile was created by checking the database
         from src.infra.database.models.user.profile import UserProfile
         saved_profile = test_session.query(UserProfile).filter(
-            UserProfile.user_id == "flow-test-user"
+            UserProfile.user_id == "550e8400-e29b-41d4-a716-446655440000"
         ).first()
         assert saved_profile is not None
         assert saved_profile.age == 30
         
         # Step 2: Upload and analyze meal image immediately
         upload_command = UploadMealImageImmediatelyCommand(
-            user_id="flow-test-user",
+            user_id="550e8400-e29b-41d4-a716-446655440000",
             file_contents=sample_image_bytes,
             content_type="image/jpeg"
         )
@@ -118,7 +118,7 @@ class TestCompleteUserFlow:
         """Test immediate meal analysis flow."""
         # Upload and analyze immediately
         command = UploadMealImageImmediatelyCommand(
-            user_id="test-user-123",
+            user_id="550e8400-e29b-41d4-a716-446655440001",
             file_contents=sample_image_bytes,
             content_type="image/jpeg"
         )
@@ -147,7 +147,7 @@ class TestCompleteUserFlow:
         # Create multiple upload commands - reduce concurrency to avoid connection issues
         commands = [
             UploadMealImageCommand(
-                user_id="test-user-123",
+                user_id="550e8400-e29b-41d4-a716-446655440001",
                 file_contents=sample_image_bytes,
                 content_type="image/jpeg"
             )
@@ -184,7 +184,7 @@ class TestCompleteUserFlow:
         # Test with small image data - should still work with mocks
         result = await event_bus.send(
             UploadMealImageCommand(
-                user_id="test-user-123",
+                user_id="550e8400-e29b-41d4-a716-446655440001",
                 file_contents=b"small image data",
                 content_type="image/jpeg"
             )
@@ -250,7 +250,7 @@ class TestEventBusIntegration:
         
         # Upload a meal
         command = UploadMealImageCommand(
-            user_id="test-user-123",
+            user_id="550e8400-e29b-41d4-a716-446655440001",
             file_contents=sample_image_bytes,
             content_type="image/jpeg"
         )
