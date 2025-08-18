@@ -1,12 +1,12 @@
 # Absolute minimum dependencies for production
-# Using flexible versions for compatibility
+# Pinned versions for reproducible builds
 
 # Core web framework
-fastapi>=0.115.0
-uvicorn[standard]>=0.27.0
-pydantic>=2.7.4
-email-validator>=2.1.0
-python-multipart>=0.0.19
+fastapi==0.115.0
+uvicorn[standard]==0.27.0
+pydantic==2.7.4
+email-validator==2.1.0
+python-multipart==0.0.19
 
 # Database (MySQL only)
 sqlalchemy==2.0.41
@@ -14,8 +14,8 @@ pymysql==1.1.1
 cryptography==45.0.0
 
 # AI/LLM - only what's needed
-langchain-core>=0.1.0
-langchain-google-genai>=2.1.0
+langchain-core==0.1.0
+langchain-google-genai==1.0.0
 
 # Image handling
 cloudinary==1.37.0
