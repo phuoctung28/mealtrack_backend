@@ -19,7 +19,7 @@ class TestSaveUserOnboardingCommandHandler:
         # Create user first
         from src.infra.database.models.user.user import User
         user = User(
-            id="test-user-123",
+            id="550e8400-e29b-41d4-a716-446655440001",
             firebase_uid="test-firebase-uid-123",
             email="test@example.com",
             username="testuser",
@@ -32,7 +32,7 @@ class TestSaveUserOnboardingCommandHandler:
         
         # Arrange
         command = SaveUserOnboardingCommand(
-            user_id="test-user-123",
+            user_id="550e8400-e29b-41d4-a716-446655440001",
             age=30,
             gender="male",
             height_cm=175,
@@ -52,7 +52,7 @@ class TestSaveUserOnboardingCommandHandler:
         # Verify the profile was created/updated in the database
         from src.infra.database.models.user.profile import UserProfile
         saved_profile = test_session.query(UserProfile).filter(
-            UserProfile.user_id == "test-user-123"
+            UserProfile.user_id == "550e8400-e29b-41d4-a716-446655440001"
         ).first()
         
         assert saved_profile is not None
@@ -69,7 +69,7 @@ class TestSaveUserOnboardingCommandHandler:
         # Create user first
         from src.infra.database.models.user.user import User
         user = User(
-            id="test-user-123",
+            id="550e8400-e29b-41d4-a716-446655440001",
             firebase_uid="test-firebase-uid-123",
             email="test@example.com",
             username="testuser",
@@ -82,7 +82,7 @@ class TestSaveUserOnboardingCommandHandler:
         
         # Arrange
         command = SaveUserOnboardingCommand(
-            user_id="test-user-123",
+            user_id="550e8400-e29b-41d4-a716-446655440001",
             age=-5,  # Invalid age
             gender="male",
             height_cm=175,
@@ -101,7 +101,7 @@ class TestSaveUserOnboardingCommandHandler:
         # Create user first
         from src.infra.database.models.user.user import User
         user = User(
-            id="test-user-123",
+            id="550e8400-e29b-41d4-a716-446655440001",
             firebase_uid="test-firebase-uid-123",
             email="test@example.com",
             username="testuser",
@@ -114,7 +114,7 @@ class TestSaveUserOnboardingCommandHandler:
         
         # Arrange
         command = SaveUserOnboardingCommand(
-            user_id="test-user-123",
+            user_id="550e8400-e29b-41d4-a716-446655440001",
             age=30,
             gender="male",
             height_cm=175,
