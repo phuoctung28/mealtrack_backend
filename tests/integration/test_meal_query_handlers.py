@@ -202,7 +202,7 @@ class TestGetMealsByDateQueryHandler:
             test_session,
             meal1_id,
             "Breakfast",
-            datetime.combine(today, datetime.min.time()),
+            created_at=datetime.combine(today, datetime.min.time()),
             calories=300,
             protein=20,
             carbs=30,
@@ -214,7 +214,7 @@ class TestGetMealsByDateQueryHandler:
             test_session,
             meal2_id,
             "Lunch",
-            datetime.combine(today, datetime.min.time()) + timedelta(hours=4),
+            created_at=datetime.combine(today, datetime.min.time()) + timedelta(hours=4),
             calories=500,
             protein=30,
             carbs=50,
@@ -266,7 +266,7 @@ class TestGetMealsByDateQueryHandler:
             test_session,
             yesterday_meal_id,
             "Yesterday's Meal",
-            datetime.combine(yesterday, datetime.min.time())
+            created_at=datetime.combine(yesterday, datetime.min.time())
         )
         
         # Create meal for today
@@ -274,7 +274,7 @@ class TestGetMealsByDateQueryHandler:
             test_session,
             today_meal_id,
             "Today's Meal",
-            datetime.combine(today, datetime.min.time())
+            created_at=datetime.combine(today, datetime.min.time())
         )
         test_session.commit()
         
@@ -304,7 +304,7 @@ class TestGetDailyMacrosQueryHandler:
             test_session,
             str(uuid.uuid4()),
             "Meal 0",
-            datetime.combine(today, datetime.min.time()),
+            created_at=datetime.combine(today, datetime.min.time()),
             calories=300,
             protein=20,
             carbs=30,
@@ -317,7 +317,7 @@ class TestGetDailyMacrosQueryHandler:
             test_session,
             str(uuid.uuid4()),
             "Meal 1",
-            datetime.combine(today, datetime.min.time()) + timedelta(hours=4),
+            created_at=datetime.combine(today, datetime.min.time()) + timedelta(hours=4),
             calories=400,
             protein=25,
             carbs=40,
@@ -330,7 +330,7 @@ class TestGetDailyMacrosQueryHandler:
             test_session,
             str(uuid.uuid4()),
             "Meal 2",
-            datetime.combine(today, datetime.min.time()) + timedelta(hours=8),
+            created_at=datetime.combine(today, datetime.min.time()) + timedelta(hours=8),
             calories=500,
             protein=30,
             carbs=50,
