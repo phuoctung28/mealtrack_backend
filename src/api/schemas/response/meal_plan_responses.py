@@ -54,6 +54,7 @@ class PlannedMealSchema(BaseModel):
     carbs: float = Field(..., description="Carbohydrates in grams")
     fat: float = Field(..., description="Fat in grams")
     ingredients: List[str]
+    seasonings: List[str]
     instructions: List[str]
     is_vegetarian: bool
     is_vegan: bool

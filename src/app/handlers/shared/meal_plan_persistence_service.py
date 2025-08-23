@@ -159,6 +159,7 @@ class MealPlanPersistenceService:
             "carbs": meal_data.get("carbs", 0.0),
             "fat": meal_data.get("fat", 0.0),
             "ingredients": meal_data.get("ingredients", []),
+            "seasonings": meal_data.get("seasonings", []),
             "instructions": meal_data.get("instructions", []),
             "is_vegetarian": meal_data.get("is_vegetarian", False),
             "is_vegan": meal_data.get("is_vegan", False),

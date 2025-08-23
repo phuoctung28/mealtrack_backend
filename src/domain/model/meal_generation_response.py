@@ -37,6 +37,7 @@ class GeneratedMeal:
     cook_time: int
     nutrition: NutritionSummary
     ingredients: List[str]
+    seasonings: List[str]
     instructions: List[str]
     is_vegetarian: bool
     is_vegan: bool
@@ -63,6 +64,7 @@ class GeneratedMeal:
             "carbs": self.nutrition.carbs,
             "fat": self.nutrition.fat,
             "ingredients": self.ingredients,
+            "seasonings": self.seasonings,
             "instructions": self.instructions,
             "is_vegetarian": self.is_vegetarian,
             "is_vegan": self.is_vegan,

@@ -43,6 +43,7 @@ class FallbackMealService:
             cook_time=template["cook_time"],
             nutrition=scaled_nutrition,
             ingredients=scaled_ingredients,
+            seasonings=template["seasonings"],
             instructions=template["instructions"],
             is_vegetarian=template["is_vegetarian"],
             is_vegan=template["is_vegan"],
@@ -67,7 +68,12 @@ class FallbackMealService:
                     "{portion}g rolled oats",
                     "30g protein powder",
                     "1 medium banana",
-                    "1 tbsp almond butter"
+                    "15ml almond butter"
+                ],
+                "seasonings": [
+                    "1g ground cinnamon",
+                    "0.5g salt",
+                    "2ml vanilla extract"
                 ],
                 "instructions": [
                     "Cook oats with water or milk",
@@ -91,10 +97,17 @@ class FallbackMealService:
                 "base_portion": 150,
                 "ingredients": [
                     "{portion}g grilled chicken breast",
-                    "Mixed greens",
-                    "Cherry tomatoes",
-                    "Cucumber",
-                    "Avocado"
+                    "100g mixed greens",
+                    "150g cherry tomatoes",
+                    "100g diced cucumber",
+                    "50g sliced avocado"
+                ],
+                "seasonings": [
+                    "15ml olive oil",
+                    "2g salt",
+                    "1g black pepper",
+                    "15ml lemon juice",
+                    "2g garlic powder"
                 ],
                 "instructions": [
                     "Grill chicken breast",
@@ -119,10 +132,17 @@ class FallbackMealService:
                 "base_portion": 180,
                 "ingredients": [
                     "{portion}g salmon fillet",
-                    "Broccoli",
-                    "Sweet potato",
-                    "Olive oil",
-                    "Lemon"
+                    "200g broccoli florets",
+                    "1 medium sweet potato",
+                    "15ml olive oil",
+                    "1 lemon"
+                ],
+                "seasonings": [
+                    "3g dried dill",
+                    "2g salt",
+                    "1g black pepper",
+                    "2g garlic powder",
+                    "5g lemon zest"
                 ],
                 "instructions": [
                     "Season salmon with herbs",
@@ -147,8 +167,13 @@ class FallbackMealService:
                 "base_portion": 170,
                 "ingredients": [
                     "{portion}g Greek yogurt",
-                    "Mixed berries",
-                    "Honey (optional)"
+                    "75g mixed berries",
+                    "5ml honey (optional)"
+                ],
+                "seasonings": [
+                    "2ml vanilla extract",
+                    "1g ground cinnamon",
+                    "0.5g salt"
                 ],
                 "instructions": [
                     "Add berries to yogurt",

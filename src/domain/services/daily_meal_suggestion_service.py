@@ -431,7 +431,7 @@ Return ONLY a JSON object with this structure:
                     f"{int(60 * scale_factor)}g rolled oats",
                     f"{int(30 * scale_factor)}g protein powder",
                     "1 medium banana",
-                    "1 tbsp almond butter",
+                    "1 tablespoon almond butter",
                     "Cinnamon to taste"
                 ],
                 "instructions": [

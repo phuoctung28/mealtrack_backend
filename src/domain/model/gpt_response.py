@@ -97,7 +97,7 @@ class GPTAnalysisResponse(BaseModel):
                     {
                         "name": "Caesar Dressing",
                         "quantity": 2,
-                        "unit": "tbsp",
+                        "unit": "tablespoon",
                         "calories": 150,
                         "macros": {
                             "protein": 1,

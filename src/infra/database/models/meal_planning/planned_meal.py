@@ -27,8 +27,9 @@ class PlannedMeal(Base, SecondaryEntityMixin):
     carbs = Column(Float)
     fat = Column(Float)
     
-    # Stored as JSON arrays
-    ingredients = Column(JSON)
+    # Stored as JSON arrays - ingredients now include portions
+    ingredients = Column(JSON)  # ["2 cups rice", "1 lb chicken breast", "1 tablespoon olive oil"]
+    seasonings = Column(JSON)   # ["1 teaspoon salt", "1/2 teaspoon black pepper", "1 tablespoon oregano"]
     instructions = Column(JSON)
     
     # Dietary flags
