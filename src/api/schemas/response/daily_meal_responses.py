@@ -79,7 +79,7 @@ class SuggestedMealResponse(BaseModel):
                     "1 cup rolled oats",
                     "1 scoop protein powder",
                     "1/2 cup mixed berries",
-                    "2 tbsp almond butter"
+                    "2 tablespoons almond butter"
                 ],
                 "instructions": [
                     "Cook oats according to package directions",

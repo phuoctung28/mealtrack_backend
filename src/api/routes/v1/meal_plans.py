@@ -194,7 +194,7 @@ async def generate_weekly_ingredient_based_meal_plan(
         )
         
         # Execute the command - this generates the full meal plan and saves it to the database
-        result = await event_bus.send(command)
+        await event_bus.send(command)
         
         # Return simple status response instead of full meal plan data
         return MealPlanGenerationStatusResponse(

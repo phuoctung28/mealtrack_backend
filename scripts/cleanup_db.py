@@ -181,6 +181,12 @@ def main():
         else:
             # Drop and recreate tables
             drop_all_tables()
+            create_all_tables()
+            
+            # Optionally populate mock data
+            if not args.no_mock_data:
+                populate_mock_data()
+        
         print("\n✨ Database cleanup complete!")
         
     except Exception as e:

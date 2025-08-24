@@ -78,6 +78,7 @@ class PlannedMeal:
     carbs: float  # grams
     fat: float  # grams
     ingredients: List[str]
+    seasonings: List[str]
     instructions: List[str]
     is_vegetarian: bool
     is_vegan: bool
@@ -96,6 +97,7 @@ class PlannedMeal:
         self.carbs = kwargs['carbs']
         self.fat = kwargs['fat']
         self.ingredients = kwargs['ingredients']
+        self.seasonings = kwargs.get('seasonings', [])
         self.instructions = kwargs['instructions']
         self.is_vegetarian = kwargs['is_vegetarian']
         self.is_vegan = kwargs['is_vegan']
@@ -120,6 +122,7 @@ class PlannedMeal:
             "carbs": self.carbs,
             "fat": self.fat,
             "ingredients": self.ingredients,
+            "seasonings": self.seasonings,
             "instructions": self.instructions,
             "is_vegetarian": self.is_vegetarian,
             "is_vegan": self.is_vegan,

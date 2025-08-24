@@ -271,6 +271,7 @@ class MealPlanOrchestrationService:
             cook_time=meal_data.get("cook_time", 20),
             nutrition=nutrition,
             ingredients=meal_data.get("ingredients", ["Basic ingredients"]),
+            seasonings=meal_data.get("seasonings", ["Basic seasonings"]),
             instructions=meal_data.get("instructions", ["Prepare and cook as desired"]),
             is_vegetarian=meal_data.get("is_vegetarian", False),
             is_vegan=meal_data.get("is_vegan", False),
@@ -290,7 +291,7 @@ class MealPlanOrchestrationService:
             raise ValueError(f"Expected 7 days, got {len(week_data)}")
         
         required_fields = {"meal_type", "name", "calories", "protein", "carbs", "fat", 
-                          "ingredients", "instructions", "is_vegetarian", "is_vegan", 
+                          "ingredients", "seasonings", "instructions", "is_vegetarian", "is_vegan", 
                           "is_gluten_free", "cuisine_type"}
         
         include_snacks = request.get("include_snacks", False)
@@ -342,6 +343,7 @@ class MealPlanOrchestrationService:
             meal.setdefault("is_vegan", False)
             meal.setdefault("is_gluten_free", False)
             meal.setdefault("cuisine_type", "International")
+            meal.setdefault("seasonings", ["salt", "pepper"])  # Default seasonings if missing
             
             # Add actual date and formatted day string
             if meal["day"] in day_to_date:
@@ -443,6 +445,7 @@ class MealPlanOrchestrationService:
                     "prep_time": fallback_meal.prep_time,
                     "cook_time": fallback_meal.cook_time,
                     "ingredients": fallback_meal.ingredients,
+                    "seasonings": fallback_meal.seasonings,
                     "instructions": fallback_meal.instructions,
                     "is_vegetarian": fallback_meal.is_vegetarian,
                     "is_vegan": fallback_meal.is_vegan,

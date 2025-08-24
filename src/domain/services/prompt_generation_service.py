@@ -36,7 +36,7 @@ class PromptGenerationService:
         """Generate weekly ingredient-based meal plan prompt."""
         meals_per_day = len(context.generation_context.meal_types)
         
-        # Create a more explicit schema
+        # Create a more explicit schema with portions and seasonings
         schema = (
             '{\n'
             '  "week": [\n'
@@ -53,7 +53,8 @@ class PromptGenerationService:
             '          "fat": 15.0,\n'
             '          "prep_time": 10,\n'
             '          "cook_time": 15,\n'
-            '          "ingredients": ["ingredient1", "ingredient2"],\n'
+            '          "ingredients": ["300g brown rice", "450g chicken breast", "100g mixed greens", "150g cherry tomatoes", "15ml olive oil"],\n'
+            '          "seasonings": ["2g salt", "1g black pepper", "3g dried oregano"],\n'
             '          "instructions": ["step1", "step2"],\n'
             '          "is_vegetarian": true,\n'
             '          "is_vegan": false,\n'
@@ -106,13 +107,31 @@ class PromptGenerationService:
             f"{meal_targets_text}\n\n"
             f"CRITICAL REQUIREMENTS:\n"
             f"- Generate exactly {meals_per_day} meals per day: {context.get_meal_types_text()}\n"
-            f"- Use ONLY the listed ingredients above\n"
+            f"- Use ONLY the listed ingredients and seasonings above\n\n"
+            f"INGREDIENT REQUIREMENTS (MANDATORY):\n"
+            f"- EVERY SINGLE ingredient MUST include exact measurements and portions - NO EXCEPTIONS\n"
+            f"- FORBIDDEN: Any ingredient without a specific amount (e.g., 'Mixed greens', 'Cherry tomatoes', 'Cucumber')\n"
+            f"- REQUIRED: ALL ingredients with precise portions using WORLD-STANDARD units (grams, milliliters, pieces)\n"
+            f"- Use INTERNATIONAL units: grams (g), milliliters (ml), pieces, slices, cloves - NOT region-specific cups/pounds/ounces\n"
+            f"- Use precise portions: '300g brown rice', '450g chicken breast', '250g salmon fillet', '200g quinoa'\n"
+            f"- ALL vegetables MUST have portions: '100g mixed greens', '150g cherry tomatoes', '100g diced cucumber', '50g sliced avocado'\n"
+            f"- Common ingredient portions: proteins (400-600g), grains/starches (200-400g), vegetables (100-300g), oils (15-30ml)\n"
+            f"- Example ingredients array: ['450g chicken breast', '300g brown rice', '150g broccoli florets', '15ml olive oil']\n"
+            f"- Adjust ingredient amounts based on serving size and nutritional targets\n\n"
+            f"SEASONINGS REQUIREMENTS (MANDATORY):\n"
+            f"- EVERY meal MUST include seasonings with exact measurements using WORLD-STANDARD units\n"
+            f"- Use INTERNATIONAL units: grams (g), milliliters (ml), pinches - NOT teaspoons/tablespoons\n"
+            f"- Use precise portions: '2g salt', '1g black pepper', '3g dried oregano', '10ml olive oil'\n"
+            f"- Common seasoning portions: salt (1-3g), pepper (0.5-1g), herbs/spices (2-5g), oils (5-15ml)\n"
+            f"- Example seasonings array: ['2g salt', '1g black pepper', '3g dried oregano', '2g garlic powder']\n"
+            f"- Adjust seasoning amounts based on serving size and meal type\n\n"
+            f"NUTRITION TARGETS:\n"
             f"- Each day must total EXACTLY {nutrition_targets.calories} calories, {nutrition_targets.protein}g protein, {nutrition_targets.carbs}g carbs, {nutrition_targets.fat}g fat\n"
             f"- Each meal must match its target nutrition values above\n"
             f"- Keep meal descriptions under 20 words\n"
             f"- Keep instructions to 3 steps maximum{snack_requirement}\n\n"
             f"CRITICAL: Return ONLY valid JSON in this exact format:\n{schema}\n\n"
-            f"Generate all 7 days with precise nutrition matching the targets above."
+            f"Generate all 7 days with precise nutrition matching the targets above. CRITICAL: EVERY SINGLE ingredient and seasoning MUST have exact portions using WORLD-STANDARD units (grams, milliliters). FORBIDDEN: Ingredients like 'Mixed greens', 'Cherry tomatoes', 'Cucumber' without portions. REQUIRED: '100g mixed greens', '150g cherry tomatoes', '100g diced cucumber'!"
         )
         
         return prompt, "You are a meal planning assistant. Return only valid JSON without any markdown formatting or explanations."
@@ -121,7 +140,7 @@ class PromptGenerationService:
         """Generate daily ingredient-based meal plan prompt."""
         meals_per_day = len(context.generation_context.meal_types)
         
-        # Create schema for daily meal plan
+        # Create schema for daily meal plan with portions and seasonings
         schema = (
             '{\\n'
             '  "meals": [\\n'
@@ -135,7 +154,8 @@ class PromptGenerationService:
             '      "fat": 15.0,\\n'
             '      "prep_time": 10,\\n'
             '      "cook_time": 15,\\n'
-            '      "ingredients": ["ingredient1", "ingredient2"],\\n'
+            '      "ingredients": ["300g brown rice", "450g chicken breast", "100g mixed greens", "150g cherry tomatoes", "15ml olive oil"],\\n'
+            '      "seasonings": ["2g salt", "1g black pepper", "3g dried oregano"],\\n'
             '      "instructions": ["step1", "step2"],\\n'
             '      "is_vegetarian": true,\\n'
             '      "is_vegan": false,\\n'
@@ -183,13 +203,31 @@ class PromptGenerationService:
             f"{meal_targets_text}\\n\\n"
             f"CRITICAL REQUIREMENTS:\\n"
             f"- Generate exactly {meals_per_day} meals: {context.get_meal_types_text()}\\n"
-            f"- Use ONLY the listed ingredients above\\n"
+            f"- Use ONLY the listed ingredients and seasonings above\\n\\n"
+            f"INGREDIENT REQUIREMENTS (MANDATORY):\\n"
+            f"- EVERY SINGLE ingredient MUST include exact measurements and portions - NO EXCEPTIONS\\n"
+            f"- FORBIDDEN: Any ingredient without a specific amount (e.g., 'Mixed greens', 'Cherry tomatoes', 'Cucumber')\\n"
+            f"- REQUIRED: ALL ingredients with precise portions using WORLD-STANDARD units (grams, milliliters, pieces)\\n"
+            f"- Use INTERNATIONAL units: grams (g), milliliters (ml), pieces, slices, cloves - NOT region-specific cups/pounds/ounces\\n"
+            f"- Use precise portions: '300g brown rice', '450g chicken breast', '250g salmon fillet', '200g quinoa'\\n"
+            f"- ALL vegetables MUST have portions: '100g mixed greens', '150g cherry tomatoes', '100g diced cucumber', '50g sliced avocado'\\n"
+            f"- Common ingredient portions: proteins (400-600g), grains/starches (200-400g), vegetables (100-300g), oils (15-30ml)\\n"
+            f"- Example ingredients array: ['450g chicken breast', '300g brown rice', '150g broccoli florets', '15ml olive oil']\\n"
+            f"- Adjust ingredient amounts based on serving size and nutritional targets\\n\\n"
+            f"SEASONINGS REQUIREMENTS (MANDATORY):\\n"
+            f"- EVERY meal MUST include seasonings with exact measurements using WORLD-STANDARD units\\n"
+            f"- Use INTERNATIONAL units: grams (g), milliliters (ml), pinches - NOT teaspoons/tablespoons\\n"
+            f"- Use precise portions: '2g salt', '1g black pepper', '3g dried oregano', '10ml olive oil'\\n"
+            f"- Common seasoning portions: salt (1-3g), pepper (0.5-1g), herbs/spices (2-5g), oils (5-15ml)\\n"
+            f"- Example seasonings array: ['2g salt', '1g black pepper', '3g dried oregano', '2g garlic powder']\\n"
+            f"- Adjust seasoning amounts based on serving size and meal type\\n\\n"
+            f"NUTRITION TARGETS:\\n"
             f"- All meals must total EXACTLY {nutrition_targets.calories} calories, {nutrition_targets.protein}g protein, {nutrition_targets.carbs}g carbs, {nutrition_targets.fat}g fat\\n"
             f"- Each meal must match its target nutrition values above\\n"
             f"- Keep meal descriptions under 20 words\\n"
             f"- Keep instructions to 3 steps maximum{snack_requirement}\\n\\n"
             f"CRITICAL: Return ONLY valid JSON in this exact format:\\n{schema}\\n\\n"
-            f"Generate all meals with precise nutrition matching the targets above."
+            f"Generate all meals with precise nutrition matching the targets above. CRITICAL: EVERY SINGLE ingredient and seasoning MUST have exact portions using WORLD-STANDARD units (grams, milliliters). FORBIDDEN: Ingredients like 'Mixed greens', 'Cherry tomatoes', 'Cucumber' without portions. REQUIRED: '100g mixed greens', '150g cherry tomatoes', '100g diced cucumber'!"
         )
         
         return prompt, "You are a meal planning assistant. Return only valid JSON without any markdown formatting or explanations."
@@ -272,11 +310,30 @@ Return ONLY a JSON object with this structure:
 Available seasonings: {context.get_seasonings_text()}
 Target calories: {calorie_target}
 
-IMPORTANT: Only use the ingredients listed above. Do not add any other ingredients.
+IMPORTANT: Only use the ingredients and seasonings listed above. Do not add any other ingredients.
 {context.get_dietary_requirements_text()}{context.get_allergy_restrictions_text()}
 
 Create a simple, practical recipe that:
-- Uses ONLY the available ingredients listed above
+- Uses ONLY the available ingredients and seasonings listed above
+
+INGREDIENT REQUIREMENTS (MANDATORY):
+- EVERY SINGLE ingredient MUST include exact measurements and portions - NO EXCEPTIONS
+- FORBIDDEN: Any ingredient without a specific amount (e.g., 'Mixed greens', 'Cherry tomatoes', 'Cucumber')
+- REQUIRED: ALL ingredients with precise portions using WORLD-STANDARD units (grams, milliliters, pieces)
+- Use INTERNATIONAL units: grams (g), milliliters (ml), pieces, slices, cloves - NOT region-specific cups/pounds/ounces
+- Use precise portions: '300g brown rice', '450g chicken breast', '250g salmon fillet', '200g quinoa'
+- ALL vegetables MUST have portions: '100g mixed greens', '150g cherry tomatoes', '100g diced cucumber', '50g sliced avocado'
+- Common ingredient portions: proteins (400-600g), grains/starches (200-400g), vegetables (100-300g), oils (15-30ml)
+- Example ingredients array: ['450g chicken breast', '300g brown rice', '150g broccoli florets', '15ml olive oil']
+
+SEASONINGS REQUIREMENTS (MANDATORY):
+- MUST include seasonings with exact measurements using WORLD-STANDARD units in separate array
+- Use INTERNATIONAL units: grams (g), milliliters (ml), pinches - NOT teaspoons/tablespoons
+- Use precise portions: '2g salt', '1g black pepper', '3g dried oregano', '10ml olive oil'
+- Common seasoning portions: salt (1-3g), pepper (0.5-1g), herbs/spices (2-5g), oils (5-15ml)
+- Seasonings array cannot be empty
+
+Additional requirements:
 - Creates a balanced and nutritious {meal_type.value}
 - Is easy to prepare
 - CRITICAL: NEVER use any ingredients that match the allergies listed above
@@ -291,7 +348,8 @@ Respond with valid JSON only:
     "fat": 15.0,
     "prep_time": 15,
     "cook_time": 20,
-    "ingredients": ["chicken", "broccoli", "rice"],
+    "ingredients": ["300g brown rice", "450g chicken breast", "100g mixed greens", "150g cherry tomatoes", "15ml olive oil"],
+    "seasonings": ["2g salt", "1g black pepper", "3g dried oregano"],
     "instructions": ["step 1", "step 2"],
     "is_vegetarian": false,
     "is_vegan": false,

@@ -143,6 +143,7 @@ class GetMealsByDateQueryHandler(EventHandler[GetMealsByDateQuery, Dict[str, Any
             carbs=db_meal.carbs or 0.0,
             fat=db_meal.fat or 0.0,
             ingredients=db_meal.ingredients or [],
+            seasonings=db_meal.seasonings or [],
             instructions=db_meal.instructions or [],
             is_vegetarian=db_meal.is_vegetarian or False,
             is_vegan=db_meal.is_vegan or False,
