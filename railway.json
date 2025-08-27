@@ -6,7 +6,10 @@
       "providers": ["python"],
       "phases": {
         "setup": {
-          "nixPkgs": ["python311", "gcc"]
+          "nixPkgs": ["python311", "gcc", "mysql-client"]
+        },
+        "install": {
+          "cmds": ["pip install -r requirements.txt"]
         }
       }
     }

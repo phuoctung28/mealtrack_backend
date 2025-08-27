@@ -1,17 +1,20 @@
 #!/usr/bin/env python
 """
-Railway startup script following best practices.
-This script handles database migrations and app startup in the correct order.
+Railway-specific migration script.
+This script handles database migrations for Railway deployment with proper error handling.
 """
 import os
 import sys
 import time
 import logging
-import subprocess
 from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import inspect, text
 
 # Configure logging
 logging.basicConfig(
@@ -21,14 +24,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def wait_for_database(max_attempts=15, delay=3):
+def wait_for_database(max_attempts=10, delay=5):
     """Wait for database to be available with exponential backoff."""
     logger.info("⏳ Waiting for database to be available...")
     
     for attempt in range(max_attempts):
         try:
             from src.infra.database.config import engine
-            from sqlalchemy import text
             
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -37,7 +39,7 @@ def wait_for_database(max_attempts=15, delay=3):
             
         except Exception as e:
             if attempt < max_attempts - 1:
-                wait_time = min(delay * (2 ** attempt), 30)  # Cap at 30 seconds
+                wait_time = delay * (2 ** attempt)  # Exponential backoff
                 logger.warning(f"Database connection attempt {attempt + 1} failed: {e}")
                 logger.info(f"Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
@@ -55,7 +57,6 @@ def run_migrations():
         wait_for_database()
         
         # Get alembic config
-        from alembic.config import Config
         alembic_cfg = Config("alembic.ini")
         
         # Check current migration status
@@ -72,8 +73,6 @@ def run_migrations():
         
         # Check if alembic_version table exists
         from src.infra.database.config import engine
-        from sqlalchemy import inspect
-        
         inspector = inspect(engine)
         tables = inspector.get_table_names()
         
@@ -85,7 +84,6 @@ def run_migrations():
             
             if not app_tables:
                 logger.info("📝 Empty database detected - stamping baseline migration")
-                from alembic import command
                 command.stamp(alembic_cfg, "001")
                 logger.info("✅ Baseline migration stamped")
             else:
@@ -93,7 +91,6 @@ def run_migrations():
         
         # Run migrations
         logger.info("🚀 Running migrations...")
-        from alembic import command
         command.upgrade(alembic_cfg, "head")
         logger.info("✅ All migrations completed successfully")
         
@@ -111,57 +108,29 @@ def run_migrations():
         return False
 
 
-def start_application():
-    """Start the FastAPI application."""
-    port = os.environ.get("PORT", "8000")
-    workers = os.environ.get("WEB_CONCURRENCY", "1")
-    
-    # Production uvicorn configuration
-    cmd = [
-        "uvicorn",
-        "src.api.main:app",
-        "--host", "0.0.0.0",
-        "--port", port,
-        "--workers", workers,
-        "--loop", "uvloop",
-        "--access-log"
-    ]
-    
-    logger.info(f"🚀 Starting application: {' '.join(cmd)}")
-    
-    # Replace current process with uvicorn
-    os.execvp("uvicorn", cmd)
-
-
 def main():
-    """Main entry point following Railway best practices."""
+    """Main entry point."""
     logger.info("=" * 60)
-    logger.info("🚂 Railway Startup Script")
+    logger.info("🚂 Railway Migration Script Starting")
     logger.info(f"Python: {sys.version}")
     logger.info(f"Environment: {os.environ.get('RAILWAY_ENVIRONMENT', 'production')}")
     logger.info(f"Database URL: {os.environ.get('DATABASE_URL', 'Not set')[:50]}...")
     logger.info("=" * 60)
     
     try:
-        # Step 1: Run migrations (CRITICAL - must succeed)
-        logger.info("📦 Step 1: Running database migrations...")
-        migration_success = run_migrations()
-        
-        if not migration_success:
-            logger.error("💥 Migrations failed! Application cannot start safely.")
-            logger.error("Railway will restart this deployment automatically.")
+        success = run_migrations()
+        if success:
+            logger.info("🎉 Migration process completed successfully!")
+            sys.exit(0)
+        else:
+            logger.error("💥 Migration process failed!")
             sys.exit(1)
-        
-        # Step 2: Start application (only if migrations succeed)
-        logger.info("🎯 Step 2: Starting application...")
-        start_application()
-        
+            
     except KeyboardInterrupt:
-        logger.warning("⚠️  Startup interrupted by user")
+        logger.warning("⚠️  Migration interrupted by user")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"💥 Unexpected error during startup: {e}")
-        logger.error("Railway will restart this deployment automatically.")
+        logger.error(f"💥 Unexpected error: {e}")
         sys.exit(1)
 
 
