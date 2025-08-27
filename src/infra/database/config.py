@@ -35,6 +35,18 @@ engine = create_engine(
     echo=False,  # Set to True to log SQL queries
     pool_pre_ping=True,  # Check connections before using them
     pool_recycle=300,  # Recycle connections every 5 minutes
+    # Railway-specific optimizations
+    pool_size=5,  # Smaller pool size for Railway
+    max_overflow=10,  # Allow some overflow connections
+    pool_timeout=30,  # Wait up to 30 seconds for available connection
+    # Connection retry and timeout settings
+    connect_args={
+        "connect_timeout": 60,  # 60 second connection timeout
+        "read_timeout": 60,     # 60 second read timeout
+        "write_timeout": 60,    # 60 second write timeout
+        "charset": "utf8mb4",
+        "autocommit": False,
+    }
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

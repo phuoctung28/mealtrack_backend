@@ -31,6 +31,9 @@ from .user.profile import UserProfile
 # User models
 from .user.user import User
 
+# Test models
+from .test import TestTable
+
 __all__ = [
     # Base
     "BaseMixin",
@@ -64,4 +67,7 @@ __all__ = [
     "MealPlan",
     "MealPlanDay",
     "PlannedMeal",
+    
+    # Test models
+    "TestTable",
 ]
