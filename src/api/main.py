@@ -21,40 +21,48 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def init_database():
-    """Initialize database tables if they don't exist."""
-    from src.infra.database.config import engine, Base
+def verify_database():
+    """Verify database connection and migration status."""
+    from src.infra.database.config import engine
+    import time
     
-    # Import all models to ensure they're registered
-
-    # Check if we should recreate tables (development mode)
-    RECREATE_TABLES = os.getenv("RECREATE_TABLES", "false").lower() == "true"
+    max_retries = 3
+    retry_delay = 5
     
-    try:
-        # Check existing tables
-        inspector = inspect(engine)
-        existing_tables = inspector.get_table_names()
-        
-        # Count non-system tables
-        app_tables = [t for t in existing_tables if t != 'alembic_version']
-        
-        if RECREATE_TABLES and app_tables:
-            logger.warning("RECREATE_TABLES=true. Dropping all tables...")
-            Base.metadata.drop_all(bind=engine)
-            logger.info("All tables dropped.")
-            app_tables = []
-        
-        if len(app_tables) == 0:
-            logger.info("Creating database schema...")
-            Base.metadata.create_all(bind=engine)
-            logger.info("✅ Database schema created successfully!")
-        else:
-            logger.info(f"✅ Database ready with {len(app_tables)} existing tables")
+    for attempt in range(max_retries):
+        try:
+            # Just verify we can connect to the database
+            # Don't create or modify any tables - that's what migrations are for!
+            with engine.connect() as conn:
+                conn.execute("SELECT 1")
             
-    except Exception as e:
-        logger.error(f"Database initialization error: {e}")
-        logger.error("If using MySQL, ensure it's running: ./local.sh")
-        raise
+            logger.info("✅ Database connection verified")
+            
+            # Check if alembic_version table exists (indicates migrations have run)
+            inspector = inspect(engine)
+            existing_tables = inspector.get_table_names()
+            
+            if 'alembic_version' in existing_tables:
+                logger.info("✅ Database migrations are in place")
+            else:
+                logger.warning("⚠️  No migrations detected. Ensure migrations run before app startup.")
+                # In production, this should never happen if migrations are properly configured
+            
+            break
+            
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Database connection attempt {attempt + 1} failed: {e}")
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                logger.error(f"Database connection failed after {max_retries} attempts: {e}")
+                if "localhost" in str(e) or "127.0.0.1" in str(e):
+                    logger.error("If using MySQL locally, ensure it's running: ./local.sh")
+                else:
+                    logger.error("Database connection failed. Check Railway deployment.")
+                raise
 
 
 @asynccontextmanager
@@ -63,8 +71,8 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting MealTrack API...")
     
-    # Initialize database
-    init_database()
+    # Verify database connection and migration status
+    verify_database()
     
     logger.info("MealTrack API started successfully!")
     yield
