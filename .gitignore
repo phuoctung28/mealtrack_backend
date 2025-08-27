@@ -49,9 +49,11 @@ coverage.xml
 
 # Cloudinary uploads (if stored locally)
 uploads/
-
+node_modules/
 # Database files
 *.db
 *.db-journal
 *.sqlite
-*.sqlite3 
+*.sqlite3
+package.json
+package-lock.json
