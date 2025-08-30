@@ -15,7 +15,7 @@ class SyncUserCommand:
     phone_number: Optional[str] = None
     display_name: Optional[str] = None
     photo_url: Optional[str] = None
-    provider: AuthProviderEnum = AuthProviderEnum.PHONE
+    provider: AuthProviderEnum = AuthProviderEnum.GOOGLE
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None

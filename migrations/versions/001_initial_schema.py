@@ -20,18 +20,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Create initial database schema"""
+    """Create initial database schema to match actual models"""
     
-    # Create users table (basic version without enhancements)
+    # Create users table - basic version without enhancements (firebase_uid, phone_number, etc. added in migration 002)
     op.create_table('users',
-        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
+        sa.Column('id', sa.CHAR(36), nullable=False),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        # Basic Information
         sa.Column('email', sa.String(length=255), nullable=False),
         sa.Column('username', sa.String(length=100), nullable=False),
         sa.Column('first_name', sa.String(length=100), nullable=True),
         sa.Column('last_name', sa.String(length=100), nullable=True),
+        # Authentication
         sa.Column('password_hash', sa.String(length=255), nullable=False),
+        # Status & Activity
         sa.Column('is_active', sa.Boolean(), nullable=False, server_default='1'),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('email'),
@@ -39,177 +42,181 @@ def upgrade() -> None:
     )
     logger.info("✅ Created users table")
     
-    # Create user_profiles table
+    # Create user_profiles table - matches UserProfile model
     op.create_table('user_profiles',
-        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
+        sa.Column('id', sa.CHAR(36), nullable=False),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
         sa.Column('user_id', sa.CHAR(36), nullable=False),
-        sa.Column('age', sa.Integer(), nullable=True),
-        sa.Column('gender', sa.Enum('MALE', 'FEMALE', 'OTHER', name='genderenum'), nullable=True),
-        sa.Column('height', sa.Float(), nullable=True),
-        sa.Column('weight', sa.Float(), nullable=True),
+        sa.Column('age', sa.Integer(), nullable=False),
+        sa.Column('gender', sa.String(length=20), nullable=False),
+        sa.Column('height_cm', sa.Float(), nullable=False),
+        sa.Column('weight_kg', sa.Float(), nullable=False),
         sa.Column('body_fat_percentage', sa.Float(), nullable=True),
-        sa.Column('activity_level', sa.Enum('SEDENTARY', 'LIGHTLY_ACTIVE', 'MODERATELY_ACTIVE', 'VERY_ACTIVE', 'EXTREMELY_ACTIVE', name='activitylevelenum'), nullable=True),
-        sa.Column('fitness_goal', sa.Enum('WEIGHT_LOSS', 'WEIGHT_GAIN', 'MUSCLE_GAIN', 'MAINTENANCE', 'BODY_RECOMPOSITION', name='fitnessgoalenum'), nullable=True),
-        sa.Column('dietary_preferences', sa.JSON(), nullable=True),
-        sa.Column('tdee', sa.Float(), nullable=True),
-        sa.Column('target_calories', sa.Integer(), nullable=True),
-        sa.Column('target_protein', sa.Float(), nullable=True),
-        sa.Column('target_carbs', sa.Float(), nullable=True),
-        sa.Column('target_fat', sa.Float(), nullable=True),
         sa.Column('is_current', sa.Boolean(), nullable=False, server_default='1'),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-        sa.PrimaryKeyConstraint('id')
+        # Goal fields
+        sa.Column('activity_level', sa.String(length=30), nullable=False, server_default='sedentary'),
+        sa.Column('fitness_goal', sa.String(length=30), nullable=False, server_default='maintenance'),
+        sa.Column('target_weight_kg', sa.Float(), nullable=True),
+        sa.Column('meals_per_day', sa.Integer(), nullable=False, server_default='3'),
+        sa.Column('snacks_per_day', sa.Integer(), nullable=False, server_default='1'),
+        # Preference fields
+        sa.Column('dietary_preferences', sa.JSON(), nullable=False),
+        sa.Column('health_conditions', sa.JSON(), nullable=False),
+        sa.Column('allergies', sa.JSON(), nullable=False),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+        sa.PrimaryKeyConstraint('id'),
+        sa.CheckConstraint('age >= 13 AND age <= 120', name='check_age_range'),
+        sa.CheckConstraint('height_cm > 0', name='check_height_positive'),
+        sa.CheckConstraint('weight_kg > 0', name='check_weight_positive'),
+        sa.CheckConstraint('body_fat_percentage IS NULL OR (body_fat_percentage >= 0 AND body_fat_percentage <= 100)', name='check_body_fat_range')
     )
     logger.info("✅ Created user_profiles table")
     
-    # Create meal_plans table
+    # Create meal_plans table - matches MealPlan model
     op.create_table('meal_plans',
-        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('user_id', sa.CHAR(36), nullable=False),
-        sa.Column('name', sa.String(length=255), nullable=False),
-        sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('start_date', sa.Date(), nullable=False),
-        sa.Column('end_date', sa.Date(), nullable=False),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='1'),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+        sa.Column('id', sa.CHAR(36), nullable=False),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('user_id', sa.String(length=255), nullable=False, index=True),
+        # User preferences stored as JSON
+        sa.Column('dietary_preferences', sa.JSON(), nullable=True),
+        sa.Column('allergies', sa.JSON(), nullable=True),
+        sa.Column('fitness_goal', sa.String(length=20), nullable=True),
+        sa.Column('meals_per_day', sa.Integer(), nullable=True),
+        sa.Column('snacks_per_day', sa.Integer(), nullable=True),
+        sa.Column('cooking_time_weekday', sa.Integer(), nullable=True),
+        sa.Column('cooking_time_weekend', sa.Integer(), nullable=True),
+        sa.Column('favorite_cuisines', sa.JSON(), nullable=True),
+        sa.Column('disliked_ingredients', sa.JSON(), nullable=True),
+        sa.Column('plan_duration', sa.String(length=20), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
     logger.info("✅ Created meal_plans table")
     
-    # Create meal_plan_days table
+    # Create meal_plan_days table - matches MealPlanDay model
     op.create_table('meal_plan_days',
-        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('plan_id', sa.CHAR(36), nullable=False),
+        sa.Column('id', sa.Integer(), nullable=False, autoincrement=True),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('meal_plan_id', sa.CHAR(36), nullable=False),
         sa.Column('date', sa.Date(), nullable=False),
-        sa.Column('total_calories', sa.Integer(), nullable=True),
-        sa.Column('total_protein', sa.Float(), nullable=True),
-        sa.Column('total_carbs', sa.Float(), nullable=True),
-        sa.Column('total_fat', sa.Float(), nullable=True),
-        sa.ForeignKeyConstraint(['plan_id'], ['meal_plans.id'], ),
+        sa.ForeignKeyConstraint(['meal_plan_id'], ['meal_plans.id']),
         sa.PrimaryKeyConstraint('id')
     )
     logger.info("✅ Created meal_plan_days table")
     
-    # Create planned_meals table (without seasonings initially)
+    # Create planned_meals table - matches PlannedMeal model
     op.create_table('planned_meals',
-        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('day_id', sa.CHAR(36), nullable=False),
-        sa.Column('meal_type', sa.Enum('BREAKFAST', 'LUNCH', 'DINNER', 'SNACK', name='mealtypeenum'), nullable=False),
+        sa.Column('id', sa.Integer(), nullable=False, autoincrement=True),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('day_id', sa.Integer(), nullable=False),
+        sa.Column('meal_type', sa.String(length=20), nullable=False),
         sa.Column('name', sa.String(length=255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('prep_time', sa.Integer(), nullable=True),
         sa.Column('cook_time', sa.Integer(), nullable=True),
+        # Nutrition info
         sa.Column('calories', sa.Integer(), nullable=True),
         sa.Column('protein', sa.Float(), nullable=True),
         sa.Column('carbs', sa.Float(), nullable=True),
         sa.Column('fat', sa.Float(), nullable=True),
+        # Stored as JSON arrays
         sa.Column('ingredients', sa.JSON(), nullable=True),
         sa.Column('instructions', sa.JSON(), nullable=True),
-        sa.Column('is_vegetarian', sa.Boolean(), nullable=False, server_default='0'),
-        sa.Column('is_vegan', sa.Boolean(), nullable=False, server_default='0'),
-        sa.Column('is_gluten_free', sa.Boolean(), nullable=False, server_default='0'),
+        # Dietary flags
+        sa.Column('is_vegetarian', sa.Boolean(), nullable=True, server_default='0'),
+        sa.Column('is_vegan', sa.Boolean(), nullable=True, server_default='0'),
+        sa.Column('is_gluten_free', sa.Boolean(), nullable=True, server_default='0'),
         sa.Column('cuisine_type', sa.String(length=100), nullable=True),
-        sa.ForeignKeyConstraint(['day_id'], ['meal_plan_days.id'], ),
+        sa.ForeignKeyConstraint(['day_id'], ['meal_plan_days.id']),
         sa.PrimaryKeyConstraint('id')
     )
     logger.info("✅ Created planned_meals table")
     
-    # Create meals table
-    op.create_table('meals',
-        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('user_id', sa.CHAR(36), nullable=False),
-        sa.Column('date', sa.Date(), nullable=False),
-        sa.Column('meal_type', sa.Enum('BREAKFAST', 'LUNCH', 'DINNER', 'SNACK', name='mealtypeenum'), nullable=False),
-        sa.Column('name', sa.String(length=255), nullable=True),
-        sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('calories', sa.Integer(), nullable=True),
-        sa.Column('protein', sa.Float(), nullable=True),
-        sa.Column('carbs', sa.Float(), nullable=True),
-        sa.Column('fat', sa.Float(), nullable=True),
-        sa.Column('fiber', sa.Float(), nullable=True),
-        sa.Column('sugar', sa.Float(), nullable=True),
-        sa.Column('sodium', sa.Float(), nullable=True),
-        sa.Column('analysis_status', sa.Enum('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', name='analysisstatusenum'), nullable=False, server_default='PENDING'),
-        sa.Column('is_analyzed', sa.Boolean(), nullable=False, server_default='0'),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-        sa.PrimaryKeyConstraint('id')
-    )
-    logger.info("✅ Created meals table")
-    
-    # Create meal_images table
-    op.create_table('meal_images',
-        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('meal_id', sa.CHAR(36), nullable=False),
-        sa.Column('original_filename', sa.String(length=255), nullable=True),
-        sa.Column('file_path', sa.Text(), nullable=False),
-        sa.Column('file_size', sa.Integer(), nullable=True),
-        sa.Column('mime_type', sa.String(length=100), nullable=True),
+    # Create mealimage table - matches MealImage model
+    op.create_table('mealimage',
+        sa.Column('image_id', sa.CHAR(36), nullable=False),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('format', sa.String(length=10), nullable=False),
+        sa.Column('size_bytes', sa.Integer(), nullable=False),
         sa.Column('width', sa.Integer(), nullable=True),
         sa.Column('height', sa.Integer(), nullable=True),
-        sa.Column('upload_source', sa.Enum('MOBILE', 'WEB', 'API', name='uploadsourceenum'), nullable=False, server_default='MOBILE'),
-        sa.Column('is_primary', sa.Boolean(), nullable=False, server_default='0'),
-        sa.ForeignKeyConstraint(['meal_id'], ['meals.id'], ),
-        sa.PrimaryKeyConstraint('id')
+        sa.Column('url', sa.String(length=255), nullable=True),
+        sa.PrimaryKeyConstraint('image_id')
     )
-    logger.info("✅ Created meal_images table")
+    logger.info("✅ Created mealimage table")
     
-    # Create nutrition_facts table
-    op.create_table('nutrition_facts',
-        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
+    # Create meal table - matches Meal model
+    op.create_table('meal',
         sa.Column('meal_id', sa.CHAR(36), nullable=False),
-        sa.Column('serving_size', sa.String(length=100), nullable=True),
-        sa.Column('calories_per_serving', sa.Integer(), nullable=True),
-        sa.Column('total_fat', sa.Float(), nullable=True),
-        sa.Column('saturated_fat', sa.Float(), nullable=True),
-        sa.Column('trans_fat', sa.Float(), nullable=True),
-        sa.Column('cholesterol', sa.Float(), nullable=True),
-        sa.Column('sodium', sa.Float(), nullable=True),
-        sa.Column('total_carbs', sa.Float(), nullable=True),
-        sa.Column('dietary_fiber', sa.Float(), nullable=True),
-        sa.Column('total_sugars', sa.Float(), nullable=True),
-        sa.Column('added_sugars', sa.Float(), nullable=True),
-        sa.Column('protein', sa.Float(), nullable=True),
-        sa.Column('vitamin_d', sa.Float(), nullable=True),
-        sa.Column('calcium', sa.Float(), nullable=True),
-        sa.Column('iron', sa.Float(), nullable=True),
-        sa.Column('potassium', sa.Float(), nullable=True),
-        sa.ForeignKeyConstraint(['meal_id'], ['meals.id'], ),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('user_id', sa.CHAR(36), nullable=False, index=True),
+        sa.Column('status', sa.String(length=20), nullable=False),
+        sa.Column('dish_name', sa.String(length=255), nullable=True),
+        sa.Column('ready_at', sa.DateTime(), nullable=True),
+        sa.Column('error_message', sa.Text(), nullable=True),
+        sa.Column('raw_ai_response', sa.Text(), nullable=True),
+        sa.Column('image_id', sa.CHAR(36), nullable=False),
+        sa.ForeignKeyConstraint(['image_id'], ['mealimage.image_id']),
+        sa.PrimaryKeyConstraint('meal_id')
+    )
+    logger.info("✅ Created meal table")
+    
+    # Create nutrition table - matches Nutrition model
+    op.create_table('nutrition',
+        sa.Column('id', sa.Integer(), nullable=False, autoincrement=True),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('calories', sa.Float(), nullable=False),
+        sa.Column('confidence_score', sa.Float(), nullable=True),
+        sa.Column('raw_ai_response', sa.Text(), nullable=True),
+        # Macro fields
+        sa.Column('protein', sa.Float(), nullable=False, server_default='0'),
+        sa.Column('carbs', sa.Float(), nullable=False, server_default='0'),
+        sa.Column('fat', sa.Float(), nullable=False, server_default='0'),
+        sa.Column('fiber', sa.Float(), nullable=True),
+        sa.Column('meal_id', sa.CHAR(36), nullable=False),
+        sa.ForeignKeyConstraint(['meal_id'], ['meal.meal_id']),
         sa.PrimaryKeyConstraint('id')
     )
-    logger.info("✅ Created nutrition_facts table")
+    logger.info("✅ Created nutrition table")
+    
+    # Create food_item table - matches FoodItem model
+    op.create_table('food_item',
+        sa.Column('id', sa.Integer(), nullable=False, autoincrement=True),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('name', sa.String(length=255), nullable=False),
+        sa.Column('quantity', sa.Float(), nullable=False),
+        sa.Column('unit', sa.String(length=50), nullable=False),
+        sa.Column('calories', sa.Float(), nullable=False),
+        sa.Column('confidence', sa.Float(), nullable=True),
+        # Macro fields
+        sa.Column('protein', sa.Float(), nullable=False, server_default='0'),
+        sa.Column('carbs', sa.Float(), nullable=False, server_default='0'),
+        sa.Column('fat', sa.Float(), nullable=False, server_default='0'),
+        sa.Column('fiber', sa.Float(), nullable=True),
+        sa.Column('nutrition_id', sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(['nutrition_id'], ['nutrition.id']),
+        sa.PrimaryKeyConstraint('id')
+    )
+    logger.info("✅ Created food_item table")
 
 
 def downgrade() -> None:
     """Drop initial database schema"""
-    op.drop_table('nutrition_facts')
-    op.drop_table('meal_images')
-    op.drop_table('meals')
+    # Drop tables in reverse order of creation (respecting foreign key constraints)
+    op.drop_table('food_item')
+    op.drop_table('nutrition')
+    op.drop_table('meal')
+    op.drop_table('mealimage')
     op.drop_table('planned_meals')
     op.drop_table('meal_plan_days')
     op.drop_table('meal_plans')
     op.drop_table('user_profiles')
     op.drop_table('users')
     logger.info("✅ Dropped all tables")
-    
-    # Drop enums
-    op.execute('DROP TYPE IF EXISTS genderenum')
-    op.execute('DROP TYPE IF EXISTS activitylevelenum')
-    op.execute('DROP TYPE IF EXISTS fitnessgoalenum')
-    op.execute('DROP TYPE IF EXISTS mealtypeenum')
-    op.execute('DROP TYPE IF EXISTS analysisstatusenum')
-    op.execute('DROP TYPE IF EXISTS uploadsourceenum')
-    logger.info("✅ Dropped enums")

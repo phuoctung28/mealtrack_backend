@@ -28,7 +28,7 @@ class User(Base, BaseMixin):
     phone_number = Column(String(20), nullable=True)
     display_name = Column(String(100), nullable=True)
     photo_url = Column(Text, nullable=True)
-    provider = Column(Enum(AuthProviderEnum), nullable=False, default=AuthProviderEnum.PHONE)  # phone, google
+    provider = Column(Enum(AuthProviderEnum), nullable=False, default=AuthProviderEnum.GOOGLE)  # phone, google
     
     # Status & Activity
     is_active = Column(Boolean, default=True, nullable=False)

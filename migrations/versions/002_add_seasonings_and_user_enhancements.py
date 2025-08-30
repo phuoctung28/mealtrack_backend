@@ -31,9 +31,9 @@ def upgrade() -> None:
     op.add_column('users', sa.Column('phone_number', sa.String(length=20), nullable=True))
     op.add_column('users', sa.Column('display_name', sa.String(length=100), nullable=True))
     op.add_column('users', sa.Column('photo_url', sa.Text(), nullable=True))
-    op.add_column('users', sa.Column('provider', sa.Enum('PHONE', 'GOOGLE', 'APPLE', name='authproviderenum'), nullable=False, server_default='PHONE'))
+    op.add_column('users', sa.Column('provider', sa.Enum('GOOGLE', 'APPLE', name='authproviderenum'), nullable=False, server_default='GOOGLE'))
     op.add_column('users', sa.Column('onboarding_completed', sa.Boolean(), nullable=False, server_default='0'))
-    op.add_column('users', sa.Column('last_accessed', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()))
+    op.add_column('users', sa.Column('last_accessed', sa.DateTime(), nullable=False))
     logger.info("✅ Added user enhancement columns")
     
     # Add indexes for performance
