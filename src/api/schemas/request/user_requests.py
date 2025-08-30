@@ -38,4 +38,4 @@ class UserCreateRequest(BaseModel):
     phone_number: Optional[str] = Field(None, description="Phone number")
     display_name: Optional[str] = Field(None, description="Display name")
     photo_url: Optional[str] = Field(None, description="Profile photo URL")
-    provider: AuthProviderEnum = Field(default=AuthProviderEnum.PHONE, description="Authentication provider")
+    provider: AuthProviderEnum = Field(default=AuthProviderEnum.GOOGLE, description="Authentication provider")
