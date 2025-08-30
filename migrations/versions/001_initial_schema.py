@@ -24,7 +24,7 @@ def upgrade() -> None:
     
     # Create users table (basic version without enhancements)
     op.create_table('users',
-        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
         sa.Column('email', sa.String(length=255), nullable=False),
@@ -41,10 +41,10 @@ def upgrade() -> None:
     
     # Create user_profiles table
     op.create_table('user_profiles',
-        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('user_id', sa.Integer(), nullable=False),
+        sa.Column('user_id', sa.CHAR(36), nullable=False),
         sa.Column('age', sa.Integer(), nullable=True),
         sa.Column('gender', sa.Enum('MALE', 'FEMALE', 'OTHER', name='genderenum'), nullable=True),
         sa.Column('height', sa.Float(), nullable=True),
@@ -66,10 +66,10 @@ def upgrade() -> None:
     
     # Create meal_plans table
     op.create_table('meal_plans',
-        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('user_id', sa.Integer(), nullable=False),
+        sa.Column('user_id', sa.CHAR(36), nullable=False),
         sa.Column('name', sa.String(length=255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('start_date', sa.Date(), nullable=False),
@@ -82,10 +82,10 @@ def upgrade() -> None:
     
     # Create meal_plan_days table
     op.create_table('meal_plan_days',
-        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('plan_id', sa.Integer(), nullable=False),
+        sa.Column('plan_id', sa.CHAR(36), nullable=False),
         sa.Column('date', sa.Date(), nullable=False),
         sa.Column('total_calories', sa.Integer(), nullable=True),
         sa.Column('total_protein', sa.Float(), nullable=True),
@@ -98,10 +98,10 @@ def upgrade() -> None:
     
     # Create planned_meals table (without seasonings initially)
     op.create_table('planned_meals',
-        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('day_id', sa.Integer(), nullable=False),
+        sa.Column('day_id', sa.CHAR(36), nullable=False),
         sa.Column('meal_type', sa.Enum('BREAKFAST', 'LUNCH', 'DINNER', 'SNACK', name='mealtypeenum'), nullable=False),
         sa.Column('name', sa.String(length=255), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
@@ -124,10 +124,10 @@ def upgrade() -> None:
     
     # Create meals table
     op.create_table('meals',
-        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('user_id', sa.Integer(), nullable=False),
+        sa.Column('user_id', sa.CHAR(36), nullable=False),
         sa.Column('date', sa.Date(), nullable=False),
         sa.Column('meal_type', sa.Enum('BREAKFAST', 'LUNCH', 'DINNER', 'SNACK', name='mealtypeenum'), nullable=False),
         sa.Column('name', sa.String(length=255), nullable=True),
@@ -148,10 +148,10 @@ def upgrade() -> None:
     
     # Create meal_images table
     op.create_table('meal_images',
-        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('meal_id', sa.Integer(), nullable=False),
+        sa.Column('meal_id', sa.CHAR(36), nullable=False),
         sa.Column('original_filename', sa.String(length=255), nullable=True),
         sa.Column('file_path', sa.Text(), nullable=False),
         sa.Column('file_size', sa.Integer(), nullable=True),
@@ -167,10 +167,10 @@ def upgrade() -> None:
     
     # Create nutrition_facts table
     op.create_table('nutrition_facts',
-        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('id', sa.CHAR(36), nullable=False, server_default=sa.text('(UUID())')),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()),
-        sa.Column('meal_id', sa.Integer(), nullable=False),
+        sa.Column('meal_id', sa.CHAR(36), nullable=False),
         sa.Column('serving_size', sa.String(length=100), nullable=True),
         sa.Column('calories_per_serving', sa.Integer(), nullable=True),
         sa.Column('total_fat', sa.Float(), nullable=True),
