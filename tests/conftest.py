@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import Generator
 
 import pytest
-from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.domain.model.macros import Macros
@@ -21,10 +20,7 @@ from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
-from src.infra.database.test_config import (
-    get_test_database_url,
-    create_test_engine
-)
+from src.infra.database.test_config import create_test_engine
 from src.infra.event_bus import PyMediatorEventBus, EventBus
 from src.infra.repositories.meal_repository import MealRepository
 
@@ -43,36 +39,16 @@ def test_engine(worker_id):
     """Create a test database engine."""
     engine = create_test_engine()
     
-    # Create test database if it doesn't exist
-    temp_engine = create_engine(
-        get_test_database_url().rsplit('/', 1)[0],
-        isolation_level='AUTOCOMMIT'
-    )
-    try:
-        with temp_engine.connect() as conn:
-            db_name = get_test_database_url().rsplit('/', 1)[1].split('?')[0]
-            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
-    finally:
-        temp_engine.dispose()
-    
     # Import models to ensure they're registered
 
     # Only one worker should create tables to avoid race conditions
     if worker_id in ("master", "gw0"):
         # Drop all tables first to ensure clean state
-        with engine.begin() as conn:
-            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
-            Base.metadata.drop_all(bind=engine)
-            conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+        Base.metadata.drop_all(bind=engine)
         
         # Create all tables
         Base.metadata.create_all(bind=engine)
         
-    # Other workers wait a bit for tables to be created
-    elif worker_id != "master":
-        import time
-        time.sleep(2)
-    
     yield engine
     engine.dispose()
 
