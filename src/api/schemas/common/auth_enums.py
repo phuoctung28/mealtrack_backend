@@ -6,8 +6,8 @@ from enum import Enum
 
 class AuthProviderEnum(str, Enum):
     """Authentication provider enumeration."""
-    PHONE = "phone"
     GOOGLE = "google"
+    APPLE = "apple"
     
     @classmethod
     def from_string(cls, value: str) -> 'AuthProviderEnum':
@@ -16,4 +16,4 @@ class AuthProviderEnum(str, Enum):
             return cls(value.lower())
         except ValueError:
             # Default to email for unknown providers
-            return cls.PHONE
+            return cls.GOOGLE

@@ -105,7 +105,7 @@ class MealGenerationService(MealGenerationServicePort):
         # Check for weekly plan indicators
         if any(indicator in combined_text for indicator in content_indicators['weekly']):
             logger.debug("Detected weekly plan generation - using high token limit")
-            return 6000  # Reduced from 8000 for weekly plans
+            return 8000  # Increased back to 8000 for complete weekly plans
         
         # Check for daily multiple meals
         meal_types_found = sum(1 for indicator in content_indicators['daily_multiple'] 
