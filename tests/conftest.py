@@ -33,12 +33,8 @@ from src.infra.event_bus import PyMediatorEventBus, EventBus
 from src.infra.repositories.meal_repository import MealRepository
 
 
-@pytest.fixture(scope="session")
-def event_loop_policy():
-    """Create an event loop policy for the test session."""
-    import asyncio
-    return asyncio.get_event_loop_policy()
-
+# Note: Using default pytest-asyncio event loop instead of custom fixture
+# to avoid conflicts with asyncio_mode = strict
 
 @pytest.fixture(scope="session")
 def test_engine(worker_id):
