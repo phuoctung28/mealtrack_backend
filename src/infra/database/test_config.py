@@ -14,7 +14,15 @@ load_dotenv()
 
 def get_test_database_url() -> str:
     """Get database URL for testing."""
-    # Use MySQL test database for consistency with production
+    # Check if DATABASE_URL is set (for CI compatibility)
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        # Replace mysql:// with mysql+pymysql:// if needed for SQLAlchemy compatibility
+        if database_url.startswith("mysql://"):
+            database_url = database_url.replace("mysql://", "mysql+pymysql://", 1)
+        return database_url
+    
+    # Use individual environment variables for local testing
     # Uses same MySQL container but different database name
     test_db_user = os.getenv("TEST_DB_USER", "root")
     test_db_password = os.getenv("TEST_DB_PASSWORD", "rootpassword123")
