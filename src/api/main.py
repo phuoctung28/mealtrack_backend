@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 
 from src.api.routes.v1.activities import router as activities_router
+from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
@@ -80,6 +81,7 @@ async def root():
 
 app.include_router(meals_router)
 app.include_router(activities_router)
+app.include_router(feature_flags_router)
 app.include_router(meal_plans_router)
 # app.include_router(daily_meals_router)
 app.include_router(user_profiles_router)

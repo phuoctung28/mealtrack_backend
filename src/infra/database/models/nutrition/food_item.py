@@ -11,6 +11,8 @@ from src.infra.database.models.base import SecondaryEntityMixin
 class FoodItem(Base, SecondaryEntityMixin):
     """Database model for food items in a meal."""
     
+    __tablename__ = 'food_item'  # Explicit table name to match migration
+    
     name = Column(String(255), nullable=False)
     quantity = Column(Float, nullable=False)
     unit = Column(String(50), nullable=False)

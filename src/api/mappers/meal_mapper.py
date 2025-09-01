@@ -104,7 +104,7 @@ class MealMapper:
                         )
                     
                     food_item_dto = FoodItemResponse(
-                        fooditem_id=str(item.name),  # Use name as ID
+                        food_item_id=str(item.name),  # Use name as ID
                         name=item.name,
                         category=None,
                         quantity=item.quantity,
@@ -209,7 +209,7 @@ class MealMapper:
             nutrition = MealMapper.map_nutrition_from_dict(item_dict["nutrition"])
         
         return FoodItem(
-            fooditem_id=item_dict.get("fooditem_id", ""),
+            food_item_id=item_dict.get("food_item_id", ""),
             name=item_dict.get("name", ""),
             category=item_dict.get("category", ""),
             quantity=item_dict.get("quantity", 0),
