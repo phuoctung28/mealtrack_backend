@@ -20,6 +20,14 @@ from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
+from src.infra.database.models.feature_flag import FeatureFlag
+from src.infra.database.models.meal_planning.meal_plan import MealPlan
+from src.infra.database.models.meal_planning.meal_plan_day import MealPlanDay
+from src.infra.database.models.meal_planning.planned_meal import PlannedMeal
+from src.infra.database.models.nutrition.nutrition import Nutrition as NutritionModel
+from src.infra.database.models.nutrition.food_item import FoodItem as FoodItemModel
+from src.infra.database.models.conversation.conversation import Conversation
+from src.infra.database.models.conversation.message import ConversationMessage
 from src.infra.database.test_config import create_test_engine
 from src.infra.event_bus import PyMediatorEventBus, EventBus
 from src.infra.repositories.meal_repository import MealRepository
