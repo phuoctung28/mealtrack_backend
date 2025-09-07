@@ -97,3 +97,17 @@ class AnalyzeMealImageRequest(BaseModel):
         max_length=500,
         description="Additional context for analysis"
     )
+
+
+# Food database manual meal creation requests
+class ManualMealItemRequest(BaseModel):
+    """Single selected food item with portion to create a manual meal."""
+    fdc_id: int = Field(..., description="USDA FDC ID")
+    quantity: float = Field(..., gt=0, description="Amount relative to serving unit (e.g., grams)")
+    unit: str = Field("g", min_length=1, max_length=20, description="Unit, default grams")
+
+
+class CreateManualMealFromFoodsRequest(BaseModel):
+    """Create a manual meal from selected USDA foods with portions."""
+    dish_name: str = Field(..., min_length=1, max_length=200)
+    items: list[ManualMealItemRequest] = Field(..., min_items=1)
