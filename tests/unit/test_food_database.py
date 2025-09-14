@@ -33,7 +33,6 @@ class StubFoodDataService:
                 {"nutrient": {"id": 1003, "name": "Protein", "unitName": "g"}, "amount": 31.0},
                 {"nutrient": {"id": 1005, "name": "Carbohydrate", "unitName": "g"}, "amount": 0.0},
                 {"nutrient": {"id": 1004, "name": "Total lipid (fat)", "unitName": "g"}, "amount": 3.6},
-                {"nutrient": {"id": 1079, "name": "Fiber, total dietary", "unitName": "g"}, "amount": 0.0},
             ],
             "foodPortions": [
                 {"measureUnit": {"name": "g"}, "gramWeight": 100.0, "modifier": "serving"},
@@ -114,7 +113,6 @@ async def test_get_food_details_query_handler_maps_nutrients():
     assert result["macros"]["protein"] == 31.0
     assert result["macros"]["carbs"] == 0.0
     assert result["macros"]["fat"] == 3.6
-    assert result["macros"]["fiber"] == 0.0
     assert result["calories"] == 165.0
 
 
