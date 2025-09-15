@@ -113,3 +113,11 @@ class NutritionSummaryResponse(BaseModel):
     macros_per_100g: MacrosResponse = Field(..., description="Macronutrients per 100g")
     total_macros: MacrosResponse = Field(..., description="Total macronutrients")
     confidence_score: float = Field(..., ge=0, le=1, description="AI analysis confidence")
+
+
+class ManualMealCreationResponse(BaseModel):
+    """Response DTO for manual meal creation."""
+    meal_id: str = Field(..., description="Created meal ID")
+    status: str = Field(..., description="Creation status")
+    message: str = Field(..., description="Success message")
+    created_at: datetime = Field(..., description="Creation timestamp")
