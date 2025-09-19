@@ -35,6 +35,11 @@ class Meal:
     ready_at: Optional[datetime] = None
     error_message: Optional[str] = None
     raw_gpt_json: Optional[str] = None
+    # Edit tracking fields
+    updated_at: Optional[datetime] = None
+    last_edited_at: Optional[datetime] = None
+    edit_count: int = 0
+    is_manually_edited: bool = False
     
     def __post_init__(self):
         """Validate invariants."""
@@ -82,7 +87,11 @@ class Meal:
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=self.error_message,
-            raw_gpt_json=self.raw_gpt_json
+            raw_gpt_json=self.raw_gpt_json,
+            updated_at=self.updated_at,
+            last_edited_at=self.last_edited_at,
+            edit_count=self.edit_count,
+            is_manually_edited=self.is_manually_edited
         )
     
     def mark_enriching(self, raw_gpt_json: str) -> 'Meal':
@@ -97,7 +106,11 @@ class Meal:
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=self.error_message,
-            raw_gpt_json=raw_gpt_json
+            raw_gpt_json=raw_gpt_json,
+            updated_at=self.updated_at,
+            last_edited_at=self.last_edited_at,
+            edit_count=self.edit_count,
+            is_manually_edited=self.is_manually_edited
         )
     
     def mark_ready(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
@@ -112,7 +125,11 @@ class Meal:
             nutrition=nutrition,
             ready_at=datetime.now(),
             error_message=self.error_message,
-            raw_gpt_json=self.raw_gpt_json
+            raw_gpt_json=self.raw_gpt_json,
+            updated_at=self.updated_at,
+            last_edited_at=self.last_edited_at,
+            edit_count=self.edit_count,
+            is_manually_edited=self.is_manually_edited
         )
     
     def mark_failed(self, error_message: str) -> 'Meal':
@@ -127,7 +144,30 @@ class Meal:
             nutrition=self.nutrition,
             ready_at=self.ready_at,
             error_message=error_message,
-            raw_gpt_json=self.raw_gpt_json
+            raw_gpt_json=self.raw_gpt_json,
+            updated_at=self.updated_at,
+            last_edited_at=self.last_edited_at,
+            edit_count=self.edit_count,
+            is_manually_edited=self.is_manually_edited
+        )
+    
+    def mark_edited(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
+        """Mark meal as edited with updated nutrition."""
+        return Meal(
+            meal_id=self.meal_id,
+            user_id=self.user_id,
+            status=MealStatus.READY,
+            created_at=self.created_at,
+            image=self.image,
+            dish_name=dish_name,
+            nutrition=nutrition,
+            ready_at=self.ready_at,
+            error_message=self.error_message,
+            raw_gpt_json=self.raw_gpt_json,
+            updated_at=datetime.now(),
+            last_edited_at=datetime.now(),
+            edit_count=self.edit_count + 1,
+            is_manually_edited=True
         )
     
     def to_dict(self) -> dict:

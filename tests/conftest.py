@@ -364,6 +364,129 @@ def sample_image_bytes() -> bytes:
     )
 
 
+@pytest.fixture
+def sample_meal_with_nutrition(test_session) -> Meal:
+    """Create a sample meal with nutrition for editing tests."""
+    import uuid
+    
+    # Create food items with IDs for editing
+    food_items = [
+        FoodItem(
+            name="Grilled Chicken",
+            quantity=150.0,
+            unit="g",
+            calories=248.0,
+            macros=Macros(
+                protein=46.2,
+                carbs=0.0,
+                fat=5.4,
+                fiber=0.0
+            ),
+            food_item_id=str(uuid.uuid4()),
+            fdc_id=171077,
+            is_custom=False
+        ),
+        FoodItem(
+            name="Brown Rice",
+            quantity=100.0,
+            unit="g",
+            calories=112.0,
+            macros=Macros(
+                protein=2.6,
+                carbs=22.0,
+                fat=0.9,
+                fiber=1.8
+            ),
+            food_item_id=str(uuid.uuid4()),
+            fdc_id=168880,
+            is_custom=False
+        ),
+        FoodItem(
+            name="Mixed Vegetables",
+            quantity=80.0,
+            unit="g",
+            calories=35.0,
+            macros=Macros(
+                protein=1.5,
+                carbs=7.0,
+                fat=0.2,
+                fiber=3.0
+            ),
+            food_item_id=str(uuid.uuid4()),
+            is_custom=True
+        )
+    ]
+    
+    meal = Meal(
+        meal_id=str(uuid.uuid4()),
+        user_id="550e8400-e29b-41d4-a716-446655440001",
+        status=MealStatus.READY,
+        created_at=datetime.now(),
+        image=MealImage(
+            image_id=str(uuid.uuid4()),
+            format="jpeg",
+            size_bytes=100000,
+            url="https://example.com/meal.jpg"
+        ),
+        dish_name="Grilled Chicken with Rice and Vegetables",
+        nutrition=Nutrition(
+            calories=395.0,
+            macros=Macros(
+                protein=50.3,
+                carbs=29.0,
+                fat=6.5,
+                fiber=4.8
+            ),
+            food_items=food_items,
+            confidence_score=0.9
+        ),
+        ready_at=datetime.now(),
+        edit_count=0,
+        is_manually_edited=False
+    )
+    
+    # Store in database
+    meal_image_model = MealImageModel.from_domain(meal.image)
+    test_session.add(meal_image_model)
+    test_session.flush()
+    
+    meal_model = MealModel.from_domain(meal)
+    test_session.add(meal_model)
+    test_session.commit()
+    
+    return meal
+
+
+@pytest.fixture
+def sample_meal_processing(test_session) -> Meal:
+    """Create a sample meal in PROCESSING status for testing."""
+    import uuid
+    
+    meal = Meal(
+        meal_id=str(uuid.uuid4()),
+        user_id="550e8400-e29b-41d4-a716-446655440001",
+        status=MealStatus.PROCESSING,
+        created_at=datetime.now(),
+        image=MealImage(
+            image_id=str(uuid.uuid4()),
+            format="jpeg",
+            size_bytes=100000,
+            url="https://example.com/processing.jpg"
+        )
+    )
+    
+    # Store in database
+    meal_image_model = MealImageModel.from_domain(meal.image)
+    test_session.add(meal_image_model)
+    test_session.flush()
+    
+    meal_model = MealModel.from_domain(meal)
+    test_session.add(meal_model)
+    test_session.commit()
+    
+    return meal
+
+
 # Pytest configuration
 def pytest_configure(config):
     """Configure pytest with custom markers."""

@@ -1,7 +1,7 @@
 """
 Food item model for individual food components within a meal.
 """
-from sqlalchemy import Column, String, Float, Integer, ForeignKey
+from sqlalchemy import Column, String, Float, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -18,6 +18,11 @@ class FoodItem(Base, SecondaryEntityMixin):
     unit = Column(String(50), nullable=False)
     calories = Column(Float, nullable=False)
     confidence = Column(Float, nullable=True)
+    
+    # Edit support fields
+    food_item_id = Column(String(36), nullable=True)  # Unique ID for editing operations
+    fdc_id = Column(Integer, nullable=True)  # USDA FDC ID if available
+    is_custom = Column(Boolean, default=False, nullable=False)  # Whether this is a custom ingredient
     
     # Macro fields (previously in separate Macros table)
     protein = Column(Float, default=0, nullable=False)
@@ -49,7 +54,10 @@ class FoodItem(Base, SecondaryEntityMixin):
             calories=self.calories,
             macros=macros,
             micros=None,  # Not implemented yet
-            confidence=self.confidence
+            confidence=self.confidence,
+            food_item_id=self.food_item_id,
+            fdc_id=self.fdc_id,
+            is_custom=self.is_custom
         )
     
     @classmethod
@@ -61,7 +69,10 @@ class FoodItem(Base, SecondaryEntityMixin):
             unit=domain_model.unit,
             calories=domain_model.calories,
             confidence=domain_model.confidence,
-            nutrition_id=nutrition_id
+            nutrition_id=nutrition_id,
+            food_item_id=getattr(domain_model, 'food_item_id', None),
+            fdc_id=getattr(domain_model, 'fdc_id', None),
+            is_custom=getattr(domain_model, 'is_custom', False)
         )
         
         # Set macro fields directly

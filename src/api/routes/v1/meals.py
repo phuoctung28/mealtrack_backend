@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, File, UploadFile, Query, BackgroundTasks, HTTPException, status
+from src.api.schemas.request.meal_requests import EditMealIngredientsRequest, AddCustomIngredientRequest
 
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
@@ -20,7 +21,11 @@ from src.api.schemas.response.meal_responses import MealStatusResponse
 from src.api.utils.file_validator import FileValidator
 from src.app.commands.meal import (
     UploadMealImageCommand,
-    RecalculateMealNutritionCommand
+    RecalculateMealNutritionCommand,
+    EditMealCommand,
+    AddCustomIngredientCommand,
+    FoodItemChange,
+    CustomNutritionData
 )
 from src.app.queries.meal import (
     GetMealByIdQuery,
@@ -324,6 +329,124 @@ async def recalculate_meal_nutrition(
             "updated_nutrition": result["updated_nutrition"],
             "weight_grams": result["weight_grams"]
         }
+        
+    except Exception as e:
+        raise handle_exception(e)
+
+
+@router.put("/{meal_id}/ingredients")
+async def update_meal_ingredients(
+    meal_id: str,
+    request: EditMealIngredientsRequest,
+    user_id: str = Query(..., description="User ID for authorization"),
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Update meal ingredients and portions.
+    
+    Supports adding, removing, and modifying ingredients with automatic nutrition recalculation.
+    """
+    try:
+        # Convert request to command
+        food_item_changes = []
+        for change_request in request.food_item_changes:
+            custom_nutrition = None
+            if change_request.custom_nutrition:
+                custom_nutrition = CustomNutritionData(
+                    calories_per_100g=change_request.custom_nutrition.calories_per_100g,
+                    protein_per_100g=change_request.custom_nutrition.protein_per_100g,
+                    carbs_per_100g=change_request.custom_nutrition.carbs_per_100g,
+                    fat_per_100g=change_request.custom_nutrition.fat_per_100g,
+                    fiber_per_100g=change_request.custom_nutrition.fiber_per_100g
+                )
+            
+            food_item_changes.append(
+                FoodItemChange(
+                    action=change_request.action,
+                    food_item_id=change_request.food_item_id,
+                    fdc_id=change_request.fdc_id,
+                    name=change_request.name,
+                    quantity=change_request.quantity,
+                    unit=change_request.unit,
+                    custom_nutrition=custom_nutrition
+                )
+            )
+        
+        command = EditMealCommand(
+            meal_id=meal_id,
+            user_id=user_id,
+            dish_name=request.dish_name,
+            food_item_changes=food_item_changes
+        )
+        
+        result = await event_bus.send(command)
+        return result
+        
+    except Exception as e:
+        raise handle_exception(e)
+
+
+@router.post("/{meal_id}/ingredients/custom")
+async def add_custom_ingredient(
+    meal_id: str,
+    request: AddCustomIngredientRequest,
+    user_id: str = Query(..., description="User ID for authorization"),
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Add a custom ingredient to an existing meal.
+    
+    Allows users to add ingredients with manual nutrition data.
+    """
+    try:
+        command = AddCustomIngredientCommand(
+            meal_id=meal_id,
+            user_id=user_id,
+            name=request.name,
+            quantity=request.quantity,
+            unit=request.unit,
+            nutrition=CustomNutritionData(
+                calories_per_100g=request.nutrition.calories_per_100g,
+                protein_per_100g=request.nutrition.protein_per_100g,
+                carbs_per_100g=request.nutrition.carbs_per_100g,
+                fat_per_100g=request.nutrition.fat_per_100g,
+                fiber_per_100g=request.nutrition.fiber_per_100g
+            )
+        )
+        
+        result = await event_bus.send(command)
+        return result
+        
+    except Exception as e:
+        raise handle_exception(e)
+
+
+@router.delete("/{meal_id}/ingredients/{food_item_id}")
+async def remove_ingredient(
+    meal_id: str,
+    food_item_id: str,
+    user_id: str = Query(..., description="User ID for authorization"),
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Remove an ingredient from a meal.
+    
+    Automatically recalculates meal nutrition after removal.
+    """
+    try:
+        command = EditMealCommand(
+            meal_id=meal_id,
+            user_id=user_id,
+            food_item_changes=[
+                FoodItemChange(
+                    action="remove",
+                    food_item_id=food_item_id
+                )
+            ]
+        )
+        
+        result = await event_bus.send(command)
+        return result
         
     except Exception as e:
         raise handle_exception(e)
