@@ -357,3 +357,4 @@ class TestAddCustomIngredientCommandHandler:
         # Act & Assert
         with pytest.raises(ValidationException, match="Meal not found or access denied"):
             await event_bus.send(command)
+

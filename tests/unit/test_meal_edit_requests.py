@@ -432,3 +432,4 @@ class TestAddCustomIngredientRequest:
                     fat_per_100g=12.0
                 )
             )
+

@@ -318,3 +318,4 @@ class TestMealEditDatabaseIntegration:
         assert converted_domain_food_item.is_custom == original_domain_food_item.is_custom
         assert converted_domain_food_item.quantity == original_domain_food_item.quantity
         assert converted_domain_food_item.calories == original_domain_food_item.calories
+
