@@ -33,7 +33,6 @@ class CustomNutritionData:
 class EditMealCommand(Command):
     """Command to edit a meal's ingredients."""
     meal_id: str
-    user_id: str
     dish_name: Optional[str] = None
     food_item_changes: List[FoodItemChange] = field(default_factory=list)
 
@@ -42,7 +41,6 @@ class EditMealCommand(Command):
 class AddCustomIngredientCommand(Command):
     """Command to add a custom ingredient to a meal."""
     meal_id: str
-    user_id: str
     name: str
     quantity: float
     unit: str

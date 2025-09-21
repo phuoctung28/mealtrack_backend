@@ -23,6 +23,7 @@ from src.app.events.meal import (
 )
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_image import MealImage
+from src.domain.model.nutrition import Nutrition, FoodItem, Macros
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 
@@ -189,10 +190,10 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         if not self.meal_repository:
             raise RuntimeError("Meal repository not configured")
         
-        # 1. Validate user owns meal
+        # 1. Validate meal exists
         meal = self.meal_repository.find_by_id(command.meal_id)
-        if not meal or meal.user_id != command.user_id:
-            raise ValidationException("Meal not found or access denied")
+        if not meal:
+            raise ValidationException("Meal not found")
         
         if meal.status != MealStatus.READY:
             raise ValidationException("Meal must be in READY status to edit")
@@ -222,15 +223,19 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         changes_summary = self._generate_changes_summary(command.food_item_changes)
         
         return {
-            "success": True,
             "meal_id": saved_meal.meal_id,
-            "updated_nutrition": updated_nutrition.to_dict(),
-            "updated_food_items": [item.to_dict() for item in updated_food_items],
-            "edit_metadata": {
-                "edit_count": saved_meal.edit_count,
-                "last_edited_at": saved_meal.last_edited_at.isoformat(),
-                "changes_summary": changes_summary
+            "message": f"Meal updated successfully. {changes_summary}",
+            "dish_name": saved_meal.dish_name or "Meal",
+            "total_calories": updated_nutrition.calories,
+            "total_nutrition": {
+                "calories": updated_nutrition.calories,
+                "protein": updated_nutrition.macros.protein,
+                "carbs": updated_nutrition.macros.carbs,
+                "fat": updated_nutrition.macros.fat,
+                "fiber": updated_nutrition.macros.fiber
             },
+            "edit_count": saved_meal.edit_count,
+            "last_edited_at": saved_meal.last_edited_at.isoformat(),
             "events": [
                 MealEditedEvent(
                     aggregate_id=saved_meal.meal_id,
@@ -246,8 +251,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
     
     async def _apply_food_item_changes(self, current_food_items, changes):
         """Apply food item changes to current list."""
-        from src.domain.model.nutrition import FoodItem
-        from src.domain.model.macros import Macros
         import uuid
         
         # Convert current items to dict for easier manipulation
@@ -320,8 +323,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         """Get nutrition data from USDA service."""
         # This would integrate with the USDA service
         # For now, return a placeholder
-        from src.domain.model.nutrition import FoodItem
-        from src.domain.model.macros import Macros
         import uuid
         
         return FoodItem(
@@ -343,8 +344,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
     
     def _calculate_total_nutrition(self, food_items):
         """Calculate total nutrition from food items."""
-        from src.domain.model.nutrition import Nutrition
-        from src.domain.model.macros import Macros
         
         total_calories = sum(item.calories for item in food_items)
         total_protein = sum(item.macros.protein for item in food_items)
@@ -416,7 +415,6 @@ class AddCustomIngredientCommandHandler(EventHandler[AddCustomIngredientCommand,
         
         edit_command = EditMealCommand(
             meal_id=command.meal_id,
-            user_id=command.user_id,
             food_item_changes=[
                 FoodItemChange(
                     action="add",

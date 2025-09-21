@@ -13,6 +13,7 @@ from .meal import (
     MealAnalysisStartedEvent,
     MealImageUploadedEvent,
     MealNutritionUpdatedEvent,
+    MealEditedEvent,
 )
 
 # Meal plan events
@@ -44,7 +45,8 @@ __all__ = [
     "MealAnalysisStartedEvent",
     "MealImageUploadedEvent",
     "MealNutritionUpdatedEvent",
-    
+    "MealEditedEvent",
+
     # Meal plan events
     "ConversationStartedEvent",
     "MealPlanGeneratedEvent",

@@ -338,7 +338,6 @@ async def recalculate_meal_nutrition(
 async def update_meal_ingredients(
     meal_id: str,
     request: EditMealIngredientsRequest,
-    user_id: str = Query(..., description="User ID for authorization"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -374,7 +373,6 @@ async def update_meal_ingredients(
         
         command = EditMealCommand(
             meal_id=meal_id,
-            user_id=user_id,
             dish_name=request.dish_name,
             food_item_changes=food_item_changes
         )
@@ -390,7 +388,6 @@ async def update_meal_ingredients(
 async def add_custom_ingredient(
     meal_id: str,
     request: AddCustomIngredientRequest,
-    user_id: str = Query(..., description="User ID for authorization"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -401,7 +398,6 @@ async def add_custom_ingredient(
     try:
         command = AddCustomIngredientCommand(
             meal_id=meal_id,
-            user_id=user_id,
             name=request.name,
             quantity=request.quantity,
             unit=request.unit,
@@ -425,7 +421,6 @@ async def add_custom_ingredient(
 async def remove_ingredient(
     meal_id: str,
     food_item_id: str,
-    user_id: str = Query(..., description="User ID for authorization"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -436,7 +431,6 @@ async def remove_ingredient(
     try:
         command = EditMealCommand(
             meal_id=meal_id,
-            user_id=user_id,
             food_item_changes=[
                 FoodItemChange(
                     action="remove",
