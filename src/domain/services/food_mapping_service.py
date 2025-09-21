@@ -9,7 +9,6 @@ USDA_NUTRIENT_MAPPING = {
     1003: "protein",   # Protein (g)
     1005: "carbs",     # Carbohydrate (g)
     1004: "fat",       # Total lipid (fat) (g)
-    1079: "fiber",     # Fiber (g)
 }
 
 
@@ -38,7 +37,7 @@ class FoodMappingService(FoodMappingServicePort):
         }
 
     def _extract_macros(self, nutrients: List[Dict[str, Any]]) -> Dict[str, float]:
-        values: Dict[str, float] = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0, "fiber": 0.0}
+        values: Dict[str, float] = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
         for entry in nutrients or []:
             # Handle both search results format and details format
             if "nutrient" in entry:

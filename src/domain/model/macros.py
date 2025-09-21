@@ -10,7 +10,6 @@ class Macros:
     protein: float
     carbs: float
     fat: float
-    fiber: Optional[float] = None
     
     def __post_init__(self):
         # Validate invariants
@@ -18,9 +17,6 @@ class Macros:
             value = getattr(self, field_name)
             if value < 0:
                 raise ValueError(f"{field_name} cannot be negative: {value}")
-        
-        if self.fiber is not None and self.fiber < 0:
-            raise ValueError(f"fiber cannot be negative: {self.fiber}")
     
     @property
     def total_calories(self) -> float:
@@ -35,6 +31,4 @@ class Macros:
             "carbs_g": self.carbs,
             "fat_g": self.fat,
         }
-        if self.fiber is not None:
-            result["fiber_g"] = self.fiber
         return result 

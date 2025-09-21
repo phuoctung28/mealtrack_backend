@@ -94,7 +94,6 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
                 "protein": round(meal.nutrition.macros.protein, 1) if meal.nutrition else 0,
                 "carbs": round(meal.nutrition.macros.carbs, 1) if meal.nutrition else 0,
                 "fat": round(meal.nutrition.macros.fat, 1) if meal.nutrition else 0,
-                "fiber": round(meal.nutrition.macros.fiber, 1) if meal.nutrition and hasattr(meal.nutrition.macros, 'fiber') else 0,
             },
             "quantity": estimated_weight,
             "status": meal.status.value if meal.status else "unknown",

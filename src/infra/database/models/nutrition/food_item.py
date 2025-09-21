@@ -23,7 +23,6 @@ class FoodItem(Base, SecondaryEntityMixin):
     protein = Column(Float, default=0, nullable=False)
     carbs = Column(Float, default=0, nullable=False)
     fat = Column(Float, default=0, nullable=False)
-    fiber = Column(Float, nullable=True)
     
     # Foreign keys
     nutrition_id = Column(Integer, ForeignKey("nutrition.id"), nullable=False)
@@ -41,7 +40,6 @@ class FoodItem(Base, SecondaryEntityMixin):
             protein=self.protein,
             carbs=self.carbs,
             fat=self.fat,
-            fiber=self.fiber
         )
         
         return DomainFoodItem(
@@ -71,6 +69,5 @@ class FoodItem(Base, SecondaryEntityMixin):
             item.protein = domain_model.macros.protein
             item.carbs = domain_model.macros.carbs
             item.fat = domain_model.macros.fat
-            item.fiber = domain_model.macros.fiber
             
         return item

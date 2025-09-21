@@ -28,7 +28,7 @@ class TestWithStubs:
         # Create stub nutrition
         stub_nutrition = Nutrition(
             calories=500,
-            macros=Macros(protein=30, carbs=50, fat=20, fiber=5),
+            macros=Macros(protein=30, carbs=50, fat=20),
             food_items=[],
             confidence_score=0.95
         )
@@ -70,7 +70,7 @@ class TestWithStubs:
             image=stub_image,
             nutrition=Nutrition(
                 calories=500,
-                macros=Macros(protein=30, carbs=50, fat=20, fiber=5),
+                macros=Macros(protein=30, carbs=50, fat=20),
                 food_items=[],
                 confidence_score=0.95
             ),

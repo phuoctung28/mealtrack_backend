@@ -243,7 +243,6 @@ class MealRepository(MealRepositoryPort):
                 protein=nutrition_data["macros"]["protein_g"],
                 carbs=nutrition_data["macros"]["carbs_g"],
                 fat=nutrition_data["macros"]["fat_g"],
-                fiber=nutrition_data["macros"].get("fiber_g")
             )
             
             # Create Micros if available
@@ -260,7 +259,6 @@ class MealRepository(MealRepositoryPort):
                         protein=item_data["macros"]["protein_g"],
                         carbs=item_data["macros"]["carbs_g"],
                         fat=item_data["macros"]["fat_g"],
-                        fiber=item_data["macros"].get("fiber_g")
                     )
                     
                     item_micros = None

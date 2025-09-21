@@ -72,7 +72,6 @@ class MealFactory(SQLAlchemyModelFactory):
     total_protein = factory.Faker("random_int", min=5, max=50)
     total_carbs = factory.Faker("random_int", min=10, max=100)
     total_fat = factory.Faker("random_int", min=5, max=40)
-    total_fiber = factory.Faker("random_int", min=0, max=15)
     confidence_score = factory.Faker("pyfloat", min_value=0.8, max_value=1.0)
 
 
@@ -92,7 +91,6 @@ class MealFoodItemFactory(SQLAlchemyModelFactory):
     protein = factory.Faker("random_int", min=0, max=40)
     carbs = factory.Faker("random_int", min=0, max=80)
     fat = factory.Faker("random_int", min=0, max=30)
-    fiber = factory.Faker("random_int", min=0, max=10)
 
 
 class TestDataBuilder:
@@ -123,7 +121,6 @@ class TestDataBuilder:
         total_protein = 0
         total_carbs = 0
         total_fat = 0
-        total_fiber = 0
         
         for _ in range(num_items):
             item = MealFoodItemFactory(meal_id=meal.meal_id)
@@ -132,14 +129,12 @@ class TestDataBuilder:
             total_protein += item.protein
             total_carbs += item.carbs
             total_fat += item.fat
-            total_fiber += item.fiber
         
         # Update meal totals
         meal.total_calories = total_calories
         meal.total_protein = total_protein
         meal.total_carbs = total_carbs
         meal.total_fat = total_fat
-        meal.total_fiber = total_fiber
         self.session.commit()
         
         return meal, food_items

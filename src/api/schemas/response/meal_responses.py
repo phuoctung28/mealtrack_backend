@@ -23,7 +23,6 @@ class MacrosResponse(BaseModel):
     protein: float = Field(..., ge=0, description="Protein in grams")
     carbs: float = Field(..., ge=0, description="Carbohydrates in grams") 
     fat: float = Field(..., ge=0, description="Fat in grams")
-    fiber: Optional[float] = Field(None, ge=0, description="Fiber in grams")
 
 
 class NutritionResponse(BaseModel):
@@ -33,9 +32,6 @@ class NutritionResponse(BaseModel):
     protein_g: float = Field(..., ge=0, description="Protein in grams")
     carbs_g: float = Field(..., ge=0, description="Carbohydrates in grams")
     fat_g: float = Field(..., ge=0, description="Fat in grams")
-    fiber_g: Optional[float] = Field(None, ge=0, description="Fiber in grams")
-    sugar_g: Optional[float] = Field(None, ge=0, description="Sugar in grams")
-    sodium_mg: Optional[float] = Field(None, ge=0, description="Sodium in milligrams")
 
 
 class FoodItemResponse(BaseModel):

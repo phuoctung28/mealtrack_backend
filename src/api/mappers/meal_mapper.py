@@ -76,7 +76,6 @@ class MealMapper:
                     protein=meal.nutrition.macros.protein,
                     carbs=meal.nutrition.macros.carbs,
                     fat=meal.nutrition.macros.fat,
-                    fiber=meal.nutrition.macros.fiber if meal.nutrition.macros.fiber is not None else 0
                 )
             # Handle legacy structure where nutrition has direct properties
             elif hasattr(meal.nutrition, 'protein'):
@@ -84,7 +83,6 @@ class MealMapper:
                     protein=meal.nutrition.protein,
                     carbs=meal.nutrition.carbs,
                     fat=meal.nutrition.fat,
-                    fiber=meal.nutrition.fiber if hasattr(meal.nutrition, 'fiber') else 0
                 )
             
             # Map food items
@@ -98,7 +96,6 @@ class MealMapper:
                             protein_g=item.macros.protein,
                             carbs_g=item.macros.carbs,
                             fat_g=item.macros.fat,
-                            fiber_g=item.macros.fiber if item.macros.fiber is not None else 0,
                             sugar_g=None,
                             sodium_mg=None
                         )
@@ -188,7 +185,6 @@ class MealMapper:
             protein_g=nutrition_dict.get("protein_g", 0),
             carbs_g=nutrition_dict.get("carbs_g", 0),
             fat_g=nutrition_dict.get("fat_g", 0),
-            fiber_g=nutrition_dict.get("fiber_g", 0),
             sugar_g=nutrition_dict.get("sugar_g", 0),
             sodium_mg=nutrition_dict.get("sodium_mg", 0)
         )
@@ -283,7 +279,6 @@ class MealMapper:
             protein=max(0, target_macros.protein - consumed_macros.protein),
             carbs=max(0, target_macros.carbs - consumed_macros.carbs),
             fat=max(0, target_macros.fat - consumed_macros.fat),
-            fiber=max(0, target_macros.fiber - consumed_macros.fiber)
         )
         
         # Calculate completion percentages

@@ -14,7 +14,6 @@ class GPTMacros(BaseModel):
     protein: float = Field(..., ge=0, description="Protein in grams")
     carbs: float = Field(..., ge=0, description="Carbohydrates in grams")
     fat: float = Field(..., ge=0, description="Fat in grams")
-    fiber: Optional[float] = Field(None, ge=0, description="Fiber in grams")
     
     @validator('protein', 'carbs', 'fat')
     def round_macros(cls, v):
@@ -90,7 +89,6 @@ class GPTAnalysisResponse(BaseModel):
                             "protein": 46.5,
                             "carbs": 0,
                             "fat": 5.4,
-                            "fiber": 0
                         },
                         "confidence": 0.9
                     },
@@ -103,7 +101,6 @@ class GPTAnalysisResponse(BaseModel):
                             "protein": 1,
                             "carbs": 2,
                             "fat": 16,
-                            "fiber": 0
                         },
                         "confidence": 0.85
                     }

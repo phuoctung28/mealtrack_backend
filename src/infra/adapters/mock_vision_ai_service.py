@@ -66,7 +66,6 @@ class MockVisionAIService(VisionAIServicePort):
                             "protein": 40,
                             "carbs": 0,
                             "fat": 8,
-                            "fiber": 0
                         }
                     },
                     {
@@ -79,7 +78,6 @@ class MockVisionAIService(VisionAIServicePort):
                             "protein": 5,
                             "carbs": 55,
                             "fat": 1,
-                            "fiber": 2
                         }
                     },
                     {
@@ -92,7 +90,6 @@ class MockVisionAIService(VisionAIServicePort):
                             "protein": 3,
                             "carbs": 15,
                             "fat": 8,
-                            "fiber": 4
                         }
                     }
                 ],
@@ -100,7 +97,6 @@ class MockVisionAIService(VisionAIServicePort):
                     "protein": 48,
                     "carbs": 70,
                     "fat": 17,
-                    "fiber": 6
                 }
             },
             "raw_response": "Mock AI response for testing"

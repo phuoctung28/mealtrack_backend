@@ -75,7 +75,6 @@ class UserMacros:
             protein=self.consumed_macros.protein + macros.protein,
             carbs=self.consumed_macros.carbs + macros.carbs,
             fat=self.consumed_macros.fat + macros.fat,
-            fiber=(self.consumed_macros.fiber or 0) + (macros.fiber or 0) if macros.fiber else self.consumed_macros.fiber
         )
         
         return UserMacros(
@@ -103,7 +102,6 @@ class UserMacros:
             protein=max(0, self.target_macros.protein - self.consumed_macros.protein),
             carbs=max(0, self.target_macros.carbs - self.consumed_macros.carbs),
             fat=max(0, self.target_macros.fat - self.consumed_macros.fat),
-            fiber=max(0, (self.target_macros.fiber or 0) - (self.consumed_macros.fiber or 0)) if self.target_macros.fiber else None
         )
     
     @property
