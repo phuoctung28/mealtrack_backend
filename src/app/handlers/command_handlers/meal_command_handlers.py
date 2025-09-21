@@ -125,9 +125,6 @@ class RecalculateMealNutritionCommandHandler(EventHandler[RecalculateMealNutriti
         meal.nutrition.macros.carbs = meal.nutrition.macros.carbs * scale_factor
         meal.nutrition.macros.fat = meal.nutrition.macros.fat * scale_factor
         
-        if hasattr(meal.nutrition.macros, 'fiber') and meal.nutrition.macros.fiber:
-            meal.nutrition.macros.fiber = meal.nutrition.macros.fiber * scale_factor
-        
         # Update food items if present
         if meal.nutrition.food_items:
             for item in meal.nutrition.food_items:
@@ -136,8 +133,6 @@ class RecalculateMealNutritionCommandHandler(EventHandler[RecalculateMealNutriti
                 item.macros.protein = item.macros.protein * scale_factor
                 item.macros.carbs = item.macros.carbs * scale_factor
                 item.macros.fat = item.macros.fat * scale_factor
-                if item.macros.fiber:
-                    item.macros.fiber = item.macros.fiber * scale_factor
         
         # Save updated meal
         updated_meal = self.meal_repository.save(meal)
@@ -149,9 +144,6 @@ class RecalculateMealNutritionCommandHandler(EventHandler[RecalculateMealNutriti
             "carbs": round(updated_meal.nutrition.macros.carbs, 1),
             "fat": round(updated_meal.nutrition.macros.fat, 1)
         }
-        
-        if hasattr(updated_meal.nutrition, 'fiber') and updated_meal.nutrition.fiber:
-            nutrition_data["fiber"] = round(updated_meal.nutrition.fiber, 1)
         
         return {
             "meal_id": command.meal_id,

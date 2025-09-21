@@ -19,7 +19,6 @@ class Nutrition(Base, SecondaryEntityMixin):
     protein = Column(Float, default=0, nullable=False)
     carbs = Column(Float, default=0, nullable=False)
     fat = Column(Float, default=0, nullable=False)
-    fiber = Column(Float, nullable=True)
     
     # Relationships
     food_items = relationship("FoodItem", 
@@ -41,7 +40,6 @@ class Nutrition(Base, SecondaryEntityMixin):
             protein=self.protein,
             carbs=self.carbs,
             fat=self.fat,
-            fiber=self.fiber
         )
         
         return DomainNutrition(
@@ -66,7 +64,6 @@ class Nutrition(Base, SecondaryEntityMixin):
             nutrition.protein = domain_model.macros.protein
             nutrition.carbs = domain_model.macros.carbs
             nutrition.fat = domain_model.macros.fat
-            nutrition.fiber = domain_model.macros.fiber
             
         # Add food items if they exist
         if domain_model.food_items:

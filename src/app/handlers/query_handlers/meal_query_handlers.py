@@ -88,7 +88,6 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
         total_protein = 0.0
         total_carbs = 0.0
         total_fat = 0.0
-        total_fiber = 0.0
         meal_count = 0
         meals_with_nutrition = 0
         
@@ -102,8 +101,6 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                     total_protein += meal.nutrition.macros.protein or 0
                     total_carbs += meal.nutrition.macros.carbs or 0
                     total_fat += meal.nutrition.macros.fat or 0
-                    if hasattr(meal.nutrition.macros, 'fiber') and meal.nutrition.macros.fiber:
-                        total_fiber += meal.nutrition.macros.fiber
         
         # Get user's TDEE targets
         target_calories = None
@@ -131,7 +128,6 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             "total_protein": round(total_protein, 1),
             "total_carbs": round(total_carbs, 1),
             "total_fat": round(total_fat, 1),
-            "total_fiber": round(total_fiber, 1),
             "meal_count": meal_count,
             "meals_with_nutrition": meals_with_nutrition
         }

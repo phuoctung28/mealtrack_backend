@@ -11,7 +11,6 @@ class MacrosRequest(BaseModel):
     protein: float = Field(..., ge=0, description="Protein in grams")
     carbs: float = Field(..., ge=0, description="Carbohydrates in grams") 
     fat: float = Field(..., ge=0, description="Fat in grams")
-    fiber: Optional[float] = Field(None, ge=0, description="Fiber in grams")
 
 
 class CreateMealRequest(BaseModel):

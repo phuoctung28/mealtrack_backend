@@ -65,7 +65,6 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
                 "protein": 10,
                 "carbs": 20,
                 "fat": 5,
-                "fiber": 2
               }
             }
           ],
@@ -118,7 +117,6 @@ class PortionAwareAnalysisStrategy(MealAnalysisStrategy):
                 "protein": 10,
                 "carbs": 20,
                 "fat": 5,
-                "fiber": 2
               }
             }
           ],
@@ -177,7 +175,6 @@ class IngredientAwareAnalysisStrategy(MealAnalysisStrategy):
                 "protein": 10,
                 "carbs": 20,
                 "fat": 5,
-                "fiber": 2
               }
             }
           ],
@@ -252,7 +249,6 @@ class WeightAwareAnalysisStrategy(MealAnalysisStrategy):
                 "protein": 10,
                 "carbs": 20,
                 "fat": 5,
-                "fiber": 2
               }
             }
           ],

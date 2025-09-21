@@ -79,7 +79,6 @@ class GPTResponseParser:
                     protein=float(macros_data.get("protein", 0)),
                     carbs=float(macros_data.get("carbs", 0)),
                     fat=float(macros_data.get("fat", 0)),
-                    fiber=float(macros_data.get("fiber", 0)) if "fiber" in macros_data else None
                 )
                 
                 # Create FoodItem with confidence score
@@ -108,15 +107,10 @@ class GPTResponseParser:
             total_carbs = sum(item.macros.carbs for item in food_items)
             total_fat = sum(item.macros.fat for item in food_items)
             
-            # Calculate fiber, handling None values
-            fibers = [item.macros.fiber for item in food_items if item.macros.fiber is not None]
-            total_fiber = sum(fibers) if fibers else None
-            
             total_macros = Macros(
                 protein=total_protein,
                 carbs=total_carbs,
                 fat=total_fat,
-                fiber=total_fiber
             )
         else:
             # If no food items, use top-level macros if available
@@ -125,7 +119,6 @@ class GPTResponseParser:
                     protein=float(data["macros"].get("protein", 0)),
                     carbs=float(data["macros"].get("carbs", 0)),
                     fat=float(data["macros"].get("fat", 0)),
-                    fiber=float(data["macros"].get("fiber", 0)) if "fiber" in data["macros"] else None
                 )
             else:
                 # Default empty macros

@@ -18,7 +18,7 @@ from src.infra.database.models.meal.meal_image import MealImage as MealImageMode
 
 
 def create_test_meal_in_db(session, meal_id, dish_name, user_id="550e8400-e29b-41d4-a716-446655440001", created_at=None, 
-                          calories=500, protein=30, carbs=50, fat=20, fiber=5):
+                          calories=500, protein=30, carbs=50, fat=20):
     """Helper to create a test meal with proper structure."""
     import uuid
     from src.infra.database.models.nutrition.nutrition import Nutrition as NutritionModel
@@ -53,7 +53,6 @@ def create_test_meal_in_db(session, meal_id, dish_name, user_id="550e8400-e29b-4
         protein=protein,
         carbs=carbs,
         fat=fat,
-        fiber=fiber,
         confidence_score=0.95
     )
     session.add(nutrition)
@@ -135,7 +134,6 @@ class TestGetMealByIdQueryHandler:
             protein=30,
             carbs=50,
             fat=20,
-            fiber=5,
             confidence_score=0.95
         )
         test_session.add(nutrition)
@@ -151,7 +149,6 @@ class TestGetMealByIdQueryHandler:
             protein=5,
             carbs=40,
             fat=2,
-            fiber=2,
             confidence=0.95
         )
         food_item2 = FoodItem(
@@ -163,7 +160,6 @@ class TestGetMealByIdQueryHandler:
             protein=25,
             carbs=10,
             fat=18,
-            fiber=3,
             confidence=0.9
         )
         test_session.add(food_item1)
@@ -207,7 +203,6 @@ class TestGetMealsByDateQueryHandler:
             protein=20,
             carbs=30,
             fat=10,
-            fiber=5
         )
         
         create_test_meal_in_db(
@@ -219,7 +214,6 @@ class TestGetMealsByDateQueryHandler:
             protein=30,
             carbs=50,
             fat=20,
-            fiber=8
         )
         test_session.commit()
         
@@ -299,7 +293,7 @@ class TestGetDailyMacrosQueryHandler:
         import uuid
         today = date.today()
         
-        # Create meal 0: 300 calories, 20 protein, 30 carbs, 10 fat, 5 fiber
+        # Create meal 0: 300 calories, 20 protein, 30 carbs, 10 fat
         create_test_meal_in_db(
             test_session,
             str(uuid.uuid4()),
@@ -309,10 +303,9 @@ class TestGetDailyMacrosQueryHandler:
             protein=20,
             carbs=30,
             fat=10,
-            fiber=5
         )
         
-        # Create meal 1: 400 calories, 25 protein, 40 carbs, 15 fat, 6 fiber
+        # Create meal 1: 400 calories, 25 protein, 40 carbs, 15 fat
         create_test_meal_in_db(
             test_session,
             str(uuid.uuid4()),
@@ -322,10 +315,9 @@ class TestGetDailyMacrosQueryHandler:
             protein=25,
             carbs=40,
             fat=15,
-            fiber=6
         )
         
-        # Create meal 2: 500 calories, 30 protein, 50 carbs, 20 fat, 7 fiber
+        # Create meal 2: 500 calories, 30 protein, 50 carbs, 20 fat
         create_test_meal_in_db(
             test_session,
             str(uuid.uuid4()),
@@ -335,7 +327,6 @@ class TestGetDailyMacrosQueryHandler:
             protein=30,
             carbs=50,
             fat=20,
-            fiber=7
         )
         
         test_session.commit()
@@ -351,7 +342,6 @@ class TestGetDailyMacrosQueryHandler:
         assert result["total_protein"] == 20 + 25 + 30  # 75
         assert result["total_carbs"] == 30 + 40 + 50  # 120
         assert result["total_fat"] == 10 + 15 + 20  # 45
-        assert result["total_fiber"] == 5 + 6 + 7  # 18
         assert result["meal_count"] == 3
     
     @pytest.mark.asyncio
@@ -370,5 +360,4 @@ class TestGetDailyMacrosQueryHandler:
         assert result["total_protein"] == 0
         assert result["total_carbs"] == 0
         assert result["total_fat"] == 0
-        assert result["total_fiber"] == 0
         assert result["meal_count"] == 0

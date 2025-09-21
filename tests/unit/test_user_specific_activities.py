@@ -35,7 +35,7 @@ class TestUserSpecificActivities:
             dish_name="User 1 Lunch",
             nutrition=Nutrition(
                 calories=500.0,
-                macros=Macros(protein=30.0, carbs=50.0, fat=20.0, fiber=5.0),
+                macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
                 food_items=[],
                 confidence_score=0.9
             ),
@@ -56,7 +56,7 @@ class TestUserSpecificActivities:
             dish_name="User 2 Lunch",
             nutrition=Nutrition(
                 calories=600.0,
-                macros=Macros(protein=35.0, carbs=60.0, fat=25.0, fiber=8.0),
+                macros=Macros(protein=35.0, carbs=60.0, fat=25.0),
                 food_items=[],
                 confidence_score=0.95
             ),

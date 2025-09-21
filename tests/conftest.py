@@ -309,7 +309,6 @@ def sample_meal_domain() -> Meal:
                 protein=30.0,
                 carbs=50.0,
                 fat=20.0,
-                fiber=5.0
             ),
             food_items=[
                 FoodItem(
@@ -321,7 +320,6 @@ def sample_meal_domain() -> Meal:
                         protein=5.0,
                         carbs=40.0,
                         fat=2.0,
-                        fiber=2.0
                     )
                 ),
                 FoodItem(
@@ -333,7 +331,6 @@ def sample_meal_domain() -> Meal:
                         protein=25.0,
                         carbs=10.0,
                         fat=18.0,
-                        fiber=3.0
                     )
                 )
             ],

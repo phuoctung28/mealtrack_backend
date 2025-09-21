@@ -33,7 +33,6 @@ class MockMealSuggestionService:
                     "protein": breakfast_calories * 0.15 / 4,  # 15% from protein, 4 cal/g
                     "carbs": breakfast_calories * 0.60 / 4,    # 60% from carbs, 4 cal/g
                     "fat": breakfast_calories * 0.25 / 9,      # 25% from fat, 9 cal/g
-                    "fiber": 8.0
                 },
                 "ingredients": [
                     "Rolled oats", "Blueberries", "Strawberries", 
@@ -56,7 +55,7 @@ class MockMealSuggestionService:
                     "protein": lunch_calories * 0.35 / 4,
                     "carbs": lunch_calories * 0.40 / 4,
                     "fat": lunch_calories * 0.25 / 9,
-                    "fiber": 12.0
+                    "": 12.0
                 },
                 "ingredients": [
                     "Chicken breast", "Mixed greens", "Cherry tomatoes",
@@ -79,7 +78,6 @@ class MockMealSuggestionService:
                     "protein": dinner_calories * 0.30 / 4,
                     "carbs": dinner_calories * 0.45 / 4,
                     "fat": dinner_calories * 0.25 / 9,
-                    "fiber": 10.0
                 },
                 "ingredients": [
                     "Salmon fillet", "Quinoa", "Broccoli", "Carrots",
@@ -103,7 +101,6 @@ class MockMealSuggestionService:
                     "protein": snack_calories * 0.30 / 4,
                     "carbs": snack_calories * 0.40 / 4,
                     "fat": snack_calories * 0.30 / 9,
-                    "fiber": 2.0
                 },
                 "ingredients": [
                     "Greek yogurt", "Walnuts", "Almonds", "Honey"

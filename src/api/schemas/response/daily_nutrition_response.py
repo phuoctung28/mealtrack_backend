@@ -6,13 +6,11 @@ from typing import Dict
 from pydantic import BaseModel, Field
 
 
-# TODO (tony): remove fiber field
 class MacrosResponse(BaseModel):
     """Macronutrient response model."""
     protein: float = Field(..., description="Protein in grams")
     carbs: float = Field(..., description="Carbohydrates in grams") 
     fat: float = Field(..., description="Fat in grams")
-    fiber: float = Field(0.0, description="Fiber in grams")
 
 class DailyNutritionResponse(BaseModel):
     """Response DTO for daily nutrition summary - matches Flutter frontend expectations."""

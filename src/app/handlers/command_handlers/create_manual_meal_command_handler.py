@@ -30,7 +30,6 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         total_protein = 0.0
         total_carbs = 0.0
         total_fat = 0.0
-        total_fiber = 0.0
         food_items: List[DomainFoodItem] = []
 
         for item in event.items:
@@ -43,13 +42,11 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             protein = float(mapped["macros"].get("protein") or 0.0) * factor
             carbs = float(mapped["macros"].get("carbs") or 0.0) * factor
             fat = float(mapped["macros"].get("fat") or 0.0) * factor
-            fiber = float(mapped["macros"].get("fiber") or 0.0) * factor
 
             total_calories += calories
             total_protein += protein
             total_carbs += carbs
             total_fat += fat
-            total_fiber += fiber
 
             food_items.append(
                 DomainFoodItem(
@@ -61,7 +58,6 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                         protein=protein,
                         carbs=carbs,
                         fat=fat,
-                        fiber=fiber,
                     ),
                     micros=None,
                     confidence=1.0,
@@ -74,7 +70,6 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                 protein=round(total_protein, 1),
                 carbs=round(total_carbs, 1),
                 fat=round(total_fat, 1),
-                fiber=round(total_fiber, 1),
             ),
             food_items=food_items,
             confidence_score=1.0,
