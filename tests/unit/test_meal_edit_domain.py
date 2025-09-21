@@ -35,7 +35,6 @@ class TestMealEditDomain:
                     protein=30.0,
                     carbs=50.0,
                     fat=20.0,
-                    fiber=5.0
                 ),
                 food_items=[],
                 confidence_score=0.9
@@ -51,7 +50,6 @@ class TestMealEditDomain:
                 protein=35.0,
                 carbs=55.0,
                 fat=25.0,
-                fiber=6.0
             ),
             food_items=[],
             confidence_score=0.9
@@ -176,7 +174,6 @@ class TestFoodItemEditSupport:
                 protein=46.2,
                 carbs=0.0,
                 fat=5.4,
-                fiber=0.0
             ),
             food_item_id="test-food-item-id",
             fdc_id=171077,
@@ -200,7 +197,6 @@ class TestFoodItemEditSupport:
                 protein=1.0,
                 carbs=5.0,
                 fat=12.0,
-                fiber=0.5
             ),
             food_item_id=str(uuid.uuid4()),
             fdc_id=None,

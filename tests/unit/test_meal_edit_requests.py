@@ -29,7 +29,6 @@ class TestFoodItemChangeRequest:
                 protein_per_100g=10.0,
                 carbs_per_100g=20.0,
                 fat_per_100g=8.0,
-                fiber_per_100g=2.0
             )
         )
         
@@ -169,7 +168,6 @@ class TestCustomNutritionRequest:
             protein_per_100g=15.0,
             carbs_per_100g=25.0,
             fat_per_100g=8.0,
-            fiber_per_100g=3.0
         )
         
         # Assert
@@ -177,21 +175,6 @@ class TestCustomNutritionRequest:
         assert request.protein_per_100g == 15.0
         assert request.carbs_per_100g == 25.0
         assert request.fat_per_100g == 8.0
-        assert request.fiber_per_100g == 3.0
-    
-    def test_valid_nutrition_without_fiber(self):
-        """Test valid nutrition request without fiber."""
-        # Arrange & Act
-        request = CustomNutritionRequest(
-            calories_per_100g=200.0,
-            protein_per_100g=15.0,
-            carbs_per_100g=25.0,
-            fat_per_100g=8.0
-        )
-        
-        # Assert
-        assert request.calories_per_100g == 200.0
-        assert request.fiber_per_100g is None
     
     def test_negative_calories(self):
         """Test negative calories validation."""
@@ -343,7 +326,6 @@ class TestAddCustomIngredientRequest:
                 protein_per_100g=2.0,
                 carbs_per_100g=10.0,
                 fat_per_100g=12.0,
-                fiber_per_100g=1.0
             )
         )
         

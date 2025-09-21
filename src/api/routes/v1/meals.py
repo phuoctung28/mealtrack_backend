@@ -356,7 +356,6 @@ async def update_meal_ingredients(
                     protein_per_100g=change_request.custom_nutrition.protein_per_100g,
                     carbs_per_100g=change_request.custom_nutrition.carbs_per_100g,
                     fat_per_100g=change_request.custom_nutrition.fat_per_100g,
-                    fiber_per_100g=change_request.custom_nutrition.fiber_per_100g
                 )
             
             food_item_changes.append(
@@ -406,7 +405,6 @@ async def add_custom_ingredient(
                 protein_per_100g=request.nutrition.protein_per_100g,
                 carbs_per_100g=request.nutrition.carbs_per_100g,
                 fat_per_100g=request.nutrition.fat_per_100g,
-                fiber_per_100g=request.nutrition.fiber_per_100g
             )
         )
         

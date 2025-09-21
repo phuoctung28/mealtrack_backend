@@ -87,7 +87,6 @@ class TestEditMealCommandHandler:
                         protein_per_100g=2.0,
                         carbs_per_100g=8.0,
                         fat_per_100g=10.0,
-                        fiber_per_100g=1.0
                     )
                 )
             ]
@@ -310,7 +309,6 @@ class TestAddCustomIngredientCommandHandler:
                 protein_per_100g=1.0,
                 carbs_per_100g=5.0,
                 fat_per_100g=42.0,
-                fiber_per_100g=0.5
             )
         )
         

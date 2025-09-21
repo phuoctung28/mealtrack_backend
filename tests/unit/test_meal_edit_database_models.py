@@ -139,7 +139,6 @@ class TestFoodItemDatabaseModelEdit:
         food_item_model.protein = 46.2
         food_item_model.carbs = 0.0
         food_item_model.fat = 5.4
-        food_item_model.fiber = 0.0
         food_item_model.food_item_id = str(uuid.uuid4())
         food_item_model.fdc_id = 171077
         food_item_model.is_custom = False
@@ -164,7 +163,6 @@ class TestFoodItemDatabaseModelEdit:
                 protein=1.0,
                 carbs=5.0,
                 fat=12.0,
-                fiber=0.5
             ),
             confidence=0.8,
             food_item_id=str(uuid.uuid4()),
@@ -213,7 +211,6 @@ class TestFoodItemDatabaseModelEdit:
         food_item_model.protein = 10.0
         food_item_model.carbs = 20.0
         food_item_model.fat = 8.0
-        food_item_model.fiber = None
         food_item_model.food_item_id = None
         food_item_model.fdc_id = None
         food_item_model.is_custom = False
@@ -225,7 +222,6 @@ class TestFoodItemDatabaseModelEdit:
         assert domain_food_item.food_item_id is None
         assert domain_food_item.fdc_id is None
         assert domain_food_item.is_custom is False
-        assert domain_food_item.macros.fiber is None
 
 
 @pytest.mark.unit
@@ -249,7 +245,7 @@ class TestMealEditDatabaseIntegration:
             dish_name="Test Meal",
             nutrition=Nutrition(
                 calories=500.0,
-                macros=Macros(protein=30.0, carbs=50.0, fat=20.0, fiber=5.0),
+                macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
                 food_items=[
                     FoodItem(
                         name="Test Food",
@@ -300,7 +296,7 @@ class TestMealEditDatabaseIntegration:
             quantity=150.0,
             unit="g",
             calories=300.0,
-            macros=Macros(protein=25.0, carbs=10.0, fat=15.0, fiber=2.0),
+            macros=Macros(protein=25.0, carbs=10.0, fat=15.0),
             confidence=0.95,
             food_item_id=str(uuid.uuid4()),
             fdc_id=54321,

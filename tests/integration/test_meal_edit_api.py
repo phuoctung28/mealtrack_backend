@@ -71,7 +71,6 @@ class TestMealEditAPI:
                         "protein_per_100g": 2.0,
                         "carbs_per_100g": 10.0,
                         "fat_per_100g": 12.0,
-                        "fiber_per_100g": 1.0
                     }
                 }
             ]
@@ -142,7 +141,6 @@ class TestMealEditAPI:
                 "protein_per_100g": 0.0,
                 "carbs_per_100g": 0.0,
                 "fat_per_100g": 100.0,
-                "fiber_per_100g": 0.0
             }
         }
         
@@ -338,7 +336,6 @@ class TestMealEditAPI:
                         "protein_per_100g": 2.0,
                         "carbs_per_100g": 3.0,
                         "fat_per_100g": 0.5,
-                        "fiber_per_100g": 2.0
                     }
                 }
             ]

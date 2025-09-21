@@ -232,7 +232,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 "protein": updated_nutrition.macros.protein,
                 "carbs": updated_nutrition.macros.carbs,
                 "fat": updated_nutrition.macros.fat,
-                "fiber": updated_nutrition.macros.fiber
             },
             "edit_count": saved_meal.edit_count,
             "last_edited_at": saved_meal.last_edited_at.isoformat(),
@@ -279,7 +278,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                             protein=existing_item.macros.protein * scale_factor,
                             carbs=existing_item.macros.carbs * scale_factor,
                             fat=existing_item.macros.fat * scale_factor,
-                            fiber=existing_item.macros.fiber * scale_factor if existing_item.macros.fiber else None
                         ),
                         micros=existing_item.micros,
                         confidence=existing_item.confidence,
@@ -309,7 +307,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                             protein=nutrition.protein_per_100g * scale_factor,
                             carbs=nutrition.carbs_per_100g * scale_factor,
                             fat=nutrition.fat_per_100g * scale_factor,
-                            fiber=nutrition.fiber_per_100g * scale_factor if nutrition.fiber_per_100g else None
                         ),
                         confidence=0.8,  # Custom ingredients have lower confidence
                         food_item_id=new_item_id,
@@ -334,7 +331,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 protein=31.0 * (quantity / 100.0),
                 carbs=0.0,
                 fat=3.6 * (quantity / 100.0),
-                fiber=0.0
             ),
             confidence=1.0,
             food_item_id=str(uuid.uuid4()),
@@ -349,7 +345,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         total_protein = sum(item.macros.protein for item in food_items)
         total_carbs = sum(item.macros.carbs for item in food_items)
         total_fat = sum(item.macros.fat for item in food_items)
-        total_fiber = sum(item.macros.fiber or 0 for item in food_items)
         
         return Nutrition(
             calories=total_calories,
@@ -357,7 +352,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 protein=total_protein,
                 carbs=total_carbs,
                 fat=total_fat,
-                fiber=total_fiber if total_fiber > 0 else None
             ),
             food_items=food_items,
             confidence_score=sum(item.confidence for item in food_items) / len(food_items) if food_items else 1.0

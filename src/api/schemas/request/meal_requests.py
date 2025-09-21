@@ -140,7 +140,6 @@ class CustomNutritionRequest(BaseModel):
     protein_per_100g: float = Field(..., ge=0, le=100, description="Protein per 100g in grams")
     carbs_per_100g: float = Field(..., ge=0, le=100, description="Carbohydrates per 100g in grams")
     fat_per_100g: float = Field(..., ge=0, le=100, description="Fat per 100g in grams")
-    fiber_per_100g: Optional[float] = Field(None, ge=0, le=100, description="Fiber per 100g in grams")
 
     class Config:
         json_schema_extra = {
@@ -149,7 +148,6 @@ class CustomNutritionRequest(BaseModel):
                 "protein_per_100g": 31.0,
                 "carbs_per_100g": 0.0,
                 "fat_per_100g": 3.6,
-                "fiber_per_100g": 0.0
             }
         }
 
@@ -199,8 +197,7 @@ class AddCustomIngredientRequest(BaseModel):
                     "calories_per_100g": 400.0,
                     "protein_per_100g": 0.5,
                     "carbs_per_100g": 2.0,
-                    "fat_per_100g": 44.0,
-                    "fiber_per_100g": 0.0
+                    "fat_per_100g": 44.0
                 }
             }
         }
