@@ -35,7 +35,6 @@ class TestEditMealCommandHandler:
         
         command = EditMealCommand(
             meal_id=meal.meal_id,
-            user_id=meal.user_id,
             food_item_changes=[
                 FoodItemChange(
                     action="update",
@@ -75,7 +74,6 @@ class TestEditMealCommandHandler:
         
         command = EditMealCommand(
             meal_id=meal.meal_id,
-            user_id=meal.user_id,
             food_item_changes=[
                 FoodItemChange(
                     action="add",
@@ -126,7 +124,6 @@ class TestEditMealCommandHandler:
         
         command = EditMealCommand(
             meal_id=meal.meal_id,
-            user_id=meal.user_id,
             food_item_changes=[
                 FoodItemChange(
                     action="remove",
@@ -167,13 +164,13 @@ class TestEditMealCommandHandler:
             food_item_changes=[
                 FoodItemChange(
                     action="update",
-                    food_item_id=food_item_1_id,
+                    id=food_item_1_id,
                     quantity=150.0,
                     unit="g"
                 ),
                 FoodItemChange(
                     action="remove",
-                    food_item_id=food_item_2_id
+                    id=food_item_2_id
                 ),
                 FoodItemChange(
                     action="add",
@@ -208,7 +205,6 @@ class TestEditMealCommandHandler:
         meal = sample_meal_with_nutrition
         command = EditMealCommand(
             meal_id=meal.meal_id,
-            user_id="different-user-id",
             food_item_changes=[
                 FoodItemChange(
                     action="add",
@@ -236,7 +232,6 @@ class TestEditMealCommandHandler:
         meal = sample_meal_processing
         command = EditMealCommand(
             meal_id=meal.meal_id,
-            user_id=meal.user_id,
             food_item_changes=[
                 FoodItemChange(
                     action="add",
@@ -263,7 +258,6 @@ class TestEditMealCommandHandler:
         # Arrange
         command = EditMealCommand(
             meal_id="non-existent-meal-id",
-            user_id="test-user-id",
             food_item_changes=[
                 FoodItemChange(
                     action="add",
