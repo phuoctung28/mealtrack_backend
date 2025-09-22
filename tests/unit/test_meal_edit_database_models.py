@@ -22,7 +22,8 @@ class TestMealDatabaseModelEdit:
         meal_model = MealModel()
         meal_model.meal_id = str(uuid.uuid4())
         meal_model.user_id = str(uuid.uuid4())
-        meal_model.status = "READY"
+        from src.infra.database.models.meal.meal import MealStatusEnum
+        meal_model.status = MealStatusEnum.READY
         meal_model.created_at = datetime.now()
         meal_model.updated_at = datetime.now()
         meal_model.dish_name = "Test Meal"
@@ -33,7 +34,7 @@ class TestMealDatabaseModelEdit:
         
         # Mock image relationship
         meal_model.image = type('MockImage', (), {
-            'to_domain': lambda: MealImage(
+            'to_domain': lambda self: MealImage(
                 image_id=str(uuid.uuid4()),
                 format="jpeg",
                 size_bytes=100000,
@@ -41,15 +42,15 @@ class TestMealDatabaseModelEdit:
             )
         })()
         
-        # Mock nutrition relationship
-        meal_model.nutrition = type('MockNutrition', (), {
-            'to_domain': lambda: Nutrition(
-                calories=500.0,
-                macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
-                food_items=[],
-                confidence_score=0.9
-            )
-        })()
+        # Mock nutrition relationship - use actual Nutrition model
+        from src.infra.database.models.nutrition.nutrition import Nutrition as NutritionModel
+        nutrition_model = NutritionModel()
+        nutrition_model.calories = 500.0
+        nutrition_model.protein = 30.0
+        nutrition_model.carbs = 50.0
+        nutrition_model.fat = 20.0
+        nutrition_model.confidence_score = 0.9
+        meal_model.nutrition = nutrition_model
         
         # Act
         domain_meal = meal_model.to_domain()
@@ -110,7 +111,14 @@ class TestMealDatabaseModelEdit:
                 format="jpeg",
                 size_bytes=100000,
                 url="https://example.com/image.jpg"
-            )
+            ),
+            nutrition=Nutrition(
+                calories=500.0,
+                macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
+                food_items=[],
+                confidence_score=0.9
+            ),
+            ready_at=datetime.now()
             # Missing edit fields - should use defaults
         )
         
@@ -272,12 +280,18 @@ class TestMealEditDatabaseIntegration:
         
         # Mock the relationships for to_domain conversion
         meal_model.image = type('MockImage', (), {
-            'to_domain': lambda: original_domain_meal.image
+            'to_domain': lambda self: original_domain_meal.image
         })()
         
-        meal_model.nutrition = type('MockNutrition', (), {
-            'to_domain': lambda: original_domain_meal.nutrition
-        })()
+        # Mock nutrition relationship - use actual Nutrition model
+        from src.infra.database.models.nutrition.nutrition import Nutrition as NutritionModel
+        nutrition_model = NutritionModel()
+        nutrition_model.calories = original_domain_meal.nutrition.calories
+        nutrition_model.protein = original_domain_meal.nutrition.macros.protein
+        nutrition_model.carbs = original_domain_meal.nutrition.macros.carbs
+        nutrition_model.fat = original_domain_meal.nutrition.macros.fat
+        nutrition_model.confidence_score = original_domain_meal.nutrition.confidence_score
+        meal_model.nutrition = nutrition_model
         
         converted_domain_meal = meal_model.to_domain()
         
