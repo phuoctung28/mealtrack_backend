@@ -25,7 +25,6 @@ def upgrade() -> None:
     op.add_column('meal', sa.Column('is_manually_edited', sa.Boolean(), nullable=False, server_default='0'))
     
     # Add editing support fields to food_item table
-    op.add_column('food_item', sa.Column('food_item_id', sa.String(length=36), nullable=True))
     op.add_column('food_item', sa.Column('fdc_id', sa.Integer(), nullable=True))
     op.add_column('food_item', sa.Column('is_custom', sa.Boolean(), nullable=False, server_default='0'))
     
@@ -33,14 +32,12 @@ def upgrade() -> None:
     op.create_index('ix_meal_edited', 'meal', ['is_manually_edited', 'last_edited_at'])
     op.create_index('ix_food_item_fdc', 'food_item', ['fdc_id'])
     op.create_index('ix_food_item_custom', 'food_item', ['is_custom'])
-    op.create_index('ix_food_item_food_item_id', 'food_item', ['food_item_id'])
 
 
 def downgrade() -> None:
     """Remove meal edit support"""
     
     # Drop indexes
-    op.drop_index('ix_food_item_food_item_id', table_name='food_item')
     op.drop_index('ix_food_item_custom', table_name='food_item')
     op.drop_index('ix_food_item_fdc', table_name='food_item')
     op.drop_index('ix_meal_edited', table_name='meal')
@@ -48,7 +45,6 @@ def downgrade() -> None:
     # Remove food_item columns
     op.drop_column('food_item', 'is_custom')
     op.drop_column('food_item', 'fdc_id')
-    op.drop_column('food_item', 'food_item_id')
     
     # Remove meal columns
     op.drop_column('meal', 'is_manually_edited')

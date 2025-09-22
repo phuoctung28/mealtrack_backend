@@ -381,7 +381,7 @@ def sample_meal_with_nutrition(test_session) -> Meal:
                 carbs=0.0,
                 fat=5.4,
             ),
-            food_item_id=str(uuid.uuid4()),
+            id=str(uuid.uuid4()),
             fdc_id=171077,
             is_custom=False
         ),
@@ -395,7 +395,7 @@ def sample_meal_with_nutrition(test_session) -> Meal:
                 carbs=22.0,
                 fat=0.9,
             ),
-            food_item_id=str(uuid.uuid4()),
+            id=str(uuid.uuid4()),
             fdc_id=168880,
             is_custom=False
         ),
@@ -409,7 +409,7 @@ def sample_meal_with_nutrition(test_session) -> Meal:
                 carbs=7.0,
                 fat=0.2,
             ),
-            food_item_id=str(uuid.uuid4()),
+            id=str(uuid.uuid4()),
             is_custom=True
         )
     ]

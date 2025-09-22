@@ -5,10 +5,10 @@ from sqlalchemy import Column, String, Float, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
-from src.infra.database.models.base import SecondaryEntityMixin
+from src.infra.database.models.base import PrimaryEntityMixin
 
 
-class FoodItem(Base, SecondaryEntityMixin):
+class FoodItem(Base, PrimaryEntityMixin):
     """Database model for food items in a meal."""
     
     __tablename__ = 'food_item'  # Explicit table name to match migration
@@ -19,8 +19,7 @@ class FoodItem(Base, SecondaryEntityMixin):
     calories = Column(Float, nullable=False)
     confidence = Column(Float, nullable=True)
     
-    # Edit support fields
-    food_item_id = Column(String(36), nullable=True)  # Unique ID for editing operations
+    # Edit support fields  
     fdc_id = Column(Integer, nullable=True)  # USDA FDC ID if available
     is_custom = Column(Boolean, default=False, nullable=False)  # Whether this is a custom ingredient
     
@@ -48,6 +47,7 @@ class FoodItem(Base, SecondaryEntityMixin):
         )
         
         return DomainFoodItem(
+            id=self.id,  # Both database and domain use UUID strings now
             name=self.name,
             quantity=self.quantity,
             unit=self.unit,
@@ -55,7 +55,6 @@ class FoodItem(Base, SecondaryEntityMixin):
             macros=macros,
             micros=None,  # Not implemented yet
             confidence=self.confidence,
-            food_item_id=self.food_item_id,
             fdc_id=self.fdc_id,
             is_custom=self.is_custom
         )
@@ -70,10 +69,13 @@ class FoodItem(Base, SecondaryEntityMixin):
             calories=domain_model.calories,
             confidence=domain_model.confidence,
             nutrition_id=nutrition_id,
-            food_item_id=getattr(domain_model, 'food_item_id', None),
             fdc_id=getattr(domain_model, 'fdc_id', None),
             is_custom=getattr(domain_model, 'is_custom', False)
         )
+        
+        # Set the ID if provided (for updates)
+        if hasattr(domain_model, 'id') and domain_model.id:
+            item.id = domain_model.id
         
         # Set macro fields directly
         if domain_model.macros:

@@ -166,6 +166,7 @@ class TestFoodItemEditSupport:
         """Test food item with edit support fields."""
         # Arrange & Act
         food_item = FoodItem(
+            id="test-food-item-id",
             name="Grilled Chicken",
             quantity=150.0,
             unit="g",
@@ -175,13 +176,12 @@ class TestFoodItemEditSupport:
                 carbs=0.0,
                 fat=5.4,
             ),
-            food_item_id="test-food-item-id",
             fdc_id=171077,
             is_custom=False
         )
         
         # Assert
-        assert food_item.food_item_id == "test-food-item-id"
+        assert food_item.id == "test-food-item-id"
         assert food_item.fdc_id == 171077
         assert food_item.is_custom is False
     
@@ -189,6 +189,7 @@ class TestFoodItemEditSupport:
         """Test custom food item creation."""
         # Arrange & Act
         custom_food_item = FoodItem(
+            id=str(uuid.uuid4()),
             name="Homemade Sauce",
             quantity=30.0,
             unit="ml",
@@ -198,7 +199,6 @@ class TestFoodItemEditSupport:
                 carbs=5.0,
                 fat=12.0,
             ),
-            food_item_id=str(uuid.uuid4()),
             fdc_id=None,
             is_custom=True
         )
@@ -206,18 +206,18 @@ class TestFoodItemEditSupport:
         # Assert
         assert custom_food_item.is_custom is True
         assert custom_food_item.fdc_id is None
-        assert custom_food_item.food_item_id is not None
+        assert custom_food_item.id is not None
     
     def test_food_item_to_dict_includes_edit_fields(self):
         """Test that to_dict includes edit support fields."""
         # Arrange
         food_item = FoodItem(
+            id="test-id",
             name="Test Food",
             quantity=100.0,
             unit="g",
             calories=200.0,
             macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
-            food_item_id="test-id",
             fdc_id=12345,
             is_custom=False
         )
@@ -226,10 +226,10 @@ class TestFoodItemEditSupport:
         result = food_item.to_dict()
         
         # Assert
-        assert "food_item_id" in result
+        assert "id" in result
         assert "fdc_id" in result
         assert "is_custom" in result
-        assert result["food_item_id"] == "test-id"
+        assert result["id"] == "test-id"
         assert result["fdc_id"] == 12345
         assert result["is_custom"] is False
     
@@ -237,12 +237,12 @@ class TestFoodItemEditSupport:
         """Test that to_dict excludes None values for optional fields."""
         # Arrange
         food_item = FoodItem(
+            id="test-id-2",
             name="Test Food",
             quantity=100.0,
             unit="g",
             calories=200.0,
             macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
-            food_item_id=None,
             fdc_id=None,
             is_custom=True
         )
@@ -251,10 +251,11 @@ class TestFoodItemEditSupport:
         result = food_item.to_dict()
         
         # Assert
-        assert "food_item_id" not in result
-        assert "fdc_id" not in result
+        assert "fdc_id" not in result  # Should be excluded since it's None
         assert "is_custom" in result
+        assert "id" in result  # Should be included since it's not None
         assert result["is_custom"] is True
+        assert result["id"] == "test-id-2"
 
 
 @pytest.mark.unit
@@ -296,13 +297,13 @@ class TestMealEditValidation:
         """Test food item validation works with edit fields."""
         # Arrange & Act - should not raise exception
         food_item = FoodItem(
+            id=str(uuid.uuid4()),
             name="Test Food",
             quantity=100.0,
             unit="g",
             calories=200.0,
             macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
             confidence=0.95,
-            food_item_id=str(uuid.uuid4()),
             fdc_id=12345,
             is_custom=False
         )

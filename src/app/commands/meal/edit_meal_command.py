@@ -11,7 +11,7 @@ from src.app.events.base import Command
 class FoodItemChange:
     """Represents a change to a food item in meal editing."""
     action: str  # "add", "update", "remove"
-    food_item_id: Optional[str] = None
+    id: Optional[str] = None
     fdc_id: Optional[int] = None
     name: Optional[str] = None
     quantity: Optional[float] = None

@@ -116,7 +116,7 @@ class CreateManualMealFromFoodsRequest(BaseModel):
 class FoodItemChangeRequest(BaseModel):
     """Request DTO for a single food item change in meal editing."""
     action: Literal["add", "update", "remove"] = Field(..., description="Action to perform: 'add', 'update', or 'remove'")
-    food_item_id: Optional[str] = Field(None, description="ID of existing food item (required for update/remove)")
+    id: Optional[str] = Field(None, description="ID of existing food item (required for update/remove)")
     fdc_id: Optional[int] = Field(None, description="USDA FDC ID for new ingredients")
     name: Optional[str] = Field(None, min_length=1, max_length=200, description="Ingredient name")
     quantity: Optional[float] = Field(None, gt=0, le=10000, description="Quantity amount")
@@ -127,7 +127,7 @@ class FoodItemChangeRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "action": "update",
-                "food_item_id": "uuid-string",
+                "id": "123",
                 "quantity": 150.0,
                 "unit": "g"
             }
@@ -164,7 +164,7 @@ class EditMealIngredientsRequest(BaseModel):
                 "food_item_changes": [
                     {
                         "action": "update",
-                        "food_item_id": "existing-uuid",
+                        "id": "existing-uuid",
                         "quantity": 200.0,
                         "unit": "g"
                     },

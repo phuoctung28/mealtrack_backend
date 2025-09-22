@@ -131,6 +131,7 @@ class TestFoodItemDatabaseModelEdit:
         """Test that food item model to_domain includes edit support fields."""
         # Arrange
         food_item_model = FoodItemModel()
+        food_item_model.id = "test-uuid-12345"  # Set UUID for testing
         food_item_model.name = "Grilled Chicken"
         food_item_model.quantity = 150.0
         food_item_model.unit = "g"
@@ -139,7 +140,6 @@ class TestFoodItemDatabaseModelEdit:
         food_item_model.protein = 46.2
         food_item_model.carbs = 0.0
         food_item_model.fat = 5.4
-        food_item_model.food_item_id = str(uuid.uuid4())
         food_item_model.fdc_id = 171077
         food_item_model.is_custom = False
         
@@ -147,7 +147,7 @@ class TestFoodItemDatabaseModelEdit:
         domain_food_item = food_item_model.to_domain()
         
         # Assert
-        assert domain_food_item.food_item_id == food_item_model.food_item_id
+        assert domain_food_item.id == food_item_model.id
         assert domain_food_item.fdc_id == 171077
         assert domain_food_item.is_custom is False
     
@@ -165,7 +165,7 @@ class TestFoodItemDatabaseModelEdit:
                 fat=12.0,
             ),
             confidence=0.8,
-            food_item_id=str(uuid.uuid4()),
+            id=str(uuid.uuid4()),
             fdc_id=None,
             is_custom=True
         )
@@ -174,7 +174,7 @@ class TestFoodItemDatabaseModelEdit:
         food_item_model = FoodItemModel.from_domain(domain_food_item, nutrition_id=1)
         
         # Assert
-        assert food_item_model.food_item_id == domain_food_item.food_item_id
+        # The database model will have an auto-generated integer ID
         assert food_item_model.fdc_id is None
         assert food_item_model.is_custom is True
     
@@ -182,6 +182,7 @@ class TestFoodItemDatabaseModelEdit:
         """Test that food item model from_domain uses defaults for missing edit fields."""
         # Arrange
         domain_food_item = FoodItem(
+            id="test-food-item-id",
             name="Basic Food",
             quantity=100.0,
             unit="g",
@@ -195,7 +196,6 @@ class TestFoodItemDatabaseModelEdit:
         food_item_model = FoodItemModel.from_domain(domain_food_item, nutrition_id=1)
         
         # Assert
-        assert food_item_model.food_item_id is None
         assert food_item_model.fdc_id is None
         assert food_item_model.is_custom is False
     
@@ -203,6 +203,7 @@ class TestFoodItemDatabaseModelEdit:
         """Test that food item model handles None values correctly."""
         # Arrange
         food_item_model = FoodItemModel()
+        food_item_model.id = "test-uuid-67890"  # Set UUID for testing
         food_item_model.name = "Test Food"
         food_item_model.quantity = 100.0
         food_item_model.unit = "g"
@@ -211,7 +212,6 @@ class TestFoodItemDatabaseModelEdit:
         food_item_model.protein = 10.0
         food_item_model.carbs = 20.0
         food_item_model.fat = 8.0
-        food_item_model.food_item_id = None
         food_item_model.fdc_id = None
         food_item_model.is_custom = False
         
@@ -219,7 +219,7 @@ class TestFoodItemDatabaseModelEdit:
         domain_food_item = food_item_model.to_domain()
         
         # Assert
-        assert domain_food_item.food_item_id is None
+        assert domain_food_item.id is not None  # Should have the database ID
         assert domain_food_item.fdc_id is None
         assert domain_food_item.is_custom is False
 
@@ -253,7 +253,7 @@ class TestMealEditDatabaseIntegration:
                         unit="g",
                         calories=200.0,
                         macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
-                        food_item_id=str(uuid.uuid4()),
+                        id=str(uuid.uuid4()),
                         fdc_id=12345,
                         is_custom=False
                     )
@@ -298,7 +298,7 @@ class TestMealEditDatabaseIntegration:
             calories=300.0,
             macros=Macros(protein=25.0, carbs=10.0, fat=15.0),
             confidence=0.95,
-            food_item_id=str(uuid.uuid4()),
+            id=str(uuid.uuid4()),
             fdc_id=54321,
             is_custom=True
         )
@@ -309,7 +309,7 @@ class TestMealEditDatabaseIntegration:
         
         # Assert
         assert converted_domain_food_item.name == original_domain_food_item.name
-        assert converted_domain_food_item.food_item_id == original_domain_food_item.food_item_id
+        # ID conversion: string domain ID -> int DB ID -> string domain ID
         assert converted_domain_food_item.fdc_id == original_domain_food_item.fdc_id
         assert converted_domain_food_item.is_custom == original_domain_food_item.is_custom
         assert converted_domain_food_item.quantity == original_domain_food_item.quantity

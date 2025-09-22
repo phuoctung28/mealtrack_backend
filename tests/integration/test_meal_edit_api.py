@@ -24,14 +24,14 @@ class TestMealEditAPI:
         """Test successful meal ingredients update."""
         # Arrange
         meal = sample_meal_with_nutrition
-        food_item_id = meal.nutrition.food_items[0].food_item_id
+        id = meal.nutrition.food_items[0].id
         
         request_data = {
             "dish_name": "Updated Grilled Chicken Meal",
             "food_item_changes": [
                 {
                     "action": "update",
-                    "food_item_id": food_item_id,
+                    "id": id,
                     "quantity": 200.0,
                     "unit": "g"
                 }
@@ -99,14 +99,14 @@ class TestMealEditAPI:
         """Test removing ingredient via update endpoint."""
         # Arrange
         meal = sample_meal_with_nutrition
-        food_item_id = meal.nutrition.food_items[0].food_item_id
+        id = meal.nutrition.food_items[0].id
         original_count = len(meal.nutrition.food_items)
         
         request_data = {
             "food_item_changes": [
                 {
                     "action": "remove",
-                    "food_item_id": food_item_id
+                    "id": id
                 }
             ]
         }
@@ -166,12 +166,12 @@ class TestMealEditAPI:
         """Test successful ingredient removal."""
         # Arrange
         meal = sample_meal_with_nutrition
-        food_item_id = meal.nutrition.food_items[0].food_item_id
+        id = meal.nutrition.food_items[0].id
         original_calories = meal.nutrition.calories
         
         # Act
         response = client.delete(
-            f"/api/v1/meals/{meal.meal_id}/ingredients/{food_item_id}?user_id={meal.user_id}"
+            f"/api/v1/meals/{meal.meal_id}/ingredients/{id}?user_id={meal.user_id}"
         )
         
         # Assert
@@ -310,8 +310,8 @@ class TestMealEditAPI:
         """Test multiple ingredient changes in a single request."""
         # Arrange
         meal = sample_meal_with_nutrition
-        food_item_1_id = meal.nutrition.food_items[0].food_item_id
-        food_item_2_id = meal.nutrition.food_items[1].food_item_id
+        food_item_1_id = meal.nutrition.food_items[0].id
+        food_item_2_id = meal.nutrition.food_items[1].id
         
         request_data = {
             "dish_name": "Completely Updated Meal",

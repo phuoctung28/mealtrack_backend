@@ -44,14 +44,14 @@ class TestFoodItemChangeRequest:
         # Arrange & Act
         request = FoodItemChangeRequest(
             action="update",
-            food_item_id="test-food-item-id",
+            id="test-food-item-id",
             quantity=150.0,
             unit="g"
         )
         
         # Assert
         assert request.action == "update"
-        assert request.food_item_id == "test-food-item-id"
+        assert request.id == "test-food-item-id"
         assert request.quantity == 150.0
         assert request.unit == "g"
     
@@ -60,12 +60,12 @@ class TestFoodItemChangeRequest:
         # Arrange & Act
         request = FoodItemChangeRequest(
             action="remove",
-            food_item_id="test-food-item-id"
+            id="test-food-item-id"
         )
         
         # Assert
         assert request.action == "remove"
-        assert request.food_item_id == "test-food-item-id"
+        assert request.id == "test-food-item-id"
     
     def test_invalid_action(self):
         """Test invalid action value."""
@@ -258,7 +258,7 @@ class TestEditMealIngredientsRequest:
             food_item_changes=[
                 FoodItemChangeRequest(
                     action="update",
-                    food_item_id="test-id",
+                    id="test-id",
                     quantity=150.0,
                     unit="g"
                 )

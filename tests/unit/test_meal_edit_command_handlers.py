@@ -30,8 +30,8 @@ class TestEditMealCommandHandler:
         
         # Get first food item ID
         first_food_item = meal.nutrition.food_items[0]
-        food_item_id = str(uuid.uuid4())
-        first_food_item.food_item_id = food_item_id
+        id = first_food_item.id
+        # Using the domain model's id field now
         
         command = EditMealCommand(
             meal_id=meal.meal_id,
@@ -39,7 +39,7 @@ class TestEditMealCommandHandler:
             food_item_changes=[
                 FoodItemChange(
                     action="update",
-                    food_item_id=food_item_id,
+                    id=id,
                     quantity=200.0,  # Double the quantity
                     unit="g"
                 )
@@ -121,8 +121,8 @@ class TestEditMealCommandHandler:
         
         # Get first food item ID
         first_food_item = meal.nutrition.food_items[0]
-        food_item_id = str(uuid.uuid4())
-        first_food_item.food_item_id = food_item_id
+        id = first_food_item.id
+        # Using the domain model's id field now
         
         command = EditMealCommand(
             meal_id=meal.meal_id,
@@ -130,7 +130,7 @@ class TestEditMealCommandHandler:
             food_item_changes=[
                 FoodItemChange(
                     action="remove",
-                    food_item_id=food_item_id
+                    id=id
                 )
             ]
         )
@@ -156,11 +156,9 @@ class TestEditMealCommandHandler:
         # Arrange
         meal = sample_meal_with_nutrition
         
-        # Set up food item IDs
-        food_item_1_id = str(uuid.uuid4())
-        food_item_2_id = str(uuid.uuid4())
-        meal.nutrition.food_items[0].food_item_id = food_item_1_id
-        meal.nutrition.food_items[1].food_item_id = food_item_2_id
+        # Set up food item IDs using the domain model's id field
+        food_item_1_id = meal.nutrition.food_items[0].id
+        food_item_2_id = meal.nutrition.food_items[1].id
         
         command = EditMealCommand(
             meal_id=meal.meal_id,

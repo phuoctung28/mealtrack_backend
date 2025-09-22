@@ -346,6 +346,8 @@ async def update_meal_ingredients(
     Supports adding, removing, and modifying ingredients with automatic nutrition recalculation.
     """
     try:
+
+        logger.info(f"Updating meal ingredients for meal {meal_id}")
         # Convert request to command
         food_item_changes = []
         for change_request in request.food_item_changes:
@@ -361,7 +363,7 @@ async def update_meal_ingredients(
             food_item_changes.append(
                 FoodItemChange(
                     action=change_request.action,
-                    food_item_id=change_request.food_item_id,
+                    id=change_request.id,
                     fdc_id=change_request.fdc_id,
                     name=change_request.name,
                     quantity=change_request.quantity,
@@ -369,6 +371,8 @@ async def update_meal_ingredients(
                     custom_nutrition=custom_nutrition
                 )
             )
+
+        logger.info(f"Food item changes: {food_item_changes}")
         
         command = EditMealCommand(
             meal_id=meal_id,
@@ -376,6 +380,7 @@ async def update_meal_ingredients(
             food_item_changes=food_item_changes
         )
         
+        logger.info(f"Sending command to event bus: {command}")
         result = await event_bus.send(command)
         return result
         
@@ -415,10 +420,10 @@ async def add_custom_ingredient(
         raise handle_exception(e)
 
 
-@router.delete("/{meal_id}/ingredients/{food_item_id}")
+@router.delete("/{meal_id}/ingredients/{id}")
 async def remove_ingredient(
     meal_id: str,
-    food_item_id: str,
+    id: str,
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -432,7 +437,7 @@ async def remove_ingredient(
             food_item_changes=[
                 FoodItemChange(
                     action="remove",
-                    food_item_id=food_item_id
+                    id=id
                 )
             ]
         )

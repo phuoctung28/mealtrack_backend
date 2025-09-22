@@ -36,7 +36,7 @@ class NutritionResponse(BaseModel):
 
 class FoodItemResponse(BaseModel):
     """Response DTO for food item information."""
-    food_item_id: str = Field(..., description="Food item ID")
+    id: str = Field(..., description="Food item ID")
     name: str = Field(..., description="Food item name")
     category: Optional[str] = Field(None, description="Food category")
     quantity: float = Field(..., description="Quantity")

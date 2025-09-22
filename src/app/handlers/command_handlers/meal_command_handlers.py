@@ -256,20 +256,21 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         food_items_dict = {}
         if current_food_items:
             for item in current_food_items:
-                item_id = item.food_item_id or str(uuid.uuid4())
-                food_items_dict[item_id] = item
+                # Use the item's ID as the key
+                food_items_dict[item.id] = item
         
         for change in changes:
-            if change.action == "remove" and change.food_item_id:
-                food_items_dict.pop(change.food_item_id, None)
+            if change.action == "remove" and change.id:
+                food_items_dict.pop(change.id, None)
             
-            elif change.action == "update" and change.food_item_id:
-                if change.food_item_id in food_items_dict:
-                    existing_item = food_items_dict[change.food_item_id]
+            elif change.action == "update" and change.id:
+                if change.id in food_items_dict:
+                    existing_item = food_items_dict[change.id]
                     # Update quantity and recalculate nutrition
                     scale_factor = (change.quantity or existing_item.quantity) / existing_item.quantity
                     
-                    food_items_dict[change.food_item_id] = FoodItem(
+                    food_items_dict[change.id] = FoodItem(
+                        id=existing_item.id,  # Preserve the existing ID
                         name=existing_item.name,
                         quantity=change.quantity or existing_item.quantity,
                         unit=change.unit or existing_item.unit,
@@ -281,7 +282,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                         ),
                         micros=existing_item.micros,
                         confidence=existing_item.confidence,
-                        food_item_id=existing_item.food_item_id,
                         fdc_id=existing_item.fdc_id,
                         is_custom=existing_item.is_custom
                     )
@@ -299,6 +299,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                     nutrition = change.custom_nutrition
                     
                     food_items_dict[new_item_id] = FoodItem(
+                        id=new_item_id,  # Use generated ID
                         name=change.name or "Custom Ingredient",
                         quantity=change.quantity or 100,
                         unit=change.unit or "g",
@@ -309,7 +310,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                             fat=nutrition.fat_per_100g * scale_factor,
                         ),
                         confidence=0.8,  # Custom ingredients have lower confidence
-                        food_item_id=new_item_id,
                         fdc_id=None,
                         is_custom=True
                     )
@@ -323,6 +323,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         import uuid
         
         return FoodItem(
+            id=str(uuid.uuid4()),  # Generate new ID for USDA food
             name=f"USDA Food {fdc_id}",
             quantity=quantity,
             unit="g",
@@ -333,7 +334,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 fat=3.6 * (quantity / 100.0),
             ),
             confidence=1.0,
-            food_item_id=str(uuid.uuid4()),
             fdc_id=fdc_id,
             is_custom=False
         )
