@@ -19,6 +19,8 @@ from src.infra.database.config import Base
 # Import all models to ensure they're registered with Base metadata
 from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
+from src.infra.database.models.nutrition.food_item import FoodItem as FoodItemModel
+from src.infra.database.models.nutrition.nutrition import Nutrition as NutritionModel
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
 from src.infra.database.test_config import (
@@ -144,7 +146,9 @@ def event_bus(
     # Import handlers
     from src.app.handlers.command_handlers.meal_command_handlers import (
         UploadMealImageCommandHandler,
-        RecalculateMealNutritionCommandHandler
+        RecalculateMealNutritionCommandHandler,
+        EditMealCommandHandler,
+        AddCustomIngredientCommandHandler
     )
     from src.app.handlers.command_handlers.upload_meal_image_immediately_handler import (
         UploadMealImageImmediatelyHandler
@@ -168,6 +172,7 @@ def event_bus(
     from src.app.commands.meal.upload_meal_image_command import UploadMealImageCommand
     from src.app.commands.meal.recalculate_meal_nutrition_command import RecalculateMealNutritionCommand
     from src.app.commands.meal.upload_meal_image_immediately_command import UploadMealImageImmediatelyCommand
+    from src.app.commands.meal.edit_meal_command import EditMealCommand, AddCustomIngredientCommand
     from src.app.queries.meal.get_meal_by_id_query import GetMealByIdQuery
     from src.app.queries.meal.get_meals_by_date_query import GetMealsByDateQuery
     from src.app.queries.meal.get_daily_macros_query import GetDailyMacrosQuery
@@ -197,6 +202,22 @@ def event_bus(
         RecalculateMealNutritionCommandHandler(meal_repository)
     )
     
+    # Register meal edit command handlers
+    event_bus.register_handler(
+        EditMealCommand,
+        EditMealCommandHandler(
+            meal_repository=meal_repository,
+            food_service=None,  # Mock if needed
+            nutrition_calculator=None
+        )
+    )
+    
+    event_bus.register_handler(
+        AddCustomIngredientCommand,
+        AddCustomIngredientCommandHandler(
+            meal_repository=meal_repository
+        )
+    )
     
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,

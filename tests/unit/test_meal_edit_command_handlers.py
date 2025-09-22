@@ -159,7 +159,6 @@ class TestEditMealCommandHandler:
         
         command = EditMealCommand(
             meal_id=meal.meal_id,
-            user_id=meal.user_id,
             dish_name="Updated Meal Name",
             food_item_changes=[
                 FoodItemChange(
@@ -292,7 +291,6 @@ class TestAddCustomIngredientCommandHandler:
         
         command = AddCustomIngredientCommand(
             meal_id=meal.meal_id,
-            user_id=meal.user_id,
             name="Homemade Dressing",
             quantity=30.0,
             unit="ml",
@@ -332,7 +330,6 @@ class TestAddCustomIngredientCommandHandler:
         meal = sample_meal_with_nutrition
         command = AddCustomIngredientCommand(
             meal_id=meal.meal_id,
-            user_id="wrong-user-id",
             name="Test Ingredient",
             quantity=100.0,
             unit="g",

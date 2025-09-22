@@ -40,7 +40,7 @@ class TestMealEditAPI:
         
         # Act
         response = client.put(
-            f"/api/v1/meals/{meal.meal_id}/ingredients?user_id={meal.user_id}",
+            f"/api/v1/meals/{meal.meal_id}/ingredients",
             json=request_data
         )
         
@@ -78,7 +78,7 @@ class TestMealEditAPI:
         
         # Act
         response = client.put(
-            f"/api/v1/meals/{meal.meal_id}/ingredients?user_id={meal.user_id}",
+            f"/api/v1/meals/{meal.meal_id}/ingredients",
             json=request_data
         )
         
@@ -113,7 +113,7 @@ class TestMealEditAPI:
         
         # Act
         response = client.put(
-            f"/api/v1/meals/{meal.meal_id}/ingredients?user_id={meal.user_id}",
+            f"/api/v1/meals/{meal.meal_id}/ingredients",
             json=request_data
         )
         
@@ -146,7 +146,7 @@ class TestMealEditAPI:
         
         # Act
         response = client.post(
-            f"/api/v1/meals/{meal.meal_id}/ingredients/custom?user_id={meal.user_id}",
+            f"/api/v1/meals/{meal.meal_id}/ingredients/custom",
             json=request_data
         )
         
@@ -171,7 +171,7 @@ class TestMealEditAPI:
         
         # Act
         response = client.delete(
-            f"/api/v1/meals/{meal.meal_id}/ingredients/{id}?user_id={meal.user_id}"
+            f"/api/v1/meals/{meal.meal_id}/ingredients/{id}"
         )
         
         # Assert
@@ -208,7 +208,7 @@ class TestMealEditAPI:
         
         # Act
         response = client.put(
-            f"/api/v1/meals/{meal.meal_id}/ingredients?user_id=wrong-user-id",
+            f"/api/v1/meals/{meal.meal_id}/ingredients",
             json=request_data
         )
         
@@ -241,7 +241,7 @@ class TestMealEditAPI:
         
         # Act
         response = client.put(
-            f"/api/v1/meals/{meal.meal_id}/ingredients?user_id={meal.user_id}",
+            f"/api/v1/meals/{meal.meal_id}/ingredients",
             json=request_data
         )
         
@@ -272,7 +272,7 @@ class TestMealEditAPI:
         
         # Act
         response = client.put(
-            "/api/v1/meals/non-existent-meal/ingredients?user_id=test-user",
+            "/api/v1/meals/non-existent-meal/ingredients",
             json=request_data
         )
         
@@ -298,7 +298,7 @@ class TestMealEditAPI:
         
         # Act
         response = client.put(
-            f"/api/v1/meals/{meal.meal_id}/ingredients?user_id={meal.user_id}",
+            f"/api/v1/meals/{meal.meal_id}/ingredients",
             json=request_data
         )
         
@@ -343,7 +343,7 @@ class TestMealEditAPI:
         
         # Act
         response = client.put(
-            f"/api/v1/meals/{meal.meal_id}/ingredients?user_id={meal.user_id}",
+            f"/api/v1/meals/{meal.meal_id}/ingredients",
             json=request_data
         )
         
@@ -394,7 +394,7 @@ class TestMealEditValidation:
         
         # Act
         response = client.put(
-            f"/api/v1/meals/{meal.meal_id}/ingredients?user_id={meal.user_id}",
+            f"/api/v1/meals/{meal.meal_id}/ingredients",
             json=request_data
         )
         
@@ -426,7 +426,7 @@ class TestMealEditValidation:
         
         # Act
         response = client.put(
-            f"/api/v1/meals/{meal.meal_id}/ingredients?user_id={meal.user_id}",
+            f"/api/v1/meals/{meal.meal_id}/ingredients",
             json=request_data
         )
         
@@ -458,7 +458,7 @@ class TestMealEditValidation:
         
         # Act
         response = client.put(
-            f"/api/v1/meals/{meal.meal_id}/ingredients?user_id={meal.user_id}",
+            f"/api/v1/meals/{meal.meal_id}/ingredients",
             json=request_data
         )
         
