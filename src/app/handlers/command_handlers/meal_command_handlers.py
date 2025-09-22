@@ -318,20 +318,44 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
     
     async def _get_usda_food_nutrition(self, fdc_id: int, quantity: float):
         """Get nutrition data from USDA service."""
-        # This would integrate with the USDA service
-        # For now, return a placeholder
         import uuid
+        
+        if not self.food_service:
+            raise RuntimeError("Food service not configured")
+        
+        # Get food details from USDA
+        food_data = await self.food_service.get_food_details(fdc_id)
+        
+        # Extract nutrition data (per 100g basis)
+        nutrients = food_data.get('foodNutrients', [])
+        
+        # Map USDA nutrient IDs to our fields
+        nutrient_map = {
+            1008: 'calories',  # Energy (kcal)
+            1003: 'protein',   # Protein
+            1005: 'carbs',     # Carbohydrate, by difference
+            1004: 'fat'        # Total lipid (fat)
+        }
+        
+        nutrition_values = {}
+        for nutrient in nutrients:
+            nutrient_id = nutrient.get('nutrient', {}).get('id')
+            if nutrient_id in nutrient_map:
+                nutrition_values[nutrient_map[nutrient_id]] = nutrient.get('amount', 0)
+        
+        # Calculate nutrition for the specified quantity
+        scale_factor = quantity / 100.0  # USDA data is per 100g
         
         return FoodItem(
             id=str(uuid.uuid4()),  # Generate new ID for USDA food
-            name=f"USDA Food {fdc_id}",
+            name=food_data.get('description', f"USDA Food {fdc_id}"),
             quantity=quantity,
             unit="g",
-            calories=165.0 * (quantity / 100.0),
+            calories=nutrition_values.get('calories', 0) * scale_factor,
             macros=Macros(
-                protein=31.0 * (quantity / 100.0),
-                carbs=0.0,
-                fat=3.6 * (quantity / 100.0),
+                protein=nutrition_values.get('protein', 0) * scale_factor,
+                carbs=nutrition_values.get('carbs', 0) * scale_factor,
+                fat=nutrition_values.get('fat', 0) * scale_factor,
             ),
             confidence=1.0,
             fdc_id=fdc_id,

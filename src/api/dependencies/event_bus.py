@@ -187,6 +187,8 @@ async def get_configured_event_bus(
         EditMealCommand,
         EditMealCommandHandler(
             meal_repository=meal_repository,
+            food_service=food_data_service,
+            nutrition_calculator=None  # TODO: Add nutrition calculator if needed
         ),
     )
 
