@@ -333,6 +333,7 @@ def sample_meal_domain() -> Meal:
             ),
             food_items=[
                 FoodItem(
+                    id="sample-rice-id",
                     name="Rice",
                     quantity=150.0,
                     unit="g",
@@ -344,6 +345,7 @@ def sample_meal_domain() -> Meal:
                     )
                 ),
                 FoodItem(
+                    id="sample-chicken-id",
                     name="Chicken",
                     quantity=100.0,
                     unit="g",
