@@ -141,6 +141,7 @@ class TestGetMealByIdQueryHandler:
         
         # Add food items
         food_item1 = FoodItem(
+            id="test-food-item-1",
             nutrition_id=nutrition.id,
             name="Rice",
             quantity=150,
@@ -152,6 +153,7 @@ class TestGetMealByIdQueryHandler:
             confidence=0.95
         )
         food_item2 = FoodItem(
+            id="test-food-item-2",
             nutrition_id=nutrition.id,
             name="Chicken",
             quantity=100,

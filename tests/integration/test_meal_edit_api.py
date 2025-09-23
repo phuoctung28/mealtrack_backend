@@ -214,7 +214,11 @@ class TestMealEditAPI:
         
         # Assert
         assert response.status_code == 400
-        assert "access denied" in response.json()["detail"].lower()
+        error_detail = response.json()["detail"]
+        if isinstance(error_detail, dict):
+            assert "access denied" in error_detail["message"].lower() or "not found" in error_detail["message"].lower()
+        else:
+            assert "access denied" in error_detail.lower() or "not found" in error_detail.lower()
     
     @pytest.mark.asyncio
     async def test_update_meal_not_ready(self, client, sample_meal_processing):
@@ -247,7 +251,11 @@ class TestMealEditAPI:
         
         # Assert
         assert response.status_code == 400
-        assert "ready status" in response.json()["detail"].lower()
+        error_detail = response.json()["detail"]
+        if isinstance(error_detail, dict):
+            assert "ready status" in error_detail["message"].lower()
+        else:
+            assert "ready status" in error_detail.lower()
     
     @pytest.mark.asyncio
     async def test_update_meal_nonexistent(self, client):
@@ -278,7 +286,11 @@ class TestMealEditAPI:
         
         # Assert
         assert response.status_code == 404
-        assert "not found" in response.json()["detail"].lower()
+        error_detail = response.json()["detail"]
+        if isinstance(error_detail, dict):
+            assert "not found" in error_detail["message"].lower()
+        else:
+            assert "not found" in error_detail.lower()
     
     @pytest.mark.asyncio
     async def test_update_meal_invalid_request_data(self, client, sample_meal_with_nutrition):

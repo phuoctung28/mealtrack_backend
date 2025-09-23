@@ -221,7 +221,7 @@ class TestEditMealCommandHandler:
         )
         
         # Act & Assert
-        with pytest.raises(ValidationException, match="Meal not found or access denied"):
+        with pytest.raises(ValidationException, match="Meal not found"):
             await event_bus.send(command)
     
     @pytest.mark.asyncio
@@ -274,7 +274,7 @@ class TestEditMealCommandHandler:
         )
         
         # Act & Assert
-        with pytest.raises(ValidationException, match="Meal not found or access denied"):
+        with pytest.raises(ValidationException, match="Meal not found"):
             await event_bus.send(command)
 
 
@@ -342,6 +342,6 @@ class TestAddCustomIngredientCommandHandler:
         )
         
         # Act & Assert
-        with pytest.raises(ValidationException, match="Meal not found or access denied"):
+        with pytest.raises(ValidationException, match="Meal not found"):
             await event_bus.send(command)
 

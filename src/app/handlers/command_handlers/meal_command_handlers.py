@@ -193,7 +193,8 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         # 1. Validate meal exists
         meal = self.meal_repository.find_by_id(command.meal_id)
         if not meal:
-            raise ValidationException("Meal not found")
+            from src.api.exceptions import ResourceNotFoundException
+            raise ResourceNotFoundException("Meal not found")
         
         if meal.status != MealStatus.READY:
             raise ValidationException("Meal must be in READY status to edit")
@@ -223,18 +224,22 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         changes_summary = self._generate_changes_summary(command.food_item_changes)
         
         return {
+            "success": True,
             "meal_id": saved_meal.meal_id,
             "message": f"Meal updated successfully. {changes_summary}",
             "dish_name": saved_meal.dish_name or "Meal",
             "total_calories": updated_nutrition.calories,
-            "total_nutrition": {
+            "updated_nutrition": {
                 "calories": updated_nutrition.calories,
                 "protein": updated_nutrition.macros.protein,
                 "carbs": updated_nutrition.macros.carbs,
                 "fat": updated_nutrition.macros.fat,
             },
-            "edit_count": saved_meal.edit_count,
-            "last_edited_at": saved_meal.last_edited_at.isoformat(),
+            "updated_food_items": [item.to_dict() for item in updated_food_items],
+            "edit_metadata": {
+                "edit_count": saved_meal.edit_count,
+                "changes_summary": changes_summary
+            },
             "events": [
                 MealEditedEvent(
                     aggregate_id=saved_meal.meal_id,
