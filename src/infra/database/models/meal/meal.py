@@ -1,7 +1,7 @@
 """
 Meal model for the main meal entity.
 """
-from sqlalchemy import Column, String, Text, Enum, ForeignKey, DateTime
+from sqlalchemy import Column, String, Text, Enum, ForeignKey, DateTime, Integer, Boolean
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -22,6 +22,11 @@ class Meal(Base, TimestampMixin):
     ready_at = Column(DateTime, nullable=True)  # When meal analysis was completed
     error_message = Column(Text, nullable=True)
     raw_ai_response = Column(Text, nullable=True)
+    
+    # Edit tracking fields
+    last_edited_at = Column(DateTime, nullable=True)  # When meal was last edited
+    edit_count = Column(Integer, default=0, nullable=False)  # Number of times edited
+    is_manually_edited = Column(Boolean, default=False, nullable=False)  # Whether meal has been manually edited
     
     # Relationships
     image_id = Column(String(36), ForeignKey("mealimage.image_id"), nullable=False)
@@ -50,9 +55,13 @@ class Meal(Base, TimestampMixin):
             image=self.image.to_domain() if self.image else None,
             dish_name=self.dish_name,
             nutrition=self.nutrition.to_domain() if self.nutrition else None,
-            ready_at=self.ready_at,  # Include ready_at timestamp
+            ready_at=self.ready_at,
             error_message=self.error_message,
-            raw_gpt_json=self.raw_ai_response
+            raw_gpt_json=self.raw_ai_response,
+            updated_at=self.updated_at,
+            last_edited_at=self.last_edited_at,
+            edit_count=self.edit_count,
+            is_manually_edited=self.is_manually_edited
         )
     
     @classmethod
@@ -77,9 +86,12 @@ class Meal(Base, TimestampMixin):
             created_at=domain_model.created_at,
             updated_at=getattr(domain_model, "updated_at", None),
             dish_name=getattr(domain_model, "dish_name", None),
-            ready_at=getattr(domain_model, "ready_at", None),  # Include ready_at timestamp
+            ready_at=getattr(domain_model, "ready_at", None),
             error_message=getattr(domain_model, "error_message", None),
             raw_ai_response=getattr(domain_model, "raw_gpt_json", None),
+            last_edited_at=getattr(domain_model, "last_edited_at", None),
+            edit_count=getattr(domain_model, "edit_count", 0),
+            is_manually_edited=getattr(domain_model, "is_manually_edited", False)
         )
         
         # Add image reference

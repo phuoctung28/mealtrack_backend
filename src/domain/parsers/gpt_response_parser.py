@@ -1,5 +1,6 @@
 import json
 from typing import Dict, Any, List, Optional
+import uuid
 
 from src.domain.model.macros import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem
@@ -87,6 +88,7 @@ class GPTResponseParser:
                     confidence = min(max(0.0, float(food_data["confidence"])), 1.0)
                 
                 food_item = FoodItem(
+                    id=uuid.uuid4(),  # Generate UUID for editing support
                     name=food_data["name"],
                     quantity=float(food_data["quantity"]),
                     unit=food_data["unit"],

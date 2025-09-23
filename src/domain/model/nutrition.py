@@ -8,6 +8,7 @@ from .micros import Micros
 @dataclass
 class FoodItem:
     """Represents a single food item in a meal with nutritional information."""
+    id: str
     name: str
     quantity: float
     unit: str
@@ -15,6 +16,8 @@ class FoodItem:
     macros: Macros
     micros: Optional[Micros] = None
     confidence: float = 1.0  # 0.0-1.0 confidence score from AI or lookup
+    fdc_id: Optional[int] = None  # USDA FDC ID if available
+    is_custom: bool = False  # Whether this is a custom ingredient
     
     def __post_init__(self):
         """Validate invariants."""
@@ -28,15 +31,19 @@ class FoodItem:
     def to_dict(self) -> Dict:
         """Convert to dictionary format."""
         result = {
+            "id": self.id,
             "name": self.name,
             "quantity": self.quantity,
             "unit": self.unit,
             "calories": self.calories,
             "macros": self.macros.to_dict(),
-            "confidence": self.confidence
+            "confidence": self.confidence,
+            "is_custom": self.is_custom
         }
         if self.micros:
             result["micros"] = self.micros.to_dict()
+        if self.fdc_id:
+            result["fdc_id"] = self.fdc_id
         return result
 
 @dataclass

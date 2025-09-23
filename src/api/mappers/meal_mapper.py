@@ -101,7 +101,7 @@ class MealMapper:
                         )
                     
                     food_item_dto = FoodItemResponse(
-                        food_item_id=str(item.name),  # Use name as ID
+                        id=str(item.id),  # Use the primary key ID as string
                         name=item.name,
                         category=None,
                         quantity=item.quantity,
@@ -205,7 +205,7 @@ class MealMapper:
             nutrition = MealMapper.map_nutrition_from_dict(item_dict["nutrition"])
         
         return FoodItem(
-            food_item_id=item_dict.get("food_item_id", ""),
+            id=item_dict.get("id", ""),
             name=item_dict.get("name", ""),
             category=item_dict.get("category", ""),
             quantity=item_dict.get("quantity", 0),

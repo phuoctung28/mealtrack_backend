@@ -4,6 +4,7 @@ Command handler for creating manual meals from selected USDA foods.
 from datetime import datetime
 from typing import Dict, Any, List
 from uuid import uuid4
+import uuid
 
 from src.app.events.base import EventHandler
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand, ManualMealItem
@@ -50,7 +51,8 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
 
             food_items.append(
                 DomainFoodItem(
-                    name=mapped.get("name") or f"FDC:{item.fdc_id}",
+                    id=uuid.uuid4(),
+                    name=mapped.get("name"),
                     quantity=item.quantity,
                     unit=item.unit,
                     calories=calories,
@@ -61,6 +63,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                     ),
                     micros=None,
                     confidence=1.0,
+                    fdc_id=item.fdc_id,
                 )
             )
 
