@@ -72,7 +72,7 @@ CREATE DATABASE mealtrack_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 ### 3. Configure Environment
 
-Create a `.env.test` file:
+Create a `.env.dev` file:
 ```env
 TEST_DB_HOST=localhost
 TEST_DB_PORT=3306
