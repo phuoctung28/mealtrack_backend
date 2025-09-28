@@ -69,6 +69,7 @@ class MealRepository(MealRepositoryPort):
                     MealStatus.ENRICHING: MealStatusEnum.ENRICHING,
                     MealStatus.READY: MealStatusEnum.READY,
                     MealStatus.FAILED: MealStatusEnum.FAILED,
+                    MealStatus.INACTIVE: MealStatusEnum.INACTIVE,
                 }
                 
                 existing_meal.status = status_mapping[meal.status]
@@ -198,7 +199,7 @@ class MealRepository(MealRepositoryPort):
             start_datetime = datetime.combine(date, datetime.min.time())
             end_datetime = start_datetime + timedelta(days=1)
             
-            # Query meals created within the date range
+            # Query meals created within the date range and exclude INACTIVE
             query = (
                 db.query(DBMeal)
                 .filter(DBMeal.created_at >= start_datetime)
@@ -209,8 +210,10 @@ class MealRepository(MealRepositoryPort):
             if user_id:
                 query = query.filter(DBMeal.user_id == user_id)
             
+            from src.infra.database.models.enums import MealStatusEnum
             db_meals = (
                 query
+                .filter(DBMeal.status != MealStatusEnum.INACTIVE)
                 .order_by(DBMeal.created_at.desc())  # Newest first
                 .limit(limit)
                 .all()

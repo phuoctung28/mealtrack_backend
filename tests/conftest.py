@@ -218,6 +218,14 @@ def event_bus(
             meal_repository=meal_repository
         )
     )
+
+    # Delete (soft delete) handler
+    from src.app.commands.meal.delete_meal_command import DeleteMealCommand
+    from src.app.handlers.command_handlers.meal_command_handlers import DeleteMealCommandHandler
+    event_bus.register_handler(
+        DeleteMealCommand,
+        DeleteMealCommandHandler(meal_repository)
+    )
     
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,

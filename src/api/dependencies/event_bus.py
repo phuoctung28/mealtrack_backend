@@ -25,6 +25,7 @@ from src.app.commands.meal import (
     UploadMealImageImmediatelyCommand,
     EditMealCommand,
     AddCustomIngredientCommand,
+    DeleteMealCommand,
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal_plan import (
@@ -57,6 +58,7 @@ from src.app.handlers.command_handlers.meal_command_handlers import (
     RecalculateMealNutritionCommandHandler,
     EditMealCommandHandler,
     AddCustomIngredientCommandHandler,
+    DeleteMealCommandHandler,
 )
 from src.app.handlers.command_handlers.create_manual_meal_command_handler import (
     CreateManualMealCommandHandler,
@@ -197,6 +199,11 @@ async def get_configured_event_bus(
         AddCustomIngredientCommandHandler(
             meal_repository=meal_repository,
         ),
+    )
+
+    event_bus.register_handler(
+        DeleteMealCommand,
+        DeleteMealCommandHandler(meal_repository),
     )
 
     # Register manual meal creation command handler

@@ -15,6 +15,7 @@ class MealStatus(Enum):
     ENRICHING = "ENRICHING"    # Enrichment with food database in progress
     READY = "READY"            # Final state, analysis complete
     FAILED = "FAILED"          # Analysis failed
+    INACTIVE = "INACTIVE"      # Soft-deleted by user; ignored in UI/macros
     
     def __str__(self):
         return self.value
@@ -63,6 +64,7 @@ class Meal:
             
         if self.status == MealStatus.FAILED and self.error_message is None:
             raise ValueError("Meal with FAILED status must have error_message")
+        # INACTIVE has no additional constraints
     
     @classmethod
     def create_new_processing(cls, user_id: str, image: MealImage) -> 'Meal':
@@ -168,6 +170,25 @@ class Meal:
             last_edited_at=datetime.now(),
             edit_count=self.edit_count + 1,
             is_manually_edited=True
+        )
+
+    def mark_inactive(self) -> 'Meal':
+        """Mark meal as INACTIVE (soft delete)."""
+        return Meal(
+            meal_id=self.meal_id,
+            user_id=self.user_id,
+            status=MealStatus.INACTIVE,
+            created_at=self.created_at,
+            image=self.image,
+            dish_name=self.dish_name,
+            nutrition=self.nutrition,
+            ready_at=self.ready_at,
+            error_message=self.error_message,
+            raw_gpt_json=self.raw_gpt_json,
+            updated_at=datetime.now(),
+            last_edited_at=self.last_edited_at,
+            edit_count=self.edit_count,
+            is_manually_edited=self.is_manually_edited
         )
     
     def to_dict(self) -> dict:

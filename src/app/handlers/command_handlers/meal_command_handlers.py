@@ -26,6 +26,7 @@ from src.domain.model.meal_image import MealImage
 from src.domain.model.nutrition import Nutrition, FoodItem, Macros
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 
 logger = logging.getLogger(__name__)
 
@@ -452,3 +453,27 @@ class AddCustomIngredientCommandHandler(EventHandler[AddCustomIngredientCommand,
         # Use the edit handler
         edit_handler = EditMealCommandHandler(self.meal_repository)
         return await edit_handler.handle(edit_command)
+
+
+@handles(DeleteMealCommand)
+class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
+    """Handler for soft-deleting a meal (marking as INACTIVE)."""
+    def __init__(self, meal_repository: MealRepositoryPort = None):
+        self.meal_repository = meal_repository
+
+    def set_dependencies(self, **kwargs):
+        self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
+
+    async def handle(self, command: DeleteMealCommand) -> Dict[str, Any]:
+        if not self.meal_repository:
+            raise RuntimeError("Meal repository not configured")
+        meal = self.meal_repository.find_by_id(command.meal_id)
+        if not meal:
+            raise ResourceNotFoundException(f"Meal with ID {command.meal_id} not found")
+        inactive_meal = meal.mark_inactive()
+        self.meal_repository.save(inactive_meal)
+        return {
+            "meal_id": inactive_meal.meal_id,
+            "status": inactive_meal.status.value,
+            "message": "Meal marked as inactive"
+        }

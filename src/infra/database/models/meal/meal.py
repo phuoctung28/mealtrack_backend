@@ -45,6 +45,7 @@ class Meal(Base, TimestampMixin):
             MealStatusEnum.ENRICHING: MealStatus.ENRICHING,
             MealStatusEnum.READY: MealStatus.READY,
             MealStatusEnum.FAILED: MealStatus.FAILED,
+            MealStatusEnum.INACTIVE: MealStatus.INACTIVE,
         }
         
         return DomainMeal(
@@ -76,6 +77,7 @@ class Meal(Base, TimestampMixin):
             MealStatus.ENRICHING: MealStatusEnum.ENRICHING,
             MealStatus.READY: MealStatusEnum.READY,
             MealStatus.FAILED: MealStatusEnum.FAILED,
+            MealStatus.INACTIVE: MealStatusEnum.INACTIVE,
         }
         
         # Create meal

@@ -30,7 +30,7 @@ class VisionAIService(VisionAIServicePort):
             raise ValueError("GOOGLE_API_KEY environment variable is not set")
             
         self.model = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             temperature=0.2,
             max_output_tokens=1500,
             google_api_key=self.api_key,
