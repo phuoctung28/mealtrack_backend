@@ -11,6 +11,7 @@ class MealStatusEnum(enum.Enum):
     ENRICHING = "ENRICHING"
     READY = "READY"
     FAILED = "FAILED"
+    INACTIVE = "INACTIVE"
 
 
 class DietaryPreferenceEnum(str, enum.Enum):

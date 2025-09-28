@@ -93,6 +93,9 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
         
         # Calculate totals from meals with nutrition data
         for meal in meals:
+            # Skip INACTIVE meals entirely
+            if meal.status == MealStatus.INACTIVE:
+                continue
             meal_count += 1
             if meal.nutrition and meal.status in [MealStatus.READY, MealStatus.ENRICHING]:
                 meals_with_nutrition += 1

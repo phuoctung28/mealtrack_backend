@@ -33,6 +33,7 @@ from src.app.queries.meal import (
     GetDailyMacrosQuery
 )
 from src.infra.event_bus import EventBus
+from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/meals", tags=["Meals"])
@@ -49,7 +50,8 @@ STATUS_MAPPING = {
     "ANALYZING": "analyzing", 
     "ENRICHING": "analyzing",  # Map to analyzI mean ing since API doesn't have enriching
     "READY": "ready",
-    "FAILED": "failed"
+    "FAILED": "failed",
+    "INACTIVE": "inactive",
 }
 
 
@@ -237,6 +239,19 @@ async def get_meal(
         
     except Exception as e:
         raise handle_exception(e)
+@router.delete("/{meal_id}")
+async def delete_meal(
+    meal_id: str,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """Mark a meal as INACTIVE (soft delete)."""
+    try:
+        command = DeleteMealCommand(meal_id=meal_id)
+        result = await event_bus.send(command)
+        return result
+    except Exception as e:
+        raise handle_exception(e)
+
 
 
 @router.get("/daily/entries", response_model=MealListResponse)

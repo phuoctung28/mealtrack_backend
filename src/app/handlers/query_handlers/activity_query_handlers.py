@@ -55,8 +55,10 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
             
             meal_activities = []
             for meal in meals:
-                # Only include meals with nutrition data
+                # Only include meals with nutrition data and exclude INACTIVE
                 if not meal.nutrition or meal.status not in [MealStatus.READY, MealStatus.ENRICHING]:
+                    continue
+                if meal.status == MealStatus.INACTIVE:
                     continue
                 
                 # Build activity from meal
