@@ -9,6 +9,10 @@ python-multipart>=0.0.19
 langchain-core>=0.1.0
 langchain-google-genai
 
+# Vector search and embeddings
+pinecone>=7.0.0
+sentence-transformers>=2.0.0
+
 # Cloud storage
 cloudinary==1.37.0
 

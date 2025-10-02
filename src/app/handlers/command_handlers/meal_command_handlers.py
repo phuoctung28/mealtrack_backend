@@ -27,6 +27,7 @@ from src.domain.model.nutrition import Nutrition, FoodItem, Macros
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
+from src.infra.services.pinecone_service import get_pinecone_service
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ class RecalculateMealNutritionCommandHandler(EventHandler[RecalculateMealNutriti
         self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
     
     async def handle(self, command: RecalculateMealNutritionCommand) -> Dict[str, Any]:
-        """Recalculate meal nutrition based on new weight."""
+        """Recalculate meal nutrition using Pinecone for fresh ingredient data."""
         if not self.meal_repository:
             raise RuntimeError("Meal repository not configured")
         
@@ -118,28 +119,39 @@ class RecalculateMealNutritionCommandHandler(EventHandler[RecalculateMealNutriti
         if not meal:
             raise ResourceNotFoundException(f"Meal with ID {command.meal_id} not found")
         
-        if not meal.nutrition:
-            raise ValidationException(f"Meal {command.meal_id} has no nutrition data to recalculate")
+        if not meal.nutrition or not meal.nutrition.food_items:
+            raise ValidationException(f"Meal {command.meal_id} has no food items to recalculate")
         
-        # Calculate scale factor
-        # Assume original portion was 100g if not specified
-        old_weight = getattr(meal, 'weight_grams', 100.0)
-        scale_factor = command.weight_grams / old_weight
-        
-        # Update nutrition values directly (since we made them mutable)
-        meal.nutrition.calories = meal.nutrition.calories * scale_factor
-        meal.nutrition.macros.protein = meal.nutrition.macros.protein * scale_factor
-        meal.nutrition.macros.carbs = meal.nutrition.macros.carbs * scale_factor
-        meal.nutrition.macros.fat = meal.nutrition.macros.fat * scale_factor
-        
-        # Update food items if present
-        if meal.nutrition.food_items:
-            for item in meal.nutrition.food_items:
-                item.quantity = item.quantity * scale_factor
-                item.calories = item.calories * scale_factor
-                item.macros.protein = item.macros.protein * scale_factor
-                item.macros.carbs = item.macros.carbs * scale_factor
-                item.macros.fat = item.macros.fat * scale_factor
+        # Use Pinecone to recalculate nutrition for all ingredients
+        try:
+            pinecone_service = get_pinecone_service()
+            
+            # Calculate total nutrition using Pinecone
+            total_nutrition = pinecone_service.calculate_total_nutrition([
+                {
+                    'name': item.name,
+                    'quantity': item.quantity,
+                    'unit': item.unit
+                }
+                for item in meal.nutrition.food_items
+            ])
+            
+            # Update meal nutrition with Pinecone-calculated values
+            meal.nutrition.calories = total_nutrition.calories
+            meal.nutrition.macros.protein = total_nutrition.protein
+            meal.nutrition.macros.carbs = total_nutrition.carbs
+            meal.nutrition.macros.fat = total_nutrition.fat
+            
+        except Exception as e:
+            logger.error(f"Error using Pinecone for recalculation: {e}")
+            # Fall back to simple scaling if Pinecone fails
+            old_weight = getattr(meal, 'weight_grams', 100.0)
+            scale_factor = command.weight_grams / old_weight
+            
+            meal.nutrition.calories = meal.nutrition.calories * scale_factor
+            meal.nutrition.macros.protein = meal.nutrition.macros.protein * scale_factor
+            meal.nutrition.macros.carbs = meal.nutrition.macros.carbs * scale_factor
+            meal.nutrition.macros.fat = meal.nutrition.macros.fat * scale_factor
         
         # Save updated meal
         updated_meal = self.meal_repository.save(meal)
@@ -160,7 +172,7 @@ class RecalculateMealNutritionCommandHandler(EventHandler[RecalculateMealNutriti
                 MealNutritionUpdatedEvent(
                     aggregate_id=command.meal_id,
                     meal_id=command.meal_id,
-                    old_weight=old_weight,
+                    old_weight=getattr(meal, 'weight_grams', 100.0),
                     new_weight=command.weight_grams,
                     updated_nutrition=nutrition_data
                 )
@@ -272,40 +284,148 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
             elif change.action == "update" and change.id:
                 if change.id in food_items_dict:
                     existing_item = food_items_dict[change.id]
-                    # Update quantity and recalculate nutrition
-                    scale_factor = (change.quantity or existing_item.quantity) / existing_item.quantity
                     
-                    food_items_dict[change.id] = FoodItem(
-                        id=existing_item.id,  # Preserve the existing ID
-                        name=existing_item.name,
-                        quantity=change.quantity or existing_item.quantity,
-                        unit=change.unit or existing_item.unit,
-                        calories=existing_item.calories * scale_factor,
-                        macros=Macros(
-                            protein=existing_item.macros.protein * scale_factor,
-                            carbs=existing_item.macros.carbs * scale_factor,
-                            fat=existing_item.macros.fat * scale_factor,
-                        ),
-                        micros=existing_item.micros,
-                        confidence=existing_item.confidence,
-                        fdc_id=existing_item.fdc_id,
-                        is_custom=existing_item.is_custom
-                    )
+                    # Check if unit changed - if so, fetch fresh nutrition data
+                    unit_changed = change.unit and change.unit != existing_item.unit
+                    
+                    if unit_changed:
+                        # Unit changed - fetch fresh nutrition data using Pinecone
+                        try:
+                            pinecone_service = get_pinecone_service()
+                            scaled_nutrition = pinecone_service.get_scaled_nutrition(
+                                ingredient_name=existing_item.name,
+                                quantity=change.quantity or existing_item.quantity,
+                                unit=change.unit
+                            )
+                            
+                            if scaled_nutrition:
+                                food_items_dict[change.id] = FoodItem(
+                                    id=existing_item.id,  # Preserve the existing ID
+                                    name=existing_item.name,
+                                    quantity=change.quantity or existing_item.quantity,
+                                    unit=change.unit,
+                                    calories=scaled_nutrition.calories,
+                                    macros=Macros(
+                                        protein=scaled_nutrition.protein,
+                                        carbs=scaled_nutrition.carbs,
+                                        fat=scaled_nutrition.fat,
+                                    ),
+                                    micros=existing_item.micros,
+                                    confidence=0.9,
+                                    fdc_id=existing_item.fdc_id,
+                                    is_custom=existing_item.is_custom
+                                )
+                            else:
+                                logger.warning(f"Could not fetch nutrition for unit change: {existing_item.name}")
+                                # Fall back to simple scaling
+                                scale_factor = (change.quantity or existing_item.quantity) / existing_item.quantity
+                                food_items_dict[change.id] = FoodItem(
+                                    id=existing_item.id,
+                                    name=existing_item.name,
+                                    quantity=change.quantity or existing_item.quantity,
+                                    unit=change.unit or existing_item.unit,
+                                    calories=existing_item.calories * scale_factor,
+                                    macros=Macros(
+                                        protein=existing_item.macros.protein * scale_factor,
+                                        carbs=existing_item.macros.carbs * scale_factor,
+                                        fat=existing_item.macros.fat * scale_factor,
+                                    ),
+                                    micros=existing_item.micros,
+                                    confidence=existing_item.confidence,
+                                    fdc_id=existing_item.fdc_id,
+                                    is_custom=existing_item.is_custom
+                                )
+                        except Exception as e:
+                            logger.error(f"Error fetching nutrition for unit change: {e}")
+                            # Fall back to simple scaling
+                            scale_factor = (change.quantity or existing_item.quantity) / existing_item.quantity
+                            food_items_dict[change.id] = FoodItem(
+                                id=existing_item.id,
+                                name=existing_item.name,
+                                quantity=change.quantity or existing_item.quantity,
+                                unit=change.unit or existing_item.unit,
+                                calories=existing_item.calories * scale_factor,
+                                macros=Macros(
+                                    protein=existing_item.macros.protein * scale_factor,
+                                    carbs=existing_item.macros.carbs * scale_factor,
+                                    fat=existing_item.macros.fat * scale_factor,
+                                ),
+                                micros=existing_item.micros,
+                                confidence=existing_item.confidence,
+                                fdc_id=existing_item.fdc_id,
+                                is_custom=existing_item.is_custom
+                            )
+                    else:
+                        # Same unit - just scale the nutrition
+                        scale_factor = (change.quantity or existing_item.quantity) / existing_item.quantity
+                        
+                        food_items_dict[change.id] = FoodItem(
+                            id=existing_item.id,  # Preserve the existing ID
+                            name=existing_item.name,
+                            quantity=change.quantity or existing_item.quantity,
+                            unit=change.unit or existing_item.unit,
+                            calories=existing_item.calories * scale_factor,
+                            macros=Macros(
+                                protein=existing_item.macros.protein * scale_factor,
+                                carbs=existing_item.macros.carbs * scale_factor,
+                                fat=existing_item.macros.fat * scale_factor,
+                            ),
+                            micros=existing_item.micros,
+                            confidence=existing_item.confidence,
+                            fdc_id=existing_item.fdc_id,
+                            is_custom=existing_item.is_custom
+                        )
             
             elif change.action == "add":
                 new_item_id = str(uuid.uuid4())
                 
+                # Priority 1: Use Pinecone for semantic search (includes both ingredients & USDA indexes)
+                if change.name:
+                    try:
+                        pinecone_service = get_pinecone_service()
+                        scaled_nutrition = pinecone_service.get_scaled_nutrition(
+                            ingredient_name=change.name,
+                            quantity=change.quantity or 100,
+                            unit=change.unit or "g"
+                        )
+                        
+                        if scaled_nutrition:
+                            food_items_dict[new_item_id] = FoodItem(
+                                id=new_item_id,
+                                name=change.name,
+                                quantity=change.quantity or 100,
+                                unit=change.unit or "g",
+                                calories=scaled_nutrition.calories,
+                                macros=Macros(
+                                    protein=scaled_nutrition.protein,
+                                    carbs=scaled_nutrition.carbs,
+                                    fat=scaled_nutrition.fat,
+                                ),
+                                confidence=0.9,
+                                fdc_id=None,
+                                is_custom=False
+                            )
+                            # Skip other methods if Pinecone found it
+                            continue
+                    except Exception as e:
+                        logger.warning(f"Pinecone search failed for {change.name}: {e}")
+                
+                # Priority 2: Explicit fdc_id (override Pinecone if provided)
                 if change.fdc_id and self.food_service:
-                    # Get nutrition from USDA
-                    usda_food = await self._get_usda_food_nutrition(change.fdc_id, change.quantity or 100)
-                    food_items_dict[new_item_id] = usda_food
-                elif change.custom_nutrition:
-                    # Create custom food item
+                    try:
+                        usda_food = await self._get_usda_food_nutrition(change.fdc_id, change.quantity or 100)
+                        food_items_dict[new_item_id] = usda_food
+                        continue
+                    except Exception as e:
+                        logger.warning(f"USDA API failed for fdc_id {change.fdc_id}: {e}")
+                
+                # Priority 3: Custom nutrition (manual override)
+                if change.custom_nutrition:
                     scale_factor = (change.quantity or 100) / 100.0
                     nutrition = change.custom_nutrition
                     
                     food_items_dict[new_item_id] = FoodItem(
-                        id=new_item_id,  # Use generated ID
+                        id=new_item_id,
                         name=change.name or "Custom Ingredient",
                         quantity=change.quantity or 100,
                         unit=change.unit or "g",
@@ -315,10 +435,12 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                             carbs=nutrition.carbs_per_100g * scale_factor,
                             fat=nutrition.fat_per_100g * scale_factor,
                         ),
-                        confidence=0.8,  # Custom ingredients have lower confidence
+                        confidence=0.8,
                         fdc_id=None,
                         is_custom=True
                     )
+                else:
+                    logger.warning(f"Could not find nutrition data for ingredient: {change.name}")
         
         return list(food_items_dict.values())
     
