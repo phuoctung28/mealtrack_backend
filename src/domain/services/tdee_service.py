@@ -1,13 +1,20 @@
 from src.domain.constants import TDEEConstants
 from src.domain.model.tdee import TdeeRequest, TdeeResponse, MacroTargets, ActivityLevel, Sex, Goal
+from src.domain.services.bmr_calculator import BMRCalculatorFactory
 
 
 class TdeeCalculationService:
-    """Domain service for TDEE and macro calculations."""
+    """
+    Domain service for TDEE and macro calculations.
+    
+    Automatically selects the appropriate BMR calculation formula:
+    - Katch-McArdle: When body fat % is provided (more accurate)
+    - Mifflin-St Jeor: When body fat % is not provided (standard approach)
+    """
     
     def calculate_tdee(self, request: TdeeRequest) -> TdeeResponse:
         """Calculate BMR, TDEE and macros based on the request."""
-        bmr = self._calculate_bmr(request)
+        bmr, formula_name = self._calculate_bmr(request)
         tdee = self._calculate_tdee_from_bmr(bmr, request.activity_level)
         macro_targets = self._calculate_all_macro_targets(tdee, request.weight_kg, request.goal)
         return TdeeResponse(
@@ -15,20 +22,30 @@ class TdeeCalculationService:
             tdee=round(tdee, 1),
             goal=request.goal,
             macros=macro_targets,
+            formula_used=formula_name,
         )
     
-    def _calculate_bmr(self, request: TdeeRequest) -> float:
-        """Calculate BMR using Mifflin-St Jeor or Katch-McArdle formula."""
-        if request.body_fat_pct is not None:
-            # Use Katch-McArdle formula when body fat % is available
-            lean_mass_kg = request.weight_kg * (1 - request.body_fat_pct / 100)
-            return 370 + 21.6 * lean_mass_kg
-        else:
-            # Use Mifflin-St Jeor formula
-            if request.sex == Sex.MALE:
-                return 10 * request.weight_kg + 6.25 * request.height_cm - 5 * request.age + 5
-            else:
-                return 10 * request.weight_kg + 6.25 * request.height_cm - 5 * request.age - 161
+    def _calculate_bmr(self, request: TdeeRequest) -> tuple[float, str]:
+        """
+        Calculate BMR using the appropriate formula based on available data.
+        
+        Returns:
+            tuple: (bmr_value, formula_name)
+        """
+        # Get the appropriate calculator
+        has_body_fat = request.body_fat_pct is not None
+        calculator = BMRCalculatorFactory.get_calculator(has_body_fat)
+
+        # Calculate BMR
+        bmr = calculator.calculate(
+            weight_kg=request.weight_kg,
+            height_cm=request.height_cm,
+            age=request.age,
+            sex=request.sex,
+            body_fat_pct=request.body_fat_pct
+        )
+
+        return bmr, calculator.get_formula_name()
     
     def _calculate_tdee_from_bmr(self, bmr: float, activity_level: ActivityLevel) -> float:
         """Calculate TDEE from BMR using activity multiplier."""

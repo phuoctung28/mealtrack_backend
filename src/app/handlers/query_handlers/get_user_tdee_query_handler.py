@@ -85,16 +85,13 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
         }
         activity_multiplier = activity_multipliers.get(tdee_request.activity_level, 1.55)
 
-        # Determine formula used
-        formula_used = "Katch-McArdle" if tdee_request.body_fat_pct is not None else "Mifflin-St Jeor"
-
         return {
             "user_id": query.user_id,
             "bmr": result.bmr,
             "tdee": result.tdee,
             "target_calories": round(result.macros.calories, 0),
             "activity_multiplier": activity_multiplier,
-            "formula_used": formula_used,
+            "formula_used": result.formula_used,
             "macros": {
                 "protein": round(result.macros.protein, 1),
                 "carbs": round(result.macros.carbs, 1),
