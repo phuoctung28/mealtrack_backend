@@ -5,12 +5,10 @@ nixPkgs = ['python311', 'gcc']
 cmds = [
     'python -m venv --copies /opt/venv',
     '. /opt/venv/bin/activate',
-    'pip install --upgrade pip',
+    'pip install --upgrade pip setuptools wheel',
+    'pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu',
     'pip install --no-cache-dir -r requirements.txt'
 ]
-
-[phases.build]
-cmds = ['echo "Build complete"']
 
 [start]
 cmd = 'python scripts/railway_start.py'
