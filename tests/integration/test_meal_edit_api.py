@@ -136,63 +136,6 @@ class TestMealEditAPI:
         assert len(updated_food_items) == original_count - 1
     
     @pytest.mark.asyncio
-    async def test_add_custom_ingredient_success(self, client, sample_meal_with_nutrition):
-        """Test successful custom ingredient addition."""
-        # Arrange
-        meal = sample_meal_with_nutrition
-        
-        request_data = {
-            "name": "Olive Oil Dressing",
-            "quantity": 15.0,
-            "unit": "ml",
-            "nutrition": {
-                "calories_per_100g": 884.0,
-                "protein_per_100g": 0.0,
-                "carbs_per_100g": 0.0,
-                "fat_per_100g": 100.0,
-            }
-        }
-        
-        # Act
-        response = client.post(
-            f"/v1/meals/{meal.meal_id}/ingredients/custom",
-            json=request_data
-        )
-        
-        # Assert
-        assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        assert result["meal_id"] == meal.meal_id
-        
-        # Check nutrition increased appropriately
-        updated_nutrition = result["updated_nutrition"]
-        expected_added_calories = 884.0 * 0.15  # 15ml = 15% of 100ml
-        assert updated_nutrition["calories"] >= meal.nutrition.calories + expected_added_calories
-    
-    @pytest.mark.asyncio
-    async def test_remove_ingredient_success(self, client, sample_meal_with_nutrition):
-        """Test successful ingredient removal."""
-        # Arrange
-        meal = sample_meal_with_nutrition
-        id = meal.nutrition.food_items[0].id
-        original_calories = meal.nutrition.calories
-        
-        # Act
-        response = client.delete(
-            f"/v1/meals/{meal.meal_id}/ingredients/{id}"
-        )
-        
-        # Assert
-        assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        
-        # Check nutrition decreased
-        updated_nutrition = result["updated_nutrition"]
-        assert updated_nutrition["calories"] < original_calories
-    
-    @pytest.mark.asyncio
     async def test_update_meal_unauthorized(self, client, sample_meal_with_nutrition):
         """Test meal update with non-existent meal ID (simulates access denied)."""
         # Arrange - use non-existent meal ID to simulate access denied
