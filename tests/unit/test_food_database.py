@@ -71,7 +71,7 @@ class InMemoryMealRepository:
 @pytest.mark.asyncio
 async def test_search_foods_query_handler_returns_mapped_results(monkeypatch):
     from src.app.queries.food.search_foods_query import SearchFoodsQuery
-    from src.app.handlers.query_handlers.food_query_handlers import SearchFoodsQueryHandler
+    from src.app.handlers.query_handlers import SearchFoodsQueryHandler
     from src.domain.services.food_mapping_service import FoodMappingService
 
     handler = SearchFoodsQueryHandler(
@@ -95,7 +95,7 @@ async def test_search_foods_query_handler_returns_mapped_results(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_food_details_query_handler_maps_nutrients():
     from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
-    from src.app.handlers.query_handlers.food_query_handlers import GetFoodDetailsQueryHandler
+    from src.app.handlers.query_handlers import GetFoodDetailsQueryHandler
     from src.domain.services.food_mapping_service import FoodMappingService
 
     handler = GetFoodDetailsQueryHandler(

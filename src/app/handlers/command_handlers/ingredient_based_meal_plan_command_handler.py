@@ -8,14 +8,14 @@ from typing import Dict, Any
 
 from src.api.converters.meal_plan_converters import MealPlanConverter
 from src.api.schemas.response.meal_plan_responses import DailyMealPlanStrongResponse
-from src.app.handlers.query_handlers.tdee_query_handlers import GetUserTdeeQueryHandler
+from src.app.handlers.query_handlers import GetUserTdeeQueryHandler
+from src.app.handlers.command_handlers import SaveUserOnboardingCommandHandler
 from src.app.queries.tdee.get_user_tdee_query import GetUserTdeeQuery
 
 from sqlalchemy.orm import Session
 
 from src.app.commands.meal_plan import GenerateIngredientBasedMealPlanCommand
 from src.app.events.base import EventHandler, handles
-from src.app.handlers.command_handlers.user_command_handlers import SaveUserOnboardingCommandHandler
 from src.domain.model.meal_plan import MealPlan, UserPreferences, DayPlan, DietaryPreference, FitnessGoal, PlanDuration, \
     PlannedMeal, MealType
 from src.domain.services.ingredient_based_meal_plan_service import IngredientBasedMealPlanService

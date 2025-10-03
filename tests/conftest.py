@@ -143,29 +143,22 @@ def event_bus(
     meal_repository
 ) -> EventBus:
     """Configured event bus for testing."""
-    # Import handlers
-    from src.app.handlers.command_handlers.meal_command_handlers import (
+    # Import handlers from modules
+    from src.app.handlers.command_handlers import (
         UploadMealImageCommandHandler,
         RecalculateMealNutritionCommandHandler,
         EditMealCommandHandler,
-        AddCustomIngredientCommandHandler
+        AddCustomIngredientCommandHandler,
+        DeleteMealCommandHandler,
+        UploadMealImageImmediatelyHandler,
+        SaveUserOnboardingCommandHandler,
+        GenerateDailyMealSuggestionsCommandHandler,
     )
-    from src.app.handlers.command_handlers.upload_meal_image_immediately_handler import (
-        UploadMealImageImmediatelyHandler
-    )
-    from src.app.handlers.query_handlers.meal_query_handlers import (
+    from src.app.handlers.query_handlers import (
         GetMealByIdQueryHandler,
         GetMealsByDateQueryHandler,
-        GetDailyMacrosQueryHandler
-    )
-    from src.app.handlers.command_handlers.user_command_handlers import (
-        SaveUserOnboardingCommandHandler
-    )
-    from src.app.handlers.command_handlers.daily_meal_command_handlers import (
-        GenerateDailyMealSuggestionsCommandHandler
-    )
-    from src.app.handlers.query_handlers.user_query_handlers import (
-        GetUserProfileQueryHandler
+        GetDailyMacrosQueryHandler,
+        GetUserProfileQueryHandler,
     )
     
     # Import commands and queries
@@ -221,7 +214,6 @@ def event_bus(
 
     # Delete (soft delete) handler
     from src.app.commands.meal.delete_meal_command import DeleteMealCommand
-    from src.app.handlers.command_handlers.meal_command_handlers import DeleteMealCommandHandler
     event_bus.register_handler(
         DeleteMealCommand,
         DeleteMealCommandHandler(meal_repository)

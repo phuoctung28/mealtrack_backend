@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
@@ -13,6 +14,8 @@ from src.infra.database.config import SessionLocal
 from src.infra.database.models.meal.meal import Meal as DBMeal
 from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
 from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
+
+logger = logging.getLogger(__name__)
 
 
 # For development, we'll use an in-memory store
@@ -46,38 +49,28 @@ class MealRepository(MealRepositoryPort):
             
             if existing_meal:
                 # Update existing meal
-                from src.domain.model.meal import MealStatus
-                
-                # Handle nutrition data
+                from src.infra.mappers import MealStatusMapper
+
+                # Handle nutrition data with smart sync
                 if meal.nutrition and not existing_meal.nutrition:
                     # Create new nutrition
                     db_nutrition = DBNutrition.from_domain(meal.nutrition, meal_id=meal.meal_id)
                     existing_meal.nutrition = db_nutrition
                 elif meal.nutrition and existing_meal.nutrition:
-                    # Update existing nutrition - this would be more complex in a real app
-                    # For now, we'll just delete and recreate
-                    db.delete(existing_meal.nutrition)
-                    db.flush()
-                    db_nutrition = DBNutrition.from_domain(meal.nutrition, meal_id=meal.meal_id)
-                    existing_meal.nutrition = db_nutrition
-                
-                # Update other fields
-                from src.infra.database.models.enums import MealStatusEnum
-                status_mapping = {
-                    MealStatus.PROCESSING: MealStatusEnum.PROCESSING,
-                    MealStatus.ANALYZING: MealStatusEnum.ANALYZING, 
-                    MealStatus.ENRICHING: MealStatusEnum.ENRICHING,
-                    MealStatus.READY: MealStatusEnum.READY,
-                    MealStatus.FAILED: MealStatusEnum.FAILED,
-                    MealStatus.INACTIVE: MealStatusEnum.INACTIVE,
-                }
-                
-                existing_meal.status = status_mapping[meal.status]
+                    # Update existing nutrition in place
+                    self._update_nutrition(db, existing_meal.nutrition, meal.nutrition, meal.meal_id)
+
+                # Update other meal fields
+                existing_meal.status = MealStatusMapper.to_db(meal.status)
                 existing_meal.dish_name = getattr(meal, "dish_name", None)
                 existing_meal.ready_at = getattr(meal, "ready_at", None)
                 existing_meal.error_message = getattr(meal, "error_message", None)
                 existing_meal.raw_ai_response = getattr(meal, "raw_gpt_json", None)
-                
+                existing_meal.updated_at = getattr(meal, "updated_at", None) or datetime.now()
+                existing_meal.last_edited_at = getattr(meal, "last_edited_at", None)
+                existing_meal.edit_count = getattr(meal, "edit_count", 0)
+                existing_meal.is_manually_edited = getattr(meal, "is_manually_edited", False)
+
                 db.commit()
                 return meal
             else:
@@ -119,26 +112,18 @@ class MealRepository(MealRepositoryPort):
     def find_by_status(self, status: MealStatus, limit: int = 10) -> List[Meal]:
         """Find meals by status."""
         db = self._get_db()
-        
+
         try:
-            from src.infra.database.models.enums import MealStatusEnum
-            
-            status_mapping = {
-                MealStatus.PROCESSING: MealStatusEnum.PROCESSING,
-                MealStatus.ANALYZING: MealStatusEnum.ANALYZING,
-                MealStatus.ENRICHING: MealStatusEnum.ENRICHING,
-                MealStatus.READY: MealStatusEnum.READY,
-                MealStatus.FAILED: MealStatusEnum.FAILED,
-            }
-            
+            from src.infra.mappers import MealStatusMapper
+
             db_meals = (
                 db.query(DBMeal)
-                .filter(DBMeal.status == status_mapping[status])
+                .filter(DBMeal.status == MealStatusMapper.to_db(status))
                 .order_by(DBMeal.created_at)  # Oldest first
                 .limit(limit)
                 .all()
             )
-            
+
             return [meal.to_domain() for meal in db_meals]
         finally:
             self._close_db_if_created(db)
@@ -299,4 +284,52 @@ class MealRepository(MealRepositoryPort):
             ready_at=datetime.fromisoformat(data["ready_at"]) if "ready_at" in data else None,
             error_message=data.get("error_message"),
             raw_gpt_json=data.get("raw_gpt_json")
-        ) 
+        )
+
+    def _update_nutrition(self, db, db_nutrition, domain_nutrition, meal_id):
+        """
+        Smart update of nutrition data - updates existing records, adds new, removes deleted.
+        Preserves IDs and only changes what's necessary.
+        """
+        from src.infra.database.models.nutrition.food_item import FoodItem as DBFoodItem
+
+        # Update nutrition fields
+        db_nutrition.calories = domain_nutrition.calories
+        db_nutrition.protein = domain_nutrition.macros.protein
+        db_nutrition.carbs = domain_nutrition.macros.carbs
+        db_nutrition.fat = domain_nutrition.macros.fat
+        db_nutrition.confidence_score = domain_nutrition.confidence_score
+
+        # Sync food items
+        if domain_nutrition.food_items:
+            # Get existing item IDs
+            existing_items = {item.id: item for item in db_nutrition.food_items}
+            new_item_ids = {item.id for item in domain_nutrition.food_items}
+
+            # Remove deleted items
+            for item_id in list(existing_items.keys()):
+                if item_id not in new_item_ids:
+                    db.delete(existing_items[item_id])
+                    logger.info(f"Deleted food item: {item_id}")
+
+            # Update or add items
+            for domain_item in domain_nutrition.food_items:
+                if domain_item.id in existing_items:
+                    # Update existing item
+                    db_item = existing_items[domain_item.id]
+                    db_item.name = domain_item.name
+                    db_item.quantity = domain_item.quantity
+                    db_item.unit = domain_item.unit
+                    db_item.calories = domain_item.calories
+                    db_item.protein = domain_item.macros.protein
+                    db_item.carbs = domain_item.macros.carbs
+                    db_item.fat = domain_item.macros.fat
+                    db_item.confidence = domain_item.confidence
+                    db_item.fdc_id = getattr(domain_item, 'fdc_id', None)
+                    db_item.is_custom = getattr(domain_item, 'is_custom', False)
+                    logger.info(f"Updated food item: {domain_item.name}")
+                else:
+                    # Add new item
+                    db_item = DBFoodItem.from_domain(domain_item, nutrition_id=db_nutrition.id)
+                    db.add(db_item)
+                    logger.info(f"Added food item: {domain_item.name}") 
