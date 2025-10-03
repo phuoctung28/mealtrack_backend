@@ -36,22 +36,12 @@ class Meal(Base, TimestampMixin):
     def to_domain(self):
         """Convert DB model to domain model."""
         from src.domain.model.meal import Meal as DomainMeal
-        from src.domain.model.meal import MealStatus
-        
-        # Convert status from database enum to domain enum
-        status_mapping = {
-            MealStatusEnum.PROCESSING: MealStatus.PROCESSING,
-            MealStatusEnum.ANALYZING: MealStatus.ANALYZING,
-            MealStatusEnum.ENRICHING: MealStatus.ENRICHING,
-            MealStatusEnum.READY: MealStatus.READY,
-            MealStatusEnum.FAILED: MealStatus.FAILED,
-            MealStatusEnum.INACTIVE: MealStatus.INACTIVE,
-        }
-        
+        from src.infra.mappers import MealStatusMapper
+
         return DomainMeal(
             meal_id=self.meal_id,
             user_id=self.user_id,
-            status=status_mapping[self.status],
+            status=MealStatusMapper.to_domain(self.status),
             created_at=self.created_at,
             image=self.image.to_domain() if self.image else None,
             dish_name=self.dish_name,
@@ -68,23 +58,13 @@ class Meal(Base, TimestampMixin):
     @classmethod
     def from_domain(cls, domain_model):
         """Create DB model from domain model."""
-        from src.domain.model.meal import MealStatus
-        
-        # Convert status from domain enum to database enum
-        status_mapping = {
-            MealStatus.PROCESSING: MealStatusEnum.PROCESSING,
-            MealStatus.ANALYZING: MealStatusEnum.ANALYZING,
-            MealStatus.ENRICHING: MealStatusEnum.ENRICHING,
-            MealStatus.READY: MealStatusEnum.READY,
-            MealStatus.FAILED: MealStatusEnum.FAILED,
-            MealStatus.INACTIVE: MealStatusEnum.INACTIVE,
-        }
-        
+        from src.infra.mappers import MealStatusMapper
+
         # Create meal
         meal = cls(
             meal_id=domain_model.meal_id,
             user_id=getattr(domain_model, "user_id", None),
-            status=status_mapping[domain_model.status],
+            status=MealStatusMapper.to_db(domain_model.status),
             created_at=domain_model.created_at,
             updated_at=getattr(domain_model, "updated_at", None),
             dish_name=getattr(domain_model, "dish_name", None),
@@ -95,14 +75,14 @@ class Meal(Base, TimestampMixin):
             edit_count=getattr(domain_model, "edit_count", 0),
             is_manually_edited=getattr(domain_model, "is_manually_edited", False)
         )
-        
+
         # Add image reference
         if domain_model.image:
             meal.image_id = domain_model.image.image_id
-            
+
         # Add nutrition if it exists
         if domain_model.nutrition:
             from src.infra.database.models.nutrition.nutrition import Nutrition
             meal.nutrition = Nutrition.from_domain(domain_model.nutrition, meal_id=domain_model.meal_id)
-            
+
         return meal

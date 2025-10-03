@@ -45,74 +45,52 @@ from src.app.commands.user.sync_user_command import (
     UpdateUserLastAccessedCommand,
 )
 from src.app.events.meal import MealImageUploadedEvent
-from src.app.handlers.command_handlers.daily_meal_command_handlers import (
-    GenerateDailyMealSuggestionsCommandHandler,
-    GenerateSingleMealCommandHandler,
-)
-from src.app.handlers.command_handlers.ingredient_based_meal_plan_command_handler import (
-    GenerateIngredientBasedMealPlanCommandHandler,
-)
-# Import all handlers
-from src.app.handlers.command_handlers.meal_command_handlers import (
+# Import all command handlers from module
+from src.app.handlers.command_handlers import (
     UploadMealImageCommandHandler,
     RecalculateMealNutritionCommandHandler,
     EditMealCommandHandler,
     AddCustomIngredientCommandHandler,
     DeleteMealCommandHandler,
-)
-from src.app.handlers.command_handlers.create_manual_meal_command_handler import (
-    CreateManualMealCommandHandler,
-)
-from src.app.handlers.command_handlers.meal_plan_command_handlers import (
-    StartMealPlanConversationCommandHandler,
-    SendConversationMessageCommandHandler,
-    GenerateDailyMealPlanCommandHandler,
-    ReplaceMealInPlanCommandHandler,
-)
-from src.app.handlers.command_handlers.upload_meal_image_immediately_handler import (
-    UploadMealImageImmediatelyHandler,
-)
-from src.app.handlers.command_handlers.user_command_handlers import (
     SaveUserOnboardingCommandHandler,
     SyncUserCommandHandler,
     UpdateUserLastAccessedCommandHandler,
     CompleteOnboardingCommandHandler,
-)
-from src.app.handlers.command_handlers.weekly_ingredient_based_meal_plan_command_handler import (
+    StartMealPlanConversationCommandHandler,
+    SendConversationMessageCommandHandler,
+    ReplaceMealInPlanCommandHandler,
+    GenerateDailyMealPlanCommandHandler,
+    GenerateDailyMealSuggestionsCommandHandler,
+    GenerateSingleMealCommandHandler,
+    CreateManualMealCommandHandler,
+    GenerateIngredientBasedMealPlanCommandHandler,
     GenerateWeeklyIngredientBasedMealPlanCommandHandler,
+    UploadMealImageImmediatelyHandler,
 )
-from src.app.handlers.event_handlers.meal_analysis_event_handler import (
-    MealAnalysisEventHandler,
-)
-from src.app.handlers.query_handlers.activity_query_handlers import (
+
+# Import all query handlers from module
+from src.app.handlers.query_handlers import (
+    GetUserTdeeQueryHandler,
+    SearchFoodsQueryHandler,
+    GetFoodDetailsQueryHandler,
+    GetMealByIdQueryHandler,
+    GetMealsByDateQueryHandler,
+    GetDailyMacrosQueryHandler,
+    GetUserProfileQueryHandler,
+    GetUserByFirebaseUidQueryHandler,
+    GetUserOnboardingStatusQueryHandler,
     GetDailyActivitiesQueryHandler,
-)
-from src.app.handlers.query_handlers.daily_meal_query_handlers import (
+    GetConversationHistoryQueryHandler,
+    GetMealPlanQueryHandler,
+    GetMealsByDateMealPlanQueryHandler,
     GetMealSuggestionsForProfileQueryHandler,
     GetSingleMealForProfileQueryHandler,
     GetMealPlanningSummaryQueryHandler,
 )
-from src.app.handlers.query_handlers.meal_plan_query_handlers import (
-    GetConversationHistoryQueryHandler,
-    GetMealPlanQueryHandler,
-    GetMealsByDateQueryHandler as MealPlanGetMealsByDateQueryHandler,
-)
-from src.app.handlers.query_handlers.meal_query_handlers import (
-    GetMealByIdQueryHandler,
-    GetMealsByDateQueryHandler,
-    GetDailyMacrosQueryHandler,
-)
-from src.app.handlers.query_handlers.tdee_query_handlers import (
-    GetUserTdeeQueryHandler,
-)
-from src.app.handlers.query_handlers.user_query_handlers import (
-    GetUserProfileQueryHandler,
-    GetUserByFirebaseUidQueryHandler,
-    GetUserOnboardingStatusQueryHandler,
-)
-from src.app.handlers.query_handlers.food_query_handlers import (
-    SearchFoodsQueryHandler,
-    GetFoodDetailsQueryHandler,
+
+# Import event handlers
+from src.app.handlers.event_handlers.meal_analysis_event_handler import (
+    MealAnalysisEventHandler,
 )
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.daily_meal import (
@@ -291,7 +269,7 @@ async def get_configured_event_bus(
     )
     event_bus.register_handler(GetMealPlanQuery, GetMealPlanQueryHandler())
     event_bus.register_handler(
-        MealPlanGetMealsByDateQuery, MealPlanGetMealsByDateQueryHandler(db)
+        MealPlanGetMealsByDateQuery, GetMealsByDateMealPlanQueryHandler(db)
     )
 
     # Register user handlers

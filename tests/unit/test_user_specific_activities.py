@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from src.app.handlers.query_handlers.activity_query_handlers import GetDailyActivitiesQueryHandler
+from src.app.handlers.query_handlers import GetDailyActivitiesQueryHandler
 from src.app.queries.activity.get_daily_activities_query import GetDailyActivitiesQuery
 from src.domain.model.macros import Macros
 from src.domain.model.meal import Meal, MealStatus
