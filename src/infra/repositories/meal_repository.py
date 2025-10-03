@@ -66,7 +66,7 @@ class MealRepository(MealRepositoryPort):
                 existing_meal.ready_at = getattr(meal, "ready_at", None)
                 existing_meal.error_message = getattr(meal, "error_message", None)
                 existing_meal.raw_ai_response = getattr(meal, "raw_gpt_json", None)
-                existing_meal.updated_at = getattr(meal, "updated_at", None)
+                existing_meal.updated_at = getattr(meal, "updated_at", None) or datetime.now()
                 existing_meal.last_edited_at = getattr(meal, "last_edited_at", None)
                 existing_meal.edit_count = getattr(meal, "edit_count", 0)
                 existing_meal.is_manually_edited = getattr(meal, "is_manually_edited", False)

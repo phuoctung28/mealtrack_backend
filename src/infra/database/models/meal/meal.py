@@ -58,6 +58,7 @@ class Meal(Base, TimestampMixin):
     @classmethod
     def from_domain(cls, domain_model):
         """Create DB model from domain model."""
+        from datetime import datetime
         from src.infra.mappers import MealStatusMapper
 
         # Create meal
@@ -66,7 +67,7 @@ class Meal(Base, TimestampMixin):
             user_id=getattr(domain_model, "user_id", None),
             status=MealStatusMapper.to_db(domain_model.status),
             created_at=domain_model.created_at,
-            updated_at=getattr(domain_model, "updated_at", None),
+            updated_at=getattr(domain_model, "updated_at", None) or datetime.now(),
             dish_name=getattr(domain_model, "dish_name", None),
             ready_at=getattr(domain_model, "ready_at", None),
             error_message=getattr(domain_model, "error_message", None),

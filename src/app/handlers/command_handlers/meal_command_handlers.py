@@ -1,4 +1,4 @@
-        """
+"""
 DEPRECATED: This file is kept for backward compatibility only.
 
 All handlers have been moved to individual files:
