@@ -145,8 +145,6 @@ def event_bus(
     """Configured event bus for testing."""
     # Import handlers from modules
     from src.app.handlers.command_handlers import (
-        UploadMealImageCommandHandler,
-        RecalculateMealNutritionCommandHandler,
         EditMealCommandHandler,
         AddCustomIngredientCommandHandler,
         DeleteMealCommandHandler,
@@ -156,18 +154,14 @@ def event_bus(
     )
     from src.app.handlers.query_handlers import (
         GetMealByIdQueryHandler,
-        GetMealsByDateQueryHandler,
         GetDailyMacrosQueryHandler,
         GetUserProfileQueryHandler,
     )
     
     # Import commands and queries
-    from src.app.commands.meal.upload_meal_image_command import UploadMealImageCommand
-    from src.app.commands.meal.recalculate_meal_nutrition_command import RecalculateMealNutritionCommand
     from src.app.commands.meal.upload_meal_image_immediately_command import UploadMealImageImmediatelyCommand
     from src.app.commands.meal.edit_meal_command import EditMealCommand, AddCustomIngredientCommand
     from src.app.queries.meal.get_meal_by_id_query import GetMealByIdQuery
-    from src.app.queries.meal.get_meals_by_date_query import GetMealsByDateQuery
     from src.app.queries.meal.get_daily_macros_query import GetDailyMacrosQuery
     from src.app.commands.user.save_user_onboarding_command import SaveUserOnboardingCommand
     from src.app.queries.user.get_user_profile_query import GetUserProfileQuery
@@ -180,21 +174,7 @@ def event_bus(
     
     # Create repositories
     user_repository = UserRepository(test_session)
-    
-    # Register command handlers
-    event_bus.register_handler(
-        UploadMealImageCommand,
-        UploadMealImageCommandHandler(
-            image_store=mock_image_store,
-            meal_repository=meal_repository
-        )
-    )
-    
-    event_bus.register_handler(
-        RecalculateMealNutritionCommand,
-        RecalculateMealNutritionCommandHandler(meal_repository)
-    )
-    
+
     # Register meal edit command handlers
     event_bus.register_handler(
         EditMealCommand,
@@ -234,15 +214,10 @@ def event_bus(
         GetMealByIdQuery,
         GetMealByIdQueryHandler(meal_repository)
     )
-    
-    event_bus.register_handler(
-        GetMealsByDateQuery,
-        GetMealsByDateQueryHandler(meal_repository)
-    )
-    
+
     event_bus.register_handler(
         GetDailyMacrosQuery,
-        GetDailyMacrosQueryHandler(meal_repository)
+        GetDailyMacrosQueryHandler(meal_repository, test_session)
     )
     
     # Register user handlers

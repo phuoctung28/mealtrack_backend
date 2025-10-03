@@ -71,7 +71,7 @@ class GetMealSuggestionsForProfileQueryHandler(EventHandler[GetMealSuggestionsFo
         suggested_meals = self.suggestion_service.generate_daily_suggestions(user_data)
 
         # Format response
-        from src.app.handlers.command_handlers.daily_meal_command_handlers import GenerateDailyMealSuggestionsCommandHandler
+        from src.app.handlers.command_handlers.generate_daily_meal_suggestions_command_handler import GenerateDailyMealSuggestionsCommandHandler
         meal_handler = GenerateDailyMealSuggestionsCommandHandler()
         meals = [meal_handler._format_meal(meal) for meal in suggested_meals]
 

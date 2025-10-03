@@ -108,26 +108,26 @@ class TestWithStubs:
 @pytest.mark.unit
 class TestHandlerStubs:
     """Example of testing handlers with stubs."""
-    
+
     def test_handler_with_stubbed_dependencies(self):
         """Test handler with all dependencies stubbed."""
-        from src.app.handlers.command_handlers.meal_command_handlers import (
-            UploadMealImageCommandHandler
+        from src.app.handlers.command_handlers.edit_meal_handler import (
+            EditMealCommandHandler
         )
-        
+
         # Create all stubs
-        stub_image_store = Mock()
-        stub_image_store.save.return_value = "mock://test-image.jpg"
-        
         stub_meal_repo = Mock()
         stub_meal_repo.save.return_value = None
-        
+
+        stub_food_service = Mock()
+
         # Create handler with stubs
-        handler = UploadMealImageCommandHandler(
-            image_store=stub_image_store,
-            meal_repository=stub_meal_repo
+        handler = EditMealCommandHandler(
+            meal_repository=stub_meal_repo,
+            food_service=stub_food_service,
+            nutrition_calculator=None
         )
-        
+
         # Verify handler is created with stubs
-        assert handler.image_store == stub_image_store
         assert handler.meal_repository == stub_meal_repo
+        assert handler.food_service == stub_food_service

@@ -7,7 +7,7 @@ import pytest
 
 from src.app.commands.daily_meal import GenerateDailyMealSuggestionsCommand
 from src.app.commands.meal import (
-    UploadMealImageCommand,
+    # UploadMealImageCommand,  # DELETED - tests using this need to be updated or removed
     UploadMealImageImmediatelyCommand
 )
 from src.app.commands.user import SaveUserOnboardingCommand
