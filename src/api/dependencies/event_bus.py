@@ -20,7 +20,8 @@ from src.app.commands.daily_meal import (
 )
 # Import all commands
 from src.app.commands.meal import (
-
+    UploadMealImageCommand,
+    RecalculateMealNutritionCommand,
     UploadMealImageImmediatelyCommand,
     EditMealCommand,
     AddCustomIngredientCommand,
@@ -28,7 +29,10 @@ from src.app.commands.meal import (
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal_plan import (
-
+    StartMealPlanConversationCommand,
+    SendConversationMessageCommand,
+    GenerateDailyMealPlanCommand,
+    GenerateIngredientBasedMealPlanCommand,
     GenerateWeeklyIngredientBasedMealPlanCommand,
     ReplaceMealInPlanCommand,
 )
@@ -43,7 +47,8 @@ from src.app.commands.user.sync_user_command import (
 from src.app.events.meal import MealImageUploadedEvent
 # Import all command handlers from module
 from src.app.handlers.command_handlers import (
-
+    UploadMealImageCommandHandler,
+    RecalculateMealNutritionCommandHandler,
     EditMealCommandHandler,
     AddCustomIngredientCommandHandler,
     DeleteMealCommandHandler,
@@ -51,13 +56,14 @@ from src.app.handlers.command_handlers import (
     SyncUserCommandHandler,
     UpdateUserLastAccessedCommandHandler,
     CompleteOnboardingCommandHandler,
-
+    StartMealPlanConversationCommandHandler,
+    SendConversationMessageCommandHandler,
     ReplaceMealInPlanCommandHandler,
-
+    GenerateDailyMealPlanCommandHandler,
     GenerateDailyMealSuggestionsCommandHandler,
     GenerateSingleMealCommandHandler,
     CreateManualMealCommandHandler,
-
+    GenerateIngredientBasedMealPlanCommandHandler,
     GenerateWeeklyIngredientBasedMealPlanCommandHandler,
     UploadMealImageImmediatelyHandler,
 )
@@ -68,13 +74,13 @@ from src.app.handlers.query_handlers import (
     SearchFoodsQueryHandler,
     GetFoodDetailsQueryHandler,
     GetMealByIdQueryHandler,
-
+    GetMealsByDateQueryHandler,
     GetDailyMacrosQueryHandler,
     GetUserProfileQueryHandler,
     GetUserByFirebaseUidQueryHandler,
     GetUserOnboardingStatusQueryHandler,
     GetDailyActivitiesQueryHandler,
-
+    GetConversationHistoryQueryHandler,
     GetMealPlanQueryHandler,
     GetMealsByDateMealPlanQueryHandler,
     GetMealSuggestionsForProfileQueryHandler,
@@ -95,11 +101,11 @@ from src.app.queries.daily_meal import (
 # Import all queries
 from src.app.queries.meal import (
     GetMealByIdQuery,
-
+    GetMealsByDateQuery,
     GetDailyMacrosQuery,
 )
 from src.app.queries.meal_plan import (
-
+    GetConversationHistoryQuery,
     GetMealPlanQuery,
     GetMealsByDateQuery as MealPlanGetMealsByDateQuery,
 )
@@ -133,6 +139,19 @@ async def get_configured_event_bus(
     event_bus = PyMediatorEventBus()
 
     # Register meal command handlers
+    event_bus.register_handler(
+        UploadMealImageCommand,
+        UploadMealImageCommandHandler(
+            image_store=image_store,
+            meal_repository=meal_repository,
+        ),
+    )
+
+    event_bus.register_handler(
+        RecalculateMealNutritionCommand,
+        RecalculateMealNutritionCommandHandler(meal_repository),
+    )
+
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
@@ -194,6 +213,9 @@ async def get_configured_event_bus(
         GetMealByIdQuery, GetMealByIdQueryHandler(meal_repository)
     )
     event_bus.register_handler(
+        GetMealsByDateQuery, GetMealsByDateQueryHandler(meal_repository)
+    )
+    event_bus.register_handler(
         GetDailyMacrosQuery, GetDailyMacrosQueryHandler(meal_repository, db)
     )
 
@@ -223,11 +245,27 @@ async def get_configured_event_bus(
 
     # Register meal plan handlers
     event_bus.register_handler(
+        StartMealPlanConversationCommand, StartMealPlanConversationCommandHandler()
+    )
+    event_bus.register_handler(
+        SendConversationMessageCommand, SendConversationMessageCommandHandler()
+    )
+    event_bus.register_handler(
+        GenerateDailyMealPlanCommand, GenerateDailyMealPlanCommandHandler(db)
+    )
+    event_bus.register_handler(
+        GenerateIngredientBasedMealPlanCommand,
+        GenerateIngredientBasedMealPlanCommandHandler(db),
+    )
+    event_bus.register_handler(
         GenerateWeeklyIngredientBasedMealPlanCommand,
         GenerateWeeklyIngredientBasedMealPlanCommandHandler(db),
     )
     event_bus.register_handler(
         ReplaceMealInPlanCommand, ReplaceMealInPlanCommandHandler()
+    )
+    event_bus.register_handler(
+        GetConversationHistoryQuery, GetConversationHistoryQueryHandler()
     )
     event_bus.register_handler(GetMealPlanQuery, GetMealPlanQueryHandler())
     event_bus.register_handler(
