@@ -6,20 +6,10 @@ values used throughout the domain layer.
 """
 from .meal_constants import (
     MealDistribution,
-    NutritionConstants,
-    PortionUnits,
-    GPTPromptConstants,
-    MealPlanningConstants,
-    TDEEConstants,
-    ConversationConstants
+    TDEEConstants
 )
 
 __all__ = [
     'MealDistribution',
-    'NutritionConstants',
-    'PortionUnits',
-    'GPTPromptConstants',
-    'MealPlanningConstants',
-    'TDEEConstants',
-    'ConversationConstants'
+    'TDEEConstants'
 ]

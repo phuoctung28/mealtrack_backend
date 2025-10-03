@@ -15,15 +15,11 @@ class MealStatusEnum(str, Enum):
     ready = "ready"
     failed = "failed"
 
-
-
-
 class MacrosResponse(BaseModel):
     """Response DTO for macronutrient information."""
     protein: float = Field(..., ge=0, description="Protein in grams")
     carbs: float = Field(..., ge=0, description="Carbohydrates in grams") 
     fat: float = Field(..., ge=0, description="Fat in grams")
-
 
 class NutritionResponse(BaseModel):
     """Response DTO for nutrition information."""
@@ -32,7 +28,6 @@ class NutritionResponse(BaseModel):
     protein_g: float = Field(..., ge=0, description="Protein in grams")
     carbs_g: float = Field(..., ge=0, description="Carbohydrates in grams")
     fat_g: float = Field(..., ge=0, description="Fat in grams")
-
 
 class FoodItemResponse(BaseModel):
     """Response DTO for food item information."""
@@ -44,7 +39,6 @@ class FoodItemResponse(BaseModel):
     description: Optional[str] = Field(None, description="Description")
     nutrition: Optional[NutritionResponse] = Field(None, description="Nutrition information")
 
-
 class SimpleMealResponse(BaseModel):
     """Response DTO for basic meal information."""
     meal_id: str = Field(..., description="Meal ID")
@@ -54,7 +48,6 @@ class SimpleMealResponse(BaseModel):
     error_message: Optional[str] = Field(None, description="Error message if failed")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
-
 
 class DetailedMealResponse(SimpleMealResponse):
     """Response DTO for detailed meal information with nutrition."""
@@ -67,7 +60,6 @@ class DetailedMealResponse(SimpleMealResponse):
     total_weight_grams: Optional[float] = Field(None, gt=0, description="Total weight")
     total_nutrition: Optional[MacrosResponse] = Field(None, description="Total macros")
 
-
 class MealListResponse(BaseModel):
     """Response DTO for paginated meal list."""
     meals: List[Union[SimpleMealResponse, DetailedMealResponse]] = Field(
@@ -79,41 +71,10 @@ class MealListResponse(BaseModel):
     page_size: int = Field(..., ge=1, le=100, description="Items per page")
     total_pages: int = Field(..., ge=0, description="Total pages")
 
-
-class MealPhotoAnalysisResponse(BaseModel):
-    """Response DTO for meal photo analysis."""
-    meal_id: str = Field(..., description="ID of the analyzed meal")
-    status: MealStatusEnum = Field(..., description="Analysis status")
-    message: str = Field(..., description="Status message")
-    estimated_completion_seconds: Optional[int] = Field(
-        None, 
-        description="Estimated seconds until completion"
-    )
-
-
-class MealSearchResponse(BaseModel):
-    """Response DTO for meal search results."""
-    results: List[SimpleMealResponse] = Field(..., description="Search results")
-    query: str = Field(..., description="Original search query")
-    total_results: int = Field(..., ge=0, description="Total matching results")
-
-
 class MealStatusResponse(BaseModel):
     """Lightweight response DTO for meal processing status."""
     meal_id: str = Field(..., description="Meal ID")
     status: MealStatusEnum = Field(..., description="Current status")
-
-
-class NutritionSummaryResponse(BaseModel):
-    """Response DTO for simplified nutrition summary."""
-    meal_name: str = Field(..., description="Identified meal name")
-    total_calories: float = Field(..., ge=0, description="Total calories")
-    total_weight_grams: float = Field(..., gt=0, description="Total weight in grams")
-    calories_per_100g: float = Field(..., ge=0, description="Calories per 100g")
-    macros_per_100g: MacrosResponse = Field(..., description="Macronutrients per 100g")
-    total_macros: MacrosResponse = Field(..., description="Total macronutrients")
-    confidence_score: float = Field(..., ge=0, le=1, description="AI analysis confidence")
-
 
 class ManualMealCreationResponse(BaseModel):
     """Response DTO for manual meal creation."""

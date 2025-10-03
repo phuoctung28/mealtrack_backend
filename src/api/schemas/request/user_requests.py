@@ -23,21 +23,8 @@ class UserSyncRequest(BaseModel):
     first_name: Optional[str] = Field(None, description="First name (extracted from display_name if not provided)")
     last_name: Optional[str] = Field(None, description="Last name (extracted from display_name if not provided)")
 
-
 class UserUpdateLastAccessedRequest(BaseModel):
     """Request to update user's last accessed timestamp."""
     firebase_uid: str = Field(..., description="Firebase user unique identifier")
     last_accessed: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Last accessed timestamp")
 
-
-class UserCreateRequest(BaseModel):
-    """Request to create a new user (legacy support)."""
-    firebase_uid: str = Field(..., description="Firebase user unique identifier")
-    email: EmailStr = Field(..., description="User email address")
-    username: Optional[str] = Field(None, description="Username (auto-generated if not provided)")
-    first_name: Optional[str] = Field(None, description="First name")
-    last_name: Optional[str] = Field(None, description="Last name")
-    phone_number: Optional[str] = Field(None, description="Phone number")
-    display_name: Optional[str] = Field(None, description="Display name")
-    photo_url: Optional[str] = Field(None, description="Profile photo URL")
-    provider: AuthProviderEnum = Field(default=AuthProviderEnum.GOOGLE, description="Authentication provider")
