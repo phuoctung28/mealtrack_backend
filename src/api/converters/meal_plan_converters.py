@@ -2,13 +2,14 @@
 Converters for transforming domain models to API response models.
 """
 from typing import Optional
+
 from src.api.schemas.response.meal_plan_responses import (
     DailyMealPlanStrongResponse,
     GeneratedMealResponse,
     UserPreferencesStrongResponse
 )
-from src.domain.model.meal_generation_response import DailyMealPlan, GeneratedMeal, NutritionSummary
 from src.domain.model.meal_generation_request import MealGenerationRequest
+from src.domain.model.meal_generation_response import DailyMealPlan, GeneratedMeal, NutritionSummary
 
 
 class MealPlanConverter:

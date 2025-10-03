@@ -5,6 +5,7 @@ import os
 from typing import Dict, Any, List, Optional
 
 import requests
+
 from src.domain.ports.food_data_service_port import FoodDataServicePort
 
 

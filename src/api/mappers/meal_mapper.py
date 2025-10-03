@@ -8,8 +8,7 @@ from src.api.schemas.response import (
     DetailedMealResponse,
     MealListResponse,
     FoodItemResponse,
-    NutritionResponse,
-    MealStatusResponse
+    NutritionResponse
 )
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
@@ -212,33 +211,6 @@ class MealMapper:
             unit=item_dict.get("unit", ""),
             description=item_dict.get("description"),
             nutrition=nutrition
-        )
-    
-    @staticmethod
-    def to_status_response(meal: Meal) -> MealStatusResponse:
-        """
-        Convert Meal domain model to MealStatusResponse DTO.
-        
-        Args:
-            meal: Meal domain model
-            
-        Returns:
-            MealStatusResponse DTO
-        """
-        # Get user-friendly status message
-        status_messages = {
-            "PROCESSING": "Your meal is being processed",
-            "ANALYZING": "AI is analyzing your meal",
-            "ENRICHING": "Enhancing your meal data",
-            "READY": "Your meal analysis is ready",
-            "FAILED": "Analysis failed"
-        }
-        
-        return MealStatusResponse(
-            meal_id=meal.meal_id,
-            status=STATUS_MAPPING.get(meal.status.value, meal.status.value.lower()),
-            status_message=status_messages.get(meal.status.value, "Unknown status"),
-            error_message=meal.error_message
         )
     
     @staticmethod

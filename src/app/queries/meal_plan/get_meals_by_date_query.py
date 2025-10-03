@@ -3,7 +3,6 @@ Query for getting meals by specific date.
 """
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional
 
 from src.app.events.base import Query
 

@@ -7,7 +7,8 @@ from typing import Dict, Any
 
 from src.app.commands.daily_meal import GenerateSingleMealCommand
 from src.app.events.base import EventHandler, handles
-from src.app.handlers.command_handlers.generate_daily_meal_suggestions_command_handler import GenerateDailyMealSuggestionsCommandHandler
+from src.app.handlers.command_handlers.generate_daily_meal_suggestions_command_handler import \
+    GenerateDailyMealSuggestionsCommandHandler
 from src.domain.model.macro_targets import SimpleMacroTargets
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
 from src.domain.services.tdee_service import TdeeCalculationService

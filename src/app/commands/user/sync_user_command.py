@@ -2,8 +2,9 @@
 Command to sync user data from Firebase authentication.
 """
 from dataclasses import dataclass
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
 from src.api.schemas.common.auth_enums import AuthProviderEnum
 
 

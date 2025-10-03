@@ -22,19 +22,10 @@ from .daily_nutrition_response import (
 # Macros responses
 # Meal plan responses
 from .meal_plan_responses import (
-    MessageSchema,
-    ConversationMessageResponse,
-    StartConversationResponse,
-    ConversationHistoryResponse,
     PlannedMealSchema,
     DayPlanSchema,
     MealPlanSummaryResponse,
-    ReplaceMealResponse,
     ErrorResponse,
-    DailyMealPlanResponse,
-    DailyMealPlanStrongResponse,
-    GeneratedMealResponse,
-    UserPreferencesStrongResponse,
     NutritionSummarySchema,
     UserPreferenceSummarySchema,
     MealsByDateResponse,
@@ -47,7 +38,6 @@ from .meal_responses import (
     MealListResponse,
     MealPhotoAnalysisResponse,
     MealSearchResponse,
-    MealStatusResponse,
     NutritionSummaryResponse,
     MacrosResponse,
     NutritionResponse,
@@ -71,19 +61,19 @@ from .tdee_responses import (
     TdeeErrorResponse,
     MacroTargetsResponse
 )
-# Weekly meal plan responses
-from .weekly_meal_plan_responses import (
-    WeeklyMealPlanResponse,
-    WeeklyMealResponse,
-    NutritionInfo,
-    UserPreferencesResponse
-)
 # User responses
 from .user_responses import (
     UserProfileResponse,
     UserSyncResponse,
     UserStatusResponse,
     UserUpdateResponse
+)
+# Weekly meal plan responses
+from .weekly_meal_plan_responses import (
+    WeeklyMealPlanResponse,
+    WeeklyMealResponse,
+    NutritionInfo,
+    UserPreferencesResponse
 )
 
 __all__ = [
@@ -101,7 +91,6 @@ __all__ = [
     'MealListResponse',
     'MealPhotoAnalysisResponse',
     'MealSearchResponse',
-    'MealStatusResponse',
     'NutritionSummaryResponse',
     'MacrosResponse',
     'NutritionResponse',
@@ -117,19 +106,10 @@ __all__ = [
     'MacroTargetsResponse',
     
     # Meal plan
-    'MessageSchema',
-    'ConversationMessageResponse',
-    'StartConversationResponse',
-    'ConversationHistoryResponse',
     'PlannedMealSchema',
     'DayPlanSchema',
     'MealPlanSummaryResponse',
-    'ReplaceMealResponse',
     'ErrorResponse',
-    'DailyMealPlanResponse',
-    'DailyMealPlanStrongResponse',
-    'GeneratedMealResponse',
-    'UserPreferencesStrongResponse',
     'NutritionSummarySchema',
     'UserPreferenceSummarySchema',
     'MealsByDateResponse',

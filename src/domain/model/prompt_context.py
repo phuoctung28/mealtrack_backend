@@ -2,7 +2,7 @@
 Domain models for prompt generation context.
 """
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+
 from src.domain.model.meal_generation_request import MealGenerationContext
 
 

@@ -98,12 +98,6 @@ class MealSearchResponse(BaseModel):
     total_results: int = Field(..., ge=0, description="Total matching results")
 
 
-class MealStatusResponse(BaseModel):
-    """Lightweight response DTO for meal processing status."""
-    meal_id: str = Field(..., description="Meal ID")
-    status: MealStatusEnum = Field(..., description="Current status")
-
-
 class NutritionSummaryResponse(BaseModel):
     """Response DTO for simplified nutrition summary."""
     meal_name: str = Field(..., description="Identified meal name")

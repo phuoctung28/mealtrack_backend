@@ -4,41 +4,9 @@ from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 
 from ..common.meal_plan_enums import (
-    ConversationStateSchema,
     MealTypeSchema,
     PlanDurationSchema
 )
-
-
-class MessageSchema(BaseModel):
-    message_id: str
-    role: str
-    content: str
-    timestamp: datetime
-    metadata: Optional[Dict] = None
-
-
-class ConversationMessageResponse(BaseModel):
-    conversation_id: str
-    state: ConversationStateSchema
-    assistant_message: str
-    requires_input: bool = Field(default=True, description="Whether the assistant expects a response")
-    meal_plan_id: Optional[str] = Field(None, description="ID of generated meal plan if available")
-
-
-class StartConversationResponse(BaseModel):
-    conversation_id: str
-    state: ConversationStateSchema
-    assistant_message: str
-
-
-class ConversationHistoryResponse(BaseModel):
-    conversation_id: str
-    state: ConversationStateSchema
-    messages: List[MessageSchema]
-    context: Dict
-    created_at: datetime
-    updated_at: datetime
 
 
 class PlannedMealSchema(BaseModel):
@@ -78,12 +46,6 @@ class MealPlanSummaryResponse(BaseModel):
     created_at: datetime
 
 
-class ReplaceMealResponse(BaseModel):
-    success: bool
-    new_meal: PlannedMealSchema
-    message: str
-
-
 class ErrorResponse(BaseModel):
     error: str
     message: str
@@ -105,65 +67,6 @@ class UserPreferenceSummarySchema(BaseModel):
     fitness_goal: str
     meals_per_day: int
     snacks_per_day: int
-
-
-class DailyMealPlanResponse(BaseModel):
-    user_id: str
-    date: str = Field(..., description="Date of the meal plan (e.g., 'today')")
-    meals: List[PlannedMealSchema]
-    total_nutrition: NutritionSummarySchema
-    target_nutrition: NutritionSummarySchema
-    user_preferences: UserPreferenceSummarySchema
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "user_id": "user123",
-                "date": "today",
-                "meals": [
-                    {
-                        "meal_id": "meal_001",
-                        "meal_type": "breakfast",
-                        "name": "Greek Yogurt Parfait",
-                        "description": "Healthy breakfast with berries and granola",
-                        "prep_time": 5,
-                        "cook_time": 0,
-                        "total_time": 5,
-                        "calories": 350,
-                        "protein": 20.5,
-                        "carbs": 35.2,
-                        "fat": 12.8,
-                        "ingredients": ["Greek yogurt", "Mixed berries", "Granola", "Honey"],
-                        "instructions": ["Layer yogurt in bowl", "Add berries", "Top with granola"],
-                        "is_vegetarian": True,
-                        "is_vegan": False,
-                        "is_gluten_free": True,
-                        "cuisine_type": "Mediterranean"
-                    }
-                ],
-                "total_nutrition": {
-                    "calories": 2100,
-                    "protein": 120.5,
-                    "carbs": 250.2,
-                    "fat": 85.8
-                },
-                "target_nutrition": {
-                    "calories": 2200,
-                    "protein": 125.0,
-                    "carbs": 275.0,
-                    "fat": 85.0
-                },
-                "user_preferences": {
-                    "dietary_preferences": ["vegetarian"],
-                    "health_conditions": [],
-                    "allergies": ["nuts"],
-                    "activity_level": "moderate",
-                    "fitness_goal": "maintenance",
-                    "meals_per_day": 3,
-                    "snacks_per_day": 1
-                }
-            }
-        }
 
 
 class MealsByDateResponse(BaseModel):
@@ -239,15 +142,7 @@ class UserPreferencesStrongResponse(BaseModel):
     snacks_per_day: int = Field(..., description="Number of snacks per day")
 
 
-class DailyMealPlanStrongResponse(BaseModel):
-    """Response model for a daily meal plan (strongly typed version)."""
-    user_id: str = Field(..., description="User identifier")
-    date: str = Field(..., description="Date of the meal plan (ISO format)")
-    plan_id: Optional[str] = Field(None, description="Plan identifier if saved")
-    meals: List[GeneratedMealResponse] = Field(..., description="List of generated meals")
-    total_nutrition: NutritionSummarySchema = Field(..., description="Total nutrition for the day")
-    target_nutrition: NutritionSummarySchema = Field(..., description="Target nutrition goals")
-    user_preferences: UserPreferencesStrongResponse = Field(..., description="User preferences used")
+
 
     class Config:
         """Pydantic config."""

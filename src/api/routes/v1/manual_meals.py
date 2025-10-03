@@ -4,11 +4,10 @@ Manual meal creation endpoint using USDA FDC items.
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.infra.event_bus import EventBus
 from src.api.schemas.request.meal_requests import CreateManualMealFromFoodsRequest
 from src.api.schemas.response.meal_responses import ManualMealCreationResponse
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand, ManualMealItem
-
+from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/meals", tags=["Meals"])
 

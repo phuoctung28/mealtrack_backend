@@ -6,12 +6,11 @@ Based on the MVP implementation from my-python-repo/mvp/meal_nutrition.py
 """
 
 import os
-from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
-import re
+from typing import Dict, Optional
 
-from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone
+from sentence_transformers import SentenceTransformer
 
 
 @dataclass

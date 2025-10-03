@@ -1,9 +1,11 @@
 """
 User management response schemas for Firebase integration.
 """
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, EmailStr, Field
+
 from ..common.auth_enums import AuthProviderEnum
 
 

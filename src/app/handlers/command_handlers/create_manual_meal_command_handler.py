@@ -1,17 +1,17 @@
 """
 Command handler for creating manual meals from selected USDA foods.
 """
-from datetime import datetime
-from typing import Dict, Any, List
-from uuid import uuid4
 import uuid
+from datetime import datetime
+from typing import Any, List
+from uuid import uuid4
 
+from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.events.base import EventHandler
-from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand, ManualMealItem
+from src.domain.model.macros import Macros
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_image import MealImage
 from src.domain.model.nutrition import Nutrition, FoodItem as DomainFoodItem
-from src.domain.model.macros import Macros
 
 
 class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any]):
