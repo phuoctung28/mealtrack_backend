@@ -8,9 +8,9 @@ All handlers extracted to individual files:
 
 Please import from individual files or from the module.
 """
-from .get_daily_macros_query_handler import GetDailyMacrosQueryHandler
 from .get_meal_by_id_query_handler import GetMealByIdQueryHandler
 from .get_meals_by_date_query_handler import GetMealsByDateQueryHandler
+from .get_daily_macros_query_handler import GetDailyMacrosQueryHandler
 
 __all__ = [
     "GetMealByIdQueryHandler",

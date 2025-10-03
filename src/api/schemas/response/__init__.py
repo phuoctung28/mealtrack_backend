@@ -71,19 +71,19 @@ from .tdee_responses import (
     TdeeErrorResponse,
     MacroTargetsResponse
 )
-# User responses
-from .user_responses import (
-    UserProfileResponse,
-    UserSyncResponse,
-    UserStatusResponse,
-    UserUpdateResponse
-)
 # Weekly meal plan responses
 from .weekly_meal_plan_responses import (
     WeeklyMealPlanResponse,
     WeeklyMealResponse,
     NutritionInfo,
     UserPreferencesResponse
+)
+# User responses
+from .user_responses import (
+    UserProfileResponse,
+    UserSyncResponse,
+    UserStatusResponse,
+    UserUpdateResponse
 )
 
 __all__ = [

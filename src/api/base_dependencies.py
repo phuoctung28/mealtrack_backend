@@ -10,12 +10,12 @@ from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.food_mapping_service import FoodMappingService
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
-from src.infra.adapters.food_cache_service import FoodCacheService
-from src.infra.adapters.food_data_service import FoodDataService
 from src.infra.adapters.image_store import ImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
+from src.infra.adapters.food_data_service import FoodDataService
+from src.infra.adapters.food_cache_service import FoodCacheService
+from src.domain.services.food_mapping_service import FoodMappingService
 from src.infra.database.config import SessionLocal
 from src.infra.repositories.meal_repository import MealRepository
 

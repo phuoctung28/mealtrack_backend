@@ -1,6 +1,6 @@
 import json
-import uuid
 from typing import Dict, Any, List, Optional
+import uuid
 
 from src.domain.model.macros import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem

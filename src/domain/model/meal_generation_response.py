@@ -2,8 +2,10 @@
 Domain models for meal generation responses.
 """
 from dataclasses import dataclass
-from datetime import date
 from typing import List, Dict, Any, Optional
+from datetime import date
+
+from src.domain.model.meal_plan import PlannedMeal
 
 
 @dataclass

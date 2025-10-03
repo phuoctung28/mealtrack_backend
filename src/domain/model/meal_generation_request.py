@@ -3,8 +3,8 @@ Domain models for meal generation requests.
 """
 from dataclasses import dataclass
 from datetime import date
+from typing import List, Dict, Any, Optional
 from enum import Enum
-from typing import List, Dict, Optional
 
 from src.domain.model.meal_plan import MealType
 

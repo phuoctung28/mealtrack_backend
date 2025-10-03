@@ -11,9 +11,10 @@ from src.app.commands.meal import (
     UploadMealImageCommand,
     RecalculateMealNutritionCommand,
     EditMealCommand,
-    AddCustomIngredientCommand
+    AddCustomIngredientCommand,
+    FoodItemChange,
+    CustomNutritionData
 )
-from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import (
     MealImageUploadedEvent,
@@ -22,9 +23,10 @@ from src.app.events.meal import (
 )
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_image import MealImage
-from src.domain.model.nutrition import FoodItem, Macros
+from src.domain.model.nutrition import Nutrition, FoodItem, Macros
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 from src.infra.services.pinecone_service import get_pinecone_service
 
 logger = logging.getLogger(__name__)

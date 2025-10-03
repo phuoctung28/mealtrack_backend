@@ -27,11 +27,12 @@ from .meal_planning.planned_meal import PlannedMeal
 from .nutrition.food_item import FoodItem
 # Nutrition models
 from .nutrition.nutrition import Nutrition
-# Test models
-from .test import TestTable
 from .user.profile import UserProfile
 # User models
 from .user.user import User
+
+# Test models
+from .test import TestTable
 
 __all__ = [
     # Base

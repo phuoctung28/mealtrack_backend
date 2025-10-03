@@ -61,10 +61,7 @@ from src.app.handlers.command_handlers import (
     GenerateWeeklyIngredientBasedMealPlanCommandHandler,
     UploadMealImageImmediatelyHandler,
 )
-# Import event handlers
-from src.app.handlers.event_handlers.meal_analysis_event_handler import (
-    MealAnalysisEventHandler,
-)
+
 # Import all query handlers from module
 from src.app.handlers.query_handlers import (
     GetUserTdeeQueryHandler,
@@ -84,14 +81,17 @@ from src.app.handlers.query_handlers import (
     GetSingleMealForProfileQueryHandler,
     GetMealPlanningSummaryQueryHandler,
 )
+
+# Import event handlers
+from src.app.handlers.event_handlers.meal_analysis_event_handler import (
+    MealAnalysisEventHandler,
+)
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.daily_meal import (
     GetMealSuggestionsForProfileQuery,
     GetSingleMealForProfileQuery,
     GetMealPlanningSummaryQuery,
 )
-from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
-from src.app.queries.food.search_foods_query import SearchFoodsQuery
 # Import all queries
 from src.app.queries.meal import (
     GetMealByIdQuery,
@@ -109,10 +109,12 @@ from src.app.queries.user.get_user_by_firebase_uid_query import (
     GetUserByFirebaseUidQuery,
     GetUserOnboardingStatusQuery,
 )
-from src.domain.ports.food_cache_service_port import FoodCacheServicePort
-from src.domain.ports.food_data_service_port import FoodDataServicePort
-from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
+from src.app.queries.food.search_foods_query import SearchFoodsQuery
+from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
 from src.infra.event_bus import PyMediatorEventBus, EventBus
+from src.domain.ports.food_data_service_port import FoodDataServicePort
+from src.domain.ports.food_cache_service_port import FoodCacheServicePort
+from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 
 
 async def get_configured_event_bus(

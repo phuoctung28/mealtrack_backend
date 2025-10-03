@@ -3,11 +3,11 @@ Nutrition calculation service - domain service for nutrition-related operations.
 Provides a unified interface for calculating nutrition from various sources.
 """
 import logging
-from dataclasses import dataclass
 from typing import Optional, List
+from dataclasses import dataclass
 
-from src.domain.model.macros import Macros
 from src.domain.model.nutrition import FoodItem, Nutrition
+from src.domain.model.macros import Macros
 
 logger = logging.getLogger(__name__)
 

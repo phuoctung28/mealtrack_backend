@@ -3,21 +3,21 @@ Meal plan orchestration service.
 Uses the unified LLM adapter with different prompts for different meal plan types.
 """
 import logging
-from datetime import date, datetime, timedelta
 from typing import Dict, Any, List
+from datetime import date, datetime, timedelta
 
+from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.model.meal_generation_request import (
-    MealGenerationRequest, MealGenerationType, UserDietaryProfile,
+    MealGenerationRequest, MealGenerationType, UserDietaryProfile, 
     UserNutritionTargets, IngredientConstraints, MealGenerationContext
 )
 from src.domain.model.meal_generation_response import (
-    DailyMealPlan, GeneratedMeal, NutritionSummary
+    DailyMealPlan, WeeklyMealPlan, GeneratedMeal, NutritionSummary
 )
 from src.domain.model.meal_plan import MealType
-from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.domain.services.fallback_meal_service import FallbackMealService
 from src.domain.services.meal_distribution_service import MealDistributionService
 from src.domain.services.meal_type_determination_service import MealTypeDeterminationService
+from src.domain.services.fallback_meal_service import FallbackMealService
 from src.domain.services.prompt_generation_service import PromptGenerationService
 
 logger = logging.getLogger(__name__)

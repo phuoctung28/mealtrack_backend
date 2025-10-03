@@ -2,9 +2,7 @@
 Feature flag database model for application-wide feature control.
 """
 from datetime import datetime
-
 from sqlalchemy import Boolean, Column, String, DateTime
-
 from src.infra.database.config import Base
 
 

@@ -1,9 +1,8 @@
 """
 Test table model for migration testing.
 """
-from datetime import datetime
-
 from sqlalchemy import Column, Integer, String, DateTime
+from datetime import datetime
 
 from src.infra.database.config import Base
 from src.infra.database.models.base import BaseMixin

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.mappers.tdee_mapper import TdeeMapper
-from src.api.schemas.request import OnboardingCompleteRequest
+from src.api.schemas.request import OnboardingCompleteRequest, GoalEnum
 from src.api.schemas.response import TdeeCalculationResponse
 from src.app.commands.user import SaveUserOnboardingCommand
 from src.app.queries.tdee import GetUserTdeeQuery

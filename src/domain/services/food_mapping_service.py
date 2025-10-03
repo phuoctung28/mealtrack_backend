@@ -2,7 +2,7 @@
 Maps USDA FDC responses into internal simplified structures and domain-friendly dictionaries.
 Keeps logic flat and readable.
 """
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 USDA_NUTRIENT_MAPPING = {
     1008: "calories",  # Energy (kcal)

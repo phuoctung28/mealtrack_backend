@@ -2,7 +2,6 @@
 Core user model for authentication and account management.
 """
 from datetime import datetime
-
 from sqlalchemy import Column, String, Boolean, DateTime, Text, Index, Enum
 from sqlalchemy.orm import relationship
 

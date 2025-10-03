@@ -5,11 +5,11 @@ Each strategy encapsulates the logic for add, update, or remove operations.
 import logging
 import uuid
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Dict, Optional
 
 from src.app.commands.meal import FoodItemChange
-from src.domain.model.macros import Macros
 from src.domain.model.nutrition import FoodItem
+from src.domain.model.macros import Macros
 from src.domain.services import NutritionCalculationService
 
 logger = logging.getLogger(__name__)

@@ -2,8 +2,9 @@
 Simple in-memory cache service interface and a fallback no-op for USDA responses.
 Replace with Redis later.
 """
-import time
 from typing import Dict, Any, List, Optional
+import time
+
 
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 
