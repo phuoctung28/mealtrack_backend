@@ -1,8 +1,9 @@
 """
 Meal planning API endpoints - Event-driven architecture.
 """
-from fastapi import APIRouter, Depends, Query
 from datetime import date
+
+from fastapi import APIRouter, Depends, Query
 
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception

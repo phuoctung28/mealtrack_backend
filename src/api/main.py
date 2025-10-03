@@ -8,15 +8,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
+from src.api.routes.v1.foods import router as foods_router
+from src.api.routes.v1.manual_meals import router as manual_meals_router
 from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
-from src.api.routes.v1.foods import router as foods_router
-from src.api.routes.v1.manual_meals import router as manual_meals_router
 
 load_dotenv()
 

@@ -2,6 +2,7 @@
 Command to mark user onboarding as completed.
 """
 from dataclasses import dataclass
+
 from src.app.events.base import Command
 
 

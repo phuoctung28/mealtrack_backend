@@ -2,6 +2,7 @@
 Domain service for determining required meal types based on user preferences.
 """
 from typing import List
+
 from src.domain.model.meal_plan import MealType
 
 

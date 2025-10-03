@@ -7,7 +7,7 @@ All handlers extracted to individual files:
 
 Please import from individual files or from the module.
 """
-from .search_foods_query_handler import SearchFoodsQueryHandler
 from .get_food_details_query_handler import GetFoodDetailsQueryHandler
+from .search_foods_query_handler import SearchFoodsQueryHandler
 
 __all__ = ["SearchFoodsQueryHandler", "GetFoodDetailsQueryHandler"]

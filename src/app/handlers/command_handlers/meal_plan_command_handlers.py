@@ -9,10 +9,10 @@ All handlers extracted to individual files:
 
 Please import from individual files or from the module.
 """
-from .start_meal_plan_conversation_command_handler import StartMealPlanConversationCommandHandler
-from .send_conversation_message_command_handler import SendConversationMessageCommandHandler
-from .replace_meal_in_plan_command_handler import ReplaceMealInPlanCommandHandler
 from .generate_daily_meal_plan_command_handler import GenerateDailyMealPlanCommandHandler
+from .replace_meal_in_plan_command_handler import ReplaceMealInPlanCommandHandler
+from .send_conversation_message_command_handler import SendConversationMessageCommandHandler
+from .start_meal_plan_conversation_command_handler import StartMealPlanConversationCommandHandler
 
 __all__ = [
     "StartMealPlanConversationCommandHandler",

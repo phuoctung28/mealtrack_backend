@@ -9,10 +9,10 @@ All handlers extracted to individual files:
 
 Please import from individual files or from the module.
 """
+from .complete_onboarding_command_handler import CompleteOnboardingCommandHandler
 from .save_user_onboarding_command_handler import SaveUserOnboardingCommandHandler
 from .sync_user_command_handler import SyncUserCommandHandler
 from .update_user_last_accessed_command_handler import UpdateUserLastAccessedCommandHandler
-from .complete_onboarding_command_handler import CompleteOnboardingCommandHandler
 
 __all__ = [
     "SaveUserOnboardingCommandHandler",

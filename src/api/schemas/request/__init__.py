@@ -31,14 +31,6 @@ from .meal_requests import (
 from .onboarding_requests import (
     OnboardingCompleteRequest
 )
-# User requests
-from .user_requests import (
-    UserSyncRequest,
-    UserUpdateLastAccessedRequest,
-    UserCreateRequest
-)
-# Common enums
-from ..common.auth_enums import AuthProviderEnum
 # TDEE requests
 from .tdee_requests import (
     TdeeCalculationRequest,
@@ -48,6 +40,14 @@ from .tdee_requests import (
     GoalEnum,
     UnitSystemEnum
 )
+# User requests
+from .user_requests import (
+    UserSyncRequest,
+    UserUpdateLastAccessedRequest,
+    UserCreateRequest
+)
+# Common enums
+from ..common.auth_enums import AuthProviderEnum
 
 __all__ = [
     # Daily meal

@@ -3,7 +3,7 @@ Meal-related request DTOs.
 """
 from typing import Optional, Literal
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 
 
 class MacrosRequest(BaseModel):

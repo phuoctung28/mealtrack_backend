@@ -4,31 +4,29 @@ Clean separation with event bus pattern.
 """
 import logging
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Depends, File, UploadFile, Query, BackgroundTasks, HTTPException, status
-from src.api.schemas.request.meal_requests import EditMealIngredientsRequest, AddCustomIngredientRequest
+from fastapi import APIRouter, Depends, File, UploadFile, Query, HTTPException, status
 
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.mappers.meal_mapper import MealMapper
+from src.api.schemas.request.meal_requests import EditMealIngredientsRequest
 from src.api.schemas.response import (
     DetailedMealResponse
 )
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
-from src.api.utils.file_validator import FileValidator
 from src.app.commands.meal import (
     EditMealCommand,
-    AddCustomIngredientCommand,
     FoodItemChange,
     CustomNutritionData
 )
+from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 from src.app.queries.meal import (
     GetMealByIdQuery,
     GetDailyMacrosQuery
 )
 from src.infra.event_bus import EventBus
-from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/meals", tags=["Meals"])

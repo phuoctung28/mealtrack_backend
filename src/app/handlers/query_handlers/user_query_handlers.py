@@ -8,9 +8,9 @@ All handlers extracted to individual files:
 
 Please import from individual files or from the module.
 """
-from .get_user_profile_query_handler import GetUserProfileQueryHandler
 from .get_user_by_firebase_uid_query_handler import GetUserByFirebaseUidQueryHandler
 from .get_user_onboarding_status_query_handler import GetUserOnboardingStatusQueryHandler
+from .get_user_profile_query_handler import GetUserProfileQueryHandler
 
 __all__ = [
     "GetUserProfileQueryHandler",

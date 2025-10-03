@@ -4,10 +4,9 @@ Foods API routes: search and details via USDA.
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.infra.event_bus import EventBus
-from src.app.queries.food.search_foods_query import SearchFoodsQuery
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
-
+from src.app.queries.food.search_foods_query import SearchFoodsQuery
+from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/foods", tags=["Foods"])
 

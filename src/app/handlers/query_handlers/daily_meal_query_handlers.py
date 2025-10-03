@@ -8,9 +8,9 @@ All handlers extracted to individual files:
 
 Please import from individual files or from the module.
 """
+from .get_meal_planning_summary_query_handler import GetMealPlanningSummaryQueryHandler
 from .get_meal_suggestions_for_profile_query_handler import GetMealSuggestionsForProfileQueryHandler
 from .get_single_meal_for_profile_query_handler import GetSingleMealForProfileQueryHandler
-from .get_meal_planning_summary_query_handler import GetMealPlanningSummaryQueryHandler
 
 __all__ = [
     "GetMealSuggestionsForProfileQueryHandler",
