@@ -44,4 +44,8 @@ jobs:
           cache-to: type=registry,ref=${{ env.DOCKER_IMAGE_NAME }}:buildcache,mode=max
 
       - name: Image digest
-        run: echo ${{ steps.meta.outputs.tags }}
+        run: |
+          echo "🎉 Successfully built and pushed Docker images!"
+          echo ""
+          echo "📦 Image tags:"
+          echo "${{ steps.meta.outputs.tags }}"
