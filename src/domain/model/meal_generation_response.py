@@ -3,7 +3,7 @@ Domain models for meal generation responses.
 """
 from dataclasses import dataclass
 from datetime import date
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 @dataclass
@@ -22,6 +22,7 @@ class NutritionSummary:
             carbs=self.carbs + other.carbs,
             fat=self.fat + other.fat
         )
+
 
 @dataclass
 class GeneratedMeal:
@@ -69,6 +70,7 @@ class GeneratedMeal:
             "cuisine_type": self.cuisine_type
         }
 
+
 @dataclass
 class DailyMealPlan:
     """A complete daily meal plan."""
@@ -84,4 +86,55 @@ class DailyMealPlan:
             total = total + meal.nutrition
         return total
 
+
 @dataclass
+class WeeklyMealPlan:
+    """A complete weekly meal plan."""
+    user_id: str
+    start_date: date
+    end_date: date
+    daily_plans: Dict[str, List[GeneratedMeal]]  # day_name -> meals
+    
+    @property
+    def all_meals(self) -> List[GeneratedMeal]:
+        """Get all meals across all days."""
+        meals = []
+        for day_meals in self.daily_plans.values():
+            meals.extend(day_meals)
+        return meals
+    
+    @property
+    def total_nutrition(self) -> NutritionSummary:
+        """Calculate total nutrition for the week."""
+        total = NutritionSummary(0, 0.0, 0.0, 0.0)
+        for meal in self.all_meals:
+            total = total + meal.nutrition
+        return total
+    
+    @property
+    def daily_average_nutrition(self) -> NutritionSummary:
+        """Calculate daily average nutrition."""
+        total = self.total_nutrition
+        return NutritionSummary(
+            calories=total.calories // 7,
+            protein=round(total.protein / 7, 1),
+            carbs=round(total.carbs / 7, 1),
+            fat=round(total.fat / 7, 1)
+        )
+
+
+@dataclass
+class MealGenerationResult:
+    """Result of meal generation operation."""
+    success: bool
+    daily_plan: Optional[DailyMealPlan] = None
+    weekly_plan: Optional[WeeklyMealPlan] = None
+    error_message: Optional[str] = None
+    
+    def is_daily_plan(self) -> bool:
+        """Check if result contains a daily plan."""
+        return self.daily_plan is not None
+    
+    def is_weekly_plan(self) -> bool:
+        """Check if result contains a weekly plan."""
+        return self.weekly_plan is not None

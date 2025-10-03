@@ -5,9 +5,19 @@ This package contains strategy pattern implementations for different
 types of meal analysis approaches.
 """
 from .meal_analysis_strategy import (
-    MealAnalysisStrategy
+    MealAnalysisStrategy,
+    BasicAnalysisStrategy,
+    PortionAwareAnalysisStrategy,
+    IngredientAwareAnalysisStrategy,
+    WeightAwareAnalysisStrategy,
+    AnalysisStrategyFactory
 )
 
 __all__ = [
-    'MealAnalysisStrategy'
+    'MealAnalysisStrategy',
+    'BasicAnalysisStrategy',
+    'PortionAwareAnalysisStrategy',
+    'IngredientAwareAnalysisStrategy',
+    'WeightAwareAnalysisStrategy',
+    'AnalysisStrategyFactory'
 ]

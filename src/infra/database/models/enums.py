@@ -3,6 +3,7 @@ Centralized enum definitions for database models.
 """
 import enum
 
+
 class MealStatusEnum(enum.Enum):
     """Enum for meal status in database."""
     PROCESSING = "PROCESSING"
@@ -12,11 +13,26 @@ class MealStatusEnum(enum.Enum):
     FAILED = "FAILED"
     INACTIVE = "INACTIVE"
 
+
+class DietaryPreferenceEnum(str, enum.Enum):
+    """Dietary preference options."""
+    vegan = "vegan"
+    vegetarian = "vegetarian"
+    pescatarian = "pescatarian"
+    gluten_free = "gluten_free"
+    keto = "keto"
+    paleo = "paleo"
+    low_carb = "low_carb"
+    dairy_free = "dairy_free"
+    none = "none"
+
+
 class FitnessGoalEnum(str, enum.Enum):
     """Fitness goal options."""
     maintenance = "maintenance"
     cutting = "cutting"
     bulking = "bulking"
+
 
 class MealTypeEnum(str, enum.Enum):
     """Meal type options."""
@@ -25,10 +41,12 @@ class MealTypeEnum(str, enum.Enum):
     dinner = "dinner"
     snack = "snack"
 
+
 class PlanDurationEnum(str, enum.Enum):
     """Meal plan duration options."""
     daily = "daily"
     weekly = "weekly"
+
 
 class ConversationStateEnum(str, enum.Enum):
     """Conversation state options for chat flow."""
@@ -46,6 +64,7 @@ class ConversationStateEnum(str, enum.Enum):
     adjusting_meal = "adjusting_meal"
     completed = "completed"
 
+
 class ActivityLevelEnum(str, enum.Enum):
     """Activity level for TDEE calculations."""
     sedentary = "sedentary"
@@ -54,10 +73,12 @@ class ActivityLevelEnum(str, enum.Enum):
     very_active = "very_active"
     extra_active = "extra_active"
 
+
 class SexEnum(str, enum.Enum):
     """Biological sex for TDEE calculations."""
     male = "male"
     female = "female"
+
 
 class GoalEnum(str, enum.Enum):
     """Fitness goal for macro calculations."""

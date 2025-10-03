@@ -2,9 +2,24 @@
 TDEE calculation request DTOs.
 """
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel, Field, root_validator
+
+
+class SexEnum(str, Enum):
+    """Enum for biological sex."""
+    male = "male"
+    female = "female"
+
+
+class ActivityLevelEnum(str, Enum):
+    """Enum for activity levels."""
+    sedentary = "sedentary"
+    light = "light"
+    moderate = "moderate"
+    active = "active"
+    extra = "extra"
 
 
 class GoalEnum(str, Enum):
@@ -12,6 +27,13 @@ class GoalEnum(str, Enum):
     maintenance = "maintenance"
     cutting = "cutting"
     bulking = "bulking"
+
+
+class UnitSystemEnum(str, Enum):
+    """Enum for unit systems."""
+    metric = "metric"
+    imperial = "imperial"
+
 
 class TdeeCalculationRequest(BaseModel):
     """Request DTO for TDEE calculation matching Flutter OnboardingData."""
@@ -71,3 +93,12 @@ class TdeeCalculationRequest(BaseModel):
             }
         }
 
+
+class BatchTdeeCalculationRequest(BaseModel):
+    """Request DTO for batch TDEE calculations."""
+    calculations: List[TdeeCalculationRequest] = Field(
+        ..., 
+        min_items=1,
+        max_items=10,
+        description="List of TDEE calculations to perform"
+    )

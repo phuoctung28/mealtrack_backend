@@ -9,6 +9,8 @@ from .daily_meal_responses import (
     SingleMealSuggestionResponse,
     SuggestedMealResponse,
     NutritionTotalsResponse,
+    MealSuggestionErrorResponse,
+    UserMealPlanSummaryResponse,
     MealTypeEnum
 )
 # Daily nutrition responses
@@ -20,11 +22,21 @@ from .daily_nutrition_response import (
 # Macros responses
 # Meal plan responses
 from .meal_plan_responses import (
+    MessageSchema,
+    ConversationMessageResponse,
+    StartConversationResponse,
+    ConversationHistoryResponse,
+    PlannedMealSchema,
+    DayPlanSchema,
+    MealPlanSummaryResponse,
     ReplaceMealResponse,
+    ErrorResponse,
+    DailyMealPlanResponse,
     DailyMealPlanStrongResponse,
     GeneratedMealResponse,
     UserPreferencesStrongResponse,
     NutritionSummarySchema,
+    UserPreferenceSummarySchema,
     MealsByDateResponse,
     MealPlanGenerationStatusResponse
 )
@@ -33,7 +45,10 @@ from .meal_responses import (
     SimpleMealResponse,
     DetailedMealResponse,
     MealListResponse,
+    MealPhotoAnalysisResponse,
+    MealSearchResponse,
     MealStatusResponse,
+    NutritionSummaryResponse,
     MacrosResponse,
     NutritionResponse,
     FoodItemResponse,
@@ -41,11 +56,19 @@ from .meal_responses import (
 )
 # Onboarding responses
 from .onboarding_responses import (
+    OnboardingFieldResponse,
+    OnboardingSectionResponse,
+    OnboardingSectionsResponse,
+    OnboardingResponseResponse,
     OnboardingResponse
 )
 # TDEE responses
 from .tdee_responses import (
     TdeeCalculationResponse,
+    BatchTdeeCalculationResponse,
+    TdeeComparisonResponse,
+    TdeeHistoryResponse,
+    TdeeErrorResponse,
     MacroTargetsResponse
 )
 # User responses
@@ -56,6 +79,12 @@ from .user_responses import (
     UserUpdateResponse
 )
 # Weekly meal plan responses
+from .weekly_meal_plan_responses import (
+    WeeklyMealPlanResponse,
+    WeeklyMealResponse,
+    NutritionInfo,
+    UserPreferencesResponse
+)
 
 __all__ = [
     # Daily meal
@@ -63,37 +92,66 @@ __all__ = [
     'SingleMealSuggestionResponse',
     'SuggestedMealResponse',
     'NutritionTotalsResponse',
-
+    'MealSuggestionErrorResponse',
+    'UserMealPlanSummaryResponse',
+    
     # Meal
     'SimpleMealResponse',
     'DetailedMealResponse',
     'MealListResponse',
+    'MealPhotoAnalysisResponse',
+    'MealSearchResponse',
     'MealStatusResponse',
+    'NutritionSummaryResponse',
     'MacrosResponse',
     'NutritionResponse',
     'FoodItemResponse',
     'MealStatusEnum',
-
+    
     # TDEE
     'TdeeCalculationResponse',
+    'BatchTdeeCalculationResponse',
+    'TdeeComparisonResponse',
+    'TdeeHistoryResponse',
+    'TdeeErrorResponse',
     'MacroTargetsResponse',
-
+    
     # Meal plan
+    'MessageSchema',
+    'ConversationMessageResponse',
+    'StartConversationResponse',
+    'ConversationHistoryResponse',
+    'PlannedMealSchema',
+    'DayPlanSchema',
+    'MealPlanSummaryResponse',
     'ReplaceMealResponse',
+    'ErrorResponse',
+    'DailyMealPlanResponse',
     'DailyMealPlanStrongResponse',
     'GeneratedMealResponse',
     'UserPreferencesStrongResponse',
     'NutritionSummarySchema',
+    'UserPreferenceSummarySchema',
     'MealsByDateResponse',
     'MealPlanGenerationStatusResponse',
 
-    # Onboarding
-    'OnboardingResponse',
+    # Weekly meal plan
+    'WeeklyMealPlanResponse',
+    'WeeklyMealResponse',
+    'NutritionInfo',
+    'UserPreferencesResponse',
 
+    # Onboarding
+    'OnboardingFieldResponse',
+    'OnboardingSectionResponse',
+    'OnboardingSectionsResponse',
+    'OnboardingResponseResponse',
+    'OnboardingResponse',
+    
     # Daily nutrition
     'DailyNutritionResponse',
     'DailyMacrosResponse',
-
+    
     # User
     'UserProfileResponse',
     'UserSyncResponse',

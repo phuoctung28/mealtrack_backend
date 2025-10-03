@@ -1,7 +1,7 @@
 """
 TDEE calculation response DTOs.
 """
-from typing import Optional
+from typing import Optional, List, Dict
 
 from pydantic import BaseModel, Field
 
@@ -24,6 +24,7 @@ class MacroTargetsResponse(BaseModel):
                 "carbs": 300.0
             }
         }
+
 
 class TdeeCalculationResponse(BaseModel):
     """Response DTO for TDEE calculation matching Flutter TdeeResult."""
@@ -59,3 +60,38 @@ class TdeeCalculationResponse(BaseModel):
             }
         }
 
+
+class BatchTdeeCalculationResponse(BaseModel):
+    """Response DTO for batch TDEE calculations."""
+    results: List[TdeeCalculationResponse] = Field(
+        ..., 
+        description="List of TDEE calculation results"
+    )
+    total_calculations: int = Field(..., ge=0, description="Total calculations performed")
+
+
+class TdeeComparisonResponse(BaseModel):
+    """Response DTO for comparing TDEE calculations."""
+    current: TdeeCalculationResponse = Field(..., description="Current TDEE calculation")
+    previous: Optional[TdeeCalculationResponse] = Field(
+        None, 
+        description="Previous TDEE calculation for comparison"
+    )
+    changes: Optional[Dict] = Field(
+        None,
+        description="Changes between calculations"
+    )
+
+
+class TdeeHistoryResponse(BaseModel):
+    """Response DTO for TDEE calculation history."""
+    user_id: str = Field(..., description="User ID")
+    calculations: List[Dict] = Field(..., description="List of historical calculations")
+    total_count: int = Field(..., ge=0, description="Total number of calculations")
+
+
+class TdeeErrorResponse(BaseModel):
+    """Response DTO for TDEE calculation errors."""
+    error: str = Field(..., description="Error type")
+    message: str = Field(..., description="Error message")
+    field: Optional[str] = Field(None, description="Field that caused the error")

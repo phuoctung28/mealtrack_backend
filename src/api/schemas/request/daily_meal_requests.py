@@ -14,6 +14,7 @@ class MealTypeEnum(str, Enum):
     dinner = "dinner"
     snack = "snack"
 
+
 class UserPreferencesRequest(BaseModel):
     """Request DTO for user preferences from onboarding data."""
     age: int = Field(..., ge=13, le=120, description="User age")
@@ -63,3 +64,24 @@ class UserPreferencesRequest(BaseModel):
             }
         }
 
+
+class MealSuggestionFilterRequest(BaseModel):
+    """Request DTO for filtering meal suggestions."""
+    meal_types: Optional[List[MealTypeEnum]] = Field(
+        default_factory=list,
+        description="Filter by meal types"
+    )
+    cuisine_types: Optional[List[str]] = Field(
+        default_factory=list,
+        description="Filter by cuisine types"
+    )
+    max_prep_time: Optional[int] = Field(
+        None,
+        ge=0,
+        le=180,
+        description="Maximum preparation time in minutes"
+    )
+    exclude_ingredients: Optional[List[str]] = Field(
+        default_factory=list,
+        description="Ingredients to exclude"
+    )

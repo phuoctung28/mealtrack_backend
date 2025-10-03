@@ -2,7 +2,7 @@
 Daily meal suggestion response DTOs.
 """
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +13,7 @@ class MealTypeEnum(str, Enum):
     lunch = "lunch"
     dinner = "dinner"
     snack = "snack"
+
 
 class NutritionTotalsResponse(BaseModel):
     """Response DTO for nutrition totals."""
@@ -30,6 +31,7 @@ class NutritionTotalsResponse(BaseModel):
                 "fat": 83.0
             }
         }
+
 
 class SuggestedMealResponse(BaseModel):
     """Response DTO for a suggested meal."""
@@ -91,6 +93,7 @@ class SuggestedMealResponse(BaseModel):
             }
         }
 
+
 class DailyMealSuggestionsResponse(BaseModel):
     """Response DTO for daily meal suggestions."""
     date: str = Field(..., description="Date for the suggestions (ISO format)")
@@ -120,7 +123,24 @@ class DailyMealSuggestionsResponse(BaseModel):
             }
         }
 
+
 class SingleMealSuggestionResponse(BaseModel):
     """Response DTO for a single meal suggestion."""
     meal: SuggestedMealResponse = Field(..., description="Suggested meal details")
 
+
+class MealSuggestionErrorResponse(BaseModel):
+    """Response DTO for meal suggestion errors."""
+    error: str = Field(..., description="Error type")
+    message: str = Field(..., description="Error message")
+    details: Optional[Dict] = Field(None, description="Additional error details")
+
+
+class UserMealPlanSummaryResponse(BaseModel):
+    """Response DTO for user meal plan summary."""
+    user_profile_id: str = Field(..., description="User profile ID")
+    total_suggestions_generated: int = Field(..., ge=0, description="Total suggestions generated")
+    average_daily_calories: float = Field(..., ge=0, description="Average daily calories")
+    preferred_meal_types: List[str] = Field(..., description="Most suggested meal types")
+    common_ingredients: List[str] = Field(..., description="Most common ingredients")
+    dietary_compliance: Dict[str, bool] = Field(..., description="Dietary preference compliance")

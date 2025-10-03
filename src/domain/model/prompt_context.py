@@ -81,4 +81,15 @@ class PromptContext:
         
         return ", ".join(dates)
 
+
 @dataclass
+class PromptTemplate:
+    """Template for generating prompts."""
+    template_text: str
+    system_message: str
+    
+    def render(self, context: PromptContext) -> str:
+        """Render the template with context."""
+        # This would be implemented with proper template rendering
+        # For now, return the template text (to be implemented properly)
+        return self.template_text

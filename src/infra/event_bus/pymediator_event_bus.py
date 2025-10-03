@@ -15,6 +15,59 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
 
+
+class EventRequest:
+    """Wrapper to make our Events compatible with pymediator Request protocol."""
+    def __init__(self, event: Event):
+        self._event = event
+    
+    @property
+    def event(self) -> Event:
+        return self._event
+
+
+class PyMediatorHandlerAdapter:
+    """Adapter to make our EventHandlers compatible with pymediator Handler protocol."""
+    
+    def __init__(self, event_handler: EventHandler):
+        self._event_handler = event_handler
+    
+    def handle(self, request: Any) -> Any:
+        """Handle the request by delegating to our event handler."""
+        if hasattr(request, 'event'):
+            actual_event = request.event
+        else:
+            actual_event = request
+            
+        import inspect
+        if inspect.iscoroutinefunction(self._event_handler.handle):
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                return None
+            except RuntimeError:
+                return asyncio.run(self._event_handler.handle(actual_event))
+        else:
+            return self._event_handler.handle(actual_event)
+
+
+class AsyncPyMediatorHandlerAdapter:
+    """Async-aware adapter for our EventHandlers."""
+    
+    def __init__(self, event_handler: EventHandler):
+        self._event_handler = event_handler
+    
+    async def handle(self, request: Any) -> Any:
+        """Handle the request asynchronously."""
+        # Extract the actual event from the wrapper
+        if hasattr(request, 'event'):
+            actual_event = request.event
+        else:
+            actual_event = request
+            
+        return await self._event_handler.handle(actual_event)
+
+
 class PyMediatorEventBus(EventBus):
     """
     Event bus implementation using pymediator library.
