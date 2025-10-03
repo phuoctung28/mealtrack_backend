@@ -13,15 +13,11 @@ from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.schemas.response import (
-    DetailedMealResponse,
-    MealListResponse
+    DetailedMealResponse
 )
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
-from src.api.schemas.response.meal_responses import MealStatusResponse
 from src.api.utils.file_validator import FileValidator
 from src.app.commands.meal import (
-    UploadMealImageCommand,
-    RecalculateMealNutritionCommand,
     EditMealCommand,
     AddCustomIngredientCommand,
     FoodItemChange,
@@ -29,7 +25,6 @@ from src.app.commands.meal import (
 )
 from src.app.queries.meal import (
     GetMealByIdQuery,
-    GetMealsByDateQuery,
     GetDailyMacrosQuery
 )
 from src.infra.event_bus import EventBus
@@ -54,51 +49,6 @@ STATUS_MAPPING = {
     "INACTIVE": "inactive",
 }
 
-
-@router.post("/image", response_model=Dict[str, str])
-async def upload_meal_image(
-    file: UploadFile = File(...),
-    user_id: str = Query(..., description="User ID for meal association"),
-    event_bus: EventBus = Depends(get_configured_event_bus)
-):
-    """
-    Upload and analyze a meal image.
-    
-    This endpoint:
-    1. Validates the uploaded image
-    2. Stores the image
-    3. Creates a meal record
-    4. Triggers background analysis (if background_tasks available)
-    """
-    try:
-        # Validate file
-        contents = await FileValidator.validate_image_file(
-            file=file,
-            allowed_content_types=ALLOWED_CONTENT_TYPES,
-            max_size_bytes=MAX_FILE_SIZE
-        )
-        
-        # Send upload command
-        command = UploadMealImageCommand(
-            user_id=user_id,
-            file_contents=contents,
-            content_type=file.content_type
-        )
-        
-        result = await event_bus.send(command)
-        
-        # Background processing is handled by the event system
-        # The MealImageUploadedEvent will trigger background analysis
-        
-        # Return a simple upload response
-        return {
-            "meal_id": result["meal_id"],
-            "status": STATUS_MAPPING.get(result["status"], result["status"]),
-            "message": "Meal image uploaded successfully"
-        }
-        
-    except Exception as e:
-        raise handle_exception(e)
 
 @router.post("/image/analyze", status_code=status.HTTP_200_OK, response_model=DetailedMealResponse)
 async def analyze_meal_image_immediate(
@@ -195,27 +145,6 @@ async def analyze_meal_image_immediate(
         )
 
 
-@router.get("/{meal_id}/status", response_model=MealStatusResponse)
-async def get_meal_status(
-    meal_id: str,
-    event_bus: EventBus = Depends(get_configured_event_bus)
-):
-    """Get the processing status of a specific meal."""
-    try:
-        # Send query
-        query = GetMealByIdQuery(meal_id=meal_id)
-        meal = await event_bus.send(query)
-        
-        # Return lightweight status information
-        return MealStatusResponse(
-            meal_id=meal.meal_id,
-            status=STATUS_MAPPING.get(meal.status.value, meal.status.value)
-        )
-        
-    except Exception as e:
-        raise handle_exception(e)
-
-
 @router.get("/{meal_id}", response_model=DetailedMealResponse)
 async def get_meal(
     meal_id: str,
@@ -254,45 +183,6 @@ async def delete_meal(
 
 
 
-@router.get("/daily/entries", response_model=MealListResponse)
-async def get_daily_meal_entries(
-    user_id: str = Query(..., description="User ID to get meals for"),
-    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
-    event_bus: EventBus = Depends(get_configured_event_bus)
-):
-    """Get all meal entries for a specific date."""
-    try:
-        # Parse date
-        if date:
-            target_date = datetime.strptime(date, "%Y-%m-%d").date()
-        else:
-            target_date = datetime.now().date()
-        
-        # Send query
-        query = GetMealsByDateQuery(user_id=user_id, target_date=target_date)
-        meals = await event_bus.send(query)
-        
-        # Get image URLs if needed
-        image_urls = {}
-        for meal in meals:
-            if meal.image:
-                from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
-                image_store = CloudinaryImageStore()
-                image_urls[meal.meal_id] = image_store.get_url(meal.image.image_id)
-        
-        # Use mapper to convert to response
-        return MealMapper.to_meal_list_response(
-            meals=meals,
-            total=len(meals),
-            page=1,
-            page_size=50,
-            image_urls=image_urls
-        )
-        
-    except Exception as e:
-        raise handle_exception(e)
-
-
 @router.get("/daily/macros", response_model=DailyNutritionResponse)
 async def get_daily_macros(
     user_id: str = Query(..., description="User ID to get TDEE targets for"),
@@ -312,38 +202,6 @@ async def get_daily_macros(
         
         # Use mapper to convert to response
         return MealMapper.to_daily_nutrition_response(result)
-        
-    except Exception as e:
-        raise handle_exception(e)
-
-
-@router.put("/{meal_id}/recalculate")
-async def recalculate_meal_nutrition(
-    meal_id: str,
-    weight_grams: float = Query(..., description="New weight in grams", gt=0),
-    event_bus: EventBus = Depends(get_configured_event_bus)
-):
-    """
-    Recalculate meal nutrition based on new weight.
-    
-    This adjusts all nutritional values proportionally based on the weight change.
-    """
-    try:
-        # Send command
-        command = RecalculateMealNutritionCommand(
-            meal_id=meal_id,
-            weight_grams=weight_grams
-        )
-        
-        result = await event_bus.send(command)
-        
-        # Return the updated nutrition result
-        return {
-            "success": True,
-            "meal_id": result["meal_id"],
-            "updated_nutrition": result["updated_nutrition"],
-            "weight_grams": result["weight_grams"]
-        }
         
     except Exception as e:
         raise handle_exception(e)
