@@ -19,15 +19,34 @@ async def create_manual_meal(
     event_bus: EventBus = Depends(get_configured_event_bus),
 ) -> ManualMealCreationResponse:
     try:
+        from datetime import datetime
+        
         items = [ManualMealItem(fdc_id=i.fdc_id, quantity=i.quantity, unit=i.unit) for i in payload.items]
-        cmd = CreateManualMealCommand(user_id=user_id, items=items, dish_name=payload.dish_name)
+        
+        # Parse target_date if provided
+        target_date = None
+        if payload.target_date:
+            try:
+                target_date = datetime.strptime(payload.target_date, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+        
+        cmd = CreateManualMealCommand(
+            user_id=user_id, 
+            items=items, 
+            dish_name=payload.dish_name, 
+            meal_type=payload.meal_type,
+            target_date=target_date
+        )
         meal = await event_bus.send(cmd)
         
         return ManualMealCreationResponse(
             meal_id=meal.meal_id,
             status="success",
-            message=f"Manual meal '{payload.dish_name}' created successfully",
+            message=f"Meal '{payload.dish_name}' created successfully",
             created_at=meal.created_at
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

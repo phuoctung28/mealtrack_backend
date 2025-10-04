@@ -74,9 +74,9 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
 
     def _build_meal_activity(self, meal, target_date: datetime) -> Dict[str, Any]:
         """Build activity dictionary from meal."""
-        # Determine meal type based on time
-        meal_type = self._determine_meal_type(meal.created_at)
-
+        # Use stored meal type if available, otherwise determine from time
+        meal_type = meal.meal_type if hasattr(meal, 'meal_type') and meal.meal_type else self._determine_meal_type(meal.created_at)
+        
         # Estimate weight
         estimated_weight = self._estimate_meal_weight(meal)
 

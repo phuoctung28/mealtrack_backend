@@ -87,11 +87,15 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             confidence_score=1.0,
         )
 
+        # Determine the meal date - use target_date if provided, otherwise use now
+        meal_date = event.target_date if event.target_date else datetime.now().date()
+        meal_datetime = datetime.combine(meal_date, datetime.now().time())
+        
         meal = Meal(
             meal_id=str(uuid4()),
             user_id=event.user_id,
             status=MealStatus.READY,
-            created_at=datetime.now(),
+            created_at=meal_datetime,
             image=MealImage(
                 image_id=str(uuid4()),
                 format="jpeg",
@@ -100,7 +104,8 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             ),
             dish_name=event.dish_name,
             nutrition=nutrition,
-            ready_at=datetime.now(),
+            ready_at=meal_datetime,
+            meal_type=event.meal_type,
         )
 
         return self.meal_repository.save(meal)

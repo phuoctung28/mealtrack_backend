@@ -110,6 +110,8 @@ class CreateManualMealFromFoodsRequest(BaseModel):
     """Create a manual meal from selected USDA foods with portions."""
     dish_name: str = Field(..., min_length=1, max_length=200)
     items: list[ManualMealItemRequest] = Field(..., min_items=1)
+    meal_type: Optional[str] = Field(None, description="Meal type: breakfast, lunch, dinner, or snack")
+    target_date: Optional[str] = Field(None, description="Target date in YYYY-MM-DD format for meal association")
 
 
 # Meal Edit Feature Requests
