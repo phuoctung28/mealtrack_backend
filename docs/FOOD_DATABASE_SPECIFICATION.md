@@ -380,7 +380,7 @@ class ServingSize {
 The USDA FDC uses specific nutrient IDs that need mapping to our Macros model:
 ```python
 USDA_NUTRIENT_MAPPING = {
-    1008: "calories",      # Energy (kcal)
+    1008: "calories",      # Energy (cal)
     1003: "protein",       # Protein (g)
     1005: "carbs",         # Carbohydrate (g)  
     1004: "fat",           # Total lipid (fat) (g)

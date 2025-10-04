@@ -293,12 +293,84 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
 
         # Apply each change using the appropriate strategy
         for change in changes:
-            strategy = strategies.get(change.action)
-            if strategy:
-                await strategy.apply(food_items_dict, change)
-            else:
-                logger.warning(f"Unknown action: {change.action}")
-
+            if change.action == "remove" and change.id:
+                food_items_dict.pop(change.id, None)
+            
+            elif change.action == "update" and change.id:
+                if change.id in food_items_dict:
+                    existing_item = food_items_dict[change.id]
+                    new_quantity = change.quantity or existing_item.quantity
+                    
+                    # If custom nutrition is provided, recalculate from per-100g values
+                    if change.custom_nutrition:
+                        scale_factor = new_quantity / 100.0
+                        nutrition = change.custom_nutrition
+                        
+                        food_items_dict[change.id] = FoodItem(
+                            id=existing_item.id,
+                            name=change.name or existing_item.name,
+                            quantity=new_quantity,
+                            unit=change.unit or existing_item.unit,
+                            calories=nutrition.calories_per_100g * scale_factor,
+                            macros=Macros(
+                                protein=nutrition.protein_per_100g * scale_factor,
+                                carbs=nutrition.carbs_per_100g * scale_factor,
+                                fat=nutrition.fat_per_100g * scale_factor,
+                            ),
+                            micros=existing_item.micros,
+                            confidence=existing_item.confidence if existing_item.is_custom else 0.8,
+                            fdc_id=existing_item.fdc_id,
+                            is_custom=True
+                        )
+                    else:
+                        # Update quantity and recalculate nutrition by scaling
+                        scale_factor = new_quantity / existing_item.quantity
+                        
+                        food_items_dict[change.id] = FoodItem(
+                            id=existing_item.id,  # Preserve the existing ID
+                            name=change.name or existing_item.name,
+                            quantity=new_quantity,
+                            unit=change.unit or existing_item.unit,
+                            calories=existing_item.calories * scale_factor,
+                            macros=Macros(
+                                protein=existing_item.macros.protein * scale_factor,
+                                carbs=existing_item.macros.carbs * scale_factor,
+                                fat=existing_item.macros.fat * scale_factor,
+                            ),
+                            micros=existing_item.micros,
+                            confidence=existing_item.confidence,
+                            fdc_id=existing_item.fdc_id,
+                            is_custom=existing_item.is_custom
+                        )
+            
+            elif change.action == "add":
+                new_item_id = str(uuid.uuid4())
+                
+                if change.fdc_id and self.food_service:
+                    # Get nutrition from USDA
+                    usda_food = await self._get_usda_food_nutrition(change.fdc_id, change.quantity or 100)
+                    food_items_dict[new_item_id] = usda_food
+                elif change.custom_nutrition:
+                    # Create custom food item
+                    scale_factor = (change.quantity or 100) / 100.0
+                    nutrition = change.custom_nutrition
+                    
+                    food_items_dict[new_item_id] = FoodItem(
+                        id=new_item_id,  # Use generated ID
+                        name=change.name or "Custom Ingredient",
+                        quantity=change.quantity or 100,
+                        unit=change.unit or "g",
+                        calories=nutrition.calories_per_100g * scale_factor,
+                        macros=Macros(
+                            protein=nutrition.protein_per_100g * scale_factor,
+                            carbs=nutrition.carbs_per_100g * scale_factor,
+                            fat=nutrition.fat_per_100g * scale_factor,
+                        ),
+                        confidence=0.8,  # Custom ingredients have lower confidence
+                        fdc_id=None,
+                        is_custom=True
+                    )
+        
         return list(food_items_dict.values())
     
     async def _get_usda_food_nutrition(self, fdc_id: int, quantity: float):
@@ -316,7 +388,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         
         # Map USDA nutrient IDs to our fields
         nutrient_map = {
-            1008: 'calories',  # Energy (kcal)
+            1008: 'calories',  # Energy (cal)
             1003: 'protein',   # Protein
             1005: 'carbs',     # Carbohydrate, by difference
             1004: 'fat'        # Total lipid (fat)

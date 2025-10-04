@@ -34,6 +34,14 @@ class NutritionResponse(BaseModel):
     fat_g: float = Field(..., ge=0, description="Fat in grams")
 
 
+class CustomNutritionResponse(BaseModel):
+    """Response DTO for custom nutrition per 100g."""
+    calories_per_100g: float = Field(..., description="Calories per 100g")
+    protein_per_100g: float = Field(..., description="Protein per 100g")
+    carbs_per_100g: float = Field(..., description="Carbs per 100g")
+    fat_per_100g: float = Field(..., description="Fat per 100g")
+
+
 class FoodItemResponse(BaseModel):
     """Response DTO for food item information."""
     id: str = Field(..., description="Food item ID")
@@ -43,6 +51,9 @@ class FoodItemResponse(BaseModel):
     unit: str = Field(..., description="Unit of measurement")
     description: Optional[str] = Field(None, description="Description")
     nutrition: Optional[NutritionResponse] = Field(None, description="Nutrition information")
+    custom_nutrition: Optional[CustomNutritionResponse] = Field(None, description="Custom nutrition per 100g for custom ingredients")
+    fdc_id: Optional[int] = Field(None, description="USDA FDC ID if available")
+    is_custom: bool = Field(False, description="Whether this is a custom ingredient")
 
 
 class SimpleMealResponse(BaseModel):

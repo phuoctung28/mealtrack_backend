@@ -5,7 +5,7 @@ Keeps logic flat and readable.
 from typing import Dict, Any, List
 
 USDA_NUTRIENT_MAPPING = {
-    1008: "calories",  # Energy (kcal)
+    1008: "calories",  # Energy (cal)
     1003: "protein",   # Protein (g)
     1005: "carbs",     # Carbohydrate (g)
     1004: "fat",       # Total lipid (fat) (g)

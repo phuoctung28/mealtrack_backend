@@ -21,7 +21,7 @@ class Macros:
     @property
     def total_calories(self) -> float:
         """Calculate total calories based on macronutrients."""
-        # Standard caloric values: 4 kcal/g for protein and carbs, 9 kcal/g for fat
+        # Standard caloric values: 4 cal/g for protein and carbs, 9 cal/g for fat
         return round(self.protein * 4 + self.carbs * 4 + self.fat * 9, 1)
     
     def to_dict(self) -> dict:
