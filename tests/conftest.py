@@ -205,7 +205,7 @@ def event_bus(
             meal_repository=meal_repository,
             food_service=None,  # Mock if needed
             nutrition_calculator=None,
-            pinecone_service=None  # Will use real service from environment
+            pinecone_service=None  # Skip - will use real service if available
         )
     )
     
