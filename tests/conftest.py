@@ -71,10 +71,32 @@ def test_engine(worker_id):
         # Create all tables
         Base.metadata.create_all(bind=engine)
         
-    # Other workers wait a bit for tables to be created
+    # Other workers wait for tables to be created
     elif worker_id != "master":
         import time
-        time.sleep(2)
+        from sqlalchemy import inspect
+        
+        # Wait up to 30 seconds for tables to be created
+        max_wait = 30
+        wait_interval = 0.5
+        waited = 0
+        
+        while waited < max_wait:
+            try:
+                inspector = inspect(engine)
+                tables = inspector.get_table_names()
+                # Check if key tables exist
+                if 'nutrition' in tables and 'meal' in tables and 'food_item' in tables:
+                    break
+            except Exception:
+                pass
+            
+            time.sleep(wait_interval)
+            waited += wait_interval
+        
+        # If tables still don't exist, try creating them ourselves
+        if waited >= max_wait:
+            Base.metadata.create_all(bind=engine)
     
     yield engine
     engine.dispose()
@@ -182,7 +204,8 @@ def event_bus(
         EditMealCommandHandler(
             meal_repository=meal_repository,
             food_service=None,  # Mock if needed
-            nutrition_calculator=None
+            nutrition_calculator=None,
+            pinecone_service=None  # Will use real service from environment
         )
     )
     
