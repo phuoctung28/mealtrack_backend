@@ -274,11 +274,12 @@ def event_bus(
 def sample_user(test_session) -> User:
     """Create a sample user for testing."""
     import uuid
+    unique_id = str(uuid.uuid4())[:8]  # Use shorter unique ID
     user = User(
         id=str(uuid.uuid4()),  # Generate unique ID for each test
-        firebase_uid=f"test-firebase-uid-{uuid.uuid4()}",
-        email=f"test-{uuid.uuid4()}@example.com",
-        username=f"testuser-{uuid.uuid4()}",
+        firebase_uid=f"test-fb-{unique_id}",
+        email=f"test-{unique_id}@example.com",
+        username=f"user-{unique_id}",
         password_hash="dummy_hash_for_test",
         created_at=datetime.now(),
         updated_at=datetime.now()
