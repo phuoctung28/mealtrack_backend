@@ -273,11 +273,12 @@ def event_bus(
 @pytest.fixture
 def sample_user(test_session) -> User:
     """Create a sample user for testing."""
+    import uuid
     user = User(
-        id="550e8400-e29b-41d4-a716-446655440001",
-        firebase_uid="test-firebase-uid-123",
-        email="test@example.com",
-        username="testuser",
+        id=str(uuid.uuid4()),  # Generate unique ID for each test
+        firebase_uid=f"test-firebase-uid-{uuid.uuid4()}",
+        email=f"test-{uuid.uuid4()}@example.com",
+        username=f"testuser-{uuid.uuid4()}",
         password_hash="dummy_hash_for_test",
         created_at=datetime.now(),
         updated_at=datetime.now()
@@ -387,7 +388,7 @@ def sample_image_bytes() -> bytes:
 
 
 @pytest.fixture
-def sample_meal_with_nutrition(test_session) -> Meal:
+def sample_meal_with_nutrition(test_session, sample_user) -> Meal:
     """Create a sample meal with nutrition for editing tests."""
     import uuid
     
@@ -438,7 +439,7 @@ def sample_meal_with_nutrition(test_session) -> Meal:
     
     meal = Meal(
         meal_id=str(uuid.uuid4()),
-        user_id="550e8400-e29b-41d4-a716-446655440001",
+        user_id=sample_user.id,
         status=MealStatus.READY,
         created_at=datetime.now(),
         image=MealImage(
@@ -476,13 +477,13 @@ def sample_meal_with_nutrition(test_session) -> Meal:
 
 
 @pytest.fixture
-def sample_meal_processing(test_session) -> Meal:
+def sample_meal_processing(test_session, sample_user) -> Meal:
     """Create a sample meal in PROCESSING status for testing."""
     import uuid
     
     meal = Meal(
         meal_id=str(uuid.uuid4()),
-        user_id="550e8400-e29b-41d4-a716-446655440001",
+        user_id=sample_user.id,
         status=MealStatus.PROCESSING,
         created_at=datetime.now(),
         image=MealImage(
