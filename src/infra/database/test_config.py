@@ -50,7 +50,8 @@ def create_test_engine():
 
 def create_test_tables(engine):
     """Create all tables in test database."""
-    # Import to ensure all models are loaded
+    # Import all models to ensure they're registered with Base.metadata
+    from src.infra.database import models  # noqa: F401
 
     # For MySQL, we can use checkfirst=True to avoid errors
     Base.metadata.create_all(bind=engine, checkfirst=True)
@@ -60,7 +61,8 @@ def drop_test_tables(engine):
     """Drop all tables in test database."""
     from sqlalchemy import MetaData
     
-    # Import to ensure all models are loaded
+    # Import all models to ensure they're registered with Base.metadata
+    from src.infra.database import models  # noqa: F401
 
     # Use reflection to find and drop ALL tables in the database
     meta = MetaData()

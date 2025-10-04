@@ -57,7 +57,8 @@ def test_engine(worker_id):
     finally:
         temp_engine.dispose()
     
-    # Import models to ensure they're registered
+    # Import all models to ensure they're registered with Base.metadata
+    from src.infra.database import models  # noqa: F401
 
     # Only one worker should create tables to avoid race conditions
     if worker_id in ("master", "gw0"):
