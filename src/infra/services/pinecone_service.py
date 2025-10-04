@@ -186,7 +186,7 @@ class PineconeNutritionService:
         Returns:
             Total NutritionData summed across all ingredients
         """
-        total = NutritionData()
+        total = NutritionData(serving_size_g=0)
 
         for ingredient in ingredients:
             nutrition = self.get_scaled_nutrition(

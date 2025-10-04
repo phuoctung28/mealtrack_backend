@@ -71,6 +71,7 @@ jobs:
         CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'mock-cloud' }}
         CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || 'mock-api-key' }}
         CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || 'mock-api-secret' }}
+        PINECONE_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || 'mock-api-key' }}
     
     - name: Upload coverage reports
       uses: codecov/codecov-action@v4

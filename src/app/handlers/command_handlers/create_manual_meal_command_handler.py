@@ -21,23 +21,32 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         self.mapping_service = mapping_service
 
     async def handle(self, event: CreateManualMealCommand):
-        # Fetch details for all items
-        fdc_ids = [i.fdc_id for i in event.items]
+        # Aggregate items with the same fdc_id first
+        from collections import defaultdict
+        aggregated_items = defaultdict(lambda: {"quantity": 0.0, "unit": "g"})
+        
+        for item in event.items:
+            aggregated_items[item.fdc_id]["quantity"] += item.quantity
+            aggregated_items[item.fdc_id]["unit"] = item.unit
+        
+        # Fetch details for all unique items
+        fdc_ids = list(aggregated_items.keys())
         details_list = await self.food_data_service.get_multiple_foods(fdc_ids)
         details_by_id = {d.get("fdcId"): d for d in details_list}
 
-        # Aggregate nutrition
+        # Calculate nutrition
         total_calories = 0.0
         total_protein = 0.0
         total_carbs = 0.0
         total_fat = 0.0
         food_items: List[DomainFoodItem] = []
 
-        for item in event.items:
-            details = details_by_id.get(item.fdc_id) or {}
+        for fdc_id, item_data in aggregated_items.items():
+            details = details_by_id.get(fdc_id) or {}
             mapped = self.mapping_service.map_food_details(details)
             base_serving = float(mapped.get("serving_size") or 100.0)
-            factor = (item.quantity / base_serving) if base_serving > 0 else 0.0
+            quantity = item_data["quantity"]
+            factor = (quantity / base_serving) if base_serving > 0 else 0.0
 
             calories = float(mapped.get("calories") or 0.0) * factor
             protein = float(mapped["macros"].get("protein") or 0.0) * factor
@@ -53,8 +62,8 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                 DomainFoodItem(
                     id=uuid.uuid4(),
                     name=mapped.get("name"),
-                    quantity=item.quantity,
-                    unit=item.unit,
+                    quantity=quantity,
+                    unit=item_data["unit"],
                     calories=calories,
                     macros=Macros(
                         protein=protein,
@@ -63,7 +72,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                     ),
                     micros=None,
                     confidence=1.0,
-                    fdc_id=item.fdc_id,
+                    fdc_id=fdc_id,
                 )
             )
 

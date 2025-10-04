@@ -57,7 +57,8 @@ def test_engine(worker_id):
     finally:
         temp_engine.dispose()
     
-    # Import models to ensure they're registered
+    # Import all models to ensure they're registered with Base.metadata
+    from src.infra.database import models  # noqa: F401
 
     # Only one worker should create tables to avoid race conditions
     if worker_id in ("master", "gw0"):
@@ -70,10 +71,32 @@ def test_engine(worker_id):
         # Create all tables
         Base.metadata.create_all(bind=engine)
         
-    # Other workers wait a bit for tables to be created
+    # Other workers wait for tables to be created
     elif worker_id != "master":
         import time
-        time.sleep(2)
+        from sqlalchemy import inspect
+        
+        # Wait up to 30 seconds for tables to be created
+        max_wait = 30
+        wait_interval = 0.5
+        waited = 0
+        
+        while waited < max_wait:
+            try:
+                inspector = inspect(engine)
+                tables = inspector.get_table_names()
+                # Check if key tables exist
+                if 'nutrition' in tables and 'meal' in tables and 'food_item' in tables:
+                    break
+            except Exception:
+                pass
+            
+            time.sleep(wait_interval)
+            waited += wait_interval
+        
+        # If tables still don't exist, try creating them ourselves
+        if waited >= max_wait:
+            Base.metadata.create_all(bind=engine)
     
     yield engine
     engine.dispose()
@@ -145,8 +168,6 @@ def event_bus(
     """Configured event bus for testing."""
     # Import handlers from modules
     from src.app.handlers.command_handlers import (
-        UploadMealImageCommandHandler,
-        RecalculateMealNutritionCommandHandler,
         EditMealCommandHandler,
         AddCustomIngredientCommandHandler,
         DeleteMealCommandHandler,
@@ -156,18 +177,14 @@ def event_bus(
     )
     from src.app.handlers.query_handlers import (
         GetMealByIdQueryHandler,
-        GetMealsByDateQueryHandler,
         GetDailyMacrosQueryHandler,
         GetUserProfileQueryHandler,
     )
     
     # Import commands and queries
-    from src.app.commands.meal.upload_meal_image_command import UploadMealImageCommand
-    from src.app.commands.meal.recalculate_meal_nutrition_command import RecalculateMealNutritionCommand
     from src.app.commands.meal.upload_meal_image_immediately_command import UploadMealImageImmediatelyCommand
     from src.app.commands.meal.edit_meal_command import EditMealCommand, AddCustomIngredientCommand
     from src.app.queries.meal.get_meal_by_id_query import GetMealByIdQuery
-    from src.app.queries.meal.get_meals_by_date_query import GetMealsByDateQuery
     from src.app.queries.meal.get_daily_macros_query import GetDailyMacrosQuery
     from src.app.commands.user.save_user_onboarding_command import SaveUserOnboardingCommand
     from src.app.queries.user.get_user_profile_query import GetUserProfileQuery
@@ -180,28 +197,15 @@ def event_bus(
     
     # Create repositories
     user_repository = UserRepository(test_session)
-    
-    # Register command handlers
-    event_bus.register_handler(
-        UploadMealImageCommand,
-        UploadMealImageCommandHandler(
-            image_store=mock_image_store,
-            meal_repository=meal_repository
-        )
-    )
-    
-    event_bus.register_handler(
-        RecalculateMealNutritionCommand,
-        RecalculateMealNutritionCommandHandler(meal_repository)
-    )
-    
+
     # Register meal edit command handlers
     event_bus.register_handler(
         EditMealCommand,
         EditMealCommandHandler(
             meal_repository=meal_repository,
             food_service=None,  # Mock if needed
-            nutrition_calculator=None
+            nutrition_calculator=None,
+            pinecone_service=None  # Skip - will use real service if available
         )
     )
     
@@ -234,15 +238,10 @@ def event_bus(
         GetMealByIdQuery,
         GetMealByIdQueryHandler(meal_repository)
     )
-    
-    event_bus.register_handler(
-        GetMealsByDateQuery,
-        GetMealsByDateQueryHandler(meal_repository)
-    )
-    
+
     event_bus.register_handler(
         GetDailyMacrosQuery,
-        GetDailyMacrosQueryHandler(meal_repository)
+        GetDailyMacrosQueryHandler(meal_repository, test_session)
     )
     
     # Register user handlers
@@ -274,11 +273,13 @@ def event_bus(
 @pytest.fixture
 def sample_user(test_session) -> User:
     """Create a sample user for testing."""
+    import uuid
+    unique_id = str(uuid.uuid4())[:8]  # Use shorter unique ID
     user = User(
-        id="550e8400-e29b-41d4-a716-446655440001",
-        firebase_uid="test-firebase-uid-123",
-        email="test@example.com",
-        username="testuser",
+        id=str(uuid.uuid4()),  # Generate unique ID for each test
+        firebase_uid=f"test-fb-{unique_id}",
+        email=f"test-{unique_id}@example.com",
+        username=f"user-{unique_id}",
         password_hash="dummy_hash_for_test",
         created_at=datetime.now(),
         updated_at=datetime.now()
@@ -388,7 +389,7 @@ def sample_image_bytes() -> bytes:
 
 
 @pytest.fixture
-def sample_meal_with_nutrition(test_session) -> Meal:
+def sample_meal_with_nutrition(test_session, sample_user) -> Meal:
     """Create a sample meal with nutrition for editing tests."""
     import uuid
     
@@ -439,7 +440,7 @@ def sample_meal_with_nutrition(test_session) -> Meal:
     
     meal = Meal(
         meal_id=str(uuid.uuid4()),
-        user_id="550e8400-e29b-41d4-a716-446655440001",
+        user_id=sample_user.id,
         status=MealStatus.READY,
         created_at=datetime.now(),
         image=MealImage(
@@ -477,13 +478,13 @@ def sample_meal_with_nutrition(test_session) -> Meal:
 
 
 @pytest.fixture
-def sample_meal_processing(test_session) -> Meal:
+def sample_meal_processing(test_session, sample_user) -> Meal:
     """Create a sample meal in PROCESSING status for testing."""
     import uuid
     
     meal = Meal(
         meal_id=str(uuid.uuid4()),
-        user_id="550e8400-e29b-41d4-a716-446655440001",
+        user_id=sample_user.id,
         status=MealStatus.PROCESSING,
         created_at=datetime.now(),
         image=MealImage(

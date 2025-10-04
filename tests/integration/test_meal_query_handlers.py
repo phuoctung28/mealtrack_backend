@@ -8,7 +8,6 @@ import pytest
 from src.api.exceptions import ResourceNotFoundException
 from src.app.queries.meal import (
     GetMealByIdQuery,
-    GetMealsByDateQuery,
     GetDailyMacrosQuery
 )
 from src.domain.model.meal import MealStatus
@@ -179,109 +178,6 @@ class TestGetMealByIdQueryHandler:
         assert len(meal.nutrition.food_items) == 2
         assert meal.nutrition.food_items[0].name == "Rice"
         assert meal.nutrition.food_items[1].name == "Chicken"
-
-
-@pytest.mark.integration
-class TestGetMealsByDateQueryHandler:
-    """Test GetMealsByDateQuery handler with database."""
-    
-    @pytest.mark.asyncio
-    async def test_get_meals_by_date_success(self, event_bus, test_session):
-        """Test successful meals retrieval by date."""
-        # Arrange - Create meals for today
-        import uuid
-        today = date.today()
-        
-        meal1_id = str(uuid.uuid4())
-        meal2_id = str(uuid.uuid4())
-        
-        # Create meals using helper function
-        create_test_meal_in_db(
-            test_session,
-            meal1_id,
-            "Breakfast",
-            created_at=datetime.combine(today, datetime.min.time()),
-            calories=300,
-            protein=20,
-            carbs=30,
-            fat=10,
-        )
-        
-        create_test_meal_in_db(
-            test_session,
-            meal2_id,
-            "Lunch",
-            created_at=datetime.combine(today, datetime.min.time()) + timedelta(hours=4),
-            calories=500,
-            protein=30,
-            carbs=50,
-            fat=20,
-        )
-        test_session.commit()
-        
-        query = GetMealsByDateQuery(user_id="550e8400-e29b-41d4-a716-446655440001", target_date=today)
-        
-        # Act
-        meals = await event_bus.send(query)
-        
-        # Assert
-        assert len(meals) == 2
-        meal_ids = [meal.meal_id for meal in meals]
-        assert meal1_id in meal_ids
-        assert meal2_id in meal_ids
-        assert all(meal.status == MealStatus.READY for meal in meals)
-    
-    @pytest.mark.asyncio
-    async def test_get_meals_by_date_empty(self, event_bus):
-        """Test meals retrieval for date with no meals."""
-        # Arrange
-        future_date = date.today() + timedelta(days=365)
-        query = GetMealsByDateQuery(user_id="550e8400-e29b-41d4-a716-446655440001", target_date=future_date)
-        
-        # Act
-        meals = await event_bus.send(query)
-        
-        # Assert
-        assert meals == []
-    
-    @pytest.mark.asyncio
-    async def test_get_meals_by_date_excludes_other_dates(
-        self, event_bus, test_session
-    ):
-        """Test that query only returns meals from specified date."""
-        # Arrange
-        import uuid
-        today = date.today()
-        yesterday = today - timedelta(days=1)
-        
-        yesterday_meal_id = str(uuid.uuid4())
-        today_meal_id = str(uuid.uuid4())
-        
-        # Create meal for yesterday
-        yesterday_meal = create_test_meal_in_db(
-            test_session,
-            yesterday_meal_id,
-            "Yesterday's Meal",
-            created_at=datetime.combine(yesterday, datetime.min.time())
-        )
-        
-        # Create meal for today
-        today_meal = create_test_meal_in_db(
-            test_session,
-            today_meal_id,
-            "Today's Meal",
-            created_at=datetime.combine(today, datetime.min.time())
-        )
-        test_session.commit()
-        
-        query = GetMealsByDateQuery(user_id="550e8400-e29b-41d4-a716-446655440001", target_date=today)
-        
-        # Act
-        meals = await event_bus.send(query)
-        
-        # Assert
-        assert len(meals) == 1
-        assert meals[0].meal_id == today_meal_id
 
 
 @pytest.mark.integration

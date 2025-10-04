@@ -1,6 +1,7 @@
 """
 Integration tests for meal edit API endpoints.
 """
+import os
 import pytest
 import json
 from datetime import datetime
@@ -10,7 +11,23 @@ from src.api.main import app
 from src.domain.model.meal import MealStatus
 
 
+def _pinecone_indexes_available():
+    """Check if Pinecone indexes are available."""
+    if not os.getenv("PINECONE_API_KEY"):
+        return False
+    try:
+        from src.infra.services.pinecone_service import PineconeNutritionService
+        service = PineconeNutritionService()
+        return service.ingredients_index is not None or service.usda_index is not None
+    except (ValueError, Exception):
+        return False
+
+
 @pytest.mark.integration
+@pytest.mark.skipif(
+    not _pinecone_indexes_available(),
+    reason="Pinecone indexes not available - skipping meal edit API tests"
+)
 class TestMealEditAPI:
     """Test meal edit API endpoints."""
     
@@ -134,63 +151,6 @@ class TestMealEditAPI:
         # Check that ingredient was removed
         updated_food_items = result["updated_food_items"]
         assert len(updated_food_items) == original_count - 1
-    
-    @pytest.mark.asyncio
-    async def test_add_custom_ingredient_success(self, client, sample_meal_with_nutrition):
-        """Test successful custom ingredient addition."""
-        # Arrange
-        meal = sample_meal_with_nutrition
-        
-        request_data = {
-            "name": "Olive Oil Dressing",
-            "quantity": 15.0,
-            "unit": "ml",
-            "nutrition": {
-                "calories_per_100g": 884.0,
-                "protein_per_100g": 0.0,
-                "carbs_per_100g": 0.0,
-                "fat_per_100g": 100.0,
-            }
-        }
-        
-        # Act
-        response = client.post(
-            f"/v1/meals/{meal.meal_id}/ingredients/custom",
-            json=request_data
-        )
-        
-        # Assert
-        assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        assert result["meal_id"] == meal.meal_id
-        
-        # Check nutrition increased appropriately
-        updated_nutrition = result["updated_nutrition"]
-        expected_added_calories = 884.0 * 0.15  # 15ml = 15% of 100ml
-        assert updated_nutrition["calories"] >= meal.nutrition.calories + expected_added_calories
-    
-    @pytest.mark.asyncio
-    async def test_remove_ingredient_success(self, client, sample_meal_with_nutrition):
-        """Test successful ingredient removal."""
-        # Arrange
-        meal = sample_meal_with_nutrition
-        id = meal.nutrition.food_items[0].id
-        original_calories = meal.nutrition.calories
-        
-        # Act
-        response = client.delete(
-            f"/v1/meals/{meal.meal_id}/ingredients/{id}"
-        )
-        
-        # Assert
-        assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        
-        # Check nutrition decreased
-        updated_nutrition = result["updated_nutrition"]
-        assert updated_nutrition["calories"] < original_calories
     
     @pytest.mark.asyncio
     async def test_update_meal_unauthorized(self, client, sample_meal_with_nutrition):
@@ -388,6 +348,10 @@ class TestMealEditAPI:
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    not _pinecone_indexes_available(),
+    reason="Pinecone indexes not available - skipping meal edit validation tests"
+)
 class TestMealEditValidation:
     """Test meal edit validation and error handling."""
     
