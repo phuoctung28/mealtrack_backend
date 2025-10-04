@@ -1,6 +1,7 @@
 """
 Unit tests for meal command handlers with Pinecone integration.
 """
+import os
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime
@@ -17,7 +18,23 @@ from src.domain.model.nutrition import Nutrition, FoodItem, Macros
 from src.infra.services.pinecone_service import NutritionData
 
 
+def _pinecone_indexes_available():
+    """Check if Pinecone indexes are available."""
+    if not os.getenv("PINECONE_API_KEY"):
+        return False
+    try:
+        from src.infra.services.pinecone_service import PineconeNutritionService
+        service = PineconeNutritionService()
+        return service.ingredients_index is not None or service.usda_index is not None
+    except (ValueError, Exception):
+        return False
+
+
 @pytest.mark.unit
+@pytest.mark.skipif(
+    not _pinecone_indexes_available(),
+    reason="Pinecone indexes not available - skipping Pinecone meal handler tests"
+)
 class TestEditMealCommandHandlerWithPinecone:
     """Test EditMealCommandHandler with Pinecone integration."""
     

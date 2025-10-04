@@ -295,6 +295,10 @@ class TestEditMealCommandHandler:
 
 
 @pytest.mark.unit
+@pytest.mark.skipif(
+    not _pinecone_indexes_available(),
+    reason="Pinecone indexes not available - skipping add custom ingredient tests"
+)
 class TestAddCustomIngredientCommandHandler:
     """Test AddCustomIngredientCommand handler."""
     
