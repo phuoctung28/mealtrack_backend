@@ -66,7 +66,8 @@ from .user_responses import (
     UserProfileResponse,
     UserSyncResponse,
     UserStatusResponse,
-    UserUpdateResponse
+    UserUpdateResponse,
+    UserMetricsResponse
 )
 # Weekly meal plan responses
 from .weekly_meal_plan_responses import (
@@ -137,6 +138,7 @@ __all__ = [
     'UserSyncResponse',
     'UserStatusResponse',
     'UserUpdateResponse',
+    'UserMetricsResponse',
 
     # Enums
     'MealTypeEnum'

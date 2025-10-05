@@ -75,6 +75,7 @@ from src.app.handlers.query_handlers import (
     GetUserProfileQueryHandler,
     GetUserByFirebaseUidQueryHandler,
     GetUserOnboardingStatusQueryHandler,
+    GetUserMetricsQueryHandler,
     GetDailyActivitiesQueryHandler,
     GetMealPlanQueryHandler,
     GetMealsByDateMealPlanQueryHandler,
@@ -100,7 +101,7 @@ from src.app.queries.meal_plan import (
     GetMealsByDateQuery as MealPlanGetMealsByDateQuery,
 )
 from src.app.queries.tdee import GetUserTdeeQuery
-from src.app.queries.user import GetUserProfileQuery
+from src.app.queries.user import GetUserProfileQuery, GetUserMetricsQuery
 from src.app.queries.user.get_user_by_firebase_uid_query import (
     GetUserByFirebaseUidQuery,
     GetUserOnboardingStatusQuery,
@@ -250,6 +251,9 @@ async def get_configured_event_bus(
     )
     event_bus.register_handler(
         GetUserOnboardingStatusQuery, GetUserOnboardingStatusQueryHandler(db)
+    )
+    event_bus.register_handler(
+        GetUserMetricsQuery, GetUserMetricsQueryHandler(db)
     )
     event_bus.register_handler(GetUserTdeeQuery, GetUserTdeeQueryHandler(db))
 

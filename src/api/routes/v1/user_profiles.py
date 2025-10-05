@@ -9,9 +9,10 @@ from src.api.exceptions import handle_exception
 from src.api.mappers.tdee_mapper import TdeeMapper
 from src.api.schemas.request import OnboardingCompleteRequest, GoalEnum
 from src.api.schemas.request.user_profile_update_requests import UpdateFitnessGoalRequest, UpdateMetricsRequest
-from src.api.schemas.response import TdeeCalculationResponse
+from src.api.schemas.response import TdeeCalculationResponse, UserMetricsResponse
 from src.app.commands.user import SaveUserOnboardingCommand
 from src.app.queries.tdee import GetUserTdeeQuery
+from src.app.queries.user import GetUserMetricsQuery
 from src.app.commands.user.update_user_goal_command import UpdateUserGoalCommand
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.domain.model.tdee import TdeeResponse, Goal
@@ -60,6 +61,33 @@ async def save_user_onboarding(
 
     except Exception as e:
         raise handle_exception(e)
+
+@router.get("/{user_id}/metrics", response_model=UserMetricsResponse)
+async def get_user_metrics(
+    user_id: str,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Get user's current metrics for settings display.
+    
+    Retrieves the user's current profile metrics including:
+    - Physical attributes (age, gender, height, weight, body fat)
+    - Activity level
+    - Fitness goal
+    - Target weight
+    """
+    try:
+        # Create query
+        query = GetUserMetricsQuery(user_id=user_id)
+        
+        # Send query
+        result = await event_bus.send(query)
+        
+        return UserMetricsResponse(**result)
+        
+    except Exception as e:
+        raise handle_exception(e)
+
 
 @router.get("/{user_id}/tdee", response_model=TdeeCalculationResponse)
 async def get_user_tdee(
