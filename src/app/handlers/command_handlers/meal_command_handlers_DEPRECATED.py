@@ -344,7 +344,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                         )
             
             elif change.action == "add":
-                new_item_id = str(uuid.uuid4())
+                new_item_id = str(uuid4())
                 
                 if change.fdc_id and self.food_service:
                     # Get nutrition from USDA
