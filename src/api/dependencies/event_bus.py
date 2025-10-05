@@ -52,14 +52,9 @@ from src.app.handlers.command_handlers import (
     GenerateDailyMealSuggestionsCommandHandler,
     GenerateSingleMealCommandHandler,
     CreateManualMealCommandHandler,
-    UpdateUserGoalCommandHandler,
-)
-from src.app.handlers.command_handlers.update_user_metrics_command_handler import (
     UpdateUserMetricsCommandHandler,
-)
-from src.app.handlers.command_handlers.weekly_ingredient_based_meal_plan_command_handler import (
-    GenerateWeeklyIngredientBasedMealPlanCommandHandler,
     UploadMealImageImmediatelyHandler,
+    GenerateWeeklyIngredientBasedMealPlanCommandHandler
 )
 # Import event handlers
 from src.app.handlers.event_handlers.meal_analysis_event_handler import (
@@ -82,6 +77,7 @@ from src.app.handlers.query_handlers import (
     GetMealSuggestionsForProfileQueryHandler,
     GetSingleMealForProfileQueryHandler,
     GetMealPlanningSummaryQueryHandler,
+    GetUserMetricsQueryHandler,
 )
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.daily_meal import (
@@ -238,7 +234,7 @@ async def get_configured_event_bus(
         CompleteOnboardingCommand, CompleteOnboardingCommandHandler(db)
     )
     event_bus.register_handler(
-        UpdateUserGoalCommand, UpdateUserGoalCommandHandler(db)
+        UpdateUserGoalCommand, UpdateUserMetricsCommandHandler(db)
     )
     event_bus.register_handler(
         UpdateUserMetricsCommand, UpdateUserMetricsCommandHandler(db)

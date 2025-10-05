@@ -20,6 +20,7 @@ from .get_user_by_firebase_uid_query_handler import GetUserByFirebaseUidQueryHan
 from .get_user_onboarding_status_query_handler import GetUserOnboardingStatusQueryHandler
 # User handlers
 from .get_user_profile_query_handler import GetUserProfileQueryHandler
+from .get_user_metrics_query_handler import GetUserMetricsQueryHandler
 # TDEE handlers
 from .get_user_tdee_query_handler import GetUserTdeeQueryHandler
 # Food handlers
@@ -38,6 +39,7 @@ __all__ = [
     "GetUserProfileQueryHandler",
     "GetUserByFirebaseUidQueryHandler",
     "GetUserOnboardingStatusQueryHandler",
+    "GetUserMetricsQueryHandler",
     # Activity
     "GetDailyActivitiesQueryHandler",
     # Meal Plan
