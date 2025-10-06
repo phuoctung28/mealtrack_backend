@@ -2,12 +2,14 @@
 Integration test for manual meal creation with target date.
 """
 import pytest
+import uuid
 from datetime import datetime, date, timedelta
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand, ManualMealItem
 from src.app.handlers.command_handlers.create_manual_meal_command_handler import CreateManualMealCommandHandler
 from src.app.queries.activity import GetDailyActivitiesQuery
-from src.app.handlers.query_handlers.activity_query_handlers import GetDailyActivitiesQueryHandler
-from unittest.mock import Mock, MagicMock
+from src.app.handlers.query_handlers.get_daily_activities_query_handler import GetDailyActivitiesQueryHandler
+from src.domain.model.meal import MealStatus
+from unittest.mock import Mock, MagicMock, AsyncMock
 
 
 @pytest.mark.asyncio
@@ -15,11 +17,11 @@ async def test_manual_meal_created_with_target_date():
     """Test that manual meals are created with the specified target date."""
     # Arrange
     mock_meal_repo = Mock()
-    mock_food_service = Mock()
+    mock_food_service = AsyncMock()
     mock_mapping_service = Mock()
     
-    # Mock food data service response
-    mock_food_service.get_multiple_foods = Mock(return_value=[
+    # Mock food data service response (async)
+    mock_food_service.get_multiple_foods = AsyncMock(return_value=[
         {
             "fdcId": 168462,
             "description": "Chicken, broilers or fryers, breast, meat only, cooked, roasted",
@@ -58,8 +60,9 @@ async def test_manual_meal_created_with_target_date():
     target_date = date.today() - timedelta(days=1)
     
     # Create command with target date
+    test_user_id = str(uuid.uuid4())
     command = CreateManualMealCommand(
-        user_id="test_user_123",
+        user_id=test_user_id,
         items=[ManualMealItem(fdc_id=168462, quantity=150.0, unit="g")],
         dish_name="Grilled Chicken",
         meal_type="lunch",
@@ -75,7 +78,7 @@ async def test_manual_meal_created_with_target_date():
     assert saved_meal.ready_at.date() == target_date
     assert saved_meal.meal_type == "lunch"
     assert saved_meal.dish_name == "Grilled Chicken"
-    assert saved_meal.user_id == "test_user_123"
+    assert saved_meal.user_id == test_user_id
     
     # Verify nutrition was calculated correctly
     assert saved_meal.nutrition is not None
@@ -89,15 +92,17 @@ async def test_manual_meal_appears_in_daily_activities():
     # Arrange
     target_date = date.today() - timedelta(days=1)
     target_datetime = datetime.combine(target_date, datetime.now().time())
+    test_user_id = str(uuid.uuid4())
+    test_meal_id = str(uuid.uuid4())
     
     # Create a mock meal with target date
     mock_meal = MagicMock()
-    mock_meal.meal_id = "meal_123"
-    mock_meal.user_id = "test_user_123"
+    mock_meal.meal_id = test_meal_id
+    mock_meal.user_id = test_user_id
     mock_meal.created_at = target_datetime
     mock_meal.dish_name = "Grilled Chicken"
     mock_meal.meal_type = "lunch"
-    mock_meal.status = MagicMock(value="READY")
+    mock_meal.status = MealStatus.READY  # Use actual enum, not MagicMock
     mock_meal.nutrition = MagicMock()
     mock_meal.nutrition.calories = 247.5
     mock_meal.nutrition.macros = MagicMock()
@@ -110,14 +115,19 @@ async def test_manual_meal_appears_in_daily_activities():
     
     # Mock meal repository
     mock_meal_repo = Mock()
-    mock_meal_repo.find_by_date = Mock(return_value=[mock_meal])
+    # Mock find_by_date to return the meal when called with any arguments
+    def find_by_date_mock(date_obj, user_id):
+        if user_id == test_user_id:
+            return [mock_meal]
+        return []
+    mock_meal_repo.find_by_date = Mock(side_effect=find_by_date_mock)
     
     # Create query handler
     handler = GetDailyActivitiesQueryHandler(meal_repository=mock_meal_repo)
     
     # Create query
     query = GetDailyActivitiesQuery(
-        user_id="test_user_123",
+        user_id=test_user_id,
         target_date=target_datetime
     )
     
@@ -127,7 +137,7 @@ async def test_manual_meal_appears_in_daily_activities():
     # Assert
     assert len(activities) == 1
     activity = activities[0]
-    assert activity["id"] == "meal_123"
+    assert activity["id"] == test_meal_id
     assert activity["type"] == "meal"
     assert activity["title"] == "Grilled Chicken"
     assert activity["meal_type"] == "lunch"
@@ -142,10 +152,10 @@ async def test_manual_meal_without_target_date_uses_current_date():
     """Test that manual meals without target date use current date."""
     # Arrange
     mock_meal_repo = Mock()
-    mock_food_service = Mock()
+    mock_food_service = AsyncMock()
     mock_mapping_service = Mock()
     
-    mock_food_service.get_multiple_foods = Mock(return_value=[
+    mock_food_service.get_multiple_foods = AsyncMock(return_value=[
         {"fdcId": 168462, "description": "Chicken Breast"}
     ])
     
@@ -171,8 +181,9 @@ async def test_manual_meal_without_target_date_uses_current_date():
     )
     
     # Create command WITHOUT target date
+    test_user_id = str(uuid.uuid4())
     command = CreateManualMealCommand(
-        user_id="test_user_123",
+        user_id=test_user_id,
         items=[ManualMealItem(fdc_id=168462, quantity=150.0, unit="g")],
         dish_name="Grilled Chicken",
         meal_type="lunch",

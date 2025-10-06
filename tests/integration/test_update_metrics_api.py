@@ -6,64 +6,67 @@ from datetime import datetime, timedelta
 from fastapi.testclient import TestClient
 
 from src.api.main import app
+from src.api.base_dependencies import get_db
 from src.infra.database.models.user import User
 from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.config import engine
-from sqlalchemy.orm import sessionmaker
-
-
-client = TestClient(app)
-SessionLocal = sessionmaker(bind=engine)
 
 
 @pytest.fixture
-def setup_test_user():
+def client(test_session):
+    """Create a test client with database dependency override."""
+    def override_get_db():
+        try:
+            yield test_session
+        finally:
+            pass  # Session cleanup handled by test_session fixture
+    
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def setup_test_user(test_session):
     """Create a test user with profile."""
-    session = SessionLocal()
-    try:
-        # Create user
-        user = User(
-            id="test_user_metrics",
-            firebase_uid="firebase_test_metrics",
-            email="test_metrics@example.com",
-            username="test_metrics",
-            password_hash="hashed",
-            is_active=True
-        )
-        session.add(user)
-        
-        # Create profile
-        profile = UserProfile(
-            user_id="test_user_metrics",
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=70.0,
-            body_fat_percentage=20.0,
-            activity_level="moderate",
-            fitness_goal="maintenance",
-            meals_per_day=3,
-            snacks_per_day=1,
-            is_current=True,
-            updated_at=datetime.utcnow() - timedelta(days=10)  # Old enough for goal changes
-        )
-        session.add(profile)
-        session.commit()
-        
-        yield user, profile
-        
-    finally:
-        # Cleanup
-        session.query(UserProfile).filter(UserProfile.user_id == "test_user_metrics").delete()
-        session.query(User).filter(User.id == "test_user_metrics").delete()
-        session.commit()
-        session.close()
+    # Create user
+    user = User(
+        id="test_user_metrics",
+        firebase_uid="firebase_test_metrics",
+        email="test_metrics@example.com",
+        username="test_metrics",
+        password_hash="hashed",
+        is_active=True
+    )
+    test_session.add(user)
+    
+    # Create profile
+    profile = UserProfile(
+        user_id="test_user_metrics",
+        age=30,
+        gender="male",
+        height_cm=175.0,
+        weight_kg=70.0,
+        body_fat_percentage=20.0,
+        activity_level="moderate",
+        fitness_goal="maintenance",
+        meals_per_day=3,
+        snacks_per_day=1,
+        is_current=True,
+        updated_at=datetime.utcnow() - timedelta(days=10)  # Old enough for goal changes
+    )
+    test_session.add(profile)
+    test_session.commit()
+    
+    yield user, profile
+    
+    # Cleanup happens automatically via test_session rollback
 
 
 class TestUpdateMetricsEndpoint:
     """Integration tests for POST /v1/user-profiles/{user_id}/metrics endpoint."""
     
-    def test_update_weight_only(self, setup_test_user):
+    def test_update_weight_only(self, client, setup_test_user):
         """Test updating only weight returns recalculated TDEE."""
         response = client.post(
             "/v1/user-profiles/test_user_metrics/metrics",
@@ -87,7 +90,7 @@ class TestUpdateMetricsEndpoint:
         assert "carbs" in macros
         assert "fat" in macros
     
-    def test_update_activity_level_only(self, setup_test_user):
+    def test_update_activity_level_only(self, client, setup_test_user):
         """Test updating only activity level."""
         response = client.post(
             "/v1/user-profiles/test_user_metrics/metrics",
@@ -101,7 +104,7 @@ class TestUpdateMetricsEndpoint:
         assert data["tdee"] > 0
         assert data["activity_multiplier"] > 1.5  # very_active multiplier
     
-    def test_update_body_fat_only(self, setup_test_user):
+    def test_update_body_fat_only(self, client, setup_test_user):
         """Test updating only body fat percentage."""
         response = client.post(
             "/v1/user-profiles/test_user_metrics/metrics",
@@ -114,7 +117,7 @@ class TestUpdateMetricsEndpoint:
         # Should use Katch-McArdle formula when body fat is provided
         assert "formula_used" in data
     
-    def test_update_fitness_goal_only(self, setup_test_user):
+    def test_update_fitness_goal_only(self, client, setup_test_user):
         """Test updating only fitness goal."""
         response = client.post(
             "/v1/user-profiles/test_user_metrics/metrics",
@@ -128,7 +131,7 @@ class TestUpdateMetricsEndpoint:
         assert data["goal"] == "cutting"
         assert "macros" in data
     
-    def test_update_all_metrics_together(self, setup_test_user):
+    def test_update_all_metrics_together(self, client, setup_test_user):
         """Test updating all metrics in one call."""
         response = client.post(
             "/v1/user-profiles/test_user_metrics/metrics",
@@ -147,7 +150,7 @@ class TestUpdateMetricsEndpoint:
         assert "macros" in data
         assert data["macros"]["calories"] > 0
     
-    def test_goal_cooldown_conflict(self, setup_test_user):
+    def test_goal_cooldown_conflict(self, client, setup_test_user):
         """Test goal update within cooldown period returns 409."""
         # First update the goal
         response1 = client.post(
@@ -169,7 +172,7 @@ class TestUpdateMetricsEndpoint:
         assert "detail" in data
         assert "cooldown_until" in str(data)
     
-    def test_goal_cooldown_override(self, setup_test_user):
+    def test_goal_cooldown_override(self, client, setup_test_user):
         """Test goal update with override bypasses cooldown."""
         # First update the goal
         response1 = client.post(
@@ -188,7 +191,7 @@ class TestUpdateMetricsEndpoint:
         data = response2.json()
         assert data["goal"] == "bulking"
     
-    def test_invalid_weight(self, setup_test_user):
+    def test_invalid_weight(self, client, setup_test_user):
         """Test validation error for invalid weight."""
         response = client.post(
             "/v1/user-profiles/test_user_metrics/metrics",
@@ -197,7 +200,7 @@ class TestUpdateMetricsEndpoint:
         
         assert response.status_code == 422  # Pydantic validation
     
-    def test_invalid_body_fat(self, setup_test_user):
+    def test_invalid_body_fat(self, client, setup_test_user):
         """Test validation error for body fat out of range."""
         response = client.post(
             "/v1/user-profiles/test_user_metrics/metrics",
@@ -206,7 +209,7 @@ class TestUpdateMetricsEndpoint:
         
         assert response.status_code == 422  # Pydantic validation
     
-    def test_empty_request(self, setup_test_user):
+    def test_empty_request(self, client, setup_test_user):
         """Test error when no metrics provided."""
         response = client.post(
             "/v1/user-profiles/test_user_metrics/metrics",
@@ -215,7 +218,7 @@ class TestUpdateMetricsEndpoint:
         
         assert response.status_code in [400, 422]
     
-    def test_nonexistent_user(self):
+    def test_nonexistent_user(self, client):
         """Test error when user doesn't exist."""
         response = client.post(
             "/v1/user-profiles/nonexistent_user/metrics",
@@ -224,7 +227,7 @@ class TestUpdateMetricsEndpoint:
         
         assert response.status_code == 404
     
-    def test_metrics_update_affects_subsequent_tdee_query(self, setup_test_user):
+    def test_metrics_update_affects_subsequent_tdee_query(self, client, setup_test_user):
         """Test that metrics update affects subsequent TDEE queries."""
         # Update metrics
         update_response = client.post(

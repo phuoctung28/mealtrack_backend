@@ -41,6 +41,14 @@ def event_loop():
 
 
 @pytest.fixture(scope="session")
+def worker_id(request):
+    """Get worker ID for parallel testing, defaults to 'master' for non-parallel runs."""
+    if hasattr(request.config, 'workerinput'):
+        return request.config.workerinput['workerid']
+    return 'master'
+
+
+@pytest.fixture(scope="session")
 def test_engine(worker_id):
     """Create a test database engine."""
     engine = create_test_engine()
