@@ -49,7 +49,6 @@ Add a dedicated endpoint for updating a user’s fitness goal from Settings. The
 ### Implementation Plan
 1) Request DTO: `UpdateFitnessGoalRequest { goal: GoalEnum }`.
 2) Route: `@router.patch("/v1/user-profiles/{user_id}/goal")` → validate request, send command, then query TDEE and return `TdeeCalculationResponse`.
-3) Command: `UpdateUserGoalCommand(user_id, goal)`; Handler loads current profile and updates `fitness_goal` using `UserRepository.update_user_goals(...)`.
 4) Reuse `GetUserTdeeQueryHandler` to compute macros.
 5) Add structured logs and basic error handling.
 

@@ -33,7 +33,6 @@ from src.app.commands.user import (
     SaveUserOnboardingCommand,
     CompleteOnboardingCommand,
 )
-from src.app.commands.user.update_user_goal_command import UpdateUserGoalCommand
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
@@ -232,9 +231,6 @@ async def get_configured_event_bus(
     )
     event_bus.register_handler(
         CompleteOnboardingCommand, CompleteOnboardingCommandHandler(db)
-    )
-    event_bus.register_handler(
-        UpdateUserGoalCommand, UpdateUserMetricsCommandHandler(db)
     )
     event_bus.register_handler(
         UpdateUserMetricsCommand, UpdateUserMetricsCommandHandler(db)
