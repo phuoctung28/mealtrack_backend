@@ -2,6 +2,7 @@
 Unit tests for user command handlers.
 """
 from datetime import datetime
+import uuid
 
 import pytest
 
@@ -16,13 +17,17 @@ class TestSaveUserOnboardingCommandHandler:
     @pytest.mark.asyncio
     async def test_save_user_onboarding_success(self, event_bus, test_session):
         """Test successful user onboarding save."""
-        # Create user first
+        # Create user first with unique IDs
+        user_id = str(uuid.uuid4())
+        unique_suffix = str(uuid.uuid4())[:8]  # Use only first 8 chars
+        firebase_uid = f"test-fb-{unique_suffix}"
+        
         from src.infra.database.models.user.user import User
         user = User(
-            id="550e8400-e29b-41d4-a716-446655440001",
-            firebase_uid="test-firebase-uid-123",
-            email="test@example.com",
-            username="testuser",
+            id=user_id,
+            firebase_uid=firebase_uid,
+            email=f"test-{unique_suffix}@example.com",
+            username=f"user-{unique_suffix}",
             password_hash="dummy_hash",
             created_at=datetime.now(),
             updated_at=datetime.now()
@@ -32,7 +37,7 @@ class TestSaveUserOnboardingCommandHandler:
         
         # Arrange
         command = SaveUserOnboardingCommand(
-            user_id="550e8400-e29b-41d4-a716-446655440001",
+            user_id=user_id,
             age=30,
             gender="male",
             height_cm=175,
@@ -52,7 +57,7 @@ class TestSaveUserOnboardingCommandHandler:
         # Verify the profile was created/updated in the database
         from src.infra.database.models.user.profile import UserProfile
         saved_profile = test_session.query(UserProfile).filter(
-            UserProfile.user_id == "550e8400-e29b-41d4-a716-446655440001"
+            UserProfile.user_id == user_id
         ).first()
         
         assert saved_profile is not None
@@ -66,13 +71,17 @@ class TestSaveUserOnboardingCommandHandler:
     @pytest.mark.asyncio
     async def test_save_user_onboarding_invalid_age(self, event_bus, test_session):
         """Test onboarding with invalid age."""
-        # Create user first
+        # Create user first with unique IDs
+        user_id = str(uuid.uuid4())
+        unique_suffix = str(uuid.uuid4())[:8]  # Use only first 8 chars
+        firebase_uid = f"test-fb-{unique_suffix}"
+        
         from src.infra.database.models.user.user import User
         user = User(
-            id="550e8400-e29b-41d4-a716-446655440001",
-            firebase_uid="test-firebase-uid-123",
-            email="test@example.com",
-            username="testuser",
+            id=user_id,
+            firebase_uid=firebase_uid,
+            email=f"test-{unique_suffix}@example.com",
+            username=f"user-{unique_suffix}",
             password_hash="dummy_hash",
             created_at=datetime.now(),
             updated_at=datetime.now()
@@ -82,7 +91,7 @@ class TestSaveUserOnboardingCommandHandler:
         
         # Arrange
         command = SaveUserOnboardingCommand(
-            user_id="550e8400-e29b-41d4-a716-446655440001",
+            user_id=user_id,
             age=-5,  # Invalid age
             gender="male",
             height_cm=175,
@@ -98,13 +107,17 @@ class TestSaveUserOnboardingCommandHandler:
     @pytest.mark.asyncio
     async def test_save_user_onboarding_invalid_weight(self, event_bus, test_session):
         """Test onboarding with invalid weight."""
-        # Create user first
+        # Create user first with unique IDs
+        user_id = str(uuid.uuid4())
+        unique_suffix = str(uuid.uuid4())[:8]  # Use only first 8 chars
+        firebase_uid = f"test-fb-{unique_suffix}"
+        
         from src.infra.database.models.user.user import User
         user = User(
-            id="550e8400-e29b-41d4-a716-446655440001",
-            firebase_uid="test-firebase-uid-123",
-            email="test@example.com",
-            username="testuser",
+            id=user_id,
+            firebase_uid=firebase_uid,
+            email=f"test-{unique_suffix}@example.com",
+            username=f"user-{unique_suffix}",
             password_hash="dummy_hash",
             created_at=datetime.now(),
             updated_at=datetime.now()
@@ -114,7 +127,7 @@ class TestSaveUserOnboardingCommandHandler:
         
         # Arrange
         command = SaveUserOnboardingCommand(
-            user_id="550e8400-e29b-41d4-a716-446655440001",
+            user_id=user_id,
             age=30,
             gender="male",
             height_cm=175,

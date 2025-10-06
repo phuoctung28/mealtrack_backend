@@ -33,6 +33,7 @@ from src.app.commands.user import (
     SaveUserOnboardingCommand,
     CompleteOnboardingCommand,
 )
+from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
     UpdateUserLastAccessedCommand,
@@ -50,8 +51,9 @@ from src.app.handlers.command_handlers import (
     GenerateDailyMealSuggestionsCommandHandler,
     GenerateSingleMealCommandHandler,
     CreateManualMealCommandHandler,
-    GenerateWeeklyIngredientBasedMealPlanCommandHandler,
+    UpdateUserMetricsCommandHandler,
     UploadMealImageImmediatelyHandler,
+    GenerateWeeklyIngredientBasedMealPlanCommandHandler
 )
 # Import event handlers
 from src.app.handlers.event_handlers.meal_analysis_event_handler import (
@@ -67,12 +69,14 @@ from src.app.handlers.query_handlers import (
     GetUserProfileQueryHandler,
     GetUserByFirebaseUidQueryHandler,
     GetUserOnboardingStatusQueryHandler,
+    GetUserMetricsQueryHandler,
     GetDailyActivitiesQueryHandler,
     GetMealPlanQueryHandler,
     GetMealsByDateMealPlanQueryHandler,
     GetMealSuggestionsForProfileQueryHandler,
     GetSingleMealForProfileQueryHandler,
     GetMealPlanningSummaryQueryHandler,
+    GetUserMetricsQueryHandler,
 )
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.daily_meal import (
@@ -92,7 +96,7 @@ from src.app.queries.meal_plan import (
     GetMealsByDateQuery as MealPlanGetMealsByDateQuery,
 )
 from src.app.queries.tdee import GetUserTdeeQuery
-from src.app.queries.user import GetUserProfileQuery
+from src.app.queries.user import GetUserProfileQuery, GetUserMetricsQuery
 from src.app.queries.user.get_user_by_firebase_uid_query import (
     GetUserByFirebaseUidQuery,
     GetUserOnboardingStatusQuery,
@@ -229,6 +233,9 @@ async def get_configured_event_bus(
         CompleteOnboardingCommand, CompleteOnboardingCommandHandler(db)
     )
     event_bus.register_handler(
+        UpdateUserMetricsCommand, UpdateUserMetricsCommandHandler(db)
+    )
+    event_bus.register_handler(
         GetUserProfileQuery, GetUserProfileQueryHandler(db)
     )
     event_bus.register_handler(
@@ -236,6 +243,9 @@ async def get_configured_event_bus(
     )
     event_bus.register_handler(
         GetUserOnboardingStatusQuery, GetUserOnboardingStatusQueryHandler(db)
+    )
+    event_bus.register_handler(
+        GetUserMetricsQuery, GetUserMetricsQueryHandler(db)
     )
     event_bus.register_handler(GetUserTdeeQuery, GetUserTdeeQueryHandler(db))
 

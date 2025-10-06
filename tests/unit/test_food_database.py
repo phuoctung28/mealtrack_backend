@@ -29,7 +29,7 @@ class StubFoodDataService:
             "servingSize": 100.0,
             "servingSizeUnit": "g",
             "foodNutrients": [
-                {"nutrient": {"id": 1008, "name": "Energy", "unitName": "kcal"}, "amount": 165.0},
+                {"nutrient": {"id": 1008, "name": "Energy", "unitName": "cal"}, "amount": 165.0},
                 {"nutrient": {"id": 1003, "name": "Protein", "unitName": "g"}, "amount": 31.0},
                 {"nutrient": {"id": 1005, "name": "Carbohydrate", "unitName": "g"}, "amount": 0.0},
                 {"nutrient": {"id": 1004, "name": "Total lipid (fat)", "unitName": "g"}, "amount": 3.6},

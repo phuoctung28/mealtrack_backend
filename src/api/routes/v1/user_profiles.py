@@ -7,10 +7,13 @@ from fastapi import APIRouter, Depends
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.mappers.tdee_mapper import TdeeMapper
-from src.api.schemas.request import OnboardingCompleteRequest
-from src.api.schemas.response import TdeeCalculationResponse
+from src.api.schemas.request import OnboardingCompleteRequest, GoalEnum
+from src.api.schemas.request.user_profile_update_requests import UpdateFitnessGoalRequest, UpdateMetricsRequest
+from src.api.schemas.response import TdeeCalculationResponse, UserMetricsResponse
 from src.app.commands.user import SaveUserOnboardingCommand
 from src.app.queries.tdee import GetUserTdeeQuery
+from src.app.queries.user import GetUserMetricsQuery
+from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.domain.model.tdee import TdeeResponse, Goal
 from src.infra.event_bus import EventBus
 
@@ -57,6 +60,33 @@ async def save_user_onboarding(
 
     except Exception as e:
         raise handle_exception(e)
+
+@router.get("/{user_id}/metrics", response_model=UserMetricsResponse)
+async def get_user_metrics(
+    user_id: str,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Get user's current metrics for settings display.
+    
+    Retrieves the user's current profile metrics including:
+    - Physical attributes (age, gender, height, weight, body fat)
+    - Activity level
+    - Fitness goal
+    - Target weight
+    """
+    try:
+        # Create query
+        query = GetUserMetricsQuery(user_id=user_id)
+        
+        # Send query
+        result = await event_bus.send(query)
+        
+        return UserMetricsResponse(**result)
+        
+    except Exception as e:
+        raise handle_exception(e)
+
 
 @router.get("/{user_id}/tdee", response_model=TdeeCalculationResponse)
 async def get_user_tdee(
@@ -109,5 +139,69 @@ async def get_user_tdee(
         
         return response
         
+    except Exception as e:
+        raise handle_exception(e)
+
+@router.post("/{user_id}/metrics", response_model=TdeeCalculationResponse)
+async def update_user_metrics(
+    user_id: str,
+    request: UpdateMetricsRequest,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Update user metrics (weight, activity level, body fat, fitness goal) and return updated TDEE/macros.
+    
+    Unified endpoint for profile updates. Supports goal cooldown with override.
+    """
+    try:
+        # Update metrics (including optional fitness goal)
+        command = UpdateUserMetricsCommand(
+            user_id=user_id,
+            weight_kg=request.weight_kg,
+            activity_level=request.activity_level,
+            body_fat_percent=request.body_fat_percent,
+            fitness_goal=request.fitness_goal.value if request.fitness_goal else None,
+            override=request.override
+        )
+        
+        # Handle goal cooldown conflicts
+        try:
+            await event_bus.send(command)
+        except Exception as e:
+            from src.api.exceptions import ConflictException, create_http_exception
+            if isinstance(e, ConflictException) and not request.override:
+                raise create_http_exception(e)
+            else:
+                raise
+
+        # Return updated TDEE/macros
+        query = GetUserTdeeQuery(user_id=user_id)
+        result = await event_bus.send(query)
+
+        goal_map = {
+            'maintenance': Goal.MAINTENANCE,
+            'cutting': Goal.CUTTING,
+            'bulking': Goal.BULKING
+        }
+
+        from src.domain.model.tdee import MacroTargets
+        domain_response = TdeeResponse(
+            bmr=result["bmr"],
+            tdee=result["tdee"],
+            goal=goal_map[result["profile_data"]["fitness_goal"]],
+            macros=MacroTargets(
+                calories=result["macros"]["calories"],
+                protein=result["macros"]["protein"],
+                carbs=result["macros"]["carbs"],
+                fat=result["macros"]["fat"]
+            )
+        )
+
+        mapper = TdeeMapper()
+        response = mapper.to_response_dto(domain_response)
+        response.activity_multiplier = result["activity_multiplier"]
+        response.formula_used = result["formula_used"]
+        return response
+
     except Exception as e:
         raise handle_exception(e)

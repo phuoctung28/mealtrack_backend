@@ -58,3 +58,17 @@ class OnboardingCompletionResponse(BaseModel):
     onboarding_completed: bool = Field(..., description="Current onboarding completion status")
     updated: bool = Field(..., description="Whether update was successful")
     message: str = Field(..., description="Operation result message")
+
+
+class UserMetricsResponse(BaseModel):
+    """Response containing user's current metrics for settings display."""
+    user_id: str = Field(..., description="User internal ID")
+    age: int = Field(..., description="User age")
+    gender: str = Field(..., description="User gender")
+    height_cm: float = Field(..., description="Height in centimeters")
+    weight_kg: float = Field(..., description="Current weight in kilograms")
+    body_fat_percentage: Optional[float] = Field(None, description="Body fat percentage")
+    activity_level: str = Field(..., description="Activity level")
+    fitness_goal: str = Field(..., description="Current fitness goal")
+    target_weight_kg: Optional[float] = Field(None, description="Target weight in kilograms")
+    updated_at: datetime = Field(..., description="Last update timestamp")

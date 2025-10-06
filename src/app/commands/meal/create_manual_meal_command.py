@@ -2,7 +2,8 @@
 Command to create a manual meal from a list of USDA FDC items with portions.
 """
 from dataclasses import dataclass
-from typing import List
+from datetime import date
+from typing import List, Optional
 
 from src.app.events.base import Command
 
@@ -19,3 +20,5 @@ class CreateManualMealCommand(Command):
     user_id: str
     items: List[ManualMealItem]
     dish_name: str
+    meal_type: Optional[str] = None
+    target_date: Optional[date] = None

@@ -95,10 +95,11 @@ class TdeeResponse:
     tdee: float
     goal: Goal
     macros: MacroTargets
+    formula_used: str | None = None  # BMR formula used (e.g., "Mifflin-St Jeor", "Katch-McArdle")
     
     def to_dict(self) -> dict:
         """Convert to dictionary format for API response."""
-        return {
+        result = {
             "bmr": self.bmr,
             "tdee": self.tdee,
             "goal": self.goal,
@@ -108,4 +109,7 @@ class TdeeResponse:
                 "fat": self.macros.fat,
                 "carbs": self.macros.carbs
             }
-        } 
+        }
+        if self.formula_used:
+            result["formula_used"] = self.formula_used
+        return result 

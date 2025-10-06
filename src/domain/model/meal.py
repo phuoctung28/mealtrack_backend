@@ -41,6 +41,7 @@ class Meal:
     last_edited_at: Optional[datetime] = None
     edit_count: int = 0
     is_manually_edited: bool = False
+    meal_type: Optional[str] = None
     
     def __post_init__(self):
         """Validate invariants."""
@@ -93,7 +94,8 @@ class Meal:
             updated_at=self.updated_at,
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
-            is_manually_edited=self.is_manually_edited
+            is_manually_edited=self.is_manually_edited,
+            meal_type=self.meal_type
         )
     
     def mark_enriching(self, raw_gpt_json: str) -> 'Meal':
@@ -112,7 +114,8 @@ class Meal:
             updated_at=self.updated_at,
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
-            is_manually_edited=self.is_manually_edited
+            is_manually_edited=self.is_manually_edited,
+            meal_type=self.meal_type
         )
     
     def mark_ready(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
@@ -131,7 +134,8 @@ class Meal:
             updated_at=self.updated_at,
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
-            is_manually_edited=self.is_manually_edited
+            is_manually_edited=self.is_manually_edited,
+            meal_type=self.meal_type
         )
     
     def mark_failed(self, error_message: str) -> 'Meal':
@@ -150,7 +154,8 @@ class Meal:
             updated_at=self.updated_at,
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
-            is_manually_edited=self.is_manually_edited
+            is_manually_edited=self.is_manually_edited,
+            meal_type=self.meal_type
         )
     
     def mark_edited(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
@@ -169,7 +174,8 @@ class Meal:
             updated_at=datetime.now(),
             last_edited_at=datetime.now(),
             edit_count=self.edit_count + 1,
-            is_manually_edited=True
+            is_manually_edited=True,
+            meal_type=self.meal_type
         )
 
     def mark_inactive(self) -> 'Meal':
@@ -188,7 +194,8 @@ class Meal:
             updated_at=datetime.now(),
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
-            is_manually_edited=self.is_manually_edited
+            is_manually_edited=self.is_manually_edited,
+            meal_type=self.meal_type
         )
     
     def to_dict(self) -> dict:

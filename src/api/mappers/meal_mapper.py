@@ -86,6 +86,7 @@ class MealMapper:
             
             # Map food items
             if meal.nutrition.food_items:
+                from src.api.schemas.response.meal_responses import CustomNutritionResponse
                 for item in meal.nutrition.food_items:
                     nutrition_dto = None
                     if hasattr(item, 'macros') and item.macros:
@@ -99,6 +100,18 @@ class MealMapper:
                             sodium_mg=None
                         )
                     
+                    # Calculate per-100g custom nutrition if this is a custom ingredient or has no fdc_id
+                    custom_nutrition_dto = None
+                    if hasattr(item, 'is_custom') and item.is_custom and item.quantity > 0:
+                        # Calculate per-100g values from absolute values
+                        scale_factor = 100.0 / item.quantity
+                        custom_nutrition_dto = CustomNutritionResponse(
+                            calories_per_100g=item.calories * scale_factor,
+                            protein_per_100g=item.macros.protein * scale_factor if item.macros else 0.0,
+                            carbs_per_100g=item.macros.carbs * scale_factor if item.macros else 0.0,
+                            fat_per_100g=item.macros.fat * scale_factor if item.macros else 0.0,
+                        )
+                    
                     food_item_dto = FoodItemResponse(
                         id=str(item.id),  # Use the primary key ID as string
                         name=item.name,
@@ -106,7 +119,10 @@ class MealMapper:
                         quantity=item.quantity,
                         unit=item.unit,
                         description=None,
-                        nutrition=nutrition_dto
+                        nutrition=nutrition_dto,
+                        custom_nutrition=custom_nutrition_dto,
+                        fdc_id=getattr(item, 'fdc_id', None),
+                        is_custom=getattr(item, 'is_custom', False)
                     )
                     food_items.append(food_item_dto)
         

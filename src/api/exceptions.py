@@ -36,6 +36,11 @@ class BusinessLogicException(MealTrackException):
     pass
 
 
+class ConflictException(MealTrackException):
+    """Raised when a request conflicts with current resource state (e.g., cooldown)."""
+    pass
+
+
 class ExternalServiceException(MealTrackException):
     """Raised when an external service fails."""
     pass
@@ -61,6 +66,7 @@ def create_http_exception(exc: MealTrackException) -> HTTPException:
         ExternalServiceException: status.HTTP_503_SERVICE_UNAVAILABLE,
         AuthenticationException: status.HTTP_401_UNAUTHORIZED,
         AuthorizationException: status.HTTP_403_FORBIDDEN,
+        ConflictException: status.HTTP_409_CONFLICT,
     }
     
     status_code = status_map.get(type(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
