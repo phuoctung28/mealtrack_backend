@@ -8,17 +8,17 @@ from sqlalchemy.orm import sessionmaker
 # Load environment variables
 load_dotenv()
 
-# Check for Railway's DATABASE_URL first, then fall back to individual variables
+# Check for DATABASE_URL first, then fall back to individual variables
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
-    # Railway or other platform provides DATABASE_URL
+    # Platform provides DATABASE_URL
     SQLALCHEMY_DATABASE_URL = DATABASE_URL
     # Replace mysql:// with mysql+pymysql:// if needed
     if SQLALCHEMY_DATABASE_URL.startswith("mysql://"):
         SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("mysql://", "mysql+pymysql://", 1)
 else:
-    # Use individual environment variables (existing setup)
+    # Use individual environment variables
     # Get database connection details from environment variables
     DB_USER = os.getenv("DB_USER", "root")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
@@ -35,8 +35,8 @@ engine = create_engine(
     echo=False,  # Set to True to log SQL queries
     pool_pre_ping=True,  # Check connections before using them
     pool_recycle=300,  # Recycle connections every 5 minutes
-    # Railway-specific optimizations
-    pool_size=5,  # Smaller pool size for Railway
+    # Database connection pool settings
+    pool_size=5,  # Connection pool size
     max_overflow=10,  # Allow some overflow connections
     pool_timeout=30,  # Wait up to 30 seconds for available connection
     # Connection retry and timeout settings

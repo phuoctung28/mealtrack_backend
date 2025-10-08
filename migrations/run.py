@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Simple migration runner for Railway.
+Simple migration runner.
 """
 import os
 import sys

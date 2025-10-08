@@ -55,7 +55,7 @@ app.add_middleware(
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for Railway."""
+    """Health check endpoint."""
     try:
         # Quick database connection check
         from src.infra.database.config import engine

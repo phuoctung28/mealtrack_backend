@@ -44,7 +44,7 @@ test_files/
 old_versions/
 mvp/
 
-# Environment files (will be set in Railway)
+# Environment files
 .env
 .env.*
 
