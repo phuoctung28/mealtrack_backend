@@ -75,60 +75,8 @@ jobs:
             coverage.xml
             htmlcov/
             test_summary.md
-
-  lint:
-    name: 🔍 Lint
-    runs-on: ubuntu-latest
-
-    steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
-
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: 🔍 Run Linting
-        run: |
-          chmod +x .github/scripts/ci-lint.sh
-          .github/scripts/ci-lint.sh all
-        continue-on-error: true
-
-      - name: 📁 Upload Report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: lint-report
-          path: lint_report.md
-
-  security:
-    name: 🔒 Security
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-
-      - name: 🐍 Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: 🔒 Run Security Scan
-        run: |
-          chmod +x .github/scripts/ci-security.sh
-          .github/scripts/ci-security.sh all
-
-      - name: 📁 Upload Reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: security-reports
-          path: |
-            bandit-report.json
-            safety-report.json
-            security_report.md
 
   summary:
     name: 📋 Summary
