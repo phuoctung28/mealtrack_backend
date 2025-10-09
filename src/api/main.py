@@ -12,6 +12,7 @@ from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
 from src.api.routes.v1.manual_meals import router as manual_meals_router
+from src.api.routes.v1.webhooks import router as webhooks_router
 from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
@@ -54,7 +55,7 @@ app.add_middleware(
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for Railway."""
+    """Health check endpoint."""
     try:
         # Quick database connection check
         from src.infra.database.config import engine
@@ -89,6 +90,7 @@ app.include_router(user_profiles_router)
 app.include_router(users_router)
 app.include_router(foods_router)
 app.include_router(manual_meals_router)
+app.include_router(webhooks_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get('ENVIRONMENT') == 'development':

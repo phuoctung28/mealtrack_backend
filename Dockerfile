@@ -46,8 +46,8 @@ ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 ENV PYTHONUNBUFFERED=1
 
-# Expose port (Railway will override this with PORT env var)
+# Expose port
 EXPOSE 8000
 
-# Use the railway start script
-CMD ["python", "scripts/railway_start.py"]
+# Start the application
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

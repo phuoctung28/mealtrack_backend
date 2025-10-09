@@ -31,6 +31,10 @@ class UserRepository:
             self.db.rollback()
             raise ValueError("User with this email or username already exists")
     
+    def get(self, user_id: str) -> Optional[User]:
+        """Get user by ID (alias for compatibility)."""
+        return self.get_user_by_id(user_id)
+    
     def get_user_by_id(self, user_id: str) -> Optional[User]:
         """Get user by ID."""
         return self.db.query(User).filter(User.id == user_id).first()

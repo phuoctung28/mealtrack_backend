@@ -15,27 +15,17 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Check if we're in Railway environment
-if [ -n "$RAILWAY_ENVIRONMENT" ]; then
-    log "🌐 Railway environment detected: $RAILWAY_ENVIRONMENT"
-    log "📦 Running migrations for production deployment..."
-    
-    # Run migrations using Python script
-    if command_exists python; then
-        log "🐍 Running migrations with Python..."
-        python scripts/railway_migrate.py
-    elif command_exists python3; then
-        log "🐍 Running migrations with Python3..."
-        python3 scripts/railway_migrate.py
-    else
-        log "❌ Python not found, cannot run migrations"
-        exit 1
-    fi
-    
+log "📦 Running database migrations..."
+
+# Check if alembic is available
+if command_exists alembic; then
+    log "🐍 Running migrations with Alembic..."
+    alembic upgrade head
     log "✅ Migrations completed successfully"
 else
-    log "🏠 Local environment detected"
-    log "💡 Skipping migrations (run manually if needed: alembic upgrade head)"
+    log "❌ Alembic not found, cannot run migrations"
+    log "💡 Install with: pip install alembic"
+    exit 1
 fi
 
-log "🚀 Migration process completed, ready to start application"
+log "🚀 Migration process completed"

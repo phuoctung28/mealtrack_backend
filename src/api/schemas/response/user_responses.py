@@ -9,6 +9,16 @@ from pydantic import BaseModel, EmailStr, Field
 from ..common.auth_enums import AuthProviderEnum
 
 
+class SubscriptionInfo(BaseModel):
+    """Subscription information."""
+    product_id: str = Field(..., description="Subscription product ID (premium_monthly or premium_yearly)")
+    status: str = Field(..., description="Subscription status (active, cancelled, expired, billing_issue)")
+    expires_at: Optional[datetime] = Field(None, description="Subscription expiration date")
+    is_monthly: bool = Field(..., description="Whether this is a monthly subscription")
+    is_yearly: bool = Field(..., description="Whether this is a yearly subscription")
+    platform: str = Field(..., description="Platform (ios, android, web)")
+
+
 class UserProfileResponse(BaseModel):
     """Response containing user profile information."""
     id: str = Field(..., description="User internal ID")
@@ -26,6 +36,10 @@ class UserProfileResponse(BaseModel):
     last_accessed: Optional[datetime] = Field(None, description="Last accessed timestamp")
     created_at: datetime = Field(..., description="Account creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+    
+    # Premium subscription fields
+    is_premium: bool = Field(..., description="Whether user has active premium subscription")
+    subscription: Optional[SubscriptionInfo] = Field(None, description="Active subscription details if any")
 
 
 class UserSyncResponse(BaseModel):

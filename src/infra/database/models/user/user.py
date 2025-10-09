@@ -45,8 +45,25 @@ class User(Base, BaseMixin):
     
     # Relationships
     profiles = relationship("UserProfile", back_populates="user", cascade="all, delete-orphan")
+    subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
     
     @property
     def current_profile(self):
         """Get the current active profile."""
         return next((p for p in self.profiles if p.is_current), None)
+    
+    def get_active_subscription(self):
+        """Get user's active subscription, if any."""
+        for subscription in self.subscriptions:
+            if subscription.is_active():
+                return subscription
+        return None
+    
+    def is_premium(self) -> bool:
+        """
+        Check if user has active premium subscription.
+        
+        Note: This checks local cache. For real-time validation,
+        use RevenueCat API via the RevenueCatService.
+        """
+        return self.get_active_subscription() is not None

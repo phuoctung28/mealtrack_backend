@@ -1,0 +1,74 @@
+name: Deploy to AWS ECS from ECR
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      image_tag:
+        description: 'ECR image tag to deploy'
+        required: false
+        default: 'latest'
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: mealtrack-backend
+  ECS_CLUSTER: mealtrack-cluster
+  ECS_SERVICE: mealtrack-api
+  ECS_TASK_FAMILY: mealtrack-backend
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to ECS
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔐 Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 🚀 Update ECS Service
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_IMAGE="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${{ github.event.inputs.image_tag }}"
+          
+          echo "Deploying image: $ECR_IMAGE"
+          
+          # Update the service with new image (forces new deployment)
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SERVICE \
+            --force-new-deployment \
+            --region $AWS_REGION
+          
+          echo "Deployment initiated. The service will pull the latest image from ECR."
+
+      - name: 📊 Deployment Summary
+        run: |
+          echo "## 🚀 ECS Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Tag:** ${{ github.event.inputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **ECS Cluster:** $ECS_CLUSTER" >> $GITHUB_STEP_SUMMARY
+          echo "- **ECS Service:** $ECS_SERVICE" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "### Deployed Image" >> $GITHUB_STEP_SUMMARY
+          echo "\`$AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/$ECR_REPOSITORY:${{ github.event.inputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Deployment initiated at $(date)" >> $GITHUB_STEP_SUMMARY
