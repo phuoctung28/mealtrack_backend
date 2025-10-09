@@ -57,3 +57,6 @@ node_modules/
 *.sqlite3
 package.json
 package-lock.json
+# Deployment tracking
+.deployments/
+*.deployment.json
