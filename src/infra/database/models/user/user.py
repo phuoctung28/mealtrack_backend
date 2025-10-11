@@ -46,6 +46,8 @@ class User(Base, BaseMixin):
     # Relationships
     profiles = relationship("UserProfile", back_populates="user", cascade="all, delete-orphan")
     subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
+    device_tokens = relationship("DeviceToken", back_populates="user", cascade="all, delete-orphan")
+    notification_logs = relationship("NotificationLog", back_populates="user", cascade="all, delete-orphan")
     
     @property
     def current_profile(self):

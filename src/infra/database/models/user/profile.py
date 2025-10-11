@@ -32,6 +32,14 @@ class UserProfile(Base, BaseMixin):
     health_conditions = Column(JSON, default=[], nullable=False)    # ['diabetes', 'hypertension', etc.]
     allergies = Column(JSON, default=[], nullable=False)           # ['nuts', 'dairy', 'shellfish', etc.]
     
+    # Notification preferences
+    notifications_enabled = Column(Boolean, default=True, nullable=False)
+    push_notifications_enabled = Column(Boolean, default=True, nullable=False)
+    email_notifications_enabled = Column(Boolean, default=False, nullable=False)
+    weekly_weight_reminder_enabled = Column(Boolean, default=False, nullable=False)
+    weekly_weight_reminder_day = Column(Integer, default=0, nullable=False)  # 0=Sunday, 6=Saturday
+    weekly_weight_reminder_time = Column(String(5), default='09:00', nullable=False)  # HH:mm format
+    
     # Constraints
     __table_args__ = (
         CheckConstraint('age >= 13 AND age <= 120', name='check_age_range'),
@@ -39,6 +47,8 @@ class UserProfile(Base, BaseMixin):
         CheckConstraint('weight_kg > 0', name='check_weight_positive'),
         CheckConstraint('body_fat_percentage IS NULL OR (body_fat_percentage >= 0 AND body_fat_percentage <= 100)', 
                        name='check_body_fat_range'),
+        CheckConstraint('weekly_weight_reminder_day >= 0 AND weekly_weight_reminder_day <= 6',
+                       name='check_reminder_day_range'),
         Index('idx_user_current', 'user_id', 'is_current'),
     )
     
