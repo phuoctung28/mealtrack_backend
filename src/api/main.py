@@ -17,6 +17,7 @@ from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
+from src.api.routes.v1.notifications import router as notifications_router
 
 load_dotenv()
 
@@ -111,6 +112,7 @@ app.include_router(users_router)
 app.include_router(foods_router)
 app.include_router(manual_meals_router)
 app.include_router(webhooks_router)
+app.include_router(notifications_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get('ENVIRONMENT') == 'development':

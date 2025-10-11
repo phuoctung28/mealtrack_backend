@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.base_dependencies import get_current_user_id, get_db_session
+from src.api.base_dependencies import get_db
 from src.api.schemas.request.notification_requests import (
     NotificationPreferencesUpdateRequest,
     DeviceTokenRegisterRequest,
@@ -36,19 +36,19 @@ router = APIRouter(prefix="/api/v1", tags=["notifications"])
 
 
 # Dependency to get notification preference service
-def get_preference_service(session: AsyncSession = Depends(get_db_session)) -> NotificationPreferenceService:
+def get_preference_service(session: AsyncSession = Depends(get_db)) -> NotificationPreferenceService:
     """Get notification preference service"""
     return NotificationServiceFactory.create_preference_service(session)
 
 
 # Dependency to get device token repository
-def get_device_repository(session: AsyncSession = Depends(get_db_session)) -> DeviceTokenRepository:
+def get_device_repository(session: AsyncSession = Depends(get_db)) -> DeviceTokenRepository:
     """Get device token repository"""
     return DeviceTokenRepository(session)
 
 
 # Dependency to get notification log repository
-def get_notification_repository(session: AsyncSession = Depends(get_db_session)) -> NotificationLogRepository:
+def get_notification_repository(session: AsyncSession = Depends(get_db)) -> NotificationLogRepository:
     """Get notification log repository"""
     return NotificationLogRepository(session)
 
@@ -61,17 +61,9 @@ def get_notification_repository(session: AsyncSession = Depends(get_db_session))
 )
 async def get_notification_preferences(
     user_id: str,
-    current_user_id: str = Depends(get_current_user_id),
     service: NotificationPreferenceService = Depends(get_preference_service)
 ):
     """Get user notification preferences"""
-    # Check authorization
-    if user_id != current_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this resource"
-        )
-    
     try:
         preferences = await service.get_preferences(user_id)
         
@@ -111,17 +103,9 @@ async def get_notification_preferences(
 async def update_notification_preferences(
     user_id: str,
     request: NotificationPreferencesUpdateRequest,
-    current_user_id: str = Depends(get_current_user_id),
     service: NotificationPreferenceService = Depends(get_preference_service)
 ):
     """Update user notification preferences"""
-    # Check authorization
-    if user_id != current_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to modify this resource"
-        )
-    
     try:
         updated_preferences = await service.update_preferences(
             user_id=user_id,
@@ -167,17 +151,9 @@ async def update_notification_preferences(
 async def register_device_token(
     user_id: str,
     request: DeviceTokenRegisterRequest,
-    current_user_id: str = Depends(get_current_user_id),
     repository: DeviceTokenRepository = Depends(get_device_repository)
 ):
     """Register device token"""
-    # Check authorization
-    if user_id != current_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to register device for this user"
-        )
-    
     try:
         # Check if device token already exists
         existing = await repository.get_by_token(request.device_token)
@@ -226,17 +202,9 @@ async def register_device_token(
 async def list_user_devices(
     user_id: str,
     active_only: bool = Query(True, description="Return only active devices"),
-    current_user_id: str = Depends(get_current_user_id),
     repository: DeviceTokenRepository = Depends(get_device_repository)
 ):
     """List user devices"""
-    # Check authorization
-    if user_id != current_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this resource"
-        )
-    
     try:
         devices = await repository.get_all_user_devices(user_id, active_only)
         
@@ -273,17 +241,9 @@ async def list_user_devices(
 async def unregister_device_token(
     user_id: str,
     device_id: str,
-    current_user_id: str = Depends(get_current_user_id),
     repository: DeviceTokenRepository = Depends(get_device_repository)
 ):
     """Unregister device token"""
-    # Check authorization
-    if user_id != current_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to modify this resource"
-        )
-    
     try:
         # Verify device belongs to user
         device = await repository.get_by_id(device_id)
@@ -329,17 +289,9 @@ async def get_notification_history(
     notification_type: Optional[str] = Query(None, description="Filter by notification type"),
     limit: int = Query(50, ge=1, le=100, description="Number of results to return"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
-    current_user_id: str = Depends(get_current_user_id),
     repository: NotificationLogRepository = Depends(get_notification_repository)
 ):
     """Get notification history"""
-    # Check authorization
-    if user_id != current_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this resource"
-        )
-    
     try:
         logs, total = await repository.get_user_logs(
             user_id=user_id,
@@ -387,17 +339,9 @@ async def get_notification_history(
 async def send_test_notification(
     user_id: str,
     request: TestNotificationRequest,
-    current_user_id: str = Depends(get_current_user_id),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db)
 ):
     """Send test notification"""
-    # Check authorization
-    if user_id != current_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to send notifications for this user"
-        )
-    
     try:
         # Initialize services with proper configuration
         push_service = NotificationServiceFactory.create_push_service(session)

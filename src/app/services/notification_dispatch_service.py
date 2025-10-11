@@ -2,7 +2,7 @@
 Service for orchestrating notification dispatch across channels.
 """
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 from src.domain.model.notification import Notification
 from src.app.services.notification_preference_service import NotificationPreferenceService
