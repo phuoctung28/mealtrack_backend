@@ -31,6 +31,26 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting MealTrack API...")
     
+    # Run database migrations
+    try:
+        from src.infra.database.migration_manager import MigrationManager
+        from src.infra.database.config import engine
+        
+        migration_manager = MigrationManager.from_environment(engine)
+        success = migration_manager.initialize_and_migrate()
+        
+        if not success:
+            logger.error("Database migrations failed!")
+            # Optionally, you can decide to exit here or continue in degraded mode
+            # For now, we'll log the error and continue
+            if os.getenv('FAIL_ON_MIGRATION_ERROR', 'false').lower() == 'true':
+                logger.error("Exiting due to migration failure (FAIL_ON_MIGRATION_ERROR=true)")
+                raise RuntimeError("Database migration failed")
+    except Exception as e:
+        logger.error(f"Failed to run migrations: {e}")
+        if os.getenv('FAIL_ON_MIGRATION_ERROR', 'false').lower() == 'true':
+            raise
+    
     logger.info("MealTrack API started successfully!")
     yield
     
