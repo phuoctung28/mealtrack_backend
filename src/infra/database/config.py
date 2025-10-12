@@ -15,17 +15,8 @@ SSL_VERIFY_IDENTITY = os.getenv("DB_SSL_VERIFY_IDENTITY", "false").lower() == "t
 
 # Debug logging for SSL configuration
 import logging
-import ssl
 logger = logging.getLogger(__name__)
 logger.info(f"SSL Configuration: enabled={SSL_ENABLED}, verify_cert={SSL_VERIFY_CERT}, verify_identity={SSL_VERIFY_IDENTITY}")
-
-# Create SSL context for more explicit SSL configuration
-if SSL_ENABLED:
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = SSL_VERIFY_IDENTITY
-    ssl_context.verify_mode = ssl.CERT_REQUIRED if SSL_VERIFY_CERT else ssl.CERT_NONE
-else:
-    ssl_context = None
 
 # Check for DATABASE_URL first, then fall back to individual variables
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -105,13 +96,11 @@ engine = create_engine(
         "write_timeout": 60,    # 60 second write timeout
         "charset": "utf8mb4",
         "autocommit": False,
-        # SSL fallback configuration (in case URL params don't work)
+        # SSL fallback configuration (mysql-connector-python specific)
         "ssl_disabled": False,
         "ssl_verify_cert": SSL_VERIFY_CERT,
         "ssl_verify_identity": SSL_VERIFY_IDENTITY,
         "ssl_ca": "",  # Empty CA for cloud providers
-        # Alternative SSL configuration using ssl context
-        "ssl": ssl_context,
     }
 )
 
