@@ -56,6 +56,19 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
             self.db.commit()
             self.db.refresh(user)
 
+            # Get subscription info if user has active premium
+            subscription_info = None
+            active_subscription = user.get_active_subscription()
+            if active_subscription:
+                subscription_info = {
+                    "product_id": active_subscription.product_id,
+                    "status": active_subscription.status,
+                    "expires_at": active_subscription.expires_at,
+                    "is_monthly": active_subscription.is_monthly(),
+                    "is_yearly": active_subscription.is_yearly(),
+                    "platform": active_subscription.platform
+                }
+
             # Prepare response
             return {
                 "user": {
@@ -73,7 +86,9 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                     "onboarding_completed": user.onboarding_completed,
                     "last_accessed": user.last_accessed,
                     "created_at": user.created_at,
-                    "updated_at": user.updated_at
+                    "updated_at": user.updated_at,
+                    "is_premium": user.is_premium(),
+                    "subscription": subscription_info
                 },
                 "created": created,
                 "updated": updated,
