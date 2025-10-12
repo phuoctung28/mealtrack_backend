@@ -10,14 +10,7 @@ from sqlalchemy import select, and_
 from src.infra.database.models.user.user import User
 from src.infra.database.models.user.profile import UserProfile
 from src.domain.model.notification import Notification
-from src.app.services.notification_preference_service import NotificationPreferenceService
-from src.app.services.notification_dispatch_service import NotificationDispatchService
-from src.app.services.push_notification_service import PushNotificationService
-from src.app.services.email_notification_service import EmailNotificationService
-from src.infra.repositories.notification_repository import (
-    DeviceTokenRepository,
-    NotificationLogRepository
-)
+from src.app.services.notification_service_factory import NotificationServiceFactory
 
 logger = logging.getLogger(__name__)
 
@@ -48,17 +41,8 @@ class WeeklyWeightReminderJob:
                 logger.info("No users to remind at this time")
                 return
             
-            # Initialize services
-            device_repo = DeviceTokenRepository(self.session)
-            notif_repo = NotificationLogRepository(self.session)
-            preference_service = NotificationPreferenceService(self.session)
-            push_service = PushNotificationService(device_repo, notif_repo)
-            email_service = EmailNotificationService(notif_repo)
-            dispatch_service = NotificationDispatchService(
-                preference_service,
-                push_service,
-                email_service
-            )
+            # Initialize services with proper configuration (FCM credentials, SMTP config)
+            dispatch_service = NotificationServiceFactory.create_dispatch_service(self.session)
             
             successful = 0
             failed = 0

@@ -39,13 +39,21 @@ class PushNotificationService:
         # Initialize Firebase Admin SDK
         if FIREBASE_AVAILABLE and fcm_credentials_path:
             try:
-                if not firebase_admin._apps:
+                # Support multiple Firebase apps per environment
+                # Check if default app exists, otherwise create it
+                try:
+                    firebase_admin.get_app()
+                    self.fcm_enabled = True
+                    logger.info("Using existing Firebase Admin SDK app")
+                except ValueError:
+                    # No app exists, create one
                     cred = credentials.Certificate(fcm_credentials_path)
                     firebase_admin.initialize_app(cred)
-                self.fcm_enabled = True
-                logger.info("Firebase Admin SDK initialized successfully")
+                    self.fcm_enabled = True
+                    logger.info(f"Firebase Admin SDK initialized with credentials: {fcm_credentials_path}")
             except Exception as e:
                 logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
+                logger.warning("Push notifications will be disabled")
         else:
             logger.warning("FCM not initialized - push notifications disabled")
     

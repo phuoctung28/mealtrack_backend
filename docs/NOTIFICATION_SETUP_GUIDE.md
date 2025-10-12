@@ -37,9 +37,13 @@ Add the following to your `.env` file:
 
 ```env
 # Firebase Cloud Messaging (FCM) Configuration
-FCM_CREDENTIALS_PATH=/path/to/firebase-credentials.json
+# Option 1: Specify explicit path
+FCM_CREDENTIALS_PATH=/mealtrack_backend/credentials/firebase-credentials.json
 
-# Email Notification Configuration
+# Option 2: Or place file at default location and it will be auto-detected
+# credentials/firebase-credentials.json
+
+# Email Notification Configuration (optional)
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=your-email@gmail.com
@@ -48,7 +52,7 @@ SMTP_USE_TLS=true
 EMAIL_FROM_ADDRESS=noreply@nutreeai.com
 EMAIL_FROM_NAME=Nutree AI
 
-# Notification Settings
+# Notification Settings (optional, defaults shown)
 NOTIFICATION_LOG_RETENTION_DAYS=30
 DEVICE_TOKEN_INACTIVITY_DAYS=90
 ```
@@ -57,10 +61,16 @@ DEVICE_TOKEN_INACTIVITY_DAYS=90
 
 #### Get Firebase Credentials
 1. Go to Firebase Console: https://console.firebase.google.com/
-2. Select your project
+2. Select your project (e.g., `nutree-ai`)
 3. Go to Project Settings > Service Accounts
 4. Click "Generate New Private Key"
-5. Save the JSON file and set path in `FCM_CREDENTIALS_PATH`
+5. Download the JSON file and save it to:
+   ```bash
+   # Save to default location (auto-detected)
+   mv ~/Downloads/nutree-ai-*.json credentials/firebase-credentials.json
+   
+   # Or save anywhere and set FCM_CREDENTIALS_PATH in .env
+   ```
 
 #### Configure Firebase Messaging
 1. In Firebase Console, go to Cloud Messaging

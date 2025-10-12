@@ -23,10 +23,8 @@ from src.api.schemas.response.notification_responses import (
     AdminNotificationTriggerResponse,
     NotificationLogResponse
 )
+from src.app.services.notification_service_factory import NotificationServiceFactory
 from src.app.services.notification_preference_service import NotificationPreferenceService
-from src.app.services.push_notification_service import PushNotificationService
-from src.app.services.email_notification_service import EmailNotificationService
-from src.app.services.notification_dispatch_service import NotificationDispatchService
 from src.infra.repositories.notification_repository import (
     DeviceTokenRepository,
     NotificationLogRepository
@@ -40,7 +38,7 @@ router = APIRouter(prefix="/api/v1", tags=["notifications"])
 # Dependency to get notification preference service
 def get_preference_service(session: AsyncSession = Depends(get_db_session)) -> NotificationPreferenceService:
     """Get notification preference service"""
-    return NotificationPreferenceService(session)
+    return NotificationServiceFactory.create_preference_service(session)
 
 
 # Dependency to get device token repository
@@ -401,10 +399,8 @@ async def send_test_notification(
         )
     
     try:
-        # Initialize services
-        device_repo = DeviceTokenRepository(session)
-        notif_repo = NotificationLogRepository(session)
-        push_service = PushNotificationService(device_repo, notif_repo)
+        # Initialize services with proper configuration
+        push_service = NotificationServiceFactory.create_push_service(session)
         
         # Create test notification
         notification = Notification(
