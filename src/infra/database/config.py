@@ -8,6 +8,11 @@ from sqlalchemy.orm import sessionmaker
 # Load environment variables
 load_dotenv()
 
+# SSL configuration from environment variables
+SSL_ENABLED = os.getenv("DB_SSL_ENABLED", "true").lower() == "true"
+SSL_VERIFY_CERT = os.getenv("DB_SSL_VERIFY_CERT", "false").lower() == "true"
+SSL_VERIFY_IDENTITY = os.getenv("DB_SSL_VERIFY_IDENTITY", "false").lower() == "true"
+
 # Check for DATABASE_URL first, then fall back to individual variables
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -46,6 +51,10 @@ engine = create_engine(
         "write_timeout": 60,    # 60 second write timeout
         "charset": "utf8mb4",
         "autocommit": False,
+        # SSL configuration for secure connections (required by Northflank)
+        "ssl_disabled": not SSL_ENABLED,  # Enable SSL based on environment
+        "ssl_verify_cert": SSL_VERIFY_CERT,  # Certificate verification from environment
+        "ssl_verify_identity": SSL_VERIFY_IDENTITY,  # Identity verification from environment
     }
 )
 
