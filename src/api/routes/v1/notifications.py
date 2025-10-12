@@ -1,18 +1,17 @@
 """
-API routes for notification preferences and management.
+Notification API endpoints - Event-driven architecture.
+Handles notification preferences, device tokens, and notification history.
 """
-import logging
-import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.base_dependencies import get_db
+from fastapi import APIRouter, Depends, Query
+
+from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.exceptions import handle_exception
 from src.api.schemas.request.notification_requests import (
     NotificationPreferencesUpdateRequest,
     DeviceTokenRegisterRequest,
-    TestNotificationRequest,
-    AdminNotificationTriggerRequest
+    TestNotificationRequest
 )
 from src.api.schemas.response.notification_responses import (
     NotificationPreferencesResponse,
@@ -20,59 +19,51 @@ from src.api.schemas.response.notification_responses import (
     DeviceListResponse,
     NotificationHistoryResponse,
     TestNotificationResponse,
-    AdminNotificationTriggerResponse,
     NotificationLogResponse
 )
-from src.app.services.notification_service_factory import NotificationServiceFactory
-from src.app.services.notification_preference_service import NotificationPreferenceService
-from src.infra.repositories.notification_repository import (
-    DeviceTokenRepository,
-    NotificationLogRepository
+from src.app.commands.notification import (
+    UpdateNotificationPreferencesCommand,
+    RegisterDeviceTokenCommand,
+    UnregisterDeviceTokenCommand,
+    SendTestNotificationCommand
 )
-from src.domain.model.notification import Notification
+from src.app.queries.notification import (
+    GetNotificationPreferencesQuery,
+    GetUserDevicesQuery,
+    GetNotificationHistoryQuery
+)
+from src.infra.event_bus import EventBus
 
-logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1", tags=["notifications"])
-
-
-# Dependency to get notification preference service
-def get_preference_service(session: AsyncSession = Depends(get_db)) -> NotificationPreferenceService:
-    """Get notification preference service"""
-    return NotificationServiceFactory.create_preference_service(session)
-
-
-# Dependency to get device token repository
-def get_device_repository(session: AsyncSession = Depends(get_db)) -> DeviceTokenRepository:
-    """Get device token repository"""
-    return DeviceTokenRepository(session)
-
-
-# Dependency to get notification log repository
-def get_notification_repository(session: AsyncSession = Depends(get_db)) -> NotificationLogRepository:
-    """Get notification log repository"""
-    return NotificationLogRepository(session)
+router = APIRouter(prefix="/v1/notifications", tags=["Notifications"])
 
 
 @router.get(
-    "/users/{user_id}/preferences/notifications",
+    "/preferences",
     response_model=NotificationPreferencesResponse,
     summary="Get notification preferences",
     description="Retrieve user's notification preferences"
 )
 async def get_notification_preferences(
-    user_id: str,
-    service: NotificationPreferenceService = Depends(get_preference_service)
+    user_id: str = Query(..., description="User ID"),
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """Get user notification preferences"""
+    """
+    Get user notification preferences.
+    
+    Returns all notification settings including:
+    - Global notification toggle
+    - Push notification settings
+    - Email notification settings
+    - Weekly weight reminder configuration
+    """
     try:
-        preferences = await service.get_preferences(user_id)
+        # Create query
+        query = GetNotificationPreferencesQuery(user_id=user_id)
         
-        if not preferences:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User profile not found"
-            )
+        # Execute query
+        preferences = await event_bus.send(query)
         
+        # Return response
         return NotificationPreferencesResponse(
             user_id=user_id,
             preferences={
@@ -84,30 +75,33 @@ async def get_notification_preferences(
                 "weekly_weight_reminder_time": preferences.weekly_weight_reminder_time
             }
         )
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error getting notification preferences: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve notification preferences"
-        )
+        raise handle_exception(e)
 
 
 @router.put(
-    "/users/{user_id}/preferences/notifications",
+    "/preferences",
     response_model=NotificationPreferencesResponse,
     summary="Update notification preferences",
     description="Update user's notification preferences"
 )
 async def update_notification_preferences(
-    user_id: str,
     request: NotificationPreferencesUpdateRequest,
-    service: NotificationPreferenceService = Depends(get_preference_service)
+    user_id: str = Query(..., description="User ID"),
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """Update user notification preferences"""
+    """
+    Update user notification preferences.
+    
+    Allows updating:
+    - Global notification toggle
+    - Push notification settings
+    - Email notification settings
+    - Weekly weight reminder configuration (day and time)
+    """
     try:
-        updated_preferences = await service.update_preferences(
+        # Create command
+        command = UpdateNotificationPreferencesCommand(
             user_id=user_id,
             notifications_enabled=request.notifications_enabled,
             push_notifications_enabled=request.push_notifications_enabled,
@@ -117,6 +111,10 @@ async def update_notification_preferences(
             weekly_weight_reminder_time=request.weekly_weight_reminder_time
         )
         
+        # Execute command
+        updated_preferences = await event_bus.send(command)
+        
+        # Return response
         return NotificationPreferencesResponse(
             user_id=user_id,
             preferences={
@@ -128,55 +126,44 @@ async def update_notification_preferences(
                 "weekly_weight_reminder_time": updated_preferences.weekly_weight_reminder_time
             }
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
     except Exception as e:
-        logger.error(f"Error updating notification preferences: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update notification preferences"
-        )
+        raise handle_exception(e)
 
 
 @router.post(
-    "/users/{user_id}/devices",
+    "/devices",
     response_model=DeviceTokenResponse,
-    status_code=status.HTTP_201_CREATED,
     summary="Register device token",
     description="Register a device token for push notifications"
 )
 async def register_device_token(
-    user_id: str,
     request: DeviceTokenRegisterRequest,
-    repository: DeviceTokenRepository = Depends(get_device_repository)
+    user_id: str = Query(..., description="User ID"),
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """Register device token"""
+    """
+    Register device token for push notifications.
+    
+    Registers a new device or updates an existing one:
+    - iOS devices with APNs token
+    - Android devices with FCM token
+    - Web devices with FCM token
+    
+    If device token already exists, updates the last_used_at timestamp.
+    """
     try:
-        # Check if device token already exists
-        existing = await repository.get_by_token(request.device_token)
-        if existing:
-            # Update existing device
-            await repository.update_last_used(existing.id)
-            return DeviceTokenResponse(
-                device_id=existing.id,
-                user_id=existing.user_id,
-                platform=existing.platform,
-                is_active=existing.is_active,
-                last_used_at=existing.last_used_at,
-                created_at=existing.created_at
-            )
-        
-        # Create new device token
-        device = await repository.create(
+        # Create command
+        command = RegisterDeviceTokenCommand(
             user_id=user_id,
             device_token=request.device_token,
             platform=request.platform,
             device_info=request.device_info
         )
         
+        # Execute command
+        device = await event_bus.send(command)
+        
+        # Return response
         return DeviceTokenResponse(
             device_id=device.id,
             user_id=device.user_id,
@@ -186,28 +173,41 @@ async def register_device_token(
             created_at=device.created_at
         )
     except Exception as e:
-        logger.error(f"Error registering device token: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to register device token"
-        )
+        raise handle_exception(e)
 
 
 @router.get(
-    "/users/{user_id}/devices",
+    "/devices",
     response_model=DeviceListResponse,
     summary="List user devices",
     description="Get list of registered devices for user"
 )
 async def list_user_devices(
-    user_id: str,
+    user_id: str = Query(..., description="User ID"),
     active_only: bool = Query(True, description="Return only active devices"),
-    repository: DeviceTokenRepository = Depends(get_device_repository)
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """List user devices"""
+    """
+    List user's registered devices.
+    
+    Returns all devices registered for push notifications:
+    - iOS devices
+    - Android devices
+    - Web devices
+    
+    Can filter by active status.
+    """
     try:
-        devices = await repository.get_all_user_devices(user_id, active_only)
+        # Create query
+        query = GetUserDevicesQuery(
+            user_id=user_id,
+            active_only=active_only
+        )
         
+        # Execute query
+        devices = await event_bus.send(query)
+        
+        # Convert to response
         device_responses = [
             DeviceTokenResponse(
                 device_id=device.id,
@@ -225,81 +225,76 @@ async def list_user_devices(
             total=len(device_responses)
         )
     except Exception as e:
-        logger.error(f"Error listing devices: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve devices"
-        )
+        raise handle_exception(e)
 
 
 @router.delete(
-    "/users/{user_id}/devices/{device_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    "/devices/{device_id}",
     summary="Unregister device token",
     description="Remove a device token registration"
 )
 async def unregister_device_token(
-    user_id: str,
     device_id: str,
-    repository: DeviceTokenRepository = Depends(get_device_repository)
+    user_id: str = Query(..., description="User ID"),
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """Unregister device token"""
+    """
+    Unregister device token.
+    
+    Removes device from receiving push notifications:
+    - Deactivates the device token
+    - User can re-register the same device later
+    """
     try:
-        # Verify device belongs to user
-        device = await repository.get_by_id(device_id)
-        if not device:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Device not found"
-            )
-        
-        if device.user_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Device does not belong to user"
-            )
-        
-        # Delete device
-        deleted = await repository.delete_by_id(device_id)
-        if not deleted:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Device not found"
-            )
-        
-        return None
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error unregistering device: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to unregister device"
+        # Create command
+        command = UnregisterDeviceTokenCommand(
+            user_id=user_id,
+            device_id=device_id
         )
+        
+        # Execute command
+        await event_bus.send(command)
+        
+        return {"success": True, "message": "Device unregistered successfully"}
+    except Exception as e:
+        raise handle_exception(e)
 
 
 @router.get(
-    "/users/{user_id}/notifications/history",
+    "/history",
     response_model=NotificationHistoryResponse,
     summary="Get notification history",
     description="Retrieve notification history for user"
 )
 async def get_notification_history(
-    user_id: str,
+    user_id: str = Query(..., description="User ID"),
     notification_type: Optional[str] = Query(None, description="Filter by notification type"),
     limit: int = Query(50, ge=1, le=100, description="Number of results to return"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
-    repository: NotificationLogRepository = Depends(get_notification_repository)
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """Get notification history"""
+    """
+    Get notification history.
+    
+    Returns paginated list of sent notifications:
+    - Sent timestamp
+    - Delivery status
+    - Notification content
+    - Can filter by notification type
+    """
     try:
-        logs, total = await repository.get_user_logs(
+        # Create query
+        query = GetNotificationHistoryQuery(
             user_id=user_id,
             notification_type=notification_type,
             limit=limit,
             offset=offset
         )
         
+        # Execute query
+        result = await event_bus.send(query)
+        
+        # Convert to response
         log_responses = [
             NotificationLogResponse(
                 id=log.id,
@@ -313,61 +308,53 @@ async def get_notification_history(
                 opened_at=log.opened_at,
                 created_at=log.created_at
             )
-            for log in logs
+            for log in result["logs"]
         ]
         
         return NotificationHistoryResponse(
             notifications=log_responses,
-            total=total,
-            limit=limit,
-            offset=offset
+            total=result["total"],
+            limit=result["limit"],
+            offset=result["offset"]
         )
     except Exception as e:
-        logger.error(f"Error getting notification history: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve notification history"
-        )
+        raise handle_exception(e)
 
 
 @router.post(
-    "/users/{user_id}/notifications/test",
+    "/test",
     response_model=TestNotificationResponse,
     summary="Send test notification",
     description="Send a test notification to user (for testing purposes)"
 )
 async def send_test_notification(
-    user_id: str,
     request: TestNotificationRequest,
-    session: AsyncSession = Depends(get_db)
+    user_id: str = Query(..., description="User ID"),
+    event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """Send test notification"""
+    """
+    Send test notification.
+    
+    Sends a test notification to verify setup:
+    - Tests push notification delivery
+    - Tests email notification delivery
+    - Returns delivery status and notification IDs
+    """
     try:
-        # Initialize services with proper configuration
-        push_service = NotificationServiceFactory.create_push_service(session)
-        
-        # Create test notification
-        notification = Notification(
+        # Create command
+        command = SendTestNotificationCommand(
             user_id=user_id,
             notification_type=request.notification_type,
-            delivery_method=request.delivery_method,
-            title="Test Notification",
-            body="This is a test notification from Nutree AI",
-            data={"test": True}
+            delivery_method=request.delivery_method
         )
         
-        # Send notification
-        notification_ids = await push_service.send_push_notification(user_id, notification)
+        # Execute command
+        result = await event_bus.send(command)
         
         return TestNotificationResponse(
-            success=len(notification_ids) > 0,
-            message="Test notification sent successfully" if notification_ids else "No devices found",
-            notification_ids=notification_ids
+            success=result["success"],
+            message=result["message"],
+            notification_ids=result["notification_ids"]
         )
     except Exception as e:
-        logger.error(f"Error sending test notification: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send test notification: {str(e)}"
-        )
-
+        raise handle_exception(e)
