@@ -23,13 +23,21 @@ class MealPlanService:
         if not self.google_api_key:
             raise ValueError("GOOGLE_API_KEY environment variable not set")
         
-        self.model = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
-            temperature=0.8,
-            max_output_tokens=1000,
-            google_api_key=self.google_api_key,
-            convert_system_message_to_human=True
-        )
+        self._model = None  # Lazy load
+        
+    @property
+    def model(self):
+        """Lazy load the ChatGoogleGenerativeAI model."""
+        if self._model is None:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            self._model = ChatGoogleGenerativeAI(
+                model="gemini-1.5-flash",
+                temperature=0.8,
+                max_output_tokens=1000,
+                google_api_key=self.google_api_key,
+                convert_system_message_to_human=True
+            )
+        return self._model
     
     def generate_meal_plan(self, user_id: str, preferences: UserPreferences) -> MealPlan:
         """Generate a complete meal plan based on user preferences"""

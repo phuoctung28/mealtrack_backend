@@ -101,8 +101,7 @@ class TestPineconeNutritionService:
     """Test PineconeNutritionService."""
     
     @patch('src.infra.services.pinecone_service.Pinecone')
-    @patch('src.infra.services.pinecone_service.SentenceTransformer')
-    def test_init_connects_to_indexes(self, mock_transformer, mock_pinecone):
+    def test_init_connects_to_indexes(self, mock_pinecone):
         """Test service initialization connects to Pinecone indexes."""
         # Arrange
         mock_pc = Mock()
@@ -128,8 +127,7 @@ class TestPineconeNutritionService:
         assert service.usda_index == mock_usda_index
     
     @patch('src.infra.services.pinecone_service.Pinecone')
-    @patch('src.infra.services.pinecone_service.SentenceTransformer')
-    def test_search_ingredient_finds_in_ingredients_index(self, mock_transformer, mock_pinecone):
+    def test_search_ingredient_finds_in_ingredients_index(self, mock_pinecone):
         """Test searching finds ingredient in ingredients index."""
         # Arrange
         mock_pc = Mock()
@@ -164,9 +162,7 @@ class TestPineconeNutritionService:
         mock_pc.Index.side_effect = mock_index
         mock_usda_index.describe_index_stats.return_value = {'total_vector_count': 456000}
         
-        mock_encoder = Mock()
-        mock_encoder.encode.return_value = Mock(tolist=lambda: [0.1, 0.2, 0.3])
-        mock_transformer.return_value = mock_encoder
+        # No encoder needed - using Pinecone inference API
         
         service = PineconeNutritionService(pinecone_api_key="test-key")
         
@@ -181,8 +177,7 @@ class TestPineconeNutritionService:
         assert result['score'] == 0.85
     
     @patch('src.infra.services.pinecone_service.Pinecone')
-    @patch('src.infra.services.pinecone_service.SentenceTransformer')
-    def test_search_ingredient_tries_usda_if_low_score(self, mock_transformer, mock_pinecone):
+    def test_search_ingredient_tries_usda_if_low_score(self, mock_pinecone):
         """Test searching falls back to USDA index if ingredients score is low."""
         # Arrange
         mock_pc = Mock()
@@ -224,9 +219,7 @@ class TestPineconeNutritionService:
         mock_pc.Index.side_effect = mock_index
         mock_usda_index.describe_index_stats.return_value = {'total_vector_count': 456000}
         
-        mock_encoder = Mock()
-        mock_encoder.encode.return_value = Mock(tolist=lambda: [0.1, 0.2, 0.3])
-        mock_transformer.return_value = mock_encoder
+        # No encoder needed - using Pinecone inference API
         
         service = PineconeNutritionService(pinecone_api_key="test-key")
         
@@ -242,8 +235,7 @@ class TestPineconeNutritionService:
         mock_usda_index.query.assert_called_once()
     
     @patch('src.infra.services.pinecone_service.Pinecone')
-    @patch('src.infra.services.pinecone_service.SentenceTransformer')
-    def test_search_ingredient_returns_none_if_no_match(self, mock_transformer, mock_pinecone):
+    def test_search_ingredient_returns_none_if_no_match(self, mock_pinecone):
         """Test searching returns None when no match found."""
         # Arrange
         mock_pc = Mock()
@@ -264,9 +256,7 @@ class TestPineconeNutritionService:
         mock_pc.Index.side_effect = mock_index
         mock_usda_index.describe_index_stats.return_value = {'total_vector_count': 456000}
         
-        mock_encoder = Mock()
-        mock_encoder.encode.return_value = Mock(tolist=lambda: [0.1, 0.2, 0.3])
-        mock_transformer.return_value = mock_encoder
+        # No encoder needed - using Pinecone inference API
         
         service = PineconeNutritionService(pinecone_api_key="test-key")
         
@@ -277,8 +267,7 @@ class TestPineconeNutritionService:
         assert result is None
     
     @patch('src.infra.services.pinecone_service.Pinecone')
-    @patch('src.infra.services.pinecone_service.SentenceTransformer')
-    def test_convert_to_grams(self, mock_transformer, mock_pinecone):
+    def test_convert_to_grams(self, mock_pinecone):
         """Test unit conversion to grams."""
         # Arrange
         mock_pc = Mock()
@@ -298,8 +287,7 @@ class TestPineconeNutritionService:
         assert service.convert_to_grams(1, "tsp") == 5
     
     @patch('src.infra.services.pinecone_service.Pinecone')
-    @patch('src.infra.services.pinecone_service.SentenceTransformer')
-    def test_get_scaled_nutrition(self, mock_transformer, mock_pinecone):
+    def test_get_scaled_nutrition(self, mock_pinecone):
         """Test getting scaled nutrition for ingredient."""
         # Arrange
         mock_pc = Mock()
@@ -325,9 +313,7 @@ class TestPineconeNutritionService:
         
         mock_pc.Index.return_value = mock_ingredients_index
         
-        mock_encoder = Mock()
-        mock_encoder.encode.return_value = Mock(tolist=lambda: [0.1, 0.2, 0.3])
-        mock_transformer.return_value = mock_encoder
+        # No encoder needed - using Pinecone inference API
         
         service = PineconeNutritionService(pinecone_api_key="test-key")
         
@@ -342,8 +328,7 @@ class TestPineconeNutritionService:
         assert result.serving_size_g == 200
     
     @patch('src.infra.services.pinecone_service.Pinecone')
-    @patch('src.infra.services.pinecone_service.SentenceTransformer')
-    def test_calculate_total_nutrition(self, mock_transformer, mock_pinecone):
+    def test_calculate_total_nutrition(self, mock_pinecone):
         """Test calculating total nutrition from multiple ingredients."""
         # Arrange
         mock_pc = Mock()
@@ -394,9 +379,7 @@ class TestPineconeNutritionService:
         mock_ingredients_index.query.side_effect = mock_query
         mock_pc.Index.return_value = mock_ingredients_index
         
-        mock_encoder = Mock()
-        mock_encoder.encode.return_value = Mock(tolist=lambda: [0.1, 0.2, 0.3])
-        mock_transformer.return_value = mock_encoder
+        # No encoder needed - using Pinecone inference API
         
         service = PineconeNutritionService(pinecone_api_key="test-key")
         

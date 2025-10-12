@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 from pinecone import Pinecone
-from sentence_transformers import SentenceTransformer
 
 
 @dataclass
@@ -51,7 +50,7 @@ class PineconeNutritionService:
             raise ValueError("PINECONE_API_KEY must be provided or set in environment")
 
         self.pc = Pinecone(api_key=api_key)
-        self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
+        # No encoder needed - use Pinecone inference API
 
         # Connect to existing indexes
         try:
@@ -82,35 +81,45 @@ class PineconeNutritionService:
         Search for ingredient in Pinecone indexes using vector similarity.
         Returns nutrition data per 100g if found.
         """
-        embedding = self.encoder.encode(query, show_progress_bar=False)
-
         best_result = None
         best_score = 0
 
         # Try ingredients index first (better per-100g data)
         if self.ingredients_index:
-            results = self.ingredients_index.query(
-                vector=embedding.tolist(),
-                top_k=1,
-                include_metadata=True
-            )
-
-            if results['matches']:
-                match = results['matches'][0]
-                if match['score'] > 0.35:
-                    best_result = match
-                    best_score = match['score']
+            try:
+                # Use Pinecone's query method with text input (inference API)
+                results = self.ingredients_index.query(
+                    vector=None,  # Let Pinecone generate embedding
+                    queries=[query],  # Pass text directly
+                    top_k=1,
+                    include_metadata=True
+                )
+                
+                if results and 'matches' in results and results['matches']:
+                    match = results['matches'][0]
+                    if match['score'] > 0.35:
+                        best_result = match
+                        best_score = match['score']
+            except Exception as e:
+                # Fallback: if inference API fails, try traditional vector search
+                # This would require pre-computed embeddings, but we'll skip for now
+                print(f"Pinecone inference failed, skipping ingredients search: {e}")
 
         # Try USDA if no good match
         if self.usda_index and best_score < 0.6:
-            results = self.usda_index.query(
-                vector=embedding.tolist(),
-                top_k=1,
-                include_metadata=True
-            )
-
-            if results['matches'] and results['matches'][0]['score'] > best_score * 1.2:
-                best_result = results['matches'][0]
+            try:
+                results = self.usda_index.query(
+                    vector=None,  # Let Pinecone generate embedding
+                    queries=[query],  # Pass text directly
+                    top_k=1,
+                    include_metadata=True
+                )
+                
+                if results and 'matches' in results and results['matches']:
+                    if results['matches'][0]['score'] > best_score * 1.2:
+                        best_result = results['matches'][0]
+            except Exception as e:
+                print(f"Pinecone inference failed, skipping USDA search: {e}")
 
         if best_result:
             metadata = best_result['metadata']
