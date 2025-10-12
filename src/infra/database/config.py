@@ -22,6 +22,14 @@ if DATABASE_URL:
     # Replace mysql:// with mysql+pymysql:// if needed
     if SQLALCHEMY_DATABASE_URL.startswith("mysql://"):
         SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("mysql://", "mysql+pymysql://", 1)
+    
+    # Add SSL parameters to URL if SSL is enabled
+    if SSL_ENABLED and "?" not in SQLALCHEMY_DATABASE_URL:
+        ssl_params = []
+        ssl_params.append(f"ssl_disabled={str(not SSL_ENABLED).lower()}")
+        ssl_params.append(f"ssl_verify_cert={str(SSL_VERIFY_CERT).lower()}")
+        ssl_params.append(f"ssl_verify_identity={str(SSL_VERIFY_IDENTITY).lower()}")
+        SQLALCHEMY_DATABASE_URL += "?" + "&".join(ssl_params)
 else:
     # Use individual environment variables
     # Get database connection details from environment variables
@@ -31,8 +39,16 @@ else:
     DB_PORT = os.getenv("DB_PORT", "3306")
     DB_NAME = os.getenv("DB_NAME", "mealtrack")
 
-    # MySQL URL
-    SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    # MySQL URL with SSL parameters
+    base_url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    if SSL_ENABLED:
+        ssl_params = []
+        ssl_params.append(f"ssl_disabled={str(not SSL_ENABLED).lower()}")
+        ssl_params.append(f"ssl_verify_cert={str(SSL_VERIFY_CERT).lower()}")
+        ssl_params.append(f"ssl_verify_identity={str(SSL_VERIFY_IDENTITY).lower()}")
+        SQLALCHEMY_DATABASE_URL = base_url + "?" + "&".join(ssl_params)
+    else:
+        SQLALCHEMY_DATABASE_URL = base_url
 
 # Create engine for MySQL/PostgreSQL
 engine = create_engine(
@@ -51,10 +67,6 @@ engine = create_engine(
         "write_timeout": 60,    # 60 second write timeout
         "charset": "utf8mb4",
         "autocommit": False,
-        # SSL configuration for secure connections (required by Northflank)
-        "ssl_disabled": not SSL_ENABLED,  # Enable SSL based on environment
-        "ssl_verify_cert": SSL_VERIFY_CERT,  # Certificate verification from environment
-        "ssl_verify_identity": SSL_VERIFY_IDENTITY,  # Identity verification from environment
     }
 )
 
