@@ -15,8 +15,17 @@ SSL_VERIFY_IDENTITY = os.getenv("DB_SSL_VERIFY_IDENTITY", "false").lower() == "t
 
 # Debug logging for SSL configuration
 import logging
+import ssl
 logger = logging.getLogger(__name__)
 logger.info(f"SSL Configuration: enabled={SSL_ENABLED}, verify_cert={SSL_VERIFY_CERT}, verify_identity={SSL_VERIFY_IDENTITY}")
+
+# Create SSL context for more explicit SSL configuration
+if SSL_ENABLED:
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = SSL_VERIFY_IDENTITY
+    ssl_context.verify_mode = ssl.CERT_REQUIRED if SSL_VERIFY_CERT else ssl.CERT_NONE
+else:
+    ssl_context = None
 
 # Check for DATABASE_URL first, then fall back to individual variables
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -24,17 +33,20 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL:
     # Platform provides DATABASE_URL
     SQLALCHEMY_DATABASE_URL = DATABASE_URL
-    # Replace mysql:// with mysql+pymysql:// if needed
+    # Replace mysql:// with mysql+mysqlconnector:// if needed (better SSL support)
     if SQLALCHEMY_DATABASE_URL.startswith("mysql://"):
-        SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("mysql://", "mysql+pymysql://", 1)
+        SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("mysql://", "mysql+mysqlconnector://", 1)
+    elif SQLALCHEMY_DATABASE_URL.startswith("mysql+pymysql://"):
+        SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("mysql+pymysql://", "mysql+mysqlconnector://", 1)
     
     # Add SSL parameters to URL if SSL is enabled
     if SSL_ENABLED:
         ssl_params = []
-        # Use explicit SSL parameters for PyMySQL
+        # Use explicit SSL parameters for mysql-connector-python
         ssl_params.append("ssl_disabled=false")
         ssl_params.append(f"ssl_verify_cert={str(SSL_VERIFY_CERT).lower()}")
         ssl_params.append(f"ssl_verify_identity={str(SSL_VERIFY_IDENTITY).lower()}")
+        ssl_params.append("ssl_ca=")  # Empty CA for cloud providers
         
         # Check if URL already has parameters
         if "?" in SQLALCHEMY_DATABASE_URL:
@@ -54,6 +66,7 @@ if DATABASE_URL:
                     user = auth_host.split(':')[0]
                     masked_url = masked_url.replace(auth_host, f'{user}:***')
         logger.info(f"Final Database URL: {masked_url}")
+        logger.info(f"SSL Parameters added: {ssl_params}")
 else:
     # Use individual environment variables
     # Get database connection details from environment variables
@@ -63,13 +76,14 @@ else:
     DB_PORT = os.getenv("DB_PORT", "3306")
     DB_NAME = os.getenv("DB_NAME", "mealtrack")
 
-    # MySQL URL with SSL parameters
-    base_url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    # MySQL URL with SSL parameters (using mysqlconnector for better SSL support)
+    base_url = f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     if SSL_ENABLED:
         ssl_params = []
         ssl_params.append("ssl_disabled=false")
         ssl_params.append(f"ssl_verify_cert={str(SSL_VERIFY_CERT).lower()}")
         ssl_params.append(f"ssl_verify_identity={str(SSL_VERIFY_IDENTITY).lower()}")
+        ssl_params.append("ssl_ca=")  # Empty CA for cloud providers
         SQLALCHEMY_DATABASE_URL = base_url + "?" + "&".join(ssl_params)
     else:
         SQLALCHEMY_DATABASE_URL = base_url
@@ -95,6 +109,9 @@ engine = create_engine(
         "ssl_disabled": False,
         "ssl_verify_cert": SSL_VERIFY_CERT,
         "ssl_verify_identity": SSL_VERIFY_IDENTITY,
+        "ssl_ca": "",  # Empty CA for cloud providers
+        # Alternative SSL configuration using ssl context
+        "ssl": ssl_context,
     }
 )
 
