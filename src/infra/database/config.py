@@ -13,6 +13,11 @@ SSL_ENABLED = os.getenv("DB_SSL_ENABLED", "true").lower() == "true"
 SSL_VERIFY_CERT = os.getenv("DB_SSL_VERIFY_CERT", "false").lower() == "true"
 SSL_VERIFY_IDENTITY = os.getenv("DB_SSL_VERIFY_IDENTITY", "false").lower() == "true"
 
+# Debug logging for SSL configuration
+import logging
+logger = logging.getLogger(__name__)
+logger.info(f"SSL Configuration: enabled={SSL_ENABLED}, verify_cert={SSL_VERIFY_CERT}, verify_identity={SSL_VERIFY_IDENTITY}")
+
 # Check for DATABASE_URL first, then fall back to individual variables
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -24,12 +29,31 @@ if DATABASE_URL:
         SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("mysql://", "mysql+pymysql://", 1)
     
     # Add SSL parameters to URL if SSL is enabled
-    if SSL_ENABLED and "?" not in SQLALCHEMY_DATABASE_URL:
+    if SSL_ENABLED:
         ssl_params = []
-        ssl_params.append(f"ssl_disabled={str(not SSL_ENABLED).lower()}")
+        # Use explicit SSL parameters for PyMySQL
+        ssl_params.append("ssl_disabled=false")
         ssl_params.append(f"ssl_verify_cert={str(SSL_VERIFY_CERT).lower()}")
         ssl_params.append(f"ssl_verify_identity={str(SSL_VERIFY_IDENTITY).lower()}")
-        SQLALCHEMY_DATABASE_URL += "?" + "&".join(ssl_params)
+        
+        # Check if URL already has parameters
+        if "?" in SQLALCHEMY_DATABASE_URL:
+            # URL already has parameters, append SSL params
+            SQLALCHEMY_DATABASE_URL += "&" + "&".join(ssl_params)
+        else:
+            # URL has no parameters, add SSL params
+            SQLALCHEMY_DATABASE_URL += "?" + "&".join(ssl_params)
+        
+        # Log the final URL (mask password for security)
+        masked_url = SQLALCHEMY_DATABASE_URL
+        if '://' in masked_url and '@' in masked_url:
+            parts = masked_url.split('://')
+            if ':' in parts[1] and '@' in parts[1]:
+                auth_host = parts[1].split('@')[0]
+                if ':' in auth_host:
+                    user = auth_host.split(':')[0]
+                    masked_url = masked_url.replace(auth_host, f'{user}:***')
+        logger.info(f"Final Database URL: {masked_url}")
 else:
     # Use individual environment variables
     # Get database connection details from environment variables
@@ -43,7 +67,7 @@ else:
     base_url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     if SSL_ENABLED:
         ssl_params = []
-        ssl_params.append(f"ssl_disabled={str(not SSL_ENABLED).lower()}")
+        ssl_params.append("ssl_disabled=false")
         ssl_params.append(f"ssl_verify_cert={str(SSL_VERIFY_CERT).lower()}")
         ssl_params.append(f"ssl_verify_identity={str(SSL_VERIFY_IDENTITY).lower()}")
         SQLALCHEMY_DATABASE_URL = base_url + "?" + "&".join(ssl_params)
@@ -67,6 +91,10 @@ engine = create_engine(
         "write_timeout": 60,    # 60 second write timeout
         "charset": "utf8mb4",
         "autocommit": False,
+        # SSL fallback configuration (in case URL params don't work)
+        "ssl_disabled": False,
+        "ssl_verify_cert": SSL_VERIFY_CERT,
+        "ssl_verify_identity": SSL_VERIFY_IDENTITY,
     }
 )
 
