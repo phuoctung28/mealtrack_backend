@@ -7,6 +7,10 @@ from typing import Dict, Any, Optional, List
 import re
 
 
+# Constants
+TIME_FORMAT_PATTERN = r'^[0-2][0-9]:[0-5][0-9]$'  # HH:mm format (e.g., 09:00, 23:59)
+
+
 @dataclass
 class NotificationPreferences:
     """User notification preferences"""
@@ -26,8 +30,12 @@ class NotificationPreferences:
     
     @staticmethod
     def _is_valid_time(time_str: str) -> bool:
-        """Validate time format HH:mm"""
-        return bool(re.match(r'^[0-2][0-9]:[0-5][0-9]$', time_str))
+        """Validate time format HH:mm (00:00 to 23:59)"""
+        if not re.match(TIME_FORMAT_PATTERN, time_str):
+            return False
+        # Additional validation for hours 00-23
+        hours = int(time_str.split(':')[0])
+        return 0 <= hours <= 23
     
     def can_send_push(self) -> bool:
         """Check if push notifications are allowed"""

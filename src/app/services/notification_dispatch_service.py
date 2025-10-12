@@ -146,7 +146,3 @@ class NotificationDispatchService:
         
         logger.info(f"Batch dispatch complete: {results}")
         return results
-
-
-from typing import Optional
-
