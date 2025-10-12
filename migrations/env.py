@@ -12,7 +12,7 @@ from sqlalchemy import pool
 from alembic import context
 
 # Import our database configuration
-from src.infra.database.config import Base, SQLALCHEMY_DATABASE_URL
+from src.infra.database.config import Base, SQLALCHEMY_DATABASE_URL, engine
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -69,11 +69,8 @@ def run_migrations_online() -> None:
     if SQLALCHEMY_DATABASE_URL:
         configuration['sqlalchemy.url'] = SQLALCHEMY_DATABASE_URL
     
-    connectable = engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    # Use our pre-configured engine with SSL support instead of creating a new one
+    connectable = engine
 
     with connectable.connect() as connection:
         context.configure(

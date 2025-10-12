@@ -234,8 +234,45 @@ class MigrationManager:
             if heads:
                 target_revision = heads[0]  # Use first head
                 logger.info(f"Using revision: {target_revision}")
-                command.stamp(config, target_revision)
-                logger.info("✅ Database stamped with latest revision")
+                
+                # Add timeout and more detailed logging
+                import signal
+                import time
+                
+                def timeout_handler(signum, frame):
+                    raise TimeoutError("Stamping operation timed out")
+                
+                # Set a 30-second timeout for the stamping operation
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(30)
+                
+                try:
+                    logger.info(f"Starting stamp operation for revision: {target_revision}")
+                    
+                    # First, manually create the alembic_version table if it doesn't exist
+                    with self.engine.connect() as conn:
+                        # Check if alembic_version table exists
+                        result = conn.execute(text("SHOW TABLES LIKE 'alembic_version'"))
+                        if not result.fetchone():
+                            logger.info("Creating alembic_version table manually...")
+                            conn.execute(text("""
+                                CREATE TABLE alembic_version (
+                                    version_num VARCHAR(32) NOT NULL,
+                                    CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
+                                ) ENGINE=InnoDB
+                            """))
+                            conn.commit()
+                            logger.info("✅ alembic_version table created")
+                    
+                    # Now try the stamp operation
+                    command.stamp(config, target_revision)
+                    signal.alarm(0)  # Cancel the alarm
+                    logger.info("✅ Database stamped with latest revision")
+                except TimeoutError:
+                    signal.alarm(0)  # Cancel the alarm
+                    logger.error("❌ Stamping operation timed out after 30 seconds")
+                    raise Exception("Stamping operation timed out")
+                    
             else:
                 logger.warning("No heads found, using baseline revision")
                 command.stamp(config, "001")
