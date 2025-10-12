@@ -1,7 +1,7 @@
 """add_subscriptions_table
 
-Revision ID: f04b8926a1d5
-Revises: 490f9b3ada53
+Revision ID: 006
+Revises: 005
 Create Date: 2025-10-08 16:07:05.746089
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'f04b8926a1d5'
-down_revision: Union[str, None] = '490f9b3ada53'
+revision: str = '006'
+down_revision: Union[str, None] = '005'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
