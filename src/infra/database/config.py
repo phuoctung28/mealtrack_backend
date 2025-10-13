@@ -91,9 +91,7 @@ engine = create_engine(
     pool_timeout=30,  # Wait up to 30 seconds for available connection
     # Connection retry and timeout settings
     connect_args={
-        "connect_timeout": 60,  # 60 second connection timeout
-        "read_timeout": 60,     # 60 second read timeout
-        "write_timeout": 60,    # 60 second write timeout
+        "connection_timeout": 60,  # 60 second connection timeout (mysql-connector-python uses connection_timeout not connect_timeout)
         "charset": "utf8mb4",
         "autocommit": False,
         # SSL fallback configuration (mysql-connector-python specific)

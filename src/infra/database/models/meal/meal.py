@@ -61,10 +61,16 @@ class Meal(Base, TimestampMixin):
         from datetime import datetime
         from src.infra.mappers import MealStatusMapper
 
+        # Convert UUID objects to strings to ensure compatibility with MySQL
+        meal_id = str(domain_model.meal_id) if domain_model.meal_id else None
+        user_id = getattr(domain_model, "user_id", None)
+        if user_id:
+            user_id = str(user_id)
+
         # Create meal
         meal = cls(
-            meal_id=domain_model.meal_id,
-            user_id=getattr(domain_model, "user_id", None),
+            meal_id=meal_id,
+            user_id=user_id,
             status=MealStatusMapper.to_db(domain_model.status),
             created_at=domain_model.created_at,
             updated_at=getattr(domain_model, "updated_at", None) or datetime.now(),
@@ -77,13 +83,13 @@ class Meal(Base, TimestampMixin):
             is_manually_edited=getattr(domain_model, "is_manually_edited", False)
         )
 
-        # Add image reference
+        # Add image reference - convert UUID to string
         if domain_model.image:
-            meal.image_id = domain_model.image.image_id
+            meal.image_id = str(domain_model.image.image_id)
 
         # Add nutrition if it exists
         if domain_model.nutrition:
             from src.infra.database.models.nutrition.nutrition import Nutrition
-            meal.nutrition = Nutrition.from_domain(domain_model.nutrition, meal_id=domain_model.meal_id)
+            meal.nutrition = Nutrition.from_domain(domain_model.nutrition, meal_id=meal_id)
 
         return meal

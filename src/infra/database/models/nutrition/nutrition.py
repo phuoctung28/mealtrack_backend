@@ -53,10 +53,13 @@ class Nutrition(Base, SecondaryEntityMixin):
     @classmethod
     def from_domain(cls, domain_model, meal_id):
         """Create DB model from domain model."""
+        # Convert UUID objects to strings to ensure compatibility with MySQL
+        meal_id_str = str(meal_id) if meal_id else None
+        
         nutrition = cls(
             calories=domain_model.calories,
             confidence_score=domain_model.confidence_score,
-            meal_id=meal_id
+            meal_id=meal_id_str
         )
         
         # Set macro fields directly
