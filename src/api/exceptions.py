@@ -1,10 +1,13 @@
 """
 API Exception classes for consistent error handling.
 """
+import logging
+import traceback
 from typing import Optional, Dict, Any
 
 from fastapi import HTTPException, status
 
+logger = logging.getLogger(__name__)
 
 class MealTrackException(Exception):
     """Base exception for all MealTrack exceptions."""
@@ -85,12 +88,32 @@ def handle_exception(exc: Exception) -> HTTPException:
     """Handle any exception and convert to appropriate HTTP exception."""
     
     if isinstance(exc, MealTrackException):
+        logger.warning(
+            f"MealTrack exception occurred: {exc.error_code} - {exc.message}",
+            extra={
+                "error_code": exc.error_code,
+                "details": exc.details
+            }
+        )
         return create_http_exception(exc)
     
     if isinstance(exc, HTTPException):
+        logger.warning(
+            f"HTTP exception occurred: {exc.status_code} - {exc.detail}"
+        )
         return exc
     
-    # Unexpected exceptions
+    # Unexpected exceptions - log full stack trace
+    logger.error(
+        f"Unexpected exception occurred: {type(exc).__name__} - {str(exc)}",
+        exc_info=True,
+        extra={
+            "exception_type": type(exc).__name__,
+            "exception_message": str(exc),
+            "stack_trace": traceback.format_exc()
+        }
+    )
+    
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail={

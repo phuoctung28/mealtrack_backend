@@ -2,6 +2,7 @@
 Users API endpoints - Firebase integration for user management.
 Handles user authentication sync, profile retrieval, and status management.
 """
+import logging
 from fastapi import APIRouter, Depends
 
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -28,6 +29,7 @@ from src.app.queries.user.get_user_by_firebase_uid_query import (
 )
 from src.infra.event_bus import EventBus
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/users", tags=["Users"])
 
 
@@ -49,6 +51,15 @@ async def sync_user_from_firebase(
     - **photo_url**: User profile photo URL (optional)
     - **provider**: Authentication provider (phone, google)
     """
+    logger.info(
+        f"Starting user sync for firebase_uid: {request.firebase_uid}",
+        extra={
+            "firebase_uid": request.firebase_uid,
+            "provider": request.provider,
+            "has_email": bool(request.email),
+            "has_phone": bool(request.phone_number)
+        }
+    )
     try:
         # Create sync command
         command = SyncUserCommand(
@@ -68,6 +79,15 @@ async def sync_user_from_firebase(
         
         # Map result to response
         user_data = result["user"]
+        
+        logger.info(
+            f"User sync completed for firebase_uid: {request.firebase_uid}",
+            extra={
+                "firebase_uid": request.firebase_uid,
+                "created": result["created"],
+                "updated": result["updated"]
+            }
+        )
 
         return UserSyncResponse(
             user=UserProfileResponse(**user_data),
@@ -77,6 +97,14 @@ async def sync_user_from_firebase(
         )
         
     except Exception as e:
+        logger.error(
+            f"User sync failed for firebase_uid: {request.firebase_uid}",
+            extra={
+                "firebase_uid": request.firebase_uid,
+                "provider": request.provider,
+                "exception_type": type(e).__name__
+            }
+        )
         raise handle_exception(e)
 
 
