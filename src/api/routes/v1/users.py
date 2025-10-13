@@ -84,8 +84,8 @@ async def sync_user_from_firebase(
             f"User sync completed for firebase_uid: {request.firebase_uid}",
             extra={
                 "firebase_uid": request.firebase_uid,
-                "created": result["created"],
-                "updated": result["updated"]
+                "user_created": result["created"],
+                "user_updated": result["updated"]
             }
         )
 
