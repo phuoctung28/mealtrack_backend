@@ -60,3 +60,7 @@ package-lock.json
 # Deployment tracking
 .deployments/
 *.deployment.json
+
+# Firebase credentials
+credentials/*.json
+*.json

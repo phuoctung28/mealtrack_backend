@@ -38,6 +38,12 @@ from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
     UpdateUserLastAccessedCommand,
 )
+from src.app.commands.notification import (
+    UpdateNotificationPreferencesCommand,
+    RegisterDeviceTokenCommand,
+    UnregisterDeviceTokenCommand,
+    SendTestNotificationCommand,
+)
 from src.app.events.meal import MealImageUploadedEvent
 # Import all command handlers from module
 from src.app.handlers.command_handlers import (
@@ -54,6 +60,12 @@ from src.app.handlers.command_handlers import (
     UpdateUserMetricsCommandHandler,
     UploadMealImageImmediatelyHandler,
     GenerateWeeklyIngredientBasedMealPlanCommandHandler
+)
+from src.app.handlers.notification_command_handlers import (
+    UpdateNotificationPreferencesCommandHandler,
+    RegisterDeviceTokenCommandHandler,
+    UnregisterDeviceTokenCommandHandler,
+    SendTestNotificationCommandHandler,
 )
 # Import event handlers
 from src.app.handlers.event_handlers.meal_analysis_event_handler import (
@@ -100,6 +112,16 @@ from src.app.queries.user import GetUserProfileQuery, GetUserMetricsQuery
 from src.app.queries.user.get_user_by_firebase_uid_query import (
     GetUserByFirebaseUidQuery,
     GetUserOnboardingStatusQuery,
+)
+from src.app.queries.notification import (
+    GetNotificationPreferencesQuery,
+    GetUserDevicesQuery,
+    GetNotificationHistoryQuery,
+)
+from src.app.handlers.notification_query_handlers import (
+    GetNotificationPreferencesQueryHandler,
+    GetUserDevicesQueryHandler,
+    GetNotificationHistoryQueryHandler,
 )
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_data_service_port import FoodDataServicePort
@@ -248,6 +270,36 @@ async def get_configured_event_bus(
         GetUserMetricsQuery, GetUserMetricsQueryHandler(db)
     )
     event_bus.register_handler(GetUserTdeeQuery, GetUserTdeeQueryHandler(db))
+
+    # Register notification handlers
+    event_bus.register_handler(
+        UpdateNotificationPreferencesCommand,
+        UpdateNotificationPreferencesCommandHandler(db)
+    )
+    event_bus.register_handler(
+        RegisterDeviceTokenCommand,
+        RegisterDeviceTokenCommandHandler(db)
+    )
+    event_bus.register_handler(
+        UnregisterDeviceTokenCommand,
+        UnregisterDeviceTokenCommandHandler(db)
+    )
+    event_bus.register_handler(
+        SendTestNotificationCommand,
+        SendTestNotificationCommandHandler(db)
+    )
+    event_bus.register_handler(
+        GetNotificationPreferencesQuery,
+        GetNotificationPreferencesQueryHandler(db)
+    )
+    event_bus.register_handler(
+        GetUserDevicesQuery,
+        GetUserDevicesQueryHandler(db)
+    )
+    event_bus.register_handler(
+        GetNotificationHistoryQuery,
+        GetNotificationHistoryQueryHandler(db)
+    )
 
     # Register domain event subscribers
     meal_analysis_handler = MealAnalysisEventHandler(
