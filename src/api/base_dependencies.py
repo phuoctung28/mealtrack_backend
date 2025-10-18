@@ -9,6 +9,7 @@ from src.domain.ports.food_data_service_port import FoodDataServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.domain.ports.notification_repository_port import NotificationRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.food_mapping_service import FoodMappingService
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
@@ -18,6 +19,7 @@ from src.infra.adapters.image_store import ImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.database.config import SessionLocal
 from src.infra.repositories.meal_repository import MealRepository
+from src.infra.repositories.notification_repository import NotificationRepository
 
 
 # Note: Old handler imports removed - using event-driven architecture now
@@ -120,6 +122,19 @@ def get_food_mapping_service() -> FoodMappingServicePort:
         FoodMappingServicePort: The food mapping service
     """
     return FoodMappingService()
+
+# Notification Repository
+def get_notification_repository(db: Session = Depends(get_db)) -> NotificationRepositoryPort:
+    """
+    Get the notification repository instance.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        NotificationRepositoryPort: The notification repository
+    """
+    return NotificationRepository(db)
 
 
 # Note: Old handler functions removed - using event-driven architecture now

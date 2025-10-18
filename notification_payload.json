@@ -1,0 +1,11 @@
+{
+  "aps": {
+    "alert": {
+      "title": "Hello from Simulator",
+      "body": "This is a simulated remote notification."
+    },
+    "badge": 1,
+    "sound": "default"
+  },
+  "customKey": "any-data-you-need"
+}

@@ -29,6 +29,9 @@ from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
 from src.infra.database.migration_manager import MigrationManager
 from src.infra.database.config import engine
+from src.api.routes.v1.notifications import router as notifications_router
+from src.api.routes.v1.notification_test import router as notification_test_router
+from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 
 load_dotenv()
 
@@ -128,6 +131,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Dev auth bypass: inject a fixed user during development
+add_dev_auth_bypass(app)
+
 
 @app.get("/health")
 async def health_check():
@@ -161,6 +167,8 @@ app.include_router(users_router)
 app.include_router(foods_router)
 app.include_router(manual_meals_router)
 app.include_router(webhooks_router)
+app.include_router(notifications_router)
+app.include_router(notification_test_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get("ENVIRONMENT") == "development":

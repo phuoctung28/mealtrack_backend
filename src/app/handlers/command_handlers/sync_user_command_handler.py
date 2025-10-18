@@ -51,6 +51,9 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                 user = self._create_new_user(command)
                 created = True
                 logger.info('Created new user')
+                
+                # Create default notification preferences for new user
+                self._create_default_notification_preferences(user.id)
 
             # Commit changes
             self.db.commit()
@@ -206,3 +209,22 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                 return name_parts[0], None
 
         return first_name, last_name
+    
+    def _create_default_notification_preferences(self, user_id: str):
+        """Create default notification preferences for a new user."""
+        try:
+            from src.domain.model.notification import NotificationPreferences
+            
+            # Create default preferences
+            default_prefs = NotificationPreferences.create_default(user_id)
+            
+            # Save to database using the notification repository
+            from src.infra.repositories.notification_repository import NotificationRepository
+            notification_repo = NotificationRepository(self.db)
+            notification_repo.save_notification_preferences(default_prefs)
+            
+            logger.info(f"Created default notification preferences for user {user_id}")
+            
+        except Exception as e:
+            logger.error(f"Error creating default notification preferences for user {user_id}: {e}")
+            # Don't raise the exception to avoid breaking user creation

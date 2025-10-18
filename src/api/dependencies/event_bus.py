@@ -8,6 +8,7 @@ from src.api.base_dependencies import (
     get_db,
     get_image_store,
     get_meal_repository,
+    get_notification_repository,
     get_vision_service,
     get_gpt_parser,
     get_food_data_service,
@@ -38,6 +39,11 @@ from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
     UpdateUserLastAccessedCommand,
 )
+from src.app.commands.notification import (
+    RegisterFcmTokenCommand,
+    DeleteFcmTokenCommand,
+    UpdateNotificationPreferencesCommand,
+)
 from src.app.events.meal import MealImageUploadedEvent
 # Import all command handlers from module
 from src.app.handlers.command_handlers import (
@@ -54,6 +60,11 @@ from src.app.handlers.command_handlers import (
     UpdateUserMetricsCommandHandler,
     UploadMealImageImmediatelyHandler,
     GenerateWeeklyIngredientBasedMealPlanCommandHandler
+)
+from src.app.handlers.command_handlers.notification_command_handlers import (
+    RegisterFcmTokenCommandHandler,
+    DeleteFcmTokenCommandHandler,
+    UpdateNotificationPreferencesCommandHandler,
 )
 # Import event handlers
 from src.app.handlers.event_handlers.meal_analysis_event_handler import (
@@ -78,6 +89,9 @@ from src.app.handlers.query_handlers import (
     GetMealPlanningSummaryQueryHandler,
     GetUserMetricsQueryHandler,
 )
+from src.app.handlers.query_handlers.notification_query_handlers import (
+    GetNotificationPreferencesQueryHandler,
+)
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.daily_meal import (
     GetMealSuggestionsForProfileQuery,
@@ -101,6 +115,7 @@ from src.app.queries.user.get_user_by_firebase_uid_query import (
     GetUserByFirebaseUidQuery,
     GetUserOnboardingStatusQuery,
 )
+from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_data_service_port import FoodDataServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
@@ -111,6 +126,7 @@ async def get_configured_event_bus(
     db: Session = Depends(get_db),
     image_store = Depends(get_image_store),
     meal_repository = Depends(get_meal_repository),
+    notification_repository = Depends(get_notification_repository),
     vision_service = Depends(get_vision_service),
     gpt_parser = Depends(get_gpt_parser),
     food_data_service: FoodDataServicePort = Depends(get_food_data_service),
@@ -248,6 +264,24 @@ async def get_configured_event_bus(
         GetUserMetricsQuery, GetUserMetricsQueryHandler(db)
     )
     event_bus.register_handler(GetUserTdeeQuery, GetUserTdeeQueryHandler(db))
+
+    # Register notification handlers
+    event_bus.register_handler(
+        RegisterFcmTokenCommand,
+        RegisterFcmTokenCommandHandler(notification_repository)
+    )
+    event_bus.register_handler(
+        DeleteFcmTokenCommand,
+        DeleteFcmTokenCommandHandler(notification_repository)
+    )
+    event_bus.register_handler(
+        UpdateNotificationPreferencesCommand,
+        UpdateNotificationPreferencesCommandHandler(notification_repository)
+    )
+    event_bus.register_handler(
+        GetNotificationPreferencesQuery,
+        GetNotificationPreferencesQueryHandler(notification_repository)
+    )
 
     # Register domain event subscribers
     meal_analysis_handler = MealAnalysisEventHandler(
