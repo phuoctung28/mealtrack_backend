@@ -44,16 +44,36 @@ pip install -r requirements.txt
 
 ### Environment Configuration
 
-2. Update `.env` with your actual configuration:
+Create a `.env` file in the root directory with the following variables:
 
-**Required Variables:**
-- `OPENAI_API_KEY`: Your OpenAI API key for GPT-4 Vision
+**AI & External APIs:**
+- `GOOGLE_API_KEY`: Your Google API key (e.g., for Gemini AI vision)
+- `USDA_FDC_API_KEY`: USDA FoodData Central API key for nutrition data
+- `PINECONE_API_KEY`: Pinecone API key for vector database
+
+**Database:**
+- `DB_PASSWORD`: MySQL database password
+
+**Cloud Storage (Cloudinary):**
 - `CLOUDINARY_CLOUD_NAME`: Your Cloudinary cloud name
-- `CLOUDINARY_API_KEY`: Your Cloudinary API key  
+- `CLOUDINARY_API_KEY`: Your Cloudinary API key
 - `CLOUDINARY_API_SECRET`: Your Cloudinary API secret
+- `UPLOADS_DIR`: Local directory for file uploads
+- `USE_MOCK_STORAGE`: Set to `1` for local storage, `0` for Cloudinary (default: `0`)
 
-**Optional Variables:**
-- `USE_MOCK_STORAGE=0`: Use Cloudinary (set to 1 for local storage)
+**Application Settings:**
+- `ENVIRONMENT`: Environment mode (e.g., `development`, `production`, `staging`)
+
+**Firebase:**
+- `FCM_CREDENTIALS_PATH`: Path to Firebase Cloud Messaging credentials JSON file
+
+**Email/SMTP Configuration:**
+- `SMTP_HOST`: SMTP server hostname
+- `SMTP_PORT`: SMTP server port
+- `SMTP_USERNAME`: SMTP authentication username
+- `SMTP_PASSWORD`: SMTP authentication password
+- `EMAIL_FROM_ADDRESS`: Email address to send from
+- `EMAIL_FROM_NAME`: Display name for sent emails
 
 ### Database Setup
 
