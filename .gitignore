@@ -60,3 +60,6 @@ package-lock.json
 # Deployment tracking
 .deployments/
 *.deployment.json
+
+# macOS
+.DS_Store
