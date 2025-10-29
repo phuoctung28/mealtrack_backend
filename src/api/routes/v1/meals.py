@@ -6,10 +6,12 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, UploadFile, Query, HTTPException, status
+from fastapi import APIRouter, Depends, File, UploadFile, Query, status
 
+from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.exceptions import handle_exception
+from src.api.exceptions import handle_exception, ValidationException
+from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.schemas.request.meal_requests import EditMealIngredientsRequest
 from src.api.schemas.response import (
@@ -22,6 +24,7 @@ from src.app.commands.meal import (
     CustomNutritionData
 )
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
+from src.app.commands.meal.upload_meal_image_immediately_command import UploadMealImageImmediatelyCommand
 from src.app.queries.meal import (
     GetMealByIdQuery,
     GetDailyMacrosQuery
@@ -52,7 +55,7 @@ STATUS_MAPPING = {
 @router.post("/image/analyze", status_code=status.HTTP_200_OK, response_model=DetailedMealResponse)
 async def analyze_meal_image_immediate(
     file: UploadFile = File(...),
-    user_id: str = Query(..., description="User ID for meal association"),
+    user_id: str = Depends(get_current_user_id),
     target_date: Optional[str] = Query(None, description="Target date in YYYY-MM-DD format for meal association"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
@@ -67,13 +70,16 @@ async def analyze_meal_image_immediate(
     - Returns complete meal analysis immediately
     - Processing time may be longer than the background version
     - Recommended for interactive use cases
+    
+    Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
         # Validate content type
         if file.content_type not in ALLOWED_CONTENT_TYPES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid file type. Only {', '.join(ALLOWED_CONTENT_TYPES)} are allowed."
+            raise ValidationException(
+                message=f"Invalid file type. Only {', '.join(ALLOWED_CONTENT_TYPES)} are allowed.",
+                error_code="INVALID_FILE_TYPE",
+                details={"content_type": file.content_type, "allowed": ALLOWED_CONTENT_TYPES}
             )
         
         # Read file content
@@ -81,9 +87,10 @@ async def analyze_meal_image_immediate(
         
         # Validate file size
         if len(contents) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File size exceeds maximum allowed (8MB)"
+            raise ValidationException(
+                message=f"File size exceeds maximum allowed ({MAX_FILE_SIZE // (1024*1024)} MB)",
+                error_code="FILE_SIZE_EXCEEDS_MAXIMUM",
+                details={"size": len(contents), "max_size": MAX_FILE_SIZE}
             )
         
         # Parse target date if provided
@@ -91,16 +98,16 @@ async def analyze_meal_image_immediate(
         if target_date:
             try:
                 parsed_target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
-                logger.info(f"Target date specified: {parsed_target_date}")
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid date format. Use YYYY-MM-DD format."
-                )
+                logger.info("Target date specified: %s", parsed_target_date)
+            except ValueError as e:
+                raise ValidationException(
+                    message="Invalid date format. Use YYYY-MM-DD format.",
+                    error_code="INVALID_DATE_FORMAT",
+                    details={"date": target_date}
+                ) from e
         
         # Process the upload and analysis immediately
-        logger.info(f"Processing meal photo for immediate analysis (target_date: {parsed_target_date})")
-        from src.app.commands.meal import UploadMealImageImmediatelyCommand
+        logger.info("Processing meal photo for immediate analysis (target_date: %s)", parsed_target_date)
         
         command = UploadMealImageImmediatelyCommand(
             user_id=user_id,
@@ -112,36 +119,30 @@ async def analyze_meal_image_immediate(
         logger.info("Uploading and analyzing meal immediately")
         meal = await event_bus.send(command)
         
-        logger.info(f"Immediate analysis completed for meal ID: {meal.meal_id}, status: {meal.status}")
+        logger.info("Immediate analysis completed for meal ID: %s, status: %s", meal.meal_id, meal.status)
         
         # Check if analysis was successful
         if meal.status.value == "FAILED":
             error_message = meal.error_message or "Analysis failed"
-            logger.error(f"Immediate analysis failed: {error_message}")
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Failed to analyze meal image: {error_message}"
+            logger.error("Immediate analysis failed: %s", error_message)
+            raise ValidationException(
+                message=f"Failed to analyze meal image: {error_message}",
+                error_code="FAILED_TO_ANALYZE_MEAL_IMAGE",
+                details={"error_message": error_message}
             )
         
         # Get the image URL if available
         image_url = None
         if meal.image:
             # Try to get URL from image store
-            from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
             image_store = CloudinaryImageStore()
             image_url = image_store.get_url(meal.image.image_id)
         
         # Return the detailed meal response using mapper
         return MealMapper.to_detailed_response(meal, image_url)
 
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error in immediate meal analysis: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error analyzing meal photo: {str(e)}"
-        )
+        raise handle_exception(e) from e
 
 
 @router.get("/{meal_id}", response_model=DetailedMealResponse)
@@ -158,7 +159,6 @@ async def get_meal(
         # Get image URL if available
         image_url = None
         if meal.image:
-            from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
             image_store = CloudinaryImageStore()
             image_url = image_store.get_url(meal.image.image_id)
         
@@ -166,7 +166,7 @@ async def get_meal(
         return MealMapper.to_detailed_response(meal, image_url)
         
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 @router.delete("/{meal_id}")
 async def delete_meal(
     meal_id: str,
@@ -178,17 +178,21 @@ async def delete_meal(
         result = await event_bus.send(command)
         return result
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 
 @router.get("/daily/macros", response_model=DailyNutritionResponse)
 async def get_daily_macros(
-    user_id: str = Query(..., description="User ID to get TDEE targets for"),
+    user_id: str = Depends(get_current_user_id),
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    """Get daily macronutrient summary for all meals with user targets from TDEE."""
+    """
+    Get daily macronutrient summary for all meals with user targets from TDEE.
+    
+    Authentication required: User ID is automatically extracted from the Firebase token.
+    """
     try:
         # Parse date
         target_date = None
@@ -203,7 +207,7 @@ async def get_daily_macros(
         return MealMapper.to_daily_nutrition_response(result)
         
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.put("/{meal_id}/ingredients")
@@ -219,7 +223,7 @@ async def update_meal_ingredients(
     """
     try:
 
-        logger.info(f"Updating meal ingredients for meal {meal_id}")
+        logger.info("Updating meal ingredients for meal %s", meal_id)
         # Convert request to command
         food_item_changes = []
         for change_request in request.food_item_changes:
@@ -244,7 +248,7 @@ async def update_meal_ingredients(
                 )
             )
 
-        logger.info(f"Food item changes: {food_item_changes}")
+        logger.info("Food item changes: %s", food_item_changes)
         
         command = EditMealCommand(
             meal_id=meal_id,
@@ -252,9 +256,9 @@ async def update_meal_ingredients(
             food_item_changes=food_item_changes
         )
         
-        logger.info(f"Sending command to event bus: {command}")
+        logger.info("Sending command to event bus: %s", command)
         result = await event_bus.send(command)
         return result
         
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e

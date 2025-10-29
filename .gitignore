@@ -34,6 +34,10 @@ env/
 # Environment variables
 .env
 
+# Firebase credentials (NEVER commit these!)
+firebase-service-account.json
+*-firebase-adminsdk-*.json
+
 # Logs
 *.log
 

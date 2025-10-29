@@ -64,8 +64,10 @@ Create a `.env` file in the root directory with the following variables:
 **Application Settings:**
 - `ENVIRONMENT`: Environment mode (e.g., `development`, `production`, `staging`)
 
-**Firebase:**
-- `FCM_CREDENTIALS_PATH`: Path to Firebase Cloud Messaging credentials JSON file
+**Firebase Authentication:**
+- `FIREBASE_CREDENTIALS`: Path to Firebase service account credentials JSON file
+  - For development: Use staging Firebase project credentials
+  - For production: Use production Firebase project credentials
 
 **Email/SMTP Configuration:**
 - `SMTP_HOST`: SMTP server hostname

@@ -5,6 +5,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Query
 
+from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.schemas.request import (
@@ -28,8 +29,8 @@ router = APIRouter(prefix="/v1/meal-plans", tags=["Meal Planning"])
 
 @router.post("/generate/weekly-ingredient-based", response_model=MealPlanGenerationStatusResponse)
 async def generate_weekly_ingredient_based_meal_plan(
-    user_id: str,
     request: IngredientBasedMealPlanRequest,
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -40,6 +41,8 @@ async def generate_weekly_ingredient_based_meal_plan(
     
     The system generates the meal plan in the background and returns a simple success status,
     allowing the frontend to show a loading screen and navigate to the home screen once complete.
+    
+    Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
         # Generate weekly meal plan using ingredients from request
@@ -60,7 +63,7 @@ async def generate_weekly_ingredient_based_meal_plan(
         )
         
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.get("/{plan_id}")
@@ -78,14 +81,14 @@ async def get_meal_plan(
         
         return result["meal_plan"]
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 # Query meals by date
 @router.get("/meals/by-date", response_model=MealsByDateResponse)
 async def get_meals_by_date(
-    user_id: str,
     meal_date: date = Query(..., description="Date to get meals for (YYYY-MM-DD format)"),
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -95,8 +98,9 @@ async def get_meals_by_date(
     This endpoint searches through all stored meal plans (both daily and weekly) to find
     meals that match the requested date.
     
+    Authentication required: User ID is automatically extracted from the Firebase token.
+    
     Parameters:
-    - user_id: The user to get meals for
     - meal_date: The specific date to retrieve meals for (YYYY-MM-DD format)
     - meal_type: Optional filter to only return specific meal type (breakfast, lunch, dinner, snack)
     """
@@ -112,4 +116,4 @@ async def get_meals_by_date(
         
         return MealsByDateResponse(**result)
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
