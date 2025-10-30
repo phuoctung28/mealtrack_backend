@@ -4,9 +4,11 @@ Test endpoints for push notifications.
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.base_dependencies import (
+    get_scheduled_notification_service,
+    get_firebase_service
+)
 from src.api.exceptions import handle_exception
-from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/notification-test", tags=["Notification Testing"])
 
@@ -27,7 +29,7 @@ class TestNotificationResponse(BaseModel):
 @router.post("/send-test", response_model=TestNotificationResponse)
 async def send_test_notification(
     request: TestNotificationRequest,
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    scheduled_service = Depends(get_scheduled_notification_service)
 ):
     """
     Send a test notification to a user.
@@ -35,37 +37,56 @@ async def send_test_notification(
     This endpoint allows testing push notifications without waiting for scheduled times.
     """
     try:
-        # This would need to be implemented as a command/query pattern
-        # For now, we'll return a placeholder response
+        if not scheduled_service:
+            raise HTTPException(
+                status_code=503,
+                detail="Scheduled notification service is not initialized"
+            )
         
-        return TestNotificationResponse(
-            success=True,
-            message=f"Test notification would be sent to user {request.user_id}",
-            details={
-                "user_id": request.user_id,
-                "notification_type": request.notification_type,
-                "note": "This is a placeholder - implement actual notification sending"
-            }
+        # Send test notification using the scheduled notification service
+        result = await scheduled_service.send_test_notification(
+            user_id=request.user_id,
+            notification_type=request.notification_type
         )
         
+        if result.get("success"):
+            return TestNotificationResponse(
+                success=True,
+                message=f"Test notification sent successfully to user {request.user_id}",
+                details=result
+            )
+        else:
+            return TestNotificationResponse(
+                success=False,
+                message=f"Failed to send test notification: {result.get('reason', 'unknown')}",
+                details=result
+            )
+        
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.get("/status")
-async def get_notification_status():
+async def get_notification_status(
+    scheduled_service = Depends(get_scheduled_notification_service),
+    firebase_service = Depends(get_firebase_service)
+):
     """
     Get the status of the notification system.
     
     Returns information about the notification service status.
     """
     try:
-        # This would check if Firebase is initialized and services are running
+        firebase_initialized = firebase_service.is_initialized() if firebase_service else False
+        scheduled_service_running = scheduled_service.is_running() if scheduled_service else False
+        
         return {
-            "firebase_initialized": True,  # Placeholder
-            "scheduled_service_running": True,  # Placeholder
-            "message": "Notification system status check"
+            "firebase_initialized": firebase_initialized,
+            "scheduled_service_running": scheduled_service_running,
+            "scheduled_service_exists": scheduled_service is not None,
+            "message": "Notification system is " + ("running" if scheduled_service_running else "not running"),
+            "status": "healthy" if (firebase_initialized and scheduled_service_running) else "degraded"
         }
         
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e

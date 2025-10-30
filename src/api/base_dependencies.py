@@ -20,6 +20,9 @@ from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.database.config import SessionLocal
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
+from src.infra.services.firebase_service import FirebaseService
+from src.domain.services.notification_service import NotificationService
+from src.infra.services.scheduled_notification_service import ScheduledNotificationService
 
 
 # Note: Old handler imports removed - using event-driven architecture now
@@ -135,6 +138,74 @@ def get_notification_repository(db: Session = Depends(get_db)) -> NotificationRe
         NotificationRepositoryPort: The notification repository
     """
     return NotificationRepository(db)
+
+
+# Firebase Service (singleton pattern - create once and reuse)
+_firebase_service = None
+
+def get_firebase_service() -> FirebaseService:
+    """
+    Get the Firebase service instance (singleton).
+    
+    Returns:
+        FirebaseService: The Firebase service
+    """
+    global _firebase_service
+    if _firebase_service is None:
+        _firebase_service = FirebaseService()
+    return _firebase_service
+
+
+# Notification Service
+def get_notification_service(
+    notification_repository: NotificationRepositoryPort = Depends(get_notification_repository),
+    firebase_service: FirebaseService = Depends(get_firebase_service)
+) -> NotificationService:
+    """
+    Get the notification service instance.
+    
+    Args:
+        notification_repository: Notification repository
+        firebase_service: Firebase service
+        
+    Returns:
+        NotificationService: The notification service
+    """
+    return NotificationService(notification_repository, firebase_service)
+
+
+# Scheduled Notification Service (singleton pattern - create once and reuse)
+_scheduled_notification_service = None
+
+def get_scheduled_notification_service() -> ScheduledNotificationService:
+    """
+    Get the scheduled notification service instance (singleton).
+    This is created during application startup in the lifespan function.
+    
+    Returns:
+        ScheduledNotificationService: The scheduled notification service
+    """
+    return _scheduled_notification_service
+
+
+def initialize_scheduled_notification_service() -> ScheduledNotificationService:
+    """
+    Initialize the scheduled notification service during application startup.
+    
+    Returns:
+        ScheduledNotificationService: The initialized scheduled notification service
+    """
+    global _scheduled_notification_service
+    if _scheduled_notification_service is None:
+        # Create instances without using Depends (we're not in request context)
+        notification_repository = NotificationRepository()
+        firebase_service = get_firebase_service()
+        notification_service = NotificationService(notification_repository, firebase_service)
+        _scheduled_notification_service = ScheduledNotificationService(
+            notification_repository, 
+            notification_service
+        )
+    return _scheduled_notification_service
 
 
 # Note: Old handler functions removed - using event-driven architecture now

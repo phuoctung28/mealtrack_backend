@@ -117,10 +117,13 @@ class FirebaseService:
     ) -> Dict[str, Any]:
         """Send notification to specific FCM tokens."""
         try:
+            # Ensure all data values are strings
+            string_data = {k: str(v) for k, v in data.items()} if data else {}
+            
             # Create multicast message
             message = messaging.MulticastMessage(
                 notification=messaging.Notification(title=title, body=body),
-                data=data,
+                data=string_data,
                 tokens=tokens,
                 android=messaging.AndroidConfig(
                     priority='high',
@@ -141,7 +144,7 @@ class FirebaseService:
             )
             
             # Send the message
-            response = messaging.send_multicast(message)
+            response = messaging.send_each_for_multicast(message)
             
             logger.info(f"Notification sent: {response.success_count} successful, {response.failure_count} failed")
             
