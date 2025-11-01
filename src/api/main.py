@@ -66,7 +66,9 @@ def initialize_firebase():
             firebase_admin.initialize_app(cred)
             logger.info("Firebase initialized with service account credentials (environment: %s)", environment)
         else:
-            raise ValueError("Firebase credentials not found")
+            # Fall back to default credentials (for local development or cloud environments)
+            firebase_admin.initialize_app()
+            logger.info("Firebase initialized with default credentials (environment: %s)", environment)
     except Exception as e:
         logger.error("Failed to initialize Firebase: %s", e)
         raise
