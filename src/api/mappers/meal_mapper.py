@@ -241,11 +241,19 @@ class MealMapper:
             DailyNutritionResponse DTO
         """
         from src.api.schemas.response.daily_nutrition_response import MacrosResponse
+        from src.api.exceptions import ResourceNotFoundException
         
         # Extract data - require actual user targets, no hardcoded defaults
         target_calories = daily_macros_data.get("target_calories")
         if not target_calories:
-            raise ValueError("target_calories is required. Daily macros query must include user's calculated TDEE data.")
+            raise ResourceNotFoundException(
+                message="User profile not found or incomplete. Please complete onboarding first.",
+                error_code="TDEE_DATA_NOT_FOUND",
+                details={
+                    "user_id": daily_macros_data.get("user_id"),
+                    "reason": "User has not completed onboarding or TDEE calculation is missing"
+                }
+            )
         
         target_macros = MacrosResponse(
             protein=daily_macros_data.get("target_macros").get("protein") or 0.0,
