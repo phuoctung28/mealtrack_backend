@@ -335,7 +335,7 @@ class TestPineconeNutritionService:
         mock_ingredients_index = Mock()
         
         # Mock different ingredients
-        def mock_query():
+        def mock_query(**kwargs):
             # Return different results based on call count
             if not hasattr(mock_query, 'call_count'):
                 mock_query.call_count = 0
