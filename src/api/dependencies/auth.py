@@ -10,6 +10,9 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth as firebase_auth
+from sqlalchemy.orm import Session
+
+from src.infra.database.config import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -93,18 +96,29 @@ async def verify_firebase_token(
         ) from e
 
 
-async def get_current_user_id(token: dict = Depends(verify_firebase_token)) -> str:
+async def get_current_user_id(
+    token: dict = Depends(verify_firebase_token),
+    db: Session = Depends(get_db)
+) -> str:
     """
-    Extract the authenticated user's ID from the verified Firebase token.
+    Extract the authenticated user's database ID from the verified Firebase token.
 
-    This is a convenience dependency that extracts just the user ID
-    from the verified token. Use this when you only need the user ID.
+    This dependency:
+    1. Extracts the Firebase UID from the verified token
+    2. Looks up the user in the database by firebase_uid
+    3. Returns the database user.id (UUID primary key)
+
+    This ensures that the user_id matches what's expected by all database queries.
 
     Args:
         token: Verified Firebase token (injected by verify_firebase_token)
+        db: Database session (injected by get_db)
 
     Returns:
-        The authenticated user's Firebase UID
+        The authenticated user's database ID (UUID)
+
+    Raises:
+        HTTPException: If token is invalid or user not found in database
 
     Example:
         @router.get("/profile")
@@ -113,14 +127,33 @@ async def get_current_user_id(token: dict = Depends(verify_firebase_token)) -> s
         ):
             return {"user_id": user_id}
     """
-    user_id = token.get("uid")
-    if not user_id:
+    firebase_uid = token.get("uid")
+    if not firebase_uid:
         logger.error("Firebase token missing 'uid' field")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token: missing user identifier",
         )
-    return user_id
+    
+    # Look up user in database by firebase_uid
+    from src.infra.database.models.user.user import User
+    user = db.query(User).filter(User.firebase_uid == firebase_uid).first()
+    
+    if not user:
+        logger.warning("User with Firebase UID %s not found in database", firebase_uid)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error_code": "USER_NOT_FOUND",
+                "message": "User not found. Please sync your account first.",
+                "details": {
+                    "firebase_uid": firebase_uid,
+                    "hint": "Call POST /v1/users/sync to create your account"
+                }
+            }
+        )
+    
+    return user.id
 
 
 async def get_current_user_email(

@@ -47,6 +47,10 @@ class UserRepository:
         """Get user by username."""
         return self.db.query(User).filter(User.username == username).first()
     
+    def get_user_by_firebase_uid(self, firebase_uid: str) -> Optional[User]:
+        """Get user by Firebase UID."""
+        return self.db.query(User).filter(User.firebase_uid == firebase_uid).first()
+    
     def create_user_profile(self, user_id: str, age: int, gender: str, 
                           height_cm: float, weight_kg: float, 
                           body_fat_percentage: Optional[float] = None,
