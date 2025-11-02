@@ -163,8 +163,11 @@ main() {
             ;;
         all)
             install_dependencies
-            verify_database
-            clean_database
+            # Skip database verification and cleaning in CI - tests handle their own DB setup
+            if [ -z "$CI" ]; then
+                verify_database
+                clean_database
+            fi
             run_tests
             generate_report
             check_coverage
