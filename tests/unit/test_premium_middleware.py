@@ -69,8 +69,8 @@ class TestPremiumMiddleware:
         """Test require_premium checks RevenueCat when no local subscription."""
         mock_request.state.user = mock_user_without_premium
         
-        with patch('src.api.middleware.premium_check.settings') as mock_settings:
-            mock_settings.REVENUECAT_SECRET_API_KEY = "test_key"
+        with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
+            mock_getenv.return_value = "test_key"
             
             with patch('src.api.middleware.premium_check.RevenueCatService') as mock_service_class:
                 mock_service = mock_service_class.return_value
@@ -87,8 +87,8 @@ class TestPremiumMiddleware:
         """Test require_premium denies access when no premium anywhere."""
         mock_request.state.user = mock_user_without_premium
         
-        with patch('src.api.middleware.premium_check.settings') as mock_settings:
-            mock_settings.REVENUECAT_SECRET_API_KEY = "test_key"
+        with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
+            mock_getenv.return_value = "test_key"
             
             with patch('src.api.middleware.premium_check.RevenueCatService') as mock_service_class:
                 mock_service = mock_service_class.return_value
@@ -106,8 +106,8 @@ class TestPremiumMiddleware:
         """Test require_premium denies access when RevenueCat not configured."""
         mock_request.state.user = mock_user_without_premium
         
-        with patch('src.api.middleware.premium_check.settings') as mock_settings:
-            mock_settings.REVENUECAT_SECRET_API_KEY = ""
+        with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
+            mock_getenv.return_value = ""
             
             with pytest.raises(HTTPException) as exc_info:
                 await require_premium(mock_request)
@@ -143,8 +143,8 @@ class TestPremiumMiddleware:
         """Test get_premium_status checks RevenueCat when no local subscription."""
         mock_request.state.user = mock_user_without_premium
         
-        with patch('src.api.middleware.premium_check.settings') as mock_settings:
-            mock_settings.REVENUECAT_SECRET_API_KEY = "test_key"
+        with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
+            mock_getenv.return_value = "test_key"
             
             with patch('src.api.middleware.premium_check.RevenueCatService') as mock_service_class:
                 mock_service = mock_service_class.return_value
@@ -167,8 +167,8 @@ class TestPremiumMiddleware:
         """Test get_premium_status when user has no premium."""
         mock_request.state.user = mock_user_without_premium
         
-        with patch('src.api.middleware.premium_check.settings') as mock_settings:
-            mock_settings.REVENUECAT_SECRET_API_KEY = "test_key"
+        with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
+            mock_getenv.return_value = "test_key"
             
             with patch('src.api.middleware.premium_check.RevenueCatService') as mock_service_class:
                 mock_service = mock_service_class.return_value
