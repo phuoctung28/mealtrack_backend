@@ -24,7 +24,7 @@ install_dependencies() {
     log_info "Installing dependencies..."
     python -m pip install --upgrade pip
     pip install -r requirements.txt
-    pip install pytest pytest-cov pytest-asyncio==0.21.1 pytest-mock
+    pip install -r requirements-test.txt
 }
 
 # Verify database connection
