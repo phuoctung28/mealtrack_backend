@@ -33,3 +33,6 @@ python-dotenv==1.0.0
 
 # Event-driven architecture
 pymediator==0.3.0
+
+# Firebase Authentication
+firebase-admin>=6.0.0

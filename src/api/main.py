@@ -1,12 +1,22 @@
+"""
+Main application file for the MealTrack API.
+
+This file initializes the FastAPI application, sets up middleware,
+includes routes, and handles application lifecycle events.
+"""
+
 import logging
 import os
 import time
 from contextlib import asynccontextmanager
 
+import firebase_admin
+from firebase_admin import credentials
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
@@ -17,6 +27,8 @@ from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
+from src.infra.database.migration_manager import MigrationManager
+from src.infra.database.config import engine
 
 load_dotenv()
 
@@ -25,35 +37,78 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def initialize_firebase():
+    """
+    Initialize Firebase Admin SDK.
+
+    Supports two methods:
+    1. Service account JSON file path (recommended for production)
+    2. Default credentials (for local development and cloud environments)
+
+    Set FIREBASE_CREDENTIALS environment variable to path of service account JSON.
+    If not set, will attempt to use default credentials.
+    """
+    try:
+        # Check if already initialized
+        firebase_admin.get_app()
+        logger.info("Firebase already initialized")
+        return
+    except ValueError:
+        # Not initialized yet, proceed with initialization
+        pass
+
+    try:
+        environment = os.getenv("ENVIRONMENT", "development")
+        credentials_path = os.getenv("FIREBASE_CREDENTIALS")
+
+        if credentials_path and os.path.exists(credentials_path):
+            cred = credentials.Certificate(credentials_path)
+            firebase_admin.initialize_app(cred)
+            logger.info("Firebase initialized with service account credentials (environment: %s)", environment)
+        else:
+            # Fall back to default credentials (for local development or cloud environments)
+            firebase_admin.initialize_app()
+            logger.info("Firebase initialized with default credentials (environment: %s)", environment)
+    except Exception as e:
+        logger.error("Failed to initialize Firebase: %s", e)
+        raise
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle application startup and shutdown events."""
     # Startup
     logger.info("Starting MealTrack API...")
-    
+
+    # Initialize Firebase Admin SDK
+    try:
+        initialize_firebase()
+    except Exception as e:
+        logger.error("Failed to initialize Firebase: %s", e)
+        raise
+
     # Run database migrations
     try:
-        from src.infra.database.migration_manager import MigrationManager
-        from src.infra.database.config import engine
-        
         migration_manager = MigrationManager.from_environment(engine)
         success = migration_manager.initialize_and_migrate()
-        
+
         if not success:
             logger.error("Database migrations failed!")
             # Optionally, you can decide to exit here or continue in degraded mode
             # For now, we'll log the error and continue
-            if os.getenv('FAIL_ON_MIGRATION_ERROR', 'false').lower() == 'true':
-                logger.error("Exiting due to migration failure (FAIL_ON_MIGRATION_ERROR=true)")
+            if os.getenv("FAIL_ON_MIGRATION_ERROR", "false").lower() == "true":
+                logger.error(
+                    "Exiting due to migration failure (FAIL_ON_MIGRATION_ERROR=true)"
+                )
                 raise RuntimeError("Database migration failed")
     except Exception as e:
-        logger.error(f"Failed to run migrations: {e}")
-        if os.getenv('FAIL_ON_MIGRATION_ERROR', 'false').lower() == 'true':
+        logger.error("Failed to run migrations: %s", e)
+        if os.getenv("FAIL_ON_MIGRATION_ERROR", "false").lower() == "true":
             raise
-    
+
     logger.info("MealTrack API started successfully!")
     yield
-    
+
     # Shutdown
     logger.info("Shutting down MealTrack API...")
 
@@ -73,33 +128,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     try:
-        # Quick database connection check
-        from src.infra.database.config import engine
-        from sqlalchemy import text
-        
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        
-        return {
-            "status": "healthy",
-            "database": "connected",
-            "timestamp": time.time()
-        }
+
+        return {"status": "healthy", "database": "connected", "timestamp": time.time()}
     except Exception as e:
         return {
             "status": "unhealthy",
             "database": "disconnected",
             "error": str(e),
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
+
 
 @app.get("/")
 async def root():
     return "MealTrack API is running! Visit /docs for API documentation."
+
 
 app.include_router(meals_router)
 app.include_router(activities_router)
@@ -113,11 +163,14 @@ app.include_router(manual_meals_router)
 app.include_router(webhooks_router)
 
 # Serve static files from uploads directory (development)
-if os.environ.get('ENVIRONMENT') == 'development':
-    uploads_path = os.getenv("UPLOADS_DIR", "./uploads")  # Default to './uploads' if UPLOADS_DIR is not set
+if os.environ.get("ENVIRONMENT") == "development":
+    uploads_path = os.getenv(
+        "UPLOADS_DIR", "./uploads"
+    )  # Default to './uploads' if UPLOADS_DIR is not set
     if os.path.exists(uploads_path):
         app.mount("/uploads", StaticFiles(directory=uploads_path), name="uploads")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True) 
+
+    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)

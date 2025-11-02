@@ -220,7 +220,7 @@ def parse_platform(store: str) -> str:
 
 def parse_timestamp(ms: Optional[int]) -> Optional[datetime]:
     """Parse millisecond timestamp to datetime."""
-    if not ms:
+    if ms is None:
         return None
     try:
         return datetime.fromtimestamp(ms / 1000)

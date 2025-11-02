@@ -6,7 +6,7 @@ import logging
 from typing import List
 
 from src.app.events.base import EventHandler, handles
-from src.app.queries.meal import GetMealsByDateQuery
+from src.app.queries.meal_plan import GetMealsByDateQuery
 from src.domain.model.meal import Meal
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 
@@ -20,13 +20,13 @@ class GetMealsByDateQueryHandler(EventHandler[GetMealsByDateQuery, List[Meal]]):
     def __init__(self, meal_repository: MealRepositoryPort = None):
         self.meal_repository = meal_repository
 
-    def set_dependencies(self, meal_repository: MealRepositoryPort):
+    def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
-        self.meal_repository = meal_repository
+        self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
 
-    async def handle(self, query: GetMealsByDateQuery) -> List[Meal]:
+    async def handle(self, event: GetMealsByDateQuery) -> List[Meal]:
         """Get meals for a specific date and user."""
         if not self.meal_repository:
             raise RuntimeError("Meal repository not configured")
-
-        return self.meal_repository.find_by_date(query.target_date, user_id=query.user_id)
+        
+        return self.meal_repository.find_by_date(event.meal_date, user_id=event.user_id)

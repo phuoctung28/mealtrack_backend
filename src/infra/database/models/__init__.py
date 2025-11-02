@@ -32,6 +32,7 @@ from .test import TestTable
 from .user.profile import UserProfile
 # User models
 from .user.user import User
+from .subscription import Subscription
 
 __all__ = [
     # Base
@@ -53,6 +54,7 @@ __all__ = [
     # User models
     "User",
     "UserProfile",
+    "Subscription",
     
     # Nutrition models
     "Nutrition",

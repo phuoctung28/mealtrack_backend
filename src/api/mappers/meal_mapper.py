@@ -12,7 +12,7 @@ from src.api.schemas.response import (
 )
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
-from src.domain.model.nutrition import FoodItem, Nutrition
+from src.domain.model.nutrition import FoodItem, Nutrition, Macros, Micros
 
 # Status mapping from domain to API
 STATUS_MAPPING = {
@@ -194,14 +194,23 @@ class MealMapper:
         Returns:
             Nutrition domain model
         """
+        macros = Macros(
+            protein=nutrition_dict.get("protein_g", 0),
+            carbs=nutrition_dict.get("carbs_g", 0),
+            fat=nutrition_dict.get("fat_g", 0)
+        )
+        
+        micros = None
+        if "sodium_mg" in nutrition_dict:
+            micros = Micros(
+                sodium=nutrition_dict.get("sodium_mg", 0)
+            )
+        
         return Nutrition(
-            nutrition_id=nutrition_dict.get("nutrition_id", ""),
             calories=nutrition_dict.get("calories", 0),
-            protein_g=nutrition_dict.get("protein_g", 0),
-            carbs_g=nutrition_dict.get("carbs_g", 0),
-            fat_g=nutrition_dict.get("fat_g", 0),
-            sugar_g=nutrition_dict.get("sugar_g", 0),
-            sodium_mg=nutrition_dict.get("sodium_mg", 0)
+            macros=macros,
+            micros=micros,
+            food_items=[]
         )
     
     @staticmethod
@@ -215,18 +224,33 @@ class MealMapper:
         Returns:
             FoodItem domain model
         """
-        nutrition = None
+        # Extract calories and macros from nutrition dict if present
+        calories = item_dict.get("calories", 0)
+        macros = Macros(protein=0, carbs=0, fat=0)
+        micros = None
+        
         if "nutrition" in item_dict and item_dict["nutrition"]:
-            nutrition = MealMapper.map_nutrition_from_dict(item_dict["nutrition"])
+            nutrition_data = item_dict["nutrition"]
+            calories = nutrition_data.get("calories", 0)
+            macros = Macros(
+                protein=nutrition_data.get("protein_g", 0),
+                carbs=nutrition_data.get("carbs_g", 0),
+                fat=nutrition_data.get("fat_g", 0)
+            )
+            if "sodium_mg" in nutrition_data:
+                micros = Micros(sodium=nutrition_data.get("sodium_mg", 0))
         
         return FoodItem(
             id=item_dict.get("id", ""),
             name=item_dict.get("name", ""),
-            category=item_dict.get("category", ""),
             quantity=item_dict.get("quantity", 0),
             unit=item_dict.get("unit", ""),
-            description=item_dict.get("description"),
-            nutrition=nutrition
+            calories=calories,
+            macros=macros,
+            micros=micros,
+            confidence=item_dict.get("confidence", 1.0),
+            fdc_id=item_dict.get("fdc_id"),
+            is_custom=item_dict.get("is_custom", False)
         )
     
     @staticmethod
@@ -241,11 +265,19 @@ class MealMapper:
             DailyNutritionResponse DTO
         """
         from src.api.schemas.response.daily_nutrition_response import MacrosResponse
+        from src.api.exceptions import ResourceNotFoundException
         
         # Extract data - require actual user targets, no hardcoded defaults
         target_calories = daily_macros_data.get("target_calories")
         if not target_calories:
-            raise ValueError("target_calories is required. Daily macros query must include user's calculated TDEE data.")
+            raise ResourceNotFoundException(
+                message="User profile not found or incomplete. Please complete onboarding first.",
+                error_code="TDEE_DATA_NOT_FOUND",
+                details={
+                    "user_id": daily_macros_data.get("user_id"),
+                    "reason": "User has not completed onboarding or TDEE calculation is missing"
+                }
+            )
         
         target_macros = MacrosResponse(
             protein=daily_macros_data.get("target_macros").get("protein") or 0.0,

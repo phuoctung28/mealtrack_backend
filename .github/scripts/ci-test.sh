@@ -24,7 +24,7 @@ install_dependencies() {
     log_info "Installing dependencies..."
     python -m pip install --upgrade pip
     pip install -r requirements.txt
-    pip install pytest pytest-cov pytest-asyncio==0.21.1 pytest-mock
+    pip install -r requirements-test.txt
 }
 
 # Verify database connection
@@ -163,8 +163,11 @@ main() {
             ;;
         all)
             install_dependencies
-            verify_database
-            clean_database
+            # Skip database verification and cleaning in CI - tests handle their own DB setup
+            if [ -z "$CI" ]; then
+                verify_database
+                clean_database
+            fi
             run_tests
             generate_report
             check_coverage

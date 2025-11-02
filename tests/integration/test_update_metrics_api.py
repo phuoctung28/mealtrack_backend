@@ -14,13 +14,19 @@ from src.infra.database.models.user.profile import UserProfile
 @pytest.fixture
 def client(test_session):
     """Create a test client with database dependency override."""
+    from src.api.dependencies.auth import get_current_user_id
+    
     def override_get_db():
         try:
             yield test_session
         finally:
             pass  # Session cleanup handled by test_session fixture
     
+    def override_get_current_user_id():
+        return "test_user_metrics"
+    
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_id] = override_get_current_user_id
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
@@ -64,12 +70,12 @@ def setup_test_user(test_session):
 
 
 class TestUpdateMetricsEndpoint:
-    """Integration tests for POST /v1/user-profiles/{user_id}/metrics endpoint."""
+    """Integration tests for POST /v1/user-profiles/metrics endpoint."""
     
     def test_update_weight_only(self, client, setup_test_user):
         """Test updating only weight returns recalculated TDEE."""
         response = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={"weight_kg": 75.0}
         )
         
@@ -93,7 +99,7 @@ class TestUpdateMetricsEndpoint:
     def test_update_activity_level_only(self, client, setup_test_user):
         """Test updating only activity level."""
         response = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={"activity_level": "very_active"}
         )
         
@@ -107,7 +113,7 @@ class TestUpdateMetricsEndpoint:
     def test_update_body_fat_only(self, client, setup_test_user):
         """Test updating only body fat percentage."""
         response = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={"body_fat_percent": 15.0}
         )
         
@@ -120,7 +126,7 @@ class TestUpdateMetricsEndpoint:
     def test_update_fitness_goal_only(self, client, setup_test_user):
         """Test updating only fitness goal."""
         response = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={"fitness_goal": "cutting"}
         )
         
@@ -134,7 +140,7 @@ class TestUpdateMetricsEndpoint:
     def test_update_all_metrics_together(self, client, setup_test_user):
         """Test updating all metrics in one call."""
         response = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={
                 "weight_kg": 72.5,
                 "activity_level": "moderately_active",
@@ -154,14 +160,14 @@ class TestUpdateMetricsEndpoint:
         """Test goal update within cooldown period returns 409."""
         # First update the goal
         response1 = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={"fitness_goal": "cutting"}
         )
         assert response1.status_code == 200
         
         # Immediately try to change it again (should fail)
         response2 = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={"fitness_goal": "bulking"}
         )
         
@@ -176,14 +182,14 @@ class TestUpdateMetricsEndpoint:
         """Test goal update with override bypasses cooldown."""
         # First update the goal
         response1 = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={"fitness_goal": "cutting"}
         )
         assert response1.status_code == 200
         
         # Immediately change it again with override
         response2 = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={"fitness_goal": "bulking", "override": True}
         )
         
@@ -194,7 +200,7 @@ class TestUpdateMetricsEndpoint:
     def test_invalid_weight(self, client, setup_test_user):
         """Test validation error for invalid weight."""
         response = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={"weight_kg": -5.0}
         )
         
@@ -203,7 +209,7 @@ class TestUpdateMetricsEndpoint:
     def test_invalid_body_fat(self, client, setup_test_user):
         """Test validation error for body fat out of range."""
         response = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={"body_fat_percent": 75.0}
         )
         
@@ -212,16 +218,24 @@ class TestUpdateMetricsEndpoint:
     def test_empty_request(self, client, setup_test_user):
         """Test error when no metrics provided."""
         response = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={}
         )
         
         assert response.status_code in [400, 422]
     
-    def test_nonexistent_user(self, client):
+    def test_nonexistent_user(self, client, test_session):
         """Test error when user doesn't exist."""
+        from src.api.dependencies.auth import get_current_user_id
+        
+        # Override to return non-existent user
+        def override_get_nonexistent_user():
+            return "nonexistent_user"
+        
+        app.dependency_overrides[get_current_user_id] = override_get_nonexistent_user
+        
         response = client.post(
-            "/v1/user-profiles/nonexistent_user/metrics",
+            "/v1/user-profiles/metrics",
             json={"weight_kg": 75.0}
         )
         
@@ -231,14 +245,14 @@ class TestUpdateMetricsEndpoint:
         """Test that metrics update affects subsequent TDEE queries."""
         # Update metrics
         update_response = client.post(
-            "/v1/user-profiles/test_user_metrics/metrics",
+            "/v1/user-profiles/metrics",
             json={"weight_kg": 80.0, "activity_level": "very_active"}
         )
         assert update_response.status_code == 200
         updated_tdee = update_response.json()["tdee"]
         
         # Query TDEE
-        query_response = client.get("/v1/user-profiles/test_user_metrics/tdee")
+        query_response = client.get("/v1/user-profiles/tdee")
         assert query_response.status_code == 200
         queried_tdee = query_response.json()["tdee"]
         

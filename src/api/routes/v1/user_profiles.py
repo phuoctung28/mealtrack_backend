@@ -4,17 +4,18 @@ Handles user profile management and TDEE calculations.
 """
 from fastapi import APIRouter, Depends
 
+from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.exceptions import handle_exception
+from src.api.exceptions import handle_exception, ConflictException, create_http_exception
 from src.api.mappers.tdee_mapper import TdeeMapper
-from src.api.schemas.request import OnboardingCompleteRequest, GoalEnum
-from src.api.schemas.request.user_profile_update_requests import UpdateFitnessGoalRequest, UpdateMetricsRequest
+from src.api.schemas.request import OnboardingCompleteRequest
+from src.api.schemas.request.user_profile_update_requests import UpdateMetricsRequest
 from src.api.schemas.response import TdeeCalculationResponse, UserMetricsResponse
 from src.app.commands.user import SaveUserOnboardingCommand
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import GetUserMetricsQuery
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
-from src.domain.model.tdee import TdeeResponse, Goal
+from src.domain.model.tdee import TdeeResponse, Goal, MacroTargets
 from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/user-profiles", tags=["User Profiles"])
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/v1/user-profiles", tags=["User Profiles"])
 @router.post("/", response_model=bool)
 async def save_user_onboarding(
     request: OnboardingCompleteRequest,
-    user_id: str = "test_user",
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -35,6 +36,8 @@ async def save_user_onboarding(
     - Fitness goals and activity level
     - Meal preferences
     - Returns TDEE calculation and macro targets
+    
+    Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
         # Create command
@@ -59,11 +62,11 @@ async def save_user_onboarding(
         return True
 
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
-@router.get("/{user_id}/metrics", response_model=UserMetricsResponse)
+@router.get("/metrics", response_model=UserMetricsResponse)
 async def get_user_metrics(
-    user_id: str,
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -74,6 +77,8 @@ async def get_user_metrics(
     - Activity level
     - Fitness goal
     - Target weight
+    
+    Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
         # Create query
@@ -85,12 +90,12 @@ async def get_user_metrics(
         return UserMetricsResponse(**result)
         
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
-@router.get("/{user_id}/tdee", response_model=TdeeCalculationResponse)
+@router.get("/tdee", response_model=TdeeCalculationResponse)
 async def get_user_tdee(
-    user_id: str,
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -100,6 +105,8 @@ async def get_user_tdee(
     - BMR using Mifflin-St Jeor or Katch-McArdle formula
     - TDEE based on activity level
     - Macro targets based on fitness goal
+    
+    Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
         # Create query
@@ -116,7 +123,6 @@ async def get_user_tdee(
         }
         
         # Create domain response
-        from src.domain.model.tdee import MacroTargets
         domain_response = TdeeResponse(
             bmr=result["bmr"],
             tdee=result["tdee"],
@@ -140,18 +146,20 @@ async def get_user_tdee(
         return response
         
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
-@router.post("/{user_id}/metrics", response_model=TdeeCalculationResponse)
+@router.post("/metrics", response_model=TdeeCalculationResponse)
 async def update_user_metrics(
-    user_id: str,
     request: UpdateMetricsRequest,
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
     Update user metrics (weight, activity level, body fat, fitness goal) and return updated TDEE/macros.
     
     Unified endpoint for profile updates. Supports goal cooldown with override.
+    
+    Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
         # Update metrics (including optional fitness goal)
@@ -168,11 +176,9 @@ async def update_user_metrics(
         try:
             await event_bus.send(command)
         except Exception as e:
-            from src.api.exceptions import ConflictException, create_http_exception
             if isinstance(e, ConflictException) and not request.override:
-                raise create_http_exception(e)
-            else:
-                raise
+                raise create_http_exception(e) from e
+            raise handle_exception(e) from e
 
         # Return updated TDEE/macros
         query = GetUserTdeeQuery(user_id=user_id)
@@ -184,7 +190,6 @@ async def update_user_metrics(
             'bulking': Goal.BULKING
         }
 
-        from src.domain.model.tdee import MacroTargets
         domain_response = TdeeResponse(
             bmr=result["bmr"],
             tdee=result["tdee"],
@@ -204,4 +209,4 @@ async def update_user_metrics(
         return response
 
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e

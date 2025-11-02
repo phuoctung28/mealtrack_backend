@@ -2,8 +2,8 @@
 Unit tests for PineconeNutritionService.
 """
 import os
+from unittest.mock import Mock, patch
 import pytest
-from unittest.mock import Mock, MagicMock, patch
 from src.infra.services.pinecone_service import (
     PineconeNutritionService,
     NutritionData,
@@ -272,11 +272,10 @@ class TestPineconeNutritionService:
         # Arrange
         mock_pc = Mock()
         mock_pinecone.return_value = mock_pc
-        mock_pc.Index.side_effect = Exception("Not needed")
+        mock_ingredients_index = Mock()
+        mock_pc.Index.return_value = mock_ingredients_index
         
         service = PineconeNutritionService(pinecone_api_key="test-key")
-        service.ingredients_index = Mock()  # Bypass init
-        service.usda_index = Mock()
         
         # Act & Assert
         assert service.convert_to_grams(100, "g") == 100
@@ -336,14 +335,14 @@ class TestPineconeNutritionService:
         mock_ingredients_index = Mock()
         
         # Mock different ingredients
-        def mock_query(vector, top_k, include_metadata):
+        def mock_query(**kwargs):
             # Return different results based on call count
             if not hasattr(mock_query, 'call_count'):
                 mock_query.call_count = 0
             
             mock_query.call_count += 1
             
-            if mock_query.call_count == 1:  # chicken
+            if mock_query.call_count == 1:
                 return {
                     'matches': [{
                         'score': 0.85,
@@ -359,7 +358,8 @@ class TestPineconeNutritionService:
                         }
                     }]
                 }
-            elif mock_query.call_count == 2:  # rice
+
+            if mock_query.call_count == 2:
                 return {
                     'matches': [{
                         'score': 0.85,
@@ -375,6 +375,7 @@ class TestPineconeNutritionService:
                         }
                     }]
                 }
+            return {'matches': []}
         
         mock_ingredients_index.query.side_effect = mock_query
         mock_pc.Index.return_value = mock_ingredients_index

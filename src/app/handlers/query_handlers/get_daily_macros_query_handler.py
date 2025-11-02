@@ -73,9 +73,12 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
 
             target_calories = tdee_result.get('target_calories')
             target_macros = tdee_result.get('macros', {})
+            
+            if target_calories is None:
+                logger.warning(f"TDEE data missing for user {query.user_id}. User may not have completed onboarding.")
         except Exception as e:
-            logger.warning(f"Could not fetch TDEE data for user {query.user_id}: {e}")
-            # Continue without target data - the client should handle missing targets
+            logger.warning(f"Could not fetch TDEE data for user {query.user_id}: {e}", exc_info=True)
+            # Continue without target data - mapper will handle this appropriately
 
         result = {
             "date": target_date.isoformat(),
