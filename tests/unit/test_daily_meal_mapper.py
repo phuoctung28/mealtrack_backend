@@ -213,9 +213,9 @@ class TestDailyMealMapper:
         assert result.meal_count == 3
         assert len(result.meals) == 1
         assert result.meals[0].name == "Oatmeal"
-        assert result.daily_totals["calories"] == 400
-        assert result.target_totals["calories"] == 2000
-        assert result.target_totals["protein"] == 150.0
+        assert result.daily_totals.calories == 400
+        assert result.target_totals.calories == 2000
+        assert result.target_totals.protein == 150.0
 
     def test_map_to_suggestions_response_with_dict_macros(self):
         """Test mapping with dict macros."""
@@ -260,7 +260,7 @@ class TestDailyMealMapper:
         result = DailyMealMapper.map_to_suggestions_response(result_data)
         
         assert result.date == "2025-01-16"
-        assert result.target_totals["protein"] == 150.0
+        assert result.target_totals.protein == 150.0
 
     def test_map_to_suggestions_response_missing_target_calories(self):
         """Test error when target_calories is missing."""

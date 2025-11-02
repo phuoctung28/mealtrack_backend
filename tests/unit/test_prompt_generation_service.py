@@ -335,7 +335,6 @@ class TestPromptGenerationService:
             allergies=[],
             fitness_goal="maintenance",
             activity_level="moderately_active",
-            include_snacks=True
         )
         
         ingredients = IngredientConstraints(
@@ -366,7 +365,6 @@ class TestPromptGenerationService:
             allergies=[],
             fitness_goal="maintenance",
             activity_level="moderately_active",
-            include_snacks=False
         )
         
         ingredients = IngredientConstraints(
