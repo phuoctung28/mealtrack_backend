@@ -11,7 +11,7 @@ from src.api.schemas.response import (
     NutritionTotalsResponse
 )
 from src.domain.model.macro_targets import SimpleMacroTargets
-from src.domain.model.meal_plan import PlannedMeal
+from src.domain.model.meal_plan import PlannedMeal, MealType
 
 
 class DailyMealMapper:
@@ -28,6 +28,15 @@ class DailyMealMapper:
         Returns:
             Dictionary with user preferences for domain service
         """
+        # Build target_macros from individual fields if any are provided
+        target_macros = None
+        if any([request.target_protein, request.target_carbs, request.target_fat]):
+            target_macros = {
+                "protein": request.target_protein,
+                "carbs": request.target_carbs,
+                "fat": request.target_fat
+            }
+        
         return {
             "age": request.age,
             "gender": request.gender,
@@ -38,7 +47,7 @@ class DailyMealMapper:
             "dietary_preferences": request.dietary_preferences or [],
             "health_conditions": request.health_conditions or [],
             "target_calories": request.target_calories,
-            "target_macros": request.target_macros
+            "target_macros": target_macros
         }
     
     @staticmethod
@@ -110,35 +119,48 @@ class DailyMealMapper:
         # Map meals
         meals = []
         for meal_dict in handler_response.get("meals", []):
+            # Convert meal_type string to enum
+            meal_type_str = meal_dict["meal_type"]
+            meal_type = MealType(meal_type_str) if isinstance(meal_type_str, str) else meal_type_str
+            
             # Create PlannedMeal from dict for easier mapping
             meal = PlannedMeal(
-                id=meal_dict["meal_id"],
-                meal_type=meal_dict["meal_type"],
+                meal_type=meal_type,
                 name=meal_dict["name"],
                 description=meal_dict["description"],
                 calories=meal_dict["calories"],
                 protein=meal_dict["protein"],
                 carbs=meal_dict["carbs"],
                 fat=meal_dict["fat"],
+                prep_time=meal_dict.get("prep_time", 0),
+                cook_time=meal_dict.get("cook_time", 0),
                 ingredients=meal_dict["ingredients"],
                 instructions=meal_dict.get("instructions", []),
-                preparation_time={
-                    "prep": meal_dict.get("prep_time", 0),
-                    "cook": meal_dict.get("cook_time", 0),
-                    "total": meal_dict.get("total_time", 0)
-                },
-                tags=[]  # Tags will be reconstructed from boolean fields
+                is_vegetarian=meal_dict.get("is_vegetarian", False),
+                is_vegan=meal_dict.get("is_vegan", False),
+                is_gluten_free=meal_dict.get("is_gluten_free", False),
+                cuisine_type=meal_dict.get("cuisine_type")
             )
             
-            # Add tags based on dietary flags
+            # Set extra attributes for mapper
+            meal.id = meal_dict["meal_id"]
+            meal.preparation_time = {
+                "prep": meal_dict.get("prep_time", 0),
+                "cook": meal_dict.get("cook_time", 0),
+                "total": meal_dict.get("total_time", 0)
+            }
+            
+            # Build tags from dietary flags
+            tags = []
             if meal_dict.get("is_vegetarian"):
-                meal.tags.append("vegetarian")
+                tags.append("vegetarian")
             if meal_dict.get("is_vegan"):
-                meal.tags.append("vegan")
+                tags.append("vegan")
             if meal_dict.get("is_gluten_free"):
-                meal.tags.append("gluten-free")
+                tags.append("gluten-free")
             if meal_dict.get("cuisine_type"):
-                meal.tags.append(meal_dict["cuisine_type"])
+                tags.append(meal_dict["cuisine_type"])
+            meal.tags = tags
             
             meals.append(DailyMealMapper.map_planned_meal_to_schema(meal))
         

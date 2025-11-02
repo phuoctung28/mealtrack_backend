@@ -2,12 +2,11 @@
 Unit tests for PromptGenerationService.
 """
 import pytest
-from datetime import date
 
 from src.domain.services.prompt_generation_service import PromptGenerationService
 from src.domain.model.meal_generation_request import (
     MealGenerationContext, MealGenerationRequest, MealGenerationType,
-    UserProfileData, NutritionTargets, AvailableIngredients
+    UserDietaryProfile, UserNutritionTargets, IngredientConstraints
 )
 from src.domain.model.meal_plan import MealType
 
@@ -21,12 +20,14 @@ def service():
 @pytest.fixture
 def user_profile():
     """Create sample user profile."""
-    return UserProfileData(
+    return UserDietaryProfile(
+        user_id="123",
+        meals_per_day=3,
         dietary_preferences=["vegetarian"],
+        allergies=[],
         health_conditions=[],
-        allergies=["peanuts"],
-        fitness_goal="maintenance",
         activity_level="moderately_active",
+        fitness_goal="maintenance",
         include_snacks=True
     )
 
@@ -34,7 +35,7 @@ def user_profile():
 @pytest.fixture
 def nutrition_targets():
     """Create sample nutrition targets."""
-    return NutritionTargets(
+    return UserNutritionTargets(
         calories=2000,
         protein=150.0,
         carbs=250.0,
@@ -47,19 +48,19 @@ class TestPromptGenerationService:
 
     def test_generate_weekly_ingredient_prompt(self, service, user_profile, nutrition_targets):
         """Test generating weekly ingredient-based prompt."""
-        ingredients = AvailableIngredients(
-            ingredients=["chicken breast", "brown rice", "broccoli"],
-            seasonings=["salt", "pepper", "olive oil"]
+        ingredients = IngredientConstraints(
+            available_ingredients=["chicken breast", "brown rice", "broccoli"],
+            available_seasonings=["salt", "pepper", "olive oil"]
         )
         
         request = MealGenerationRequest(
             generation_type=MealGenerationType.WEEKLY_INGREDIENT_BASED,
             user_profile=user_profile,
             nutrition_targets=nutrition_targets,
-            available_ingredients=ingredients
+            ingredient_constraints=ingredients
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         
         prompt, system_message = service.generate_prompt_and_system_message(context)
         
@@ -74,19 +75,19 @@ class TestPromptGenerationService:
 
     def test_generate_daily_ingredient_prompt(self, service, user_profile, nutrition_targets):
         """Test generating daily ingredient-based prompt."""
-        ingredients = AvailableIngredients(
-            ingredients=["salmon", "quinoa", "asparagus"],
-            seasonings=["lemon", "garlic", "thyme"]
+        ingredients = IngredientConstraints(
+            available_ingredients=["salmon", "quinoa", "asparagus"],
+            available_seasonings=["lemon", "garlic", "thyme"]
         )
         
         request = MealGenerationRequest(
             generation_type=MealGenerationType.DAILY_INGREDIENT_BASED,
             user_profile=user_profile,
             nutrition_targets=nutrition_targets,
-            available_ingredients=ingredients
+            ingredient_constraints=ingredients
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         
         prompt, system_message = service.generate_prompt_and_system_message(context)
         
@@ -105,7 +106,7 @@ class TestPromptGenerationService:
             nutrition_targets=nutrition_targets
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         
         prompt, system_message = service.generate_prompt_and_system_message(context)
         
@@ -123,26 +124,26 @@ class TestPromptGenerationService:
             nutrition_targets=nutrition_targets
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         
         with pytest.raises(ValueError, match="Unsupported generation type"):
             service.generate_prompt_and_system_message(context)
 
     def test_generate_single_ingredient_meal_prompt(self, service, user_profile, nutrition_targets):
         """Test generating single ingredient-based meal prompt."""
-        ingredients = AvailableIngredients(
-            ingredients=["chicken", "rice", "vegetables"],
-            seasonings=["salt", "pepper"]
+        ingredients = IngredientConstraints(
+            available_ingredients=["chicken", "rice", "vegetables"],
+            available_seasonings=["salt", "pepper"]
         )
         
         request = MealGenerationRequest(
             generation_type=MealGenerationType.DAILY_INGREDIENT_BASED,
             user_profile=user_profile,
             nutrition_targets=nutrition_targets,
-            available_ingredients=ingredients
+            ingredient_constraints=ingredients
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         
         prompt, system_message = service.generate_single_meal_prompt(
             meal_type=MealType.BREAKFAST,
@@ -164,7 +165,7 @@ class TestPromptGenerationService:
             nutrition_targets=nutrition_targets
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         
         prompt, system_message = service.generate_single_meal_prompt(
             meal_type=MealType.DINNER,
@@ -179,7 +180,10 @@ class TestPromptGenerationService:
 
     def test_prompt_includes_dietary_preferences(self, service, nutrition_targets):
         """Test that dietary preferences are included in prompt."""
-        user_profile = UserProfileData(
+        user_profile = UserDietaryProfile(
+            user_id="123",
+            meals_per_day=3,
+            include_snacks=True,
             dietary_preferences=["vegan", "gluten_free"],
             health_conditions=[],
             allergies=[],
@@ -193,7 +197,7 @@ class TestPromptGenerationService:
             nutrition_targets=nutrition_targets
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         prompt, _ = service.generate_prompt_and_system_message(context)
         
         assert "vegan" in prompt.lower()
@@ -201,7 +205,10 @@ class TestPromptGenerationService:
 
     def test_prompt_includes_allergies(self, service, nutrition_targets):
         """Test that allergies are included in prompt."""
-        user_profile = UserProfileData(
+        user_profile = UserDietaryProfile(
+            user_id="123",
+            meals_per_day=3,
+            include_snacks=True,
             dietary_preferences=[],
             health_conditions=[],
             allergies=["shellfish", "tree nuts", "dairy"],
@@ -209,19 +216,19 @@ class TestPromptGenerationService:
             activity_level="extra_active"
         )
         
-        ingredients = AvailableIngredients(
-            ingredients=["beef", "rice"],
-            seasonings=["salt"]
+        ingredients = IngredientConstraints(
+            available_ingredients=["beef", "rice"],
+            available_seasonings=["salt"]
         )
         
         request = MealGenerationRequest(
             generation_type=MealGenerationType.DAILY_INGREDIENT_BASED,
             user_profile=user_profile,
             nutrition_targets=nutrition_targets,
-            available_ingredients=ingredients
+            ingredient_constraints=ingredients
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         prompt, _ = service.generate_single_meal_prompt(
             meal_type=MealType.LUNCH,
             calorie_target=600,
@@ -234,19 +241,19 @@ class TestPromptGenerationService:
 
     def test_prompt_includes_calorie_distribution(self, service, user_profile, nutrition_targets):
         """Test that prompt includes calorie distribution for meals."""
-        ingredients = AvailableIngredients(
-            ingredients=["chicken"],
-            seasonings=["salt"]
+        ingredients = IngredientConstraints(
+            available_ingredients=["chicken"],
+            available_seasonings=["salt"]
         )
         
         request = MealGenerationRequest(
             generation_type=MealGenerationType.WEEKLY_INGREDIENT_BASED,
             user_profile=user_profile,
             nutrition_targets=nutrition_targets,
-            available_ingredients=ingredients
+            ingredient_constraints=ingredients
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         prompt, _ = service.generate_prompt_and_system_message(context)
         
         # Should include meal-specific calorie targets
@@ -256,19 +263,19 @@ class TestPromptGenerationService:
 
     def test_prompt_requires_exact_portions(self, service, user_profile, nutrition_targets):
         """Test that prompts require exact ingredient portions."""
-        ingredients = AvailableIngredients(
-            ingredients=["chicken breast", "rice"],
-            seasonings=["salt", "pepper"]
+        ingredients = IngredientConstraints(
+            available_ingredients=["chicken breast", "rice"],
+            available_seasonings=["salt", "pepper"]
         )
         
         request = MealGenerationRequest(
             generation_type=MealGenerationType.DAILY_INGREDIENT_BASED,
             user_profile=user_profile,
             nutrition_targets=nutrition_targets,
-            available_ingredients=ingredients
+            ingredient_constraints=ingredients
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         prompt, _ = service.generate_prompt_and_system_message(context)
         
         # Should emphasize exact measurements
@@ -284,7 +291,7 @@ class TestPromptGenerationService:
             nutrition_targets=nutrition_targets
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         prompt, _ = service.generate_prompt_and_system_message(context)
         
         # Should mention time considerations
@@ -293,7 +300,10 @@ class TestPromptGenerationService:
 
     def test_prompt_with_health_conditions(self, service, nutrition_targets):
         """Test prompt generation with health conditions."""
-        user_profile = UserProfileData(
+        user_profile = UserDietaryProfile(
+            user_id="123",
+            meals_per_day=3,
+            include_snacks=True,
             dietary_preferences=[],
             health_conditions=["diabetes", "hypertension"],
             allergies=[],
@@ -307,7 +317,7 @@ class TestPromptGenerationService:
             nutrition_targets=nutrition_targets
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         prompt, _ = service.generate_prompt_and_system_message(context)
         
         # Health conditions should be mentioned
@@ -316,7 +326,10 @@ class TestPromptGenerationService:
 
     def test_prompt_with_snacks(self, service, nutrition_targets):
         """Test prompt includes snacks when requested."""
-        user_profile = UserProfileData(
+        user_profile = UserDietaryProfile(
+            user_id="123",
+            meals_per_day=3,
+            include_snacks=True,
             dietary_preferences=[],
             health_conditions=[],
             allergies=[],
@@ -325,26 +338,29 @@ class TestPromptGenerationService:
             include_snacks=True
         )
         
-        ingredients = AvailableIngredients(
-            ingredients=["chicken"],
-            seasonings=["salt"]
+        ingredients = IngredientConstraints(
+            available_ingredients=["chicken"],
+            available_seasonings=["salt"]
         )
         
         request = MealGenerationRequest(
             generation_type=MealGenerationType.WEEKLY_INGREDIENT_BASED,
             user_profile=user_profile,
             nutrition_targets=nutrition_targets,
-            available_ingredients=ingredients
+            ingredient_constraints=ingredients
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         prompt, _ = service.generate_prompt_and_system_message(context)
         
         assert "snack" in prompt.lower()
 
     def test_prompt_without_snacks(self, service, nutrition_targets):
         """Test prompt excludes snacks when not requested."""
-        user_profile = UserProfileData(
+        user_profile = UserDietaryProfile(
+            user_id="123",
+            meals_per_day=3,
+            include_snacks=False,
             dietary_preferences=[],
             health_conditions=[],
             allergies=[],
@@ -353,19 +369,19 @@ class TestPromptGenerationService:
             include_snacks=False
         )
         
-        ingredients = AvailableIngredients(
-            ingredients=["chicken"],
-            seasonings=["salt"]
+        ingredients = IngredientConstraints(
+            available_ingredients=["chicken"],
+            available_seasonings=["salt"]
         )
         
         request = MealGenerationRequest(
             generation_type=MealGenerationType.DAILY_INGREDIENT_BASED,
             user_profile=user_profile,
             nutrition_targets=nutrition_targets,
-            available_ingredients=ingredients
+            ingredient_constraints=ingredients
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         prompt, _ = service.generate_prompt_and_system_message(context)
         
         # Snack requirement should not be present
@@ -379,7 +395,7 @@ class TestPromptGenerationService:
             nutrition_targets=nutrition_targets
         )
         
-        context = MealGenerationContext(request=request)
+        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
         _, system_message = service.generate_prompt_and_system_message(context)
         
         # System message should establish expertise
