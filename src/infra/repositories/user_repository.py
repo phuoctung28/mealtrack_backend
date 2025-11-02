@@ -14,12 +14,13 @@ class UserRepository:
     def __init__(self, db: Session):
         self.db = db
     
-    def create_user(self, email: str, username: str, password_hash: str) -> User:
+    def create_user(self, email: str, username: str, password_hash: str, firebase_uid: str) -> User:
         """Create a new user."""
         user = User(
             email=email,
             username=username,
             password_hash=password_hash,
+            firebase_uid=firebase_uid,
             is_active=True
         )
         self.db.add(user)
@@ -66,8 +67,9 @@ class UserRepository:
         # Mark all existing profiles as not current
         self.db.query(UserProfile).filter(
             UserProfile.user_id == user_id,
-            UserProfile.is_current == True
-        ).update({"is_current": False})
+            UserProfile.is_current ==  True
+        ).update({"is_current": False}, synchronize_session='evaluate')
+        self.db.flush()
         
         profile = UserProfile(
             user_id=user_id,
@@ -89,7 +91,7 @@ class UserRepository:
             allergies=allergies or []
         )
         self.db.add(profile)
-        self.db.commit()
+        self.db.commit()  # This will commit both the old profile updates and new profile creation
         self.db.refresh(profile)
         return profile
     

@@ -12,7 +12,7 @@ from src.infra.database.models.user.profile import UserProfile
 from src.infra.repositories.user_repository import UserRepository
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def db_session():
     """Create an in-memory SQLite database for testing."""
     engine = create_engine("sqlite:///:memory:")
@@ -20,7 +20,9 @@ def db_session():
     Session = sessionmaker(bind=engine)
     session = Session()
     yield session
+    session.rollback()
     session.close()
+    Base.metadata.drop_all(engine)
 
 
 @pytest.fixture
@@ -53,13 +55,15 @@ class TestUserRepository:
         user = user_repository.create_user(
             email="newuser@example.com",
             username="newuser",
-            password_hash="hashed_pwd"
+            password_hash="hashed_pwd",
+            firebase_uid="firebase_newuser"
         )
         
         assert user.id is not None
         assert user.email == "newuser@example.com"
         assert user.username == "newuser"
         assert user.password_hash == "hashed_pwd"
+        assert user.firebase_uid == "firebase_newuser"
         assert user.is_active is True
 
     def test_create_user_duplicate_email(self, user_repository, sample_user):
@@ -68,7 +72,8 @@ class TestUserRepository:
             user_repository.create_user(
                 email="test@example.com",
                 username="different",
-                password_hash="pwd"
+                password_hash="pwd",
+                firebase_uid="firebase_different"
             )
 
     def test_create_user_duplicate_username(self, user_repository, sample_user):
@@ -77,7 +82,8 @@ class TestUserRepository:
             user_repository.create_user(
                 email="different@example.com",
                 username="testuser",
-                password_hash="pwd"
+                password_hash="pwd",
+                firebase_uid="firebase_different2"
             )
 
     def test_get_user_by_id(self, user_repository, sample_user):
@@ -196,10 +202,12 @@ class TestUserRepository:
             weight_kg=73.0
         )
         
-        # Refresh first profile
-        user_repository.db.refresh(profile1)
+        # Query profile1 fresh from database to verify it was updated
+        refreshed_profile1 = user_repository.db.query(UserProfile).filter(
+            UserProfile.id == profile1.id
+        ).first()
         
-        assert profile1.is_current is False
+        assert refreshed_profile1.is_current is False
         assert profile2.is_current is True
 
     def test_get_current_user_profile(self, user_repository, sample_user):

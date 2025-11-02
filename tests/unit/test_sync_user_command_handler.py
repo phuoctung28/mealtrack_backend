@@ -1,9 +1,9 @@
 """
 Unit tests for SyncUserCommandHandler.
 """
-import pytest
 from datetime import datetime
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
+import pytest
 from sqlalchemy.orm import Session
 
 from src.app.commands.user.sync_user_command import SyncUserCommand
@@ -28,6 +28,7 @@ def handler(mock_db_session):
 class TestSyncUserCommandHandler:
     """Test suite for SyncUserCommandHandler."""
 
+    @pytest.mark.asyncio
     async def test_handle_create_new_user(self, handler, mock_db_session):
         """Test creating a new user when no user exists."""
         command = SyncUserCommand(
@@ -84,6 +85,7 @@ class TestSyncUserCommandHandler:
         assert result["message"] == "User created successfully"
         mock_db_session.commit.assert_called_once()
 
+    @pytest.mark.asyncio
     async def test_handle_update_existing_user(self, handler, mock_db_session):
         """Test updating an existing user."""
         command = SyncUserCommand(
@@ -135,6 +137,7 @@ class TestSyncUserCommandHandler:
         assert result["message"] == "User updated successfully"
         mock_db_session.commit.assert_called_once()
 
+    @pytest.mark.asyncio
     async def test_handle_no_changes(self, handler, mock_db_session):
         """Test when user exists but no updates needed."""
         command = SyncUserCommand(
@@ -178,6 +181,7 @@ class TestSyncUserCommandHandler:
         assert result["created"] is False
         assert result["message"] in ["User updated successfully", "User data up to date"]
 
+    @pytest.mark.asyncio
     async def test_handle_with_premium_subscription(self, handler, mock_db_session):
         """Test syncing user with active premium subscription."""
         command = SyncUserCommand(
@@ -225,6 +229,7 @@ class TestSyncUserCommandHandler:
         assert result["user"]["subscription"]["product_id"] == "premium_monthly"
         assert result["user"]["subscription"]["is_monthly"] is True
 
+    @pytest.mark.asyncio
     async def test_handle_database_error(self, handler, mock_db_session):
         """Test handling database error during sync."""
         command = SyncUserCommand(
@@ -301,6 +306,7 @@ class TestSyncUserCommandHandler:
         assert first == "Correct"
         assert last == "Name"
 
+    @pytest.mark.asyncio
     async def test_handle_without_db_session(self):
         """Test error when handler has no database session."""
         handler = SyncUserCommandHandler()

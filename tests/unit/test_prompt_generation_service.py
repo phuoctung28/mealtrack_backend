@@ -253,7 +253,23 @@ class TestPromptGenerationService:
             ingredient_constraints=ingredients
         )
         
-        context = MealGenerationContext(request=request, calorie_distribution=None, meal_types=[], start_date=None, end_date=None)
+        # Provide calorie distribution for meals
+        from src.domain.model.meal_generation_request import CalorieDistribution, MealType
+        calorie_dist = CalorieDistribution(
+            distribution={
+                MealType.BREAKFAST: 600,
+                MealType.LUNCH: 700,
+                MealType.DINNER: 700
+            }
+        )
+        
+        context = MealGenerationContext(
+            request=request, 
+            calorie_distribution=calorie_dist, 
+            meal_types=[MealType.BREAKFAST, MealType.LUNCH, MealType.DINNER], 
+            start_date=None, 
+            end_date=None
+        )
         prompt, _ = service.generate_prompt_and_system_message(context)
         
         # Should include meal-specific calorie targets
