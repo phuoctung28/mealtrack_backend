@@ -272,11 +272,10 @@ class TestPineconeNutritionService:
         # Arrange
         mock_pc = Mock()
         mock_pinecone.return_value = mock_pc
-        mock_pc.Index.side_effect = Exception("Not needed")
+        mock_ingredients_index = Mock()
+        mock_pc.Index.return_value = mock_ingredients_index
         
         service = PineconeNutritionService(pinecone_api_key="test-key")
-        service.ingredients_index = Mock()  # Bypass init
-        service.usda_index = Mock()
         
         # Act & Assert
         assert service.convert_to_grams(100, "g") == 100
@@ -336,7 +335,7 @@ class TestPineconeNutritionService:
         mock_ingredients_index = Mock()
         
         # Mock different ingredients
-        def mock_query(vector, top_k, include_metadata):
+        def mock_query(**kwargs):
             # Return different results based on call count
             if not hasattr(mock_query, 'call_count'):
                 mock_query.call_count = 0
