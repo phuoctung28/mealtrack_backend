@@ -3,6 +3,7 @@ Notifications API endpoints for push notification management.
 """
 from fastapi import APIRouter, Depends, Request
 
+from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.schemas.request.notification_requests import (
@@ -29,11 +30,9 @@ router = APIRouter(prefix="/v1/notifications", tags=["Notifications"])
 @router.post("/tokens", response_model=FcmTokenResponse)
 async def register_fcm_token(
     request: FcmTokenRegistrationRequest,
-    http_request: Request,
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    # Get user_id from dev auth bypass
-    user_id = getattr(http_request.state, 'user', None).id if hasattr(http_request.state, 'user') and http_request.state.user else "test_user"
     """
     Register an FCM token for push notifications.
     
@@ -61,11 +60,10 @@ async def register_fcm_token(
 @router.delete("/tokens", response_model=FcmTokenResponse)
 async def delete_fcm_token(
     request: FcmTokenDeletionRequest,
-    http_request: Request,
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     # Get user_id from dev auth bypass
-    user_id = getattr(http_request.state, 'user', None).id if hasattr(http_request.state, 'user') and http_request.state.user else "test_user"
     """
     Delete an FCM token (used during logout).
     
@@ -91,11 +89,10 @@ async def delete_fcm_token(
 
 @router.get("/preferences", response_model=NotificationPreferencesResponse)
 async def get_notification_preferences(
-    http_request: Request,
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     # Get user_id from dev auth bypass
-    user_id = getattr(http_request.state, 'user', None).id if hasattr(http_request.state, 'user') and http_request.state.user else "test_user"
     """
     Get user's notification preferences.
     
@@ -116,11 +113,9 @@ async def get_notification_preferences(
 @router.put("/preferences", response_model=NotificationPreferencesUpdateResponse)
 async def update_notification_preferences(
     request: NotificationPreferencesUpdateRequest,
-    http_request: Request,
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    # Get user_id from dev auth bypass
-    user_id = getattr(http_request.state, 'user', None).id if hasattr(http_request.state, 'user') and http_request.state.user else "test_user"
     """
     Update user's notification preferences.
     
