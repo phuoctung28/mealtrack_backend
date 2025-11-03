@@ -63,7 +63,6 @@ async def delete_fcm_token(
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    # Get user_id from dev auth bypass
     """
     Delete an FCM token (used during logout).
     
@@ -92,7 +91,6 @@ async def get_notification_preferences(
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
-    # Get user_id from dev auth bypass
     """
     Get user's notification preferences.
     
