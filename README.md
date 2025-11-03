@@ -65,9 +65,14 @@ Create a `.env` file in the root directory with the following variables:
 - `ENVIRONMENT`: Environment mode (e.g., `development`, `production`, `staging`)
 
 **Firebase Authentication:**
-- `FIREBASE_CREDENTIALS`: Path to Firebase service account credentials JSON file
+- `FIREBASE_CREDENTIALS`: Path to Firebase service account credentials JSON file (recommended for local development)
+  - Example: `/path/to/firebase-service-account.json`
   - For development: Use staging Firebase project credentials
   - For production: Use production Firebase project credentials
+- `FIREBASE_SERVICE_ACCOUNT_JSON`: Firebase service account credentials as JSON string (recommended for production/cloud deployments)
+  - Example: `'{"type":"service_account","project_id":"your-project-id",...}'`
+  - Takes precedence over FIREBASE_CREDENTIALS if both are set
+  - Useful for cloud platforms where file paths are not ideal
 
 **Email/SMTP Configuration:**
 - `SMTP_HOST`: SMTP server hostname

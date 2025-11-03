@@ -5,6 +5,7 @@ This file initializes the FastAPI application, sets up middleware,
 includes routes, and handles application lifecycle events.
 """
 
+import json
 import logging
 import os
 import time
@@ -45,12 +46,14 @@ def initialize_firebase():
     """
     Initialize Firebase Admin SDK.
 
-    Supports two methods:
-    1. Service account JSON file path (recommended for production)
-    2. Default credentials (for local development and cloud environments)
+    Supports three methods (in priority order):
+    1. Service account JSON file path via FIREBASE_CREDENTIALS (recommended for local development)
+    2. Service account JSON string via FIREBASE_SERVICE_ACCOUNT_JSON (recommended for production)
+    3. Default credentials (fallback for cloud environments)
 
-    Set FIREBASE_CREDENTIALS environment variable to path of service account JSON.
-    If not set, will attempt to use default credentials.
+    Environment Variables:
+    - FIREBASE_CREDENTIALS: Path to service account JSON file
+    - FIREBASE_SERVICE_ACCOUNT_JSON: Service account JSON as string
     """
     try:
         # Check if already initialized
@@ -63,16 +66,32 @@ def initialize_firebase():
 
     try:
         environment = os.getenv("ENVIRONMENT", "development")
+        
+        # Option 1: Check for service account file path
         credentials_path = os.getenv("FIREBASE_CREDENTIALS")
-
         if credentials_path and os.path.exists(credentials_path):
             cred = credentials.Certificate(credentials_path)
             firebase_admin.initialize_app(cred)
-            logger.info("Firebase initialized with service account credentials (environment: %s)", environment)
-        else:
-            # Fall back to default credentials (for local development or cloud environments)
-            firebase_admin.initialize_app()
-            logger.info("Firebase initialized with default credentials (environment: %s)", environment)
+            logger.info("Firebase initialized with service account file (environment: %s)", environment)
+            return
+
+        # Option 2: Check for service account JSON string
+        service_account_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+        if service_account_json:
+            try:
+                service_account_dict = json.loads(service_account_json)
+                cred = credentials.Certificate(service_account_dict)
+                firebase_admin.initialize_app(cred)
+                logger.info("Firebase initialized with service account JSON string (environment: %s)", environment)
+                return
+            except json.JSONDecodeError as e:
+                logger.error("Invalid JSON in FIREBASE_SERVICE_ACCOUNT_JSON: %s", e)
+                raise ValueError("FIREBASE_SERVICE_ACCOUNT_JSON contains invalid JSON") from e
+
+        # Option 3: Fall back to default credentials
+        firebase_admin.initialize_app()
+        logger.info("Firebase initialized with default credentials (environment: %s)", environment)
+
     except Exception as e:
         logger.error("Failed to initialize Firebase: %s", e)
         raise
