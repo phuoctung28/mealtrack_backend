@@ -29,6 +29,10 @@ from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
 from src.infra.database.migration_manager import MigrationManager
 from src.infra.database.config import engine
+from src.api.routes.v1.notifications import router as notifications_router
+from src.api.routes.v1.notification_test import router as notification_test_router
+from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
+from src.api.base_dependencies import initialize_scheduled_notification_service
 
 load_dotenv()
 
@@ -106,11 +110,31 @@ async def lifespan(app: FastAPI):
         if os.getenv("FAIL_ON_MIGRATION_ERROR", "false").lower() == "true":
             raise
 
+    # Initialize and start scheduled notification service
+    scheduled_service = None
+    try:
+        logger.info("Initializing scheduled notification service...")
+        scheduled_service = initialize_scheduled_notification_service()
+        await scheduled_service.start()
+        logger.info("Scheduled notification service started successfully!")
+    except Exception as e:
+        logger.error(f"Failed to start scheduled notification service: {e}")
+        # Continue running the API even if notification service fails
+    
     logger.info("MealTrack API started successfully!")
     yield
 
     # Shutdown
     logger.info("Shutting down MealTrack API...")
+    
+    # Stop scheduled notification service
+    if scheduled_service:
+        try:
+            logger.info("Stopping scheduled notification service...")
+            await scheduled_service.stop()
+            logger.info("Scheduled notification service stopped successfully!")
+        except Exception as e:
+            logger.error(f"Error stopping scheduled notification service: {e}")
 
 
 app = FastAPI(
@@ -127,6 +151,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Dev auth bypass: inject a fixed user during development
+add_dev_auth_bypass(app)
 
 
 @app.get("/health")
@@ -161,6 +188,8 @@ app.include_router(users_router)
 app.include_router(foods_router)
 app.include_router(manual_meals_router)
 app.include_router(webhooks_router)
+app.include_router(notifications_router)
+app.include_router(notification_test_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get("ENVIRONMENT") == "development":

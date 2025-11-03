@@ -33,6 +33,8 @@ from .user.profile import UserProfile
 # User models
 from .user.user import User
 from .subscription import Subscription
+# Notification models
+from .notification import NotificationPreferences, UserFcmToken
 
 __all__ = [
     # Base
@@ -71,4 +73,8 @@ __all__ = [
     
     # Test models
     "TestTable",
+    
+    # Notification models
+    "NotificationPreferences",
+    "UserFcmToken",
 ]

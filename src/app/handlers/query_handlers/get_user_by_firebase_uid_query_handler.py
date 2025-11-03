@@ -4,6 +4,7 @@ Auto-extracted for better maintainability.
 """
 import logging
 from typing import Dict, Any
+import os
 
 from sqlalchemy.orm import Session
 
@@ -39,6 +40,16 @@ class GetUserByFirebaseUidQueryHandler(EventHandler[GetUserByFirebaseUidQuery, D
         if not user:
             raise ResourceNotFoundException(f"User with Firebase UID {query.firebase_uid} not found")
 
+        # In development, avoid touching subscriptions table (may not exist yet)
+        if os.getenv("ENVIRONMENT") == "development":
+            is_premium_value = True
+        else:
+            try:
+                is_premium_value = bool(user.is_premium())
+            except Exception:
+                # Safe fallback if subscription lookup fails
+                is_premium_value = False
+
         return {
             "id": user.id,
             "firebase_uid": user.firebase_uid,
@@ -54,5 +65,7 @@ class GetUserByFirebaseUidQueryHandler(EventHandler[GetUserByFirebaseUidQuery, D
             "onboarding_completed": user.onboarding_completed,
             "last_accessed": user.last_accessed,
             "created_at": user.created_at,
-            "updated_at": user.updated_at
+            "updated_at": user.updated_at,
+            # Required by UserProfileResponse
+            "is_premium": is_premium_value
         }
