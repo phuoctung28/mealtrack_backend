@@ -2,8 +2,9 @@
 Integration tests for delete account API endpoint.
 Tests the complete flow from API request to database changes.
 """
-import pytest
 from unittest.mock import patch
+from firebase_admin.auth import UserNotFoundError
+import pytest
 
 from src.infra.database.models.user import User
 from src.app.commands.user import DeleteUserCommand
@@ -260,7 +261,6 @@ class TestDeleteAccountIntegration:
 
         with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
             # Simulate Firebase not found (already deleted)
-            from firebase_admin.exceptions import UserNotFoundError
             mock_firebase.side_effect = UserNotFoundError("User not found in Firebase")
 
             # Act & Assert - should not crash
