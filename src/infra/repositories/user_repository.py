@@ -37,20 +37,32 @@ class UserRepository:
         return self.get_user_by_id(user_id)
     
     def get_user_by_id(self, user_id: str) -> Optional[User]:
-        """Get user by ID."""
-        return self.db.query(User).filter(User.id == user_id).first()
-    
+        """Get user by ID (only active users)."""
+        return self.db.query(User).filter(
+            User.id == user_id,
+            User.is_active == True
+        ).first()
+
     def get_user_by_email(self, email: str) -> Optional[User]:
-        """Get user by email."""
-        return self.db.query(User).filter(User.email == email).first()
-    
+        """Get user by email (only active users)."""
+        return self.db.query(User).filter(
+            User.email == email,
+            User.is_active == True
+        ).first()
+
     def get_user_by_username(self, username: str) -> Optional[User]:
-        """Get user by username."""
-        return self.db.query(User).filter(User.username == username).first()
-    
+        """Get user by username (only active users)."""
+        return self.db.query(User).filter(
+            User.username == username,
+            User.is_active == True
+        ).first()
+
     def get_user_by_firebase_uid(self, firebase_uid: str) -> Optional[User]:
-        """Get user by Firebase UID."""
-        return self.db.query(User).filter(User.firebase_uid == firebase_uid).first()
+        """Get user by Firebase UID (only active users)."""
+        return self.db.query(User).filter(
+            User.firebase_uid == firebase_uid,
+            User.is_active == True
+        ).first()
     
     def create_user_profile(self, user_id: str, age: int, gender: str, 
                           height_cm: float, weight_kg: float, 

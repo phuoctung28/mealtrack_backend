@@ -86,3 +86,10 @@ class UserMetricsResponse(BaseModel):
     fitness_goal: str = Field(..., description="Current fitness goal")
     target_weight_kg: Optional[float] = Field(None, description="Target weight in kilograms")
     updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class UserDeleteResponse(BaseModel):
+    """Response from user account deletion operation."""
+    firebase_uid: str = Field(..., description="Firebase user unique identifier")
+    deleted: bool = Field(..., description="Whether deletion was successful")
+    message: str = Field(..., description="Operation result message")
