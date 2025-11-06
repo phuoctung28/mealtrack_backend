@@ -16,9 +16,10 @@ from src.api.schemas.response.user_responses import (
     UserProfileResponse,
     UserStatusResponse,
     UserUpdateResponse,
-    OnboardingCompletionResponse
+    OnboardingCompletionResponse,
+    UserDeleteResponse
 )
-from src.app.commands.user import CompleteOnboardingCommand
+from src.app.commands.user import CompleteOnboardingCommand, DeleteUserCommand
 from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
     UpdateUserLastAccessedCommand
@@ -201,21 +202,72 @@ async def complete_onboarding(
 ):
     """
     Mark user onboarding as completed.
-    
+
     Sets the user's onboarding status to completed if it's currently false.
     This endpoint is called when the user finishes the onboarding flow in the mobile app.
-    
+
     - **firebase_uid**: Firebase user unique identifier
     """
     try:
         # Create command
         command = CompleteOnboardingCommand(firebase_uid=firebase_uid)
-        
+
         # Send command
         result = await event_bus.send(command)
-        
+
         # Return completion response
         return OnboardingCompletionResponse(**result)
-        
+
     except Exception as e:
+        raise handle_exception(e)
+
+
+@router.delete("/firebase/{firebase_uid}", response_model=UserDeleteResponse)
+async def delete_user_account(
+    firebase_uid: str,
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Delete user account (soft delete in DB, hard delete in Firebase).
+
+    Performs complete account deletion:
+    - Soft deletes user in database (sets is_active=False)
+    - Anonymizes user data for GDPR compliance
+    - Hard deletes user from Firebase Authentication
+
+    This action cannot be undone. All user data will be anonymized and
+    the account will be marked as inactive.
+
+    - **firebase_uid**: Firebase user unique identifier
+    """
+    logger.info(
+        f"Starting account deletion for firebase_uid: {firebase_uid}",
+        extra={"firebase_uid": firebase_uid}
+    )
+    try:
+        # Create delete command
+        command = DeleteUserCommand(firebase_uid=firebase_uid)
+
+        # Send command
+        result = await event_bus.send(command)
+
+        logger.info(
+            f"Account deletion completed for firebase_uid: {firebase_uid}",
+            extra={
+                "firebase_uid": firebase_uid,
+                "deleted": result["deleted"]
+            }
+        )
+
+        # Return deletion response
+        return UserDeleteResponse(**result)
+
+    except Exception as e:
+        logger.error(
+            f"Account deletion failed for firebase_uid: {firebase_uid}",
+            extra={
+                "firebase_uid": firebase_uid,
+                "exception_type": type(e).__name__
+            }
+        )
         raise handle_exception(e)

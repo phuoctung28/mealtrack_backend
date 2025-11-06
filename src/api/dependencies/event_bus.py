@@ -33,6 +33,7 @@ from src.app.commands.meal_plan import (
 from src.app.commands.user import (
     SaveUserOnboardingCommand,
     CompleteOnboardingCommand,
+    DeleteUserCommand,
 )
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.commands.user.sync_user_command import (
@@ -54,6 +55,7 @@ from src.app.handlers.command_handlers import (
     SyncUserCommandHandler,
     UpdateUserLastAccessedCommandHandler,
     CompleteOnboardingCommandHandler,
+    DeleteUserCommandHandler,
     GenerateDailyMealSuggestionsCommandHandler,
     GenerateSingleMealCommandHandler,
     CreateManualMealCommandHandler,
@@ -247,6 +249,9 @@ async def get_configured_event_bus(
     )
     event_bus.register_handler(
         CompleteOnboardingCommand, CompleteOnboardingCommandHandler(db)
+    )
+    event_bus.register_handler(
+        DeleteUserCommand, DeleteUserCommandHandler(db)
     )
     event_bus.register_handler(
         UpdateUserMetricsCommand, UpdateUserMetricsCommandHandler(db)

@@ -5,6 +5,7 @@ Each handler is in its own file for better maintainability.
 
 from .add_custom_ingredient_handler import AddCustomIngredientCommandHandler
 from .complete_onboarding_command_handler import CompleteOnboardingCommandHandler
+from .delete_user_command_handler import DeleteUserCommandHandler
 # Standalone handlers (already individual files)
 from .create_manual_meal_command_handler import CreateManualMealCommandHandler
 from .delete_meal_handler import DeleteMealCommandHandler
@@ -31,6 +32,7 @@ __all__ = [
     "SyncUserCommandHandler",
     "UpdateUserLastAccessedCommandHandler",
     "CompleteOnboardingCommandHandler",
+    "DeleteUserCommandHandler",
     "UpdateUserMetricsCommandHandler",
     # Daily Meal handlers
     "GenerateDailyMealSuggestionsCommandHandler",
