@@ -65,8 +65,11 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                     self.db.commit()
                 except Exception as e:
                     logger.error(f"Failed to create notification preferences for user {user.id}: {e}")
-                    # Rollback only the notification preferences, not the user creation
-                    self.db.rollback()
+                    # Note: We don't rollback here because:
+                    # 1. The user was already committed above (line 56) and cannot be rolled back
+                    # 2. The notification repository handles its own transaction/rollback
+                    # 3. Rolling back would detach the user object, breaking subsequent operations like get_active_subscription()
+                    # The user will still be created successfully; preferences can be created later via the API
 
             # Get subscription info if user has active premium
             subscription_info = None
