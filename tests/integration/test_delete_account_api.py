@@ -13,7 +13,8 @@ from src.app.commands.user import DeleteUserCommand
 class TestDeleteAccountIntegration:
     """Integration tests for complete delete account workflow."""
 
-    def test_delete_account_complete_flow(self, test_session, event_bus):
+    @pytest.mark.asyncio
+    async def test_delete_account_complete_flow(self, test_session, event_bus):
         """Test complete user deletion flow."""
         # Arrange - create a test user
         user = User(
@@ -43,7 +44,7 @@ class TestDeleteAccountIntegration:
 
             # Act - execute delete command
             command = DeleteUserCommand(firebase_uid="firebase_integration_123")
-            result = event_bus.execute(command)
+            result = await event_bus.send(command)
 
             # Assert
             assert result["deleted"] is True
@@ -63,7 +64,8 @@ class TestDeleteAccountIntegration:
             ).first()
             assert cannot_find is None
 
-    def test_delete_user_data_anonymization(self, test_session, event_bus):
+    @pytest.mark.asyncio
+    async def test_delete_user_data_anonymization(self, test_session, event_bus):
         """Test that user data is properly anonymized."""
         # Arrange
         user = User(
@@ -87,7 +89,7 @@ class TestDeleteAccountIntegration:
 
             # Act
             command = DeleteUserCommand(firebase_uid="firebase_anon_123")
-            result = event_bus.execute(command)
+            result = await event_bus.send(command)
 
             # Assert
             assert result["deleted"] is True
@@ -102,7 +104,8 @@ class TestDeleteAccountIntegration:
             assert deleted_user.display_name is None
             assert deleted_user.password_hash == "DELETED"
 
-    def test_multiple_users_deletion_isolation(self, test_session, event_bus):
+    @pytest.mark.asyncio
+    async def test_multiple_users_deletion_isolation(self, test_session, event_bus):
         """Test that deleting one user doesn't affect others."""
         # Arrange - create two users
         user1 = User(
@@ -132,7 +135,7 @@ class TestDeleteAccountIntegration:
 
             # Act - delete only user1
             command = DeleteUserCommand(firebase_uid="firebase_user1_int")
-            result = event_bus.execute(command)
+            result = await event_bus.send(command)
             assert result["deleted"] is True
 
             # Assert
@@ -143,7 +146,8 @@ class TestDeleteAccountIntegration:
             assert unaffected_user2.is_active is True
             assert unaffected_user2.email == "user2_integration@example.com"
 
-    def test_delete_preserves_audit_trail(self, test_session, event_bus):
+    @pytest.mark.asyncio
+    async def test_delete_preserves_audit_trail(self, test_session, event_bus):
         """Test that soft delete preserves data for audit trail."""
         # Arrange
         user = User(
@@ -165,7 +169,7 @@ class TestDeleteAccountIntegration:
 
             # Act
             command = DeleteUserCommand(firebase_uid="firebase_audit_int")
-            event_bus.execute(command)
+            await event_bus.send(command)
 
             # Assert - ID and creation time preserved
             deleted_user = test_session.query(User).filter(User.id == original_id).first()
@@ -173,7 +177,8 @@ class TestDeleteAccountIntegration:
             assert deleted_user.created_at == original_created
             assert deleted_user.is_active is False
 
-    def test_firebase_failure_does_not_prevent_soft_delete(self, test_session, event_bus):
+    @pytest.mark.asyncio
+    async def test_firebase_failure_does_not_prevent_soft_delete(self, test_session, event_bus):
         """Test that database soft delete succeeds even if Firebase deletion fails."""
         # Arrange
         user = User(
@@ -192,7 +197,7 @@ class TestDeleteAccountIntegration:
 
             # Act
             command = DeleteUserCommand(firebase_uid="firebase_fail_int")
-            result = event_bus.execute(command)
+            result = await event_bus.send(command)
 
             # Assert - should still return deleted=True
             assert result["deleted"] is True
@@ -202,7 +207,8 @@ class TestDeleteAccountIntegration:
             assert deleted_user.is_active is False
             assert "deleted_" in deleted_user.email
 
-    def test_deleted_user_filtered_from_queries(self, test_session, event_bus):
+    @pytest.mark.asyncio
+    async def test_deleted_user_filtered_from_queries(self, test_session, event_bus):
         """Test that deleted users are properly filtered from active queries."""
         # Arrange - create a user and delete it
         user = User(
@@ -221,7 +227,7 @@ class TestDeleteAccountIntegration:
 
             # Act - delete user
             command = DeleteUserCommand(firebase_uid="firebase_filter_int")
-            event_bus.execute(command)
+            await event_bus.send(command)
 
             # Assert - simulate auth check (only find active users)
             active_user = test_session.query(User).filter(
@@ -237,7 +243,8 @@ class TestDeleteAccountIntegration:
             assert all_user is not None
             assert all_user.is_active is False
 
-    def test_idempotent_firebase_deletion(self, test_session, event_bus):
+    @pytest.mark.asyncio
+    async def test_idempotent_firebase_deletion(self, test_session, event_bus):
         """Test that firebase deletion failures are handled gracefully."""
         # Arrange
         user = User(
@@ -258,6 +265,6 @@ class TestDeleteAccountIntegration:
 
             # Act & Assert - should not crash
             command = DeleteUserCommand(firebase_uid="firebase_idem_int")
-            result = event_bus.execute(command)
+            result = await event_bus.send(command)
 
             assert result["deleted"] is True

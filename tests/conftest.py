@@ -273,7 +273,15 @@ def event_bus(
             tdee_service=TdeeCalculationService()
         )
     )
-    
+
+    # Register delete user command handler
+    from src.app.commands.user.delete_user_command import DeleteUserCommand
+    from src.app.handlers.command_handlers.delete_user_command_handler import DeleteUserCommandHandler
+    event_bus.register_handler(
+        DeleteUserCommand,
+        DeleteUserCommandHandler(db=test_session)
+    )
+
     return event_bus
 
 
