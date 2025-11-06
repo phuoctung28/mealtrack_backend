@@ -3,6 +3,7 @@ Users API endpoints - Firebase integration for user management.
 Handles user authentication sync, profile retrieval, and status management.
 """
 import logging
+
 from fastapi import APIRouter, Depends
 
 from src.api.dependencies.event_bus import get_configured_event_bus

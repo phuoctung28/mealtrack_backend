@@ -6,8 +6,8 @@ import logging
 from dataclasses import dataclass
 from typing import Optional, List
 
-from src.domain.model.macros import Macros
 from src.domain.model.nutrition import FoodItem, Nutrition
+from src.domain.model.nutrition import Macros
 
 logger = logging.getLogger(__name__)
 

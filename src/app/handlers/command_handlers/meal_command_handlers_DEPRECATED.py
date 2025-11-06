@@ -21,7 +21,7 @@ from src.app.events.meal import (
     MealEditedEvent
 )
 from src.domain.model.meal import Meal, MealStatus
-from src.domain.model.meal_image import MealImage
+from src.domain.model.meal import MealImage
 from src.domain.model.nutrition import FoodItem, Macros
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort

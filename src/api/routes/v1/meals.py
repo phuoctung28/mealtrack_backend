@@ -11,7 +11,6 @@ from fastapi import APIRouter, Depends, File, UploadFile, Query, status
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception, ValidationException
-from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.schemas.request.meal_requests import EditMealIngredientsRequest
 from src.api.schemas.response import (
@@ -29,6 +28,7 @@ from src.app.queries.meal import (
     GetMealByIdQuery,
     GetDailyMacrosQuery
 )
+from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)

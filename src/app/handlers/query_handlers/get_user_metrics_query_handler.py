@@ -3,12 +3,14 @@ GetUserMetricsQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
 import logging
+from typing import Dict, Any
+
+from sqlalchemy.orm import Session
+
+from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import handles, EventHandler
 from src.app.queries.user import GetUserMetricsQuery
 from src.infra.database.models.user.profile import UserProfile
-from src.api.exceptions import ResourceNotFoundException
-from typing import Dict, Any
-from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 

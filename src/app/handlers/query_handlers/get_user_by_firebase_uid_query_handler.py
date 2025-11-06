@@ -3,8 +3,8 @@ GetUserByFirebaseUidQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
 import logging
-from typing import Dict, Any
 import os
+from typing import Dict, Any
 
 from sqlalchemy.orm import Session
 

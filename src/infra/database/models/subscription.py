@@ -2,6 +2,7 @@
 Subscription model for tracking user subscriptions.
 """
 from datetime import datetime
+
 from sqlalchemy import Column, String, DateTime, Boolean, Enum, ForeignKey, Index
 from sqlalchemy.orm import relationship
 

@@ -4,7 +4,7 @@ Ensures consistent mapping across the entire application.
 """
 from typing import Dict
 
-from src.domain.model.tdee import ActivityLevel, Goal
+from src.domain.model.user import ActivityLevel, Goal
 
 
 class ActivityGoalMapper:

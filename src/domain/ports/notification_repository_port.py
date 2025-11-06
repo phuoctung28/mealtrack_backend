@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from src.domain.model.notification import UserFcmToken, NotificationPreferences, DeviceType
+from src.domain.model.notification import UserFcmToken, NotificationPreferences
 
 
 class NotificationRepositoryPort(ABC):

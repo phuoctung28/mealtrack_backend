@@ -51,13 +51,22 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                 user = self._create_new_user(command)
                 created = True
                 logger.info('Created new user')
-                
-                # Create default notification preferences for new user
-                self._create_default_notification_preferences(user.id)
 
-            # Commit changes
+            # Commit changes to get the user ID
             self.db.commit()
             self.db.refresh(user)
+            
+            # Create default notification preferences for new user (after commit so user.id is available)
+            # Do this in a separate try-except so it doesn't affect user creation if it fails
+            if created:
+                try:
+                    self._create_default_notification_preferences(user.id)
+                    # Commit notification preferences separately
+                    self.db.commit()
+                except Exception as e:
+                    logger.error(f"Failed to create notification preferences for user {user.id}: {e}")
+                    # Rollback only the notification preferences, not the user creation
+                    self.db.rollback()
 
             # Get subscription info if user has active premium
             subscription_info = None
@@ -213,6 +222,11 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
     def _create_default_notification_preferences(self, user_id: str):
         """Create default notification preferences for a new user."""
         try:
+            # Guard against None user_id
+            if not user_id:
+                logger.warning("Cannot create notification preferences: user_id is None")
+                return
+            
             from src.domain.model.notification import NotificationPreferences
             
             # Create default preferences

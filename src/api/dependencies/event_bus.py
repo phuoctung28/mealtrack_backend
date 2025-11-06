@@ -30,20 +30,20 @@ from src.app.commands.meal.create_manual_meal_command import CreateManualMealCom
 from src.app.commands.meal_plan import (
     GenerateWeeklyIngredientBasedMealPlanCommand,
 )
-from src.app.commands.user import (
-    SaveUserOnboardingCommand,
-    CompleteOnboardingCommand,
-)
-from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
-from src.app.commands.user.sync_user_command import (
-    SyncUserCommand,
-    UpdateUserLastAccessedCommand,
-)
 from src.app.commands.notification import (
     RegisterFcmTokenCommand,
     DeleteFcmTokenCommand,
     UpdateNotificationPreferencesCommand,
 )
+from src.app.commands.user import (
+    SaveUserOnboardingCommand,
+    CompleteOnboardingCommand,
+)
+from src.app.commands.user.sync_user_command import (
+    SyncUserCommand,
+    UpdateUserLastAccessedCommand,
+)
+from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.meal import MealImageUploadedEvent
 # Import all command handlers from module
 from src.app.handlers.command_handlers import (
@@ -80,7 +80,6 @@ from src.app.handlers.query_handlers import (
     GetUserProfileQueryHandler,
     GetUserByFirebaseUidQueryHandler,
     GetUserOnboardingStatusQueryHandler,
-    GetUserMetricsQueryHandler,
     GetDailyActivitiesQueryHandler,
     GetMealPlanQueryHandler,
     GetMealsByDateMealPlanQueryHandler,
@@ -109,13 +108,13 @@ from src.app.queries.meal_plan import (
     GetMealPlanQuery,
     GetMealsByDateQuery as MealPlanGetMealsByDateQuery,
 )
+from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import GetUserProfileQuery, GetUserMetricsQuery
 from src.app.queries.user.get_user_by_firebase_uid_query import (
     GetUserByFirebaseUidQuery,
     GetUserOnboardingStatusQuery,
 )
-from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_data_service_port import FoodDataServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort

@@ -3,10 +3,12 @@ Premium access validation middleware.
 
 Uses RevenueCat as source of truth, with local cache for performance.
 """
-import os
-from fastapi import Request, HTTPException, status, Depends
-from src.domain.services.revenuecat_service import RevenueCatService
 import logging
+import os
+
+from fastapi import Request, HTTPException, status
+
+from src.domain.services.revenuecat_service import RevenueCatService
 
 logger = logging.getLogger(__name__)
 

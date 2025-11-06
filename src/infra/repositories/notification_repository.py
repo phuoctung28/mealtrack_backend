@@ -1,13 +1,14 @@
 import logging
 from typing import List, Optional
 
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
 
-from src.domain.model.notification import UserFcmToken, NotificationPreferences, DeviceType
+from src.domain.model.notification import UserFcmToken, NotificationPreferences
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
 from src.infra.database.config import SessionLocal
-from src.infra.database.models.notification import UserFcmToken as DBUserFcmToken, NotificationPreferences as DBNotificationPreferences
+from src.infra.database.models.notification import UserFcmToken as DBUserFcmToken, \
+    NotificationPreferences as DBNotificationPreferences
 
 logger = logging.getLogger(__name__)
 

@@ -9,8 +9,8 @@ from typing import Dict, Any
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal_plan import GetMealsByDateQuery
-from src.domain.model.meal_plan import PlannedMeal, MealType
-from src.domain.model.meal_query_response import MealsForDateResponse
+from src.domain.model.conversation import MealsForDateResponse
+from src.domain.model.meal_planning import PlannedMeal, MealType
 
 logger = logging.getLogger(__name__)
 

@@ -3,8 +3,8 @@ Domain service for calculating calorie distribution across meals.
 """
 from typing import List
 
-from src.domain.model.meal_generation_request import CalorieDistribution, UserNutritionTargets
-from src.domain.model.meal_plan import MealType
+from src.domain.model.meal_planning import CalorieDistribution, UserNutritionTargets
+from src.domain.model.meal_planning import MealType
 
 
 class MealDistributionService:

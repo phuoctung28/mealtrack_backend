@@ -3,11 +3,12 @@ Service for interacting with RevenueCat REST API.
 
 RevenueCat is the source of truth for subscription status.
 """
+import logging
 import os
-import httpx
 from datetime import datetime
 from typing import Optional, Dict
-import logging
+
+import httpx
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ from typing import Dict, Any
 
 from sqlalchemy.orm import Session
 
-from src.domain.model.meal_plan import UserPreferences
+from src.domain.model.meal_planning import UserPreferences
 from src.infra.database.models.enums import (
     FitnessGoalEnum,
     PlanDurationEnum,

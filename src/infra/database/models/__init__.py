@@ -24,17 +24,17 @@ from .meal.meal_image import MealImage
 from .meal_planning.meal_plan import MealPlan
 from .meal_planning.meal_plan_day import MealPlanDay
 from .meal_planning.planned_meal import PlannedMeal
+# Notification models
+from .notification import NotificationPreferences, UserFcmToken
 from .nutrition.food_item import FoodItem
 # Nutrition models
 from .nutrition.nutrition import Nutrition
+from .subscription import Subscription
 # Test models
 from .test import TestTable
 from .user.profile import UserProfile
 # User models
 from .user.user import User
-from .subscription import Subscription
-# Notification models
-from .notification import NotificationPreferences, UserFcmToken
 
 __all__ = [
     # Base

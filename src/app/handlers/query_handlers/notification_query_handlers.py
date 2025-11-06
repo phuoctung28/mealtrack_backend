@@ -2,7 +2,7 @@
 Query handlers for notification operations.
 """
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.domain.model.notification import NotificationPreferences

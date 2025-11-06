@@ -2,6 +2,7 @@
 Notification response schemas for push notification management.
 """
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 

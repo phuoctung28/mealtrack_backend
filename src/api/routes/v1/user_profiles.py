@@ -12,10 +12,10 @@ from src.api.schemas.request import OnboardingCompleteRequest
 from src.api.schemas.request.user_profile_update_requests import UpdateMetricsRequest
 from src.api.schemas.response import TdeeCalculationResponse, UserMetricsResponse
 from src.app.commands.user import SaveUserOnboardingCommand
+from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import GetUserMetricsQuery
-from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
-from src.domain.model.tdee import TdeeResponse, Goal, MacroTargets
+from src.domain.model.user import TdeeResponse, Goal, MacroTargets
 from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/user-profiles", tags=["User Profiles"])

@@ -4,11 +4,8 @@ from typing import List, Optional, Dict, Any
 
 from sqlalchemy.orm import Session
 
-from src.domain.model.macros import Macros
-from src.domain.model.meal import Meal, MealStatus
-from src.domain.model.meal_image import MealImage
-from src.domain.model.micros import Micros
-from src.domain.model.nutrition import Nutrition, FoodItem
+from src.domain.model.meal import Meal, MealStatus, MealImage
+from src.domain.model.nutrition import Macros, Micros, Nutrition, FoodItem
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.infra.database.config import SessionLocal
 from src.infra.database.models.meal.meal import Meal as DBMeal

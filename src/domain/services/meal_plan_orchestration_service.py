@@ -6,14 +6,14 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Dict, Any, List
 
-from src.domain.model.meal_generation_request import (
+from src.domain.model.meal_planning import (
+    DailyMealPlan, GeneratedMeal, NutritionSummary
+)
+from src.domain.model.meal_planning import (
     MealGenerationRequest, MealGenerationType, UserDietaryProfile,
     UserNutritionTargets, IngredientConstraints, MealGenerationContext
 )
-from src.domain.model.meal_generation_response import (
-    DailyMealPlan, GeneratedMeal, NutritionSummary
-)
-from src.domain.model.meal_plan import MealType
+from src.domain.model.meal_planning import MealType
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.fallback_meal_service import FallbackMealService
 from src.domain.services.meal_distribution_service import MealDistributionService

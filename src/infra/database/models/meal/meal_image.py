@@ -22,7 +22,7 @@ class MealImage(Base, TimestampMixin):
     
     def to_domain(self):
         """Convert DB model to domain model."""
-        from src.domain.model.meal_image import MealImage as DomainMealImage
+        from src.domain.model.meal import MealImage as DomainMealImage
         
         return DomainMealImage(
             image_id=self.image_id,

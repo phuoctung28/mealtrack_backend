@@ -7,7 +7,6 @@ from typing import Dict, List, Optional, Any
 from src.domain.model.notification import (
     NotificationType,
     PushNotification,
-    UserFcmToken,
     NotificationPreferences
 )
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from src.app.handlers.query_handlers import GetUserTdeeQueryHandler
 from src.app.queries.tdee.get_user_tdee_query import GetUserTdeeQuery
-from src.domain.model.meal_plan import UserPreferences, DietaryPreference, FitnessGoal, PlanDuration
+from src.domain.model.meal_planning import UserPreferences, DietaryPreference, FitnessGoal, PlanDuration
 from src.infra.database.models.user import UserProfile
 
 logger = logging.getLogger(__name__)

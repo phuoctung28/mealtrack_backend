@@ -8,9 +8,9 @@ from uuid import uuid4
 
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.events.base import EventHandler
-from src.domain.model.macros import Macros
 from src.domain.model.meal import Meal, MealStatus
-from src.domain.model.meal_image import MealImage
+from src.domain.model.meal import MealImage
+from src.domain.model.nutrition import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem as DomainFoodItem
 
 

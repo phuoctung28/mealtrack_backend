@@ -3,6 +3,7 @@ Manual meal creation endpoint using USDA FDC items.
 """
 
 from datetime import datetime
+
 from fastapi import APIRouter, Depends
 
 from src.api.dependencies.auth import get_current_user_id

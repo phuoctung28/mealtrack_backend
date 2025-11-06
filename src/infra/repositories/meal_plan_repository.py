@@ -6,7 +6,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from src.domain.model.meal_plan import MealPlan
+from src.domain.model.meal_planning import MealPlan
 from src.infra.database.config import SessionLocal
 from src.infra.database.models.enums import FitnessGoalEnum, PlanDurationEnum, MealTypeEnum
 from src.infra.database.models.meal_planning.meal_plan import MealPlan as DBMealPlan

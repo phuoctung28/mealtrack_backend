@@ -12,28 +12,28 @@ import time
 from contextlib import asynccontextmanager
 
 import firebase_admin
-from firebase_admin import credentials
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from firebase_admin import credentials
 from sqlalchemy import text
 
+from src.api.base_dependencies import initialize_scheduled_notification_service
+from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
 from src.api.routes.v1.manual_meals import router as manual_meals_router
-from src.api.routes.v1.webhooks import router as webhooks_router
 from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meals import router as meals_router
+from src.api.routes.v1.notification_test import router as notification_test_router
+from src.api.routes.v1.notifications import router as notifications_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
-from src.infra.database.migration_manager import MigrationManager
+from src.api.routes.v1.webhooks import router as webhooks_router
 from src.infra.database.config import engine
-from src.api.routes.v1.notifications import router as notifications_router
-from src.api.routes.v1.notification_test import router as notification_test_router
-from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
-from src.api.base_dependencies import initialize_scheduled_notification_service
+from src.infra.database.migration_manager import MigrationManager
 
 load_dotenv()
 

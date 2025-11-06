@@ -7,8 +7,8 @@ from typing import List, Dict
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from src.domain.model.macro_targets import SimpleMacroTargets
-from src.domain.model.meal_plan import PlannedMeal, MealType
+from src.domain.model.meal_planning import PlannedMeal, MealType
+from src.domain.model.meal_planning import SimpleMacroTargets
 
 logger = logging.getLogger(__name__)
 

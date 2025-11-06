@@ -3,16 +3,17 @@ Webhook handlers for RevenueCat events.
 
 Syncs subscription data to local database.
 """
-import os
-from fastapi import APIRouter, Request, HTTPException, Header
-from typing import Optional
-from datetime import datetime
 import logging
+import os
 import uuid
+from datetime import datetime
+from typing import Optional
 
-from src.infra.database.uow import UnitOfWork
+from fastapi import APIRouter, Request, HTTPException, Header
+
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
+from src.infra.database.uow import UnitOfWork
 
 router = APIRouter(prefix="/v1/webhooks", tags=["Webhooks"])
 logger = logging.getLogger(__name__)
