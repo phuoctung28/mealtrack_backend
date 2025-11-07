@@ -76,6 +76,9 @@ class TestSyncUserCommandHandler:
         # Set up the handler to use the mock user
         handler._create_new_user = Mock(return_value=mock_user)
         
+        # Mock the notification preference creation to avoid actual database calls
+        handler._create_default_notification_preferences = Mock()
+        
         result = await handler.handle(command)
         
         assert result["created"] is True
@@ -83,7 +86,12 @@ class TestSyncUserCommandHandler:
         assert result["user"]["firebase_uid"] == "firebase_123"
         assert result["user"]["email"] == "newuser@example.com"
         assert result["message"] == "User created successfully"
-        mock_db_session.commit.assert_called_once()
+        # After bug fix: commit is called twice for new users
+        # 1. First commit to save user and get user.id
+        # 2. Second commit to save notification preferences
+        assert mock_db_session.commit.call_count == 2
+        # Verify notification preferences were created for new user
+        handler._create_default_notification_preferences.assert_called_once_with(mock_user.id)
 
     @pytest.mark.asyncio
     async def test_handle_update_existing_user(self, handler, mock_db_session):
@@ -130,12 +138,18 @@ class TestSyncUserCommandHandler:
         
         handler._update_existing_user = Mock(return_value=True)
         
+        # Mock notification preferences (should NOT be called for existing users)
+        handler._create_default_notification_preferences = Mock()
+        
         result = await handler.handle(command)
         
         assert result["created"] is False
         assert result["updated"] is True
         assert result["message"] == "User updated successfully"
+        # For existing users, commit is only called once (no notification preferences creation)
         mock_db_session.commit.assert_called_once()
+        # Verify notification preferences were NOT created for existing user
+        handler._create_default_notification_preferences.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_handle_no_changes(self, handler, mock_db_session):
