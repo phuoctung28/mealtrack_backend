@@ -38,6 +38,7 @@ from src.app.commands.notification import (
 from src.app.commands.user import (
     SaveUserOnboardingCommand,
     CompleteOnboardingCommand,
+    DeleteUserCommand,
 )
 from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
@@ -54,6 +55,7 @@ from src.app.handlers.command_handlers import (
     SyncUserCommandHandler,
     UpdateUserLastAccessedCommandHandler,
     CompleteOnboardingCommandHandler,
+    DeleteUserCommandHandler,
     GenerateDailyMealSuggestionsCommandHandler,
     GenerateSingleMealCommandHandler,
     CreateManualMealCommandHandler,
@@ -246,6 +248,9 @@ async def get_configured_event_bus(
     )
     event_bus.register_handler(
         CompleteOnboardingCommand, CompleteOnboardingCommandHandler(db)
+    )
+    event_bus.register_handler(
+        DeleteUserCommand, DeleteUserCommandHandler(db)
     )
     event_bus.register_handler(
         UpdateUserMetricsCommand, UpdateUserMetricsCommandHandler(db)

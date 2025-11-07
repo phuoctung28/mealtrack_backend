@@ -231,26 +231,26 @@ class TestGetCurrentUserId:
         mock_db = Mock()
         mock_query = Mock()
         mock_filter = Mock()
-        
+
         mock_db.query.return_value = mock_query
         mock_query.filter.return_value = mock_filter
         mock_filter.first.return_value = None  # User not found
-        
+
         mock_token = {
             "uid": "nonexistent_firebase_uid",
             "email": "nonexistent@example.com",
         }
-        
+
         # Act & Assert
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user_id(mock_token, mock_db)
-        
+
         assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
         assert "detail" in dir(exc_info.value)
         detail = exc_info.value.detail
         assert detail["error_code"] == "USER_NOT_FOUND"
-        assert "sync your account" in detail["message"].lower()
-        assert detail["details"]["firebase_uid"] == "nonexistent_firebase_uid"
+        assert "user not found or account has been deleted" in detail["message"].lower()
+        assert detail["details"]["hint"] is not None
         assert "POST /v1/users/sync" in detail["details"]["hint"]
 
     @pytest.mark.asyncio
