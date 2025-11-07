@@ -86,10 +86,9 @@ class TestSyncUserCommandHandler:
         assert result["user"]["firebase_uid"] == "firebase_123"
         assert result["user"]["email"] == "newuser@example.com"
         assert result["message"] == "User created successfully"
-        # After bug fix: commit is called twice for new users
-        # 1. First commit to save user and get user.id
-        # 2. Second commit to save notification preferences
-        assert mock_db_session.commit.call_count == 2
+        # Only one commit in the handler - NotificationRepository commits on the same session internally
+        # The commit saves the user and gets user.id for notification preferences
+        mock_db_session.commit.assert_called_once()
         # Verify notification preferences were created for new user
         handler._create_default_notification_preferences.assert_called_once_with(mock_user.id)
 

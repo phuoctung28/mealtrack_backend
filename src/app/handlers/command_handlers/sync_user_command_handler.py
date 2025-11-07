@@ -61,13 +61,13 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
             if created:
                 try:
                     self._create_default_notification_preferences(user.id)
-                    # Commit notification preferences separately
-                    self.db.commit()
+                    # Note: No commit needed here - NotificationRepository uses the same session (self.db)
+                    # and already commits in its save_notification_preferences method
                 except Exception as e:
                     logger.error(f"Failed to create notification preferences for user {user.id}: {e}")
                     # Note: We don't rollback here because:
                     # 1. The user was already committed above (line 56) and cannot be rolled back
-                    # 2. The notification repository handles its own transaction/rollback
+                    # 2. The NotificationRepository already rolled back its own changes if it failed
                     # 3. Rolling back would detach the user object, breaking subsequent operations like get_active_subscription()
                     # The user will still be created successfully; preferences can be created later via the API
 
