@@ -123,7 +123,7 @@ async def test_create_manual_meal_command_handler_aggregates_items(monkeypatch):
     from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand, ManualMealItem
     from src.app.handlers.command_handlers.create_manual_meal_command_handler import CreateManualMealCommandHandler
     from src.domain.services.food_mapping_service import FoodMappingService
-    from src.domain.model.meal import MealStatus
+    from src.domain.model import MealStatus
 
     class StubMultiFoodService(StubFoodDataService):
         async def get_multiple_foods(self, fdc_ids: List[int]) -> List[Dict[str, Any]]:

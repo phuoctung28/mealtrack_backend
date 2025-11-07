@@ -8,7 +8,7 @@ from src.domain.services.bmr_calculator import (
     KatchMcArdleCalculator,
     BMRCalculatorFactory
 )
-from src.domain.model.tdee import Sex
+from src.domain.model import Sex
 
 
 class TestMifflinStJeorCalculator:

@@ -7,7 +7,7 @@ from unittest.mock import Mock, MagicMock
 from sqlalchemy.orm import Session
 
 from src.app.handlers.shared.meal_plan_persistence_service import MealPlanPersistenceService
-from src.domain.model.meal_plan import UserPreferences, DietaryPreference, FitnessGoal, PlanDuration
+from src.domain.model import UserPreferences, DietaryPreference, FitnessGoal, PlanDuration
 from src.infra.database.models.meal_planning import MealPlan as MealPlanORM
 
 

@@ -8,7 +8,7 @@ from src.app.commands.meal.create_manual_meal_command import CreateManualMealCom
 from src.app.handlers.command_handlers.create_manual_meal_command_handler import CreateManualMealCommandHandler
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.handlers.query_handlers.get_daily_activities_query_handler import GetDailyActivitiesQueryHandler
-from src.domain.model.meal import MealStatus
+from src.domain.model import MealStatus
 from unittest.mock import Mock, MagicMock, AsyncMock
 
 

@@ -4,7 +4,7 @@ Unit tests for DeleteMeal (soft delete) command handler.
 import pytest
 
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
-from src.domain.model.meal import MealStatus
+from src.domain.model import MealStatus
 
 
 @pytest.mark.unit

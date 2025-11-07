@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.domain.model.meal_plan import (
+from src.domain.model import (
     MealPlan, PlannedMeal, DayPlan, UserPreferences,
     FitnessGoal, MealType, PlanDuration, DietaryPreference
 )

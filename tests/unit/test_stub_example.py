@@ -6,10 +6,7 @@ from unittest.mock import Mock, MagicMock
 
 import pytest
 
-from src.domain.model.macros import Macros
-from src.domain.model.meal import Meal, MealStatus
-from src.domain.model.meal_image import MealImage
-from src.domain.model.nutrition import Nutrition
+from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition
 
 
 class TestWithStubs:

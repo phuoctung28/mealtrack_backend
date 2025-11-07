@@ -6,7 +6,7 @@ import pytest
 from src.app.commands.meal import (
     UploadMealImageImmediatelyCommand
 )
-from src.domain.model.meal import MealStatus
+from src.domain.model import MealStatus
 
 
 @pytest.mark.unit 

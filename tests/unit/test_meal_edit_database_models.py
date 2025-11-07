@@ -5,9 +5,7 @@ import pytest
 import uuid
 from datetime import datetime
 
-from src.domain.model.meal import Meal as DomainMeal, MealStatus
-from src.domain.model.meal_image import MealImage
-from src.domain.model.nutrition import Nutrition, FoodItem, Macros
+from src.domain.model import Meal as DomainMeal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.nutrition.food_item import FoodItem as FoodItemModel
 

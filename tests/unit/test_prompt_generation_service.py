@@ -4,11 +4,10 @@ Unit tests for PromptGenerationService.
 import pytest
 
 from src.domain.services.prompt_generation_service import PromptGenerationService
-from src.domain.model.meal_generation_request import (
+from src.domain.model import (
     MealGenerationContext, MealGenerationRequest, MealGenerationType,
-    UserDietaryProfile, UserNutritionTargets, IngredientConstraints
+    UserDietaryProfile, UserNutritionTargets, IngredientConstraints, MealType
 )
-from src.domain.model.meal_plan import MealType
 
 
 @pytest.fixture
@@ -254,7 +253,7 @@ class TestPromptGenerationService:
         )
         
         # Provide calorie distribution for meals
-        from src.domain.model.meal_generation_request import CalorieDistribution, MealType
+        from src.domain.model import CalorieDistribution
         calorie_dist = CalorieDistribution(
             distribution={
                 MealType.BREAKFAST: 600,

@@ -12,7 +12,7 @@ from src.app.commands.meal import (
 )
 from src.app.commands.user import SaveUserOnboardingCommand
 from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery
-from src.domain.model.meal import Meal, MealStatus
+from src.domain.model import Meal, MealStatus
 
 
 @pytest.mark.integration

@@ -8,10 +8,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from src.domain.model.macros import Macros
-from src.domain.model.meal import Meal, MealStatus
-from src.domain.model.meal_image import MealImage
-from src.domain.model.nutrition import Nutrition, FoodItem
+from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition, FoodItem
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.infra.adapters.mock_image_store import MockImageStore
 from src.infra.adapters.mock_vision_ai_service import MockVisionAIService

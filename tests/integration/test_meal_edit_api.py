@@ -8,7 +8,7 @@ from datetime import datetime
 from fastapi.testclient import TestClient
 
 from src.api.main import app
-from src.domain.model.meal import MealStatus
+from src.domain.model import MealStatus
 
 
 def _pinecone_indexes_available():

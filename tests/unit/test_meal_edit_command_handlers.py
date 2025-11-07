@@ -14,8 +14,7 @@ from src.app.commands.meal import (
     CustomNutritionData
 )
 from src.app.events.meal import MealEditedEvent
-from src.domain.model.meal import MealStatus
-from src.domain.model.nutrition import FoodItem, Macros
+from src.domain.model import MealStatus, FoodItem, Macros
 
 
 def _pinecone_indexes_available():

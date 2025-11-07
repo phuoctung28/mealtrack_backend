@@ -10,7 +10,7 @@ from src.app.queries.meal import (
     GetMealByIdQuery,
     GetDailyMacrosQuery
 )
-from src.domain.model.meal import MealStatus
+from src.domain.model import MealStatus
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.meal.meal_image import MealImage as MealImageModel

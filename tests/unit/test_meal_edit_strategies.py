@@ -15,8 +15,7 @@ from src.app.handlers.command_handlers.meal_edit_strategies import (
     FoodItemChangeStrategyFactory,
 )
 from src.app.commands.meal.edit_meal_command import FoodItemChange, CustomNutritionData
-from src.domain.model.nutrition import FoodItem
-from src.domain.model.macros import Macros
+from src.domain.model import FoodItem, Macros
 
 
 class TestRemoveFoodItemStrategy:
