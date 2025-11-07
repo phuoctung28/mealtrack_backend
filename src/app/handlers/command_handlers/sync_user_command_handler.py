@@ -52,24 +52,17 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                 created = True
                 logger.info('Created new user')
 
-            # Commit changes to get the user ID
-            self.db.commit()
+            # Flush to get the user ID without committing the transaction
+            self.db.flush()
             self.db.refresh(user)
             
-            # Create default notification preferences for new user (after commit so user.id is available)
-            # Do this in a separate try-except so it doesn't affect user creation if it fails
+            # Create default notification preferences for new user (before commit for atomicity)
+            # Both user and preferences will be committed together in a single transaction
             if created:
-                try:
-                    self._create_default_notification_preferences(user.id)
-                    # Note: No commit needed here - NotificationRepository uses the same session (self.db)
-                    # and already commits in its save_notification_preferences method
-                except Exception as e:
-                    logger.error(f"Failed to create notification preferences for user {user.id}: {e}")
-                    # Note: We don't rollback here because:
-                    # 1. The user was already committed above (line 56) and cannot be rolled back
-                    # 2. The NotificationRepository already rolled back its own changes if it failed
-                    # 3. Rolling back would detach the user object, breaking subsequent operations like get_active_subscription()
-                    # The user will still be created successfully; preferences can be created later via the API
+                self._create_default_notification_preferences_without_commit(user.id)
+            
+            # Commit both user and notification preferences atomically
+            self.db.commit()
 
             # Get subscription info if user has active premium
             subscription_info = None
@@ -222,26 +215,41 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
 
         return first_name, last_name
     
-    def _create_default_notification_preferences(self, user_id: str):
-        """Create default notification preferences for a new user."""
-        try:
-            # Guard against None user_id
-            if not user_id:
-                logger.warning("Cannot create notification preferences: user_id is None")
-                return
-            
-            from src.domain.model.notification import NotificationPreferences
-            
-            # Create default preferences
-            default_prefs = NotificationPreferences.create_default(user_id)
-            
-            # Save to database using the notification repository
-            from src.infra.repositories.notification_repository import NotificationRepository
-            notification_repo = NotificationRepository(self.db)
-            notification_repo.save_notification_preferences(default_prefs)
-            
-            logger.info(f"Created default notification preferences for user {user_id}")
-            
-        except Exception as e:
-            logger.error(f"Error creating default notification preferences for user {user_id}: {e}")
-            # Don't raise the exception to avoid breaking user creation
+    def _create_default_notification_preferences_without_commit(self, user_id: str):
+        """Create default notification preferences for a new user without committing.
+        
+        This method adds notification preferences to the session but does not commit,
+        allowing the caller to commit both user and preferences atomically.
+        """
+        # Guard against None user_id
+        if not user_id:
+            logger.warning("Cannot create notification preferences: user_id is None")
+            return
+        
+        from src.domain.model.notification import NotificationPreferences
+        from src.infra.database.models.notification import NotificationPreferences as DBNotificationPreferences
+        
+        # Create default preferences
+        default_prefs = NotificationPreferences.create_default(user_id)
+        
+        # Create database model directly without using repository (to avoid auto-commit)
+        db_prefs = DBNotificationPreferences(
+            id=default_prefs.preferences_id,
+            user_id=default_prefs.user_id,
+            meal_reminders_enabled=default_prefs.meal_reminders_enabled,
+            water_reminders_enabled=default_prefs.water_reminders_enabled,
+            sleep_reminders_enabled=default_prefs.sleep_reminders_enabled,
+            progress_notifications_enabled=default_prefs.progress_notifications_enabled,
+            reengagement_notifications_enabled=default_prefs.reengagement_notifications_enabled,
+            breakfast_time_minutes=default_prefs.breakfast_time_minutes,
+            lunch_time_minutes=default_prefs.lunch_time_minutes,
+            dinner_time_minutes=default_prefs.dinner_time_minutes,
+            water_reminder_interval_hours=default_prefs.water_reminder_interval_hours,
+            sleep_reminder_time_minutes=default_prefs.sleep_reminder_time_minutes,
+            created_at=default_prefs.created_at,
+            updated_at=default_prefs.updated_at
+        )
+        
+        # Add to session (will be committed by caller)
+        self.db.add(db_prefs)
+        logger.info(f"Added default notification preferences for user {user_id} to session")
