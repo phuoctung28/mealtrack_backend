@@ -3,6 +3,7 @@ Command handler for updating user metrics.
 """
 import logging
 from datetime import datetime, timedelta
+
 from sqlalchemy.orm import Session
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException, ConflictException

@@ -8,7 +8,7 @@ import factory
 from factory.alchemy import SQLAlchemyModelFactory
 from src.infra.database.models.meal_food_item import MealFoodItem
 
-from src.domain.model.meal import MealStatus
+from src.domain.model import MealStatus
 from src.infra.database.models.meal import Meal as MealModel
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User

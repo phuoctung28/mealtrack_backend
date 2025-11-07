@@ -3,8 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from .macros import Macros
-from .micros import Micros
+from ..nutrition import Macros, Micros
 
 
 @dataclass

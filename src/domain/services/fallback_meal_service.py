@@ -3,8 +3,8 @@ Domain service for providing fallback meals when generation fails.
 """
 from typing import Dict
 
-from src.domain.model.meal_generation_response import GeneratedMeal, NutritionSummary
-from src.domain.model.meal_plan import MealType
+from src.domain.model.meal_planning import GeneratedMeal, NutritionSummary
+from src.domain.model.meal_planning import MealType
 
 
 class FallbackMealService:

@@ -4,11 +4,11 @@ Scheduled notification service for sending push notifications at specific times.
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from src.domain.model.notification import NotificationType
-from src.domain.services.notification_service import NotificationService
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
+from src.domain.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
 

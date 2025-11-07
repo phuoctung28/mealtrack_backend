@@ -5,8 +5,7 @@ import pytest
 
 from src.api.mappers.daily_meal_mapper import DailyMealMapper
 from src.api.schemas.request import UserPreferencesRequest
-from src.domain.model.macro_targets import SimpleMacroTargets
-from src.domain.model.meal_plan import PlannedMeal, MealType
+from src.domain.model import SimpleMacroTargets, PlannedMeal, MealType
 
 
 class TestDailyMealMapper:

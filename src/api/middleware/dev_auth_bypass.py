@@ -1,20 +1,19 @@
-import os
 import logging
-from types import SimpleNamespace
-from datetime import datetime
+import os
 import uuid
+from datetime import datetime
+from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import FastAPI, Request
 
 from src.infra.database.config import SessionLocal
-from src.infra.database.models.user.user import User
-from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import Meal as DBMeal
 from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
-from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
-
+from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.user.user import User
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ Uses the unified orchestration service.
 import logging
 from typing import Dict, Any
 
-from src.domain.model.meal_generation_response import DailyMealPlan
+from src.domain.model.meal_planning import DailyMealPlan
 from src.domain.services.meal_plan_orchestration_service import MealPlanOrchestrationService
 from src.infra.adapters.meal_generation_service import MealGenerationService
 

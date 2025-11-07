@@ -8,10 +8,7 @@ import pytest
 
 from src.app.handlers.query_handlers import GetDailyActivitiesQueryHandler
 from src.app.queries.activity.get_daily_activities_query import GetDailyActivitiesQuery
-from src.domain.model.macros import Macros
-from src.domain.model.meal import Meal, MealStatus
-from src.domain.model.meal_image import MealImage
-from src.domain.model.nutrition import Nutrition
+from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition
 
 
 @pytest.mark.asyncio

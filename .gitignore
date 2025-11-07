@@ -19,7 +19,7 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-
+.venv/
 # Virtual Environment
 venv/
 ENV/

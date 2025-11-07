@@ -5,9 +5,7 @@ import pytest
 import uuid
 from datetime import datetime
 
-from src.domain.model.meal import Meal, MealStatus
-from src.domain.model.meal_image import MealImage
-from src.domain.model.nutrition import Nutrition, FoodItem, Macros
+from src.domain.model import Meal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 
 
 @pytest.mark.unit

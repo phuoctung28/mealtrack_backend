@@ -95,7 +95,7 @@ class TdeeResponse:
     tdee: float
     goal: Goal
     macros: MacroTargets
-    formula_used: str | None = None  # BMR formula used (e.g., "Mifflin-St Jeor", "Katch-McArdle")
+    formula_used: Optional[str] = None  # BMR formula used (e.g., "Mifflin-St Jeor", "Katch-McArdle")
     
     def to_dict(self) -> dict:
         """Convert to dictionary format for API response."""

@@ -1,63 +1,151 @@
-# Domain models
-from .activity import Activity, ActivityType
-from .conversation import Conversation, ConversationContext, ConversationState, Message, MessageRole
-from .food import Food
-from .ingredient import Ingredient
-from .macro_targets import SimpleMacroTargets
-from .macros import Macros
-from .meal import Meal, MealStatus
-from .meal_image import MealImage
-from .meal_plan import MealPlan, PlannedMeal, DayPlan, UserPreferences, DietaryPreference, FitnessGoal, MealType, \
-    PlanDuration
-from .micros import Micros
-from .nutrition import Nutrition, FoodItem
-from .notification import UserFcmToken, NotificationPreferences, PushNotification, DeviceType, NotificationType
-from .onboarding import OnboardingSection, OnboardingField, OnboardingResponse, OnboardingSectionType, FieldType
-from .tdee import TdeeRequest, TdeeResponse, MacroTargets, Sex, ActivityLevel as TdeeActivityLevel, Goal, UnitSystem
-from .user_macros import UserMacros
+"""
+Domain models organized by bounded context.
+
+This module re-exports all domain models from their bounded contexts for convenience.
+"""
+# AI context
+from .ai import (
+    GPTMacros,
+    GPTFoodItem,
+    GPTAnalysisResponse,
+    GPTResponseError,
+    GPTResponseFormatError,
+    GPTResponseValidationError,
+    GPTResponseParsingError,
+    GPTResponseIncompleteError,
+)
+# Conversation context
+from .conversation import (
+    Conversation,
+    Message,
+    MessageRole,
+    ConversationContext,
+    ConversationState,
+    PromptContext,
+    MealsForDateResponse,
+)
+# Meal context
+from .meal import Meal, MealStatus, MealImage, Ingredient
+# Meal Planning context
+from .meal_planning import (
+    MealPlan,
+    PlannedMeal,
+    DayPlan,
+    UserPreferences,
+    DietaryPreference,
+    FitnessGoal,
+    MealType,
+    PlanDuration,
+    SimpleMacroTargets,
+    MealGenerationRequest,
+    MealGenerationType,
+    MealGenerationContext,
+    UserDietaryProfile,
+    UserNutritionTargets,
+    IngredientConstraints,
+    CalorieDistribution,
+    DailyMealPlan,
+    GeneratedMeal,
+    NutritionSummary,
+)
+# Notification context
+from .notification import (
+    UserFcmToken,
+    NotificationPreferences,
+    PushNotification,
+    DeviceType,
+    NotificationType,
+)
+# Nutrition context
+from .nutrition import Nutrition, FoodItem, Macros, Micros, Food
+# User context
+from .user import (
+    Activity,
+    ActivityType,
+    UserMacros,
+    OnboardingSection,
+    OnboardingField,
+    OnboardingResponse,
+    OnboardingSectionType,
+    FieldType,
+    TdeeRequest,
+    TdeeResponse,
+    MacroTargets,
+    Sex,
+    ActivityLevel,
+    Goal,
+    UnitSystem,
+)
 
 __all__ = [
-    "Meal",
-    "MealStatus", 
-    "MealImage",
-    "Nutrition",
-    "FoodItem",
-    "Macros",
-    "Micros",
-    "Food",
-    "Ingredient",
-    "Activity",
-    "ActivityType",
-    "UserMacros",
-    "OnboardingSection",
-    "OnboardingField", 
-    "OnboardingResponse",
-    "OnboardingSectionType",
-    "FieldType",
-    "TdeeRequest",
-    "TdeeResponse",
-    "MacroTargets",
-    "Sex",
-    "TdeeActivityLevel",
-    "Goal",
-    "UnitSystem",
-    "MealPlan",
-    "PlannedMeal",
-    "DayPlan",
-    "UserPreferences",
-    "DietaryPreference",
-    "FitnessGoal",
-    "MealType",
-    "PlanDuration",
-    "Conversation",
-    "ConversationContext",
-    "ConversationState",
-    "Message",
-    "MessageRole",
-    "SimpleMacroTargets",
-    "UserFcmToken",
-    "NotificationPreferences",
-    "PushNotification",
-    "DeviceType",
-    "NotificationType"
-] 
+    # Meal
+    'Meal',
+    'MealStatus',
+    'MealImage',
+    'Ingredient',
+    # Nutrition
+    'Nutrition',
+    'FoodItem',
+    'Macros',
+    'Micros',
+    'Food',
+    # User
+    'Activity',
+    'ActivityType',
+    'UserMacros',
+    'OnboardingSection',
+    'OnboardingField',
+    'OnboardingResponse',
+    'OnboardingSectionType',
+    'FieldType',
+    'TdeeRequest',
+    'TdeeResponse',
+    'MacroTargets',
+    'Sex',
+    'ActivityLevel',
+    'Goal',
+    'UnitSystem',
+    # Meal Planning
+    'MealPlan',
+    'PlannedMeal',
+    'DayPlan',
+    'UserPreferences',
+    'DietaryPreference',
+    'FitnessGoal',
+    'MealType',
+    'PlanDuration',
+    'SimpleMacroTargets',
+    'MealGenerationRequest',
+    'MealGenerationType',
+    'MealGenerationContext',
+    'UserDietaryProfile',
+    'UserNutritionTargets',
+    'IngredientConstraints',
+    'CalorieDistribution',
+    'DailyMealPlan',
+    'GeneratedMeal',
+    'NutritionSummary',
+    # Conversation
+    'Conversation',
+    'Message',
+    'MessageRole',
+    'ConversationContext',
+    'ConversationState',
+    'PromptContext',
+    'MealsForDateResponse',
+    # AI
+    'GPTMacros',
+    'GPTFoodItem',
+    'GPTAnalysisResponse',
+    'GPTResponseError',
+    'GPTResponseFormatError',
+    'GPTResponseValidationError',
+    'GPTResponseParsingError',
+    'GPTResponseIncompleteError',
+    # Notification
+    'UserFcmToken',
+    'NotificationPreferences',
+    'PushNotification',
+    'DeviceType',
+    'NotificationType',
+]

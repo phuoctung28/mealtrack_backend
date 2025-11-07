@@ -18,9 +18,9 @@ from .generate_single_meal_command_handler import GenerateSingleMealCommandHandl
 from .save_user_onboarding_command_handler import SaveUserOnboardingCommandHandler
 from .sync_user_command_handler import SyncUserCommandHandler
 from .update_user_last_accessed_command_handler import UpdateUserLastAccessedCommandHandler
+from .update_user_metrics_command_handler import UpdateUserMetricsCommandHandler
 from .upload_meal_image_immediately_handler import UploadMealImageImmediatelyHandler
 from .weekly_ingredient_based_meal_plan_command_handler import GenerateWeeklyIngredientBasedMealPlanCommandHandler
-from .update_user_metrics_command_handler import UpdateUserMetricsCommandHandler
 
 __all__ = [
     # Meal handlers

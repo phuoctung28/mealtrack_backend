@@ -5,9 +5,8 @@ from datetime import date, timedelta
 from typing import List, Dict, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
-from src.domain.model.meal_plan import (
+from src.domain.model.meal_planning import (
     MealPlan, PlannedMeal, DayPlan, UserPreferences,
     FitnessGoal, MealType, PlanDuration
 )

@@ -1,5 +1,5 @@
 from src.domain.constants import TDEEConstants
-from src.domain.model.tdee import TdeeRequest, TdeeResponse, MacroTargets, ActivityLevel, Sex, Goal
+from src.domain.model.user import TdeeRequest, TdeeResponse, MacroTargets, ActivityLevel, Goal
 from src.domain.services.bmr_calculator import BMRCalculatorFactory
 
 

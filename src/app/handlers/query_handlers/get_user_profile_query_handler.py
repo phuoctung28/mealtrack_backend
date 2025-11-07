@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.user import GetUserProfileQuery
-from src.domain.model import TdeeRequest, UnitSystem, Goal
-from src.domain.model.tdee import ActivityLevel, Sex
+from src.domain.model.user import ActivityLevel, Sex
+from src.domain.model.user import TdeeRequest, UnitSystem, Goal
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.database.models.user.profile import UserProfile
 

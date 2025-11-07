@@ -10,8 +10,8 @@ from src.api.schemas.response import (
     DailyMealSuggestionsResponse,
     NutritionTotalsResponse
 )
-from src.domain.model.macro_targets import SimpleMacroTargets
-from src.domain.model.meal_plan import PlannedMeal, MealType
+from src.domain.model.meal_planning import PlannedMeal, MealType
+from src.domain.model.meal_planning import SimpleMacroTargets
 
 
 class DailyMealMapper:
@@ -213,7 +213,7 @@ class DailyMealMapper:
             pass
         elif isinstance(target_macros, dict):
             # Convert dict to SimpleMacroTargets object
-            from src.domain.model.macro_targets import SimpleMacroTargets
+            from src.domain.model.meal_planning import SimpleMacroTargets
             target_macros = SimpleMacroTargets(
                 protein=target_macros.get('protein', 0.0),
                 carbs=target_macros.get('carbs', 0.0),

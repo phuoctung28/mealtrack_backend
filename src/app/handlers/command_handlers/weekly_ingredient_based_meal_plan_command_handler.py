@@ -12,7 +12,7 @@ from src.app.commands.meal_plan import GenerateWeeklyIngredientBasedMealPlanComm
 from src.app.events.base import EventHandler, handles
 from src.app.handlers.shared.meal_plan_persistence_service import MealPlanPersistenceService
 from src.app.handlers.shared.user_profile_service import UserProfileService
-from src.domain.model.meal_plan import PlanDuration
+from src.domain.model.meal_planning import PlanDuration
 from src.domain.services.weekly_ingredient_based_meal_plan_service import (
     WeeklyIngredientBasedMealPlanService,
 )

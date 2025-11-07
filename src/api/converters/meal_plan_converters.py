@@ -8,8 +8,8 @@ from src.api.schemas.response.meal_plan_responses import (
     GeneratedMealResponse,
     UserPreferencesStrongResponse
 )
-from src.domain.model.meal_generation_request import MealGenerationRequest
-from src.domain.model.meal_generation_response import DailyMealPlan, GeneratedMeal, NutritionSummary
+from src.domain.model.meal_planning import DailyMealPlan, GeneratedMeal, NutritionSummary
+from src.domain.model.meal_planning import MealGenerationRequest
 
 
 class MealPlanConverter:

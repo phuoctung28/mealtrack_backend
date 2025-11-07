@@ -1,7 +1,7 @@
 """
 Notifications API endpoints for push notification management.
 """
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus

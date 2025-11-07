@@ -71,10 +71,14 @@ class TestSyncUserCommandHandler:
         # Mock refresh to return the user
         mock_db_session.refresh.return_value = None
         mock_db_session.add = Mock()
+        mock_db_session.flush = Mock()
         mock_db_session.commit = Mock()
         
         # Set up the handler to use the mock user
         handler._create_new_user = Mock(return_value=mock_user)
+        
+        # Mock the notification preference creation to avoid actual database calls
+        handler._create_default_notification_preferences_without_commit = Mock()
         
         result = await handler.handle(command)
         
@@ -83,7 +87,12 @@ class TestSyncUserCommandHandler:
         assert result["user"]["firebase_uid"] == "firebase_123"
         assert result["user"]["email"] == "newuser@example.com"
         assert result["message"] == "User created successfully"
+        # Verify flush was called to get user.id without committing
+        mock_db_session.flush.assert_called_once()
+        # Single atomic commit for both user and notification preferences
         mock_db_session.commit.assert_called_once()
+        # Verify notification preferences were added to session for new user
+        handler._create_default_notification_preferences_without_commit.assert_called_once_with(mock_user.id)
 
     @pytest.mark.asyncio
     async def test_handle_update_existing_user(self, handler, mock_db_session):
@@ -130,12 +139,18 @@ class TestSyncUserCommandHandler:
         
         handler._update_existing_user = Mock(return_value=True)
         
+        # Mock notification preferences (should NOT be called for existing users)
+        handler._create_default_notification_preferences_without_commit = Mock()
+        
         result = await handler.handle(command)
         
         assert result["created"] is False
         assert result["updated"] is True
         assert result["message"] == "User updated successfully"
+        # For existing users, commit is only called once (no notification preferences creation)
         mock_db_session.commit.assert_called_once()
+        # Verify notification preferences were NOT created for existing user
+        handler._create_default_notification_preferences_without_commit.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_handle_no_changes(self, handler, mock_db_session):

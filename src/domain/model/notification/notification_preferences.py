@@ -1,101 +1,12 @@
 """
-Notification domain models for push notifications.
+Notification preferences domain model.
 """
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 from typing import Optional
 
-
-class DeviceType(Enum):
-    """Device types for FCM tokens."""
-    IOS = "ios"
-    ANDROID = "android"
-    
-    def __str__(self):
-        return self.value
-
-
-class NotificationType(Enum):
-    """Types of notifications that can be sent."""
-    MEAL_REMINDER_BREAKFAST = "meal_reminder_breakfast"
-    MEAL_REMINDER_LUNCH = "meal_reminder_lunch"
-    MEAL_REMINDER_DINNER = "meal_reminder_dinner"
-    WATER_REMINDER = "water_reminder"
-    SLEEP_REMINDER = "sleep_reminder"
-    PROGRESS_NOTIFICATION = "progress_notification"
-    REENGAGEMENT_NOTIFICATION = "reengagement_notification"
-    
-    def __str__(self):
-        return self.value
-
-
-@dataclass
-class UserFcmToken:
-    """
-    Domain model representing a user's FCM token for push notifications.
-    """
-    token_id: str  # UUID as string
-    user_id: str  # UUID as string
-    fcm_token: str
-    device_type: DeviceType
-    is_active: bool = True
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    
-    def __post_init__(self):
-        """Validate invariants."""
-        # Validate UUID formats
-        try:
-            uuid.UUID(self.token_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for token_id: {self.token_id}")
-        
-        try:
-            uuid.UUID(self.user_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for user_id: {self.user_id}")
-        
-        # Validate FCM token format (basic check)
-        if not self.fcm_token or len(self.fcm_token) < 10:
-            raise ValueError("FCM token must be a valid non-empty string")
-    
-    @classmethod
-    def create_new(cls, user_id: str, fcm_token: str, device_type: DeviceType) -> 'UserFcmToken':
-        """Factory method to create a new FCM token."""
-        return cls(
-            token_id=str(uuid.uuid4()),
-            user_id=user_id,
-            fcm_token=fcm_token,
-            device_type=device_type,
-            created_at=datetime.now(),
-            updated_at=datetime.now()
-        )
-    
-    def deactivate(self) -> 'UserFcmToken':
-        """Deactivate the token."""
-        return UserFcmToken(
-            token_id=self.token_id,
-            user_id=self.user_id,
-            fcm_token=self.fcm_token,
-            device_type=self.device_type,
-            is_active=False,
-            created_at=self.created_at,
-            updated_at=datetime.now()
-        )
-    
-    def to_dict(self) -> dict:
-        """Convert to dictionary format."""
-        return {
-            "token_id": self.token_id,
-            "user_id": self.user_id,
-            "fcm_token": self.fcm_token,
-            "device_type": str(self.device_type),
-            "is_active": self.is_active,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-        }
+from .enums import NotificationType
 
 
 @dataclass
@@ -148,15 +59,25 @@ class NotificationPreferences:
     
     @classmethod
     def create_default(cls, user_id: str) -> 'NotificationPreferences':
-        """Factory method to create default notification preferences."""
+        """Factory method to create default notification preferences.
+        
+        All notification types are enabled by default with sensible timing defaults.
+        """
         return cls(
             preferences_id=str(uuid.uuid4()),
             user_id=user_id,
-            # Default times: 8:00 AM, 12:00 PM, 6:00 PM, 10:00 PM
+            # All notification types enabled by default
+            meal_reminders_enabled=True,
+            water_reminders_enabled=True,
+            sleep_reminders_enabled=True,
+            progress_notifications_enabled=True,
+            reengagement_notifications_enabled=True,
+            # Default meal times: 8:00 AM, 12:00 PM, 6:00 PM, 10:00 PM
             breakfast_time_minutes=480,  # 8:00 AM
             lunch_time_minutes=720,      # 12:00 PM
             dinner_time_minutes=1080,    # 6:00 PM
             sleep_reminder_time_minutes=1320,  # 10:00 PM
+            water_reminder_interval_hours=2,  # Every 2 hours
             created_at=datetime.now(),
             updated_at=datetime.now()
         )
@@ -254,34 +175,3 @@ class NotificationPreferences:
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
-
-@dataclass
-class PushNotification:
-    """
-    Domain model representing a push notification to be sent.
-    """
-    user_id: str  # UUID as string
-    title: str
-    body: str
-    notification_type: NotificationType
-    data: Optional[dict] = None
-    
-    def __post_init__(self):
-        """Validate invariants."""
-        try:
-            uuid.UUID(self.user_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for user_id: {self.user_id}")
-        
-        if not self.title or not self.body:
-            raise ValueError("Title and body must be non-empty strings")
-    
-    def to_dict(self) -> dict:
-        """Convert to dictionary format."""
-        return {
-            "user_id": self.user_id,
-            "title": self.title,
-            "body": self.body,
-            "notification_type": str(self.notification_type),
-            "data": self.data or {},
-        }

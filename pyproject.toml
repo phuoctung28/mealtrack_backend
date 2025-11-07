@@ -10,4 +10,37 @@ readme = "README.md"
 requires-python = ">=3.8"
 
 [tool.pytest.ini_options]
-pythonpath = ["."] 
+pythonpath = ["."]
+
+[tool.coverage.run]
+omit = [
+    # Development and testing utilities
+    "src/api/middleware/dev_auth_bypass.py",
+    # Database infrastructure
+    "src/infra/database/migration_manager.py",
+    "src/infra/database/uow.py",
+    # External service integrations
+    "src/infra/services/firebase_service.py",
+    "src/infra/services/pinecone_service.py",
+    "src/infra/services/scheduled_notification_service.py",
+    # Standard exclusions
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+show_missing = true
+precision = 2 

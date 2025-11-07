@@ -7,7 +7,7 @@ from src.api.schemas.response import (
     TdeeCalculationResponse,
     MacroTargetsResponse
 )
-from src.domain.model.tdee import (
+from src.domain.model.user import (
     TdeeRequest,
     TdeeResponse,
     Sex,

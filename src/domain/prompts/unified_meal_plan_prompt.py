@@ -4,8 +4,8 @@ Generates all meals for a day in a single API call.
 """
 from typing import Dict, Any
 
-from src.domain.model.macro_targets import SimpleMacroTargets
-from src.domain.model.meal_plan import MealType
+from src.domain.model.meal_planning import MealType
+from src.domain.model.meal_planning import SimpleMacroTargets
 
 
 def build_unified_meal_prompt(meal_distribution: Dict[MealType, float], user_preferences: Dict[str, Any]) -> str:

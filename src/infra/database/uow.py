@@ -1,12 +1,12 @@
 """
 Unit of Work pattern implementation for managing database transactions.
 """
-from typing import Type, TypeVar
+from typing import TypeVar
+
 from sqlalchemy.orm import Session
 
-from src.infra.repositories.user_repository import UserRepository
 from src.infra.repositories.subscription_repository import SubscriptionRepository
-
+from src.infra.repositories.user_repository import UserRepository
 
 T = TypeVar('T')
 

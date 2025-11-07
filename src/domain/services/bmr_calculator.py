@@ -6,7 +6,8 @@ Provides different formulas for calculating BMR based on available user data:
 - Katch-McArdle: More accurate formula using lean body mass (requires body fat %)
 """
 from abc import ABC, abstractmethod
-from src.domain.model.tdee import Sex
+
+from src.domain.model.user import Sex
 
 
 class BMRCalculator(ABC):

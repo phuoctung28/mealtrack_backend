@@ -4,17 +4,16 @@ Database migration manager for automatic schema and migration management.
 This module handles automatic database initialization and migration execution
 during application startup, ensuring the database is always up-to-date.
 """
+import logging
 import os
 import time
-import logging
 from typing import Optional
-from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from alembic.script import ScriptDirectory
 from alembic.runtime.migration import MigrationContext
-from sqlalchemy import inspect, text, pool
+from alembic.script import ScriptDirectory
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError, DatabaseError
 

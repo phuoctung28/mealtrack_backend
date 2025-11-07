@@ -4,7 +4,7 @@ Mock Meal Suggestion Service for testing.
 import uuid
 from typing import List, Dict, Any
 
-from src.domain.model.meal_plan import MealType, PlannedMeal
+from src.domain.model.meal_planning import MealType, PlannedMeal
 
 
 class MockMealSuggestionService:

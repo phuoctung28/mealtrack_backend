@@ -2,9 +2,9 @@
 Base repository class for common database operations.
 """
 from typing import TypeVar, Generic, Type, Optional, List
-from sqlalchemy.orm import Session
-from sqlalchemy import select
 from uuid import uuid4
+
+from sqlalchemy.orm import Session
 
 T = TypeVar('T')
 

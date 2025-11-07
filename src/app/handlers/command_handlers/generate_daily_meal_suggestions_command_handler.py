@@ -12,8 +12,8 @@ from src.app.commands.daily_meal import GenerateDailyMealSuggestionsCommand
 from src.app.events.base import EventHandler, handles
 from src.app.events.daily_meal import DailyMealsGeneratedEvent
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.macro_targets import SimpleMacroTargets
-from src.domain.model.tdee import TdeeRequest, Sex, UnitSystem
+from src.domain.model.meal_planning import SimpleMacroTargets
+from src.domain.model.user import TdeeRequest, Sex, UnitSystem
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
 from src.domain.services.tdee_service import TdeeCalculationService
 

@@ -3,8 +3,8 @@ Prompt templates for daily meal plan generation.
 """
 from typing import Dict, Any
 
-from src.domain.model.macro_targets import SimpleMacroTargets
-from src.domain.model.meal_plan import MealType
+from src.domain.model.meal_planning import MealType
+from src.domain.model.meal_planning import SimpleMacroTargets
 
 
 def build_single_meal_prompt(meal_type: MealType, calorie_target: float, user_preferences: Dict[str, Any]) -> str:

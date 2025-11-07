@@ -6,7 +6,7 @@ from datetime import date
 from enum import Enum
 from typing import List, Dict, Optional
 
-from src.domain.model.meal_plan import MealType
+from .meal_plan import MealType
 
 
 class MealGenerationType(Enum):

@@ -6,8 +6,7 @@ from unittest.mock import patch
 import json
 
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
-from src.domain.model.meal_plan import MealType, PlannedMeal
-from src.domain.model.macro_targets import SimpleMacroTargets
+from src.domain.model import MealType, PlannedMeal, SimpleMacroTargets
 
 
 @pytest.fixture

@@ -10,10 +10,7 @@ import uuid
 
 from src.app.handlers.query_handlers.get_meals_by_date_query_handler import GetMealsByDateQueryHandler
 from src.app.queries.meal_plan import GetMealsByDateQuery
-from src.domain.model.meal import Meal, MealStatus
-from src.domain.model.meal_image import MealImage
-from src.domain.model.nutrition import Nutrition, FoodItem
-from src.domain.model.macros import Macros
+from src.domain.model import Meal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 
 
 class TestGetMealsByDateQueryHandler:

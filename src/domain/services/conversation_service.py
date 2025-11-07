@@ -6,7 +6,7 @@ from src.domain.model.conversation import (
     Conversation, ConversationContext, ConversationState,
     MessageRole
 )
-from src.domain.model.meal_plan import (
+from src.domain.model.meal_planning import (
     UserPreferences, DietaryPreference, FitnessGoal, PlanDuration, MealPlan, MealType
 )
 from src.domain.services.meal_plan_service import MealPlanService

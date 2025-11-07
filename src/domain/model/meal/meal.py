@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Optional
 
 from .meal_image import MealImage
-from .nutrition import Nutrition
+from ..nutrition import Nutrition
 
 
 class MealStatus(Enum):

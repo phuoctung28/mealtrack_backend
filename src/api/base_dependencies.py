@@ -12,6 +12,7 @@ from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.food_mapping_service import FoodMappingService
+from src.domain.services.notification_service import NotificationService
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.food_cache_service import FoodCacheService
 from src.infra.adapters.food_data_service import FoodDataService
@@ -21,7 +22,6 @@ from src.infra.database.config import SessionLocal
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
 from src.infra.services.firebase_service import FirebaseService
-from src.domain.services.notification_service import NotificationService
 from src.infra.services.scheduled_notification_service import ScheduledNotificationService
 
 
