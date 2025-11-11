@@ -108,7 +108,7 @@ class TestHandlerStubs:
 
     def test_handler_with_stubbed_dependencies(self):
         """Test handler with all dependencies stubbed."""
-        from src.app.handlers.command_handlers.edit_meal_handler import (
+        from src.app.handlers.command_handlers.edit_meal_command_handler import (
             EditMealCommandHandler
         )
 

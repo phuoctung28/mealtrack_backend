@@ -63,7 +63,7 @@ from src.app.handlers.command_handlers import (
     UploadMealImageImmediatelyHandler,
     GenerateWeeklyIngredientBasedMealPlanCommandHandler
 )
-from src.app.handlers.command_handlers.notification_command_handlers import (
+from src.app.handlers.command_handlers import (
     RegisterFcmTokenCommandHandler,
     DeleteFcmTokenCommandHandler,
     UpdateNotificationPreferencesCommandHandler,
@@ -84,13 +84,13 @@ from src.app.handlers.query_handlers import (
     GetUserOnboardingStatusQueryHandler,
     GetDailyActivitiesQueryHandler,
     GetMealPlanQueryHandler,
-    GetMealsByDateMealPlanQueryHandler,
+    GetMealsFromPlanByDateQueryHandler,
     GetMealSuggestionsForProfileQueryHandler,
     GetSingleMealForProfileQueryHandler,
     GetMealPlanningSummaryQueryHandler,
     GetUserMetricsQueryHandler,
 )
-from src.app.handlers.query_handlers.notification_query_handlers import (
+from src.app.handlers.query_handlers import (
     GetNotificationPreferencesQueryHandler,
 )
 from src.app.queries.activity import GetDailyActivitiesQuery
@@ -107,16 +107,13 @@ from src.app.queries.meal import (
     GetDailyMacrosQuery,
 )
 from src.app.queries.meal_plan import (
-    GetMealPlanQuery,
-    GetMealsByDateQuery as MealPlanGetMealsByDateQuery,
+    GetMealsFromPlanByDateQuery,
 )
 from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import GetUserProfileQuery, GetUserMetricsQuery
-from src.app.queries.user.get_user_by_firebase_uid_query import (
-    GetUserByFirebaseUidQuery,
-    GetUserOnboardingStatusQuery,
-)
+from src.app.queries.user.get_user_by_firebase_uid_query import GetUserByFirebaseUidQuery
+from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboardingStatusQuery
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_data_service_port import FoodDataServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
@@ -235,7 +232,7 @@ async def get_configured_event_bus(
     )
     event_bus.register_handler(GetMealPlanQuery, GetMealPlanQueryHandler())
     event_bus.register_handler(
-        MealPlanGetMealsByDateQuery, GetMealsByDateMealPlanQueryHandler(db)
+        GetMealsFromPlanByDateQuery, GetMealsFromPlanByDateQueryHandler(db)
     )
 
     # Register user handlers
@@ -295,7 +292,7 @@ async def get_configured_event_bus(
         image_store=image_store,
     )
     event_bus.subscribe(
-        MealImageUploadedEvent, meal_analysis_handler.handle_meal_image_uploaded
+        MealImageUploadedEvent, meal_analysis_handler
     )
 
     return event_bus

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
-from src.app.queries.user.get_user_by_firebase_uid_query import GetUserOnboardingStatusQuery
+from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboardingStatusQuery
 from src.infra.database.models.user import User
 
 logger = logging.getLogger(__name__)

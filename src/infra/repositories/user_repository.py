@@ -14,16 +14,12 @@ class UserRepository:
     def __init__(self, db: Session):
         self.db = db
     
-    def create_user(self, email: str, username: str, password_hash: str, firebase_uid: str) -> User:
-        """Create a new user."""
-        user = User(
-            email=email,
-            username=username,
-            password_hash=password_hash,
-            firebase_uid=firebase_uid,
-            is_active=True
-        )
-        self.db.add(user)
+    def save(self, user: User) -> User:
+        """Save or update a user."""
+        if not user.id:
+            self.db.add(user)
+        else:
+            self.db.merge(user)
         try:
             self.db.commit()
             self.db.refresh(user)
@@ -32,37 +28,64 @@ class UserRepository:
             self.db.rollback()
             raise ValueError("User with this email or username already exists")
     
-    def get(self, user_id: str) -> Optional[User]:
-        """Get user by ID (alias for compatibility)."""
-        return self.get_user_by_id(user_id)
+    def create_user(self, email: str, username: str, password_hash: str, firebase_uid: str) -> User:
+        """Create a new user (deprecated - use save instead)."""
+        user = User(
+            email=email,
+            username=username,
+            password_hash=password_hash,
+            firebase_uid=firebase_uid,
+            is_active=True
+        )
+        return self.save(user)
     
-    def get_user_by_id(self, user_id: str) -> Optional[User]:
-        """Get user by ID (only active users)."""
+    def find_by_id(self, user_id: str) -> Optional[User]:
+        """Find user by ID (only active users)."""
         return self.db.query(User).filter(
             User.id == user_id,
             User.is_active == True
         ).first()
+    
+    def get(self, user_id: str) -> Optional[User]:
+        """Get user by ID (deprecated - use find_by_id)."""
+        return self.find_by_id(user_id)
+    
+    def get_user_by_id(self, user_id: str) -> Optional[User]:
+        """Get user by ID (deprecated - use find_by_id)."""
+        return self.find_by_id(user_id)
 
-    def get_user_by_email(self, email: str) -> Optional[User]:
-        """Get user by email (only active users)."""
+    def find_by_email(self, email: str) -> Optional[User]:
+        """Find user by email (only active users)."""
         return self.db.query(User).filter(
             User.email == email,
             User.is_active == True
         ).first()
+    
+    def get_user_by_email(self, email: str) -> Optional[User]:
+        """Get user by email (deprecated - use find_by_email)."""
+        return self.find_by_email(email)
 
-    def get_user_by_username(self, username: str) -> Optional[User]:
-        """Get user by username (only active users)."""
+    def find_by_username(self, username: str) -> Optional[User]:
+        """Find user by username (only active users)."""
         return self.db.query(User).filter(
             User.username == username,
             User.is_active == True
         ).first()
+    
+    def get_user_by_username(self, username: str) -> Optional[User]:
+        """Get user by username (deprecated - use find_by_username)."""
+        return self.find_by_username(username)
 
-    def get_user_by_firebase_uid(self, firebase_uid: str) -> Optional[User]:
-        """Get user by Firebase UID (only active users)."""
+    def find_by_firebase_uid(self, firebase_uid: str) -> Optional[User]:
+        """Find user by Firebase UID (only active users)."""
         return self.db.query(User).filter(
             User.firebase_uid == firebase_uid,
             User.is_active == True
         ).first()
+    
+    def get_user_by_firebase_uid(self, firebase_uid: str) -> Optional[User]:
+        """Get user by Firebase UID (deprecated - use find_by_firebase_uid)."""
+        return self.find_by_firebase_uid(firebase_uid)
     
     def create_user_profile(self, user_id: str, age: int, gender: str, 
                           height_cm: float, weight_kg: float, 

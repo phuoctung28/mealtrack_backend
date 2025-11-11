@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import create_engine, text
-from src.infra.database.test_config import get_test_database_url, create_test_tables
+from tests.fixtures.database.test_config import get_test_database_url, create_test_tables
 
 
 def setup_test_database():

@@ -1,9 +1,10 @@
 """
-Query handlers for notification operations.
+Handler for getting notification preferences.
 """
 import logging
 from typing import Any, Dict
 
+from src.app.events.base import EventHandler, handles
 from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.domain.model.notification import NotificationPreferences
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
@@ -11,14 +12,22 @@ from src.domain.ports.notification_repository_port import NotificationRepository
 logger = logging.getLogger(__name__)
 
 
-class GetNotificationPreferencesQueryHandler:
+@handles(GetNotificationPreferencesQuery)
+class GetNotificationPreferencesQueryHandler(EventHandler[GetNotificationPreferencesQuery, Dict[str, Any]]):
     """Handler for getting notification preferences."""
     
-    def __init__(self, notification_repository: NotificationRepositoryPort):
+    def __init__(self, notification_repository: NotificationRepositoryPort = None):
         self.notification_repository = notification_repository
+    
+    def set_dependencies(self, **kwargs):
+        """Set dependencies for dependency injection."""
+        self.notification_repository = kwargs.get('notification_repository', self.notification_repository)
     
     async def handle(self, query: GetNotificationPreferencesQuery) -> Dict[str, Any]:
         """Handle notification preferences query."""
+        if not self.notification_repository:
+            raise RuntimeError("Notification repository not configured")
+        
         try:
             # Get preferences for user
             preferences = self.notification_repository.find_notification_preferences_by_user(query.user_id)

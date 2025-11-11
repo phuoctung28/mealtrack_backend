@@ -108,7 +108,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
     async def _apply_food_item_changes(self, current_food_items, changes):
         """Apply food item changes to current list using strategy pattern."""
         from src.domain.services import NutritionCalculationService
-        from src.app.handlers.command_handlers.meal_edit_strategies import FoodItemChangeStrategyFactory
+        from src.domain.strategies.meal_edit_strategies import FoodItemChangeStrategyFactory
 
         # Convert current items to dict for easier manipulation
         food_items_dict = {}
