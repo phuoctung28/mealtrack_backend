@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 import uuid
 
-from src.app.handlers.command_handlers.meal_edit_strategies import (
+from src.domain.strategies.meal_edit_strategies import (
     RemoveFoodItemStrategy,
     UpdateFoodItemStrategy,
     AddFoodItemStrategy,

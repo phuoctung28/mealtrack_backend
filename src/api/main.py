@@ -24,14 +24,14 @@ from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
-from src.api.routes.v1.manual_meals import router as manual_meals_router
+
 from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meals import router as meals_router
-from src.api.routes.v1.notification_test import router as notification_test_router
 from src.api.routes.v1.notifications import router as notifications_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
+from src.api.routes.v1.health import router as health_router
 from src.infra.database.config import engine
 from src.infra.database.migration_manager import MigrationManager
 
@@ -174,29 +174,8 @@ app.add_middleware(
 # Dev auth bypass: inject a fixed user during development
 add_dev_auth_bypass(app)
 
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-
-        return {"status": "healthy", "database": "connected", "timestamp": time.time()}
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "database": "disconnected",
-            "error": str(e),
-            "timestamp": time.time(),
-        }
-
-
-@app.get("/")
-async def root():
-    return "MealTrack API is running! Visit /docs for API documentation."
-
-
+# Include all routers
+app.include_router(health_router)
 app.include_router(meals_router)
 app.include_router(activities_router)
 app.include_router(feature_flags_router)
@@ -205,10 +184,8 @@ app.include_router(meal_plans_router)
 app.include_router(user_profiles_router)
 app.include_router(users_router)
 app.include_router(foods_router)
-app.include_router(manual_meals_router)
 app.include_router(webhooks_router)
 app.include_router(notifications_router)
-app.include_router(notification_test_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get("ENVIRONMENT") == "development":

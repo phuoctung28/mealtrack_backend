@@ -31,7 +31,7 @@ fi
 
 # Setup development database if needed
 echo "🔧 Setting up development database..."
-python scripts/dev_setup.py
+python scripts/development/dev_setup.py
 
 # Start app
 echo "✅ Ready! Starting at http://localhost:8000"

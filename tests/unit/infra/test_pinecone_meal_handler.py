@@ -12,7 +12,7 @@ from src.app.commands.meal import (
     FoodItemChange,
     CustomNutritionData
 )
-from src.app.handlers.command_handlers.edit_meal_handler import EditMealCommandHandler
+from src.app.handlers.command_handlers.edit_meal_command_handler import EditMealCommandHandler
 from src.domain.model import Meal, MealStatus, Nutrition, FoodItem, Macros
 from src.infra.services.pinecone_service import NutritionData
 

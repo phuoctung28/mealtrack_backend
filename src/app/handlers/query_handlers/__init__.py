@@ -14,7 +14,8 @@ from .get_meal_plan_query_handler import GetMealPlanQueryHandler
 from .get_meal_planning_summary_query_handler import GetMealPlanningSummaryQueryHandler
 # Daily Meal handlers
 from .get_meal_suggestions_for_profile_query_handler import GetMealSuggestionsForProfileQueryHandler
-from .get_meals_by_date_meal_plan_query_handler import GetMealsByDateQueryHandler as GetMealsByDateMealPlanQueryHandler
+from .get_meals_from_plan_by_date_query_handler import GetMealsFromPlanByDateQueryHandler
+from .get_meals_by_date_query_handler import GetMealsByDateQueryHandler
 from .get_single_meal_for_profile_query_handler import GetSingleMealForProfileQueryHandler
 from .get_user_by_firebase_uid_query_handler import GetUserByFirebaseUidQueryHandler
 from .get_user_metrics_query_handler import GetUserMetricsQueryHandler
@@ -25,6 +26,8 @@ from .get_user_profile_query_handler import GetUserProfileQueryHandler
 from .get_user_tdee_query_handler import GetUserTdeeQueryHandler
 # Food handlers
 from .search_foods_query_handler import SearchFoodsQueryHandler
+# Notification handlers
+from .get_notification_preferences_query_handler import GetNotificationPreferencesQueryHandler
 
 __all__ = [
     # TDEE
@@ -44,9 +47,12 @@ __all__ = [
     "GetDailyActivitiesQueryHandler",
     # Meal Plan
     "GetMealPlanQueryHandler",
-    "GetMealsByDateMealPlanQueryHandler",
+    "GetMealsFromPlanByDateQueryHandler",
+    "GetMealsByDateQueryHandler",
     # Daily Meal
     "GetMealSuggestionsForProfileQueryHandler",
     "GetSingleMealForProfileQueryHandler",
     "GetMealPlanningSummaryQueryHandler",
+    # Notification
+    "GetNotificationPreferencesQueryHandler",
 ]

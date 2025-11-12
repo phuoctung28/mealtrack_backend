@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition, FoodItem
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.infra.adapters.mock_image_store import MockImageStore
-from src.infra.adapters.mock_vision_ai_service import MockVisionAIService
+from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIService
 from src.infra.database.config import Base
 # Import all models to ensure they're registered with Base metadata
 from src.infra.database.models.meal.meal import Meal as MealModel
@@ -20,7 +20,7 @@ from src.infra.database.models.nutrition.food_item import FoodItem as FoodItemMo
 from src.infra.database.models.nutrition.nutrition import Nutrition as NutritionModel
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
-from src.infra.database.test_config import (
+from tests.fixtures.database.test_config import (
     get_test_database_url,
     create_test_engine
 )

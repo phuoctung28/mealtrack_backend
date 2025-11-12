@@ -30,8 +30,6 @@ from .nutrition.food_item import FoodItem
 # Nutrition models
 from .nutrition.nutrition import Nutrition
 from .subscription import Subscription
-# Test models
-from .test import TestTable
 from .user.profile import UserProfile
 # User models
 from .user.user import User
@@ -72,7 +70,6 @@ __all__ = [
     "PlannedMeal",
     
     # Test models
-    "TestTable",
     
     # Notification models
     "NotificationPreferences",

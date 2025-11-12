@@ -25,10 +25,8 @@ from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
     UpdateUserLastAccessedCommand
 )
-from src.app.queries.user.get_user_by_firebase_uid_query import (
-    GetUserByFirebaseUidQuery,
-    GetUserOnboardingStatusQuery
-)
+from src.app.queries.user.get_user_by_firebase_uid_query import GetUserByFirebaseUidQuery
+from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboardingStatusQuery
 from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)

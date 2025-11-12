@@ -1,22 +1,20 @@
 """
-GetMealsByDateQueryHandler (Meal Plan) - Individual handler file.
-Auto-extracted for better maintainability.
-
-Note: This is the meal plan version, different from the meal query version.
+GetMealsFromPlanByDateQueryHandler - Handler for retrieving planned meals by date.
+Handles GetMealsFromPlanByDateQuery to avoid conflict with GetMealsByDateQuery.
 """
 import logging
 from typing import Dict, Any
 
 from src.app.events.base import EventHandler, handles
-from src.app.queries.meal_plan import GetMealsByDateQuery
+from src.app.queries.meal_plan import GetMealsFromPlanByDateQuery
 from src.domain.model.conversation import MealsForDateResponse
 from src.domain.model.meal_planning import PlannedMeal, MealType
 
 logger = logging.getLogger(__name__)
 
 
-@handles(GetMealsByDateQuery)
-class GetMealsByDateQueryHandler(EventHandler[GetMealsByDateQuery, Dict[str, Any]]):
+@handles(GetMealsFromPlanByDateQuery)
+class GetMealsFromPlanByDateQueryHandler(EventHandler[GetMealsFromPlanByDateQuery, Dict[str, Any]]):
     """Handler for getting meals by specific date."""
 
     def __init__(self, db=None):
@@ -26,7 +24,7 @@ class GetMealsByDateQueryHandler(EventHandler[GetMealsByDateQuery, Dict[str, Any
         """Set database dependency if available."""
         self.db = db
 
-    async def handle(self, query: GetMealsByDateQuery) -> Dict[str, Any]:
+    async def handle(self, query: GetMealsFromPlanByDateQuery) -> Dict[str, Any]:
         """Get meals for a specific date."""
         try:
             if self.db:

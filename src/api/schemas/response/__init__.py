@@ -42,6 +42,7 @@ from .meal_responses import (
     MacrosResponse,
     NutritionResponse,
     FoodItemResponse,
+    ManualMealCreationResponse,
     MealStatusEnum
 )
 # Onboarding responses
@@ -96,6 +97,7 @@ __all__ = [
     'MacrosResponse',
     'NutritionResponse',
     'FoodItemResponse',
+    'ManualMealCreationResponse',
     'MealStatusEnum',
     
     # TDEE

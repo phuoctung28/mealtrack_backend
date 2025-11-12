@@ -4,6 +4,7 @@ Event handler for meal analysis events.
 import logging
 from datetime import datetime
 
+from src.app.events.base import EventHandler, handles
 from src.app.events.meal import MealImageUploadedEvent
 from src.domain.model.meal import MealStatus
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
@@ -17,7 +18,8 @@ from src.infra.repositories.meal_repository import MealRepository
 logger = logging.getLogger(__name__)
 
 
-class MealAnalysisEventHandler:
+@handles(MealImageUploadedEvent)
+class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
     """Handler for meal analysis events."""
     
     def __init__(
@@ -32,7 +34,14 @@ class MealAnalysisEventHandler:
         self.gpt_parser = gpt_parser or GPTResponseParser()
         self.image_store = image_store or CloudinaryImageStore()
     
-    async def handle_meal_image_uploaded(self, event: MealImageUploadedEvent) -> None:
+    def set_dependencies(self, **kwargs):
+        """Set dependencies for dependency injection."""
+        self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
+        self.vision_service = kwargs.get('vision_service', self.vision_service)
+        self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
+        self.image_store = kwargs.get('image_store', self.image_store)
+    
+    async def handle(self, event: MealImageUploadedEvent) -> None:
         """Handle meal image uploaded event by triggering background analysis."""
         logger.info(f"EVENT HANDLER CALLED: Received MealImageUploadedEvent for meal {event.meal_id}")
         try:

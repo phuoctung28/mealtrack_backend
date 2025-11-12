@@ -3,14 +3,14 @@ command_handlers - Individual handler files.
 Each handler is in its own file for better maintainability.
 """
 
-from .add_custom_ingredient_handler import AddCustomIngredientCommandHandler
+from .add_custom_ingredient_command_handler import AddCustomIngredientCommandHandler
 from .complete_onboarding_command_handler import CompleteOnboardingCommandHandler
 from .delete_user_command_handler import DeleteUserCommandHandler
 # Standalone handlers (already individual files)
 from .create_manual_meal_command_handler import CreateManualMealCommandHandler
-from .delete_meal_handler import DeleteMealCommandHandler
+from .delete_meal_command_handler import DeleteMealCommandHandler
 # Meal handlers (already extracted)
-from .edit_meal_handler import EditMealCommandHandler
+from .edit_meal_command_handler import EditMealCommandHandler
 # Daily Meal handlers (newly extracted)
 from .generate_daily_meal_suggestions_command_handler import GenerateDailyMealSuggestionsCommandHandler
 from .generate_single_meal_command_handler import GenerateSingleMealCommandHandler
@@ -19,8 +19,12 @@ from .save_user_onboarding_command_handler import SaveUserOnboardingCommandHandl
 from .sync_user_command_handler import SyncUserCommandHandler
 from .update_user_last_accessed_command_handler import UpdateUserLastAccessedCommandHandler
 from .update_user_metrics_command_handler import UpdateUserMetricsCommandHandler
-from .upload_meal_image_immediately_handler import UploadMealImageImmediatelyHandler
+from .upload_meal_image_immediately_command_handler import UploadMealImageImmediatelyHandler
 from .weekly_ingredient_based_meal_plan_command_handler import GenerateWeeklyIngredientBasedMealPlanCommandHandler
+# Notification handlers
+from .register_fcm_token_command_handler import RegisterFcmTokenCommandHandler
+from .delete_fcm_token_command_handler import DeleteFcmTokenCommandHandler
+from .update_notification_preferences_command_handler import UpdateNotificationPreferencesCommandHandler
 
 __all__ = [
     # Meal handlers
@@ -41,4 +45,8 @@ __all__ = [
     "CreateManualMealCommandHandler",
     "GenerateWeeklyIngredientBasedMealPlanCommandHandler",
     "UploadMealImageImmediatelyHandler",
+    # Notification handlers
+    "RegisterFcmTokenCommandHandler",
+    "DeleteFcmTokenCommandHandler",
+    "UpdateNotificationPreferencesCommandHandler",
 ]
