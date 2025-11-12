@@ -8,14 +8,27 @@ import sys
 import logging
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add project root to path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 from src.infra.database.config import engine, Base
 from sqlalchemy import inspect
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Warn if not running in virtual environment
+venv_path = project_root / ".venv"
+is_in_venv = hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
+if venv_path.exists() and not is_in_venv:
+    venv_python = venv_path / "bin" / "python"
+    if venv_python.exists():
+        logger.warning(
+            "⚠️  Warning: Script is not running in virtual environment.\n"
+            f"Please activate venv first: source .venv/bin/activate\n"
+            f"Or run with venv Python: {venv_python} {sys.argv[0]}"
+        )
 
 
 def setup_dev_database():
