@@ -2,6 +2,7 @@
 Unit tests for NotificationRepository.
 """
 import pytest
+import uuid
 from datetime import datetime
 from unittest.mock import Mock, MagicMock, patch
 
@@ -15,6 +16,12 @@ from src.infra.database.models.notification import (
     UserFcmToken as DBUserFcmToken,
     NotificationPreferences as DBNotificationPreferences
 )
+
+# Test UUIDs - using fixed UUIDs for consistency in tests
+TEST_USER_ID = "00000000-0000-0000-0000-000000000001"
+TEST_TOKEN_ID_1 = "00000000-0000-0000-0000-000000000011"
+TEST_TOKEN_ID_2 = "00000000-0000-0000-0000-000000000012"
+TEST_TOKEN_ID_123 = "00000000-0000-0000-0000-000000000123"
 
 
 class TestNotificationRepository:
@@ -43,8 +50,8 @@ class TestNotificationRepository:
         """Test saving a new FCM token."""
         # Arrange
         token = UserFcmToken(
-            token_id="token-123",
-            user_id="user-123",
+            token_id=TEST_TOKEN_ID_123,
+            user_id=TEST_USER_ID,
             fcm_token="fcm-token-abc",
             device_type=DeviceType.IOS,
             is_active=True,
@@ -65,7 +72,7 @@ class TestNotificationRepository:
             
             # Assert
             assert result.fcm_token == "fcm-token-abc"
-            assert result.user_id == "user-123"
+            assert result.user_id == TEST_USER_ID
             mock_db_session.add.assert_called_once()
             mock_db_session.commit.assert_called_once()
     
@@ -73,8 +80,8 @@ class TestNotificationRepository:
         """Test updating an existing FCM token."""
         # Arrange
         token = UserFcmToken(
-            token_id="token-123",
-            user_id="user-123",
+            token_id=TEST_TOKEN_ID_123,
+            user_id=TEST_USER_ID,
             fcm_token="fcm-token-abc",
             device_type=DeviceType.IOS,
             is_active=True,
@@ -98,15 +105,15 @@ class TestNotificationRepository:
         assert result.fcm_token == "fcm-token-abc"
         mock_db_session.add.assert_not_called()  # Should not add, only update
         mock_db_session.commit.assert_called_once()
-        assert existing_db_token.user_id == "user-123"
+        assert existing_db_token.user_id == TEST_USER_ID
         assert existing_db_token.device_type == "ios"
     
     def test_find_fcm_token_by_token_exists(self, repository, mock_db_session):
         """Test finding an FCM token that exists."""
         # Arrange
         token = UserFcmToken(
-            token_id="token-123",
-            user_id="user-123",
+            token_id=TEST_TOKEN_ID_123,
+            user_id=TEST_USER_ID,
             fcm_token="fcm-token-abc",
             device_type=DeviceType.IOS,
             is_active=True,
@@ -147,8 +154,8 @@ class TestNotificationRepository:
         """Test finding all active FCM tokens for a user."""
         # Arrange
         token1 = UserFcmToken(
-            token_id="token-1",
-            user_id="user-123",
+            token_id=TEST_TOKEN_ID_1,
+            user_id=TEST_USER_ID,
             fcm_token="fcm-1",
             device_type=DeviceType.IOS,
             is_active=True,
@@ -156,8 +163,8 @@ class TestNotificationRepository:
             updated_at=datetime.now()
         )
         token2 = UserFcmToken(
-            token_id="token-2",
-            user_id="user-123",
+            token_id=TEST_TOKEN_ID_2,
+            user_id=TEST_USER_ID,
             fcm_token="fcm-2",
             device_type=DeviceType.ANDROID,
             is_active=True,
@@ -176,7 +183,7 @@ class TestNotificationRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.find_active_fcm_tokens_by_user("user-123")
+        result = repository.find_active_fcm_tokens_by_user(TEST_USER_ID)
         
         # Assert
         assert len(result) == 2
@@ -255,7 +262,7 @@ class TestNotificationRepository:
     def test_save_new_notification_preferences(self, repository, mock_db_session):
         """Test saving new notification preferences."""
         # Arrange
-        prefs = NotificationPreferences.create_default("user-123")
+        prefs = NotificationPreferences.create_default(TEST_USER_ID)
         
         # Mock query to return None (no existing preferences)
         mock_query = Mock()
@@ -269,14 +276,14 @@ class TestNotificationRepository:
             result = repository.save_notification_preferences(prefs)
             
             # Assert
-            assert result.user_id == "user-123"
+            assert result.user_id == TEST_USER_ID
             mock_db_session.add.assert_called_once()
             mock_db_session.commit.assert_called_once()
     
     def test_save_existing_notification_preferences(self, repository, mock_db_session):
         """Test updating existing notification preferences."""
         # Arrange
-        prefs = NotificationPreferences.create_default("user-123")
+        prefs = NotificationPreferences.create_default(TEST_USER_ID)
         prefs.meal_reminders_enabled = False  # Changed value
         
         # Mock existing preferences
@@ -292,7 +299,7 @@ class TestNotificationRepository:
         result = repository.save_notification_preferences(prefs)
         
         # Assert
-        assert result.user_id == "user-123"
+        assert result.user_id == TEST_USER_ID
         mock_db_session.add.assert_not_called()  # Should not add, only update
         mock_db_session.commit.assert_called_once()
         assert existing_db_prefs.meal_reminders_enabled is False
@@ -300,7 +307,7 @@ class TestNotificationRepository:
     def test_find_notification_preferences_by_user_exists(self, repository, mock_db_session):
         """Test finding notification preferences that exist."""
         # Arrange
-        prefs = NotificationPreferences.create_default("user-123")
+        prefs = NotificationPreferences.create_default(TEST_USER_ID)
         
         db_prefs = Mock(spec=DBNotificationPreferences)
         db_prefs.to_domain = Mock(return_value=prefs)
@@ -311,11 +318,11 @@ class TestNotificationRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.find_notification_preferences_by_user("user-123")
+        result = repository.find_notification_preferences_by_user(TEST_USER_ID)
         
         # Assert
         assert result is not None
-        assert result.user_id == "user-123"
+        assert result.user_id == TEST_USER_ID
     
     def test_find_notification_preferences_by_user_not_exists(self, repository, mock_db_session):
         """Test finding notification preferences that don't exist."""
@@ -326,7 +333,7 @@ class TestNotificationRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.find_notification_preferences_by_user("user-123")
+        result = repository.find_notification_preferences_by_user(TEST_USER_ID)
         
         # Assert
         assert result is None
@@ -334,7 +341,7 @@ class TestNotificationRepository:
     def test_update_notification_preferences(self, repository, mock_db_session):
         """Test updating notification preferences calls save_notification_preferences."""
         # Arrange
-        prefs = NotificationPreferences.create_default("user-123")
+        prefs = NotificationPreferences.create_default(TEST_USER_ID)
         
         # Mock existing preferences
         existing_db_prefs = Mock(spec=DBNotificationPreferences)
@@ -346,10 +353,10 @@ class TestNotificationRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.update_notification_preferences("user-123", prefs)
+        result = repository.update_notification_preferences(TEST_USER_ID, prefs)
         
         # Assert
-        assert result.user_id == "user-123"
+        assert result.user_id == TEST_USER_ID
         mock_db_session.commit.assert_called_once()
     
     def test_delete_notification_preferences_exists(self, repository, mock_db_session):
@@ -363,7 +370,7 @@ class TestNotificationRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.delete_notification_preferences("user-123")
+        result = repository.delete_notification_preferences(TEST_USER_ID)
         
         # Assert
         assert result is True
@@ -379,7 +386,7 @@ class TestNotificationRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.delete_notification_preferences("user-123")
+        result = repository.delete_notification_preferences(TEST_USER_ID)
         
         # Assert
         assert result is False
@@ -462,8 +469,8 @@ class TestNotificationRepository:
         """Test that errors during save trigger rollback."""
         # Arrange
         token = UserFcmToken(
-            token_id="token-123",
-            user_id="user-123",
+            token_id=TEST_TOKEN_ID_123,
+            user_id=TEST_USER_ID,
             fcm_token="fcm-token-abc",
             device_type=DeviceType.IOS,
             is_active=True,
@@ -486,7 +493,7 @@ class TestNotificationRepository:
     def test_save_notification_preferences_error_rollback(self, repository, mock_db_session):
         """Test that errors during save trigger rollback."""
         # Arrange
-        prefs = NotificationPreferences.create_default("user-123")
+        prefs = NotificationPreferences.create_default(TEST_USER_ID)
         
         mock_query = Mock()
         mock_query.filter = Mock(return_value=mock_query)
@@ -513,7 +520,7 @@ class TestNotificationRepository:
         
         # Act & Assert
         with pytest.raises(Exception, match="Database error"):
-            repository.delete_notification_preferences("user-123")
+            repository.delete_notification_preferences(TEST_USER_ID)
         
         mock_db_session.rollback.assert_called_once()
     
@@ -522,7 +529,7 @@ class TestNotificationRepository:
     def test_repository_without_session_creates_and_closes(self):
         """Test repository creates and closes session when not provided."""
         # Arrange
-        with patch('src.infra.repositories.notification_repository.SessionLocal') as mock_session_local:
+        with patch('src.infra.database.config.SessionLocal') as mock_session_local:
             mock_session = Mock()
             mock_session_local.return_value = mock_session
             
