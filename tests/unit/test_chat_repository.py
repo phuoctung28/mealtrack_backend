@@ -2,6 +2,7 @@
 Unit tests for ChatRepository.
 """
 import pytest
+import uuid
 from datetime import datetime
 from unittest.mock import Mock, MagicMock, patch
 
@@ -16,6 +17,10 @@ from src.infra.database.models.chat import (
     ChatThread as DBChatThread,
     ChatMessage as DBChatMessage
 )
+
+# Test UUIDs - using fixed UUIDs for consistency in tests
+TEST_USER_ID = "00000000-0000-0000-0000-000000000001"
+TEST_THREAD_ID = "00000000-0000-0000-0000-000000000002"
 
 
 class TestChatRepository:
@@ -45,7 +50,7 @@ class TestChatRepository:
         """Test saving a new thread."""
         # Arrange
         thread = Thread.create_new(
-            user_id="user-123",
+            user_id=TEST_USER_ID,
             title="Test Thread",
             metadata={"key": "value"}
         )
@@ -72,7 +77,7 @@ class TestChatRepository:
         """Test updating an existing thread."""
         # Arrange
         thread = Thread.create_new(
-            user_id="user-123",
+            user_id=TEST_USER_ID,
             title="Updated Title"
         )
         
@@ -98,7 +103,7 @@ class TestChatRepository:
     def test_find_thread_by_id_exists(self, repository, mock_db_session):
         """Test finding a thread that exists."""
         # Arrange
-        thread = Thread.create_new(user_id="user-123", title="Test")
+        thread = Thread.create_new(user_id=TEST_USER_ID, title="Test")
         
         db_thread = Mock(spec=DBChatThread)
         db_thread.to_domain = Mock(return_value=thread)
@@ -132,8 +137,8 @@ class TestChatRepository:
     def test_find_threads_by_user(self, repository, mock_db_session):
         """Test finding all threads for a user."""
         # Arrange
-        thread1 = Thread.create_new(user_id="user-123", title="Thread 1")
-        thread2 = Thread.create_new(user_id="user-123", title="Thread 2")
+        thread1 = Thread.create_new(user_id=TEST_USER_ID, title="Thread 1")
+        thread2 = Thread.create_new(user_id=TEST_USER_ID, title="Thread 2")
         
         db_thread1 = Mock(spec=DBChatThread)
         db_thread1.to_domain = Mock(return_value=thread1)
@@ -149,7 +154,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.find_threads_by_user("user-123", limit=50, offset=0)
+        result = repository.find_threads_by_user(TEST_USER_ID, limit=50, offset=0)
         
         # Assert
         assert len(result) == 2
@@ -168,7 +173,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.find_threads_by_user("user-123", include_deleted=False)
+        result = repository.find_threads_by_user(TEST_USER_ID, include_deleted=False)
         
         # Assert
         # Verify filter was called twice (user_id and status != 'deleted')
@@ -185,7 +190,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.delete_thread("thread-123")
+        result = repository.delete_thread(TEST_THREAD_ID)
         
         # Assert
         assert result is True
@@ -214,7 +219,7 @@ class TestChatRepository:
         """Test saving a new message."""
         # Arrange
         message = Message.create_user_message(
-            thread_id="thread-123",
+            thread_id=TEST_THREAD_ID,
             content="Hello!",
             metadata={"key": "value"}
         )
@@ -243,7 +248,7 @@ class TestChatRepository:
         """Test updating an existing message."""
         # Arrange
         message = Message.create_user_message(
-            thread_id="thread-123",
+            thread_id=TEST_THREAD_ID,
             content="Updated content"
         )
         
@@ -271,7 +276,7 @@ class TestChatRepository:
         """Test that saving a message updates the thread's updated_at."""
         # Arrange
         message = Message.create_user_message(
-            thread_id="thread-123",
+            thread_id=TEST_THREAD_ID,
             content="Hello!"
         )
         
@@ -293,8 +298,8 @@ class TestChatRepository:
     def test_find_messages_by_thread(self, repository, mock_db_session):
         """Test finding all messages for a thread."""
         # Arrange
-        msg1 = Message.create_user_message(thread_id="thread-123", content="First")
-        msg2 = Message.create_assistant_message(thread_id="thread-123", content="Second")
+        msg1 = Message.create_user_message(thread_id=TEST_THREAD_ID, content="First")
+        msg2 = Message.create_assistant_message(thread_id=TEST_THREAD_ID, content="Second")
         
         db_msg1 = Mock(spec=DBChatMessage)
         db_msg1.to_domain = Mock(return_value=msg1)
@@ -310,7 +315,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.find_messages_by_thread("thread-123", limit=100, offset=0)
+        result = repository.find_messages_by_thread(TEST_THREAD_ID, limit=100, offset=0)
         
         # Assert
         assert len(result) == 2
@@ -329,7 +334,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.find_messages_by_thread("thread-123", limit=50, offset=10)
+        result = repository.find_messages_by_thread(TEST_THREAD_ID, limit=50, offset=10)
         
         # Assert
         mock_query.limit.assert_called_once_with(50)
@@ -346,7 +351,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.count_user_threads("user-123", include_deleted=False)
+        result = repository.count_user_threads(TEST_USER_ID, include_deleted=False)
         
         # Assert
         assert result == 5
@@ -362,7 +367,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.count_user_threads("user-123", include_deleted=True)
+        result = repository.count_user_threads(TEST_USER_ID, include_deleted=True)
         
         # Assert
         assert result == 8
@@ -378,7 +383,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.count_user_threads("user-123")
+        result = repository.count_user_threads(TEST_USER_ID)
         
         # Assert
         assert result == 0
@@ -392,7 +397,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.count_thread_messages("thread-123")
+        result = repository.count_thread_messages(TEST_THREAD_ID)
         
         # Assert
         assert result == 10
@@ -406,7 +411,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.count_thread_messages("thread-123")
+        result = repository.count_thread_messages(TEST_THREAD_ID)
         
         # Assert
         assert result == 0
@@ -416,7 +421,7 @@ class TestChatRepository:
     def test_save_thread_error_rollback(self, repository, mock_db_session):
         """Test that errors during save trigger rollback."""
         # Arrange
-        thread = Thread.create_new(user_id="user-123")
+        thread = Thread.create_new(user_id=TEST_USER_ID)
         
         mock_query = Mock()
         mock_query.filter = Mock(return_value=mock_query)
@@ -434,7 +439,7 @@ class TestChatRepository:
         """Test that errors during message save trigger rollback."""
         # Arrange
         message = Message.create_user_message(
-            thread_id="thread-123",
+            thread_id=TEST_THREAD_ID,
             content="Test"
         )
         
@@ -463,7 +468,7 @@ class TestChatRepository:
         
         # Act & Assert
         with pytest.raises(Exception, match="Database error"):
-            repository.delete_thread("thread-123")
+            repository.delete_thread(TEST_THREAD_ID)
         
         mock_db_session.rollback.assert_called_once()
     
@@ -472,7 +477,7 @@ class TestChatRepository:
     def test_repository_without_session_creates_and_closes(self):
         """Test repository creates and closes session when not provided."""
         # Arrange
-        with patch('src.infra.repositories.chat_repository.SessionLocal') as mock_session_local:
+        with patch('src.infra.database.config.SessionLocal') as mock_session_local:
             mock_session = Mock()
             mock_session_local.return_value = mock_session
             
@@ -509,7 +514,7 @@ class TestChatRepository:
     def test_save_archived_thread(self, repository, mock_db_session):
         """Test saving an archived thread."""
         # Arrange
-        thread = Thread.create_new(user_id="user-123")
+        thread = Thread.create_new(user_id=TEST_USER_ID)
         archived_thread = thread.archive()
         
         mock_query = Mock()
@@ -527,7 +532,7 @@ class TestChatRepository:
     def test_save_deleted_thread(self, repository, mock_db_session):
         """Test saving a deleted thread."""
         # Arrange
-        thread = Thread.create_new(user_id="user-123")
+        thread = Thread.create_new(user_id=TEST_USER_ID)
         deleted_thread = thread.delete()
         
         mock_query = Mock()
@@ -547,7 +552,7 @@ class TestChatRepository:
     def test_save_user_message(self, repository, mock_db_session):
         """Test saving a user message."""
         # Arrange
-        message = Message.create_user_message(thread_id="thread-123", content="User says hi")
+        message = Message.create_user_message(thread_id=TEST_THREAD_ID, content="User says hi")
         
         db_thread = Mock(spec=DBChatThread)
         
@@ -566,7 +571,7 @@ class TestChatRepository:
     def test_save_assistant_message(self, repository, mock_db_session):
         """Test saving an assistant message."""
         # Arrange
-        message = Message.create_assistant_message(thread_id="thread-123", content="AI responds")
+        message = Message.create_assistant_message(thread_id=TEST_THREAD_ID, content="AI responds")
         
         db_thread = Mock(spec=DBChatThread)
         
@@ -585,7 +590,7 @@ class TestChatRepository:
     def test_save_system_message(self, repository, mock_db_session):
         """Test saving a system message."""
         # Arrange
-        message = Message.create_system_message(thread_id="thread-123", content="System message")
+        message = Message.create_system_message(thread_id=TEST_THREAD_ID, content="System message")
         
         db_thread = Mock(spec=DBChatThread)
         
@@ -607,7 +612,7 @@ class TestChatRepository:
         """Test saving thread with metadata."""
         # Arrange
         thread = Thread.create_new(
-            user_id="user-123",
+            user_id=TEST_USER_ID,
             metadata={"context": "nutrition", "tags": ["protein", "diet"]}
         )
         
@@ -628,7 +633,7 @@ class TestChatRepository:
         """Test saving message with metadata."""
         # Arrange
         message = Message.create_assistant_message(
-            thread_id="thread-123",
+            thread_id=TEST_THREAD_ID,
             content="Response",
             metadata={"model": "gpt-4", "tokens": 150}
         )
@@ -663,7 +668,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.find_threads_by_user("user-123")
+        result = repository.find_threads_by_user(TEST_USER_ID)
         
         # Assert
         assert result == []
@@ -680,7 +685,7 @@ class TestChatRepository:
         mock_db_session.query = Mock(return_value=mock_query)
         
         # Act
-        result = repository.find_messages_by_thread("thread-123")
+        result = repository.find_messages_by_thread(TEST_THREAD_ID)
         
         # Assert
         assert result == []
@@ -688,7 +693,7 @@ class TestChatRepository:
     def test_save_thread_with_no_metadata(self, repository, mock_db_session):
         """Test saving thread without metadata."""
         # Arrange
-        thread = Thread.create_new(user_id="user-123", metadata=None)
+        thread = Thread.create_new(user_id=TEST_USER_ID, metadata=None)
         
         mock_query = Mock()
         mock_query.filter = Mock(return_value=mock_query)
@@ -706,7 +711,7 @@ class TestChatRepository:
     def test_save_message_no_thread_found(self, repository, mock_db_session):
         """Test saving message when thread doesn't exist."""
         # Arrange
-        message = Message.create_user_message(thread_id="thread-123", content="Hello")
+        message = Message.create_user_message(thread_id=TEST_THREAD_ID, content="Hello")
         
         mock_query = Mock()
         mock_query.filter = Mock(return_value=mock_query)
