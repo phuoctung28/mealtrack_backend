@@ -41,6 +41,6 @@ class AddCustomIngredientCommandHandler(EventHandler[AddCustomIngredientCommand,
         
         return {
             "success": True,
-            "meal_id": updated_meal.id,
+            "meal_id": updated_meal.meal_id,
             "message": f"Added custom ingredient: {command.name}"
         }

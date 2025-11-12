@@ -108,6 +108,7 @@ from src.app.queries.meal import (
 )
 from src.app.queries.meal_plan import (
     GetMealsFromPlanByDateQuery,
+    GetMealPlanQuery,
 )
 from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.app.queries.tdee import GetUserTdeeQuery
