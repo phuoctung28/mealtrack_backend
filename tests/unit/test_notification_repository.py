@@ -156,7 +156,7 @@ class TestNotificationRepository:
         token1 = UserFcmToken(
             token_id=TEST_TOKEN_ID_1,
             user_id=TEST_USER_ID,
-            fcm_token="fcm-1",
+            fcm_token="fcm-token-12345-1",
             device_type=DeviceType.IOS,
             is_active=True,
             created_at=datetime.now(),
@@ -165,7 +165,7 @@ class TestNotificationRepository:
         token2 = UserFcmToken(
             token_id=TEST_TOKEN_ID_2,
             user_id=TEST_USER_ID,
-            fcm_token="fcm-2",
+            fcm_token="fcm-token-12345-2",
             device_type=DeviceType.ANDROID,
             is_active=True,
             created_at=datetime.now(),
@@ -187,8 +187,8 @@ class TestNotificationRepository:
         
         # Assert
         assert len(result) == 2
-        assert result[0].fcm_token == "fcm-1"
-        assert result[1].fcm_token == "fcm-2"
+        assert result[0].fcm_token == "fcm-token-12345-1"
+        assert result[1].fcm_token == "fcm-token-12345-2"
     
     def test_deactivate_fcm_token_exists(self, repository, mock_db_session):
         """Test deactivating an existing FCM token."""
@@ -529,7 +529,8 @@ class TestNotificationRepository:
     def test_repository_without_session_creates_and_closes(self):
         """Test repository creates and closes session when not provided."""
         # Arrange
-        with patch('src.infra.database.config.SessionLocal') as mock_session_local:
+        # Patch SessionLocal in the repository module's namespace since it's imported at module level
+        with patch('src.infra.repositories.notification_repository.SessionLocal') as mock_session_local:
             mock_session = Mock()
             mock_session_local.return_value = mock_session
             
