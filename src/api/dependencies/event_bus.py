@@ -313,7 +313,7 @@ async def get_configured_event_bus(
 
     # Register chat handlers
     from src.infra.repositories.chat_repository import ChatRepository
-    from src.infra.services.ai import MockChatService
+    from tests.fixtures.mock_chat_service import MockChatService
     
     chat_repository = ChatRepository(db)
     ai_service = MockChatService()  # Use mock for MVP, replace with OpenAI later
