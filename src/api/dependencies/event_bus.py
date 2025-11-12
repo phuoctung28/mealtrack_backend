@@ -94,6 +94,27 @@ from src.app.handlers.query_handlers import (
 from src.app.handlers.query_handlers import (
     GetNotificationPreferencesQueryHandler,
 )
+# Chat handlers
+from src.app.handlers.command_handlers.chat import (
+    CreateThreadCommandHandler,
+    SendMessageCommandHandler,
+    DeleteThreadCommandHandler,
+)
+from src.app.handlers.query_handlers.chat import (
+    GetThreadsQueryHandler,
+    GetThreadQueryHandler,
+    GetMessagesQueryHandler,
+)
+from src.app.commands.chat import (
+    CreateThreadCommand,
+    SendMessageCommand,
+    DeleteThreadCommand,
+)
+from src.app.queries.chat import (
+    GetThreadsQuery,
+    GetThreadQuery,
+    GetMessagesQuery,
+)
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.daily_meal import (
     GetMealSuggestionsForProfileQuery,
@@ -288,6 +309,38 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         GetNotificationPreferencesQuery,
         GetNotificationPreferencesQueryHandler(notification_repository)
+    )
+
+    # Register chat handlers
+    from src.infra.repositories.chat_repository import ChatRepository
+    from src.infra.services.ai import MockChatService
+    
+    chat_repository = ChatRepository(db)
+    ai_service = MockChatService()  # Use mock for MVP, replace with OpenAI later
+    
+    event_bus.register_handler(
+        CreateThreadCommand,
+        CreateThreadCommandHandler(chat_repository)
+    )
+    event_bus.register_handler(
+        SendMessageCommand,
+        SendMessageCommandHandler(chat_repository, ai_service)
+    )
+    event_bus.register_handler(
+        DeleteThreadCommand,
+        DeleteThreadCommandHandler(chat_repository)
+    )
+    event_bus.register_handler(
+        GetThreadsQuery,
+        GetThreadsQueryHandler(chat_repository)
+    )
+    event_bus.register_handler(
+        GetThreadQuery,
+        GetThreadQueryHandler(chat_repository)
+    )
+    event_bus.register_handler(
+        GetMessagesQuery,
+        GetMessagesQueryHandler(chat_repository)
     )
 
     # Register domain event subscribers

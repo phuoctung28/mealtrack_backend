@@ -24,7 +24,8 @@ from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
-
+from src.api.routes.v1.chat import router as chat_router
+from src.api.routes.v1.chat_ws import router as chat_ws_router
 from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.notifications import router as notifications_router
@@ -176,6 +177,8 @@ add_dev_auth_bypass(app)
 
 # Include all routers
 app.include_router(health_router)
+app.include_router(chat_router)
+app.include_router(chat_ws_router)  # WebSocket router
 app.include_router(meals_router)
 app.include_router(activities_router)
 app.include_router(feature_flags_router)
