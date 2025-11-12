@@ -10,7 +10,7 @@ from src.domain.model.meal import Meal
 from src.domain.model.nutrition import FoodItem
 from src.domain.model.nutrition import Nutrition
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.app.commands.meal.edit_meal_command import FoodItemChange
+from src.app.commands.meal.edit_meal_command import FoodItemChange, CustomNutritionData
 
 
 logger = logging.getLogger(__name__)
@@ -125,7 +125,7 @@ class MealService:
         name: str,
         quantity: float,
         unit: str,
-        nutrition: Optional[Nutrition] = None
+        nutrition: Optional[CustomNutritionData] = None
     ) -> Meal:
         """Add a custom ingredient to a meal."""
         meal = self.meal_repository.find_by_id(meal_id)
@@ -137,7 +137,7 @@ class MealService:
             name=name,
             quantity=quantity,
             unit=unit,
-            custom_nutrition=nutrition if nutrition else Nutrition()
+            custom_nutrition=nutrition
         )
         
         updated_meal = self.apply_food_item_changes(meal, [food_item_change])

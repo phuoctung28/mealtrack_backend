@@ -85,6 +85,7 @@ from src.app.handlers.query_handlers import (
     GetDailyActivitiesQueryHandler,
     GetMealPlanQueryHandler,
     GetMealsFromPlanByDateQueryHandler,
+    GetMealsByDateQueryHandler,
     GetMealSuggestionsForProfileQueryHandler,
     GetSingleMealForProfileQueryHandler,
     GetMealPlanningSummaryQueryHandler,
@@ -109,6 +110,7 @@ from src.app.queries.meal import (
 from src.app.queries.meal_plan import (
     GetMealsFromPlanByDateQuery,
     GetMealPlanQuery,
+    GetMealsByDateQuery,
 )
 from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.app.queries.tdee import GetUserTdeeQuery
@@ -234,6 +236,9 @@ async def get_configured_event_bus(
     event_bus.register_handler(GetMealPlanQuery, GetMealPlanQueryHandler())
     event_bus.register_handler(
         GetMealsFromPlanByDateQuery, GetMealsFromPlanByDateQueryHandler(db)
+    )
+    event_bus.register_handler(
+        GetMealsByDateQuery, GetMealsByDateQueryHandler(meal_repository)
     )
 
     # Register user handlers
