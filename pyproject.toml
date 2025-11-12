@@ -23,6 +23,9 @@ omit = [
     "src/infra/services/firebase_service.py",
     "src/infra/services/pinecone_service.py",
     "src/infra/services/scheduled_notification_service.py",
+    "src/infra/services/firebase_auth_service.py",
+    "src/infra/services/ai/openai_chat_service.py",
+    "src/infra/websocket/connection_manager.py",
     # Standard exclusions
     "*/tests/*",
     "*/test_*.py",

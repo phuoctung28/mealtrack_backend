@@ -4,7 +4,7 @@ TDEE calculation request DTOs.
 from enum import Enum
 from typing import Optional, List
 
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class SexEnum(str, Enum):
@@ -54,12 +54,12 @@ class TdeeCalculationRequest(BaseModel):
         description="Unit system for height/weight"
     )
 
-    @root_validator(skip_on_failure=True)
-    def validate_measurements_with_units(cls, values):
+    @model_validator(mode='after')
+    def validate_measurements_with_units(self):
         """Validate height and weight based on unit system."""
-        unit_system = values.get('unit_system')
-        height = values.get('height')
-        weight = values.get('weight')
+        unit_system = self.unit_system
+        height = self.height
+        weight = self.weight
         
         if height is not None and unit_system is not None:
             if unit_system == UnitSystemEnum.metric:
@@ -77,7 +77,7 @@ class TdeeCalculationRequest(BaseModel):
                 if not (66 <= weight <= 551):
                     raise ValueError('Weight must be between 66-551 lbs for imperial system')
         
-        return values
+        return self
     
     class Config:
         json_schema_extra = {
