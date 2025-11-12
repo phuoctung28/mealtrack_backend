@@ -48,7 +48,7 @@ class ChatRepository(ChatRepositoryPort):
                 existing.updated_at = thread.updated_at
                 
                 if thread.metadata:
-                    existing.metadata = json.dumps(thread.metadata)
+                    existing.metadata_ = json.dumps(thread.metadata)
                 
                 db_thread = existing
             else:
@@ -59,7 +59,7 @@ class ChatRepository(ChatRepositoryPort):
                     title=thread.title,
                     status=str(thread.status).lower(),
                     is_active=thread.status == ThreadStatus.ACTIVE,
-                    metadata=json.dumps(thread.metadata) if thread.metadata else None,
+                    metadata_=json.dumps(thread.metadata) if thread.metadata else None,
                     created_at=thread.created_at,
                     updated_at=thread.updated_at
                 )
@@ -150,7 +150,7 @@ class ChatRepository(ChatRepositoryPort):
                 # Update existing message (though messages should be immutable)
                 existing.content = message.content
                 if message.metadata:
-                    existing.metadata = json.dumps(message.metadata)
+                    existing.metadata_ = json.dumps(message.metadata)
                 db_message = existing
             else:
                 # Create new message
@@ -159,7 +159,7 @@ class ChatRepository(ChatRepositoryPort):
                     thread_id=message.thread_id,
                     role=str(message.role).lower(),
                     content=message.content,
-                    metadata=json.dumps(message.metadata) if message.metadata else None,
+                    metadata_=json.dumps(message.metadata) if message.metadata else None,
                     created_at=message.created_at
                 )
                 db.add(db_message)

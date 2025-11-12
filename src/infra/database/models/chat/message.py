@@ -20,8 +20,8 @@ class ChatMessage(Base, BaseMixin):
     role = Column(String(20), nullable=False)  # 'user', 'assistant', 'system'
     content = Column(Text, nullable=False)
     
-    # JSON metadata for extensibility (tokens, model info, etc.)
-    metadata = Column(Text, nullable=True)  # Store as JSON string
+    # JSON metadata for extensibility (tokens, model info, etc.) - use metadata_ to avoid SQLAlchemy reserved word
+    metadata_ = Column('metadata', Text, nullable=True)  # Store as JSON string
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -44,9 +44,9 @@ class ChatMessage(Base, BaseMixin):
         
         # Parse metadata
         metadata_dict = {}
-        if self.metadata:
+        if self.metadata_:
             try:
-                metadata_dict = json.loads(self.metadata)
+                metadata_dict = json.loads(self.metadata_)
             except (json.JSONDecodeError, TypeError):
                 metadata_dict = {}
         

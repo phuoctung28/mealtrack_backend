@@ -21,8 +21,8 @@ class ChatThread(Base, BaseMixin):
     status = Column(String(20), nullable=False, default='active', index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     
-    # JSON metadata for extensibility
-    metadata = Column(Text, nullable=True)  # Store as JSON string
+    # JSON metadata for extensibility (use metadata_ to avoid SQLAlchemy reserved word)
+    metadata_ = Column('metadata', Text, nullable=True)  # Store as JSON string
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -47,9 +47,9 @@ class ChatThread(Base, BaseMixin):
         
         # Parse metadata
         metadata_dict = {}
-        if self.metadata:
+        if self.metadata_:
             try:
-                metadata_dict = json.loads(self.metadata)
+                metadata_dict = json.loads(self.metadata_)
             except (json.JSONDecodeError, TypeError):
                 metadata_dict = {}
         
