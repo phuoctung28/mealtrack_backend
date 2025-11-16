@@ -19,7 +19,7 @@ cloudinary==1.37.0
 requests==2.32.4
 
 # Image processing
-pillow==10.3.0
+pillow>=11.0.0
 
 # Database
 sqlalchemy==2.0.41
