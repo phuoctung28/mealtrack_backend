@@ -4,13 +4,15 @@ Auto-extracted for better maintainability.
 """
 import logging
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from sqlalchemy.orm import Session
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user import CompleteOnboardingCommand
 from src.app.events.base import EventHandler, handles
+from src.infra.cache.cache_keys import CacheKeys
+from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -20,12 +22,14 @@ logger = logging.getLogger(__name__)
 class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, Dict[str, Any]]):
     """Handler for marking user onboarding as completed."""
 
-    def __init__(self, db: Session = None):
+    def __init__(self, db: Session = None, cache_service: Optional[CacheService] = None):
         self.db = db
+        self.cache_service = cache_service
 
-    def set_dependencies(self, db: Session):
+    def set_dependencies(self, db: Session, **kwargs):
         """Set dependencies for dependency injection."""
         self.db = db
+        self.cache_service = kwargs.get("cache_service", self.cache_service)
 
     async def handle(self, command: CompleteOnboardingCommand) -> Dict[str, Any]:
         """Mark user onboarding as completed if not already completed."""
@@ -55,6 +59,7 @@ class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, D
             user.last_accessed = datetime.utcnow()
 
             self.db.commit()
+            await self._invalidate_user_profile(user.id)
 
             return {
                 "firebase_uid": command.firebase_uid,
@@ -67,3 +72,9 @@ class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, D
             self.db.rollback()
             logger.error(f"Error completing onboarding: {str(e)}")
             raise
+
+    async def _invalidate_user_profile(self, user_id: str):
+        if not self.cache_service:
+            return
+        cache_key, _ = CacheKeys.user_profile(user_id)
+        await self.cache_service.invalidate(cache_key)

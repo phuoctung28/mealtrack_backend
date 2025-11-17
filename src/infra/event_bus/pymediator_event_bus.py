@@ -3,7 +3,6 @@ PyMediator-based event bus implementation.
 """
 import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Type, TypeVar, Dict, List
 
 from pymediator import Mediator as PyMediator, SingletonRegistry
@@ -20,43 +19,18 @@ class EventRequest:
     """Wrapper to make our Events compatible with pymediator Request protocol."""
     def __init__(self, event: Event):
         self._event = event
-    
+
     @property
     def event(self) -> Event:
         return self._event
 
 
-class PyMediatorHandlerAdapter:
-    """Adapter to make our EventHandlers compatible with pymediator Handler protocol."""
-    
-    def __init__(self, event_handler: EventHandler):
-        self._event_handler = event_handler
-    
-    def handle(self, request: Any) -> Any:
-        """Handle the request by delegating to our event handler."""
-        if hasattr(request, 'event'):
-            actual_event = request.event
-        else:
-            actual_event = request
-            
-        import inspect
-        if inspect.iscoroutinefunction(self._event_handler.handle):
-            import asyncio
-            try:
-                loop = asyncio.get_running_loop()
-                return None
-            except RuntimeError:
-                return asyncio.run(self._event_handler.handle(actual_event))
-        else:
-            return self._event_handler.handle(actual_event)
-
-
 class AsyncPyMediatorHandlerAdapter:
     """Async-aware adapter for our EventHandlers."""
-    
+
     def __init__(self, event_handler: EventHandler):
         self._event_handler = event_handler
-    
+
     async def handle(self, request: Any) -> Any:
         """Handle the request asynchronously."""
         # Extract the actual event from the wrapper
@@ -64,28 +38,33 @@ class AsyncPyMediatorHandlerAdapter:
             actual_event = request.event
         else:
             actual_event = request
-            
+
         return await self._event_handler.handle(actual_event)
 
 
 class PyMediatorEventBus(EventBus):
     """
     Event bus implementation using pymediator library.
-    
+
     This implementation wraps pymediator to provide compatibility with our
     event-driven architecture while leveraging pymediator's features.
+    Uses async-native execution without thread pools for proper event loop handling.
     """
-    
+
     def __init__(self):
         # Use SingletonRegistry to ensure handlers are reused
         registry = SingletonRegistry()
         self._mediator = PyMediator(registry=registry)
         self._event_type_mapping: Dict[Type[Event], Type[EventRequest]] = {}
         self._domain_event_subscribers: Dict[Type[DomainEvent], List[Any]] = {}
-        self._thread_pool = ThreadPoolExecutor(max_workers=20, thread_name_prefix="EventBus")
-        
+        # Store direct handler references for async execution
+        self._async_handlers: Dict[Type[Event], EventHandler] = {}
+
     def register_handler(self, event_type: Type[Event], handler: EventHandler) -> None:
         """Register a handler for a specific event type."""
+        # Store the handler directly for async execution
+        self._async_handlers[event_type] = handler
+
         # Create a unique wrapper class for this event type
         wrapper_class = type(
             f"{event_type.__name__}Request",
@@ -94,19 +73,19 @@ class PyMediatorEventBus(EventBus):
                 '__init__': lambda self, event: EventRequest.__init__(self, event)
             }
         )
-        
+
         # Store the mapping
         self._event_type_mapping[event_type] = wrapper_class
-        
-        # Create handler adapter - we'll handle async inside the adapter
+
+        # Create async handler adapter
         adapter_class = type(
-            f"{handler.__class__.__name__}Adapter",
-            (PyMediatorHandlerAdapter,),
+            f"{handler.__class__.__name__}AsyncAdapter",
+            (AsyncPyMediatorHandlerAdapter,),
             {
-                '__init__': lambda self: PyMediatorHandlerAdapter.__init__(self, handler)
+                '__init__': lambda self: AsyncPyMediatorHandlerAdapter.__init__(self, handler)
             }
         )
-        
+
         # Register with pymediator
         self._mediator.registry.register(wrapper_class, adapter_class)
 
@@ -114,28 +93,29 @@ class PyMediatorEventBus(EventBus):
         """Subscribe to domain events."""
         if event_type not in self._domain_event_subscribers:
             self._domain_event_subscribers[event_type] = []
-        
+
         self._domain_event_subscribers[event_type].append(handler)
         logger.info(f"Subscribed to {event_type.__name__}")
-    
+
     async def send(self, event: Event) -> Any:
         """Send a command/query and get the result."""
         event_type = type(event)
-        
-        if event_type not in self._event_type_mapping:
+
+        if event_type not in self._async_handlers:
             raise ValueError(f"No handler registered for {event_type.__name__}")
-        
+
         try:
-            # Wrap the event in a request
-            wrapper_class = self._event_type_mapping[event_type]
-            wrapped_request = wrapper_class(event)
-            
-            result = await asyncio.get_event_loop().run_in_executor(
-                self._thread_pool, 
-                self._mediator.send, 
-                wrapped_request
-            )
-            
+            # Get the handler directly and execute it asynchronously
+            handler = self._async_handlers[event_type]
+
+            # Check if handler is async
+            import inspect
+            if inspect.iscoroutinefunction(handler.handle):
+                result = await handler.handle(event)
+            else:
+                # For sync handlers, execute directly (no thread pool needed)
+                result = handler.handle(event)
+
             # Handle domain events if returned
             if isinstance(result, list) and all(isinstance(e, DomainEvent) for e in result):
                 logger.info(f"Publishing {len(result)} domain events from command result")
@@ -148,7 +128,7 @@ class PyMediatorEventBus(EventBus):
                     if isinstance(domain_event, DomainEvent):
                         await self.publish(domain_event)
             return result
-            
+
         except Exception as e:
             logger.error(f"Error handling {event_type.__name__}: {str(e)}", exc_info=True)
             raise
@@ -195,6 +175,5 @@ class PyMediatorEventBus(EventBus):
             asyncio.create_task(run_tasks_in_background())
 
     def close(self):
-        if hasattr(self, '_thread_pool'):
-            self._thread_pool.shutdown(wait=True)
-            logger.info("Event bus thread pool shut down")
+        """Close event bus resources."""
+        logger.info("Event bus closed")

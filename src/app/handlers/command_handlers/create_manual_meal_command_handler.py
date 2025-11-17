@@ -3,7 +3,7 @@ Command handler for creating manual meals from selected USDA foods.
 """
 import uuid
 from datetime import datetime
-from typing import Any, List
+from typing import Any, List, Optional
 from uuid import uuid4
 
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
@@ -12,13 +12,16 @@ from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal import MealImage
 from src.domain.model.nutrition import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem as DomainFoodItem
+from src.infra.cache.cache_keys import CacheKeys
+from src.infra.cache.cache_service import CacheService
 
 
 class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any]):
-    def __init__(self, meal_repository, food_data_service, mapping_service):
+    def __init__(self, meal_repository, food_data_service, mapping_service, cache_service: Optional[CacheService] = None):
         self.meal_repository = meal_repository
         self.food_data_service = food_data_service
         self.mapping_service = mapping_service
+        self.cache_service = cache_service
 
     async def handle(self, event: CreateManualMealCommand):
         # Aggregate items with the same fdc_id first
@@ -108,4 +111,12 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             meal_type=event.meal_type,
         )
 
-        return self.meal_repository.save(meal)
+        saved_meal = self.meal_repository.save(meal)
+        await self._invalidate_daily_macros(event.user_id, meal_date)
+        return saved_meal
+
+    async def _invalidate_daily_macros(self, user_id, target_date):
+        if not self.cache_service:
+            return
+        cache_key, _ = CacheKeys.daily_macros(user_id, target_date)
+        await self.cache_service.invalidate(cache_key)
