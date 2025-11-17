@@ -4,6 +4,7 @@ Handler for immediate meal image upload and analysis.
 import logging
 from datetime import datetime
 from uuid import uuid4
+from typing import Optional
 
 from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.app.events.base import EventHandler, handles
@@ -13,6 +14,8 @@ from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
+from src.infra.cache.cache_keys import CacheKeys
+from src.infra.cache.cache_service import CacheService
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +29,14 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         image_store: ImageStorePort = None,
         meal_repository: MealRepositoryPort = None,
         vision_service: VisionAIServicePort = None,
-        gpt_parser: GPTResponseParser = None
+        gpt_parser: GPTResponseParser = None,
+        cache_service: Optional[CacheService] = None,
     ):
         self.image_store = image_store
         self.meal_repository = meal_repository
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
+        self.cache_service = cache_service
     
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
@@ -39,6 +44,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
         self.vision_service = kwargs.get('vision_service', self.vision_service)
         self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
+        self.cache_service = kwargs.get('cache_service', self.cache_service)
     
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
@@ -107,6 +113,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             # Save the fully analyzed meal
             final_meal = self.meal_repository.save(meal)
             logger.info(f"Meal {final_meal.meal_id} analysis completed successfully with status {final_meal.status}")
+            await self._invalidate_daily_macros(command.user_id, meal_date)
             
             return final_meal
             
@@ -118,3 +125,9 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                 meal.error_message = str(e)
                 self.meal_repository.save(meal)
             raise
+
+    async def _invalidate_daily_macros(self, user_id, target_date):
+        if not self.cache_service:
+            return
+        cache_key, _ = CacheKeys.daily_macros(user_id, target_date)
+        await self.cache_service.invalidate(cache_key)

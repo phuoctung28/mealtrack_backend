@@ -3,12 +3,15 @@ SaveUserOnboardingCommandHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
 import logging
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user import SaveUserOnboardingCommand
 from src.app.events.base import EventHandler, handles
+from src.infra.cache.cache_keys import CacheKeys
+from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.user import User
 from src.infra.database.models.user.profile import UserProfile
 
@@ -19,12 +22,14 @@ logger = logging.getLogger(__name__)
 class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, None]):
     """Handler for saving user onboarding data."""
 
-    def __init__(self, db: Session = None):
+    def __init__(self, db: Session = None, cache_service: Optional[CacheService] = None):
         self.db = db
+        self.cache_service = cache_service
 
-    def set_dependencies(self, db: Session):
+    def set_dependencies(self, db: Session, **kwargs):
         """Set dependencies for dependency injection."""
         self.db = db
+        self.cache_service = kwargs.get("cache_service", self.cache_service)
 
     async def handle(self, command: SaveUserOnboardingCommand) -> None:
         """Save user onboarding data."""
@@ -78,8 +83,15 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
             self.db.add(profile)
             self.db.commit()
             self.db.refresh(profile)
+            await self._invalidate_user_profile(command.user_id)
 
         except Exception as e:
             self.db.rollback()
             logger.error(f"Error saving onboarding data: {str(e)}")
             raise
+
+    async def _invalidate_user_profile(self, user_id: str):
+        if not self.cache_service:
+            return
+        cache_key, _ = CacheKeys.user_profile(user_id)
+        await self.cache_service.invalidate(cache_key)

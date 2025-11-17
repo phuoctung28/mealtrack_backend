@@ -3,12 +3,15 @@ Command handler for updating user metrics.
 """
 import logging
 from datetime import datetime, timedelta
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException, ConflictException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.base import EventHandler, handles
+from src.infra.cache.cache_keys import CacheKeys
+from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.user.profile import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -18,11 +21,13 @@ logger = logging.getLogger(__name__)
 class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, None]):
     """Handle updating user metrics (weight, activity level, body fat)."""
 
-    def __init__(self, db: Session = None):
+    def __init__(self, db: Session = None, cache_service: Optional[CacheService] = None):
         self.db = db
+        self.cache_service = cache_service
 
-    def set_dependencies(self, db: Session):
+    def set_dependencies(self, db: Session, **kwargs):
         self.db = db
+        self.cache_service = kwargs.get("cache_service", self.cache_service)
 
     async def handle(self, command: UpdateUserMetricsCommand) -> None:
         if not self.db:
@@ -88,9 +93,16 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
             self.db.add(profile)
             self.db.commit()
             self.db.refresh(profile)
+            await self._invalidate_user_profile(command.user_id)
 
         except Exception as e:
             self.db.rollback()
             logger.error(f"Error updating user metrics: {str(e)}")
             raise
+
+    async def _invalidate_user_profile(self, user_id: str):
+        if not self.cache_service:
+            return
+        cache_key, _ = CacheKeys.user_profile(user_id)
+        await self.cache_service.invalidate(cache_key)
 

@@ -2,10 +2,16 @@
 from typing import Optional, List
 
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
+
+
+_USER_RELATIONSHIP_LOADS = (
+    selectinload(User.profiles),
+    selectinload(User.subscriptions),
+)
 
 
 class UserRepository:
@@ -41,10 +47,15 @@ class UserRepository:
     
     def find_by_id(self, user_id: str) -> Optional[User]:
         """Find user by ID (only active users)."""
-        return self.db.query(User).filter(
-            User.id == user_id,
-            User.is_active == True
-        ).first()
+        return (
+            self.db.query(User)
+            .options(*_USER_RELATIONSHIP_LOADS)
+            .filter(
+                User.id == user_id,
+                User.is_active == True
+            )
+            .first()
+        )
     
     def get(self, user_id: str) -> Optional[User]:
         """Get user by ID (deprecated - use find_by_id)."""
@@ -56,10 +67,15 @@ class UserRepository:
 
     def find_by_email(self, email: str) -> Optional[User]:
         """Find user by email (only active users)."""
-        return self.db.query(User).filter(
-            User.email == email,
-            User.is_active == True
-        ).first()
+        return (
+            self.db.query(User)
+            .options(*_USER_RELATIONSHIP_LOADS)
+            .filter(
+                User.email == email,
+                User.is_active == True
+            )
+            .first()
+        )
     
     def get_user_by_email(self, email: str) -> Optional[User]:
         """Get user by email (deprecated - use find_by_email)."""
@@ -67,10 +83,15 @@ class UserRepository:
 
     def find_by_username(self, username: str) -> Optional[User]:
         """Find user by username (only active users)."""
-        return self.db.query(User).filter(
-            User.username == username,
-            User.is_active == True
-        ).first()
+        return (
+            self.db.query(User)
+            .options(*_USER_RELATIONSHIP_LOADS)
+            .filter(
+                User.username == username,
+                User.is_active == True
+            )
+            .first()
+        )
     
     def get_user_by_username(self, username: str) -> Optional[User]:
         """Get user by username (deprecated - use find_by_username)."""
@@ -78,10 +99,15 @@ class UserRepository:
 
     def find_by_firebase_uid(self, firebase_uid: str) -> Optional[User]:
         """Find user by Firebase UID (only active users)."""
-        return self.db.query(User).filter(
-            User.firebase_uid == firebase_uid,
-            User.is_active == True
-        ).first()
+        return (
+            self.db.query(User)
+            .options(*_USER_RELATIONSHIP_LOADS)
+            .filter(
+                User.firebase_uid == firebase_uid,
+                User.is_active == True
+            )
+            .first()
+        )
     
     def get_user_by_firebase_uid(self, firebase_uid: str) -> Optional[User]:
         """Get user by Firebase UID (deprecated - use find_by_firebase_uid)."""
