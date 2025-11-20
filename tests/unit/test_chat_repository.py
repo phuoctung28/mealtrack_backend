@@ -145,13 +145,34 @@ class TestChatRepository:
         db_thread2 = Mock(spec=DBChatThread)
         db_thread2.to_domain = Mock(return_value=thread2)
         
+        # Mock subquery for message count
+        mock_subquery = Mock()
+        mock_subquery.label = Mock(return_value=mock_subquery)
+        
+        # Mock the main query - it now returns tuples (db_thread, message_count)
         mock_query = Mock()
         mock_query.filter = Mock(return_value=mock_query)
         mock_query.order_by = Mock(return_value=mock_query)
         mock_query.limit = Mock(return_value=mock_query)
         mock_query.offset = Mock(return_value=mock_query)
-        mock_query.all = Mock(return_value=[db_thread1, db_thread2])
-        mock_db_session.query = Mock(return_value=mock_query)
+        mock_query.all = Mock(return_value=[(db_thread1, 5), (db_thread2, 3)])
+        
+        # Mock db.query to return different things for subquery vs main query
+        query_call_count = [0]
+        def query_side_effect(*args):
+            query_call_count[0] += 1
+            if query_call_count[0] == 1:
+                # First call is for the subquery (db.query(func.count(...)))
+                subquery_mock = Mock()
+                subquery_mock.filter = Mock(return_value=subquery_mock)
+                subquery_mock.correlate = Mock(return_value=subquery_mock)
+                subquery_mock.scalar_subquery = Mock(return_value=mock_subquery)
+                return subquery_mock
+            else:
+                # Second call is for the main query (db.query(ChatThread, ...))
+                return mock_query
+        
+        mock_db_session.query = Mock(side_effect=query_side_effect)
         
         # Act
         result = repository.find_threads_by_user(TEST_USER_ID, limit=50, offset=0)
@@ -164,19 +185,41 @@ class TestChatRepository:
     def test_find_threads_by_user_exclude_deleted(self, repository, mock_db_session):
         """Test finding threads excludes deleted by default."""
         # Arrange
+        # Mock subquery for message count
+        mock_subquery = Mock()
+        mock_subquery.label = Mock(return_value=mock_subquery)
+        
+        # Mock the main query
         mock_query = Mock()
         mock_query.filter = Mock(return_value=mock_query)
         mock_query.order_by = Mock(return_value=mock_query)
         mock_query.limit = Mock(return_value=mock_query)
         mock_query.offset = Mock(return_value=mock_query)
         mock_query.all = Mock(return_value=[])
-        mock_db_session.query = Mock(return_value=mock_query)
+        
+        # Mock db.query to return different things for subquery vs main query
+        query_call_count = [0]
+        def query_side_effect(*args):
+            query_call_count[0] += 1
+            if query_call_count[0] == 1:
+                # First call is for the subquery (db.query(func.count(...)))
+                subquery_mock = Mock()
+                subquery_mock.filter = Mock(return_value=subquery_mock)
+                subquery_mock.correlate = Mock(return_value=subquery_mock)
+                subquery_mock.scalar_subquery = Mock(return_value=mock_subquery)
+                return subquery_mock
+            else:
+                # Second call is for the main query (db.query(ChatThread, ...))
+                return mock_query
+        
+        mock_db_session.query = Mock(side_effect=query_side_effect)
         
         # Act
         result = repository.find_threads_by_user(TEST_USER_ID, include_deleted=False)
         
         # Assert
-        # Verify filter was called twice (user_id and status != 'deleted')
+        # Verify filter was called twice on main query (user_id and status != 'deleted')
+        # Note: The subquery also has filter calls, but we're checking the main query
         assert mock_query.filter.call_count == 2
     
     def test_delete_thread_exists(self, repository, mock_db_session):
@@ -659,13 +702,34 @@ class TestChatRepository:
     def test_find_threads_by_user_empty_result(self, repository, mock_db_session):
         """Test finding threads when user has none."""
         # Arrange
+        # Mock subquery for message count
+        mock_subquery = Mock()
+        mock_subquery.label = Mock(return_value=mock_subquery)
+        
+        # Mock the main query
         mock_query = Mock()
         mock_query.filter = Mock(return_value=mock_query)
         mock_query.order_by = Mock(return_value=mock_query)
         mock_query.limit = Mock(return_value=mock_query)
         mock_query.offset = Mock(return_value=mock_query)
         mock_query.all = Mock(return_value=[])
-        mock_db_session.query = Mock(return_value=mock_query)
+        
+        # Mock db.query to return different things for subquery vs main query
+        query_call_count = [0]
+        def query_side_effect(*args):
+            query_call_count[0] += 1
+            if query_call_count[0] == 1:
+                # First call is for the subquery (db.query(func.count(...)))
+                subquery_mock = Mock()
+                subquery_mock.filter = Mock(return_value=subquery_mock)
+                subquery_mock.correlate = Mock(return_value=subquery_mock)
+                subquery_mock.scalar_subquery = Mock(return_value=mock_subquery)
+                return subquery_mock
+            else:
+                # Second call is for the main query (db.query(ChatThread, ...))
+                return mock_query
+        
+        mock_db_session.query = Mock(side_effect=query_side_effect)
         
         # Act
         result = repository.find_threads_by_user(TEST_USER_ID)
