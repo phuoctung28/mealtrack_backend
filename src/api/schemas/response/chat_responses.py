@@ -2,7 +2,7 @@
 Response schemas for chat endpoints.
 """
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class MessageResponse(BaseModel):

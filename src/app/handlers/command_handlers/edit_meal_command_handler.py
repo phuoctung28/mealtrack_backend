@@ -3,7 +3,8 @@ Handler for editing meal ingredients.
 """
 import logging
 import uuid
-from typing import Dict, Any
+from datetime import datetime
+from typing import Dict, Any, Optional
 
 from src.api.exceptions import ValidationException, ResourceNotFoundException
 from src.app.commands.meal import EditMealCommand
@@ -12,6 +13,8 @@ from src.app.events.meal import MealEditedEvent
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition import FoodItem, Macros
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.infra.cache.cache_keys import CacheKeys
+from src.infra.cache.cache_service import CacheService
 from src.infra.services.pinecone_service import get_pinecone_service
 
 logger = logging.getLogger(__name__)
@@ -25,11 +28,13 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                  meal_repository: MealRepositoryPort = None,
                  food_service=None,
                  nutrition_calculator=None,
-                 pinecone_service=None):
+                 pinecone_service=None,
+                 cache_service: Optional[CacheService] = None):
         self.meal_repository = meal_repository
         self.food_service = food_service
         self.nutrition_calculator = nutrition_calculator
         self.pinecone_service = pinecone_service
+        self.cache_service = cache_service
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
@@ -37,6 +42,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         self.food_service = kwargs.get('food_service', self.food_service)
         self.nutrition_calculator = kwargs.get('nutrition_calculator', self.nutrition_calculator)
         self.pinecone_service = kwargs.get('pinecone_service', self.pinecone_service)
+        self.cache_service = kwargs.get('cache_service', self.cache_service)
 
     async def handle(self, command: EditMealCommand) -> Dict[str, Any]:
         """Handle meal editing operations."""
@@ -68,6 +74,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
 
         # 5. Persist changes
         saved_meal = self.meal_repository.save(updated_meal)
+        await self._invalidate_daily_macros(saved_meal)
 
         # 6. Calculate nutrition delta for event
         nutrition_delta = self._calculate_nutrition_delta(meal.nutrition, updated_nutrition)
@@ -216,3 +223,10 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 summary_parts.append("Updated portion")
 
         return "; ".join(summary_parts) if summary_parts else "Updated meal"
+
+    async def _invalidate_daily_macros(self, meal):
+        if not self.cache_service or not meal:
+            return
+        created_at = meal.created_at or datetime.utcnow()
+        cache_key, _ = CacheKeys.daily_macros(meal.user_id, created_at.date())
+        await self.cache_service.invalidate(cache_key)

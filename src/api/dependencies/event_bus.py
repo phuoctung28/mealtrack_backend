@@ -1,6 +1,8 @@
 """
 Event bus dependency for FastAPI with proper type registrations.
 """
+from typing import Optional
+
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
@@ -14,6 +16,7 @@ from src.api.base_dependencies import (
     get_food_data_service,
     get_food_cache_service,
     get_food_mapping_service,
+    get_cache_service,
 )
 from src.app.commands.daily_meal import (
     GenerateDailyMealSuggestionsCommand,
@@ -141,6 +144,7 @@ from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboard
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_data_service_port import FoodDataServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
+from src.infra.cache.cache_service import CacheService
 from src.infra.event_bus import PyMediatorEventBus, EventBus
 
 
@@ -154,6 +158,7 @@ async def get_configured_event_bus(
     food_data_service: FoodDataServicePort = Depends(get_food_data_service),
     food_cache_service: FoodCacheServicePort = Depends(get_food_cache_service),
     food_mapping_service: FoodMappingServicePort = Depends(get_food_mapping_service),
+    cache_service: Optional[CacheService] = Depends(get_cache_service),
 ) -> EventBus:
     """
     Get an event bus with all handlers configured.
@@ -168,6 +173,7 @@ async def get_configured_event_bus(
             meal_repository=meal_repository,
             vision_service=vision_service,
             gpt_parser=gpt_parser,
+            cache_service=cache_service,
         ),
     )
 
@@ -177,7 +183,8 @@ async def get_configured_event_bus(
         EditMealCommandHandler(
             meal_repository=meal_repository,
             food_service=food_data_service,
-            nutrition_calculator=None  # TODO: Add nutrition calculator if needed
+            nutrition_calculator=None,  # TODO: Add nutrition calculator if needed
+            cache_service=cache_service,
         ),
     )
 
@@ -185,12 +192,16 @@ async def get_configured_event_bus(
         AddCustomIngredientCommand,
         AddCustomIngredientCommandHandler(
             meal_repository=meal_repository,
+            cache_service=cache_service,
         ),
     )
 
     event_bus.register_handler(
         DeleteMealCommand,
-        DeleteMealCommandHandler(meal_repository),
+        DeleteMealCommandHandler(
+            meal_repository=meal_repository,
+            cache_service=cache_service,
+        ),
     )
 
     # Register manual meal creation command handler
@@ -200,6 +211,7 @@ async def get_configured_event_bus(
             meal_repository=meal_repository,
             food_data_service=food_data_service,
             mapping_service=food_mapping_service,
+            cache_service=cache_service,
         ),
     )
 
@@ -222,7 +234,12 @@ async def get_configured_event_bus(
         GetMealByIdQuery, GetMealByIdQueryHandler(meal_repository)
     )
     event_bus.register_handler(
-        GetDailyMacrosQuery, GetDailyMacrosQueryHandler(meal_repository, db)
+        GetDailyMacrosQuery,
+        GetDailyMacrosQueryHandler(
+            meal_repository,
+            db,
+            cache_service=cache_service,
+        ),
     )
 
     # Register activity query handlers
@@ -264,23 +281,27 @@ async def get_configured_event_bus(
 
     # Register user handlers
     event_bus.register_handler(
-        SaveUserOnboardingCommand, SaveUserOnboardingCommandHandler(db)
+        SaveUserOnboardingCommand,
+        SaveUserOnboardingCommandHandler(db, cache_service=cache_service),
     )
     event_bus.register_handler(SyncUserCommand, SyncUserCommandHandler(db))
     event_bus.register_handler(
         UpdateUserLastAccessedCommand, UpdateUserLastAccessedCommandHandler(db)
     )
     event_bus.register_handler(
-        CompleteOnboardingCommand, CompleteOnboardingCommandHandler(db)
+        CompleteOnboardingCommand,
+        CompleteOnboardingCommandHandler(db, cache_service=cache_service),
     )
     event_bus.register_handler(
         DeleteUserCommand, DeleteUserCommandHandler(db)
     )
     event_bus.register_handler(
-        UpdateUserMetricsCommand, UpdateUserMetricsCommandHandler(db)
+        UpdateUserMetricsCommand,
+        UpdateUserMetricsCommandHandler(db, cache_service=cache_service),
     )
     event_bus.register_handler(
-        GetUserProfileQuery, GetUserProfileQueryHandler(db)
+        GetUserProfileQuery,
+        GetUserProfileQueryHandler(db),
     )
     event_bus.register_handler(
         GetUserByFirebaseUidQuery, GetUserByFirebaseUidQueryHandler(db)

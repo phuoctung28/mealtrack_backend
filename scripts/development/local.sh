@@ -29,6 +29,16 @@ if ! docker ps | grep -q mealtrack_mysql; then
     sleep 10
 fi
 
+if ! docker ps | grep -q mealtrack_redis; then
+    echo "🐳 Starting Redis..."
+    docker run -d --name mealtrack_redis \
+        -p 6379:6379 \
+        redis:7-alpine 2>/dev/null || docker start mealtrack_redis
+
+    echo "⏳ Waiting for Redis..."
+    sleep 5
+fi
+
 # Setup development database if needed
 echo "🔧 Setting up development database..."
 python scripts/development/dev_setup.py

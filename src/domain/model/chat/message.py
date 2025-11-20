@@ -59,7 +59,7 @@ class Message:
             thread_id=thread_id,
             role=MessageRole.USER,
             content=content,
-            created_at=datetime.now(),
+            created_at=datetime.utcnow(),
             metadata=metadata or {}
         )
     
@@ -76,7 +76,7 @@ class Message:
             thread_id=thread_id,
             role=MessageRole.ASSISTANT,
             content=content,
-            created_at=datetime.now(),
+            created_at=datetime.utcnow(),
             metadata=metadata or {}
         )
     
@@ -93,7 +93,7 @@ class Message:
             thread_id=thread_id,
             role=MessageRole.SYSTEM,
             content=content,
-            created_at=datetime.now(),
+            created_at=datetime.utcnow(),
             metadata=metadata or {}
         )
     

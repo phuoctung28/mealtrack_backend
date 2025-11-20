@@ -4,12 +4,14 @@ Auto-extracted for better maintainability.
 """
 import logging
 from datetime import date
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetDailyMacrosQuery
 from src.domain.model.meal import MealStatus
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.infra.cache.cache_keys import CacheKeys
+from src.infra.cache.cache_service import CacheService
 
 logger = logging.getLogger(__name__)
 
@@ -18,15 +20,22 @@ logger = logging.getLogger(__name__)
 class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any]]):
     """Handler for calculating daily macronutrient totals with user targets."""
 
-    def __init__(self, meal_repository: MealRepositoryPort = None, db=None):
+    def __init__(
+        self,
+        meal_repository: MealRepositoryPort = None,
+        db=None,
+        cache_service: Optional[CacheService] = None,
+    ):
         self.meal_repository = meal_repository
         self.db = db
+        self.cache_service = cache_service
 
-    def set_dependencies(self, meal_repository: MealRepositoryPort, db=None):
+    def set_dependencies(self, meal_repository: MealRepositoryPort, db=None, **kwargs):
         """Set dependencies for dependency injection."""
         self.meal_repository = meal_repository
         if db:
             self.db = db
+        self.cache_service = kwargs.get("cache_service", self.cache_service)
 
     async def handle(self, query: GetDailyMacrosQuery) -> Dict[str, Any]:
         """Calculate daily macros for a given date with user targets."""
@@ -34,6 +43,10 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             raise RuntimeError("Meal repository not configured")
 
         target_date = query.target_date or date.today()
+        cached_result = await self._try_get_cached_result(query.user_id, target_date)
+        if cached_result is not None:
+            return cached_result
+
         meals = self.meal_repository.find_by_date(target_date, user_id=query.user_id)
 
         # Initialize totals
@@ -103,4 +116,17 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 "calories": target_macros.get('calories', target_calories or 0.0)
             }
 
+        await self._write_cache(query.user_id, target_date, result)
         return result
+
+    async def _try_get_cached_result(self, user_id: str, target_date: date):
+        if not self.cache_service:
+            return None
+        cache_key, _ = CacheKeys.daily_macros(user_id, target_date)
+        return await self.cache_service.get_json(cache_key)
+
+    async def _write_cache(self, user_id: str, target_date: date, payload: Dict[str, Any]):
+        if not self.cache_service:
+            return
+        cache_key, ttl = CacheKeys.daily_macros(user_id, target_date)
+        await self.cache_service.set_json(cache_key, payload, ttl)

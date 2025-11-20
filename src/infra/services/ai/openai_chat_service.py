@@ -21,7 +21,7 @@ class OpenAIChatService(AIChatServicePort):
         if self.api_key:
             try:
                 import openai
-                self.client = openai.OpenAI(api_key=self.api_key)
+                self.client = openai.AsyncOpenAI(api_key=self.api_key)
                 logger.info(f"OpenAI chat service initialized with model {self.model}")
             except ImportError:
                 logger.warning("OpenAI package not installed. Install with: pip install openai")
@@ -39,6 +39,10 @@ class OpenAIChatService(AIChatServicePort):
         if not self.client:
             raise RuntimeError("OpenAI client not initialized. Check API key.")
         
+        # Validate temperature parameter
+        if not 0 <= temperature <= 2:
+            raise ValueError("temperature must be between 0 and 2")
+        
         try:
             # Prepare messages
             formatted_messages = []
@@ -54,7 +58,7 @@ class OpenAIChatService(AIChatServicePort):
             formatted_messages.extend(messages)
             
             # Call OpenAI API
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=formatted_messages,
                 temperature=temperature,
@@ -95,6 +99,10 @@ class OpenAIChatService(AIChatServicePort):
         if not self.client:
             raise RuntimeError("OpenAI client not initialized. Check API key.")
         
+        # Validate temperature parameter
+        if not 0 <= temperature <= 2:
+            raise ValueError("temperature must be between 0 and 2")
+        
         try:
             # Prepare messages
             formatted_messages = []
@@ -110,7 +118,7 @@ class OpenAIChatService(AIChatServicePort):
             formatted_messages.extend(messages)
             
             # Call OpenAI API with streaming
-            stream = self.client.chat.completions.create(
+            stream = await self.client.chat.completions.create(
                 model=self.model,
                 messages=formatted_messages,
                 temperature=temperature,
@@ -119,7 +127,7 @@ class OpenAIChatService(AIChatServicePort):
             )
             
             # Yield chunks
-            for chunk in stream:
+            async for chunk in stream:
                 if chunk.choices[0].delta.content:
                     yield {
                         "chunk": chunk.choices[0].delta.content,

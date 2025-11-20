@@ -19,11 +19,17 @@ from fastapi.staticfiles import StaticFiles
 from firebase_admin import credentials
 from sqlalchemy import text
 
-from src.api.base_dependencies import initialize_scheduled_notification_service
+from src.api.base_dependencies import (
+    initialize_cache_layer,
+    initialize_scheduled_notification_service,
+    shutdown_cache_layer,
+)
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
+from src.api.routes.v1.monitoring import router as monitoring_router
+
 from src.api.routes.v1.chat import router as chat_router
 from src.api.routes.v1.chat_ws import router as chat_ws_router
 from src.api.routes.v1.meal_plans import router as meal_plans_router
@@ -140,7 +146,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to start scheduled notification service: {e}")
         # Continue running the API even if notification service fails
-    
+
+    # Initialize Redis cache
+    try:
+        await initialize_cache_layer()
+    except Exception as exc:
+        logger.error("Failed to initialize cache layer: %s", exc)
+        if os.getenv("FAIL_ON_CACHE_ERROR", "false").lower() == "true":
+            raise
+
     logger.info("MealTrack API started successfully!")
     yield
 
@@ -155,6 +169,9 @@ async def lifespan(app: FastAPI):
             logger.info("Scheduled notification service stopped successfully!")
         except Exception as e:
             logger.error(f"Error stopping scheduled notification service: {e}")
+
+    # Disconnect cache
+    await shutdown_cache_layer()
 
 
 app = FastAPI(
@@ -187,6 +204,7 @@ app.include_router(meal_plans_router)
 app.include_router(user_profiles_router)
 app.include_router(users_router)
 app.include_router(foods_router)
+app.include_router(monitoring_router)
 app.include_router(webhooks_router)
 app.include_router(notifications_router)
 

@@ -2,7 +2,6 @@
 Chat API endpoints - Event-driven architecture.
 Handles chat thread and message operations.
 """
-from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from src.api.dependencies.auth import get_current_user_id

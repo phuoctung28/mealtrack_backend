@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.model.nutrition import Macros, Micros, Nutrition, FoodItem
@@ -13,6 +13,11 @@ from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
 from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
 
 logger = logging.getLogger(__name__)
+
+_MEAL_LOAD_OPTIONS = (
+    joinedload(DBMeal.image),
+    selectinload(DBMeal.nutrition).selectinload(DBNutrition.food_items),
+)
 
 
 # For development, we'll use an in-memory store
@@ -97,7 +102,12 @@ class MealRepository(MealRepositoryPort):
         db = self._get_db()
         
         try:
-            db_meal = db.query(DBMeal).filter(DBMeal.meal_id == meal_id).first()
+            db_meal = (
+                db.query(DBMeal)
+                .options(*_MEAL_LOAD_OPTIONS)
+                .filter(DBMeal.meal_id == meal_id)
+                .first()
+            )
             
             if db_meal:
                 return db_meal.to_domain()
@@ -115,6 +125,7 @@ class MealRepository(MealRepositoryPort):
 
             db_meals = (
                 db.query(DBMeal)
+                .options(*_MEAL_LOAD_OPTIONS)
                 .filter(DBMeal.status == MealStatusMapper.to_db(status))
                 .order_by(DBMeal.created_at)  # Oldest first
                 .limit(limit)
@@ -184,6 +195,7 @@ class MealRepository(MealRepositoryPort):
             # Query meals created within the date range and exclude INACTIVE
             query = (
                 db.query(DBMeal)
+                .options(*_MEAL_LOAD_OPTIONS)
                 .filter(DBMeal.created_at >= start_datetime)
                 .filter(DBMeal.created_at < end_datetime)
             )

@@ -4,7 +4,6 @@ Defines the contract that chat storage implementations must follow.
 """
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from datetime import datetime
 
 from src.domain.model.chat import Thread, Message
 

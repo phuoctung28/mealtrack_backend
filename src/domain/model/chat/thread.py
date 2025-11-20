@@ -54,7 +54,7 @@ class Thread:
         metadata: Optional[Dict[str, Any]] = None
     ) -> 'Thread':
         """Factory method to create a new thread."""
-        now = datetime.now()
+        now = datetime.utcnow()
         return cls(
             thread_id=str(uuid.uuid4()),
             user_id=user_id,
@@ -80,7 +80,7 @@ class Thread:
             title=self.title,
             status=self.status,
             created_at=self.created_at,
-            updated_at=datetime.now(),
+            updated_at=datetime.utcnow(),
             metadata=self.metadata,
             messages=updated_messages
         )
@@ -93,7 +93,7 @@ class Thread:
             title=self.title,
             status=ThreadStatus.ARCHIVED,
             created_at=self.created_at,
-            updated_at=datetime.now(),
+            updated_at=datetime.utcnow(),
             metadata=self.metadata,
             messages=self.messages
         )
@@ -106,7 +106,7 @@ class Thread:
             title=self.title,
             status=ThreadStatus.DELETED,
             created_at=self.created_at,
-            updated_at=datetime.now(),
+            updated_at=datetime.utcnow(),
             metadata=self.metadata,
             messages=self.messages
         )
@@ -122,13 +122,16 @@ class Thread:
             title=title,
             status=self.status,
             created_at=self.created_at,
-            updated_at=datetime.now(),
+            updated_at=datetime.utcnow(),
             metadata=self.metadata,
             messages=self.messages
         )
     
     def get_message_count(self) -> int:
         """Get the number of messages in this thread."""
+        # Check for cached message count (set by repository to avoid N+1 queries)
+        if hasattr(self, '_cached_message_count'):
+            return self._cached_message_count
         return len(self.messages)
     
     def get_last_message(self) -> Optional[Message]:

@@ -1,4 +1,6 @@
+import logging
 import os
+from typing import Optional
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
@@ -18,16 +20,61 @@ from src.infra.adapters.food_cache_service import FoodCacheService
 from src.infra.adapters.food_data_service import FoodDataService
 from src.infra.adapters.image_store import ImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
+from src.infra.cache.cache_service import CacheService
+from src.infra.cache.metrics import CacheMonitor
+from src.infra.cache.redis_client import RedisClient
 from src.infra.database.config import SessionLocal
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
 from src.infra.services.firebase_service import FirebaseService
 from src.infra.services.scheduled_notification_service import ScheduledNotificationService
+from src.infra.config.settings import settings
 
 
 # Note: Old handler imports removed - using event-driven architecture now
 # from src.app.handlers.activity_handler import ActivityHandler
 # ... etc
+
+
+# Globals
+logger = logging.getLogger(__name__)
+_redis_client: Optional[RedisClient] = None
+_cache_service: Optional[CacheService] = None
+_cache_monitor = CacheMonitor()
+
+
+async def initialize_cache_layer() -> None:
+    """Initialize Redis cache if enabled."""
+    global _redis_client, _cache_service
+
+    if not settings.CACHE_ENABLED:
+        logger.info("Caching disabled via settings")
+        return
+
+    if _redis_client is None:
+        _redis_client = RedisClient(
+            redis_url=settings.redis_url,
+            max_connections=settings.REDIS_MAX_CONNECTIONS,
+        )
+        await _redis_client.connect()
+
+    _cache_service = CacheService(
+        redis_client=_redis_client,
+        default_ttl=settings.CACHE_DEFAULT_TTL,
+        monitor=_cache_monitor,
+        enabled=settings.CACHE_ENABLED,
+    )
+
+
+async def shutdown_cache_layer() -> None:
+    """Gracefully close Redis connections."""
+    global _redis_client, _cache_service
+
+    if _cache_service:
+        _cache_service = None
+    if _redis_client:
+        await _redis_client.disconnect()
+        _redis_client = None
 
 
 # Database
@@ -114,7 +161,17 @@ def get_food_cache_service() -> FoodCacheServicePort:
     Returns:
         FoodCacheServicePort: The food cache service
     """
-    return FoodCacheService()
+    return FoodCacheService(cache_service=_cache_service)
+
+
+def get_cache_service() -> Optional[CacheService]:
+    """Expose cache service for dependency injection."""
+    return _cache_service
+
+
+def get_cache_monitor() -> CacheMonitor:
+    """Return shared cache monitor for metrics."""
+    return _cache_monitor
 
 # Food Mapping Service
 def get_food_mapping_service() -> FoodMappingServicePort:

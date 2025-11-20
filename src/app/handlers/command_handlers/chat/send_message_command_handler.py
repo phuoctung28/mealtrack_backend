@@ -2,7 +2,7 @@
 Handler for sending a message in a chat thread.
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.chat import SendMessageCommand
@@ -85,6 +85,7 @@ class SendMessageCommandHandler(EventHandler[SendMessageCommand, Dict[str, Any]]
         
         # Generate AI response with streaming
         assistant_message = None
+        ai_error = None
         if self.ai_service:
             try:
                 # Get conversation history
@@ -143,17 +144,23 @@ class SendMessageCommandHandler(EventHandler[SendMessageCommand, Dict[str, Any]]
                     )
             
             except Exception as e:
-                logger.error(f"Error generating AI response: {e}")
+                logger.error(f"Error generating AI response: {e}", exc_info=True)
                 # Stop typing indicator on error
                 if WEBSOCKET_AVAILABLE:
                     await chat_connection_manager.broadcast_typing_indicator(
                         command.thread_id, False
                     )
-                # Continue without AI response - user message already saved
+                # Store error information - user message was successfully saved
+                ai_error = {
+                    "message": "Failed to generate AI response",
+                    "error": str(e),
+                    "error_type": type(e).__name__
+                }
         
         return {
             "success": True,
             "user_message": saved_user_message.to_dict(),
-            "assistant_message": assistant_message.to_dict() if assistant_message else None
+            "assistant_message": assistant_message.to_dict() if assistant_message else None,
+            "ai_error": ai_error
         }
 

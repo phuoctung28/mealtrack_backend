@@ -4,7 +4,7 @@ Meal Plan Repository for persisting meal plans.
 
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from src.domain.model.meal_planning import MealPlan
 from src.infra.database.config import SessionLocal
@@ -12,6 +12,10 @@ from src.infra.database.models.enums import FitnessGoalEnum, PlanDurationEnum, M
 from src.infra.database.models.meal_planning.meal_plan import MealPlan as DBMealPlan
 from src.infra.database.models.meal_planning.meal_plan_day import MealPlanDay as DBMealPlanDay
 from src.infra.database.models.meal_planning.planned_meal import PlannedMeal as DBPlannedMeal
+
+_MEAL_PLAN_LOAD_OPTIONS = (
+    selectinload(DBMealPlan.days).selectinload(DBMealPlanDay.meals),
+)
 
 
 class MealPlanRepository:
@@ -95,7 +99,12 @@ class MealPlanRepository:
         db = self._get_db()
         
         try:
-            db_plan = db.query(DBMealPlan).filter(DBMealPlan.id == plan_id).first()
+            db_plan = (
+                db.query(DBMealPlan)
+                .options(*_MEAL_PLAN_LOAD_OPTIONS)
+                .filter(DBMealPlan.id == plan_id)
+                .first()
+            )
             if db_plan:
                 # TODO: Map back to domain model - for now return the DB model
                 return db_plan
