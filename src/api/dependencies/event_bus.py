@@ -7,6 +7,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from src.api.base_dependencies import (
+    get_ai_chat_service,
     get_db,
     get_image_store,
     get_meal_repository,
@@ -141,6 +142,7 @@ from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import GetUserProfileQuery, GetUserMetricsQuery
 from src.app.queries.user.get_user_by_firebase_uid_query import GetUserByFirebaseUidQuery
 from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboardingStatusQuery
+from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_data_service_port import FoodDataServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
@@ -159,6 +161,7 @@ async def get_configured_event_bus(
     food_cache_service: FoodCacheServicePort = Depends(get_food_cache_service),
     food_mapping_service: FoodMappingServicePort = Depends(get_food_mapping_service),
     cache_service: Optional[CacheService] = Depends(get_cache_service),
+    ai_chat_service: AIChatServicePort = Depends(get_ai_chat_service),
 ) -> EventBus:
     """
     Get an event bus with all handlers configured.
@@ -334,10 +337,8 @@ async def get_configured_event_bus(
 
     # Register chat handlers
     from src.infra.repositories.chat_repository import ChatRepository
-    from tests.fixtures.mock_chat_service import MockChatService
     
     chat_repository = ChatRepository(db)
-    ai_service = MockChatService()  # Use mock for MVP, replace with OpenAI later
     
     event_bus.register_handler(
         CreateThreadCommand,
@@ -345,7 +346,7 @@ async def get_configured_event_bus(
     )
     event_bus.register_handler(
         SendMessageCommand,
-        SendMessageCommandHandler(chat_repository, ai_service)
+        SendMessageCommandHandler(chat_repository, ai_chat_service)
     )
     event_bus.register_handler(
         DeleteThreadCommand,

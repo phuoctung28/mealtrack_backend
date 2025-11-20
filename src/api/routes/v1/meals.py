@@ -266,7 +266,7 @@ async def get_daily_macros(
         raise handle_exception(e) from e
 
 
-@router.put("/{meal_id}/ingredients")
+@router.put("/{meal_id}/ingredients", response_model=None)
 async def update_meal_ingredients(
     meal_id: str,
     request: EditMealIngredientsRequest,

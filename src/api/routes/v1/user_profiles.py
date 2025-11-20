@@ -21,7 +21,7 @@ from src.infra.event_bus import EventBus
 router = APIRouter(prefix="/v1/user-profiles", tags=["User Profiles"])
 
 
-@router.post("/", response_model=bool)
+@router.post("/", response_model=None)
 async def save_user_onboarding(
     request: OnboardingCompleteRequest,
     user_id: str = Depends(get_current_user_id),

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_data_service_port import FoodDataServicePort
+from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
@@ -26,6 +27,7 @@ from src.infra.cache.redis_client import RedisClient
 from src.infra.database.config import SessionLocal
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
+from src.infra.services.ai.openai_chat_service import OpenAIChatService
 from src.infra.services.firebase_service import FirebaseService
 from src.infra.services.scheduled_notification_service import ScheduledNotificationService
 from src.infra.config.settings import settings
@@ -131,6 +133,50 @@ def get_vision_service() -> VisionAIServicePort:
     """
     
     return VisionAIService()
+
+
+# AI Chat Service
+def get_ai_chat_service() -> AIChatServicePort:
+    """
+    Get the AI chat service instance using the LLM provider factory.
+    
+    Supports multiple LLM providers (OpenAI, Gemini) with auto-detection.
+    Provider selection priority:
+    1. LLM_PROVIDER environment variable (if set)
+    2. Auto-detect from available API keys (OPENAI_API_KEY > GOOGLE_API_KEY)
+    
+    Returns:
+        AIChatServicePort: The configured LLM provider instance
+        
+    Raises:
+        ValueError: If no LLM provider can be configured (no API keys available)
+    """
+    from src.infra.services.ai.llm_provider_factory import LLMProviderFactory
+    from src.infra.config.settings import settings
+    
+    try:
+        provider = settings.LLM_PROVIDER
+        if provider:
+            logger.info(f"Using configured LLM provider: {provider}")
+        
+        # Get model from settings if available
+        model = None
+        if provider == "openai":
+            model = settings.OPENAI_MODEL
+        elif provider == "gemini":
+            model = settings.GEMINI_MODEL
+        
+        return LLMProviderFactory.create_provider(
+            provider=provider,
+            model=model
+        )
+    except ValueError as e:
+        logger.error(f"Failed to create LLM provider: {e}")
+        raise ValueError(
+            "AI chat service is not available. "
+            "Please configure at least one LLM provider by setting "
+            "OPENAI_API_KEY or GOOGLE_API_KEY environment variable."
+        ) from e
 
 
 # GPT Parser

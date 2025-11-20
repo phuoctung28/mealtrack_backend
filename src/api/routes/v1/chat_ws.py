@@ -4,10 +4,11 @@ WebSocket endpoint for real-time chat.
 import json
 import logging
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends, status
 from fastapi.exceptions import WebSocketException
 from firebase_admin import auth as firebase_auth
 
+from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import ResourceNotFoundException
 from src.app.queries.chat import GetThreadQuery
 from src.infra.database.config import get_db
@@ -108,7 +109,7 @@ async def chat_websocket(
     websocket: WebSocket,
     thread_id: str,
     token: str = Query(...),
-    event_bus: EventBus = None,
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     WebSocket endpoint for real-time chat.
