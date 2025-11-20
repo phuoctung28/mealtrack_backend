@@ -6,7 +6,7 @@ improving type safety and error handling in the parsing process.
 """
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class GPTMacros(BaseModel):
@@ -15,7 +15,8 @@ class GPTMacros(BaseModel):
     carbs: float = Field(..., ge=0, description="Carbohydrates in grams")
     fat: float = Field(..., ge=0, description="Fat in grams")
     
-    @validator('protein', 'carbs', 'fat')
+    @field_validator('protein', 'carbs', 'fat')
+    @classmethod
     def round_macros(cls, v):
         """Round macro values to 1 decimal place."""
         return round(v, 1)
@@ -30,11 +31,12 @@ class GPTFoodItem(BaseModel):
     macros: GPTMacros = Field(..., description="Macronutrient breakdown")
     confidence: float = Field(1.0, ge=0, le=1, description="Confidence score")
     
-    @validator('calories')
-    def validate_calories(cls, v, values):
+    @field_validator('calories')
+    @classmethod
+    def validate_calories(cls, v, info):
         """Validate calories against macros if possible."""
-        if 'macros' in values:
-            macros = values['macros']
+        if info.data and 'macros' in info.data:
+            macros = info.data['macros']
             calculated = (macros.protein * 4) + (macros.carbs * 4) + (macros.fat * 9)
             # Allow 20% tolerance for rounding and estimation
             if abs(v - calculated) > calculated * 0.2:
@@ -56,18 +58,20 @@ class GPTAnalysisResponse(BaseModel):
     ingredient_based: Optional[bool] = Field(None, description="Whether ingredient-based analysis")
     total_weight_grams: Optional[float] = Field(None, gt=0, description="Total weight if provided")
     
-    @validator('foods')
+    @field_validator('foods')
+    @classmethod
     def validate_foods_not_empty(cls, v):
         """Ensure foods list is not empty."""
         if not v:
             raise ValueError("Foods list cannot be empty")
         return v
     
-    @validator('total_calories')
-    def validate_total_calories(cls, v, values):
+    @field_validator('total_calories')
+    @classmethod
+    def validate_total_calories(cls, v, info):
         """Validate total calories matches sum of food items."""
-        if 'foods' in values:
-            calculated_total = sum(food.calories for food in values['foods'])
+        if info.data and 'foods' in info.data:
+            calculated_total = sum(food.calories for food in info.data['foods'])
             # Allow 5% tolerance for rounding
             if abs(v - calculated_total) > calculated_total * 0.05:
                 # Use calculated total instead

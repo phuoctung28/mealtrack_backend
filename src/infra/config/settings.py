@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
     PINECONE_API_KEY: str | None = Field(default=None)
+    
+    # LLM Provider configuration
+    LLM_PROVIDER: str | None = Field(default=None, description="LLM provider to use: 'openai' or 'gemini'. Auto-detects if not set.")
+    OPENAI_MODEL: str = Field(default="gpt-3.5-turbo", description="OpenAI model to use")
+    GEMINI_MODEL: str = Field(default="gemini-1.5-flash", description="Gemini model to use")
     REVENUECAT_SECRET_API_KEY: str | None = Field(default=None)
     REVENUECAT_WEBHOOK_SECRET: str | None = Field(default=None)
     CLOUDINARY_CLOUD_NAME: str | None = Field(default=None)

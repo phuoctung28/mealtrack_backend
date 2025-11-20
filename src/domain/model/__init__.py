@@ -14,6 +14,12 @@ from .ai import (
     GPTResponseParsingError,
     GPTResponseIncompleteError,
 )
+# Chat context
+from .chat import (
+    Thread,
+    MessageRole as ChatMessageRole,
+    ThreadStatus,
+)
 # Conversation context
 from .conversation import (
     Conversation,
@@ -148,4 +154,8 @@ __all__ = [
     'PushNotification',
     'DeviceType',
     'NotificationType',
+    # Chat
+    'Thread',
+    'ChatMessageRole',
+    'ThreadStatus',
 ]

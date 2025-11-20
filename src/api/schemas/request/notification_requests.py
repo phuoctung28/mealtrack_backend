@@ -3,7 +3,7 @@ Notification request schemas for push notification management.
 """
 from typing import Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class FcmTokenRegistrationRequest(BaseModel):
@@ -11,7 +11,8 @@ class FcmTokenRegistrationRequest(BaseModel):
     fcm_token: str = Field(..., description="Firebase Cloud Messaging token")
     device_type: str = Field(..., description="Device type (ios or android)")
     
-    @validator('device_type')
+    @field_validator('device_type')
+    @classmethod
     def validate_device_type(cls, v):
         if v not in ['ios', 'android']:
             raise ValueError('device_type must be either "ios" or "android"')

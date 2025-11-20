@@ -19,7 +19,7 @@ router = APIRouter(
 )
 
 
-@router.get("/daily", response_model=List[Dict])
+@router.get("/daily", response_model=None)
 async def get_daily_activities(
     user_id: str = Depends(get_current_user_id),
     date: Optional[str] = Query(
