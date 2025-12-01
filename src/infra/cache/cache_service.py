@@ -4,6 +4,7 @@ High-level cache service that handles serialization and metrics.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any, Awaitable, Callable, Optional, TypeVar
 
 from pydantic import BaseModel
@@ -96,5 +97,7 @@ def _json_serializer(value: Any) -> Any:
     """Helper to serialize objects that aren't JSON-serializable by default."""
     if isinstance(value, BaseModel):
         return value.model_dump()
+    if isinstance(value, datetime):
+        return value.isoformat() + 'Z'
     raise TypeError(f"Object of type {value.__class__.__name__} is not JSON serializable")
 
