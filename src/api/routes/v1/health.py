@@ -10,7 +10,6 @@ from sqlalchemy import text
 
 from src.infra.database.config import (
     POOL_MAX_OVERFLOW,
-    POOL_SIZE,
     TOTAL_POOL_CAPACITY,
     engine,
 )
@@ -147,3 +146,75 @@ async def _fetch_mysql_connection_stats() -> Dict[str, Any]:
             }
 
     return await asyncio.to_thread(_query)
+
+
+@router.get("/health/notifications")
+async def notification_health_check():
+    """
+    Health check for push notification system.
+    Checks: Firebase SDK init, APNS config status, token stats.
+    """
+    try:
+        from src.infra.services.firebase_service import FirebaseService
+        from src.infra.database.config import SessionLocal
+        from src.infra.database.models.notification import UserFcmToken as DBToken
+        from sqlalchemy import func
+
+        firebase_service = FirebaseService()
+
+        health_status = {
+            "status": "healthy",
+            "firebase_initialized": firebase_service.is_initialized(),
+            "components": {}
+        }
+
+        # Check Firebase Admin SDK
+        if not firebase_service.is_initialized():
+            health_status["status"] = "degraded"
+            health_status["components"]["firebase_sdk"] = {
+                "status": "error",
+                "message": "Firebase Admin SDK not initialized"
+            }
+        else:
+            health_status["components"]["firebase_sdk"] = {
+                "status": "healthy",
+                "message": "Firebase Admin SDK initialized"
+            }
+
+        # Get token stats from database
+        db = SessionLocal()
+        try:
+            total_tokens = db.query(func.count(DBToken.id)).scalar()
+            active_tokens = db.query(func.count(DBToken.id)).filter(
+                DBToken.is_active
+            ).scalar()
+            inactive_tokens = total_tokens - active_tokens
+
+            health_status["components"]["fcm_tokens"] = {
+                "status": "healthy",
+                "total": total_tokens,
+                "active": active_tokens,
+                "inactive": inactive_tokens,
+                "inactive_rate": round(inactive_tokens / total_tokens * 100, 2) if total_tokens > 0 else 0
+            }
+
+            # Warn if high inactive rate
+            if total_tokens > 0 and (inactive_tokens / total_tokens) > 0.5:
+                health_status["status"] = "warning"
+                health_status["components"]["fcm_tokens"]["message"] = "High inactive token rate"
+        finally:
+            db.close()
+
+        return JSONResponse(
+            status_code=200 if health_status["status"] == "healthy" else 503,
+            content=health_status
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "error",
+                "error": str(e)
+            }
+        )
