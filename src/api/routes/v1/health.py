@@ -1,6 +1,7 @@
 """
 Health check endpoints for monitoring and status.
 """
+
 import asyncio
 from typing import Any, Dict, Optional
 
@@ -58,9 +59,7 @@ async def database_pool_status():
         pool_size = pool.size()
         overflow = pool.overflow()
         available = max(pool_size - checked_out, 0)
-        utilization_pct = (
-            (checked_out / pool_size) * 100 if pool_size > 0 else 0.0
-        )
+        utilization_pct = (checked_out / pool_size) * 100 if pool_size > 0 else 0.0
 
         return {
             "status": "healthy",
@@ -140,9 +139,9 @@ async def _fetch_mysql_connection_stats() -> Dict[str, Any]:
                 "active_connections": active_connections,
                 "pool_capacity": TOTAL_POOL_CAPACITY,
                 "max_connections": max_connections,
-                "utilization_pct": round(utilization_pct, 2)
-                if utilization_pct is not None
-                else None,
+                "utilization_pct": (
+                    round(utilization_pct, 2) if utilization_pct is not None else None
+                ),
             }
 
     return await asyncio.to_thread(_query)
@@ -165,7 +164,7 @@ async def notification_health_check():
         health_status = {
             "status": "healthy",
             "firebase_initialized": firebase_service.is_initialized(),
-            "components": {}
+            "components": {},
         }
 
         # Check Firebase Admin SDK
@@ -173,21 +172,21 @@ async def notification_health_check():
             health_status["status"] = "degraded"
             health_status["components"]["firebase_sdk"] = {
                 "status": "error",
-                "message": "Firebase Admin SDK not initialized"
+                "message": "Firebase Admin SDK not initialized",
             }
         else:
             health_status["components"]["firebase_sdk"] = {
                 "status": "healthy",
-                "message": "Firebase Admin SDK initialized"
+                "message": "Firebase Admin SDK initialized",
             }
 
         # Get token stats from database
         db = SessionLocal()
         try:
             total_tokens = db.query(func.count(DBToken.id)).scalar()
-            active_tokens = db.query(func.count(DBToken.id)).filter(
-                DBToken.is_active
-            ).scalar()
+            active_tokens = (
+                db.query(func.count(DBToken.id)).filter(DBToken.is_active).scalar()
+            )
             inactive_tokens = total_tokens - active_tokens
 
             health_status["components"]["fcm_tokens"] = {
@@ -195,26 +194,28 @@ async def notification_health_check():
                 "total": total_tokens,
                 "active": active_tokens,
                 "inactive": inactive_tokens,
-                "inactive_rate": round(inactive_tokens / total_tokens * 100, 2) if total_tokens > 0 else 0
+                "inactive_rate": (
+                    round(inactive_tokens / total_tokens * 100, 2)
+                    if total_tokens > 0
+                    else 0
+                ),
             }
 
             # Warn if high inactive rate
             if total_tokens > 0 and (inactive_tokens / total_tokens) > 0.5:
                 health_status["status"] = "warning"
-                health_status["components"]["fcm_tokens"]["message"] = "High inactive token rate"
+                health_status["components"]["fcm_tokens"][
+                    "message"
+                ] = "High inactive token rate"
         finally:
             db.close()
 
         return JSONResponse(
             status_code=200 if health_status["status"] == "healthy" else 503,
-            content=health_status
+            content=health_status,
         )
 
     except Exception as e:
         return JSONResponse(
-            status_code=503,
-            content={
-                "status": "error",
-                "error": str(e)
-            }
+            status_code=503, content={"status": "error", "error": str(e)}
         )
