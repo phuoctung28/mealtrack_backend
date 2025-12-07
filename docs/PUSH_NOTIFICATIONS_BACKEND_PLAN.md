@@ -11,7 +11,15 @@ Simple backend implementation for push notifications using Firebase Cloud Messag
 - NotificationPreferences matching the JSON structure below
 - Testing UI to preview notifications
 
-## Database Schema (2 Tables Only)
+## Database Schema
+
+### Users Table (Timezone Column)
+
+The `users` table includes a `timezone` column (added in migration 010):
+- Column: `timezone VARCHAR(50) NOT NULL DEFAULT 'UTC'`
+- Index: `idx_users_timezone` on `timezone` column
+- Format: IANA timezone identifiers (e.g., "America/Los_Angeles", "Asia/Ho_Chi_Minh")
+- Purpose: Enables timezone-aware notification scheduling
 
 ### 1. User FCM Tokens
 
@@ -50,6 +58,7 @@ CREATE TABLE notification_preferences (
 
     -- Water Reminder Settings
     water_reminder_interval_hours INTEGER DEFAULT 2 CHECK (water_reminder_interval_hours > 0),
+    last_water_reminder_at TIMESTAMP WITH TIME ZONE,
 
     -- Sleep Reminder Timing (minutes from midnight)
     sleep_reminder_time_minutes INTEGER CHECK (sleep_reminder_time_minutes >= 0 AND sleep_reminder_time_minutes < 1440),
@@ -325,7 +334,7 @@ def check_sleep_reminders():
 
 ## Important Notes
 
-- **Timezone:** Store user timezone in user table and convert `*_time_minutes` to user's local time
+- **Timezone:** User timezone is stored in `users.timezone` column (IANA format, default 'UTC'). Convert `*_time_minutes` to user's local time when scheduling notifications (Phase 2).
 - **Rate Limiting:** Don't send same notification type more than once per hour per user
 - **Invalid Tokens:** Set `is_active = false` when FCM returns invalid token error
 - **Default Preferences:** Create default preferences when user signs up:

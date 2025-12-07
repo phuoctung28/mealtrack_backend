@@ -36,6 +36,7 @@ class NotificationPreferences:
     lunch_time_minutes: Optional[int] = None
     dinner_time_minutes: Optional[int] = None
     water_reminder_interval_hours: int = 2
+    last_water_reminder_at: Optional[datetime] = None
     sleep_reminder_time_minutes: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -132,6 +133,7 @@ class NotificationPreferences:
             lunch_time_minutes=lunch_time_minutes if lunch_time_minutes is not None else self.lunch_time_minutes,
             dinner_time_minutes=dinner_time_minutes if dinner_time_minutes is not None else self.dinner_time_minutes,
             water_reminder_interval_hours=water_reminder_interval_hours if water_reminder_interval_hours is not None else self.water_reminder_interval_hours,
+            last_water_reminder_at=self.last_water_reminder_at,
             sleep_reminder_time_minutes=sleep_reminder_time_minutes if sleep_reminder_time_minutes is not None else self.sleep_reminder_time_minutes,
             created_at=self.created_at,
             updated_at=datetime.now()
@@ -167,6 +169,7 @@ class NotificationPreferences:
             "lunch_time_minutes": self.lunch_time_minutes,
             "dinner_time_minutes": self.dinner_time_minutes,
             "water_reminder_interval_hours": self.water_reminder_interval_hours,
+            "last_water_reminder_at": self.last_water_reminder_at.isoformat() if self.last_water_reminder_at else None,
             "sleep_reminder_time_minutes": self.sleep_reminder_time_minutes,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
