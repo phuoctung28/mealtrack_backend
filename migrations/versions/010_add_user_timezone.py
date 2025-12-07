@@ -39,11 +39,12 @@ def upgrade() -> None:
     )
     
     # Add last_water_reminder_at to notification_preferences table
+    # Use timezone=True to store timezone-aware datetimes (required for UTC comparisons)
     op.add_column(
         'notification_preferences',
         sa.Column(
             'last_water_reminder_at',
-            sa.DateTime(),
+            sa.DateTime(timezone=True),
             nullable=True
         )
     )

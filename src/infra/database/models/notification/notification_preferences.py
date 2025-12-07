@@ -28,7 +28,8 @@ class NotificationPreferences(Base, BaseMixin):
     
     # Water Reminder Settings
     water_reminder_interval_hours = Column(Integer, default=2, nullable=False)
-    last_water_reminder_at = Column(DateTime, nullable=True)
+    # Use timezone=True to store timezone-aware datetimes (required for UTC comparisons)
+    last_water_reminder_at = Column(DateTime(timezone=True), nullable=True)
     
     # Sleep Reminder Timing (minutes from midnight)
     sleep_reminder_time_minutes = Column(Integer, nullable=True)
