@@ -10,6 +10,11 @@ class FcmTokenRegistrationRequest(BaseModel):
     """Request to register an FCM token."""
     fcm_token: str = Field(..., description="Firebase Cloud Messaging token")
     device_type: str = Field(..., description="Device type (ios or android)")
+    timezone: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="IANA timezone identifier (e.g., 'America/Los_Angeles')"
+    )
     
     @field_validator('device_type')
     @classmethod

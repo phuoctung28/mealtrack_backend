@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import and_
@@ -6,9 +7,11 @@ from sqlalchemy.orm import Session
 
 from src.domain.model.notification import UserFcmToken, NotificationPreferences
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
+from src.domain.services.timezone_utils import utc_to_local_minutes, DEFAULT_TIMEZONE
 from src.infra.database.config import SessionLocal
 from src.infra.database.models.notification import UserFcmToken as DBUserFcmToken, \
     NotificationPreferences as DBNotificationPreferences
+from src.infra.database.models.user.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -249,12 +252,23 @@ class NotificationRepository(NotificationRepositoryPort):
             self._close_db_if_created(db)
     
     # Utility operations
-    def find_users_for_meal_reminder(self, meal_type: str, time_minutes: int) -> List[str]:
-        """Find user IDs who should receive meal reminders at a specific time."""
+    def find_users_for_meal_reminder(self, meal_type: str, current_utc: datetime) -> List[str]:
+        """
+        Find user IDs who should receive meal reminders at current UTC time.
+        
+        Converts UTC to each user's local time for matching.
+        
+        Args:
+            meal_type: breakfast, lunch, or dinner
+            current_utc: Current UTC datetime
+            
+        Returns:
+            List of user IDs who should receive reminder
+        """
         db = self._get_db()
         
         try:
-            # Determine the time field based on meal type
+            # Determine time field based on meal type
             if meal_type == "breakfast":
                 time_field = DBNotificationPreferences.breakfast_time_minutes
             elif meal_type == "lunch":
@@ -264,42 +278,133 @@ class NotificationRepository(NotificationRepositoryPort):
             else:
                 return []
             
-            db_prefs = db.query(DBNotificationPreferences).filter(
-                and_(
+            # Query users with meal reminders enabled
+            results = (
+                db.query(DBNotificationPreferences.user_id, User.timezone)
+                .join(User, DBNotificationPreferences.user_id == User.id)
+                .filter(
                     DBNotificationPreferences.meal_reminders_enabled == True,
-                    time_field == time_minutes
+                    time_field.isnot(None)
                 )
-            ).all()
+                .all()
+            )
             
-            return [prefs.user_id for prefs in db_prefs]
+            # Filter by local time match
+            matching_users = []
+            for user_id, timezone in results:
+                user_timezone = timezone or DEFAULT_TIMEZONE
+                local_minutes = utc_to_local_minutes(current_utc, user_timezone)
+                
+                # Get user's preferred time
+                prefs = db.query(DBNotificationPreferences).filter(
+                    DBNotificationPreferences.user_id == user_id
+                ).first()
+                
+                if prefs:
+                    pref_minutes = getattr(prefs, f"{meal_type}_time_minutes")
+                    if pref_minutes is not None and pref_minutes == local_minutes:
+                        matching_users.append(user_id)
+            
+            return matching_users
+            
         finally:
             self._close_db_if_created(db)
     
-    def find_users_for_sleep_reminder(self, time_minutes: int) -> List[str]:
-        """Find user IDs who should receive sleep reminders at a specific time."""
+    def find_users_for_sleep_reminder(self, current_utc: datetime) -> List[str]:
+        """
+        Find user IDs who should receive sleep reminders at current UTC time.
+        
+        Args:
+            current_utc: Current UTC datetime
+            
+        Returns:
+            List of user IDs who should receive reminder
+        """
         db = self._get_db()
         
         try:
-            db_prefs = db.query(DBNotificationPreferences).filter(
-                and_(
+            results = (
+                db.query(
+                    DBNotificationPreferences.user_id,
+                    DBNotificationPreferences.sleep_reminder_time_minutes,
+                    User.timezone
+                )
+                .join(User, DBNotificationPreferences.user_id == User.id)
+                .filter(
                     DBNotificationPreferences.sleep_reminders_enabled == True,
-                    DBNotificationPreferences.sleep_reminder_time_minutes == time_minutes
+                    DBNotificationPreferences.sleep_reminder_time_minutes.isnot(None)
                 )
-            ).all()
+                .all()
+            )
             
-            return [prefs.user_id for prefs in db_prefs]
+            matching_users = []
+            for user_id, pref_minutes, timezone in results:
+                user_timezone = timezone or DEFAULT_TIMEZONE
+                local_minutes = utc_to_local_minutes(current_utc, user_timezone)
+                
+                if pref_minutes == local_minutes:
+                    matching_users.append(user_id)
+            
+            return matching_users
+            
         finally:
             self._close_db_if_created(db)
     
-    def find_users_for_water_reminder(self) -> List[str]:
-        """Find user IDs who should receive water reminders."""
+    def find_users_for_water_reminder(self, current_utc: datetime) -> List[str]:
+        """
+        Find users who should receive water reminders based on their interval setting.
+        
+        Args:
+            current_utc: Current UTC datetime
+            
+        Returns:
+            List of user IDs due for water reminder
+        """
         db = self._get_db()
         
         try:
-            db_prefs = db.query(DBNotificationPreferences).filter(
-                DBNotificationPreferences.water_reminders_enabled == True
-            ).all()
+            results = (
+                db.query(
+                    DBNotificationPreferences.user_id,
+                    DBNotificationPreferences.water_reminder_interval_hours,
+                    DBNotificationPreferences.last_water_reminder_at
+                )
+                .filter(DBNotificationPreferences.water_reminders_enabled == True)
+                .all()
+            )
             
-            return [prefs.user_id for prefs in db_prefs]
+            matching_users = []
+            for user_id, interval_hours, last_sent in results:
+                # If never sent, send now
+                if last_sent is None:
+                    matching_users.append(user_id)
+                    continue
+                
+                # Check if interval has passed
+                hours_since_last = (current_utc - last_sent).total_seconds() / 3600
+                if hours_since_last >= interval_hours:
+                    matching_users.append(user_id)
+            
+            return matching_users
+            
+        finally:
+            self._close_db_if_created(db)
+    
+    def update_last_water_reminder(self, user_id: str, sent_at: datetime) -> bool:
+        """Update last water reminder timestamp for user."""
+        db = self._get_db()
+        try:
+            prefs = db.query(DBNotificationPreferences).filter(
+                DBNotificationPreferences.user_id == user_id
+            ).first()
+            if prefs:
+                prefs.last_water_reminder_at = sent_at
+                db.commit()
+                return True
+            return False
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error updating last water reminder for {user_id}: {e}")
+            raise e
         finally:
             self._close_db_if_created(db)

@@ -320,7 +320,7 @@ async def get_configured_event_bus(
     # Register notification handlers
     event_bus.register_handler(
         RegisterFcmTokenCommand,
-        RegisterFcmTokenCommandHandler(notification_repository)
+        RegisterFcmTokenCommandHandler(notification_repository, db)
     )
     event_bus.register_handler(
         DeleteFcmTokenCommand,
