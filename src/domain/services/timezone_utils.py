@@ -8,6 +8,10 @@ logger = logging.getLogger(__name__)
 # Default timezone
 DEFAULT_TIMEZONE = "UTC"
 
+# Default quiet hours (for water reminders)
+DEFAULT_SLEEP_TIME_MINUTES = 1320  # 10:00 PM
+DEFAULT_BREAKFAST_TIME_MINUTES = 480  # 8:00 AM
+
 
 def get_zone_info(timezone_str: str) -> ZoneInfo:
     """
@@ -63,4 +67,34 @@ def is_valid_timezone(timezone_str: str) -> bool:
         return True
     except ZoneInfoNotFoundError:
         return False
+
+
+def is_in_quiet_hours(
+    local_minutes: int,
+    quiet_start: int | None,
+    quiet_end: int | None
+) -> bool:
+    """
+    Check if local_minutes falls within quiet hours window.
+
+    Handles midnight crossing (quiet_start > quiet_end).
+    Uses defaults if values are None.
+
+    Args:
+        local_minutes: Current local time in minutes (0-1439)
+        quiet_start: Quiet hours start (sleep time) in minutes, or None
+        quiet_end: Quiet hours end (breakfast time) in minutes, or None
+
+    Returns:
+        True if in quiet hours, False otherwise
+    """
+    start = quiet_start if quiet_start is not None else DEFAULT_SLEEP_TIME_MINUTES
+    end = quiet_end if quiet_end is not None else DEFAULT_BREAKFAST_TIME_MINUTES
+
+    if start > end:
+        # Crosses midnight: e.g., 22:00 to 08:00
+        return local_minutes >= start or local_minutes < end
+    else:
+        # Same day: e.g., 01:00 to 05:00
+        return start <= local_minutes < end
 

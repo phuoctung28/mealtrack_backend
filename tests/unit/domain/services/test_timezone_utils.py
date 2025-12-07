@@ -9,7 +9,10 @@ from src.domain.services.timezone_utils import (
     get_zone_info,
     utc_to_local_minutes,
     is_valid_timezone,
-    DEFAULT_TIMEZONE
+    is_in_quiet_hours,
+    DEFAULT_TIMEZONE,
+    DEFAULT_SLEEP_TIME_MINUTES,
+    DEFAULT_BREAKFAST_TIME_MINUTES
 )
 
 
@@ -106,4 +109,72 @@ class TestIsValidTimezone:
         """Test empty timezone."""
         assert is_valid_timezone("") is False
         assert is_valid_timezone(None) is False
+
+
+class TestIsInQuietHours:
+    """Tests for is_in_quiet_hours function."""
+
+    def test_midnight_crossing_in_quiet_late_night(self):
+        """User at 23:00 with sleep=22:00, wake=08:00 → in quiet"""
+        assert is_in_quiet_hours(1380, 1320, 480) is True  # 23:00
+
+    def test_midnight_crossing_in_quiet_early_morning(self):
+        """User at 03:00 with sleep=22:00, wake=08:00 → in quiet"""
+        assert is_in_quiet_hours(180, 1320, 480) is True  # 03:00
+
+    def test_midnight_crossing_not_in_quiet(self):
+        """User at 12:00 with sleep=22:00, wake=08:00 → not in quiet"""
+        assert is_in_quiet_hours(720, 1320, 480) is False  # 12:00
+
+    def test_at_quiet_start_boundary(self):
+        """User at exactly sleep time → in quiet"""
+        assert is_in_quiet_hours(1320, 1320, 480) is True  # 22:00
+
+    def test_at_quiet_end_boundary(self):
+        """User at exactly wake time → not in quiet"""
+        assert is_in_quiet_hours(480, 1320, 480) is False  # 08:00
+
+    def test_just_before_quiet_start(self):
+        """User at 21:59 (one minute before sleep) → not in quiet"""
+        assert is_in_quiet_hours(1319, 1320, 480) is False
+
+    def test_just_before_quiet_end(self):
+        """User at 07:59 (one minute before wake) → in quiet"""
+        assert is_in_quiet_hours(479, 1320, 480) is True
+
+    def test_none_values_use_defaults(self):
+        """None values should use defaults (22:00-08:00)"""
+        # 23:00 in default quiet hours
+        assert is_in_quiet_hours(1380, None, None) is True
+        # 12:00 not in quiet hours
+        assert is_in_quiet_hours(720, None, None) is False
+        # Verify defaults are correct
+        assert DEFAULT_SLEEP_TIME_MINUTES == 1320
+        assert DEFAULT_BREAKFAST_TIME_MINUTES == 480
+
+    def test_partial_none_quiet_start(self):
+        """None quiet_start uses default sleep time"""
+        # User at 23:00, default sleep=22:00, breakfast=06:00
+        assert is_in_quiet_hours(1380, None, 360) is True  # 23:00 in quiet
+
+    def test_partial_none_quiet_end(self):
+        """None quiet_end uses default breakfast time"""
+        # User at 07:00, sleep=21:00, default breakfast=08:00
+        assert is_in_quiet_hours(420, 1260, None) is True  # 07:00 in quiet
+
+    def test_same_day_quiet_hours(self):
+        """Same day quiet hours (no midnight crossing)"""
+        # Quiet from 01:00 (60) to 05:00 (300) - unlikely but valid
+        assert is_in_quiet_hours(120, 60, 300) is True   # 02:00 in quiet
+        assert is_in_quiet_hours(360, 60, 300) is False  # 06:00 not in quiet
+        assert is_in_quiet_hours(60, 60, 300) is True    # At start, in quiet
+        assert is_in_quiet_hours(300, 60, 300) is False  # At end, not in quiet
+
+    def test_midnight_exactly(self):
+        """User at midnight (0 minutes) with sleep=22:00, wake=08:00 → in quiet"""
+        assert is_in_quiet_hours(0, 1320, 480) is True
+
+    def test_afternoon_not_in_quiet(self):
+        """User at 15:00 (900 minutes) → not in quiet"""
+        assert is_in_quiet_hours(900, 1320, 480) is False
 

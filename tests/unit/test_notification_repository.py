@@ -3,7 +3,7 @@ Unit tests for NotificationRepository.
 """
 import pytest
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock, MagicMock, patch
 
 from src.domain.model.notification import (
@@ -395,70 +395,82 @@ class TestNotificationRepository:
     # Utility Operations Tests
     
     def test_find_users_for_meal_reminder_breakfast(self, repository, mock_db_session):
-        """Test finding users for breakfast reminder."""
-        # Arrange
-        db_prefs1 = Mock(spec=DBNotificationPreferences)
-        db_prefs1.user_id = "user-1"
-        db_prefs2 = Mock(spec=DBNotificationPreferences)
-        db_prefs2.user_id = "user-2"
-        
+        """Test finding users for breakfast reminder with timezone-aware query."""
+        # Arrange - mock returns tuples of (user_id, timezone)
         mock_query = Mock()
+        mock_query.join = Mock(return_value=mock_query)
         mock_query.filter = Mock(return_value=mock_query)
-        mock_query.all = Mock(return_value=[db_prefs1, db_prefs2])
+        mock_query.all = Mock(return_value=[("user-1", "UTC"), ("user-2", "UTC")])
         mock_db_session.query = Mock(return_value=mock_query)
-        
-        # Act
-        result = repository.find_users_for_meal_reminder("breakfast", 480)  # 8:00 AM
-        
-        # Assert
-        assert len(result) == 2
+
+        # Mock the secondary query for getting preference times
+        mock_prefs1 = Mock()
+        mock_prefs1.breakfast_time_minutes = 480  # 8:00 AM
+        mock_prefs2 = Mock()
+        mock_prefs2.breakfast_time_minutes = 480  # 8:00 AM
+
+        def mock_first_side_effect():
+            # Return different prefs based on call count
+            return mock_prefs1
+
+        mock_query.first = Mock(side_effect=[mock_prefs1, mock_prefs2])
+
+        # Act - 8:00 UTC = 8:00 AM local time for UTC users
+        current_utc = datetime(2024, 12, 7, 8, 0, tzinfo=timezone.utc)
+        result = repository.find_users_for_meal_reminder("breakfast", current_utc)
+
+        # Assert - both users should match at 8:00 AM
         assert "user-1" in result
         assert "user-2" in result
     
     def test_find_users_for_meal_reminder_invalid_meal_type(self, repository, mock_db_session):
         """Test finding users for invalid meal type returns empty list."""
         # Act
-        result = repository.find_users_for_meal_reminder("invalid", 480)
-        
+        current_utc = datetime(2024, 12, 7, 8, 0, tzinfo=timezone.utc)
+        result = repository.find_users_for_meal_reminder("invalid", current_utc)
+
         # Assert
         assert result == []
         mock_db_session.query.assert_not_called()
     
     def test_find_users_for_sleep_reminder(self, repository, mock_db_session):
-        """Test finding users for sleep reminder."""
-        # Arrange
-        db_prefs1 = Mock(spec=DBNotificationPreferences)
-        db_prefs1.user_id = "user-1"
-        
+        """Test finding users for sleep reminder with timezone-aware query."""
+        # Arrange - mock returns tuples of (user_id, pref_minutes, timezone)
         mock_query = Mock()
+        mock_query.join = Mock(return_value=mock_query)
         mock_query.filter = Mock(return_value=mock_query)
-        mock_query.all = Mock(return_value=[db_prefs1])
+        # User with sleep time 22:00 (1320 minutes) in UTC timezone
+        mock_query.all = Mock(return_value=[("user-1", 1320, "UTC")])
         mock_db_session.query = Mock(return_value=mock_query)
-        
-        # Act
-        result = repository.find_users_for_sleep_reminder(1320)  # 10:00 PM
-        
+
+        # Act - 22:00 UTC = 22:00 local time for UTC user
+        current_utc = datetime(2024, 12, 7, 22, 0, tzinfo=timezone.utc)
+        result = repository.find_users_for_sleep_reminder(current_utc)
+
         # Assert
         assert len(result) == 1
         assert "user-1" in result
     
     def test_find_users_for_water_reminder(self, repository, mock_db_session):
-        """Test finding users for water reminder."""
-        # Arrange
-        db_prefs1 = Mock(spec=DBNotificationPreferences)
-        db_prefs1.user_id = "user-1"
-        db_prefs2 = Mock(spec=DBNotificationPreferences)
-        db_prefs2.user_id = "user-2"
-        
+        """Test finding users for water reminder with quiet hours filtering."""
+        # Arrange - mock returns tuples of
+        # (user_id, interval_hours, last_sent, sleep_time, breakfast_time, timezone)
+        # User 1: interval passed, outside quiet hours (12:00 noon)
+        # User 2: interval passed, outside quiet hours (12:00 noon)
         mock_query = Mock()
+        mock_query.join = Mock(return_value=mock_query)
         mock_query.filter = Mock(return_value=mock_query)
-        mock_query.all = Mock(return_value=[db_prefs1, db_prefs2])
+        mock_query.all = Mock(return_value=[
+            ("user-1", 2, None, 1320, 480, "UTC"),  # Never sent, sleep=22:00, wake=08:00
+            ("user-2", 2, datetime(2024, 12, 7, 9, 0, tzinfo=timezone.utc), 1320, 480, "UTC")
+        ])
         mock_db_session.query = Mock(return_value=mock_query)
-        
-        # Act
-        result = repository.find_users_for_water_reminder()
-        
-        # Assert
+
+        # Act - 12:00 UTC (noon, outside quiet hours 22:00-08:00)
+        current_utc = datetime(2024, 12, 7, 12, 0, tzinfo=timezone.utc)
+        result = repository.find_users_for_water_reminder(current_utc)
+
+        # Assert - both should be returned (outside quiet hours, interval passed)
         assert len(result) == 2
         assert "user-1" in result
         assert "user-2" in result

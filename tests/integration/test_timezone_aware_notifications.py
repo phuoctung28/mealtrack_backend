@@ -429,3 +429,248 @@ class TestWaterReminderInterval:
         test_session.refresh(db_prefs)
         assert db_prefs.last_water_reminder_at == sent_at
 
+
+@pytest.mark.integration
+class TestWaterReminderQuietHours:
+    """Integration tests for water reminder quiet hours."""
+
+    def test_skip_water_reminder_during_quiet_hours(self, test_session):
+        """Water reminder skipped when user is in quiet hours (local 23:00)."""
+        # Create user in UTC timezone
+        user_id = str(uuid.uuid4())
+        user = User(
+            id=user_id,
+            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            email=f"test-{uuid.uuid4()}@example.com",
+            username=f"user-{uuid.uuid4()}",
+            password_hash="dummy_hash",
+            timezone="UTC",
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        test_session.add(user)
+        test_session.commit()
+
+        # Create notification preferences with sleep=22:00, breakfast=08:00
+        prefs = DomainNotificationPreferences.create_default(user_id)
+        db_prefs = NotificationPreferences(
+            id=prefs.preferences_id,
+            user_id=prefs.user_id,
+            meal_reminders_enabled=prefs.meal_reminders_enabled,
+            water_reminders_enabled=True,
+            sleep_reminders_enabled=prefs.sleep_reminders_enabled,
+            progress_notifications_enabled=prefs.progress_notifications_enabled,
+            reengagement_notifications_enabled=prefs.reengagement_notifications_enabled,
+            breakfast_time_minutes=480,  # 08:00
+            lunch_time_minutes=prefs.lunch_time_minutes,
+            dinner_time_minutes=prefs.dinner_time_minutes,
+            water_reminder_interval_hours=2,
+            last_water_reminder_at=None,  # Never sent
+            sleep_reminder_time_minutes=1320,  # 22:00
+            created_at=prefs.created_at,
+            updated_at=prefs.updated_at
+        )
+        test_session.add(db_prefs)
+        test_session.commit()
+
+        # Test: 23:00 UTC (in quiet hours for UTC user)
+        repository = NotificationRepository(db=test_session)
+        current_utc = datetime(2024, 12, 7, 23, 0, tzinfo=timezone.utc)
+        user_ids = repository.find_users_for_water_reminder(current_utc)
+
+        assert user_id not in user_ids
+
+    def test_send_water_reminder_outside_quiet_hours(self, test_session):
+        """Water reminder sent when user is outside quiet hours (local 12:00)."""
+        # Create user in UTC timezone
+        user_id = str(uuid.uuid4())
+        user = User(
+            id=user_id,
+            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            email=f"test-{uuid.uuid4()}@example.com",
+            username=f"user-{uuid.uuid4()}",
+            password_hash="dummy_hash",
+            timezone="UTC",
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        test_session.add(user)
+        test_session.commit()
+
+        # Create notification preferences with sleep=22:00, breakfast=08:00
+        prefs = DomainNotificationPreferences.create_default(user_id)
+        db_prefs = NotificationPreferences(
+            id=prefs.preferences_id,
+            user_id=prefs.user_id,
+            meal_reminders_enabled=prefs.meal_reminders_enabled,
+            water_reminders_enabled=True,
+            sleep_reminders_enabled=prefs.sleep_reminders_enabled,
+            progress_notifications_enabled=prefs.progress_notifications_enabled,
+            reengagement_notifications_enabled=prefs.reengagement_notifications_enabled,
+            breakfast_time_minutes=480,  # 08:00
+            lunch_time_minutes=prefs.lunch_time_minutes,
+            dinner_time_minutes=prefs.dinner_time_minutes,
+            water_reminder_interval_hours=2,
+            last_water_reminder_at=None,  # Never sent
+            sleep_reminder_time_minutes=1320,  # 22:00
+            created_at=prefs.created_at,
+            updated_at=prefs.updated_at
+        )
+        test_session.add(db_prefs)
+        test_session.commit()
+
+        # Test: 12:00 UTC (outside quiet hours for UTC user)
+        repository = NotificationRepository(db=test_session)
+        current_utc = datetime(2024, 12, 7, 12, 0, tzinfo=timezone.utc)
+        user_ids = repository.find_users_for_water_reminder(current_utc)
+
+        assert user_id in user_ids
+
+    def test_quiet_hours_respects_timezone(self, test_session):
+        """Quiet hours calculation respects user timezone."""
+        # Create user in Vietnam timezone (UTC+7)
+        user_id = str(uuid.uuid4())
+        user = User(
+            id=user_id,
+            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            email=f"test-{uuid.uuid4()}@example.com",
+            username=f"user-{uuid.uuid4()}",
+            password_hash="dummy_hash",
+            timezone="Asia/Ho_Chi_Minh",
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        test_session.add(user)
+        test_session.commit()
+
+        # Create notification preferences with sleep=22:00, breakfast=08:00 (local VN time)
+        prefs = DomainNotificationPreferences.create_default(user_id)
+        db_prefs = NotificationPreferences(
+            id=prefs.preferences_id,
+            user_id=prefs.user_id,
+            meal_reminders_enabled=prefs.meal_reminders_enabled,
+            water_reminders_enabled=True,
+            sleep_reminders_enabled=prefs.sleep_reminders_enabled,
+            progress_notifications_enabled=prefs.progress_notifications_enabled,
+            reengagement_notifications_enabled=prefs.reengagement_notifications_enabled,
+            breakfast_time_minutes=480,  # 08:00 VN
+            lunch_time_minutes=prefs.lunch_time_minutes,
+            dinner_time_minutes=prefs.dinner_time_minutes,
+            water_reminder_interval_hours=2,
+            last_water_reminder_at=None,
+            sleep_reminder_time_minutes=1320,  # 22:00 VN
+            created_at=prefs.created_at,
+            updated_at=prefs.updated_at
+        )
+        test_session.add(db_prefs)
+        test_session.commit()
+
+        repository = NotificationRepository(db=test_session)
+
+        # Test: 15:00 UTC = 22:00 VN (just entered quiet hours) → NOT returned
+        current_utc = datetime(2024, 12, 7, 15, 0, tzinfo=timezone.utc)
+        user_ids = repository.find_users_for_water_reminder(current_utc)
+        assert user_id not in user_ids
+
+        # Test: 05:00 UTC = 12:00 VN (noon, outside quiet hours) → returned
+        current_utc = datetime(2024, 12, 7, 5, 0, tzinfo=timezone.utc)
+        user_ids = repository.find_users_for_water_reminder(current_utc)
+        assert user_id in user_ids
+
+    def test_quiet_hours_early_morning(self, test_session):
+        """Water reminder skipped during early morning quiet hours."""
+        # Create user in UTC timezone
+        user_id = str(uuid.uuid4())
+        user = User(
+            id=user_id,
+            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            email=f"test-{uuid.uuid4()}@example.com",
+            username=f"user-{uuid.uuid4()}",
+            password_hash="dummy_hash",
+            timezone="UTC",
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        test_session.add(user)
+        test_session.commit()
+
+        # Create notification preferences with sleep=22:00, breakfast=08:00
+        prefs = DomainNotificationPreferences.create_default(user_id)
+        db_prefs = NotificationPreferences(
+            id=prefs.preferences_id,
+            user_id=prefs.user_id,
+            meal_reminders_enabled=prefs.meal_reminders_enabled,
+            water_reminders_enabled=True,
+            sleep_reminders_enabled=prefs.sleep_reminders_enabled,
+            progress_notifications_enabled=prefs.progress_notifications_enabled,
+            reengagement_notifications_enabled=prefs.reengagement_notifications_enabled,
+            breakfast_time_minutes=480,  # 08:00
+            lunch_time_minutes=prefs.lunch_time_minutes,
+            dinner_time_minutes=prefs.dinner_time_minutes,
+            water_reminder_interval_hours=2,
+            last_water_reminder_at=None,
+            sleep_reminder_time_minutes=1320,  # 22:00
+            created_at=prefs.created_at,
+            updated_at=prefs.updated_at
+        )
+        test_session.add(db_prefs)
+        test_session.commit()
+
+        # Test: 03:00 UTC (early morning, in quiet hours)
+        repository = NotificationRepository(db=test_session)
+        current_utc = datetime(2024, 12, 7, 3, 0, tzinfo=timezone.utc)
+        user_ids = repository.find_users_for_water_reminder(current_utc)
+
+        assert user_id not in user_ids
+
+    def test_quiet_hours_uses_defaults_when_none(self, test_session):
+        """Quiet hours uses defaults (22:00-08:00) when user has no prefs set."""
+        # Create user in UTC timezone
+        user_id = str(uuid.uuid4())
+        user = User(
+            id=user_id,
+            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            email=f"test-{uuid.uuid4()}@example.com",
+            username=f"user-{uuid.uuid4()}",
+            password_hash="dummy_hash",
+            timezone="UTC",
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        test_session.add(user)
+        test_session.commit()
+
+        # Create notification preferences with sleep and breakfast time as None
+        prefs = DomainNotificationPreferences.create_default(user_id)
+        db_prefs = NotificationPreferences(
+            id=prefs.preferences_id,
+            user_id=prefs.user_id,
+            meal_reminders_enabled=prefs.meal_reminders_enabled,
+            water_reminders_enabled=True,
+            sleep_reminders_enabled=prefs.sleep_reminders_enabled,
+            progress_notifications_enabled=prefs.progress_notifications_enabled,
+            reengagement_notifications_enabled=prefs.reengagement_notifications_enabled,
+            breakfast_time_minutes=None,  # Will use default 08:00
+            lunch_time_minutes=prefs.lunch_time_minutes,
+            dinner_time_minutes=prefs.dinner_time_minutes,
+            water_reminder_interval_hours=2,
+            last_water_reminder_at=None,
+            sleep_reminder_time_minutes=None,  # Will use default 22:00
+            created_at=prefs.created_at,
+            updated_at=prefs.updated_at
+        )
+        test_session.add(db_prefs)
+        test_session.commit()
+
+        repository = NotificationRepository(db=test_session)
+
+        # 23:00 UTC should be in quiet hours (default 22:00-08:00)
+        current_utc = datetime(2024, 12, 7, 23, 0, tzinfo=timezone.utc)
+        user_ids = repository.find_users_for_water_reminder(current_utc)
+        assert user_id not in user_ids
+
+        # 12:00 UTC should be outside quiet hours
+        current_utc = datetime(2024, 12, 7, 12, 0, tzinfo=timezone.utc)
+        user_ids = repository.find_users_for_water_reminder(current_utc)
+        assert user_id in user_ids
+

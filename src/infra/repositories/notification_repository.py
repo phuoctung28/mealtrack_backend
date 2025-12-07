@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 
 from src.domain.model.notification import UserFcmToken, NotificationPreferences
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
-from src.domain.services.timezone_utils import utc_to_local_minutes, DEFAULT_TIMEZONE
+from src.domain.services.timezone_utils import (
+    utc_to_local_minutes,
+    is_in_quiet_hours,
+    DEFAULT_TIMEZONE
+)
 from src.infra.database.config import SessionLocal
 from src.infra.database.models.notification import UserFcmToken as DBUserFcmToken, \
     NotificationPreferences as DBNotificationPreferences
@@ -352,41 +356,54 @@ class NotificationRepository(NotificationRepositoryPort):
     
     def find_users_for_water_reminder(self, current_utc: datetime) -> List[str]:
         """
-        Find users who should receive water reminders based on their interval setting.
-        
+        Find users who should receive water reminders based on interval and quiet hours.
+
+        Skips users whose local time is in quiet hours (sleep → breakfast).
+
         Args:
             current_utc: Current UTC datetime
-            
+
         Returns:
             List of user IDs due for water reminder
         """
         db = self._get_db()
-        
+
         try:
             results = (
                 db.query(
                     DBNotificationPreferences.user_id,
                     DBNotificationPreferences.water_reminder_interval_hours,
-                    DBNotificationPreferences.last_water_reminder_at
+                    DBNotificationPreferences.last_water_reminder_at,
+                    DBNotificationPreferences.sleep_reminder_time_minutes,
+                    DBNotificationPreferences.breakfast_time_minutes,
+                    User.timezone
                 )
+                .join(User, DBNotificationPreferences.user_id == User.id)
                 .filter(DBNotificationPreferences.water_reminders_enabled == True)
                 .all()
             )
-            
+
             matching_users = []
-            for user_id, interval_hours, last_sent in results:
-                # If never sent, send now
+            for (user_id, interval_hours, last_sent,
+                 sleep_time, breakfast_time, timezone) in results:
+
+                # Check quiet hours
+                user_timezone = timezone or DEFAULT_TIMEZONE
+                local_minutes = utc_to_local_minutes(current_utc, user_timezone)
+
+                if is_in_quiet_hours(local_minutes, sleep_time, breakfast_time):
+                    continue  # Skip - user is sleeping
+
+                # Check interval elapsed
                 if last_sent is None:
                     matching_users.append(user_id)
-                    continue
-                
-                # Check if interval has passed
-                hours_since_last = (current_utc - last_sent).total_seconds() / 3600
-                if hours_since_last >= interval_hours:
-                    matching_users.append(user_id)
-            
+                else:
+                    hours_since_last = (current_utc - last_sent).total_seconds() / 3600
+                    if hours_since_last >= interval_hours:
+                        matching_users.append(user_id)
+
             return matching_users
-            
+
         finally:
             self._close_db_if_created(db)
     
