@@ -8,6 +8,17 @@ from typing import Optional
 
 from .enums import NotificationType
 
+# Map notification types to their corresponding preference fields
+NOTIFICATION_TYPE_TO_FIELD = {
+    NotificationType.MEAL_REMINDER_BREAKFAST: "meal_reminders_enabled",
+    NotificationType.MEAL_REMINDER_LUNCH: "meal_reminders_enabled",
+    NotificationType.MEAL_REMINDER_DINNER: "meal_reminders_enabled",
+    NotificationType.WATER_REMINDER: "water_reminders_enabled",
+    NotificationType.SLEEP_REMINDER: "sleep_reminders_enabled",
+    NotificationType.PROGRESS_NOTIFICATION: "progress_notifications_enabled",
+    NotificationType.REENGAGEMENT_NOTIFICATION: "reengagement_notifications_enabled",
+}
+
 
 @dataclass
 class NotificationPreferences:
@@ -128,22 +139,8 @@ class NotificationPreferences:
     
     def is_notification_type_enabled(self, notification_type: NotificationType) -> bool:
         """Check if a specific notification type is enabled."""
-        if notification_type == NotificationType.MEAL_REMINDER_BREAKFAST:
-            return self.meal_reminders_enabled
-        elif notification_type == NotificationType.MEAL_REMINDER_LUNCH:
-            return self.meal_reminders_enabled
-        elif notification_type == NotificationType.MEAL_REMINDER_DINNER:
-            return self.meal_reminders_enabled
-        elif notification_type == NotificationType.WATER_REMINDER:
-            return self.water_reminders_enabled
-        elif notification_type == NotificationType.SLEEP_REMINDER:
-            return self.sleep_reminders_enabled
-        elif notification_type == NotificationType.PROGRESS_NOTIFICATION:
-            return self.progress_notifications_enabled
-        elif notification_type == NotificationType.REENGAGEMENT_NOTIFICATION:
-            return self.reengagement_notifications_enabled
-        else:
-            return False
+        field_name = NOTIFICATION_TYPE_TO_FIELD.get(notification_type)
+        return getattr(self, field_name, False) if field_name else False
     
     def get_meal_reminder_time(self, meal_type: str) -> Optional[int]:
         """Get the reminder time in minutes for a specific meal type."""

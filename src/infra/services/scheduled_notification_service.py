@@ -15,7 +15,13 @@ logger = logging.getLogger(__name__)
 
 class ScheduledNotificationService:
     """Service for scheduling and sending notifications at specific times."""
-    
+
+    # Scheduling constants
+    SCHEDULING_LOOP_INTERVAL_SECONDS = 60
+    SCHEDULING_LOOP_ERROR_RETRY_SECONDS = 30
+    WATER_REMINDER_CHECK_INTERVAL_MINUTES = 15
+    WATER_REMINDER_MAX_BATCH_SIZE = 10
+
     def __init__(
         self,
         notification_repository: NotificationRepositoryPort,
@@ -68,31 +74,31 @@ class ScheduledNotificationService:
             try:
                 current_time = datetime.now(timezone.utc)
                 await self._check_and_send_notifications(current_time)
-                
-                # Wait for 60 seconds before next check
-                await asyncio.sleep(60)
-                
+
+                # Wait for next check
+                await asyncio.sleep(self.SCHEDULING_LOOP_INTERVAL_SECONDS)
+
             except asyncio.CancelledError:
                 logger.info("Scheduling loop cancelled")
                 break
             except Exception as e:
                 logger.error(f"Error in scheduling loop: {e}")
                 # Wait a bit before retrying
-                await asyncio.sleep(30)
+                await asyncio.sleep(self.SCHEDULING_LOOP_ERROR_RETRY_SECONDS)
     
     async def _check_and_send_notifications(self, current_time: datetime):
         """Check if any notifications need to be sent at the current time."""
         try:
             current_minutes = current_time.hour * 60 + current_time.minute
-            
+
             # Check meal reminders
             await self._check_meal_reminders(current_minutes)
-            
+
             # Check sleep reminders
             await self._check_sleep_reminders(current_minutes)
-            
-            # Check water reminders (simplified - runs every 15 minutes)
-            if current_minutes % 15 == 0:
+
+            # Check water reminders (runs every N minutes)
+            if current_minutes % self.WATER_REMINDER_CHECK_INTERVAL_MINUTES == 0:
                 await self._check_water_reminders()
                 
         except Exception as e:
@@ -150,9 +156,9 @@ class ScheduledNotificationService:
         try:
             # This is a simplified version - in production you'd track last sent time
             user_ids = self.notification_repository.find_users_for_water_reminder()
-            
+
             # Limit to avoid sending too many at once
-            limited_user_ids = user_ids[:10]  # Send to max 10 users per check
+            limited_user_ids = user_ids[:self.WATER_REMINDER_MAX_BATCH_SIZE]
             
             for user_id in limited_user_ids:
                 try:

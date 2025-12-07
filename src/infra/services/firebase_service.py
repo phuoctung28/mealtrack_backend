@@ -13,6 +13,14 @@ from firebase_admin import credentials, messaging
 logger = logging.getLogger(__name__)
 
 
+class NotificationChannelConfig:
+    """Android notification channel configuration."""
+
+    HIGH_PRIORITY_CHANNEL_ID = "high_priority_channel"
+    MEDIUM_PRIORITY_CHANNEL_ID = "medium_priority_channel"
+    LOW_PRIORITY_CHANNEL_ID = "low_priority_channel"
+
+
 class FirebaseService:
     """Service for Firebase Admin SDK operations."""
 
@@ -129,7 +137,8 @@ class FirebaseService:
                 android=messaging.AndroidConfig(
                     priority="high",
                     notification=messaging.AndroidNotification(
-                        channel_id="high_priority_channel", sound="default"
+                        channel_id=NotificationChannelConfig.HIGH_PRIORITY_CHANNEL_ID,
+                        sound="default",
                     ),
                 ),
                 apns=messaging.APNSConfig(
@@ -209,7 +218,8 @@ class FirebaseService:
                 android=messaging.AndroidConfig(
                     priority="high",
                     notification=messaging.AndroidNotification(
-                        channel_id="high_priority_channel", sound="default"
+                        channel_id=NotificationChannelConfig.HIGH_PRIORITY_CHANNEL_ID,
+                        sound="default",
                     ),
                 ),
                 apns=messaging.APNSConfig(

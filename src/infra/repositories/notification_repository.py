@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 class NotificationRepository(NotificationRepositoryPort):
     """Implementation of the notification repository using SQLAlchemy."""
-    
-    def __init__(self, db: Session = None):
+
+    def __init__(self, db: Optional[Session] = None):
         """Initialize with optional session dependency."""
         self.db = db
     
