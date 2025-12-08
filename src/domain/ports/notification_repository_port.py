@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import List, Optional
 
 from src.domain.model.notification import UserFcmToken, NotificationPreferences
@@ -129,13 +130,15 @@ class NotificationRepositoryPort(ABC):
     
     # Utility operations
     @abstractmethod
-    def find_users_for_meal_reminder(self, meal_type: str, time_minutes: int) -> List[str]:
+    def find_users_for_meal_reminder(self, meal_type: str, current_utc: datetime) -> List[str]:
         """
-        Finds user IDs who should receive meal reminders at a specific time.
+        Finds user IDs who should receive meal reminders at current UTC time.
+        
+        Converts UTC to each user's local time for matching.
         
         Args:
             meal_type: The meal type (breakfast, lunch, dinner)
-            time_minutes: The time in minutes from midnight
+            current_utc: Current UTC datetime
             
         Returns:
             List of user IDs who should receive the reminder
@@ -143,12 +146,14 @@ class NotificationRepositoryPort(ABC):
         pass
     
     @abstractmethod
-    def find_users_for_sleep_reminder(self, time_minutes: int) -> List[str]:
+    def find_users_for_sleep_reminder(self, current_utc: datetime) -> List[str]:
         """
-        Finds user IDs who should receive sleep reminders at a specific time.
+        Finds user IDs who should receive sleep reminders at current UTC time.
+        
+        Converts UTC to each user's local time for matching.
         
         Args:
-            time_minutes: The time in minutes from midnight
+            current_utc: Current UTC datetime
             
         Returns:
             List of user IDs who should receive the reminder
@@ -156,13 +161,28 @@ class NotificationRepositoryPort(ABC):
         pass
     
     @abstractmethod
-    def find_users_for_water_reminder(self) -> List[str]:
+    def find_users_for_water_reminder(self, current_utc: datetime) -> List[str]:
         """
-        Finds user IDs who should receive water reminders.
-        Note: This is a simplified version. In production, you'd need to track
-        last water reminder sent time for each user.
+        Finds user IDs who should receive water reminders based on their interval setting.
         
+        Args:
+            current_utc: Current UTC datetime
+            
         Returns:
-            List of user IDs who should receive water reminders
+            List of user IDs due for water reminder
+        """
+        pass
+    
+    @abstractmethod
+    def update_last_water_reminder(self, user_id: str, sent_at: datetime) -> bool:
+        """
+        Update last water reminder timestamp for user.
+        
+        Args:
+            user_id: User ID
+            sent_at: Timestamp when reminder was sent
+            
+        Returns:
+            True if updated successfully, False otherwise
         """
         pass

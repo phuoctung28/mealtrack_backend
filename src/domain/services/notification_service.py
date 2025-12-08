@@ -23,6 +23,22 @@ DEACTIVATABLE_FCM_ERRORS = {
     "INVALID_ARGUMENT",  # Malformed token
 }
 
+# Meal reminder configuration
+MEAL_REMINDER_CONFIG = {
+    "breakfast": {
+        "title": "🍳 Breakfast Time!",
+        "body": "Start your day right - log your breakfast",
+    },
+    "lunch": {
+        "title": "🥗 Lunch Time!",
+        "body": "Time for a nutritious lunch break",
+    },
+    "dinner": {
+        "title": "🍽️ Dinner Time!",
+        "body": "Wind down with a healthy dinner",
+    },
+}
+
 
 class NotificationService:
     """Service for sending push notifications."""
@@ -93,7 +109,11 @@ class NotificationService:
 
             # 4. Handle invalid tokens
             if result.get("success") and result.get("failed_tokens"):
-                await self._handle_failed_tokens(result["failed_tokens"])
+                await self._handle_failed_tokens(
+                    result["failed_tokens"],
+                    user_id=user_id,
+                    notification_type=str(notification_type),
+                )
 
             logger.info(f"Notification sent to user {user_id}: {result}")
             return result
@@ -104,20 +124,11 @@ class NotificationService:
 
     async def send_meal_reminder(self, user_id: str, meal_type: str) -> Dict[str, Any]:
         """Send meal reminder notification."""
-        meal_titles = {
-            "breakfast": "🍳 Breakfast Time!",
-            "lunch": "🥗 Lunch Time!",
-            "dinner": "🍽️ Dinner Time!",
-        }
-
-        meal_bodies = {
-            "breakfast": "Start your day right - log your breakfast",
-            "lunch": "Time for a nutritious lunch break",
-            "dinner": "Wind down with a healthy dinner",
-        }
-
-        title = meal_titles.get(meal_type, "🍽️ Meal Time!")
-        body = meal_bodies.get(meal_type, "Time to log your meal")
+        config = MEAL_REMINDER_CONFIG.get(
+            meal_type, {"title": "🍽️ Meal Time!", "body": "Time to log your meal"}
+        )
+        title = config["title"]
+        body = config["body"]
 
         notification_type = NotificationType(f"meal_reminder_{meal_type}")
 
@@ -199,9 +210,15 @@ class NotificationService:
 
         return results
 
-    async def _handle_failed_tokens(self, failed_tokens: List[Dict[str, Any]]):
+    async def _handle_failed_tokens(
+        self,
+        failed_tokens: List[Dict[str, Any]],
+        user_id: str = "",
+        notification_type: str = "",
+    ):
         """Handle tokens that failed to receive notifications."""
         deactivated_count = 0
+        context = f"user={user_id}, type={notification_type}" if user_id else ""
 
         for failed_token in failed_tokens:
             token = failed_token["token"]
@@ -215,15 +232,20 @@ class NotificationService:
 
             if should_deactivate:
                 logger.info(
-                    f"Deactivating invalid FCM token: {token[:20]}... error={error}"
+                    f"Deactivating invalid FCM token ({context}): "
+                    f"{token[:20]}... error={error}"
                 )
                 self.notification_repository.deactivate_fcm_token(token)
                 deactivated_count += 1
             else:
-                logger.warning(f"FCM token failed with error {error}: {token[:20]}...")
+                logger.warning(
+                    f"FCM token failed ({context}) with error {error}: {token[:20]}..."
+                )
 
         if deactivated_count > 0:
-            logger.info(f"Deactivated {deactivated_count} invalid FCM tokens")
+            logger.info(
+                f"Deactivated {deactivated_count} invalid FCM tokens ({context})"
+            )
 
     def get_notification_preferences(
         self, user_id: str

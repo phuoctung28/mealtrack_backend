@@ -8,6 +8,17 @@ from typing import Optional
 
 from .enums import NotificationType
 
+# Map notification types to their corresponding preference fields
+NOTIFICATION_TYPE_TO_FIELD = {
+    NotificationType.MEAL_REMINDER_BREAKFAST: "meal_reminders_enabled",
+    NotificationType.MEAL_REMINDER_LUNCH: "meal_reminders_enabled",
+    NotificationType.MEAL_REMINDER_DINNER: "meal_reminders_enabled",
+    NotificationType.WATER_REMINDER: "water_reminders_enabled",
+    NotificationType.SLEEP_REMINDER: "sleep_reminders_enabled",
+    NotificationType.PROGRESS_NOTIFICATION: "progress_notifications_enabled",
+    NotificationType.REENGAGEMENT_NOTIFICATION: "reengagement_notifications_enabled",
+}
+
 
 @dataclass
 class NotificationPreferences:
@@ -25,6 +36,7 @@ class NotificationPreferences:
     lunch_time_minutes: Optional[int] = None
     dinner_time_minutes: Optional[int] = None
     water_reminder_interval_hours: int = 2
+    last_water_reminder_at: Optional[datetime] = None
     sleep_reminder_time_minutes: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -121,6 +133,7 @@ class NotificationPreferences:
             lunch_time_minutes=lunch_time_minutes if lunch_time_minutes is not None else self.lunch_time_minutes,
             dinner_time_minutes=dinner_time_minutes if dinner_time_minutes is not None else self.dinner_time_minutes,
             water_reminder_interval_hours=water_reminder_interval_hours if water_reminder_interval_hours is not None else self.water_reminder_interval_hours,
+            last_water_reminder_at=self.last_water_reminder_at,
             sleep_reminder_time_minutes=sleep_reminder_time_minutes if sleep_reminder_time_minutes is not None else self.sleep_reminder_time_minutes,
             created_at=self.created_at,
             updated_at=datetime.now()
@@ -128,22 +141,8 @@ class NotificationPreferences:
     
     def is_notification_type_enabled(self, notification_type: NotificationType) -> bool:
         """Check if a specific notification type is enabled."""
-        if notification_type == NotificationType.MEAL_REMINDER_BREAKFAST:
-            return self.meal_reminders_enabled
-        elif notification_type == NotificationType.MEAL_REMINDER_LUNCH:
-            return self.meal_reminders_enabled
-        elif notification_type == NotificationType.MEAL_REMINDER_DINNER:
-            return self.meal_reminders_enabled
-        elif notification_type == NotificationType.WATER_REMINDER:
-            return self.water_reminders_enabled
-        elif notification_type == NotificationType.SLEEP_REMINDER:
-            return self.sleep_reminders_enabled
-        elif notification_type == NotificationType.PROGRESS_NOTIFICATION:
-            return self.progress_notifications_enabled
-        elif notification_type == NotificationType.REENGAGEMENT_NOTIFICATION:
-            return self.reengagement_notifications_enabled
-        else:
-            return False
+        field_name = NOTIFICATION_TYPE_TO_FIELD.get(notification_type)
+        return getattr(self, field_name, False) if field_name else False
     
     def get_meal_reminder_time(self, meal_type: str) -> Optional[int]:
         """Get the reminder time in minutes for a specific meal type."""
@@ -170,6 +169,7 @@ class NotificationPreferences:
             "lunch_time_minutes": self.lunch_time_minutes,
             "dinner_time_minutes": self.dinner_time_minutes,
             "water_reminder_interval_hours": self.water_reminder_interval_hours,
+            "last_water_reminder_at": self.last_water_reminder_at.isoformat() if self.last_water_reminder_at else None,
             "sleep_reminder_time_minutes": self.sleep_reminder_time_minutes,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

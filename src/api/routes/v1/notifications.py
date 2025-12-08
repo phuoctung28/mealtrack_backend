@@ -43,7 +43,8 @@ async def register_fcm_token(
         command = RegisterFcmTokenCommand(
             user_id=user_id,
             fcm_token=request.fcm_token,
-            device_type=request.device_type
+            device_type=request.device_type,
+            timezone=request.timezone
         )
         
         result = await event_bus.send(command)

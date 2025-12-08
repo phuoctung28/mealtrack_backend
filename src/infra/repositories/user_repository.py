@@ -1,4 +1,5 @@
 """Repository for user-related database operations."""
+import logging
 from typing import Optional, List
 
 from sqlalchemy.exc import IntegrityError
@@ -6,6 +7,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
+
+logger = logging.getLogger(__name__)
 
 
 _USER_RELATIONSHIP_LOADS = (
@@ -203,3 +206,17 @@ class UserRepository:
         self.db.commit()
         self.db.refresh(profile)
         return profile
+    
+    def update_user_timezone(self, user_id: str, timezone: str) -> bool:
+        """Update user's timezone."""
+        try:
+            user = self.find_by_id(user_id)
+            if user:
+                user.timezone = timezone
+                self.db.commit()
+                return True
+            return False
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error updating timezone for user {user_id}: {e}")
+            raise e

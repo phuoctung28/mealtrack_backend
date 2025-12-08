@@ -15,7 +15,12 @@ logger = logging.getLogger(__name__)
 
 class ScheduledNotificationService:
     """Service for scheduling and sending notifications at specific times."""
-    
+
+    # Scheduling constants
+    SCHEDULING_LOOP_INTERVAL_SECONDS = 60
+    SCHEDULING_LOOP_ERROR_RETRY_SECONDS = 30
+    WATER_REMINDER_MAX_BATCH_SIZE = 10
+
     def __init__(
         self,
         notification_repository: NotificationRepositoryPort,
@@ -68,44 +73,41 @@ class ScheduledNotificationService:
             try:
                 current_time = datetime.now(timezone.utc)
                 await self._check_and_send_notifications(current_time)
-                
-                # Wait for 60 seconds before next check
-                await asyncio.sleep(60)
-                
+
+                # Wait for next check
+                await asyncio.sleep(self.SCHEDULING_LOOP_INTERVAL_SECONDS)
+
             except asyncio.CancelledError:
                 logger.info("Scheduling loop cancelled")
                 break
             except Exception as e:
                 logger.error(f"Error in scheduling loop: {e}")
                 # Wait a bit before retrying
-                await asyncio.sleep(30)
+                await asyncio.sleep(self.SCHEDULING_LOOP_ERROR_RETRY_SECONDS)
     
     async def _check_and_send_notifications(self, current_time: datetime):
         """Check if any notifications need to be sent at the current time."""
         try:
-            current_minutes = current_time.hour * 60 + current_time.minute
-            
-            # Check meal reminders
-            await self._check_meal_reminders(current_minutes)
-            
-            # Check sleep reminders
-            await self._check_sleep_reminders(current_minutes)
-            
-            # Check water reminders (simplified - runs every 15 minutes)
-            if current_minutes % 15 == 0:
-                await self._check_water_reminders()
+            # Check meal reminders (pass full datetime)
+            await self._check_meal_reminders(current_time)
+
+            # Check sleep reminders (pass full datetime)
+            await self._check_sleep_reminders(current_time)
+
+            # Check water reminders (based on user intervals)
+            await self._check_water_reminders(current_time)
                 
         except Exception as e:
             logger.error(f"Error checking notifications: {e}")
     
-    async def _check_meal_reminders(self, current_minutes: int):
-        """Check if any users need meal reminders at the current time."""
+    async def _check_meal_reminders(self, current_utc: datetime):
+        """Check if any users need meal reminders at the current UTC time."""
         try:
             meal_types = ["breakfast", "lunch", "dinner"]
             
             for meal_type in meal_types:
                 user_ids = self.notification_repository.find_users_for_meal_reminder(
-                    meal_type, current_minutes
+                    meal_type, current_utc  # Pass datetime, not minutes
                 )
                 
                 for user_id in user_ids:
@@ -125,10 +127,12 @@ class ScheduledNotificationService:
         except Exception as e:
             logger.error(f"Error checking meal reminders: {e}")
     
-    async def _check_sleep_reminders(self, current_minutes: int):
-        """Check if any users need sleep reminders at the current time."""
+    async def _check_sleep_reminders(self, current_utc: datetime):
+        """Check if any users need sleep reminders at the current UTC time."""
         try:
-            user_ids = self.notification_repository.find_users_for_sleep_reminder(current_minutes)
+            user_ids = self.notification_repository.find_users_for_sleep_reminder(
+                current_utc  # Pass datetime, not minutes
+            )
             
             for user_id in user_ids:
                 try:
@@ -145,20 +149,21 @@ class ScheduledNotificationService:
         except Exception as e:
             logger.error(f"Error checking sleep reminders: {e}")
     
-    async def _check_water_reminders(self):
-        """Check if any users need water reminders."""
+    async def _check_water_reminders(self, current_utc: datetime):
+        """Check if any users need water reminders based on their interval."""
         try:
-            # This is a simplified version - in production you'd track last sent time
-            user_ids = self.notification_repository.find_users_for_water_reminder()
-            
+            user_ids = self.notification_repository.find_users_for_water_reminder(current_utc)
+
             # Limit to avoid sending too many at once
-            limited_user_ids = user_ids[:10]  # Send to max 10 users per check
+            limited_user_ids = user_ids[:self.WATER_REMINDER_MAX_BATCH_SIZE]
             
             for user_id in limited_user_ids:
                 try:
                     result = await self.notification_service.send_water_reminder(user_id)
                     
                     if result.get("success"):
+                        # Update last sent timestamp
+                        self.notification_repository.update_last_water_reminder(user_id, current_utc)
                         logger.info(f"Water reminder sent to user {user_id}")
                     else:
                         logger.warning(f"Failed to send water reminder to user {user_id}: {result}")

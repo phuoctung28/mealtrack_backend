@@ -1,7 +1,7 @@
 """
 Notification preferences model for user notification settings.
 """
-from sqlalchemy import Column, String, Boolean, Integer, CheckConstraint
+from sqlalchemy import Column, String, Boolean, Integer, DateTime, CheckConstraint
 
 from src.infra.database.config import Base
 from src.infra.database.models.base import BaseMixin
@@ -28,6 +28,8 @@ class NotificationPreferences(Base, BaseMixin):
     
     # Water Reminder Settings
     water_reminder_interval_hours = Column(Integer, default=2, nullable=False)
+    # Use timezone=True to store timezone-aware datetimes (required for UTC comparisons)
+    last_water_reminder_at = Column(DateTime(timezone=True), nullable=True)
     
     # Sleep Reminder Timing (minutes from midnight)
     sleep_reminder_time_minutes = Column(Integer, nullable=True)
@@ -59,6 +61,7 @@ class NotificationPreferences(Base, BaseMixin):
             lunch_time_minutes=self.lunch_time_minutes,
             dinner_time_minutes=self.dinner_time_minutes,
             water_reminder_interval_hours=self.water_reminder_interval_hours,
+            last_water_reminder_at=self.last_water_reminder_at,
             sleep_reminder_time_minutes=self.sleep_reminder_time_minutes,
             created_at=self.created_at,
             updated_at=self.updated_at

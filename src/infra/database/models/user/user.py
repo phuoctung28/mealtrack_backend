@@ -36,11 +36,15 @@ class User(Base, BaseMixin):
     onboarding_completed = Column(Boolean, default=False, nullable=False)
     last_accessed = Column(DateTime, default=datetime.now, nullable=False)
     
+    # Timezone (IANA format, e.g., "America/Los_Angeles")
+    timezone = Column(String(50), nullable=False, server_default='UTC')
+    
     # Indexes for performance
     __table_args__ = (
         Index('idx_firebase_uid', 'firebase_uid'),
         Index('idx_provider', 'provider'),
         Index('idx_onboarding_completed', 'onboarding_completed'),
+        Index('idx_users_timezone', 'timezone'),
     )
     
     # Relationships
