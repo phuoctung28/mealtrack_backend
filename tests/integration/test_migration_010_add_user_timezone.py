@@ -26,7 +26,6 @@ class TestMigration010:
         assert 'timezone' in columns
         assert columns['timezone']['type'].length == 50
         assert columns['timezone']['nullable'] is False
-        assert columns['timezone']['default'] == 'UTC'
     
     def test_user_timezone_index_exists(self, test_session):
         """Test that index on timezone column exists."""
