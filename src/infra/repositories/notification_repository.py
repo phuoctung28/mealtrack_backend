@@ -398,7 +398,10 @@ class NotificationRepository(NotificationRepositoryPort):
                 if last_sent is None:
                     matching_users.append(user_id)
                 else:
-                    hours_since_last = (current_utc - last_sent).total_seconds() / 3600
+                    # MySQL returns naive datetimes, so compare without timezone
+                    current_naive = current_utc.replace(tzinfo=None)
+                    last_sent_naive = last_sent.replace(tzinfo=None) if last_sent.tzinfo else last_sent
+                    hours_since_last = (current_naive - last_sent_naive).total_seconds() / 3600
                     if hours_since_last >= interval_hours:
                         matching_users.append(user_id)
 

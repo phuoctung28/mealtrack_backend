@@ -115,9 +115,9 @@ class TestTimezoneAwareMealReminders:
         user1_id = str(uuid.uuid4())
         user1 = User(
             id=user1_id,
-            firebase_uid=user_id,
-            email=f"test-{uuid.uuid4()}@example.com",
-            username=f"user-{uuid.uuid4()}",
+            firebase_uid=user1_id,
+            email=f"test-{user1_id[:8]}@example.com",
+            username=f"user-{user1_id[:8]}",
             password_hash="dummy_hash",
             timezone="Asia/Ho_Chi_Minh",
             created_at=datetime.now(),
@@ -129,9 +129,9 @@ class TestTimezoneAwareMealReminders:
         user2_id = str(uuid.uuid4())
         user2 = User(
             id=user2_id,
-            firebase_uid=user_id,
-            email=f"test-{uuid.uuid4()}@example.com",
-            username=f"user-{uuid.uuid4()}",
+            firebase_uid=user2_id,
+            email=f"test-{user2_id[:8]}@example.com",
+            username=f"user-{user2_id[:8]}",
             password_hash="dummy_hash",
             timezone="America/Los_Angeles",
             created_at=datetime.now(),
@@ -304,7 +304,8 @@ class TestWaterReminderInterval:
         prefs = DomainNotificationPreferences.create_default(user_id)
         prefs.water_reminders_enabled = True
         prefs.water_reminder_interval_hours = 2
-        last_reminder = datetime(2024, 12, 7, 9, 0, tzinfo=timezone.utc)
+        # Use naive datetime as MySQL returns naive datetimes
+        last_reminder = datetime(2024, 12, 7, 9, 0)
         db_prefs = NotificationPreferences(
             id=prefs.preferences_id,
             user_id=prefs.user_id,
@@ -353,7 +354,8 @@ class TestWaterReminderInterval:
         prefs = DomainNotificationPreferences.create_default(user_id)
         prefs.water_reminders_enabled = True
         prefs.water_reminder_interval_hours = 2
-        last_reminder = datetime(2024, 12, 7, 11, 0, tzinfo=timezone.utc)
+        # Use naive datetime as MySQL returns naive datetimes
+        last_reminder = datetime(2024, 12, 7, 11, 0)
         db_prefs = NotificationPreferences(
             id=prefs.preferences_id,
             user_id=prefs.user_id,
@@ -427,7 +429,10 @@ class TestWaterReminderInterval:
         
         assert result is True
         test_session.refresh(db_prefs)
-        assert db_prefs.last_water_reminder_at == sent_at
+        # MySQL may return naive datetime, so compare without timezone
+        stored_time = db_prefs.last_water_reminder_at
+        expected_time = sent_at.replace(tzinfo=None)
+        assert stored_time.replace(tzinfo=None) == expected_time
 
 
 @pytest.mark.integration

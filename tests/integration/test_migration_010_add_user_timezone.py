@@ -124,7 +124,8 @@ class TestMigration010:
         
         from src.domain.model.notification import NotificationPreferences as DomainNotificationPreferences
         
-        reminder_time = datetime.now()
+        # Use a datetime without microseconds since MySQL truncates them
+        reminder_time = datetime.now().replace(microsecond=0)
         prefs = DomainNotificationPreferences.create_default(str(uuid.uuid4()))
         db_prefs = NotificationPreferences(
             id=prefs.preferences_id,
@@ -148,5 +149,6 @@ class TestMigration010:
         test_session.refresh(db_prefs)
         
         assert db_prefs.last_water_reminder_at is not None
-        assert db_prefs.last_water_reminder_at == reminder_time
+        # Compare without microseconds as MySQL may truncate them
+        assert db_prefs.last_water_reminder_at.replace(microsecond=0) == reminder_time
 
