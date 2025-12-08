@@ -40,11 +40,12 @@ class TestMigration010:
         from datetime import datetime
         import uuid
         
+        unique_id = str(uuid.uuid4())
         user = User(
-            id=str(uuid.uuid4()),
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
-            email=f"test-{uuid.uuid4()}@example.com",
-            username=f"user-{uuid.uuid4()}",
+            id=unique_id,
+            firebase_uid=unique_id,  # firebase_uid column is String(36), UUID is exactly 36 chars
+            email=f"test-{unique_id[:8]}@example.com",
+            username=f"user-{unique_id[:8]}",
             password_hash="dummy_hash",
             created_at=datetime.now(),
             updated_at=datetime.now()
@@ -60,11 +61,12 @@ class TestMigration010:
         from datetime import datetime
         import uuid
         
+        unique_id = str(uuid.uuid4())
         user = User(
-            id=str(uuid.uuid4()),
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
-            email=f"test-{uuid.uuid4()}@example.com",
-            username=f"user-{uuid.uuid4()}",
+            id=unique_id,
+            firebase_uid=unique_id,  # firebase_uid column is String(36), UUID is exactly 36 chars
+            email=f"test-{unique_id[:8]}@example.com",
+            username=f"user-{unique_id[:8]}",
             password_hash="dummy_hash",
             timezone="America/Los_Angeles",
             created_at=datetime.now(),

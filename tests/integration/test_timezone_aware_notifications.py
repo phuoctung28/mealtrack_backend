@@ -21,7 +21,7 @@ class TestTimezoneAwareMealReminders:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -68,7 +68,7 @@ class TestTimezoneAwareMealReminders:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -115,7 +115,7 @@ class TestTimezoneAwareMealReminders:
         user1_id = str(uuid.uuid4())
         user1 = User(
             id=user1_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -129,7 +129,7 @@ class TestTimezoneAwareMealReminders:
         user2_id = str(uuid.uuid4())
         user2 = User(
             id=user2_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -189,7 +189,7 @@ class TestTimezoneAwareSleepReminders:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -241,7 +241,7 @@ class TestWaterReminderInterval:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -289,7 +289,7 @@ class TestWaterReminderInterval:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -338,7 +338,7 @@ class TestWaterReminderInterval:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -387,7 +387,7 @@ class TestWaterReminderInterval:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -440,7 +440,7 @@ class TestWaterReminderQuietHours:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -486,7 +486,7 @@ class TestWaterReminderQuietHours:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -532,7 +532,7 @@ class TestWaterReminderQuietHours:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -583,7 +583,7 @@ class TestWaterReminderQuietHours:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
@@ -629,7 +629,7 @@ class TestWaterReminderQuietHours:
         user_id = str(uuid.uuid4())
         user = User(
             id=user_id,
-            firebase_uid=f"test-fb-{uuid.uuid4()}",
+            firebase_uid=user_id,
             email=f"test-{uuid.uuid4()}@example.com",
             username=f"user-{uuid.uuid4()}",
             password_hash="dummy_hash",
