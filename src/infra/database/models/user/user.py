@@ -37,7 +37,7 @@ class User(Base, BaseMixin):
     last_accessed = Column(DateTime, default=datetime.now, nullable=False)
     
     # Timezone (IANA format, e.g., "America/Los_Angeles")
-    timezone = Column(String(50), nullable=False, default='UTC')
+    timezone = Column(String(50), nullable=False, server_default='UTC')
     
     # Indexes for performance
     __table_args__ = (
