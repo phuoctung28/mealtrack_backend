@@ -1,141 +1,227 @@
 # MealTrack Backend
 
-A FastAPI-based backend service for meal tracking and nutritional analysis with AI vision capabilities and cloud storage integration.
+A sophisticated FastAPI-based microservice for meal tracking and nutritional analysis with AI vision capabilities, intelligent meal planning, and personalized nutrition insights.
+
+## Quick Links
+
+- **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Vision, goals, requirements, success metrics
+- **[System Architecture](./docs/system-architecture.md)** - Architecture patterns, data flow, integrations
+- **[Codebase Summary](./docs/codebase-summary.md)** - Project structure, modules, dependencies
+- **[Code Standards](./docs/code-standards.md)** - Style guide, patterns, conventions
+- **[API Documentation](./docs/api-docs.md)** - Endpoint details (auto-generated via Swagger)
 
 ## Features
 
-- **Image Upload & Storage**: Upload meal images with automatic Cloudinary integration
-- **AI-Powered Analysis**: Automatic nutritional analysis using OpenAI's GPT-4 Vision
-- **Background Processing**: Asynchronous meal analysis using FastAPI background tasks
-- **RESTful API**: Clean REST endpoints for meal management
-- **Database Support**: MySQL
-- **Clean Architecture**: 4-layer architecture with clear separation of concerns
+- **AI-Powered Meal Analysis**: Google Gemini vision for food recognition and nutritional extraction
+- **Intelligent Meal Planning**: AI-generated personalized meal plans with dietary preferences
+- **Real-time Chat**: WebSocket-based nutrition advice with AI conversation
+- **Meal Tracking & History**: Complete meal logging with manual entry and image-based analysis
+- **Nutritional Insights**: Daily summaries, macro tracking, TDEE calculations
+- **Push Notifications**: Firebase Cloud Messaging with preference management
+- **Vector Search**: Pinecone-powered semantic food discovery
+- **Feature Management**: Dynamic feature flags for gradual rollouts
+- **Clean Architecture**: 4-layer architecture with CQRS pattern
 
-## Architecture
+## Technology Stack
 
-The application follows an n-layer (Clean Architecture) pattern:
+**Core**:
+- FastAPI 0.115.0+ (async web framework)
+- Python 3.8+ (async/await support)
+- SQLAlchemy 2.0 (ORM)
+- Pydantic v2 (validation)
 
-- **Presentation Layer (`src/api/`)**: HTTP endpoints, routers, and request/response handling
-- **Application Layer (`src/app/`)**: Use cases, handlers, and application services
-- **Domain Layer (`src/domain/`)**: Core business logic, entities, and domain services
-- **Infrastructure Layer (`src/infra/`)**: External services, repositories, database, and adapters
+**Data**:
+- MySQL 8.0+ (primary database)
+- Redis 7.0+ (caching)
+- Alembic (migrations)
 
-## API Endpoints
+**AI/ML**:
+- Google Gemini 2.0 (vision API)
+- OpenAI GPT-4 (chat/planning)
+- Pinecone (vector embeddings)
+- LangChain (LLM orchestration)
 
-### Meals
-- `POST /v1/meals/image` - Upload a meal image for analysis
-- `GET /v1/meals/{meal_id}` - Get complete meal details
-- `GET /v1/meals/{meal_id}/status` - Get meal processing status
+**Integration**:
+- Firebase Admin SDK (auth, messaging)
+- USDA FoodData Central (nutrition database)
+- Cloudinary (image storage)
 
-### Health
-- `GET /health` - Health check endpoint
-- `GET /` - API information
+**Quality**:
+- pytest (testing framework)
+- ruff (linting), black (formatting), mypy (type checking)
+- 70%+ code coverage
 
-## Setup and Installation
+## Architecture Overview
+
+The application follows a **4-Layer Clean Architecture** with **CQRS** pattern:
+
+```
+API Layer (HTTP Routes)
+    ↓
+Application Layer (Commands/Queries)
+    ↓
+Domain Layer (Business Logic)
+    ↓
+Infrastructure Layer (Databases, APIs)
+```
+
+**Key Patterns**:
+- Event-Driven Architecture for loose coupling
+- Dependency Injection for testability
+- Repository Pattern for data access
+- Strategy Pattern for pluggable algorithms
+- Async-first for performance
+
+See [System Architecture](./docs/system-architecture.md) for detailed diagrams and patterns.
+
+## Getting Started
 
 ### Prerequisites
-- Python 3.10+
-- pip or pipenv
+- Python 3.8+
+- MySQL 8.0+
+- Redis 7.0+
+- Docker (optional)
 
-### Install Dependencies
+### Development Setup
+
 ```bash
+# Clone repository
+git clone <repo-url>
+cd backend
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
-```
 
-### Environment Configuration
+# Setup environment
+cp .env.example .env
+# Edit .env with your credentials
 
-Create a `.env` file in the root directory with the following variables:
+# Run migrations
+python -m alembic upgrade head
 
-**AI & External APIs:**
-- `GOOGLE_API_KEY`: Your Google API key (e.g., for Gemini AI vision)
-- `USDA_FDC_API_KEY`: USDA FoodData Central API key for nutrition data
-- `PINECONE_API_KEY`: Pinecone API key for vector database
-
-**Database:**
-- `DB_PASSWORD`: MySQL database password
-
-**Cloud Storage (Cloudinary):**
-- `CLOUDINARY_CLOUD_NAME`: Your Cloudinary cloud name
-- `CLOUDINARY_API_KEY`: Your Cloudinary API key
-- `CLOUDINARY_API_SECRET`: Your Cloudinary API secret
-- `UPLOADS_DIR`: Local directory for file uploads
-- `USE_MOCK_STORAGE`: Set to `1` for local storage, `0` for Cloudinary (default: `0`)
-
-**Application Settings:**
-- `ENVIRONMENT`: Environment mode (e.g., `development`, `production`, `staging`)
-
-**Firebase Authentication:**
-- `FIREBASE_CREDENTIALS`: Path to Firebase service account credentials JSON file (recommended for local development)
-  - Example: `/path/to/firebase-service-account.json`
-  - For development: Use staging Firebase project credentials
-  - For production: Use production Firebase project credentials
-- `FIREBASE_SERVICE_ACCOUNT_JSON`: Firebase service account credentials as JSON string (recommended for production/cloud deployments)
-  - Example: `'{"type":"service_account","project_id":"your-project-id",...}'`
-  - Takes precedence over FIREBASE_CREDENTIALS if both are set
-  - Useful for cloud platforms where file paths are not ideal
-
-**Email/SMTP Configuration:**
-- `SMTP_HOST`: SMTP server hostname
-- `SMTP_PORT`: SMTP server port
-- `SMTP_USERNAME`: SMTP authentication username
-- `SMTP_PASSWORD`: SMTP authentication password
-- `EMAIL_FROM_ADDRESS`: Email address to send from
-- `EMAIL_FROM_NAME`: Display name for sent emails
-
-### Database Setup
-
-For MySQL setup, update the database environment variables in `.env`.
-
-## Running the Application
-
-### Development Server
-```bash
+# Start development server
 uvicorn src.api.main:app --reload
-```
-
-### Production Server
-```bash
-uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 ```
 
 The API will be available at:
 - **API Base**: http://localhost:8000
-- **Swagger Documentation**: http://localhost:8000/docs
-- **ReDoc Documentation**: http://localhost:8000/redoc
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
 
-## Usage Example
+## API Overview
 
-### Upload a Meal Image
+### Core Endpoints
+
+**Meals**:
+- `POST /v1/meals/image/analyze` - Analyze meal image with AI
+- `POST /v1/meals/manual` - Log meal manually
+- `GET /v1/meals/{id}` - Get meal details
+- `PATCH /v1/meals/{id}` - Edit meal details
+
+**Meal Planning**:
+- `POST /v1/meal-plans/generate` - Generate AI meal plan
+- `GET /v1/meal-plans/{id}` - Get meal plan
+- `PUT /v1/meal-plans/{id}/meals/{day}` - Replace meal
+
+**Chat**:
+- `POST /v1/chat/threads` - Create chat thread
+- `POST /v1/chat/threads/{id}/messages` - Send message
+- `WebSocket /v1/chat/ws` - Real-time chat
+
+**Users**:
+- `POST /v1/users/onboarding` - User registration
+- `GET /v1/users/profiles` - Get user profile
+- `PUT /v1/users/profiles` - Update profile
+
+See [Project Overview](./docs/project-overview-pdr.md#api-surface-area) for complete endpoint listing.
+
+## Configuration
+
+See `.env.example` for all available environment variables. Key variables:
+
+**Essential**:
+- `ENVIRONMENT`: development/production/staging
+- MySQL: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
+- Redis: `REDIS_URL`
+- Firebase: `FIREBASE_CREDENTIALS` or `FIREBASE_SERVICE_ACCOUNT_JSON`
+
+**AI Services**:
+- `GOOGLE_API_KEY`: Gemini vision API
+- `OPENAI_API_KEY`: GPT-4 chat/planning
+- `USDA_FDC_API_KEY`: Food database
+- `PINECONE_API_KEY`: Vector embeddings
+
+**Cloud Storage**:
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+
+See [Project Overview](./docs/project-overview-pdr.md) for complete configuration details.
+
+## Testing
+
 ```bash
-curl -X POST "http://localhost:8000/v1/meals/image" \
-     -H "Content-Type: multipart/form-data" \
-     -F "file=@path/to/your/meal_image.jpg"
+# Run all tests
+pytest
+
+# With coverage report
+pytest --cov=src
+
+# Unit tests only
+pytest -m unit
+
+# Integration tests
+pytest -m integration
 ```
 
-Response:
-```json
-{
-  "meal_id": "uuid-string",
-  "status": "PROCESSING"
-}
-```
+Target coverage: 70%+ (higher for critical paths)
 
-### Check Meal Status
+See [Testing Setup](./docs/TESTING_SETUP.md) for detailed testing information.
+
+## Development
+
 ```bash
-curl "http://localhost:8000/v1/meals/{meal_id}/status"
+# Code quality checks
+ruff format src/           # Format code
+ruff check src/            # Lint
+mypy src/                  # Type checking
+
+# All checks
+ruff format src/ && isort src/ && ruff check src/ && mypy src/ && pytest
+
+# Run migrations
+alembic upgrade head
+
+# Create new migration
+alembic revision --autogenerate -m "Description"
 ```
 
-### Get Complete Meal Details
-```bash
-curl "http://localhost:8000/v1/meals/{meal_id}"
-```
+See [Code Standards](./docs/code-standards.md) for detailed development guidelines.
 
-## Background Processing
+## Documentation
 
-The application automatically processes uploaded meal images in the background:
+- **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Requirements and architecture
+- **[System Architecture](./docs/system-architecture.md)** - Design patterns and data flow
+- **[Code Standards](./docs/code-standards.md)** - Style guide and conventions
+- **[Codebase Summary](./docs/codebase-summary.md)** - Module organization
+- **[Testing Setup](./docs/TESTING_SETUP.md)** - Test configuration
+- **Event-Driven Architecture** - See [./docs/EVENT_DRIVEN_ARCHITECTURE.md](./docs/EVENT_DRIVEN_ARCHITECTURE.md)
 
-1. **PROCESSING**: Image uploaded and stored
-2. **ANALYZING**: AI analyzing the image for nutritional content
-3. **ENRICHING**: Finalizing nutritional data
-4. **READY**: Analysis complete, nutrition data available
-5. **FAILED**: Processing failed (check error_message)
+## Contributing
+
+1. Create a feature branch: `git checkout -b feature/your-feature`
+2. Make changes and add tests
+3. Run tests and code quality checks (see Development section)
+4. Submit PR with description
+
+All PRs must:
+- Pass tests (100% for new code)
+- Include type hints (mypy strict)
+- Meet code coverage (70%+ minimum)
+- Follow code standards
+
+## License
+
+See LICENSE file for details.
