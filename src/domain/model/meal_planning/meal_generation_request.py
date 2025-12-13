@@ -16,6 +16,14 @@ class MealGenerationType(Enum):
     WEEKLY_INGREDIENT_BASED = "weekly_ingredient_based"
 
 
+class TimeFilterEnum(Enum):
+    """Time constraints for meal preparation."""
+    ANY = "any"           # No time constraint
+    QUICK = "quick"       # Under 15 minutes
+    MODERATE = "moderate" # 15-30 minutes
+    EXTENDED = "extended" # 30-60 minutes
+
+
 @dataclass
 class UserNutritionTargets:
     """User's nutritional targets."""
@@ -54,6 +62,7 @@ class MealGenerationRequest:
     user_profile: UserDietaryProfile
     nutrition_targets: UserNutritionTargets
     ingredient_constraints: Optional[IngredientConstraints] = None
+    time_filter: Optional[TimeFilterEnum] = None  # Time constraint for cooking
 
 
 @dataclass

@@ -139,3 +139,84 @@ Respond with valid JSON only:
 def get_system_message() -> str:
     """Get system message for daily meal planning."""
     return "You are a professional nutritionist creating personalized meal suggestions."
+
+
+def build_quick_meal_suggestions_prompt(
+    meal_type: str,
+    ingredients: list[str],
+    time_filter: str | None = None,
+    count: int = 6
+) -> str:
+    """
+    Build prompt for quick meal suggestions with enriched output.
+
+    Args:
+        meal_type: Type of meal (breakfast, lunch, dinner, snack)
+        ingredients: List of available/desired ingredients
+        time_filter: Optional time constraint (any, quick, moderate, extended)
+        count: Number of meal ideas to generate (default 6)
+
+    Returns:
+        Prompt string for AI generation
+    """
+
+    # Build ingredients text
+    ingredients_text = ", ".join(ingredients) if ingredients else "any common ingredients"
+
+    # Build time constraint section
+    time_constraint = ""
+    if time_filter and time_filter != "any":
+        time_limits = {
+            "quick": ("under 15 minutes", 15),
+            "moderate": ("15-30 minutes", 30),
+            "extended": ("30-60 minutes", 60),
+        }
+        description, max_time = time_limits.get(time_filter, ("any time", 999))
+        time_constraint = f"""
+Time Constraint: {description}
+- All meals MUST be completable within {max_time} minutes total
+- Prioritize quick cooking methods if needed
+"""
+
+    return f"""Generate {count} quick {meal_type} meal ideas using these ingredients: {ingredients_text}
+{time_constraint}
+Requirements:
+1. Each meal should prominently feature the provided ingredients
+2. Include practical, achievable recipes
+3. Vary the cooking styles and cuisines
+4. Be creative but realistic
+
+For each meal, provide:
+- name: Catchy meal name
+- description: Short tagline (10 words max)
+- time_minutes: Total cooking time in minutes
+- calories: Estimated calories
+- protein_g, carbs_g, fat_g: Macros in grams
+- pairs_with: List of 3-5 complementary ingredients that would enhance this meal
+- quick_recipe: List of 4-6 simple cooking steps
+- tags: List of relevant tags like "quick", "high-protein", "low-carb", etc.
+
+Return ONLY a JSON object with this structure:
+{{
+    "meals": [
+        {{
+            "name": "Meal Name",
+            "description": "Quick, flavorful tagline",
+            "time_minutes": 15,
+            "calories": 400,
+            "protein_g": 30.0,
+            "carbs_g": 40.0,
+            "fat_g": 12.0,
+            "pairs_with": ["avocado", "lemon", "cherry tomatoes"],
+            "quick_recipe": [
+                "Season the protein with salt and pepper",
+                "Heat pan with olive oil",
+                "Cook until golden",
+                "Serve with sides"
+            ],
+            "tags": ["quick", "high-protein", "low-carb"]
+        }}
+    ]
+}}
+
+Generate exactly {count} different meal ideas."""
