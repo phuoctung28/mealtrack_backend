@@ -72,6 +72,11 @@ from src.app.handlers.command_handlers import (
     DeleteFcmTokenCommandHandler,
     UpdateNotificationPreferencesCommandHandler,
 )
+# Ingredient handlers
+from src.app.handlers.command_handlers import (
+    RecognizeIngredientCommandHandler,
+)
+from src.app.commands.ingredient import RecognizeIngredientCommand
 # Import event handlers
 from src.app.handlers.event_handlers.meal_analysis_event_handler import (
     MealAnalysisEventHandler,
@@ -333,6 +338,12 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         GetNotificationPreferencesQuery,
         GetNotificationPreferencesQueryHandler(notification_repository)
+    )
+
+    # Register ingredient recognition handler
+    event_bus.register_handler(
+        RecognizeIngredientCommand,
+        RecognizeIngredientCommandHandler(vision_service=vision_service)
     )
 
     # Register chat handlers

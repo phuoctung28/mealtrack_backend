@@ -11,7 +11,9 @@ from .daily_meal_responses import (
     NutritionTotalsResponse,
     MealSuggestionErrorResponse,
     UserMealPlanSummaryResponse,
-    MealTypeEnum
+    MealTypeEnum,
+    QuickMealIdeaResponse,
+    QuickMealSuggestionsResponse
 )
 # Daily nutrition responses
 from .daily_nutrition_response import (
@@ -77,6 +79,11 @@ from .weekly_meal_plan_responses import (
     NutritionInfo,
     UserPreferencesResponse
 )
+# Ingredient recognition responses
+from .ingredient_recognition_responses import (
+    IngredientRecognitionResponse,
+    IngredientCategoryEnum
+)
 
 __all__ = [
     # Daily meal
@@ -86,6 +93,8 @@ __all__ = [
     'NutritionTotalsResponse',
     'MealSuggestionErrorResponse',
     'UserMealPlanSummaryResponse',
+    'QuickMealIdeaResponse',
+    'QuickMealSuggestionsResponse',
     
     # Meal
     'SimpleMealResponse',
@@ -143,5 +152,9 @@ __all__ = [
     'UserMetricsResponse',
 
     # Enums
-    'MealTypeEnum'
+    'MealTypeEnum',
+
+    # Ingredient recognition
+    'IngredientRecognitionResponse',
+    'IngredientCategoryEnum'
 ]

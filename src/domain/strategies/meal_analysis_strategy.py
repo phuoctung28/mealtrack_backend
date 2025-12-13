@@ -280,6 +280,43 @@ Adjust your analysis to ensure the combined weight of all food items matches the
     def get_strategy_name(self) -> str:
         return f"WeightAware({self.weight_grams}g)"
 
+
+class IngredientIdentificationStrategy(MealAnalysisStrategy):
+    """
+    Strategy for identifying a single ingredient from an image.
+
+    Used when user takes a photo of an unknown food/ingredient and wants
+    to identify it before getting meal suggestions.
+    """
+
+    def get_analysis_prompt(self) -> str:
+        return """
+        You are a food ingredient identification assistant.
+        Identify the single food ingredient shown in this image.
+
+        Return your analysis in the following JSON format:
+        {
+          "name": "ingredient name in English",
+          "confidence": 0.95,
+          "category": "vegetable|fruit|protein|grain|dairy|seasoning|other"
+        }
+
+        Guidelines:
+        - Identify the PRIMARY/LARGEST ingredient if multiple are visible
+        - Name should be in English, lowercase (e.g., "chicken breast", "broccoli", "salmon fillet")
+        - Confidence between 0 (unsure) and 1 (certain)
+        - Category must be one of: vegetable, fruit, protein, grain, dairy, seasoning, other
+        - If no clear ingredient visible, return {"name": null, "confidence": 0, "category": null}
+        - Always return well-formed JSON
+        """
+
+    def get_user_message(self) -> str:
+        return "Identify the food ingredient in this image:"
+
+    def get_strategy_name(self) -> str:
+        return "IngredientIdentification"
+
+
 class AnalysisStrategyFactory:
     """
     Factory class for creating meal analysis strategies.
@@ -304,7 +341,12 @@ class AnalysisStrategyFactory:
     def create_weight_strategy(weight_grams: float) -> MealAnalysisStrategy:
         """Create a weight-aware analysis strategy."""
         return WeightAwareAnalysisStrategy(weight_grams)
-    
+
+    @staticmethod
+    def create_ingredient_identification_strategy() -> MealAnalysisStrategy:
+        """Create an ingredient identification strategy for photo recognition."""
+        return IngredientIdentificationStrategy()
+
     @staticmethod
     def create_combined_strategy(
         portion_size: Optional[float] = None, 
