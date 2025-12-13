@@ -144,3 +144,76 @@ class UserMealPlanSummaryResponse(BaseModel):
     preferred_meal_types: List[str] = Field(..., description="Most suggested meal types")
     common_ingredients: List[str] = Field(..., description="Most common ingredients")
     dietary_compliance: Dict[str, bool] = Field(..., description="Dietary preference compliance")
+
+
+class QuickMealIdeaResponse(BaseModel):
+    """Response DTO for a quick meal idea with enriched data."""
+    meal_id: str = Field(..., description="Unique meal identifier")
+    name: str = Field(..., description="Meal name")
+    description: str = Field(..., description="Short tagline (10 words max)")
+    time_minutes: int = Field(..., ge=0, description="Total cooking time in minutes")
+    calories: int = Field(..., ge=0, description="Estimated calories")
+    protein_g: float = Field(..., ge=0, description="Protein in grams")
+    carbs_g: float = Field(..., ge=0, description="Carbohydrates in grams")
+    fat_g: float = Field(..., ge=0, description="Fat in grams")
+    pairs_with: List[str] = Field(
+        default_factory=list,
+        description="3-5 complementary ingredients"
+    )
+    quick_recipe: List[str] = Field(
+        default_factory=list,
+        description="4-6 simple cooking steps"
+    )
+    tags: List[str] = Field(
+        default_factory=list,
+        description="Tags like 'quick', 'high-protein'"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "meal_id": "123e4567-e89b-12d3-a456-426614174000",
+                "name": "Chicken Stir-Fry",
+                "description": "Quick, flavorful, pairs with rice",
+                "time_minutes": 15,
+                "calories": 420,
+                "protein_g": 35.0,
+                "carbs_g": 25.0,
+                "fat_g": 18.0,
+                "pairs_with": ["avocado", "lemon", "cherry tomatoes", "feta cheese"],
+                "quick_recipe": [
+                    "Season chicken with salt and pepper",
+                    "Heat pan with olive oil over high heat",
+                    "Stir-fry chicken until golden (5 min)",
+                    "Add vegetables and sauce",
+                    "Serve immediately"
+                ],
+                "tags": ["quick", "high-protein", "low-carb"]
+            }
+        }
+
+
+class QuickMealSuggestionsResponse(BaseModel):
+    """Response DTO for quick meal suggestions."""
+    success: bool = Field(True, description="Whether generation was successful")
+    meal_type: str = Field(..., description="Type of meal requested")
+    ingredients: List[str] = Field(..., description="Ingredients used in search")
+    time_filter: Optional[str] = Field(None, description="Time filter applied")
+    meals: List[QuickMealIdeaResponse] = Field(..., description="List of meal ideas")
+    displayed_count: int = Field(..., ge=0, description="Number of meals currently displayed")
+    total_count: int = Field(..., ge=0, description="Total number of meals available")
+    has_more: bool = Field(False, description="Whether more meals are available")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "meal_type": "lunch",
+                "ingredients": ["chicken"],
+                "time_filter": "quick",
+                "meals": [],
+                "displayed_count": 3,
+                "total_count": 6,
+                "has_more": True
+            }
+        }

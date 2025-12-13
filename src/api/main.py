@@ -39,6 +39,7 @@ from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.api.routes.v1.health import router as health_router
+from src.api.routes.v1.ingredients import router as ingredients_router
 from src.infra.database.config import engine
 from src.infra.database.migration_manager import MigrationManager
 
@@ -207,6 +208,7 @@ app.include_router(foods_router)
 app.include_router(monitoring_router)
 app.include_router(webhooks_router)
 app.include_router(notifications_router)
+app.include_router(ingredients_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get("ENVIRONMENT") == "development":

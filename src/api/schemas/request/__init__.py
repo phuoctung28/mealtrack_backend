@@ -48,6 +48,10 @@ from .user_requests import (
 )
 # Common enums
 from ..common.auth_enums import AuthProviderEnum
+# Ingredient recognition requests
+from .ingredient_recognition_requests import (
+    IngredientRecognitionRequest
+)
 
 __all__ = [
     # Daily meal
@@ -88,5 +92,8 @@ __all__ = [
     'UserCreateRequest',
     
     # Common enums
-    'AuthProviderEnum'
+    'AuthProviderEnum',
+
+    # Ingredient recognition
+    'IngredientRecognitionRequest'
 ]

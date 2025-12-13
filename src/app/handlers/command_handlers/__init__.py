@@ -25,6 +25,8 @@ from .weekly_ingredient_based_meal_plan_command_handler import GenerateWeeklyIng
 from .register_fcm_token_command_handler import RegisterFcmTokenCommandHandler
 from .delete_fcm_token_command_handler import DeleteFcmTokenCommandHandler
 from .update_notification_preferences_command_handler import UpdateNotificationPreferencesCommandHandler
+# Ingredient handlers
+from .recognize_ingredient_command_handler import RecognizeIngredientCommandHandler
 
 __all__ = [
     # Meal handlers
@@ -49,4 +51,6 @@ __all__ = [
     "RegisterFcmTokenCommandHandler",
     "DeleteFcmTokenCommandHandler",
     "UpdateNotificationPreferencesCommandHandler",
+    # Ingredient handlers
+    "RecognizeIngredientCommandHandler",
 ]

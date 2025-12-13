@@ -130,11 +130,56 @@ class MealGenerationResult:
     daily_plan: Optional[DailyMealPlan] = None
     weekly_plan: Optional[WeeklyMealPlan] = None
     error_message: Optional[str] = None
-    
+
     def is_daily_plan(self) -> bool:
         """Check if result contains a daily plan."""
         return self.daily_plan is not None
-    
+
     def is_weekly_plan(self) -> bool:
         """Check if result contains a weekly plan."""
         return self.weekly_plan is not None
+
+
+@dataclass
+class QuickMealIdea:
+    """
+    A quick meal idea for ingredient-based suggestions.
+
+    Used when user provides ingredients and wants meal ideas.
+    Includes simplified info for quick display + pairs_with and quick_recipe.
+    """
+    meal_id: str
+    name: str
+    description: str  # Short tagline (10 words max)
+    time_minutes: int  # Total cooking time
+    calories: int
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    pairs_with: List[str]  # 3-5 complementary ingredients
+    quick_recipe: List[str]  # 4-6 simple steps
+    tags: List[str]  # ["quick", "high-protein", etc.]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API response."""
+        return {
+            "meal_id": self.meal_id,
+            "name": self.name,
+            "description": self.description,
+            "time_minutes": self.time_minutes,
+            "calories": self.calories,
+            "protein_g": self.protein_g,
+            "carbs_g": self.carbs_g,
+            "fat_g": self.fat_g,
+            "pairs_with": self.pairs_with,
+            "quick_recipe": self.quick_recipe,
+            "tags": self.tags,
+        }
+
+
+@dataclass
+class QuickMealSuggestionsResult:
+    """Result of quick meal suggestions generation."""
+    success: bool
+    meals: List[QuickMealIdea]
+    error_message: Optional[str] = None
