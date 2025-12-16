@@ -30,7 +30,7 @@ class MealPlanService:
         if self._model is None:
             from langchain_google_genai import ChatGoogleGenerativeAI
             self._model = ChatGoogleGenerativeAI(
-                model="gemini-1.5-flash",
+                model="gemini-2.0-flash",
                 temperature=0.8,
                 max_output_tokens=1000,
                 google_api_key=self.google_api_key,

@@ -43,6 +43,7 @@ def upgrade():
         sa.Column('content', sa.Text(), nullable=False),
         sa.Column('metadata', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.ForeignKeyConstraint(['thread_id'], ['chat_threads.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id')
     )

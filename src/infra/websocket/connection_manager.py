@@ -126,11 +126,35 @@ class ConnectionManager:
         })
     
     async def broadcast_message_complete(self, thread_id: str, message: dict):
-        """Broadcast a completed message to all thread subscribers."""
+        """
+        Broadcast a completed message to all thread subscribers.
+        
+        Message includes follow_ups and structured_data when available in metadata.
+        """
+        # Extract structured data from metadata for convenience
+        metadata = message.get("metadata", {})
+        follow_ups = metadata.get("follow_ups", [])
+        structured_data = metadata.get("structured_data")
+        
         await self.send_to_thread(thread_id, {
             "type": "message_complete",
             "thread_id": thread_id,
-            "message": message
+            "message": message,
+            "follow_ups": follow_ups,
+            "structured_data": structured_data
+        })
+    
+    async def broadcast_structured_data(self, thread_id: str, structured_data: dict):
+        """
+        Broadcast structured data (follow-ups, meal suggestions) to all thread subscribers.
+        
+        This is used to send structured data separately from the main message,
+        useful for progressive updates during streaming.
+        """
+        await self.send_to_thread(thread_id, {
+            "type": "structured_data",
+            "thread_id": thread_id,
+            "data": structured_data
         })
     
     async def broadcast_typing_indicator(self, thread_id: str, is_typing: bool):

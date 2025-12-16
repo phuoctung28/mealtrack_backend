@@ -31,7 +31,7 @@ class MealGenerationService(MealGenerationServicePort):
         else:
             # Base LLM configuration - will be customized per request
             self.base_llm_config = {
-                "model": "gemini-1.5-flash",
+                "model": "gemini-2.0-flash",
                 "temperature": 0.2,  # Lower temperature for consistency
                 "google_api_key": self.api_key,
                 "response_mime_type": "application/json",  # Always expect JSON
