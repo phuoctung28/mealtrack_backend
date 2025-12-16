@@ -33,6 +33,7 @@ from src.api.routes.v1.monitoring import router as monitoring_router
 from src.api.routes.v1.chat import router as chat_router
 from src.api.routes.v1.chat_ws import router as chat_ws_router
 from src.api.routes.v1.meal_plans import router as meal_plans_router
+from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.notifications import router as notifications_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
@@ -201,6 +202,7 @@ app.include_router(meals_router)
 app.include_router(activities_router)
 app.include_router(feature_flags_router)
 app.include_router(meal_plans_router)
+app.include_router(meal_suggestions_router)
 # app.include_router(daily_meals_router)
 app.include_router(user_profiles_router)
 app.include_router(users_router)

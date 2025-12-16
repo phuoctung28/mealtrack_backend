@@ -14,6 +14,9 @@ from .edit_meal_command_handler import EditMealCommandHandler
 # Daily Meal handlers (newly extracted)
 from .generate_daily_meal_suggestions_command_handler import GenerateDailyMealSuggestionsCommandHandler
 from .generate_single_meal_command_handler import GenerateSingleMealCommandHandler
+# Meal Suggestion handlers
+from .generate_meal_suggestions_command_handler import GenerateMealSuggestionsCommandHandler
+from .save_meal_suggestion_command_handler import SaveMealSuggestionCommandHandler
 # User handlers (newly extracted)
 from .save_user_onboarding_command_handler import SaveUserOnboardingCommandHandler
 from .sync_user_command_handler import SyncUserCommandHandler
@@ -43,6 +46,9 @@ __all__ = [
     # Daily Meal handlers
     "GenerateDailyMealSuggestionsCommandHandler",
     "GenerateSingleMealCommandHandler",
+    # Meal Suggestion handlers
+    "GenerateMealSuggestionsCommandHandler",
+    "SaveMealSuggestionCommandHandler",
     # Standalone handlers
     "CreateManualMealCommandHandler",
     "GenerateWeeklyIngredientBasedMealPlanCommandHandler",
