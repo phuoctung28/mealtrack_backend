@@ -34,6 +34,10 @@ from src.app.commands.meal.create_manual_meal_command import CreateManualMealCom
 from src.app.commands.meal_plan import (
     GenerateWeeklyIngredientBasedMealPlanCommand,
 )
+from src.app.commands.meal_suggestion import (
+    GenerateMealSuggestionsCommand,
+    SaveMealSuggestionCommand,
+)
 from src.app.commands.notification import (
     RegisterFcmTokenCommand,
     DeleteFcmTokenCommand,
@@ -65,7 +69,9 @@ from src.app.handlers.command_handlers import (
     CreateManualMealCommandHandler,
     UpdateUserMetricsCommandHandler,
     UploadMealImageImmediatelyHandler,
-    GenerateWeeklyIngredientBasedMealPlanCommandHandler
+    GenerateWeeklyIngredientBasedMealPlanCommandHandler,
+    GenerateMealSuggestionsCommandHandler,
+    SaveMealSuggestionCommandHandler,
 )
 from src.app.handlers.command_handlers import (
     RegisterFcmTokenCommandHandler,
@@ -285,6 +291,16 @@ async def get_configured_event_bus(
     )
     event_bus.register_handler(
         GetMealsByDateQuery, GetMealsByDateQueryHandler(meal_repository)
+    )
+    
+    # Register meal suggestion handlers
+    event_bus.register_handler(
+        GenerateMealSuggestionsCommand,
+        GenerateMealSuggestionsCommandHandler(),
+    )
+    event_bus.register_handler(
+        SaveMealSuggestionCommand,
+        SaveMealSuggestionCommandHandler(db=db),
     )
 
     # Register user handlers

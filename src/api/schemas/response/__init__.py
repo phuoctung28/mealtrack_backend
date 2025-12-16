@@ -33,6 +33,13 @@ from .meal_plan_responses import (
     MealsByDateResponse,
     MealPlanGenerationStatusResponse
 )
+# Meal suggestion responses
+from .meal_suggestion_responses import (
+    MealSuggestionItem,
+    MealSuggestionsResponse,
+    SaveMealSuggestionResponse,
+    MacrosSchema as MealSuggestionMacrosSchema
+)
 # Meal responses
 from .meal_responses import (
     SimpleMealResponse,
@@ -126,6 +133,12 @@ __all__ = [
     'UserPreferenceSummarySchema',
     'MealsByDateResponse',
     'MealPlanGenerationStatusResponse',
+    
+    # Meal suggestion
+    'MealSuggestionItem',
+    'MealSuggestionsResponse',
+    'SaveMealSuggestionResponse',
+    'MealSuggestionMacrosSchema',
 
     # Weekly meal plan
     'WeeklyMealPlanResponse',

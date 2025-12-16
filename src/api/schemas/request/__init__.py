@@ -12,6 +12,11 @@ from .daily_meal_requests import (
 from .ingredient_based_meal_plan_requests import (
     IngredientBasedMealPlanRequest
 )
+# Meal suggestion requests
+from .meal_suggestion_requests import (
+    MealSuggestionRequest,
+    SaveMealSuggestionRequest
+)
 # Meal plan requests
 from .meal_plan_requests import (
     UserPreferencesSchema,
@@ -82,6 +87,10 @@ __all__ = [
     
     # Ingredient-based meal plan
     'IngredientBasedMealPlanRequest',
+    
+    # Meal suggestion
+    'MealSuggestionRequest',
+    'SaveMealSuggestionRequest',
     
     # Onboarding
     'OnboardingCompleteRequest',
