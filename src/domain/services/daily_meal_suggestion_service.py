@@ -22,7 +22,7 @@ class DailyMealSuggestionService:
             raise ValueError("GOOGLE_API_KEY environment variable not set")
         
         self.model = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             temperature=0.7,
             max_output_tokens=4000,  # Increased for multiple meals
             google_api_key=self.google_api_key,

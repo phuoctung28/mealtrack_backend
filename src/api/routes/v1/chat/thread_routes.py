@@ -1,35 +1,22 @@
 """
-Chat API endpoints - Event-driven architecture.
-Handles chat thread and message operations.
+Chat thread routes - Thread CRUD operations.
 """
 from fastapi import APIRouter, Depends, Query
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
-from src.api.schemas.request.chat_requests import (
-    CreateThreadRequest,
-    SendMessageRequest
-)
+from src.api.schemas.request.chat_requests import CreateThreadRequest
 from src.api.schemas.response.chat_responses import (
     ThreadResponse,
-    ThreadListResponse,
-    MessageResponse,
-    SendMessageResponse
+    ThreadListResponse
 )
-from src.app.commands.chat import (
-    CreateThreadCommand,
-    SendMessageCommand,
-    DeleteThreadCommand
-)
-from src.app.queries.chat import (
-    GetThreadsQuery,
-    GetThreadQuery,
-    GetMessagesQuery
-)
+from src.api.builders.chat_response_builder import ChatResponseBuilder
+from src.app.commands.chat import CreateThreadCommand, DeleteThreadCommand
+from src.app.queries.chat import GetThreadsQuery, GetThreadQuery
 from src.infra.event_bus import EventBus
 
-router = APIRouter(prefix="/v1/chat", tags=["Chat"])
+router = APIRouter()
 
 
 @router.post("/threads", response_model=ThreadResponse)
@@ -39,9 +26,12 @@ async def create_thread(
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
-    Create a new chat thread.
-    
+    Create a new chat thread with automatic welcome message.
+
     Authentication required: User ID is automatically extracted from the Firebase token.
+
+    Returns the thread with a welcome message from the meal planning assistant,
+    including suggested follow-up questions to help users get started.
     """
     try:
         command = CreateThreadCommand(
@@ -49,11 +39,17 @@ async def create_thread(
             title=request.title,
             metadata=request.metadata
         )
-        
+
         result = await event_bus.send(command)
-        
-        return ThreadResponse(**result["thread"])
-    
+
+        # Build thread response with properly structured messages
+        thread_data = ChatResponseBuilder.build_thread_with_messages(
+            thread_data=result["thread"],
+            messages=result["thread"].get("messages")
+        )
+
+        return ThreadResponse(**thread_data)
+
     except Exception as e:
         raise handle_exception(e) from e
 
@@ -68,7 +64,7 @@ async def get_threads(
 ):
     """
     Get list of chat threads for the current user.
-    
+
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
@@ -78,11 +74,11 @@ async def get_threads(
             offset=offset,
             include_deleted=include_deleted
         )
-        
+
         result = await event_bus.send(query)
-        
+
         return ThreadListResponse(**result)
-    
+
     except Exception as e:
         raise handle_exception(e) from e
 
@@ -95,84 +91,27 @@ async def get_thread(
 ):
     """
     Get a specific thread with its messages.
-    
+
     Authentication required: User ID is automatically extracted from the Firebase token.
+
+    Messages include follow_ups and structured_data when available.
     """
     try:
         query = GetThreadQuery(
             thread_id=thread_id,
             user_id=user_id
         )
-        
+
         result = await event_bus.send(query)
-        
-        # Merge thread and messages into response
-        thread_data = result["thread"]
-        thread_data["messages"] = result["messages"]
-        
+
+        # Build thread response with properly structured messages
+        thread_data = ChatResponseBuilder.build_thread_with_messages(
+            thread_data=result["thread"],
+            messages=result.get("messages", [])
+        )
+
         return ThreadResponse(**thread_data)
-    
-    except Exception as e:
-        raise handle_exception(e) from e
 
-
-@router.post("/threads/{thread_id}/messages", response_model=SendMessageResponse)
-async def send_message(
-    thread_id: str,
-    request: SendMessageRequest,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus)
-):
-    """
-    Send a message in a thread and get AI response.
-    
-    Authentication required: User ID is automatically extracted from the Firebase token.
-    """
-    try:
-        command = SendMessageCommand(
-            thread_id=thread_id,
-            user_id=user_id,
-            content=request.content,
-            metadata=request.metadata
-        )
-        
-        result = await event_bus.send(command)
-        
-        return SendMessageResponse(
-            success=result["success"],
-            user_message=MessageResponse(**result["user_message"]),
-            assistant_message=MessageResponse(**result["assistant_message"]) if result.get("assistant_message") else None
-        )
-    
-    except Exception as e:
-        raise handle_exception(e) from e
-
-
-@router.get("/threads/{thread_id}/messages")
-async def get_messages(
-    thread_id: str,
-    limit: int = Query(100, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus)
-):
-    """
-    Get messages from a thread with pagination.
-    
-    Authentication required: User ID is automatically extracted from the Firebase token.
-    """
-    try:
-        query = GetMessagesQuery(
-            thread_id=thread_id,
-            user_id=user_id,
-            limit=limit,
-            offset=offset
-        )
-        
-        result = await event_bus.send(query)
-        
-        return result
-    
     except Exception as e:
         raise handle_exception(e) from e
 
@@ -185,7 +124,7 @@ async def delete_thread(
 ):
     """
     Delete a thread (soft delete).
-    
+
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
@@ -193,11 +132,10 @@ async def delete_thread(
             thread_id=thread_id,
             user_id=user_id
         )
-        
+
         result = await event_bus.send(command)
-        
+
         return result
-    
+
     except Exception as e:
         raise handle_exception(e) from e
-
