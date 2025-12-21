@@ -2,7 +2,9 @@
 GenerateMealSuggestionsCommandHandler - Handler for generating meal suggestions.
 """
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+
+from sqlalchemy.orm import Session
 
 from src.app.commands.meal_suggestion import GenerateMealSuggestionsCommand
 from src.app.events.base import EventHandler, handles
@@ -16,9 +18,15 @@ logger = logging.getLogger(__name__)
 class GenerateMealSuggestionsCommandHandler(EventHandler[GenerateMealSuggestionsCommand, Dict[str, Any]]):
     """Handler for generating exactly 3 meal suggestions."""
     
-    def __init__(self, suggestion_service=None, user_repository=None):
+    def __init__(
+        self,
+        suggestion_service=None,
+        user_repository=None,
+        db: Optional[Session] = None
+    ):
         self.suggestion_service = suggestion_service or MealSuggestionService()
-        self.user_repository = user_repository or UserRepository()
+        self.db = db
+        self.user_repository = user_repository or UserRepository(db) if db else None
     
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
@@ -26,6 +34,9 @@ class GenerateMealSuggestionsCommandHandler(EventHandler[GenerateMealSuggestions
             self.suggestion_service = kwargs['suggestion_service']
         if 'user_repository' in kwargs:
             self.user_repository = kwargs['user_repository']
+        if 'db' in kwargs:
+            self.db = kwargs['db']
+            self.user_repository = UserRepository(self.db) if self.db else None
     
     async def handle(self, command: GenerateMealSuggestionsCommand) -> Dict[str, Any]:
         """

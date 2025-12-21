@@ -29,14 +29,14 @@ async def save_user_onboarding(
 ):
     """
     Save user onboarding data and return TDEE calculation.
-    
+
     Creates/updates:
     - User profile with physical attributes
-    - Dietary preferences, health conditions, allergies
+    - Pain points and dietary preferences
     - Fitness goals and activity level
     - Meal preferences
     - Returns TDEE calculation and macro targets
-    
+
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
@@ -50,12 +50,9 @@ async def save_user_onboarding(
             body_fat_percentage=request.body_fat_percentage,
             activity_level=request.activity_level,
             fitness_goal=request.goal,
-            target_weight_kg=request.target_weight,
-            meals_per_day=request.meals_per_day,
-            snacks_per_day=request.snacks_per_day,
+            pain_points=request.pain_points,
             dietary_preferences=request.dietary_preferences,
-            health_conditions=request.health_conditions,
-            allergies=request.allergies
+            meals_per_day=request.meals_per_day
         )
 
         await event_bus.send(command)
