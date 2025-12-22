@@ -116,9 +116,10 @@ async def get_user_tdee(
         goal_map = {
             'maintenance': Goal.MAINTENANCE,
             'cutting': Goal.CUTTING,
-            'bulking': Goal.BULKING
+            'bulking': Goal.BULKING,
+            'recomp': Goal.RECOMP
         }
-        
+
         # Create domain response
         domain_response = TdeeResponse(
             bmr=result["bmr"],
@@ -184,7 +185,8 @@ async def update_user_metrics(
         goal_map = {
             'maintenance': Goal.MAINTENANCE,
             'cutting': Goal.CUTTING,
-            'bulking': Goal.BULKING
+            'bulking': Goal.BULKING,
+            'recomp': Goal.RECOMP
         }
 
         domain_response = TdeeResponse(

@@ -109,13 +109,34 @@ class TDEEConstants:
     
     # Goal adjustments (calories)
     CUTTING_DEFICIT = 500      # 500 calorie deficit
-    BULKING_SURPLUS = 500      # 500 calorie surplus
+    BULKING_SURPLUS = 300      # 300 calorie surplus (lean bulk)
     MAINTENANCE_ADJUSTMENT = 0
-    
-    # Macro percentages - Moderate Carb (30/35/35) from tdeecalculator.net
-    PROTEIN_PERCENT = 0.30    # 30% of calories from protein
-    FAT_PERCENT = 0.35        # 35% of calories from fat  
-    CARBS_PERCENT = 0.35      # 35% of calories from carbs
+    RECOMP_ADJUSTMENT = 0      # No calorie adjustment for recomposition
+
+    # Goal-specific macro ratios (protein/carbs/fat)
+    # Based on nutrition science: higher protein during deficit/recomp, higher carbs during bulk
+    MACRO_RATIOS = {
+        "bulking": {
+            "protein": 0.30,
+            "carbs": 0.45,
+            "fat": 0.25
+        },
+        "cutting": {
+            "protein": 0.35,
+            "carbs": 0.40,
+            "fat": 0.25
+        },
+        "maintenance": {
+            "protein": 0.30,
+            "carbs": 0.45,
+            "fat": 0.25
+        },
+        "recomp": {
+            "protein": 0.35,
+            "carbs": 0.40,
+            "fat": 0.25
+        }
+    }
     
     # Validation ranges
     MIN_AGE = 13

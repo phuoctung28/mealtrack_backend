@@ -20,6 +20,7 @@ class Goal(Enum):
     MAINTENANCE = "maintenance"
     CUTTING = "cutting"
     BULKING = "bulking"
+    RECOMP = "recomp"
 
 
 class UnitSystem(Enum):

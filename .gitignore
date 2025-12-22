@@ -71,3 +71,6 @@ package-lock.json
 # Firebase credentials (NEVER commit these!)
 firebase-service-account.json
 *-firebase-adminsdk-*.json
+
+# ClaudeKit
+plans/
