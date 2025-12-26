@@ -68,6 +68,7 @@ def _ensure_dev_user() -> User:
             dietary_preferences=[],
             health_conditions=[],
             allergies=[],
+            pain_points=[],
         )
         session.add(profile)
         session.commit()
