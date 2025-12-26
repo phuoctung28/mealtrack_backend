@@ -16,18 +16,17 @@ class SaveUserOnboardingCommand(Command):
     gender: str
     height_cm: float
     weight_kg: float
-    
+
     # Goals
     activity_level: str
     fitness_goal: str
-    
-    # Optional fields at the end
-    body_fat_percentage: Optional[float] = None
-    target_weight_kg: Optional[float] = None
+
+    # Preferences - REQUIRED
+    pain_points: List[str]
+    dietary_preferences: List[str]
+
+    # Meal preferences
     meals_per_day: int = 3
-    snacks_per_day: int = 1
-    
-    # Preferences
-    dietary_preferences: Optional[List[str]] = None
-    health_conditions: Optional[List[str]] = None
-    allergies: Optional[List[str]] = None
+
+    # Optional fields
+    body_fat_percentage: Optional[float] = None

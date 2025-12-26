@@ -61,25 +61,40 @@ class TdeeCalculationService:
         return bmr * multiplier
     
     def _calculate_all_macro_targets(self, tdee: float, weight_kg: float, goal: Goal) -> MacroTargets:
-        """Calculate macro targets using Moderate Carb (30/35/35) split."""
-        calories = 0
+        """Calculate macro targets using goal-specific ratios based on nutrition science.
 
+        Different goals require different macro distributions:
+        - Bulking: Higher carbs for training energy, moderate protein
+        - Cutting: Higher protein to preserve muscle, lower carbs
+        - Maintenance: Balanced approach like bulking
+        - Recomp: High protein like cutting, moderate carbs for training
+        """
+        # Determine target calories based on goal
         if goal == Goal.MAINTENANCE:
             calories = tdee
+            goal_key = "maintenance"
         elif goal == Goal.CUTTING:
             calories = tdee - TDEEConstants.CUTTING_DEFICIT
+            goal_key = "cutting"
         elif goal == Goal.BULKING:
             calories = tdee + TDEEConstants.BULKING_SURPLUS
-        
-        # Calculate macros using 30/35/35 split (Protein/Fat/Carbs)
-        protein_calories = calories * TDEEConstants.PROTEIN_PERCENT
-        fat_calories = calories * TDEEConstants.FAT_PERCENT
-        carb_calories = calories * TDEEConstants.CARBS_PERCENT
-        
-        # Convert to grams (protein: 4 cal/g, fat: 9 cal/g, carbs: 4 cal/g)
-        protein_g = protein_calories / 4
-        fat_g = fat_calories / 9
-        carb_g = carb_calories / 4
+            goal_key = "bulking"
+        elif goal == Goal.RECOMP:
+            calories = tdee + TDEEConstants.RECOMP_ADJUSTMENT
+            goal_key = "recomp"
+        else:
+            # Fallback to maintenance for unknown goals
+            calories = tdee
+            goal_key = "maintenance"
+
+        # Get goal-specific macro ratios
+        macro_ratios = TDEEConstants.MACRO_RATIOS.get(goal_key, TDEEConstants.MACRO_RATIOS["maintenance"])
+
+        # Calculate macros using goal-specific ratios
+        # Protein: 4 cal/g, Carbs: 4 cal/g, Fat: 9 cal/g
+        protein_g = (calories * macro_ratios["protein"]) / 4
+        carb_g = (calories * macro_ratios["carbs"]) / 4
+        fat_g = (calories * macro_ratios["fat"]) / 9
 
         macro_targets = MacroTargets(
             calories=round(calories, 1),
