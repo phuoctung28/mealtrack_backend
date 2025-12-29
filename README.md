@@ -12,15 +12,18 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 
 ## Features
 
-- **AI-Powered Meal Analysis**: Google Gemini vision for food recognition and nutritional extraction
-- **Intelligent Meal Planning**: AI-generated personalized meal plans with dietary preferences
-- **Real-time Chat**: WebSocket-based nutrition advice with AI conversation
+- **AI-Powered Meal Analysis**: Google Gemini 2.0 vision for food recognition and nutritional extraction
+- **Ingredient Recognition**: AI-powered ingredient identification from meal images
+- **Intelligent Meal Planning**: AI-generated personalized meal plans with dietary preferences and ingredient-based meal suggestions
+- **Meal Suggestions**: Generate and save AI-driven meal recommendations based on user preferences
+- **Real-time Chat**: WebSocket-based nutrition advice with AI conversation and context awareness
 - **Meal Tracking & History**: Complete meal logging with manual entry and image-based analysis
 - **Nutritional Insights**: Daily summaries, macro tracking, TDEE calculations
-- **Push Notifications**: Firebase Cloud Messaging with preference management
+- **Push Notifications**: Firebase Cloud Messaging with timezone-aware scheduling
+- **User Pain Points**: Capture and track user health concerns during onboarding
 - **Vector Search**: Pinecone-powered semantic food discovery
 - **Feature Management**: Dynamic feature flags for gradual rollouts
-- **Clean Architecture**: 4-layer architecture with CQRS pattern
+- **Clean Architecture**: 4-layer architecture with CQRS pattern and event-driven design
 
 ## Technology Stack
 
@@ -114,28 +117,46 @@ The API will be available at:
 
 ## API Overview
 
-### Core Endpoints
+### Core Endpoints (70+ total)
 
 **Meals**:
-- `POST /v1/meals/image/analyze` - Analyze meal image with AI
+- `POST /v1/meals/image/analyze` - Analyze meal image with AI vision
 - `POST /v1/meals/manual` - Log meal manually
 - `GET /v1/meals/{id}` - Get meal details
 - `PATCH /v1/meals/{id}` - Edit meal details
 
+**Ingredients & Suggestions**:
+- `POST /v1/ingredients/recognize` - AI-powered ingredient recognition from image
+- `POST /v1/meal-suggestions/generate` - Generate AI meal suggestions
+- `POST /v1/meal-suggestions/{id}/save` - Save suggestion as meal
+
 **Meal Planning**:
 - `POST /v1/meal-plans/generate` - Generate AI meal plan
+- `POST /v1/meal-plans/generate/weekly-ingredient-based` - Generate plan with ingredient options
 - `GET /v1/meal-plans/{id}` - Get meal plan
-- `PUT /v1/meal-plans/{id}/meals/{day}` - Replace meal
+- `PUT /v1/meal-plans/{id}/meals/{day}` - Replace meal in plan
+- `GET /v1/meals/by-date` - Get meals by date range
 
 **Chat**:
 - `POST /v1/chat/threads` - Create chat thread
 - `POST /v1/chat/threads/{id}/messages` - Send message
-- `WebSocket /v1/chat/ws` - Real-time chat
+- `GET /v1/chat/threads/{id}/messages` - Get message history
+- `WebSocket /v1/chat/ws/{thread_id}` - Real-time chat stream
 
 **Users**:
-- `POST /v1/users/onboarding` - User registration
-- `GET /v1/users/profiles` - Get user profile
-- `PUT /v1/users/profiles` - Update profile
+- `POST /v1/users/sync` - Sync user from Firebase
+- `POST /v1/users/onboarding` - Complete user onboarding with pain points
+- `GET /v1/user-profiles/me` - Get user profile
+- `PUT /v1/user-profiles/me` - Update profile with timezone
+
+**Notifications**:
+- `POST /v1/notifications/tokens` - Register FCM token
+- `PUT /v1/notifications/preferences` - Update notification preferences
+
+**Other**:
+- `GET /v1/foods/search` - Search USDA food database
+- `GET /v1/feature-flags/{flag}` - Check feature flag status
+- `POST /v1/webhooks/revenucat` - RevenueCat subscription webhooks
 
 See [Project Overview](./docs/project-overview-pdr.md#api-surface-area) for complete endpoint listing.
 

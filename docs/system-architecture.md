@@ -1,8 +1,8 @@
 # MealTrack Backend - System Architecture
 
-**Version:** 0.2.0
-**Last Updated:** December 2024
-**Architecture Pattern:** 4-Layer Clean Architecture with CQRS
+**Version:** 0.3.0
+**Last Updated:** December 29, 2024
+**Architecture Pattern:** 4-Layer Clean Architecture with CQRS and Event-Driven Design
 
 ---
 
@@ -665,24 +665,27 @@ GET /v1/meals/{meal_id}
 ### Integration Points
 
 ```
-┌──────────────┐
-│   MealTrack  │
-│   Backend    │
-└──────┬───────┘
+┌──────────────────────┐
+│   MealTrack Backend  │
+│   (v0.3.0)           │
+└──────┬───────────────┘
        │
-       ├─► Google Gemini API
+       ├─► Google Gemini 2.0 API
        │   - Meal image analysis
        │   - Vision AI processing
        │   - Food recognition
+       │   - Ingredient identification (NEW)
        │
        ├─► OpenAI GPT-4 API
        │   - Chat responses
        │   - Meal planning
        │   - Nutrition advice
+       │   - Meal suggestions (NEW)
        │
        ├─► Firebase
        │   - User authentication
        │   - Push notifications (FCM)
+       │   - Timezone-aware scheduling (NEW)
        │   - User ID management
        │
        ├─► Pinecone
@@ -700,10 +703,16 @@ GET /v1/meals/{meal_id}
        │   - Image optimization
        │   - URL generation
        │
+       ├─► RevenueCat (NEW)
+       │   - Subscription management
+       │   - Webhook events
+       │   - User entitlements
+       │
        └─► MySQL Database
            - Persistent storage
            - Transaction management
            - Data integrity
+           - 11 migrations (up-to-date)
 ```
 
 ### Service Integration Pattern

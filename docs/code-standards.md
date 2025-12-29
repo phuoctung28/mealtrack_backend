@@ -1,8 +1,8 @@
 # MealTrack Backend - Code Standards & Conventions
 
-**Version:** 1.0
-**Last Updated:** December 2024
-**Scope**: Python source code in `src/` directory
+**Version:** 1.1
+**Last Updated:** December 29, 2024
+**Scope**: Python source code in `src/` directory (Python 3.11+)
 
 ---
 

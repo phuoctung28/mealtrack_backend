@@ -1,7 +1,7 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Last Updated:** December 2024
-**Version:** 0.2.0
+**Last Updated:** December 29, 2024
+**Version:** 0.3.0
 **Status:** Active Development
 
 ---
@@ -237,6 +237,71 @@ Empower users to understand their nutrition through intelligent, AI-driven meal 
 - [ ] Search queries processed in <500ms
 - [ ] Support 300K+ food embeddings
 - [ ] Multi-language search support
+
+### 10. Ingredient Recognition
+**Status**: Active
+**Description**: AI-powered ingredient identification from meal images.
+
+**Capabilities**:
+- Identify individual ingredients from images
+- Extract ingredient quantities
+- Return ingredient-based suggestions
+- Integration with meal planning
+
+**Acceptance Criteria**:
+- [ ] Identify ingredients with >85% accuracy
+- [ ] Process images in <3 seconds (p99)
+- [ ] Return structured ingredient data
+- [ ] Support 1000+ daily recognition requests
+
+### 11. Meal Suggestions
+**Status**: Active
+**Description**: Generate and save AI-driven meal recommendations.
+
+**Capabilities**:
+- Generate personalized meal suggestions
+- Consider dietary preferences and goals
+- Save suggestions as meals in history
+- Weekly suggestion generation
+- Ingredient-based meal planning
+
+**Acceptance Criteria**:
+- [ ] Generate suggestions in <5 seconds
+- [ ] Respect user dietary preferences 100%
+- [ ] Variety score >0.8 across suggestions
+- [ ] Support 50+ dietary restrictions
+
+### 12. User Pain Points Tracking
+**Status**: Active
+**Description**: Capture and track user health concerns during onboarding.
+
+**Capabilities**:
+- Collect pain points during signup
+- Store pain points in user profile
+- Use for personalized recommendations
+- Track changes over time
+
+**Acceptance Criteria**:
+- [ ] Capture 5+ pain point categories
+- [ ] Store pain points with timestamps
+- [ ] Enable filtering by pain point
+- [ ] Support pain point history tracking
+
+### 13. Timezone-Aware Notifications
+**Status**: Active
+**Description**: Send notifications respecting user timezone preferences.
+
+**Capabilities**:
+- Capture user timezone during onboarding
+- Schedule notifications in user's timezone
+- Support timezone changes
+- Prevent off-hours notifications
+
+**Acceptance Criteria**:
+- [ ] Store timezone per user
+- [ ] Schedule notifications in user's timezone
+- [ ] Honor quiet hours preferences
+- [ ] Support 350+ timezone formats
 
 ---
 
@@ -510,16 +575,23 @@ And: Can be toggled per user or globally
 https://api.mealtrack.app/v1
 ```
 
-### API Endpoints (High-Level)
+### API Endpoints (70+ Total)
 
 #### Meals Management
-- `POST /meals/image/analyze` - Analyze meal image
+- `POST /meals/image/analyze` - Analyze meal image with AI vision
 - `GET /meals/{id}` - Get meal details
 - `PATCH /meals/{id}` - Edit meal
 - `POST /meals/manual` - Create meal manually
+- `GET /meals/by-date` - Get meals by date range
+
+#### Ingredients & Suggestions
+- `POST /ingredients/recognize` - AI ingredient recognition from image
+- `POST /meal-suggestions/generate` - Generate meal suggestions
+- `POST /meal-suggestions/{id}/save` - Save suggestion as meal
 
 #### Meal Planning
 - `POST /meal-plans/generate` - Generate meal plan
+- `POST /meal-plans/generate/weekly-ingredient-based` - Generate with ingredient options
 - `GET /meal-plans/{id}` - Get meal plan
 - `PUT /meal-plans/{id}/meals/{day}` - Replace meal in plan
 
@@ -531,13 +603,15 @@ https://api.mealtrack.app/v1
 - `POST /chat/threads` - Create chat thread
 - `POST /chat/threads/{id}/messages` - Send message
 - `GET /chat/threads/{id}/messages` - Get thread history
-- `WebSocket /chat/ws` - WebSocket chat stream
+- `WebSocket /chat/ws/{thread_id}` - WebSocket chat stream
 
 #### Users
 - `POST /users/sync` - Sync user from Firebase
-- `POST /users/onboarding` - Complete onboarding
-- `GET /users/profiles` - Get user profile
-- `PUT /users/profiles` - Update user profile
+- `POST /users/onboarding` - Complete onboarding with pain points
+- `GET /user-profiles/me` - Get user profile
+- `PUT /user-profiles/me` - Update user profile with timezone
+- `GET /user-profiles/me/tdee` - Get TDEE calculation
+- `POST /user-profiles/me/tdee` - Update TDEE calculation
 
 #### Notifications
 - `POST /notifications/tokens` - Register FCM token
@@ -548,6 +622,9 @@ https://api.mealtrack.app/v1
 - `GET /feature-flags/{flag}` - Get flag status
 - `POST /feature-flags` - Create flag (admin)
 - `PUT /feature-flags/{id}` - Update flag (admin)
+
+#### Webhooks
+- `POST /webhooks/revenucat` - RevenueCat subscription webhooks
 
 ---
 
@@ -652,7 +729,8 @@ https://api.mealtrack.app/v1
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 0.2.0 | Dec 2024 | Active development with all 8 core features |
+| 0.3.0 | Dec 29, 2024 | Added ingredient recognition, meal suggestions, pain points tracking, timezone-aware notifications (13 core features) |
+| 0.2.0 | Dec 2024 | Active development with 9 core features including chat system |
 | 0.1.0 | Nov 2024 | Initial MVP with image analysis and meal tracking |
 
 ---

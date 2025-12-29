@@ -1,8 +1,9 @@
 # MealTrack Backend - Codebase Summary
 
-**Generated:** December 2024
-**Codebase Stats**: 446 files, 407,959 tokens, 1.9M characters
-**Language**: Python 3.8+
+**Generated:** December 29, 2024
+**Codebase Stats**: 59 Python source + test files, 138,200 tokens (main), 651,541 characters
+**Language**: Python 3.11+
+**Framework**: FastAPI 0.115.0+, SQLAlchemy 2.0
 
 ---
 
@@ -43,12 +44,13 @@ mealtrack_backend/
 
 | Metric | Value |
 |--------|-------|
-| Total Files | 446 |
-| Python Files | ~200+ |
-| Test Files | ~40+ |
-| Total Tokens | 407,959 |
-| Average File Size | 4.3KB |
-| Largest Files | Integration tests (6K+ tokens) |
+| Total Python Files | 59 (source + tests) |
+| Source Files (src/) | 40+ |
+| Test Files | 20+ |
+| Total Tokens | 138,200 |
+| Total Characters | 651,541 |
+| Average File Size | 11KB |
+| Largest Files | Integration/unit tests (6K+ tokens) |
 
 ---
 
@@ -602,47 +604,55 @@ feature_flags (flag_id, flag_name, enabled, rollout_percentage)
 
 ## API Routes
 
-### Route Organization
+### Route Organization (70+ endpoints)
 
 ```
 /v1/
-├── /health              # Health checks
-├── /meals               # Meal management
-│   ├── POST /image/analyze
-│   ├── GET /{id}
-│   ├── PATCH /{id}
-│   └── POST /manual
-├── /meal-plans          # Meal planning
-│   ├── POST /generate
+├── /health                          # Health checks
+├── /meals                           # Meal management
+│   ├── POST /image/analyze          # AI image analysis
+│   ├── POST /manual                 # Manual entry
+│   ├── GET /{id}                    # Get meal
+│   ├── PATCH /{id}                  # Edit meal
+│   └── GET /by-date                 # Query by date
+├── /ingredients                     # New: Ingredient recognition
+│   └── POST /recognize              # AI ingredient detection
+├── /meal-suggestions                # New: Meal recommendations
+│   ├── POST /generate               # Generate suggestions
+│   └── POST /{id}/save              # Save suggestion
+├── /meal-plans                      # Meal planning
+│   ├── POST /generate               # Standard generation
+│   ├── POST /generate/weekly-ingredient-based  # New: Ingredient-based
 │   ├── GET /{id}
 │   └── PUT /{id}/meals/{day}
-├── /foods               # Food database
+├── /foods                           # Food database
 │   ├── GET /search
 │   └── GET /{id}
-├── /chat                # Chat endpoints
+├── /chat                            # Chat endpoints
 │   ├── POST /threads
 │   ├── POST /threads/{id}/messages
 │   ├── GET /threads/{id}/messages
-│   └── WebSocket /ws
-├── /users               # User management
+│   └── WebSocket /ws/{thread_id}
+├── /users                           # User management
 │   ├── POST /sync
-│   ├── POST /onboarding
+│   ├── POST /onboarding             # Updated: with pain points
 │   └── POST /metrics/update
-├── /user-profiles       # Profile management
-│   ├── GET /
-│   ├── PUT /
-│   ├── GET /tdee
-│   └── POST /tdee
-├── /notifications       # Push notifications
-│   ├── POST /tokens
-│   └── PUT /preferences
-├── /feature-flags       # Feature management
+├── /user-profiles                   # Profile management
+│   ├── GET /me
+│   ├── PUT /me                      # Updated: with timezone
+│   ├── GET /me/tdee
+│   └── POST /me/tdee
+├── /notifications                   # Push notifications
+│   ├── POST /tokens                 # FCM token registration
+│   ├── PUT /preferences
+│   └── GET /preferences
+├── /feature-flags                   # Feature management
 │   └── GET /{flag}
-├── /activities          # Activity tracking
+├── /activities                      # Activity tracking
 │   └── GET /
-├── /webhooks            # External webhooks
-│   └── POST /firebase
-└── /monitoring          # Monitoring/metrics
+├── /webhooks                        # External webhooks
+│   └── POST /revenucat              # Updated: RevenueCat webhooks
+└── /monitoring                      # Monitoring/metrics
     └── GET /metrics
 ```
 
@@ -733,17 +743,29 @@ tests/
 
 ## Summary
 
-The MealTrack Backend implements a robust 4-layer clean architecture with ~200 Python files organized by concern. The CQRS pattern in the application layer decouples API routes from business logic, while the domain layer encapsulates core business rules independently. The infrastructure layer handles all external integrations (Gemini, OpenAI, Firebase, Cloudinary, etc.), making the system highly testable and maintainable.
+The MealTrack Backend implements a robust 4-layer clean architecture with 59 core Python files organized by concern, totaling 138K tokens. The CQRS pattern in the application layer decouples API routes from business logic, while the domain layer encapsulates core business rules independently. The infrastructure layer handles all external integrations (Google Gemini 2.0, OpenAI GPT-4, Firebase, Pinecone, RevenueCat, Cloudinary, etc.), making the system highly testable and maintainable.
 
 **Key Strengths**:
 - Clear separation of concerns across 4 layers
-- CQRS pattern for scalable command/query handling
-- Comprehensive test suite (70%+ coverage)
-- Event-driven architecture for loose coupling
-- Well-organized module structure by domain
+- CQRS pattern for scalable command/query handling (40+ command/query handlers)
+- Comprehensive test suite (70%+ coverage across 20+ test files)
+- Event-driven architecture for loose coupling and reactive features
+- Well-organized module structure by domain (13 core features)
+- 70+ REST endpoints supporting diverse meal tracking workflows
+- New features: ingredient recognition, meal suggestions, pain points tracking, timezone-aware notifications
+
+**Recent Additions (v0.3.0)**:
+- Ingredient recognition API (`/v1/ingredients/recognize`)
+- Meal suggestions generation and saving
+- User pain points collection during onboarding
+- Timezone-aware notification scheduling
+- RevenueCat subscription webhook integration
+- 11 database migrations supporting all features
 
 **Growth Points**:
-- Documentation of individual service contracts
-- Integration test coverage for complex flows
-- Performance profiling and optimization
-- Database query optimization guidelines
+- API response time optimization (p99 target <1s)
+- Database query optimization for large datasets
+- Integration test coverage for meal suggestion flows
+- Performance profiling and benchmarking suite
+- Comprehensive API documentation updates
+- Distributed tracing and monitoring system
