@@ -31,6 +31,7 @@ class UserProfile(Base, BaseMixin):
     dietary_preferences = Column(JSON, default=[], nullable=False)  # ['vegan', 'vegetarian', 'gluten_free', etc.]
     health_conditions = Column(JSON, default=[], nullable=False)    # ['diabetes', 'hypertension', etc.]
     allergies = Column(JSON, default=[], nullable=False)           # ['nuts', 'dairy', 'shellfish', etc.]
+    pain_points = Column(JSON, default=[], nullable=True)
     
     # Constraints
     __table_args__ = (

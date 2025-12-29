@@ -59,7 +59,8 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
         goal_map = {
             "maintenance": Goal.MAINTENANCE,
             "cutting": Goal.CUTTING,
-            "bulking": Goal.BULKING
+            "bulking": Goal.BULKING,
+            "recomp": Goal.RECOMP
         }
 
         tdee_request = TdeeRequest(

@@ -70,14 +70,11 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
             # Update goals
             profile.activity_level = command.activity_level
             profile.fitness_goal = command.fitness_goal
-            profile.target_weight_kg = command.target_weight_kg
             profile.meals_per_day = command.meals_per_day
-            profile.snacks_per_day = command.snacks_per_day
 
-            # Update preferences (JSON fields)
-            profile.dietary_preferences = command.dietary_preferences or []
-            profile.health_conditions = command.health_conditions or []
-            profile.allergies = command.allergies or []
+            # Update preferences (JSON fields) - REQUIRED
+            profile.pain_points = command.pain_points
+            profile.dietary_preferences = command.dietary_preferences
 
             # Save profile
             self.db.add(profile)
