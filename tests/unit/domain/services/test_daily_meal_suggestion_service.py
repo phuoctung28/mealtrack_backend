@@ -78,12 +78,12 @@ class TestDailyMealSuggestionService:
 
     def test_build_meal_suggestion_prompt(self, service, user_preferences):
         """Test building meal suggestion prompt."""
-        prompt = service._build_meal_suggestion_prompt(
+        prompt = service.prompt_builder.build_meal_suggestion_prompt(
             meal_type=MealType.BREAKFAST,
             calorie_target=500,
             user_preferences=user_preferences
         )
-        
+
         assert "breakfast" in prompt.lower()
         assert "500" in prompt
         assert "vegetarian" in prompt.lower()
@@ -93,8 +93,8 @@ class TestDailyMealSuggestionService:
     def test_extract_json_direct(self, service):
         """Test extracting JSON directly."""
         content = '{"name": "meal", "calories": 500}'
-        result = service._extract_json(content)
-        
+        result = service.json_extractor.extract_json(content)
+
         assert result == {"name": "meal", "calories": 500}
 
     def test_extract_json_from_markdown(self, service):
@@ -104,16 +104,16 @@ class TestDailyMealSuggestionService:
 {"name": "salad", "calories": 300}
 ```
 '''
-        result = service._extract_json(content)
-        
+        result = service.json_extractor.extract_json(content)
+
         assert result == {"name": "salad", "calories": 300}
 
     def test_extract_json_invalid(self, service):
         """Test error when JSON cannot be extracted."""
         content = "This is not JSON"
-        
+
         with pytest.raises(ValueError, match="Could not extract JSON"):
-            service._extract_json(content)
+            service.json_extractor.extract_json(content)
 
     def test_extract_unified_meals_json_valid(self, service):
         """Test extracting unified meals JSON."""
@@ -123,18 +123,18 @@ class TestDailyMealSuggestionService:
                 {"meal_type": "lunch", "name": "Salad", "calories": 500}
             ]
         })
-        
-        result = service._extract_unified_meals_json(content)
-        
+
+        result = service.json_extractor.extract_unified_meals_json(content)
+
         assert "meals" in result
         assert len(result["meals"]) == 2
 
     def test_extract_unified_meals_json_missing_meals(self, service):
         """Test error when meals array is missing."""
         content = '{"other_data": "value"}'
-        
+
         with pytest.raises(ValueError, match="missing 'meals' array"):
-            service._extract_unified_meals_json(content)
+            service.json_extractor.extract_unified_meals_json(content)
 
     def test_build_unified_meal_prompt(self, service, user_preferences):
         """Test building unified meal prompt."""
@@ -143,9 +143,9 @@ class TestDailyMealSuggestionService:
             MealType.LUNCH: 700,
             MealType.DINNER: 800
         }
-        
-        prompt = service._build_unified_meal_prompt(meal_distribution, user_preferences)
-        
+
+        prompt = service.prompt_builder.build_unified_meal_prompt(meal_distribution, user_preferences)
+
         assert "breakfast" in prompt.lower()
         assert "lunch" in prompt.lower()
         assert "dinner" in prompt.lower()
@@ -155,8 +155,8 @@ class TestDailyMealSuggestionService:
 
     def test_get_fallback_meal_breakfast(self, service):
         """Test getting fallback breakfast meal."""
-        meal = service._get_fallback_meal(MealType.BREAKFAST, 400)
-        
+        meal = service.fallback_provider.get_fallback_meal(MealType.BREAKFAST, 400)
+
         assert meal.meal_type == MealType.BREAKFAST
         assert meal.name is not None
         assert meal.calories > 0
@@ -164,33 +164,33 @@ class TestDailyMealSuggestionService:
 
     def test_get_fallback_meal_lunch(self, service):
         """Test getting fallback lunch meal."""
-        meal = service._get_fallback_meal(MealType.LUNCH, 600)
-        
+        meal = service.fallback_provider.get_fallback_meal(MealType.LUNCH, 600)
+
         assert meal.meal_type == MealType.LUNCH
         assert meal.name is not None
         assert meal.calories > 0
 
     def test_get_fallback_meal_dinner(self, service):
         """Test getting fallback dinner meal."""
-        meal = service._get_fallback_meal(MealType.DINNER, 700)
-        
+        meal = service.fallback_provider.get_fallback_meal(MealType.DINNER, 700)
+
         assert meal.meal_type == MealType.DINNER
         assert meal.name is not None
         assert meal.calories > 0
 
     def test_get_fallback_meal_snack(self, service):
         """Test getting fallback snack meal."""
-        meal = service._get_fallback_meal(MealType.SNACK, 200)
-        
+        meal = service.fallback_provider.get_fallback_meal(MealType.SNACK, 200)
+
         assert meal.meal_type == MealType.SNACK
         assert meal.name is not None
         assert meal.calories > 0
 
     def test_get_fallback_meal_scales_with_calories(self, service):
         """Test that fallback meals scale portions based on calorie target."""
-        meal_400 = service._get_fallback_meal(MealType.BREAKFAST, 400)
-        meal_800 = service._get_fallback_meal(MealType.BREAKFAST, 800)
-        
+        meal_400 = service.fallback_provider.get_fallback_meal(MealType.BREAKFAST, 400)
+        meal_800 = service.fallback_provider.get_fallback_meal(MealType.BREAKFAST, 800)
+
         # Higher calorie meal should have higher nutrient values
         assert meal_800.calories > meal_400.calories
         assert meal_800.protein > meal_400.protein
@@ -229,9 +229,9 @@ class TestDailyMealSuggestionService:
             'dietary_preferences': [],
             'health_conditions': []
         }
-        
+
         with pytest.raises(ValueError, match="target_calories is required"):
-            service._build_meal_suggestion_prompt(
+            service.prompt_builder.build_meal_suggestion_prompt(
                 meal_type=MealType.BREAKFAST,
                 calorie_target=400,
                 user_preferences=user_preferences
@@ -240,13 +240,13 @@ class TestDailyMealSuggestionService:
     def test_build_meal_suggestion_prompt_with_health_conditions(self, service, user_preferences):
         """Test prompt includes health conditions."""
         user_preferences['health_conditions'] = ['diabetes', 'hypertension']
-        
-        prompt = service._build_meal_suggestion_prompt(
+
+        prompt = service.prompt_builder.build_meal_suggestion_prompt(
             meal_type=MealType.LUNCH,
             calorie_target=600,
             user_preferences=user_preferences
         )
-        
+
         assert 'diabetes' in prompt.lower()
         assert 'hypertension' in prompt.lower()
 
@@ -258,15 +258,15 @@ class TestDailyMealSuggestionService:
             ('build_muscle', 'protein'),
             ('maintain_weight', 'balanced')
         ]
-        
+
         for goal, keyword in goals_and_keywords:
             user_preferences['goal'] = goal
-            prompt = service._build_meal_suggestion_prompt(
+            prompt = service.prompt_builder.build_meal_suggestion_prompt(
                 meal_type=MealType.DINNER,
                 calorie_target=700,
                 user_preferences=user_preferences
             )
-            
+
             assert goal in prompt.lower() or keyword in prompt.lower()
 
     def test_build_unified_prompt_includes_all_meals(self, service, user_preferences):
@@ -276,9 +276,9 @@ class TestDailyMealSuggestionService:
             MealType.LUNCH: 700,
             MealType.DINNER: 800
         }
-        
-        prompt = service._build_unified_meal_prompt(meal_distribution, user_preferences)
-        
+
+        prompt = service.prompt_builder.build_unified_meal_prompt(meal_distribution, user_preferences)
+
         # Should have targets for each meal
         assert "Breakfast" in prompt
         assert "Lunch" in prompt
@@ -301,15 +301,15 @@ class TestDailyMealSuggestionService:
                 'fat_grams': 67
             }
         }
-        
+
         meal_distribution = {
             MealType.BREAKFAST: 600,
             MealType.LUNCH: 700,
             MealType.DINNER: 700
         }
-        
-        prompt = service._build_unified_meal_prompt(meal_distribution, user_preferences)
-        
+
+        prompt = service.prompt_builder.build_unified_meal_prompt(meal_distribution, user_preferences)
+
         # Should work with dict format
         assert "protein" in prompt.lower()
         assert prompt is not None
@@ -352,9 +352,9 @@ class TestDailyMealSuggestionService:
             ]
         }
         '''
-        
-        result = service._extract_json(content)
-        
+
+        result = service.json_extractor.extract_json(content)
+
         assert "meals" in result
         assert len(result["meals"][0]["ingredients"]) == 3
 

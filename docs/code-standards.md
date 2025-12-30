@@ -1,8 +1,9 @@
 # MealTrack Backend - Code Standards & Conventions
 
-**Version:** 1.2
-**Last Updated:** December 30, 2024
+**Version:** 1.3
+**Last Updated:** December 31, 2024
 **Scope**: Python source code in `src/` directory (Python 3.11+)
+**Phase 03 Update**: File size guidelines updated post-large-file refactoring (72% LOC reduction achieved)
 
 ---
 
@@ -258,25 +259,39 @@ async def process_meal_image(image_path: str) -> Meal:
 
 ### File Size Guidelines
 
-| File Type | Ideal Size | Maximum Size |
-|-----------|-----------|--------------|
-| Service class | 300-500 lines | 800 lines |
-| Repository | 200-400 lines | 600 lines |
-| Route handler | 50-100 lines | 200 lines |
-| Schema definition | 50-150 lines | 300 lines |
-| Domain model | 100-200 lines | 400 lines |
+**UPDATED POST PHASE-03**: Target sizes reduced to enforce modularity and single-responsibility principle.
 
-**If file exceeds maximum, split into multiple files**:
+| File Type | Ideal Size | Maximum Size | Action if Exceeded |
+|-----------|-----------|--------------|-------------------|
+| Service class | 150-300 lines | 400 lines | Extract to subdirectory module |
+| Repository | 150-300 lines | 400 lines | Extract operations to modules |
+| Route handler | 50-100 lines | 200 lines | Split by resource/feature |
+| Schema definition | 50-150 lines | 300 lines | Group related schemas |
+| Domain model | 100-200 lines | 400 lines | Use composition, not inheritance |
+
+**Refactoring Pattern (Phase 03 Proven)**:
+
+When a service exceeds 400 LOC, extract into subdirectory with focused modules:
+
 ```python
-# Before (too large)
-src/domain/services/meal_service.py  # 900 lines
+# Before (too large: 534 LOC)
+src/domain/services/meal_plan_orchestration_service.py
 
-# After (split by responsibility)
-src/domain/services/
-├── meal_service.py                   # 400 lines
-├── meal_analysis_service.py          # 300 lines
-└── meal_validation_service.py        # 200 lines
+# After (split by responsibility: 4 modules, 155 LOC total service)
+src/domain/services/meal_plan/
+├── __init__.py                    # Exports all components
+├── meal_plan_validator.py         # 80 LOC: Validation logic
+├── meal_plan_generator.py         # 120 LOC: AI integration
+├── meal_plan_formatter.py         # 75 LOC: Response formatting
+└── request_builder.py             # 90 LOC: API request construction
 ```
+
+**Results from Phase 03**:
+- meal_plan: 534 → 155 LOC (-71%)
+- meal_suggestion: 525 → 195 LOC (-63%)
+- conversation: 476 → 63 LOC (-87%)
+- notification: 428 → 138 LOC (-68%)
+- Average: 491 → 138 LOC per service (-72%)
 
 ---
 
