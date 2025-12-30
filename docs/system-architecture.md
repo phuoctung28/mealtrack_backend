@@ -1,7 +1,7 @@
 # MealTrack Backend - System Architecture
 
-**Version:** 0.3.0
-**Last Updated:** December 29, 2024
+**Version:** 0.4.0
+**Last Updated:** December 30, 2024
 **Architecture Pattern:** 4-Layer Clean Architecture with CQRS and Event-Driven Design
 
 ---
@@ -14,10 +14,11 @@
 4. [Data Flow](#data-flow)
 5. [External Integrations](#external-integrations)
 6. [Database Design](#database-design)
-7. [Caching Strategy](#caching-strategy)
-8. [Event-Driven Architecture](#event-driven-architecture)
-9. [Security Architecture](#security-architecture)
-10. [Deployment Architecture](#deployment-architecture)
+7. [Query Optimization & N+1 Prevention](#query-optimization--n1-prevention)
+8. [Caching Strategy](#caching-strategy)
+9. [Event-Driven Architecture](#event-driven-architecture)
+10. [Security Architecture](#security-architecture)
+11. [Deployment Architecture](#deployment-architecture)
 
 ---
 
@@ -849,6 +850,83 @@ feature_flags
 4. **Status Enums**: Meal status, message role stored as ENUM for type safety
 5. **JSON Columns**: Preferences stored as JSON for flexibility
 6. **Indexes on Foreign Keys**: All FK columns indexed for query performance
+
+---
+
+## Query Optimization & N+1 Prevention
+
+### Problem: N+1 Query Pattern
+
+Without eager loading, each relationship access triggers additional queries:
+
+```python
+# This causes N+1 queries
+meals = get_meals(user_id)  # 1 query: SELECT * FROM meals
+for meal in meals:          # N queries: SELECT * FROM nutrition WHERE meal_id = ?
+    print(meal.nutrition)
+```
+
+**Impact**:
+- GET /meals endpoint → 1 + N queries (N = number of meals)
+- GET /meal-plans/{id} → 1 + days + (days * meals) queries (nested)
+
+### Solution: Eager Loading with SQLAlchemy
+
+Define load strategies at repository module level:
+
+```python
+from sqlalchemy.orm import joinedload, selectinload
+
+# Meal Repository
+_MEAL_LOAD_OPTIONS = (
+    joinedload(DBMeal.user),                    # M2O: LEFT JOIN
+    selectinload(DBMeal.nutrition)
+    .selectinload(DBNutrition.food_items),      # O2M: SELECT IN (nested)
+    selectinload(DBMeal.images),                # O2M: SELECT IN
+)
+
+# Apply in queries
+async def get_by_id(self, meal_id: str) -> Optional[Meal]:
+    result = await self.session.execute(
+        select(DBMeal)
+        .options(*_MEAL_LOAD_OPTIONS)
+        .where(DBMeal.id == meal_id)
+    )
+    return self._to_domain(result.scalar_one_or_none())
+```
+
+### Eager Loading Strategies
+
+| Relationship | Strategy | Use Case | Example |
+|--------------|----------|----------|---------|
+| Many-to-One | `joinedload()` | Parent objects (single result) | Meal → User |
+| One-to-Many | `selectinload()` | Collections (many results) | Meal → FoodItems |
+| Nested | Chained `selectinload()` | Deep relationships | MealPlan → Days → Meals |
+
+**Key Metrics (Phase 02 Audit)**:
+- Query logging enabled in development (config.py line 102)
+- `meal_repository.py`: Proper eager loading implemented (_MEAL_LOAD_OPTIONS)
+- `meal_plan_repository.py`: Nested eager loading implemented (_MEAL_PLAN_LOAD_OPTIONS)
+- `notification_repository.py`: Minor N+1 in preference loop (lines 303-305) - non-critical, pending optimization
+
+### Development Practices
+
+Enable query logging during development to verify optimization:
+
+```bash
+# In .env
+ENVIRONMENT=development
+
+# Check logs for query count reduction
+# Should see: SELECT, SELECT IN, SELECT IN (not 1 + N queries)
+```
+
+### Affected Repositories
+
+- ✅ **meal_repository.py**: Eager loading configured
+- ✅ **meal_plan_repository.py**: Nested eager loading configured
+- ⚠️ **notification_repository.py**: Preference queries in loop (low priority)
+- ✅ **user_repository.py**: Standard eager loading
 
 ---
 

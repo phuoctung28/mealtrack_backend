@@ -283,8 +283,13 @@ class NotificationRepository(NotificationRepositoryPort):
                 return []
             
             # Query users with meal reminders enabled
+            # Include time_field in query to avoid N+1 (was querying prefs in loop)
             results = (
-                db.query(DBNotificationPreferences.user_id, User.timezone)
+                db.query(
+                    DBNotificationPreferences.user_id,
+                    User.timezone,
+                    time_field
+                )
                 .join(User, DBNotificationPreferences.user_id == User.id)
                 .filter(
                     DBNotificationPreferences.meal_reminders_enabled == True,
@@ -292,22 +297,15 @@ class NotificationRepository(NotificationRepositoryPort):
                 )
                 .all()
             )
-            
+
             # Filter by local time match
             matching_users = []
-            for user_id, timezone in results:
+            for user_id, timezone, pref_minutes in results:
                 user_timezone = timezone or DEFAULT_TIMEZONE
                 local_minutes = utc_to_local_minutes(current_utc, user_timezone)
-                
-                # Get user's preferred time
-                prefs = db.query(DBNotificationPreferences).filter(
-                    DBNotificationPreferences.user_id == user_id
-                ).first()
-                
-                if prefs:
-                    pref_minutes = getattr(prefs, f"{meal_type}_time_minutes")
-                    if pref_minutes is not None and pref_minutes == local_minutes:
-                        matching_users.append(user_id)
+
+                if pref_minutes is not None and pref_minutes == local_minutes:
+                    matching_users.append(user_id)
             
             return matching_users
             

@@ -1,7 +1,7 @@
 # MealTrack Backend - Code Standards & Conventions
 
-**Version:** 1.1
-**Last Updated:** December 29, 2024
+**Version:** 1.2
+**Last Updated:** December 30, 2024
 **Scope**: Python source code in `src/` directory (Python 3.11+)
 
 ---
@@ -889,6 +889,56 @@ stmt = select(MealORM).where(
     (MealORM.created_at <= end_date)
 )
 ```
+
+### Eager Loading & N+1 Prevention
+
+**Problem**: Lazy loading relationships causes N+1 queries (1 query for parent + N queries for children).
+
+**Solution**: Use eager loading with `.options()` in queries:
+
+```python
+from sqlalchemy.orm import joinedload, selectinload
+
+# Pattern: Define load options as module-level constant
+_MEAL_LOAD_OPTIONS = (
+    joinedload(MealORM.user),              # M2O: LEFT JOIN (single result)
+    selectinload(MealORM.food_items),      # O2M: Separate SELECT IN (many results)
+    selectinload(MealORM.images),          # O2M: Separate SELECT IN
+)
+
+# Apply in queries
+async def get_by_id(self, meal_id: str) -> Optional[Meal]:
+    """Get meal with all relationships eager loaded."""
+    stmt = select(MealORM).options(*_MEAL_LOAD_OPTIONS).where(
+        MealORM.id == meal_id
+    )
+    result = await self._session.execute(stmt)
+    orm_model = result.scalar_one_or_none()
+    return self._to_domain(orm_model) if orm_model else None
+
+# Nested eager loading (for deep relationships)
+_MEAL_PLAN_LOAD_OPTIONS = (
+    selectinload(MealPlanORM.days)
+    .selectinload(MealPlanDayORM.meals),   # Nested selectinload
+)
+
+async def get_weekly_plan(self, plan_id: str) -> Optional[MealPlan]:
+    """Get meal plan with all nested relationships."""
+    stmt = select(MealPlanORM).options(*_MEAL_PLAN_LOAD_OPTIONS).where(
+        MealPlanORM.id == plan_id
+    )
+    result = await self._session.execute(stmt)
+    return self._to_domain(result.scalar_one_or_none())
+```
+
+**Guidelines**:
+- **joinedload()** for Many-to-One relationships (parent objects, small result sets)
+- **selectinload()** for One-to-Many relationships (collections, larger result sets)
+- **Nested selectinload()** for deep relationships (plan → days → meals)
+- Always define load options as `_LOAD_OPTIONS` constant at module top
+- Apply to all queries that access relationships
+
+**Development**: Enable query logging in `.env` with `ENVIRONMENT=development` to verify query count reduction in logs.
 
 ---
 

@@ -163,6 +163,24 @@ def meal_repository(test_session) -> MealRepository:
 
 
 @pytest.fixture
+def strict_session(test_session) -> Session:
+    """
+    Session configured for N+1 detection testing.
+
+    Use this fixture in tests where you want to verify that
+    all necessary relationships are eager loaded. Apply raiseload('*')
+    in query options to raise exceptions on lazy loads.
+
+    Example:
+        def test_no_n1_queries(strict_session):
+            result = strict_session.query(Model).options(raiseload('*')).all()
+            # Accessing relationships will raise if not eager loaded
+    """
+    test_session.expire_on_commit = False
+    return test_session
+
+
+@pytest.fixture
 def event_bus(
     test_session,
     mock_image_store,
