@@ -99,7 +99,7 @@ logger.info(
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    echo=False,
+    echo=os.getenv("ENVIRONMENT", "production") == "development",  # Log queries in dev
     echo_pool=POOL_ECHO,
     pool_pre_ping=True,
     pool_recycle=POOL_RECYCLE,
