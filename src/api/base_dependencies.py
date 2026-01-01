@@ -44,6 +44,11 @@ _redis_client: Optional[RedisClient] = None
 _cache_service: Optional[CacheService] = None
 _cache_monitor = CacheMonitor()
 
+# Singleton service instances (initialized once, reused across requests)
+_image_store: Optional[ImageStorePort] = None
+_ai_chat_service: Optional[AIChatServicePort] = None
+_vision_service: Optional[VisionAIServicePort] = None
+
 
 async def initialize_cache_layer() -> None:
     """Initialize Redis cache if enabled."""
@@ -94,19 +99,22 @@ def get_db():
         db.close()
 
 
-# Image Store
+# Image Store (singleton pattern)
 def get_image_store() -> ImageStorePort:
     """
-    Get the image store adapter instance.
-    
+    Get the image store adapter instance (singleton).
+
     Returns:
         ImageStorePort: The image store adapter (Cloudinary or Mock)
     """
-    use_mock = bool(int(os.getenv("USE_MOCK_STORAGE", "0")))
-    if use_mock:
-        return ImageStore()
-    else:
-        return CloudinaryImageStore()
+    global _image_store
+    if _image_store is None:
+        use_mock = bool(int(os.getenv("USE_MOCK_STORAGE", "0")))
+        if use_mock:
+            _image_store = ImageStore()
+        else:
+            _image_store = CloudinaryImageStore()
+    return _image_store
 
 
 # Meal Repository
@@ -123,53 +131,60 @@ def get_meal_repository(db: Session = Depends(get_db)) -> MealRepositoryPort:
     return MealRepository(db)
 
 
-# Vision Service
+# Vision Service (singleton pattern)
 def get_vision_service() -> VisionAIServicePort:
     """
-    Get the vision AI service instance.
-    
+    Get the vision AI service instance (singleton).
+
     Returns:
         VisionAIServicePort: The vision service
     """
-    
-    return VisionAIService()
+    global _vision_service
+    if _vision_service is None:
+        _vision_service = VisionAIService()
+    return _vision_service
 
 
-# AI Chat Service
+# AI Chat Service (singleton pattern)
 def get_ai_chat_service() -> AIChatServicePort:
     """
-    Get the AI chat service instance using the LLM provider factory.
-    
+    Get the AI chat service instance (singleton) using the LLM provider factory.
+
     Supports multiple LLM providers (OpenAI, Gemini) with auto-detection.
     Provider selection priority:
     1. LLM_PROVIDER environment variable (if set)
     2. Auto-detect from available API keys (OPENAI_API_KEY > GOOGLE_API_KEY)
-    
+
     Returns:
         AIChatServicePort: The configured LLM provider instance
-        
+
     Raises:
         ValueError: If no LLM provider can be configured (no API keys available)
     """
+    global _ai_chat_service
+    if _ai_chat_service is not None:
+        return _ai_chat_service
+
     from src.infra.services.ai.llm_provider_factory import LLMProviderFactory
     from src.infra.config.settings import settings
-    
+
     try:
         provider = settings.LLM_PROVIDER
         if provider:
             logger.info(f"Using configured LLM provider: {provider}")
-        
+
         # Get model from settings if available
         model = None
         if provider == "openai":
             model = settings.OPENAI_MODEL
         elif provider == "gemini":
             model = settings.GEMINI_MODEL
-        
-        return LLMProviderFactory.create_provider(
+
+        _ai_chat_service = LLMProviderFactory.create_provider(
             provider=provider,
             model=model
         )
+        return _ai_chat_service
     except ValueError as e:
         logger.error(f"Failed to create LLM provider: {e}")
         raise ValueError(

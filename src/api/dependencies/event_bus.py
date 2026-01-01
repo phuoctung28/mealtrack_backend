@@ -160,6 +160,53 @@ from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.infra.cache.cache_service import CacheService
 from src.infra.event_bus import PyMediatorEventBus, EventBus
 
+# Singleton lightweight event bus for food search (no heavy dependencies)
+_food_search_event_bus: Optional[EventBus] = None
+
+
+def get_food_search_event_bus() -> EventBus:
+    """
+    Get a lightweight event bus for food search operations (singleton).
+
+    This event bus only registers food-related handlers and does NOT
+    initialize heavy services like Cloudinary, Gemini, etc.
+
+    Returns:
+        EventBus: Lightweight event bus for food search
+    """
+    global _food_search_event_bus
+    if _food_search_event_bus is not None:
+        return _food_search_event_bus
+
+    from src.api.base_dependencies import (
+        get_food_data_service,
+        get_food_cache_service,
+        get_food_mapping_service,
+    )
+
+    event_bus = PyMediatorEventBus()
+
+    # Only register food-related handlers (lightweight)
+    food_data_service = get_food_data_service()
+    food_cache_service = get_food_cache_service()
+    food_mapping_service = get_food_mapping_service()
+
+    event_bus.register_handler(
+        SearchFoodsQuery,
+        SearchFoodsQueryHandler(
+            food_data_service, food_cache_service, food_mapping_service
+        ),
+    )
+    event_bus.register_handler(
+        GetFoodDetailsQuery,
+        GetFoodDetailsQueryHandler(
+            food_data_service, food_cache_service, food_mapping_service
+        ),
+    )
+
+    _food_search_event_bus = event_bus
+    return _food_search_event_bus
+
 
 async def get_configured_event_bus(
     db: Session = Depends(get_db),

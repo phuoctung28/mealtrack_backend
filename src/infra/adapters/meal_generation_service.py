@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Dict, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -14,6 +15,11 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 
 logger = logging.getLogger(__name__)
+
+
+def _truncate(s: str, max_len: int = 200) -> str:
+    """Truncate string for logging."""
+    return s[:max_len] + "..." if len(s) > max_len else s
 
 
 class MealGenerationService(MealGenerationServicePort):
@@ -41,7 +47,7 @@ class MealGenerationService(MealGenerationServicePort):
         """
         Generate meal plan using provided prompt and system message.
         Single entry point for all meal generation.
-        
+
         Args:
             prompt: The generation prompt
             system_message: System instructions
@@ -50,37 +56,66 @@ class MealGenerationService(MealGenerationServicePort):
         """
         if not self.api_key:
             raise RuntimeError("GOOGLE_API_KEY missing — cannot call Gemini.")
-        
+
+        start_time = time.time()
+
         try:
             # Determine optimal token limit based on content complexity
             if max_tokens is None:
                 max_tokens = self._determine_optimal_tokens(prompt, system_message)
-            
+
+            # Log request config
+            model_name = self.base_llm_config.get("model", "unknown")
+            logger.info(
+                f"[AI-REQUEST] model={model_name} | "
+                f"max_tokens={max_tokens} | "
+                f"prompt_len={len(prompt)} | "
+                f"system_len={len(system_message)} | "
+                f"response_type={response_type}"
+            )
+
             # Create LLM instance with appropriate token limit
             llm = ChatGoogleGenerativeAI(
                 **self.base_llm_config,
                 max_output_tokens=max_tokens
             )
-            
+
             # Create messages
             messages = [
                 SystemMessage(content=system_message),
                 HumanMessage(content=prompt)
             ]
-            
+
             # Generate response
             response = llm.invoke(messages)
             content = response.content
-            
+            elapsed = time.time() - start_time
+
+            # Log response details
+            logger.info(
+                f"[AI-RESPONSE] elapsed={elapsed:.2f}s | "
+                f"content_len={len(content)} chars (~{len(content)//4} tokens) | "
+                f"starts_with={_truncate(content[:50], 50)} | "
+                f"ends_with={_truncate(content[-50:] if len(content) > 50 else content, 50)}"
+            )
+
             # Extract and validate JSON
             if response_type == "json":
                 data = self._extract_json(content)
+                logger.debug(
+                    f"[AI-PARSED] keys={list(data.keys()) if isinstance(data, dict) else 'non-dict'}"
+                )
                 return data
             else:
                 return {"raw_content": content}
-                
+
         except Exception as e:
-            logger.error(f"Error generating meal plan: {str(e)}")
+            elapsed = time.time() - start_time
+            logger.error(
+                f"[AI-ERROR] elapsed={elapsed:.2f}s | "
+                f"error_type={type(e).__name__} | "
+                f"error={str(e)[:200]}"
+            )
             raise
     
     def _determine_optimal_tokens(self, prompt: str, system_message: str) -> int:
@@ -120,73 +155,279 @@ class MealGenerationService(MealGenerationServicePort):
     
     def _extract_json(self, content: str) -> Dict[str, Any]:
         """Extract and validate JSON from AI response with better error handling."""
+        logger.debug(
+            f"[JSON-EXTRACT-START] content_len={len(content)} | "
+            f"first_char={repr(content[0]) if content else 'empty'} | "
+            f"last_char={repr(content[-1]) if content else 'empty'}"
+        )
+
         try:
             # Direct JSON parsing (works with response_mime_type="application/json")
-            return json.loads(content)
+            result = json.loads(content)
+            logger.debug("[JSON-EXTRACT] direct parse success")
+            return result
         except json.JSONDecodeError as e:
-            logger.warning(f"Direct JSON parsing failed: {str(e)}")
-            logger.debug(f"Content length: {len(content)} characters")
-            
+            logger.warning(
+                f"[JSON-PARSE-FAIL-DIRECT] error={e.msg} | "
+                f"pos={e.pos} | "
+                f"line={e.lineno} | "
+                f"col={e.colno} | "
+                f"context={_truncate(content[max(0, e.pos-30):e.pos+30], 60)}"
+            )
+
             # Try to fix common JSON issues
             cleaned_content = self._clean_json_content(content)
             if cleaned_content:
+                logger.debug(
+                    f"[JSON-CLEAN] original_len={len(content)} | "
+                    f"cleaned_len={len(cleaned_content)} | "
+                    f"diff={len(content) - len(cleaned_content)}"
+                )
                 try:
-                    return json.loads(cleaned_content)
+                    result = json.loads(cleaned_content)
+                    logger.info("[JSON-EXTRACT] cleaned parse success")
+                    return result
                 except json.JSONDecodeError as e2:
-                    logger.warning(f"Cleaned JSON parsing failed: {str(e2)}")
-            
+                    logger.warning(
+                        f"[JSON-PARSE-FAIL-CLEANED] error={e2.msg} | "
+                        f"pos={e2.pos} | "
+                        f"context={_truncate(cleaned_content[max(0, e2.pos-30):e2.pos+30], 60)}"
+                    )
+
             # Fallback: try to find JSON in markdown code block
             json_match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
             if json_match:
+                json_content = json_match.group(1).strip()
+                logger.debug(
+                    f"[JSON-MARKDOWN] found markdown block | "
+                    f"extracted_len={len(json_content)}"
+                )
                 try:
-                    json_content = json_match.group(1).strip()
-                    return json.loads(json_content)
+                    result = json.loads(json_content)
+                    logger.info("[JSON-EXTRACT] markdown parse success")
+                    return result
                 except json.JSONDecodeError as e3:
-                    logger.warning(f"Markdown JSON parsing failed: {str(e3)}")
-            
+                    logger.warning(
+                        f"[JSON-PARSE-FAIL-MARKDOWN] error={e3.msg} | pos={e3.pos}"
+                    )
+
             # Last resort: find any JSON-like structure
             json_match = re.search(r'\{.*\}', content, re.DOTALL)
             if json_match:
+                json_content = json_match.group(0)
+                logger.debug(
+                    f"[JSON-REGEX] found JSON structure | "
+                    f"extracted_len={len(json_content)}"
+                )
                 try:
-                    json_content = json_match.group(0)
                     cleaned_json = self._clean_json_content(json_content)
                     if cleaned_json:
-                        return json.loads(cleaned_json)
+                        result = json.loads(cleaned_json)
+                        logger.info("[JSON-EXTRACT] regex+clean parse success")
+                        return result
                 except json.JSONDecodeError as e4:
-                    logger.warning(f"Regex JSON parsing failed: {str(e4)}")
-            
+                    logger.warning(
+                        f"[JSON-PARSE-FAIL-REGEX] error={e4.msg} | pos={e4.pos}"
+                    )
+
             # Log the problematic content for debugging (truncated)
             content_preview = content[:500] + "..." if len(content) > 500 else content
-            logger.error(f"Could not extract valid JSON from response. Preview: {content_preview}")
+            logger.error(
+                f"[JSON-EXTRACT-FAILED] all parsing attempts failed | "
+                f"content_preview={content_preview}"
+            )
             raise ValueError(f"Could not extract valid JSON from response: {str(e)}")
     
     def _clean_json_content(self, content: str) -> str:
         """Clean common JSON formatting issues."""
         if not content.strip():
+            logger.debug("[JSON-CLEAN] empty content, returning empty")
             return ""
-        
-        # Remove common problematic patterns
+
+        original_len = len(content)
         content = content.strip()
-        
-        # Remove trailing commas before closing brackets/braces
-        content = re.sub(r',(\s*[}\]])', r'\1', content)
-        
-        # Fix missing quotes around keys (simple cases)
-        content = re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', content)
-        
-        # Remove any trailing content after the main JSON object
-        brace_count = 0
-        json_end = -1
-        for i, char in enumerate(content):
+
+        # Strategy: Find positions of complete top-level objects in suggestions array
+        # Look for pattern: complete {...} objects at depth 2 (inside suggestions array)
+
+        in_string = False
+        escape_next = False
+        depth = 0  # Brace depth
+        bracket_depth = 0  # Bracket depth
+        last_complete_suggestion_end = -1
+        object_start_depth = -1
+        complete_objects_count = 0
+        root_object_end = -1  # Position where root JSON object ends
+
+        i = 0
+        while i < len(content):
+            char = content[i]
+
+            if escape_next:
+                escape_next = False
+                i += 1
+                continue
+
+            if char == '\\' and in_string:
+                escape_next = True
+                i += 1
+                continue
+
+            if char == '"':
+                in_string = not in_string
+                i += 1
+                continue
+
+            if in_string:
+                i += 1
+                continue
+
+            # Track structure depth
             if char == '{':
                 brace_count += 1
             elif char == '}':
-                brace_count -= 1
-                if brace_count == 0:
-                    json_end = i
-                    break
-        
-        if json_end > 0:
-            content = content[:json_end + 1]
-        
+                # Check if we're closing a suggestion object
+                if depth == 2 and object_start_depth == 2:
+                    last_complete_suggestion_end = i + 1
+                    complete_objects_count += 1
+                    object_start_depth = -1
+                depth = max(0, depth - 1)
+                # Track when root object closes (depth returns to 0)
+                if depth == 0 and bracket_depth == 0 and root_object_end == -1:
+                    root_object_end = i + 1
+            elif char == '[':
+                bracket_depth += 1
+            elif char == ']':
+                bracket_depth = max(0, bracket_depth - 1)
+                # Track when root array closes
+                if depth == 0 and bracket_depth == 0 and root_object_end == -1:
+                    root_object_end = i + 1
+
+            i += 1
+
+        # Check if JSON is incomplete (unclosed structures or in string)
+        is_incomplete = in_string or depth > 0 or bracket_depth > 0
+
+        logger.debug(
+            f"[JSON-CLEAN-ANALYSIS] original_len={original_len} | "
+            f"in_string={in_string} | "
+            f"unclosed_braces={depth} | "
+            f"unclosed_brackets={bracket_depth} | "
+            f"complete_objects={complete_objects_count} | "
+            f"last_complete_pos={last_complete_suggestion_end} | "
+            f"root_object_end={root_object_end} | "
+            f"is_incomplete={is_incomplete}"
+        )
+
+        # If there's extra text after a complete JSON object, truncate it
+        if not is_incomplete and root_object_end > 0 and root_object_end < len(content):
+            extra_text = content[root_object_end:].strip()
+            if extra_text:
+                logger.debug(
+                    f"[JSON-CLEAN-EXTRA-TEXT] removing {len(content) - root_object_end} chars "
+                    f"after complete JSON at pos {root_object_end}"
+                )
+                content = content[:root_object_end]
+
+        # Always fix trailing commas before closing braces/brackets (common AI output issue)
+        original_content = content
+        content = re.sub(r',(\s*[}\]])', r'\1', content)
+        if content != original_content:
+            logger.debug("[JSON-CLEAN-TRAILING-COMMA] removed trailing comma before closing brace/bracket")
+
+        if is_incomplete and last_complete_suggestion_end > 0:
+            # Truncate to last complete suggestion
+            truncated_len = len(content) - last_complete_suggestion_end
+            content = content[:last_complete_suggestion_end]
+            # Close the suggestions array and root object
+            content += ']}'
+            logger.info(
+                f"[JSON-CLEAN-RECOVERY] truncated {truncated_len} chars | "
+                f"kept {last_complete_suggestion_end} chars | "
+                f"preserved {complete_objects_count} complete objects | "
+                f"added closing ']}}'"
+            )
+        elif is_incomplete:
+            # No complete suggestions found, try simpler recovery
+            logger.warning(
+                f"[JSON-CLEAN-FALLBACK] no complete objects found | "
+                f"attempting simple recovery"
+            )
+            # Find last complete key-value pair
+            last_valid = self._find_last_valid_json_position(content)
+            if last_valid > 0:
+                content = content[:last_valid]
+                logger.debug(
+                    f"[JSON-CLEAN-TRUNCATE] cut at last_valid={last_valid}"
+                )
+
+            # Remove trailing incomplete content
+            content = re.sub(r',\s*$', '', content)
+            content = re.sub(r':\s*$', ': null', content)  # Fix hanging colons
+            content = re.sub(r',(\s*[}\]])', r'\1', content)
+
+            # Close structures
+            content = self._close_json_structures(content)
+            logger.debug(
+                f"[JSON-CLEAN-CLOSED] final_len={len(content)}"
+            )
+
+        return content
+
+    def _find_last_valid_json_position(self, content: str) -> int:
+        """Find position after last complete JSON value."""
+        in_string = False
+        escape_next = False
+        last_valid = 0
+
+        for i, char in enumerate(content):
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\' and in_string:
+                escape_next = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                if not in_string:  # Just closed a string
+                    last_valid = i + 1
+                continue
+            if in_string:
+                continue
+            if char in '}]':
+                last_valid = i + 1
+            elif char == ',':
+                last_valid = i
+
+        return last_valid
+
+    def _close_json_structures(self, content: str) -> str:
+        """Close any unclosed JSON structures."""
+        in_string = False
+        escape_next = False
+        structure_stack = []
+
+        for char in content:
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\' and in_string:
+                escape_next = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if char in '{[':
+                structure_stack.append(char)
+            elif char == '}' and structure_stack and structure_stack[-1] == '{':
+                structure_stack.pop()
+            elif char == ']' and structure_stack and structure_stack[-1] == '[':
+                structure_stack.pop()
+
+        # Close in reverse order
+        for opener in reversed(structure_stack):
+            content += ']' if opener == '[' else '}'
+
         return content

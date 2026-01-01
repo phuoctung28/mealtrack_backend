@@ -16,7 +16,7 @@ class TestMealGenerationService:
         service = MealGenerationService()
         assert service.api_key == 'test_api_key'
         assert service.base_llm_config is not None
-        assert service.base_llm_config['model'] == 'gemini-1.5-flash'
+        assert service.base_llm_config['model'] == 'gemini-2.5-flash'
         assert service.base_llm_config['temperature'] == 0.2
 
     @patch.dict('os.environ', {}, clear=True)
