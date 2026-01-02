@@ -1,83 +1,43 @@
 """
-Meal suggestion API endpoints.
+Meal suggestion API endpoints (Phase 06).
+Includes both legacy endpoints and new session-based endpoints.
 """
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
-from src.api.schemas.request import (
+from src.api.schemas.request.meal_suggestion_requests import (
     MealSuggestionRequest,
-    SaveMealSuggestionRequest
+    SaveMealSuggestionRequest,
+    RegenerateSuggestionsRequest,
+    AcceptSuggestionRequest,
+    RejectSuggestionRequest,
 )
-from src.api.schemas.response import (
+from src.api.schemas.response.meal_suggestion_responses import (
     MealSuggestionsResponse,
-    SaveMealSuggestionResponse
+    SaveMealSuggestionResponse,
+    SuggestionsListResponse,
+    AcceptedMealResponse,
+)
+from src.api.mappers.meal_suggestion_mapper import (
+    to_suggestions_list_response,
+    to_accepted_meal_response,
 )
 from src.app.commands.meal_suggestion import (
     GenerateMealSuggestionsCommand,
-    SaveMealSuggestionCommand
+    SaveMealSuggestionCommand,
+    RegenerateSuggestionsCommand,
+    AcceptSuggestionCommand,
+    RejectSuggestionCommand,
+    DiscardSessionCommand,
 )
+from src.app.queries.meal_suggestion import GetSessionSuggestionsQuery
 from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/meal-suggestions", tags=["Meal Suggestions"])
-
-
-@router.post("/generate", response_model=MealSuggestionsResponse)
-async def generate_meal_suggestions(
-    request: MealSuggestionRequest,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus)
-):
-    """
-    Generate exactly 3 meal suggestions based on user inputs.
-    
-    This endpoint generates 3 meal suggestions for a specific meal type based on:
-    - Available ingredients (optional)
-    - Time constraints (optional)
-    - Dietary preferences (optional)
-    - Calorie targets (optional)
-    
-    The system can also regenerate suggestions by excluding previously suggested meals.
-    
-    Authentication required: User ID is automatically extracted from the Firebase token.
-    
-    Parameters:
-    - meal_type: Type of meal (breakfast, lunch, dinner, snack) - REQUIRED
-    - ingredients: List of available ingredients (max 20) - OPTIONAL
-    - time_available_minutes: Time constraint in minutes - OPTIONAL
-    - dietary_preferences: Dietary preferences (e.g., vegetarian, vegan) - OPTIONAL
-    - calorie_target: Target calories for the meal - OPTIONAL
-    - exclude_ids: List of meal IDs to exclude (for regeneration) - OPTIONAL
-    
-    Returns:
-    - request_id: Unique identifier for this request
-    - suggestions: List of exactly 3 meal suggestions
-    - generation_token: Token for tracking regeneration
-    """
-    try:
-        # Create command
-        command = GenerateMealSuggestionsCommand(
-            user_id=user_id,
-            meal_type=request.meal_type,
-            ingredients=request.ingredients,
-            time_available_minutes=request.time_available_minutes,
-            dietary_preferences=request.dietary_preferences,
-            calorie_target=request.calorie_target,
-            exclude_ids=request.exclude_ids
-        )
-        
-        # Execute the command
-        result = await event_bus.send(command)
-        
-        # Return response
-        return MealSuggestionsResponse(**result)
-        
-    except Exception as e:
-        raise handle_exception(e) from e
-
 
 @router.post("/save", response_model=SaveMealSuggestionResponse)
 async def save_meal_suggestion(
@@ -146,7 +106,169 @@ async def save_meal_suggestion(
         
         # Return response
         return SaveMealSuggestionResponse(**result)
-        
+
     except Exception as e:
         raise handle_exception(e) from e
 
+
+# ============================================================================
+# Phase 06: New Session-Based Endpoints
+# ============================================================================
+
+
+@router.post("/generate", response_model=SuggestionsListResponse)
+async def generate_suggestions_v2(
+    request: MealSuggestionRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    [Phase 06] Generate 3 meal suggestions with session tracking.
+
+    Uses meal_size (S/M/L/XL/OMAD) to calculate target calories from user's TDEE.
+    Creates a session that tracks shown suggestions for regeneration.
+    Session expires after 4 hours.
+    """
+    try:
+        command = GenerateMealSuggestionsCommand(
+            user_id=user_id,
+            meal_type=request.meal_type,
+            meal_size=request.meal_size.value,
+            ingredients=request.ingredients,
+            ingredient_image_url=request.ingredient_image_url,
+            cooking_time_minutes=request.cooking_time_minutes.value,
+        )
+
+        session, suggestions = await event_bus.send(command)
+        return to_suggestions_list_response(session, suggestions)
+
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.post("/regenerate", response_model=SuggestionsListResponse)
+async def regenerate_suggestions(
+    request: RegenerateSuggestionsRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    [Phase 06] Regenerate 3 NEW suggestions excluding previously shown.
+
+    Requires session_id from initial generation.
+    Excludes all previously shown suggestions plus explicitly passed exclude_ids.
+    """
+    try:
+        command = RegenerateSuggestionsCommand(
+            user_id=user_id,
+            session_id=request.session_id,
+            exclude_ids=request.exclude_ids,
+        )
+
+        session, suggestions = await event_bus.send(command)
+        return to_suggestions_list_response(session, suggestions)
+
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.get("/{session_id}", response_model=SuggestionsListResponse)
+async def get_session_suggestions(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    [Phase 06] Get current session's suggestions.
+
+    Retrieves all suggestions generated in this session.
+    Returns 404 if session expired (4h TTL).
+    """
+    try:
+        query = GetSessionSuggestionsQuery(
+            user_id=user_id,
+            session_id=session_id,
+        )
+
+        session, suggestions = await event_bus.send(query)
+        return to_suggestions_list_response(session, suggestions)
+
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.post("/{suggestion_id}/accept", response_model=AcceptedMealResponse)
+async def accept_suggestion(
+    suggestion_id: str,
+    request: AcceptSuggestionRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    [Phase 06] Accept suggestion with portion multiplier (1x-4x).
+
+    Applies portion multiplier to macros and saves to meal history.
+    Marks suggestion as accepted.
+    """
+    try:
+        command = AcceptSuggestionCommand(
+            user_id=user_id,
+            suggestion_id=suggestion_id,
+            portion_multiplier=request.portion_multiplier,
+            consumed_at=request.consumed_at,
+        )
+
+        result = await event_bus.send(command)
+        return to_accepted_meal_response(result)
+
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.post("/{suggestion_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+async def reject_suggestion(
+    suggestion_id: str,
+    request: RejectSuggestionRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    [Phase 06] Reject suggestion with optional feedback.
+
+    Marks suggestion as rejected. Feedback used for analytics/improvement.
+    """
+    try:
+        command = RejectSuggestionCommand(
+            user_id=user_id,
+            suggestion_id=suggestion_id,
+            feedback=request.feedback if hasattr(request, 'feedback') else None,
+        )
+
+        await event_bus.send(command)
+
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def discard_session(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    [Phase 06] Discard entire suggestion session.
+
+    Deletes session and all associated suggestions from cache.
+    Used when user cancels the flow.
+    """
+    try:
+        command = DiscardSessionCommand(
+            user_id=user_id,
+            session_id=session_id,
+        )
+
+        await event_bus.send(command)
+
+    except Exception as e:
+        raise handle_exception(e) from e

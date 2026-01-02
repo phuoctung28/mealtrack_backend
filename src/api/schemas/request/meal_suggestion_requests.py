@@ -1,31 +1,58 @@
 """
 Request schemas for meal suggestion generation.
 """
+from datetime import datetime
 from typing import List, Optional, Literal
+from enum import Enum
 
 from pydantic import BaseModel, Field
 
 
+class MealSizeEnum(str, Enum):
+    """T-shirt sizing for meal portions."""
+    S = "S"      # 10% of daily TDEE
+    M = "M"      # 20%
+    L = "L"      # 40%
+    XL = "XL"    # 60%
+    OMAD = "OMAD"  # 100%
+
+
+class CookingTimeEnum(int, Enum):
+    """Predefined cooking time options."""
+    QUICK = 20
+    MEDIUM = 30
+    STANDARD = 45
+    LONG = 60
+
+
 class MealSuggestionRequest(BaseModel):
     """
-    Request schema for generating meal suggestions.
-    
-    Generates exactly 3 meal suggestions based on the provided inputs.
+    Request schema for generating meal suggestions (Phase 06).
+
+    Generates exactly 3 meal suggestions based on:
+    - meal_type, meal_size, ingredients (text or image), cooking_time
     """
-    
+
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
-        ..., 
+        ...,
         description="Type of meal to generate suggestions for"
+    )
+    meal_size: MealSizeEnum = Field(
+        ...,
+        description="T-shirt sizing (S/M/L/XL/OMAD) determines % of daily TDEE"
     )
     ingredients: List[str] = Field(
         default_factory=list,
         max_length=20,
         description="Optional list of available ingredients (max 20)"
     )
-    time_available_minutes: Optional[int] = Field(
+    ingredient_image_url: Optional[str] = Field(
         None,
-        gt=0,
-        description="Optional time constraint in minutes (Any / <15 / <30 / <60)"
+        description="Optional photo of ingredients for AI recognition"
+    )
+    cooking_time_minutes: CookingTimeEnum = Field(
+        ...,
+        description="Cooking time constraint (20/30/45/60 minutes)"
     )
     dietary_preferences: List[str] = Field(
         default_factory=list,
@@ -34,22 +61,82 @@ class MealSuggestionRequest(BaseModel):
     calorie_target: Optional[int] = Field(
         None,
         gt=0,
-        description="Optional calorie target for the meal"
+        description="Optional calorie target override (calculated from meal_size if not provided)"
     )
     exclude_ids: List[str] = Field(
         default_factory=list,
         description="List of meal IDs to exclude (for regeneration)"
     )
-    
+
     class Config:
         json_schema_extra = {
             "example": {
                 "meal_type": "lunch",
+                "meal_size": "M",
                 "ingredients": ["chicken breast", "broccoli", "rice"],
-                "time_available_minutes": 30,
+                "ingredient_image_url": None,
+                "cooking_time_minutes": 30,
                 "dietary_preferences": ["high-protein"],
-                "calorie_target": 500,
+                "calorie_target": None,
                 "exclude_ids": []
+            }
+        }
+
+
+class RegenerateSuggestionsRequest(BaseModel):
+    """Request to regenerate 3 NEW meal ideas (excludes shown)."""
+
+    session_id: str = Field(..., description="Suggestion session ID")
+    exclude_ids: List[str] = Field(
+        default_factory=list,
+        description="Suggestion IDs to exclude from regeneration"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "session_id": "session_abc123",
+                "exclude_ids": ["meal_lunch_1234", "meal_lunch_5678"]
+            }
+        }
+
+
+class AcceptSuggestionRequest(BaseModel):
+    """Request to accept suggestion with portion multiplier."""
+
+    portion_multiplier: int = Field(
+        default=1,
+        ge=1,
+        le=4,
+        description="Portion multiplier (1x, 2x, 3x, 4x)"
+    )
+    consumed_at: Optional[datetime] = Field(
+        None,
+        description="Optional consumption timestamp (defaults to now)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "portion_multiplier": 2,
+                "consumed_at": "2025-12-30T12:00:00Z"
+            }
+        }
+
+
+class RejectSuggestionRequest(BaseModel):
+    """Request to reject suggestion with optional feedback."""
+
+    feedback: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Optional feedback on why suggestion was rejected"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "feedback": "Too spicy for my taste"
             }
         }
 
@@ -57,8 +144,9 @@ class MealSuggestionRequest(BaseModel):
 class SaveMealSuggestionRequest(BaseModel):
     """
     Request schema for saving a selected meal suggestion to meal history.
+    (LEGACY - use AcceptSuggestionRequest instead)
     """
-    
+
     suggestion_id: str = Field(
         ...,
         description="ID of the suggestion to save"
@@ -107,7 +195,7 @@ class SaveMealSuggestionRequest(BaseModel):
         None,
         description="Date to save the meal for (YYYY-MM-DD format), defaults to today"
     )
-    
+
     class Config:
         json_schema_extra = {
             "example": {

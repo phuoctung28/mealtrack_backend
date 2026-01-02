@@ -326,5 +326,38 @@ def initialize_scheduled_notification_service() -> ScheduledNotificationService:
     return _scheduled_notification_service
 
 
+# Phase 06: Meal Suggestion Dependencies
+def get_redis_client() -> Optional[RedisClient]:
+    """Get Redis client for meal suggestions repository."""
+    return _redis_client
+
+
+def get_meal_suggestion_repository():
+    """Get meal suggestion repository (Phase 06)."""
+    from src.infra.repositories.meal_suggestion_repository import MealSuggestionRepository
+    if _redis_client is None:
+        raise RuntimeError("Redis client not initialized. Ensure cache layer is initialized.")
+    return MealSuggestionRepository(_redis_client)
+
+
+def get_suggestion_orchestration_service(
+    db: Session = Depends(get_db),
+):
+    """Get suggestion orchestration service (Phase 06)."""
+    from src.domain.services.meal_suggestion import SuggestionOrchestrationService
+    from src.infra.adapters.meal_generation_service import MealGenerationService
+    from src.infra.repositories.user_repository import UserRepository
+
+    meal_gen_service = MealGenerationService()
+    suggestion_repo = get_meal_suggestion_repository()
+    user_repo = UserRepository(db)
+
+    return SuggestionOrchestrationService(
+        generation_service=meal_gen_service,
+        suggestion_repo=suggestion_repo,
+        user_repo=user_repo,
+    )
+
+
 # Note: Old handler functions removed - using event-driven architecture now
 # The event bus configuration in event_bus.py handles all dependencies
