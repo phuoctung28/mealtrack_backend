@@ -1,6 +1,7 @@
 """
 Response schemas for meal suggestion generation (Phase 06).
 """
+
 from datetime import datetime
 from typing import List, Optional
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 
 class MacrosSchema(BaseModel):
     """Macronutrient information."""
+
     calories: int = Field(..., description="Total calories")
     protein: float = Field(..., description="Protein in grams")
     carbs: float = Field(..., description="Carbohydrates in grams")
@@ -17,6 +19,7 @@ class MacrosSchema(BaseModel):
 
 class MacroEstimateResponse(BaseModel):
     """Alias for MacrosSchema for consistency."""
+
     calories: int = Field(..., description="Total calories")
     protein: float = Field(..., description="Protein in grams")
     carbs: float = Field(..., description="Carbohydrates in grams")
@@ -25,6 +28,7 @@ class MacroEstimateResponse(BaseModel):
 
 class IngredientResponse(BaseModel):
     """Ingredient with amount and unit."""
+
     name: str = Field(..., description="Ingredient name")
     amount: float = Field(..., description="Amount/quantity")
     unit: str = Field(..., description="Unit (g, ml, tbsp, etc)")
@@ -32,6 +36,7 @@ class IngredientResponse(BaseModel):
 
 class RecipeStepResponse(BaseModel):
     """Single recipe step with numbered instruction."""
+
     step: int = Field(..., description="Step number (1-indexed)")
     instruction: str = Field(..., description="Step instruction")
     duration_minutes: Optional[int] = Field(None, description="Duration for this step")
@@ -45,24 +50,20 @@ class MealSuggestionResponse(BaseModel):
     id: str = Field(..., description="Unique identifier for this suggestion")
     meal_name: str = Field(..., description="Name of the meal")
     description: str = Field(..., description="Brief description of the meal")
-    macros: MacroEstimateResponse = Field(..., description="Macronutrient breakdown (base portion)")
+    macros: MacroEstimateResponse = Field(
+        ..., description="Macronutrient breakdown (base portion)"
+    )
     ingredients: List[IngredientResponse] = Field(
-        ...,
-        description="List of ingredients with amounts"
+        ..., description="List of ingredients with amounts"
     )
     recipe_steps: List[RecipeStepResponse] = Field(
-        ...,
-        description="Numbered cooking steps"
+        ..., description="Numbered cooking steps"
     )
     prep_time_minutes: int = Field(
-        ...,
-        description="Total prep time (includes cooking)"
+        ..., description="Total prep time (includes cooking)"
     )
     confidence_score: float = Field(
-        default=0.9,
-        ge=0.0,
-        le=1.0,
-        description="AI confidence score (0.0-1.0)"
+        default=0.9, ge=0.0, le=1.0, description="AI confidence score (0.0-1.0)"
     )
 
 
@@ -75,19 +76,21 @@ class SuggestionsListResponse(BaseModel):
     Response containing exactly 3 meal suggestions (Phase 06).
     """
 
-    session_id: str = Field(
-        ...,
-        description="Suggestion session ID for tracking"
+    session_id: str = Field(..., description="Suggestion session ID for tracking")
+    meal_type: str = Field(
+        ..., description="Type of meal (breakfast, lunch, dinner, snack)"
+    )
+    meal_portion_type: str = Field(
+        ..., description="Portion type: snack, main, or omad"
+    )
+    target_calories: int = Field(
+        ..., description="Calculated target calories for this portion type"
     )
     suggestions: List[MealSuggestionResponse] = Field(
-        ...,
-        min_length=3,
-        max_length=3,
-        description="Exactly 3 meal suggestions"
+        ..., min_length=3, max_length=3, description="Exactly 3 meal suggestions"
     )
     expires_at: datetime = Field(
-        ...,
-        description="Session expiration timestamp (4 hours)"
+        ..., description="Session expiration timestamp (4 hours)"
     )
 
 
@@ -100,7 +103,9 @@ class AcceptedMealResponse(BaseModel):
 
     meal_id: str = Field(..., description="ID of saved meal in history")
     meal_name: str = Field(..., description="Name of the meal")
-    macros: MacroEstimateResponse = Field(..., description="Adjusted macros (after portion multiplier)")
+    macros: MacroEstimateResponse = Field(
+        ..., description="Adjusted macros (after portion multiplier)"
+    )
     saved_at: datetime = Field(..., description="Timestamp when meal was saved")
 
     class Config:
@@ -108,12 +113,8 @@ class AcceptedMealResponse(BaseModel):
             "example": {
                 "meal_id": "meal_12345",
                 "meal_name": "Grilled Chicken Rice Bowl",
-                "macros": {
-                    "protein": 70.0,
-                    "carbs": 80.0,
-                    "fat": 30.0
-                },
-                "saved_at": "2025-12-30T12:00:00Z"
+                "macros": {"protein": 70.0, "carbs": 80.0, "fat": 30.0},
+                "saved_at": "2025-12-30T12:00:00Z",
             }
         }
 
@@ -127,13 +128,9 @@ class SaveMealSuggestionResponse(BaseModel):
     success: bool = Field(..., description="Whether the save was successful")
     message: str = Field(..., description="Status message")
     meal_id: Optional[str] = Field(
-        None,
-        description="ID of the saved meal in the database"
+        None, description="ID of the saved meal in the database"
     )
-    meal_date: str = Field(
-        ...,
-        description="Date the meal was saved for (YYYY-MM-DD)"
-    )
+    meal_date: str = Field(..., description="Date the meal was saved for (YYYY-MM-DD)")
 
     class Config:
         json_schema_extra = {
@@ -141,7 +138,6 @@ class SaveMealSuggestionResponse(BaseModel):
                 "success": True,
                 "message": "Meal suggestion saved successfully to your meal history",
                 "meal_id": "12345",
-                "meal_date": "2024-01-15"
+                "meal_date": "2024-01-15",
             }
         }
-

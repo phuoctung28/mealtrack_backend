@@ -2,6 +2,7 @@
 Meal suggestion API endpoints (Phase 06).
 Includes both legacy endpoints and new session-based endpoints.
 """
+
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, status
@@ -43,16 +44,16 @@ router = APIRouter(prefix="/v1/meal-suggestions", tags=["Meal Suggestions"])
 async def save_meal_suggestion(
     request: SaveMealSuggestionRequest,
     user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Save a selected meal suggestion to the user's meal history.
-    
+
     This endpoint saves a meal suggestion to the user's planned meals for a specific date.
     The meal can then be viewed in the user's meal plan and tracked in their daily nutrition.
-    
+
     Authentication required: User ID is automatically extracted from the Firebase token.
-    
+
     Parameters:
     - suggestion_id: ID of the suggestion to save - REQUIRED
     - name: Name of the meal - REQUIRED
@@ -66,7 +67,7 @@ async def save_meal_suggestion(
     - ingredients_list: List of ingredients - OPTIONAL
     - instructions: Cooking instructions - OPTIONAL
     - meal_date: Date to save the meal for (YYYY-MM-DD), defaults to today - OPTIONAL
-    
+
     Returns:
     - success: Whether the save was successful
     - message: Status message
@@ -83,7 +84,7 @@ async def save_meal_suggestion(
                 raise ValueError("meal_date must be in YYYY-MM-DD format")
         else:
             meal_date = date.today()
-        
+
         # Create command
         command = SaveMealSuggestionCommand(
             user_id=user_id,
@@ -98,12 +99,12 @@ async def save_meal_suggestion(
             fat=request.fat,
             ingredients_list=request.ingredients_list,
             instructions=request.instructions,
-            meal_date=meal_date
+            meal_date=meal_date,
         )
-        
+
         # Execute the command
         result = await event_bus.send(command)
-        
+
         # Return response
         return SaveMealSuggestionResponse(**result)
 
@@ -125,15 +126,19 @@ async def generate_suggestions_v2(
     """
     [Phase 06] Generate 3 meal suggestions with session tracking.
 
-    Uses meal_size (S/M/L/XL/OMAD) to calculate target calories from user's TDEE.
+    Uses meal_portion_type (snack/main/omad) to calculate target calories from user's TDEE.
     Creates a session that tracks shown suggestions for regeneration.
     Session expires after 4 hours.
+
+    Backward compatible: accepts deprecated meal_size (S/M/L/XL/OMAD) and maps to new types.
     """
     try:
-        command = GenerateMealSuggestionsCommand(
+        portion_type = request.get_effective_portion_type()
+
+        command = GenerateSuggestionsCommandV2(
             user_id=user_id,
             meal_type=request.meal_type,
-            meal_size=request.meal_size.value,
+            meal_portion_type=portion_type.value,
             ingredients=request.ingredients,
             ingredient_image_url=request.ingredient_image_url,
             cooking_time_minutes=request.cooking_time_minutes.value,
@@ -241,7 +246,7 @@ async def reject_suggestion(
         command = RejectSuggestionCommand(
             user_id=user_id,
             suggestion_id=suggestion_id,
-            feedback=request.feedback if hasattr(request, 'feedback') else None,
+            feedback=request.feedback if hasattr(request, "feedback") else None,
         )
 
         await event_bus.send(command)

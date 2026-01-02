@@ -3,6 +3,7 @@ Orchestration service for Phase 06 meal suggestions with full recipe support.
 Handles session tracking, AI generation with timeout, and portion multipliers.
 """
 
+
 import asyncio
 import logging
 import time
@@ -24,7 +25,11 @@ from src.domain.ports.meal_generation_service_port import MealGenerationServiceP
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
 )
+from src.domain.ports.meal_suggestion_repository_port import (
+    MealSuggestionRepositoryPort,
+)
 from src.domain.ports.user_repository_port import UserRepositoryPort
+from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
@@ -48,17 +53,20 @@ class SuggestionOrchestrationService:
         user_repo: UserRepositoryPort,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
+        portion_service: PortionCalculationService = None,
     ):
         self._generation = generation_service
         self._repo = suggestion_repo
         self._user_repo = user_repo
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
+        self._portion_service = portion_service or PortionCalculationService()
 
     async def generate_suggestions(
         self,
         user_id: str,
         meal_type: str,
+        meal_portion_type: str,
         meal_portion_type: str,
         ingredients: List[str],
         ingredient_image_url: Optional[str],
@@ -85,12 +93,23 @@ class SuggestionOrchestrationService:
             meals_per_day=meals_per_day,
         )
         target_calories = portion_target.target_calories
+        # Get meals_per_day from profile (default to 3)
+        meals_per_day = getattr(user.current_profile, "meals_per_day", 3)
+
+        # Calculate target calories using PortionCalculationService
+        portion_target = self._portion_service.get_target_for_meal_type(
+            meal_type=meal_portion_type,
+            daily_target=int(daily_tdee),
+            meals_per_day=meals_per_day,
+        )
+        target_calories = portion_target.target_calories
 
         # Create session
         session = SuggestionSession(
             id=f"session_{uuid.uuid4().hex[:16]}",
             user_id=user_id,
             meal_type=meal_type,
+            meal_portion_type=meal_portion_type,
             meal_portion_type=meal_portion_type,
             target_calories=target_calories,
             ingredients=ingredients,
@@ -222,12 +241,14 @@ class SuggestionOrchestrationService:
                 "moderate": ActivityLevel.MODERATE,
                 "active": ActivityLevel.ACTIVE,
                 "extra": ActivityLevel.EXTRA,
+                "extra": ActivityLevel.EXTRA,
             }
 
             goal_map = {
                 "maintenance": Goal.MAINTENANCE,
                 "cutting": Goal.CUTTING,
                 "bulking": Goal.BULKING,
+                "recomp": Goal.RECOMP,
                 "recomp": Goal.RECOMP,
             }
 
@@ -239,8 +260,12 @@ class SuggestionOrchestrationService:
                 activity_level=activity_map.get(
                     profile.activity_level, ActivityLevel.MODERATE
                 ),
+                activity_level=activity_map.get(
+                    profile.activity_level, ActivityLevel.MODERATE
+                ),
                 goal=goal_map.get(profile.fitness_goal, Goal.MAINTENANCE),
                 body_fat_pct=profile.body_fat_percentage,
+                unit_system=UnitSystem.METRIC,
                 unit_system=UnitSystem.METRIC,
             )
 
@@ -249,6 +274,9 @@ class SuggestionOrchestrationService:
             return result.macros.calories
 
         except Exception as e:
+            logger.warning(
+                f"Failed to calculate TDEE: {e}. Using default 2000 calories."
+            )
             logger.warning(
                 f"Failed to calculate TDEE: {e}. Using default 2000 calories."
             )
@@ -281,7 +309,9 @@ class SuggestionOrchestrationService:
 
             # Call AI with timeout
             # 3 suggestions with full recipe steps need ~8000 tokens
-            logger.info(f"Generating suggestions for session {session.id}, target: {session.target_calories} cal")
+            logger.info(
+                f"Generating suggestions for session {session.id}, target: {session.target_calories} cal"
+            )
             raw_response = await asyncio.wait_for(
                 asyncio.to_thread(
                     self._generation.generate_meal_plan,
@@ -321,6 +351,7 @@ class SuggestionOrchestrationService:
                 suggestions.append(self._create_fallback(session, len(suggestions)))
 
             return suggestions[: self.SUGGESTIONS_COUNT]
+            return suggestions[: self.SUGGESTIONS_COUNT]
 
         except asyncio.TimeoutError:
             elapsed = time.time() - start_time
@@ -334,6 +365,7 @@ class SuggestionOrchestrationService:
             )
             return [
                 self._create_fallback(session, i) for i in range(self.SUGGESTIONS_COUNT)
+                self._create_fallback(session, i) for i in range(self.SUGGESTIONS_COUNT)
             ]
         except Exception as e:
             elapsed = time.time() - start_time
@@ -346,10 +378,16 @@ class SuggestionOrchestrationService:
             )
             return [
                 self._create_fallback(session, i) for i in range(self.SUGGESTIONS_COUNT)
+                self._create_fallback(session, i) for i in range(self.SUGGESTIONS_COUNT)
             ]
 
     def _build_prompt(self, session: SuggestionSession, exclude_ids: List[str]) -> str:
         """Build AI prompt for meal generation."""
+        ingredients_str = (
+            ", ".join(session.ingredients)
+            if session.ingredients
+            else "any common ingredients"
+        )
         ingredients_str = (
             ", ".join(session.ingredients)
             if session.ingredients
@@ -440,6 +478,9 @@ IMPORTANT:
                             calories=raw.get("macros", {}).get(
                                 "calories", session.target_calories
                             ),
+                            calories=raw.get("macros", {}).get(
+                                "calories", session.target_calories
+                            ),
                             protein=raw.get("macros", {}).get("protein", 20.0),
                             carbs=raw.get("macros", {}).get("carbs", 30.0),
                             fat=raw.get("macros", {}).get("fat", 10.0),
@@ -450,6 +491,12 @@ IMPORTANT:
                         recipe_steps=[
                             RecipeStep(**step) for step in raw.get("recipe_steps", [])
                         ],
+                        prep_time_minutes=raw.get(
+                            "prep_time_minutes", session.cooking_time_minutes
+                        ),
+                        confidence_score=self._normalize_confidence(
+                            raw.get("confidence_score", 0.85)
+                        ),
                         prep_time_minutes=raw.get(
                             "prep_time_minutes", session.cooking_time_minutes
                         ),
@@ -499,6 +546,9 @@ IMPORTANT:
                 Ingredient(name="Grains", amount=100, unit="g"),
             ],
             recipe_steps=[
+                RecipeStep(
+                    step=1, instruction="Prepare ingredients", duration_minutes=5
+                ),
                 RecipeStep(
                     step=1, instruction="Prepare ingredients", duration_minutes=5
                 ),

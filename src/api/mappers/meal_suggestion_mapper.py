@@ -1,4 +1,5 @@
 """Mappers for meal suggestion domain to API responses."""
+
 from typing import List
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
@@ -52,6 +53,9 @@ def to_suggestions_list_response(
     """Convert session + suggestions to API response."""
     return SuggestionsListResponse(
         session_id=session.id,
+        meal_type=session.meal_type,
+        meal_portion_type=session.meal_portion_type,
+        target_calories=session.target_calories,
         suggestions=[to_meal_suggestion_response(s) for s in suggestions],
         expires_at=session.expires_at,
     )
