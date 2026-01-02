@@ -1,10 +1,12 @@
 """Portion target value object."""
+
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class PortionTarget:
     """Immutable portion target for meal generation."""
+
     target_calories: int
     min_calories: int
     max_calories: int

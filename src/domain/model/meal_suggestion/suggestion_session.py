@@ -1,4 +1,5 @@
 """Suggestion session for tracking user's meal generation flow."""
+
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -7,9 +8,10 @@ from typing import List, Optional
 @dataclass
 class SuggestionSession:
     """Session tracking for meal suggestion flow (4-hour lifetime)."""
+
     id: str
     user_id: str
-    meal_type: str          # breakfast, lunch, dinner, snack
+    meal_type: str  # breakfast, lunch, dinner, snack
     meal_portion_type: str  # snack, main, omad
     target_calories: int
     ingredients: List[str]
