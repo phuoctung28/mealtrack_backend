@@ -7,9 +7,6 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, status
 
-from src.app.commands.meal_suggestion.generate_suggestions_command import (
-    GenerateSuggestionsCommand,
-)
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
@@ -30,6 +27,7 @@ from src.api.mappers.meal_suggestion_mapper import (
     to_accepted_meal_response,
 )
 from src.app.commands.meal_suggestion import (
+    GenerateMealSuggestionsCommand,
     SaveMealSuggestionCommand,
     RegenerateSuggestionsCommand,
     AcceptSuggestionCommand,
@@ -144,13 +142,13 @@ async def generate_suggestions(
     try:
         portion_type = request.get_effective_portion_type()
 
-        command = GenerateSuggestionsCommand(
+        command = GenerateMealSuggestionsCommand(
             user_id=user_id,
             meal_type=request.meal_type,
             meal_portion_type=portion_type.value,
             ingredients=request.ingredients,
-            ingredient_image_url=request.ingredient_image_url,
-            cooking_time_minutes=request.cooking_time_minutes.value,
+            time_available_minutes=request.cooking_time_minutes.value,
+            exclude_ids=[],
         )
 
         session, suggestions = await event_bus.send(command)

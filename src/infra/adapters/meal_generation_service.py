@@ -360,6 +360,30 @@ class MealGenerationService(MealGenerationServicePort):
         if content != original_content:
             logger.debug("[JSON-CLEAN-TRAILING-COMMA] removed trailing comma before closing brace/bracket")
 
+        # Fix missing commas between array elements or object properties (common AI output issue)
+        # These patterns use }\s+{ or ]\s+" to ensure there's whitespace (newlines) between
+        # which indicates structure boundaries, not content inside strings
+        original_content = content
+
+        # Pattern: } followed by whitespace (including newline) then { (missing comma between objects)
+        content = re.sub(r'\}(\s*\n\s*)\{', r'},\1{', content)
+
+        # Pattern: ] followed by whitespace (including newline) then [ (missing comma between arrays)
+        content = re.sub(r'\](\s*\n\s*)\[', r'],\1[', content)
+
+        # Pattern: } followed by whitespace (including newline) then " (object end, then property key)
+        content = re.sub(r'\}(\s*\n\s*)"', r'},\1"', content)
+
+        # Pattern: ] followed by whitespace (including newline) then " (array end, then property key)
+        content = re.sub(r'\](\s*\n\s*)"', r'],\1"', content)
+
+        # Also handle single-line JSON with spaces (but be conservative - require at least 2 spaces)
+        content = re.sub(r'\}(  +)\{', r'},\1{', content)
+        content = re.sub(r'\](  +)\[', r'],\1[', content)
+
+        if content != original_content:
+            logger.debug("[JSON-CLEAN-MISSING-COMMA] added missing commas between JSON structures")
+
         if is_incomplete and last_complete_suggestion_end > 0:
             # Truncate to last complete suggestion
             truncated_len = len(content) - last_complete_suggestion_end

@@ -355,17 +355,11 @@ async def get_configured_event_bus(
     # Register meal suggestion handlers
     event_bus.register_handler(
         GenerateMealSuggestionsCommand,
-        GenerateMealSuggestionsCommandHandler(),
+        GenerateMealSuggestionsCommandHandler(suggestion_service),
     )
     event_bus.register_handler(
         SaveMealSuggestionCommand,
         SaveMealSuggestionCommandHandler(db=db),
-    )
-
-    # Phase 06: Register new suggestion handlers
-    event_bus.register_handler(
-        GenerateMealSuggestionsCommand,
-        GenerateMealSuggestionsCommandHandler(suggestion_service),
     )
     event_bus.register_handler(
         RegenerateSuggestionsCommand,

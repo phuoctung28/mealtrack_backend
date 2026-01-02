@@ -66,7 +66,6 @@ class SuggestionOrchestrationService:
         meal_type: str,
         meal_portion_type: str,
         ingredients: List[str],
-        ingredient_image_url: Optional[str],
         cooking_time_minutes: int,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """Generate initial 3 suggestions and create session."""
@@ -107,7 +106,6 @@ class SuggestionOrchestrationService:
             meal_portion_type=meal_portion_type,
             target_calories=target_calories,
             ingredients=ingredients,
-            ingredient_image_url=ingredient_image_url,
             cooking_time_minutes=cooking_time_minutes,
         )
 
@@ -308,7 +306,6 @@ class SuggestionOrchestrationService:
                     prompt,
                     system_message,
                     "json",
-                    8000,  # Explicit max_tokens for full recipe details
                     8000,  # Explicit max_tokens for full recipe details
                 ),
                 timeout=self.GENERATION_TIMEOUT_SECONDS,

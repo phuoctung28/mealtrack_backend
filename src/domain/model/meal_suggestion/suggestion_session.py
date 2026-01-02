@@ -15,7 +15,6 @@ class SuggestionSession:
     meal_portion_type: str  # snack, main, omad
     target_calories: int
     ingredients: List[str]
-    ingredient_image_url: Optional[str]
     cooking_time_minutes: int
     shown_suggestion_ids: List[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.utcnow)

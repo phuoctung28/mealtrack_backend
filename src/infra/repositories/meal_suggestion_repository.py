@@ -126,7 +126,6 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
             "meal_portion_type": session.meal_portion_type,
             "target_calories": session.target_calories,
             "ingredients": session.ingredients,
-            "ingredient_image_url": session.ingredient_image_url,
             "cooking_time_minutes": session.cooking_time_minutes,
             "shown_suggestion_ids": session.shown_suggestion_ids,
             "created_at": session.created_at.isoformat(),
