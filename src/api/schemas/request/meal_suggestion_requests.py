@@ -192,6 +192,12 @@ class SaveMealSuggestionRequest(BaseModel):
     protein: float = Field(..., description="Protein in grams")
     carbs: float = Field(..., description="Carbohydrates in grams")
     fat: float = Field(..., description="Fat in grams")
+    portion_multiplier: int = Field(
+        default=1,
+        ge=1,
+        le=4,
+        description="Portion multiplier (1x, 2x, 3x, 4x) - scales macros before saving",
+    )
     ingredients_list: List[str] = Field(
         default_factory=list, description="List of ingredients"
     )
@@ -215,6 +221,7 @@ class SaveMealSuggestionRequest(BaseModel):
                 "protein": 45.0,
                 "carbs": 55.0,
                 "fat": 12.0,
+                "portion_multiplier": 1,
                 "ingredients_list": ["chicken breast", "brown rice", "broccoli"],
                 "instructions": ["Grill chicken", "Cook rice", "Steam broccoli"],
                 "meal_date": "2024-01-15",

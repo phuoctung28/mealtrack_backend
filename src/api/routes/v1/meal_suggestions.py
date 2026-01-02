@@ -7,6 +7,9 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, status
 
+from src.app.commands.meal_suggestion.generate_suggestions_command import (
+    GenerateSuggestionsCommand,
+)
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
@@ -18,7 +21,6 @@ from src.api.schemas.request.meal_suggestion_requests import (
     RejectSuggestionRequest,
 )
 from src.api.schemas.response.meal_suggestion_responses import (
-    MealSuggestionsResponse,
     SaveMealSuggestionResponse,
     SuggestionsListResponse,
     AcceptedMealResponse,
@@ -28,7 +30,6 @@ from src.api.mappers.meal_suggestion_mapper import (
     to_accepted_meal_response,
 )
 from src.app.commands.meal_suggestion import (
-    GenerateMealSuggestionsCommand,
     SaveMealSuggestionCommand,
     RegenerateSuggestionsCommand,
     AcceptSuggestionCommand,
@@ -39,6 +40,7 @@ from src.app.queries.meal_suggestion import GetSessionSuggestionsQuery
 from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/meal-suggestions", tags=["Meal Suggestions"])
+
 
 @router.post("/save", response_model=SaveMealSuggestionResponse)
 async def save_meal_suggestion(
@@ -85,7 +87,14 @@ async def save_meal_suggestion(
         else:
             meal_date = date.today()
 
-        # Create command
+        # Apply portion multiplier to macros before saving
+        multiplier = request.portion_multiplier or 1
+        scaled_calories = int(request.calories * multiplier)
+        scaled_protein = request.protein * multiplier
+        scaled_carbs = request.carbs * multiplier
+        scaled_fat = request.fat * multiplier
+
+        # Create command with scaled macros
         command = SaveMealSuggestionCommand(
             user_id=user_id,
             suggestion_id=request.suggestion_id,
@@ -93,10 +102,10 @@ async def save_meal_suggestion(
             description=request.description,
             meal_type=request.meal_type,
             estimated_cook_time_minutes=request.estimated_cook_time_minutes,
-            calories=request.calories,
-            protein=request.protein,
-            carbs=request.carbs,
-            fat=request.fat,
+            calories=scaled_calories,
+            protein=scaled_protein,
+            carbs=scaled_carbs,
+            fat=scaled_fat,
             ingredients_list=request.ingredients_list,
             instructions=request.instructions,
             meal_date=meal_date,
@@ -118,7 +127,7 @@ async def save_meal_suggestion(
 
 
 @router.post("/generate", response_model=SuggestionsListResponse)
-async def generate_suggestions_v2(
+async def generate_suggestions(
     request: MealSuggestionRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
@@ -135,7 +144,7 @@ async def generate_suggestions_v2(
     try:
         portion_type = request.get_effective_portion_type()
 
-        command = GenerateSuggestionsCommandV2(
+        command = GenerateSuggestionsCommand(
             user_id=user_id,
             meal_type=request.meal_type,
             meal_portion_type=portion_type.value,
