@@ -53,13 +53,11 @@ class SuggestionOrchestrationService:
         user_repo: UserRepositoryPort,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
-        portion_service: PortionCalculationService = None,
     ):
         self._generation = generation_service
         self._repo = suggestion_repo
         self._user_repo = user_repo
         self._tdee_service = tdee_service or TdeeCalculationService()
-        self._portion_service = portion_service or PortionCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
 
     async def generate_suggestions(
@@ -67,15 +65,12 @@ class SuggestionOrchestrationService:
         user_id: str,
         meal_type: str,
         meal_portion_type: str,
-        meal_portion_type: str,
         ingredients: List[str],
         ingredient_image_url: Optional[str],
         cooking_time_minutes: int,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """Generate initial 3 suggestions and create session."""
         # Get user's daily TDEE
-        user = self._user_repo.find_by_id(user_id)
-        if not user or not user.current_profile:
         user = self._user_repo.find_by_id(user_id)
         if not user or not user.current_profile:
             raise ValueError(f"User {user_id} not found or missing profile")
@@ -109,7 +104,6 @@ class SuggestionOrchestrationService:
             id=f"session_{uuid.uuid4().hex[:16]}",
             user_id=user_id,
             meal_type=meal_type,
-            meal_portion_type=meal_portion_type,
             meal_portion_type=meal_portion_type,
             target_calories=target_calories,
             ingredients=ingredients,
@@ -260,12 +254,8 @@ class SuggestionOrchestrationService:
                 activity_level=activity_map.get(
                     profile.activity_level, ActivityLevel.MODERATE
                 ),
-                activity_level=activity_map.get(
-                    profile.activity_level, ActivityLevel.MODERATE
-                ),
                 goal=goal_map.get(profile.fitness_goal, Goal.MAINTENANCE),
                 body_fat_pct=profile.body_fat_percentage,
-                unit_system=UnitSystem.METRIC,
                 unit_system=UnitSystem.METRIC,
             )
 
@@ -365,7 +355,6 @@ class SuggestionOrchestrationService:
             )
             return [
                 self._create_fallback(session, i) for i in range(self.SUGGESTIONS_COUNT)
-                self._create_fallback(session, i) for i in range(self.SUGGESTIONS_COUNT)
             ]
         except Exception as e:
             elapsed = time.time() - start_time
@@ -377,7 +366,6 @@ class SuggestionOrchestrationService:
                 exc_info=True,
             )
             return [
-                self._create_fallback(session, i) for i in range(self.SUGGESTIONS_COUNT)
                 self._create_fallback(session, i) for i in range(self.SUGGESTIONS_COUNT)
             ]
 
@@ -478,12 +466,9 @@ IMPORTANT:
                             calories=raw.get("macros", {}).get(
                                 "calories", session.target_calories
                             ),
-                            calories=raw.get("macros", {}).get(
-                                "calories", session.target_calories
-                            ),
-                            protein=raw.get("macros", {}).get("protein", 20.0),
-                            carbs=raw.get("macros", {}).get("carbs", 30.0),
-                            fat=raw.get("macros", {}).get("fat", 10.0),
+                            protein=raw.get("macros", {}).get("protein", 20),
+                            carbs=raw.get("macros", {}).get("carbs", 30),
+                            fat=raw.get("macros", {}).get("fat", 10),
                         ),
                         ingredients=[
                             Ingredient(**ing) for ing in raw.get("ingredients", [])
@@ -491,12 +476,6 @@ IMPORTANT:
                         recipe_steps=[
                             RecipeStep(**step) for step in raw.get("recipe_steps", [])
                         ],
-                        prep_time_minutes=raw.get(
-                            "prep_time_minutes", session.cooking_time_minutes
-                        ),
-                        confidence_score=self._normalize_confidence(
-                            raw.get("confidence_score", 0.85)
-                        ),
                         prep_time_minutes=raw.get(
                             "prep_time_minutes", session.cooking_time_minutes
                         ),

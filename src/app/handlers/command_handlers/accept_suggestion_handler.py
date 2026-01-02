@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 from src.app.commands.meal_suggestion import AcceptSuggestionCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.services.meal_suggestion import SuggestionOrchestrationService
+from src.domain.services.meal_suggestion.suggestion_orchestration_service import SuggestionOrchestrationService
 
 logger = logging.getLogger(__name__)
 

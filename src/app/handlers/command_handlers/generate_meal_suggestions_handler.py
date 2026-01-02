@@ -4,7 +4,7 @@ from typing import List, Tuple
 
 from src.app.commands.meal_suggestion import GenerateMealSuggestionsCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.services.meal_suggestion import SuggestionOrchestrationService
+from src.domain.services.meal_suggestion.suggestion_orchestration_service import SuggestionOrchestrationService
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 
 logger = logging.getLogger(__name__)
