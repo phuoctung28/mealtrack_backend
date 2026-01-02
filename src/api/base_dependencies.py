@@ -344,7 +344,7 @@ def get_suggestion_orchestration_service(
     db: Session = Depends(get_db),
 ):
     """Get suggestion orchestration service (Phase 06)."""
-    from src.domain.services.meal_suggestion import SuggestionOrchestrationService
+    from src.domain.services.meal_suggestion.suggestion_orchestration_service import SuggestionOrchestrationService
     from src.infra.adapters.meal_generation_service import MealGenerationService
     from src.infra.repositories.user_repository import UserRepository
 

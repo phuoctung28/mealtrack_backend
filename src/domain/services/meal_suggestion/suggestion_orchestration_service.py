@@ -68,6 +68,8 @@ class SuggestionOrchestrationService:
         # Get user's daily TDEE
         user = self._user_repo.find_by_id(user_id)
         if not user or not user.current_profile:
+        user = self._user_repo.find_by_id(user_id)
+        if not user or not user.current_profile:
             raise ValueError(f"User {user_id} not found or missing profile")
 
         # Calculate daily TDEE from profile
@@ -278,12 +280,15 @@ class SuggestionOrchestrationService:
             )
 
             # Call AI with timeout
+            # 3 suggestions with full recipe steps need ~8000 tokens
+            logger.info(f"Generating suggestions for session {session.id}, target: {session.target_calories} cal")
             raw_response = await asyncio.wait_for(
                 asyncio.to_thread(
                     self._generation.generate_meal_plan,
                     prompt,
                     system_message,
                     "json",
+                    8000,  # Explicit max_tokens for full recipe details
                     8000,  # Explicit max_tokens for full recipe details
                 ),
                 timeout=self.GENERATION_TIMEOUT_SECONDS,
@@ -358,6 +363,25 @@ Requirements:
 - Max cooking time: {session.cooking_time_minutes} minutes
 - Excluded meal count: {len(exclude_ids)} (generate different meals)
 
+Return JSON with 'suggestions' array containing exactly 3 objects:
+{{
+  "suggestions": [
+    {{
+      "name": "Meal Name",
+      "description": "Brief 1-2 sentence description",
+      "ingredients": [{{"name": "ingredient", "amount": 100, "unit": "g"}}],
+      "recipe_steps": [{{"step": 1, "instruction": "Step text", "duration_minutes": 5}}],
+      "macros": {{"calories": 500, "protein": 30, "carbs": 40, "fat": 15}},
+      "prep_time_minutes": 20,
+      "confidence_score": 0.85
+    }}
+  ]
+}}
+
+IMPORTANT:
+- confidence_score must be 0.0-1.0 (not 1-5)
+- Include 4-8 recipe_steps per meal
+- Macros should match target calories
 Return JSON with 'suggestions' array containing exactly 3 objects:
 {{
   "suggestions": [
@@ -483,6 +507,13 @@ IMPORTANT:
             prep_time_minutes=20,
             confidence_score=0.5,
         )
+
+    def _normalize_confidence(self, score: float) -> float:
+        """Normalize confidence score to 0-1 range (AI may return 1-5 scale)."""
+        if score > 1.0:
+            # Assume 1-5 scale, convert to 0-1
+            return min(1.0, score / 5.0)
+        return max(0.0, min(1.0, score))
 
     def _normalize_confidence(self, score: float) -> float:
         """Normalize confidence score to 0-1 range (AI may return 1-5 scale)."""

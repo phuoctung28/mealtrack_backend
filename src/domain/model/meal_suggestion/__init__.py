@@ -9,6 +9,7 @@ from .meal_suggestion import (
     MacroEstimate,
     MEAL_SIZE_PERCENTAGES,
 )
+from .portion_target import PortionTarget
 from .suggestion_session import SuggestionSession
 
 __all__ = [
@@ -20,5 +21,6 @@ __all__ = [
     "RecipeStep",
     "MacroEstimate",
     "MEAL_SIZE_PERCENTAGES",
+    "PortionTarget",
     "SuggestionSession",
 ]

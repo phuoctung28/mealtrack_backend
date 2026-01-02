@@ -9,8 +9,8 @@ class SuggestionSession:
     """Session tracking for meal suggestion flow (4-hour lifetime)."""
     id: str
     user_id: str
-    meal_type: str
-    meal_size: str
+    meal_type: str          # breakfast, lunch, dinner, snack
+    meal_portion_type: str  # snack, main, omad
     target_calories: int
     ingredients: List[str]
     ingredient_image_url: Optional[str]

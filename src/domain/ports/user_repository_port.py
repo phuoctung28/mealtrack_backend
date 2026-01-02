@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, List
 from datetime import datetime
 
-from src.domain.model.user import User, UserProfile
+from src.infra.database.models.user import User, UserProfile
 
 
 class UserRepositoryPort(ABC):
