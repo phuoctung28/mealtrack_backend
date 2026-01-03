@@ -72,7 +72,16 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
             self.db.commit()
             logger.info(f"Successfully soft deleted user in database")
 
-            # Step 3: Hard delete from Firebase Authentication
+            # Step 3: Revoke refresh tokens to invalidate all active sessions
+            # This prevents the user from getting new access tokens
+            try:
+                self.firebase_auth_service.revoke_refresh_tokens(command.firebase_uid)
+                logger.info(f"Successfully revoked Firebase refresh tokens")
+            except Exception as revoke_error:
+                logger.warning(f"Token revocation failed: {str(revoke_error)}")
+                # Continue - deletion is more important
+
+            # Step 4: Hard delete from Firebase Authentication
             try:
                 firebase_deleted = self.firebase_auth_service.delete_firebase_user(
                     command.firebase_uid

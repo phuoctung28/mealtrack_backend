@@ -73,3 +73,28 @@ class FirebaseAuthService:
         """
         user = FirebaseAuthService.get_firebase_user(firebase_uid)
         return user is not None
+
+    @staticmethod
+    def revoke_refresh_tokens(firebase_uid: str) -> bool:
+        """
+        Revoke all refresh tokens for a Firebase user.
+        This invalidates all existing sessions and forces re-authentication.
+
+        Args:
+            firebase_uid: The Firebase UID of the user
+
+        Returns:
+            bool: True if revocation was successful, False otherwise
+        """
+        try:
+            auth.revoke_refresh_tokens(firebase_uid)
+            logger.info(f"Successfully revoked refresh tokens for Firebase user")
+            return True
+
+        except UserNotFoundError:
+            logger.warning(f"Firebase user not found - tokens already invalidated")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to revoke refresh tokens: {str(e)}")
+            return False
