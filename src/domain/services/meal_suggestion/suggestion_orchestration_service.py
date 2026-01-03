@@ -3,6 +3,7 @@ Orchestration service for Phase 06 meal suggestions with full recipe support.
 Handles session tracking, AI generation with timeout, and portion multipliers.
 """
 
+
 import asyncio
 import logging
 import time
@@ -24,7 +25,11 @@ from src.domain.ports.meal_generation_service_port import MealGenerationServiceP
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
 )
+from src.domain.ports.meal_suggestion_repository_port import (
+    MealSuggestionRepositoryPort,
+)
 from src.domain.ports.user_repository_port import UserRepositoryPort
+from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
@@ -61,7 +66,6 @@ class SuggestionOrchestrationService:
         meal_type: str,
         meal_portion_type: str,
         ingredients: List[str],
-        ingredient_image_url: Optional[str],
         cooking_time_minutes: int,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """Generate initial 3 suggestions and create session."""
@@ -83,6 +87,16 @@ class SuggestionOrchestrationService:
             meals_per_day=meals_per_day,
         )
         target_calories = portion_target.target_calories
+        # Get meals_per_day from profile (default to 3)
+        meals_per_day = getattr(user.current_profile, "meals_per_day", 3)
+
+        # Calculate target calories using PortionCalculationService
+        portion_target = self._portion_service.get_target_for_meal_type(
+            meal_type=meal_portion_type,
+            daily_target=int(daily_tdee),
+            meals_per_day=meals_per_day,
+        )
+        target_calories = portion_target.target_calories
 
         # Create session
         session = SuggestionSession(
@@ -92,7 +106,6 @@ class SuggestionOrchestrationService:
             meal_portion_type=meal_portion_type,
             target_calories=target_calories,
             ingredients=ingredients,
-            ingredient_image_url=ingredient_image_url,
             cooking_time_minutes=cooking_time_minutes,
         )
 
@@ -220,12 +233,14 @@ class SuggestionOrchestrationService:
                 "moderate": ActivityLevel.MODERATE,
                 "active": ActivityLevel.ACTIVE,
                 "extra": ActivityLevel.EXTRA,
+                "extra": ActivityLevel.EXTRA,
             }
 
             goal_map = {
                 "maintenance": Goal.MAINTENANCE,
                 "cutting": Goal.CUTTING,
                 "bulking": Goal.BULKING,
+                "recomp": Goal.RECOMP,
                 "recomp": Goal.RECOMP,
             }
 
@@ -247,6 +262,9 @@ class SuggestionOrchestrationService:
             return result.macros.calories
 
         except Exception as e:
+            logger.warning(
+                f"Failed to calculate TDEE: {e}. Using default 2000 calories."
+            )
             logger.warning(
                 f"Failed to calculate TDEE: {e}. Using default 2000 calories."
             )
@@ -278,6 +296,10 @@ class SuggestionOrchestrationService:
             )
 
             # Call AI with timeout
+            # 3 suggestions with full recipe steps need ~8000 tokens
+            logger.info(
+                f"Generating suggestions for session {session.id}, target: {session.target_calories} cal"
+            )
             raw_response = await asyncio.wait_for(
                 asyncio.to_thread(
                     self._generation.generate_meal_plan,
@@ -316,6 +338,7 @@ class SuggestionOrchestrationService:
                 suggestions.append(self._create_fallback(session, len(suggestions)))
 
             return suggestions[: self.SUGGESTIONS_COUNT]
+            return suggestions[: self.SUGGESTIONS_COUNT]
 
         except asyncio.TimeoutError:
             elapsed = time.time() - start_time
@@ -350,6 +373,11 @@ class SuggestionOrchestrationService:
             if session.ingredients
             else "any common ingredients"
         )
+        ingredients_str = (
+            ", ".join(session.ingredients)
+            if session.ingredients
+            else "any common ingredients"
+        )
         return f"""Generate exactly 3 meal suggestions for {session.meal_type}.
 
 Requirements:
@@ -358,6 +386,25 @@ Requirements:
 - Max cooking time: {session.cooking_time_minutes} minutes
 - Excluded meal count: {len(exclude_ids)} (generate different meals)
 
+Return JSON with 'suggestions' array containing exactly 3 objects:
+{{
+  "suggestions": [
+    {{
+      "name": "Meal Name",
+      "description": "Brief 1-2 sentence description",
+      "ingredients": [{{"name": "ingredient", "amount": 100, "unit": "g"}}],
+      "recipe_steps": [{{"step": 1, "instruction": "Step text", "duration_minutes": 5}}],
+      "macros": {{"calories": 500, "protein": 30, "carbs": 40, "fat": 15}},
+      "prep_time_minutes": 20,
+      "confidence_score": 0.85
+    }}
+  ]
+}}
+
+IMPORTANT:
+- confidence_score must be 0.0-1.0 (not 1-5)
+- Include 4-8 recipe_steps per meal
+- Macros should match target calories
 Return JSON with 'suggestions' array containing exactly 3 objects:
 {{
   "suggestions": [
@@ -416,9 +463,9 @@ IMPORTANT:
                             calories=raw.get("macros", {}).get(
                                 "calories", session.target_calories
                             ),
-                            protein=raw.get("macros", {}).get("protein", 20.0),
-                            carbs=raw.get("macros", {}).get("carbs", 30.0),
-                            fat=raw.get("macros", {}).get("fat", 10.0),
+                            protein=raw.get("macros", {}).get("protein", 20),
+                            carbs=raw.get("macros", {}).get("carbs", 30),
+                            fat=raw.get("macros", {}).get("fat", 10),
                         ),
                         ingredients=[
                             Ingredient(**ing) for ing in raw.get("ingredients", [])
@@ -478,11 +525,21 @@ IMPORTANT:
                 RecipeStep(
                     step=1, instruction="Prepare ingredients", duration_minutes=5
                 ),
+                RecipeStep(
+                    step=1, instruction="Prepare ingredients", duration_minutes=5
+                ),
                 RecipeStep(step=2, instruction="Cook meal", duration_minutes=15),
             ],
             prep_time_minutes=20,
             confidence_score=0.5,
         )
+
+    def _normalize_confidence(self, score: float) -> float:
+        """Normalize confidence score to 0-1 range (AI may return 1-5 scale)."""
+        if score > 1.0:
+            # Assume 1-5 scale, convert to 0-1
+            return min(1.0, score / 5.0)
+        return max(0.0, min(1.0, score))
 
     def _normalize_confidence(self, score: float) -> float:
         """Normalize confidence score to 0-1 range (AI may return 1-5 scale)."""

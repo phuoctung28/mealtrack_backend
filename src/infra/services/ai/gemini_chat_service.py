@@ -18,11 +18,11 @@ class GeminiChatService(AIChatServicePort):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gemini-2.0-flash",
+        model: str = None,
         system_prompt: Optional[str] = None
     ):
         self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
-        self.model_name = model
+        self.model_name = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.system_prompt = system_prompt or SystemPrompts.get_meal_planning_prompt()
         self.client = None
 

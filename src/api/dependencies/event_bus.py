@@ -18,6 +18,7 @@ from src.api.base_dependencies import (
     get_food_cache_service,
     get_food_mapping_service,
     get_cache_service,
+    get_suggestion_orchestration_service,
 )
 from src.app.commands.daily_meal import (
     GenerateDailyMealSuggestionsCommand,
@@ -37,7 +38,12 @@ from src.app.commands.meal_plan import (
 from src.app.commands.meal_suggestion import (
     GenerateMealSuggestionsCommand,
     SaveMealSuggestionCommand,
+    RegenerateSuggestionsCommand,
+    AcceptSuggestionCommand,
+    RejectSuggestionCommand,
+    DiscardSessionCommand,
 )
+from src.app.queries.meal_suggestion import GetSessionSuggestionsQuery
 from src.app.commands.notification import (
     RegisterFcmTokenCommand,
     DeleteFcmTokenCommand,
@@ -72,6 +78,11 @@ from src.app.handlers.command_handlers import (
     GenerateWeeklyIngredientBasedMealPlanCommandHandler,
     GenerateMealSuggestionsCommandHandler,
     SaveMealSuggestionCommandHandler,
+    RegenerateSuggestionsHandler,
+    GetSessionSuggestionsHandler,
+    AcceptSuggestionHandler,
+    RejectSuggestionHandler,
+    DiscardSessionHandler,
 )
 from src.app.handlers.command_handlers import (
     RegisterFcmTokenCommandHandler,
@@ -220,6 +231,7 @@ async def get_configured_event_bus(
     food_mapping_service: FoodMappingServicePort = Depends(get_food_mapping_service),
     cache_service: Optional[CacheService] = Depends(get_cache_service),
     ai_chat_service: AIChatServicePort = Depends(get_ai_chat_service),
+    suggestion_service = Depends(get_suggestion_orchestration_service),
 ) -> EventBus:
     """
     Get an event bus with all handlers configured.
@@ -343,11 +355,31 @@ async def get_configured_event_bus(
     # Register meal suggestion handlers
     event_bus.register_handler(
         GenerateMealSuggestionsCommand,
-        GenerateMealSuggestionsCommandHandler(),
+        GenerateMealSuggestionsCommandHandler(suggestion_service),
     )
     event_bus.register_handler(
         SaveMealSuggestionCommand,
         SaveMealSuggestionCommandHandler(db=db),
+    )
+    event_bus.register_handler(
+        RegenerateSuggestionsCommand,
+        RegenerateSuggestionsHandler(suggestion_service),
+    )
+    event_bus.register_handler(
+        GetSessionSuggestionsQuery,
+        GetSessionSuggestionsHandler(suggestion_service),
+    )
+    event_bus.register_handler(
+        AcceptSuggestionCommand,
+        AcceptSuggestionHandler(suggestion_service),
+    )
+    event_bus.register_handler(
+        RejectSuggestionCommand,
+        RejectSuggestionHandler(suggestion_service),
+    )
+    event_bus.register_handler(
+        DiscardSessionCommand,
+        DiscardSessionHandler(suggestion_service),
     )
 
     # Register user handlers

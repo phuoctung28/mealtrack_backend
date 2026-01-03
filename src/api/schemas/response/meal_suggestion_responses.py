@@ -1,6 +1,8 @@
 """
-Response schemas for meal suggestion generation.
+Response schemas for meal suggestion generation (Phase 06).
 """
+
+from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -8,117 +10,111 @@ from pydantic import BaseModel, Field
 
 class MacrosSchema(BaseModel):
     """Macronutrient information."""
+
+    calories: int = Field(..., description="Total calories")
     protein: float = Field(..., description="Protein in grams")
     carbs: float = Field(..., description="Carbohydrates in grams")
     fat: float = Field(..., description="Fat in grams")
 
 
-class MealSuggestionItem(BaseModel):
+class MacroEstimateResponse(BaseModel):
+    """Alias for MacrosSchema for consistency."""
+
+    calories: int = Field(..., description="Total calories")
+    protein: float = Field(..., description="Protein in grams")
+    carbs: float = Field(..., description="Carbohydrates in grams")
+    fat: float = Field(..., description="Fat in grams")
+
+
+class IngredientResponse(BaseModel):
+    """Ingredient with amount and unit."""
+
+    name: str = Field(..., description="Ingredient name")
+    amount: float = Field(..., description="Amount/quantity")
+    unit: str = Field(..., description="Unit (g, ml, tbsp, etc)")
+
+
+class RecipeStepResponse(BaseModel):
+    """Single recipe step with numbered instruction."""
+
+    step: int = Field(..., description="Step number (1-indexed)")
+    instruction: str = Field(..., description="Step instruction")
+    duration_minutes: Optional[int] = Field(None, description="Duration for this step")
+
+
+class MealSuggestionResponse(BaseModel):
     """
-    A single meal suggestion with all required information.
+    A single meal suggestion with full recipe details (Phase 06).
     """
-    
+
     id: str = Field(..., description="Unique identifier for this suggestion")
-    name: str = Field(..., description="Name of the meal")
+    meal_name: str = Field(..., description="Name of the meal")
     description: str = Field(..., description="Brief description of the meal")
-    estimated_cook_time_minutes: int = Field(
-        ..., 
-        description="Total cooking time (prep + cook) in minutes"
+    macros: MacroEstimateResponse = Field(
+        ..., description="Macronutrient breakdown (base portion)"
     )
-    calories: int = Field(..., description="Total calories for the meal")
-    macros: MacrosSchema = Field(..., description="Macronutrient breakdown")
-    ingredients_list: List[str] = Field(
-        ..., 
-        description="List of ingredients with portions"
+    ingredients: List[IngredientResponse] = Field(
+        ..., description="List of ingredients with amounts"
     )
-    instructions: List[str] = Field(
-        default_factory=list,
-        description="Step-by-step cooking instructions"
+    recipe_steps: List[RecipeStepResponse] = Field(
+        ..., description="Numbered cooking steps"
     )
-    tags: List[str] = Field(
-        default_factory=list,
-        description="Tags like vegetarian, vegan, gluten-free, cuisine type"
+    prep_time_minutes: int = Field(
+        ..., description="Total prep time (includes cooking)"
     )
-    image_url: Optional[str] = Field(
-        None,
-        description="Optional image URL for the meal"
+    confidence_score: float = Field(
+        default=0.9, ge=0.0, le=1.0, description="AI confidence score (0.0-1.0)"
     )
-    source: Optional[str] = Field(
-        None,
-        description="Optional source of the recipe"
+
+
+# Alias for backward compatibility
+MealSuggestionItem = MealSuggestionResponse
+
+
+class SuggestionsListResponse(BaseModel):
+    """
+    Response containing exactly 3 meal suggestions (Phase 06).
+    """
+
+    session_id: str = Field(..., description="Suggestion session ID for tracking")
+    meal_type: str = Field(
+        ..., description="Type of meal (breakfast, lunch, dinner, snack)"
     )
-    
+    meal_portion_type: str = Field(
+        ..., description="Portion type: snack, main, or omad"
+    )
+    target_calories: int = Field(
+        ..., description="Calculated target calories for this portion type"
+    )
+    suggestions: List[MealSuggestionResponse] = Field(
+        ..., min_length=3, max_length=3, description="Exactly 3 meal suggestions"
+    )
+    expires_at: datetime = Field(
+        ..., description="Session expiration timestamp (4 hours)"
+    )
+
+
+# Alias for backward compatibility
+MealSuggestionsResponse = SuggestionsListResponse
+
+
+class AcceptedMealResponse(BaseModel):
+    """Response after accepting suggestion with portion multiplier."""
+
+    meal_id: str = Field(..., description="ID of saved meal in history")
+    meal_name: str = Field(..., description="Name of the meal")
+    macros: MacroEstimateResponse = Field(
+        ..., description="Adjusted macros (after portion multiplier)"
+    )
+    saved_at: datetime = Field(..., description="Timestamp when meal was saved")
+
     class Config:
         json_schema_extra = {
             "example": {
-                "id": "meal_lunch_1234",
-                "name": "Grilled Chicken with Rice",
-                "description": "Healthy high-protein lunch with lean chicken and brown rice",
-                "estimated_cook_time_minutes": 25,
-                "calories": 520,
-                "macros": {
-                    "protein": 45.0,
-                    "carbs": 55.0,
-                    "fat": 12.0
-                },
-                "ingredients_list": [
-                    "200g chicken breast",
-                    "150g brown rice",
-                    "100g broccoli",
-                    "1 tbsp olive oil"
-                ],
-                "instructions": [
-                    "Season chicken breast with salt and pepper",
-                    "Grill chicken for 6-7 minutes per side",
-                    "Cook brown rice according to package instructions",
-                    "Steam broccoli for 5 minutes",
-                    "Serve together"
-                ],
-                "tags": ["high-protein", "gluten-free", "healthy"],
-                "image_url": None,
-                "source": "AI Generated"
-            }
-        }
-
-
-class MealSuggestionsResponse(BaseModel):
-    """
-    Response containing exactly 3 meal suggestions.
-    """
-    
-    request_id: str = Field(
-        ..., 
-        description="Unique identifier for this request (for tracking)"
-    )
-    suggestions: List[MealSuggestionItem] = Field(
-        ..., 
-        min_length=3,
-        max_length=3,
-        description="Exactly 3 meal suggestions"
-    )
-    generation_token: str = Field(
-        ...,
-        description="Token for regeneration tracking (to avoid duplicates)"
-    )
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "request_id": "req_abc123",
-                "suggestions": [
-                    {
-                        "id": "meal_lunch_1234",
-                        "name": "Grilled Chicken with Rice",
-                        "description": "Healthy high-protein lunch",
-                        "estimated_cook_time_minutes": 25,
-                        "calories": 520,
-                        "macros": {"protein": 45.0, "carbs": 55.0, "fat": 12.0},
-                        "ingredients_list": ["chicken breast", "rice", "broccoli"],
-                        "instructions": ["Grill chicken", "Cook rice"],
-                        "tags": ["high-protein", "gluten-free"]
-                    }
-                ],
-                "generation_token": "gen_xyz789"
+                "meal_id": "meal_12345",
+                "meal_name": "Grilled Chicken Rice Bowl",
+                "macros": {"protein": 70.0, "carbs": 80.0, "fat": 30.0},
+                "saved_at": "2025-12-30T12:00:00Z",
             }
         }
 
@@ -126,26 +122,22 @@ class MealSuggestionsResponse(BaseModel):
 class SaveMealSuggestionResponse(BaseModel):
     """
     Response after saving a meal suggestion to history.
+    (LEGACY - use AcceptedMealResponse instead)
     """
-    
+
     success: bool = Field(..., description="Whether the save was successful")
     message: str = Field(..., description="Status message")
     meal_id: Optional[str] = Field(
-        None,
-        description="ID of the saved meal in the database"
+        None, description="ID of the saved meal in the database"
     )
-    meal_date: str = Field(
-        ...,
-        description="Date the meal was saved for (YYYY-MM-DD)"
-    )
-    
+    meal_date: str = Field(..., description="Date the meal was saved for (YYYY-MM-DD)")
+
     class Config:
         json_schema_extra = {
             "example": {
                 "success": True,
                 "message": "Meal suggestion saved successfully to your meal history",
                 "meal_id": "12345",
-                "meal_date": "2024-01-15"
+                "meal_date": "2024-01-15",
             }
         }
-

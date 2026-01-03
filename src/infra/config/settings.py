@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     # LLM Provider configuration
     LLM_PROVIDER: str | None = Field(default=None, description="LLM provider to use: 'openai' or 'gemini'. Auto-detects if not set.")
     OPENAI_MODEL: str = Field(default="gpt-3.5-turbo", description="OpenAI model to use")
-    GEMINI_MODEL: str = Field(default="gemini-2.0-flash", description="Gemini model to use (same as food scanning)")
+    GEMINI_MODEL: str = Field(default="gemini-2.5-flash", description="Gemini model to use (same as food scanning)")
     
     # Chat/AI configuration
     CHAT_ENABLE_STRUCTURED_RESPONSES: bool = Field(default=True, description="Enable structured JSON responses from chat AI")

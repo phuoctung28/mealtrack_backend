@@ -30,7 +30,6 @@ class MealSuggestionService:
         ingredients: List[str],
         time_available_minutes: Optional[int],
         dietary_preferences: List[str],
-        exclude_ids: List[str]
     ) -> Dict[str, Any]:
         """
         Generate exactly 3 meal suggestions.

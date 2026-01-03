@@ -1,113 +1,214 @@
 """
 Request schemas for meal suggestion generation.
 """
-from typing import List, Optional, Literal
 
-from pydantic import BaseModel, Field
+import warnings
+from datetime import datetime
+from enum import Enum
+from typing import List, Literal, Optional
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class MealSizeEnum(str, Enum):
+    """DEPRECATED: T-shirt sizing for meal portions. Use MealPortionTypeEnum."""
+
+    S = "S"  # 10% of daily TDEE
+    M = "M"  # 20%
+    L = "L"  # 40%
+    XL = "XL"  # 60%
+    OMAD = "OMAD"  # 100%
+
+
+class MealPortionTypeEnum(str, Enum):
+    """Simplified meal portion types (replaces MealSizeEnum)."""
+
+    SNACK = "snack"  # Fixed ~150-300 kcal
+    MAIN = "main"  # Calculated from TDEE / meals_per_day
+    OMAD = "omad"  # Full daily target
+
+
+def map_legacy_size_to_type(size: MealSizeEnum) -> MealPortionTypeEnum:
+    """Map legacy meal size to new portion type."""
+    mapping = {
+        MealSizeEnum.S: MealPortionTypeEnum.SNACK,
+        MealSizeEnum.M: MealPortionTypeEnum.SNACK,
+        MealSizeEnum.L: MealPortionTypeEnum.MAIN,
+        MealSizeEnum.XL: MealPortionTypeEnum.MAIN,
+        MealSizeEnum.OMAD: MealPortionTypeEnum.OMAD,
+    }
+    return mapping[size]
+
+
+class CookingTimeEnum(int, Enum):
+    """Predefined cooking time options."""
+
+    QUICK = 20
+    MEDIUM = 30
+    STANDARD = 45
+    LONG = 60
 
 
 class MealSuggestionRequest(BaseModel):
     """
     Request schema for generating meal suggestions.
-    
-    Generates exactly 3 meal suggestions based on the provided inputs.
+
+    Generates exactly 3 meal suggestions based on:
+    - meal_type, meal_portion_type (or legacy meal_size), ingredients, cooking_time
     """
-    
+
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
-        ..., 
-        description="Type of meal to generate suggestions for"
+        ..., description="Type of meal to generate suggestions for"
+    )
+    # NEW: Simplified portion type (preferred)
+    meal_portion_type: Optional[MealPortionTypeEnum] = Field(
+        None,
+        description="Portion type: snack (~225 kcal), main (TDEE-based), omad (full daily)",
+    )
+    # DEPRECATED: Keep for backward compatibility
+    meal_size: Optional[MealSizeEnum] = Field(
+        None, description="DEPRECATED: Use meal_portion_type instead"
     )
     ingredients: List[str] = Field(
         default_factory=list,
         max_length=20,
-        description="Optional list of available ingredients (max 20)"
+        description="Optional list of available ingredients (max 20)",
     )
-    time_available_minutes: Optional[int] = Field(
-        None,
-        gt=0,
-        description="Optional time constraint in minutes (Any / <15 / <30 / <60)"
+    ingredient_image_url: Optional[str] = Field(
+        None, description="Optional photo of ingredients for AI recognition"
+    )
+    cooking_time_minutes: CookingTimeEnum = Field(
+        ..., description="Cooking time constraint (20/30/45/60 minutes)"
     )
     dietary_preferences: List[str] = Field(
         default_factory=list,
-        description="Optional dietary preferences (e.g., vegetarian, vegan, halal)"
+        description="Optional dietary preferences (e.g., vegetarian, vegan, halal)",
     )
     calorie_target: Optional[int] = Field(
         None,
         gt=0,
-        description="Optional calorie target for the meal"
+        description="Optional calorie target override (calculated from portion type if not provided)",
     )
     exclude_ids: List[str] = Field(
         default_factory=list,
-        description="List of meal IDs to exclude (for regeneration)"
+        description="List of meal IDs to exclude (for regeneration)",
     )
-    
+
+    @field_validator("meal_size", mode="before")
+    @classmethod
+    def warn_deprecated_meal_size(cls, v):
+        if v is not None:
+            warnings.warn(
+                "meal_size is deprecated, use meal_portion_type instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        return v
+
+    def get_effective_portion_type(self) -> MealPortionTypeEnum:
+        """Get effective portion type, preferring new field over legacy."""
+        if self.meal_portion_type is not None:
+            return self.meal_portion_type
+        if self.meal_size is not None:
+            return map_legacy_size_to_type(self.meal_size)
+        # Default based on meal_type
+        if self.meal_type == "snack":
+            return MealPortionTypeEnum.SNACK
+        return MealPortionTypeEnum.MAIN
+
     class Config:
         json_schema_extra = {
             "example": {
                 "meal_type": "lunch",
+                "meal_portion_type": "main",
                 "ingredients": ["chicken breast", "broccoli", "rice"],
-                "time_available_minutes": 30,
-                "dietary_preferences": ["high-protein"],
-                "calorie_target": 500,
-                "exclude_ids": []
+                "cooking_time_minutes": 30,
             }
         }
+
+
+class RegenerateSuggestionsRequest(BaseModel):
+    """Request to regenerate 3 NEW meal ideas (excludes shown)."""
+
+    session_id: str = Field(..., description="Suggestion session ID")
+    exclude_ids: List[str] = Field(
+        default_factory=list, description="Suggestion IDs to exclude from regeneration"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "session_id": "session_abc123",
+                "exclude_ids": ["meal_lunch_1234", "meal_lunch_5678"],
+            }
+        }
+
+
+class AcceptSuggestionRequest(BaseModel):
+    """Request to accept suggestion with portion multiplier."""
+
+    portion_multiplier: int = Field(
+        default=1, ge=1, le=4, description="Portion multiplier (1x, 2x, 3x, 4x)"
+    )
+    consumed_at: Optional[datetime] = Field(
+        None, description="Optional consumption timestamp (defaults to now)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {"portion_multiplier": 2, "consumed_at": "2025-12-30T12:00:00Z"}
+        }
+
+
+class RejectSuggestionRequest(BaseModel):
+    """Request to reject suggestion with optional feedback."""
+
+    feedback: Optional[str] = Field(
+        None,
+        max_length=500,
+        description="Optional feedback on why suggestion was rejected",
+    )
+
+    class Config:
+        json_schema_extra = {"example": {"feedback": "Too spicy for my taste"}}
 
 
 class SaveMealSuggestionRequest(BaseModel):
     """
     Request schema for saving a selected meal suggestion to meal history.
+    (LEGACY - use AcceptSuggestionRequest instead)
     """
-    
-    suggestion_id: str = Field(
-        ...,
-        description="ID of the suggestion to save"
-    )
-    name: str = Field(
-        ...,
-        description="Name of the meal"
-    )
-    description: str = Field(
-        default="",
-        description="Description of the meal"
-    )
+
+    suggestion_id: str = Field(..., description="ID of the suggestion to save")
+    name: str = Field(..., description="Name of the meal")
+    description: str = Field(default="", description="Description of the meal")
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
-        ...,
-        description="Type of meal"
+        ..., description="Type of meal"
     )
     estimated_cook_time_minutes: int = Field(
-        ...,
-        description="Total cooking time in minutes"
+        ..., description="Total cooking time in minutes"
     )
-    calories: int = Field(
-        ...,
-        description="Calories for the meal"
-    )
-    protein: float = Field(
-        ...,
-        description="Protein in grams"
-    )
-    carbs: float = Field(
-        ...,
-        description="Carbohydrates in grams"
-    )
-    fat: float = Field(
-        ...,
-        description="Fat in grams"
+    calories: int = Field(..., description="Calories for the meal")
+    protein: float = Field(..., description="Protein in grams")
+    carbs: float = Field(..., description="Carbohydrates in grams")
+    fat: float = Field(..., description="Fat in grams")
+    portion_multiplier: int = Field(
+        default=1,
+        ge=1,
+        le=4,
+        description="Portion multiplier (1x, 2x, 3x, 4x) - scales macros before saving",
     )
     ingredients_list: List[str] = Field(
-        default_factory=list,
-        description="List of ingredients"
+        default_factory=list, description="List of ingredients"
     )
     instructions: List[str] = Field(
-        default_factory=list,
-        description="Cooking instructions"
+        default_factory=list, description="Cooking instructions"
     )
     meal_date: Optional[str] = Field(
         None,
-        description="Date to save the meal for (YYYY-MM-DD format), defaults to today"
+        description="Date to save the meal for (YYYY-MM-DD format), defaults to today",
     )
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -120,9 +221,9 @@ class SaveMealSuggestionRequest(BaseModel):
                 "protein": 45.0,
                 "carbs": 55.0,
                 "fat": 12.0,
+                "portion_multiplier": 1,
                 "ingredients_list": ["chicken breast", "brown rice", "broccoli"],
                 "instructions": ["Grill chicken", "Cook rice", "Steam broccoli"],
-                "meal_date": "2024-01-15"
+                "meal_date": "2024-01-15",
             }
         }
-

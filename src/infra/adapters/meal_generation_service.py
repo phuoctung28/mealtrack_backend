@@ -37,7 +37,7 @@ class MealGenerationService(MealGenerationServicePort):
         else:
             # Base LLM configuration - will be customized per request
             self.base_llm_config = {
-                "model": "gemini-2.0-flash",
+                "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
                 "temperature": 0.2,  # Lower temperature for consistency
                 "google_api_key": self.api_key,
                 "response_mime_type": "application/json",  # Always expect JSON
@@ -121,7 +121,7 @@ class MealGenerationService(MealGenerationServicePort):
     def _determine_optimal_tokens(self, prompt: str, system_message: str) -> int:
         """
         Determine optimal token limit based on content complexity.
-        
+
         Returns:
             Appropriate max_output_tokens value
         """
@@ -129,26 +129,45 @@ class MealGenerationService(MealGenerationServicePort):
         content_indicators = {
             # Weekly plans need more tokens
             'weekly': ['week', '7 days', 'monday', 'tuesday', 'wednesday'],
-            # Multiple meals need moderate tokens  
+            # Multiple suggestions with full details (ingredients, recipe steps)
+            'suggestions': ['suggestions', 'meal ideas', 'recipe_steps', 'ingredients (array'],
+            # Multiple meals need moderate tokens
             'daily_multiple': ['breakfast', 'lunch', 'dinner', 'snack'],
             # Single meals need fewer tokens
             'single': ['single meal', 'one meal', 'generate a meal']
         }
-        
+
         combined_text = (prompt + " " + system_message).lower()
-        
+
         # Check for weekly plan indicators
         if any(indicator in combined_text for indicator in content_indicators['weekly']):
             logger.debug("Detected weekly plan generation - using high token limit")
             return 8000  # Increased back to 8000 for complete weekly plans
-        
+
+        # Check for multiple suggestions with full recipe details
+        if any(indicator in combined_text for indicator in content_indicators['suggestions']):
+            # Extract number of suggestions requested - handle formats like:
+            # "3 meal suggestions", "exactly 3 different breakfast meal suggestions"
+            suggestion_count_match = re.search(
+                r'(?:exactly\s+)?(\d+)\s+(?:\w+\s+)*(?:meal\s+)?suggestions?',
+                combined_text
+            )
+            if suggestion_count_match:
+                count = int(suggestion_count_match.group(1))
+                # Each full suggestion with ingredients + instructions + seasonings ~1500 tokens
+                tokens = max(4000, count * 1500)
+                logger.debug(f"Detected {count} meal suggestions - using {tokens} token limit")
+                return min(tokens, 8000)  # Cap at 8000
+            logger.debug("Detected meal suggestions generation - using medium-high token limit")
+            return 5000  # Default for suggestions with full details (increased from 3500)
+
         # Check for daily multiple meals
-        meal_types_found = sum(1 for indicator in content_indicators['daily_multiple'] 
+        meal_types_found = sum(1 for indicator in content_indicators['daily_multiple']
                               if indicator in combined_text)
         if meal_types_found >= 3:
             logger.debug("Detected daily multiple meal generation - using medium token limit")
             return 3000  # Medium for daily plans with multiple meals
-        
+
         # Single meal or simple requests
         logger.debug("Detected simple meal generation - using low token limit")
         return 1500  # Conservative for single meals
@@ -239,7 +258,10 @@ class MealGenerationService(MealGenerationServicePort):
             raise ValueError(f"Could not extract valid JSON from response: {str(e)}")
     
     def _clean_json_content(self, content: str) -> str:
-        """Clean common JSON formatting issues."""
+        """
+        Clean and recover truncated JSON from token limit cutoffs.
+        Strategy: Find last complete suggestion object and close structures.
+        """
         if not content.strip():
             logger.debug("[JSON-CLEAN] empty content, returning empty")
             return ""
@@ -284,7 +306,10 @@ class MealGenerationService(MealGenerationServicePort):
 
             # Track structure depth
             if char == '{':
-                brace_count += 1
+                depth += 1
+                # Track when we enter a suggestion object (depth 2, inside suggestions array)
+                if depth == 2 and bracket_depth == 1:
+                    object_start_depth = depth
             elif char == '}':
                 # Check if we're closing a suggestion object
                 if depth == 2 and object_start_depth == 2:
@@ -334,6 +359,30 @@ class MealGenerationService(MealGenerationServicePort):
         content = re.sub(r',(\s*[}\]])', r'\1', content)
         if content != original_content:
             logger.debug("[JSON-CLEAN-TRAILING-COMMA] removed trailing comma before closing brace/bracket")
+
+        # Fix missing commas between array elements or object properties (common AI output issue)
+        # These patterns use }\s+{ or ]\s+" to ensure there's whitespace (newlines) between
+        # which indicates structure boundaries, not content inside strings
+        original_content = content
+
+        # Pattern: } followed by whitespace (including newline) then { (missing comma between objects)
+        content = re.sub(r'\}(\s*\n\s*)\{', r'},\1{', content)
+
+        # Pattern: ] followed by whitespace (including newline) then [ (missing comma between arrays)
+        content = re.sub(r'\](\s*\n\s*)\[', r'],\1[', content)
+
+        # Pattern: } followed by whitespace (including newline) then " (object end, then property key)
+        content = re.sub(r'\}(\s*\n\s*)"', r'},\1"', content)
+
+        # Pattern: ] followed by whitespace (including newline) then " (array end, then property key)
+        content = re.sub(r'\](\s*\n\s*)"', r'],\1"', content)
+
+        # Also handle single-line JSON with spaces (but be conservative - require at least 2 spaces)
+        content = re.sub(r'\}(  +)\{', r'},\1{', content)
+        content = re.sub(r'\](  +)\[', r'],\1[', content)
+
+        if content != original_content:
+            logger.debug("[JSON-CLEAN-MISSING-COMMA] added missing commas between JSON structures")
 
         if is_incomplete and last_complete_suggestion_end > 0:
             # Truncate to last complete suggestion

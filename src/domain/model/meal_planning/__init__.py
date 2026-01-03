@@ -26,6 +26,16 @@ from .meal_plan import (
     MealType,
     PlanDuration
 )
+from .meal_suggestion import (
+    MealSuggestion,
+    MealSize,
+    SuggestionStatus,
+    Ingredient,
+    RecipeStep,
+    MacroEstimate,
+    MEAL_SIZE_PERCENTAGES
+)
+from .suggestion_session import SuggestionSession
 
 __all__ = [
     'MealPlan',
@@ -47,5 +57,13 @@ __all__ = [
     'GeneratedMeal',
     'NutritionSummary',
     'SimpleMacroTargets',
+    'MealSuggestion',
+    'MealSize',
+    'SuggestionStatus',
+    'Ingredient',
+    'RecipeStep',
+    'MacroEstimate',
+    'MEAL_SIZE_PERCENTAGES',
+    'SuggestionSession',
 ]
 

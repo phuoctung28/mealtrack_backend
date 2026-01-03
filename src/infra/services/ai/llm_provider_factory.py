@@ -127,6 +127,6 @@ class LLMProviderFactory:
                 "Please set GOOGLE_API_KEY environment variable."
             )
         
-        model = model or os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+        model = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         return GeminiChatService(api_key=api_key, model=model)
 

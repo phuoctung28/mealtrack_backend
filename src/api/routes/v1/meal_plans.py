@@ -20,7 +20,7 @@ from src.app.commands.meal_plan import (
 )
 from src.app.queries.meal_plan import (
     GetMealPlanQuery,
-    GetMealsByDateQuery
+    GetMealsFromPlanByDateQuery
 )
 from src.infra.event_bus import EventBus
 
@@ -105,15 +105,15 @@ async def get_meals_by_date(
     - meal_type: Optional filter to only return specific meal type (breakfast, lunch, dinner, snack)
     """
     try:
-        # Create query
-        query = GetMealsByDateQuery(
+        # Create query for planned meals by date
+        query = GetMealsFromPlanByDateQuery(
             user_id=user_id,
             meal_date=meal_date,
         )
-        
-        # Send query
+
+        # Send query - returns dict matching MealsByDateResponse
         result = await event_bus.send(query)
-        
+
         return MealsByDateResponse(**result)
     except Exception as e:
         raise handle_exception(e) from e
