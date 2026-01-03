@@ -5,9 +5,10 @@ Provides Firebase token verification and user extraction.
 """
 
 import logging
+import os
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth as firebase_auth
 from sqlalchemy.orm import Session
@@ -97,21 +98,26 @@ async def verify_firebase_token(
 
 
 async def get_current_user_id(
-    token: dict = Depends(verify_firebase_token),
+    request: Request,
     db: Session = Depends(get_db)
 ) -> str:
     """
     Extract the authenticated user's database ID from the verified Firebase token.
+    
+    In development mode, checks request.state.user first (set by dev_auth_bypass middleware)
+    before attempting Firebase token verification.
 
     This dependency:
-    1. Extracts the Firebase UID from the verified token
-    2. Looks up the user in the database by firebase_uid
-    3. Returns the database user.id (UUID primary key)
+    1. Checks for dev bypass user (development mode)
+    2. Extracts the Firebase UID from the verified token (production)
+    3. Looks up the user in the database by firebase_uid
+    4. Returns the database user.id (UUID primary key)
 
     This ensures that the user_id matches what's expected by all database queries.
 
     Args:
-        token: Verified Firebase token (injected by verify_firebase_token)
+        request: FastAPI request object (for dev bypass check)
+        token: Verified Firebase token (optional, for production)
         db: Database session (injected by get_db)
 
     Returns:
@@ -127,6 +133,41 @@ async def get_current_user_id(
         ):
             return {"user_id": user_id}
     """
+    # Check for dev bypass user first (development mode)
+    if hasattr(request.state, 'user') and request.state.user:
+        logger.debug("Using dev bypass user: %s", request.state.user.id)
+        return request.state.user.id
+    
+    # Check for debug token bypass
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token_str = auth_header.split(" ")[1]
+        # Skip Firebase verification for debug token
+        if token_str == "debug-token-bypass":
+            # Use dev user from database
+            firebase_uid = os.getenv("DEV_USER_FIREBASE_UID", "dev_firebase_uid")
+            from src.infra.database.models.user.user import User
+            user = db.query(User).filter(
+                User.firebase_uid == firebase_uid,
+                User.is_active == True
+            ).first()
+            if user:
+                logger.debug("Using dev user for debug-token-bypass: %s", user.id)
+                return user.id
+    
+    # Normal Firebase token verification
+    try:
+        security = HTTPBearer()
+        credentials = await security(request)
+        token = await verify_firebase_token(credentials)
+    except Exception as e:
+        logger.warning("Token verification failed: %s", str(e))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from e
+    
     firebase_uid = token.get("uid")
     if not firebase_uid:
         logger.error("Firebase token missing 'uid' field")
