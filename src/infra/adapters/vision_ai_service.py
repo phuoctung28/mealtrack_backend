@@ -1,6 +1,8 @@
 import base64
 import json
+import logging
 import os
+import re
 from typing import Dict, Any, List
 
 from dotenv import load_dotenv
@@ -15,6 +17,8 @@ from src.domain.strategies.meal_analysis_strategy import (
 
 # Load environment variables
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 class VisionAIService(VisionAIServicePort):
     """
@@ -32,7 +36,7 @@ class VisionAIService(VisionAIServicePort):
         self.model = ChatGoogleGenerativeAI(
             model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
             temperature=0.2,
-            max_output_tokens=1500,
+            max_output_tokens=4096,
             google_api_key=self.api_key,
             convert_system_message_to_human=True
         )
@@ -40,21 +44,21 @@ class VisionAIService(VisionAIServicePort):
     def analyze_with_strategy(self, image_bytes: bytes, strategy: MealAnalysisStrategy) -> Dict[str, Any]:
         """
         Analyze a food image using the provided analysis strategy.
-        
+
         Args:
             image_bytes: The raw bytes of the image to analyze
             strategy: The analysis strategy to use
-            
+
         Returns:
             JSON-compatible dictionary with the raw AI response
-            
+
         Raises:
             RuntimeError: If analysis fails
         """
         try:
             # Encode image for the API
             image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-            
+
             # Create message with the image using strategy
             messages = [
                 SystemMessage(content=strategy.get_analysis_prompt()),
@@ -65,41 +69,94 @@ class VisionAIService(VisionAIServicePort):
                     ]
                 )
             ]
-            
+
             # Call the API
             response = self.model.invoke(messages)
-            
+
             # Parse the response to extract the JSON
             content = response.content
-            
+
+            # Validate response content is not empty
+            if not content or (isinstance(content, str) and not content.strip()):
+                # Check for safety blocking or other issues
+                response_metadata = getattr(response, 'response_metadata', {})
+                finish_reason = response_metadata.get('finish_reason', 'unknown')
+                safety_ratings = response_metadata.get('safety_ratings', [])
+
+                logger.warning(
+                    f"Empty response from Gemini API. finish_reason={finish_reason}, "
+                    f"safety_ratings={safety_ratings}"
+                )
+
+                if finish_reason == 'SAFETY':
+                    raise ValueError(
+                        "Image was blocked by AI safety filters. "
+                        "Please try a different image of food."
+                    )
+                raise ValueError(
+                    f"AI returned empty response (finish_reason: {finish_reason}). "
+                    "The image may not be clear or recognizable as food."
+                )
+
             # Extract JSON from the response
-            try:
-                # Try to parse the entire response as JSON
-                result = json.loads(content)
-            except json.JSONDecodeError:
-                # If that fails, try to find and extract just the JSON part
-                import re
-                json_match = re.search(r'```json(.*?)```', content, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(1).strip()
-                    result = json.loads(json_str)
-                else:
-                    # As a last resort, try to find any JSON-like structure
-                    json_match = re.search(r'\{.*\}', content, re.DOTALL)
-                    if json_match:
-                        json_str = json_match.group(0)
-                        result = json.loads(json_str)
-                    else:
-                        raise ValueError("Could not extract JSON from response")
-            
+            result = self._extract_json_from_response(content)
+
             return {
                 "raw_response": content,
                 "structured_data": result,
                 "strategy_used": strategy.get_strategy_name()
             }
-            
+
         except Exception as e:
             raise RuntimeError(f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}")
+
+    def _extract_json_from_response(self, content: str) -> Dict[str, Any]:
+        """
+        Extract JSON from AI response, handling various formats.
+
+        Args:
+            content: The raw response string from the AI
+
+        Returns:
+            Parsed JSON as dictionary
+
+        Raises:
+            ValueError: If JSON cannot be extracted
+        """
+        # Try to parse the entire response as JSON
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+
+        # Try to find JSON in markdown code block (with closing ```)
+        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', content)
+        if json_match:
+            try:
+                return json.loads(json_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # Try to find any complete JSON object
+        json_match = re.search(r'\{[\s\S]*\}', content)
+        if json_match:
+            try:
+                return json.loads(json_match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        # Detect truncated response (has opening { but no closing })
+        if '{' in content and '}' not in content:
+            logger.error(f"Truncated JSON response detected: {content[:500]}")
+            raise ValueError(
+                "AI response was truncated. Please try again with a simpler image."
+            )
+
+        logger.error(f"Could not extract JSON from response: {content[:500]}")
+        raise ValueError(
+            "Could not extract JSON from AI response. "
+            "Please try again or use a clearer image."
+        )
         
     def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
         """
