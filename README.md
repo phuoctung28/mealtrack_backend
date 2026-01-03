@@ -10,26 +10,27 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 - **[Code Standards](./docs/code-standards.md)** - Style guide, patterns, conventions
 - **[API Documentation](./docs/api-docs.md)** - Endpoint details (auto-generated via Swagger)
 
-## Features
+## Features (13 Core Features, 70+ API Endpoints)
 
-- **AI-Powered Meal Analysis**: Google Gemini 2.0 vision for food recognition and nutritional extraction
+- **AI-Powered Meal Analysis**: Google Gemini 2.5 Flash vision for food recognition and nutritional extraction
+- **Session-Based Meal Suggestions** (NEW v0.4): AI meal recommendations with 4-hour TTL, portion multipliers (1-4x), rejection feedback
 - **Ingredient Recognition**: AI-powered ingredient identification from meal images
-- **Intelligent Meal Planning**: AI-generated personalized meal plans with dietary preferences and ingredient-based meal suggestions
-- **Meal Suggestions**: Generate and save AI-driven meal recommendations based on user preferences
+- **Intelligent Meal Planning**: AI-generated personalized plans with dietary preferences and ingredient-based generation
 - **Real-time Chat**: WebSocket-based nutrition advice with AI conversation and context awareness
 - **Meal Tracking & History**: Complete meal logging with manual entry and image-based analysis
-- **Nutritional Insights**: Daily summaries, macro tracking, TDEE calculations
-- **Push Notifications**: Firebase Cloud Messaging with timezone-aware scheduling
+- **Nutritional Insights**: Daily summaries, macro tracking, TDEE calculations, goal monitoring
+- **Push Notifications**: Firebase Cloud Messaging with timezone-aware scheduling and goal-based triggers
 - **User Pain Points**: Capture and track user health concerns during onboarding
 - **Vector Search**: Pinecone-powered semantic food discovery
-- **Feature Management**: Dynamic feature flags for gradual rollouts
-- **Clean Architecture**: 4-layer architecture with CQRS pattern and event-driven design
+- **Feature Management**: Dynamic feature flags with gradual rollouts and user-level overrides
+- **RevenueCat Integration**: Subscription webhook handling and premium features
+- **Clean Architecture**: 4-layer architecture with CQRS pattern, event-driven design, and 681+ tests
 
 ## Technology Stack
 
 **Core**:
 - FastAPI 0.115.0+ (async web framework)
-- Python 3.8+ (async/await support)
+- Python 3.11+ (async/await support)
 - SQLAlchemy 2.0 (ORM)
 - Pydantic v2 (validation)
 
@@ -39,7 +40,7 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 - Alembic (migrations)
 
 **AI/ML**:
-- Google Gemini 2.0 (vision API)
+- Google Gemini 2.5 Flash (vision API)
 - OpenAI GPT-4 (chat/planning)
 - Pinecone (vector embeddings)
 - LangChain (LLM orchestration)

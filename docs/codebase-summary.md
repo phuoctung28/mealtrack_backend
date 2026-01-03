@@ -1,11 +1,13 @@
 # MealTrack Backend - Codebase Summary
 
-**Generated:** December 31, 2024
-**Codebase Stats**: 65+ Python source + test files, 150K+ tokens (main), 700K+ characters
+**Generated:** January 3, 2026
+**Codebase Stats**: 515 total files, 473,592 tokens, 2.2M+ characters
+**Source Files**: ~145 Python files (src/)
+**Test Files**: 57 files with 681 test cases
 **Language**: Python 3.11+
 **Framework**: FastAPI 0.115.0+, SQLAlchemy 2.0
-**Query Optimization**: N+1 prevention implemented with eager loading (Phase 02 complete)
-**Code Quality**: Large file refactoring completed (Phase 03 complete - 72% LOC reduction)
+**Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
+**Status**: Phase 06 Session-Based Meal Suggestions Active (681+ tests passing, 70%+ code coverage)
 
 ---
 
@@ -30,34 +32,60 @@
 
 ```
 mealtrack_backend/
-├── src/                                 # Application source code
+├── src/                                 # Application source code (145 files)
 │   ├── api/                             # API Layer (HTTP endpoints)
+│   │   ├── routes/v1/                   # 13+ endpoint files (70+ routes)
+│   │   ├── schemas/                     # 28+ Pydantic models
+│   │   ├── mappers/                     # Domain to API conversion
+│   │   ├── dependencies/                # FastAPI DI providers
+│   │   ├── middleware/                  # HTTP middleware
+│   │   └── utils/                       # API utilities
 │   ├── app/                             # Application Layer (CQRS)
+│   │   ├── commands/                    # 34+ command definitions
+│   │   ├── queries/                     # 30+ query definitions
+│   │   ├── events/                      # 18 domain events
+│   │   └── handlers/                    # 54+ total handlers
 │   ├── domain/                          # Domain Layer (Business logic)
-│   └── infra/                           # Infrastructure Layer (Services)
-├── tests/                               # Test suite
-├── migrations/                          # Database migrations
-├── docs/                                # Documentation
+│   │   ├── model/                       # 25+ domain entities
+│   │   ├── services/                    # 36 service files (refactored)
+│   │   ├── strategies/                  # Strategy implementations
+│   │   ├── ports/                       # Interface definitions
+│   │   └── prompts/                     # AI prompt templates
+│   └── infra/                           # Infrastructure Layer
+│       ├── database/                    # SQLAlchemy + Alembic (11 migrations)
+│       ├── repositories/                # 7+ data access implementations
+│       ├── services/                    # External service adapters
+│       ├── cache/                       # Redis caching
+│       ├── event_bus/                   # Event dispatcher
+│       └── adapters/                    # Storage & integrations
+├── tests/                               # Test suite (57 files, 681 tests)
+├── migrations/                          # Database migrations (11 versions)
+├── docs/                                # Documentation (5+ files)
 ├── scripts/                             # Utility scripts
-└── requirements.txt                     # Python dependencies
+├── requirements.txt                     # Python dependencies
+└── .env.example                         # Environment template
 ```
 
-### Codebase Metrics (Post Phase-03 Refactoring)
+### Codebase Metrics (Updated Jan 2026)
 
 | Metric | Value |
 |--------|-------|
-| Total Python Files | 65+ (source + tests) |
-| Source Files (src/) | 48+ |
-| Test Files | 20+ |
-| Total Tokens | 150K+ |
-| Total Characters | 700K+ |
-| Average File Size | 8-10KB |
-| Largest Files | Integration/unit tests (6K+ tokens) |
-| Domain Service Modules | 36 files (refactored from 4 monolithic services) |
+| Total Files | 515 (73 Python source + tests, 442 other) |
+| Source Files (src/) | ~145 files |
+| Test Files | 57 files |
+| Total Test Cases | 681 tests |
+| Total Tokens | 473,592 |
+| Total Characters | 2.2M+ |
+| Lines of Code (src/) | 33,308 LOC |
+| API Endpoints | 70+ REST endpoints |
+| CQRS Commands | 34+ command definitions |
+| CQRS Queries | 30+ query definitions |
+| Event Handlers | 54+ total (43 command, 11 query) |
+| Database Tables | 27 tables across 11 migrations |
+| Domain Services | 36 files (refactored from 4 monolithic) |
+| Code Coverage | 70%+ maintained |
 
-### Phase 03 Refactoring Summary
-
-**Status**: COMPLETED (2025-12-31)
+### Phase 03 Refactoring Summary (Completed Dec 31, 2024)
 
 4 large backend files refactored into 13 specialized components:
 
@@ -69,16 +97,9 @@ mealtrack_backend/
 | notification_repository.py | 428 | 138 | -68% | 3 modules |
 | **TOTAL** | **1,963** | **551** | **-72%** | **13 components** |
 
-**Refactored Components**:
-- `src/domain/services/meal_plan/` - MealPlanValidator, MealPlanGenerator, MealPlanFormatter, RequestBuilder
-- `src/domain/services/meal_suggestion/` - JsonExtractor, SuggestionFallbackProvider, SuggestionPromptBuilder
-- `src/domain/services/conversation/` - ConversationParser, ConversationFormatter, ConversationHandler
-- `src/infra/repositories/notification/` - FCMTokenOperations, NotificationPreferencesOperations, ReminderQueryBuilder
-
-**Key Metrics**:
-- All 131 tests passing (100%)
+**Key Achievements**:
+- All 681 tests passing (100%)
 - Zero breaking changes to API
-- Backward compatible - no external interface changes
 - New files use dependency injection
 - Module exports via __init__.py files
 
@@ -90,43 +111,45 @@ mealtrack_backend/
 
 ```
 src/
-├── api/                                 # Presentation Layer
+├── api/                                 # Presentation Layer (72 files, 8,278 LOC)
 │   ├── main.py                          # FastAPI app initialization
 │   ├── base_dependencies.py             # Shared dependencies
-│   ├── routes/
-│   │   └── v1/
-│   │       ├── health.py                # Health check endpoints
-│   │       ├── meals.py                 # Meal management routes
-│   │       ├── chat.py                  # Chat endpoints
-│   │       ├── chat_ws.py               # WebSocket chat
-│   │       ├── meal_plans.py            # Meal planning routes
-│   │       ├── user_profiles.py         # User profile routes
-│   │       ├── users.py                 # User management routes
-│   │       ├── foods.py                 # USDA food search routes
-│   │       ├── notifications.py         # Push notification routes
-│   │       ├── feature_flags.py         # Feature flag routes
-│   │       ├── activities.py            # Activity tracking routes
-│   │       ├── webhooks.py              # External webhook handlers
-│   │       └── monitoring.py            # Monitoring endpoints
-│   ├── schemas/
-│   │   ├── request/                     # Request DTOs
-│   │   ├── response/                    # Response DTOs
-│   │   └── common/                      # Shared schemas
-│   ├── mappers/                         # Entity -> Schema mappers
-│   ├── converters/                      # Data conversion utilities
+│   ├── routes/v1/                       # 13+ route files
+│   │   ├── health.py
+│   │   ├── meals.py                     # 6 endpoints
+│   │   ├── meal_suggestions.py          # 7 endpoints (Phase 06 NEW)
+│   │   ├── meal_plans.py                # 3 endpoints
+│   │   ├── chat/                        # Chat endpoints
+│   │   ├── chat_ws.py                   # WebSocket chat
+│   │   ├── user_profiles.py             # 3 endpoints
+│   │   ├── users.py                     # 5 endpoints
+│   │   ├── foods.py                     # 2 endpoints
+│   │   ├── notifications.py             # 3 endpoints
+│   │   ├── ingredients.py               # 2 endpoints (NEW v0.3)
+│   │   ├── feature_flags.py             # 3 endpoints
+│   │   ├── webhooks.py                  # RevenueCat
+│   │   ├── monitoring.py                # 1 endpoint
+│   │   ├── activities.py                # 1 endpoint
+│   │   └── daily_meals.py               # 1 endpoint
+│   ├── schemas/                         # 28+ Pydantic models
+│   │   ├── request/                     # Request DTOs (13+ files)
+│   │   └── response/                    # Response DTOs (10+ files)
+│   ├── mappers/                         # Entity -> Schema converters
 │   ├── dependencies/                    # FastAPI Depends providers
-│   ├── middleware/                      # HTTP middleware
-│   └── utils/                           # API utilities
+│   ├── middleware/                      # Auth bypass, premium check
+│   └── utils/                           # File validation, etc
 │
-├── app/                                 # Application Layer (CQRS)
-│   ├── commands/                        # Command definitions
-│   │   ├── meal/
-│   │   ├── meal_plan/
-│   │   ├── chat/
-│   │   ├── user/
-│   │   ├── daily_meal/
-│   │   └── notification/
-│   ├── queries/                         # Query definitions
+├── app/                                 # Application Layer (145 files, 6,340 LOC - CQRS)
+│   ├── commands/                        # 34+ command definitions
+│   │   ├── meal/                        # Meal commands (5+)
+│   │   ├── meal_plan/                   # Meal planning (3+)
+│   │   ├── chat/                        # Chat (3+)
+│   │   ├── user/                        # User (3+)
+│   │   ├── daily_meal/                  # Daily suggestions (2+)
+│   │   ├── notification/                # Notifications (2+)
+│   │   ├── ingredient/                  # Ingredients (1+)
+│   │   └── meal_suggestion/             # Suggestions (NEW)
+│   ├── queries/                         # 30+ query definitions
 │   │   ├── meal/
 │   │   ├── meal_plan/
 │   │   ├── chat/
@@ -134,67 +157,67 @@ src/
 │   │   ├── user/
 │   │   ├── notification/
 │   │   ├── activity/
-│   │   └── tdee/
+│   │   ├── tdee/
+│   │   └── ingredient/
 │   ├── events/                          # Domain event definitions
 │   │   ├── meal/
 │   │   ├── meal_plan/
 │   │   ├── user/
 │   │   ├── tdee/
 │   │   └── daily_meal/
-│   └── handlers/
-│       ├── command_handlers/            # Command handler implementations
-│       ├── query_handlers/              # Query handler implementations
-│       └── event_handlers/              # Domain event subscribers
+│   └── handlers/                        # 54+ total implementations
+│       ├── command_handlers/            # 43+ implementations
+│       ├── query_handlers/              # 11+ implementations
+│       └── event_handlers/              # Event subscribers
 │
-├── domain/                              # Domain Layer
-│   ├── model/                           # Domain models (not ORM)
+├── domain/                              # Domain Layer (107 files, 11,282 LOC)
+│   ├── model/                           # 25+ domain entities
 │   │   ├── ai/                          # AI-related models
-│   │   ├── meal/
-│   │   ├── meal_planning/
-│   │   ├── nutrition/
-│   │   ├── user/
-│   │   ├── notification/
-│   │   ├── chat/
-│   │   └── conversation/
-│   ├── services/                        # Domain services (36 files, refactored)
+│   │   ├── meal/                        # Meal entities
+│   │   ├── meal_planning/               # Planning models
+│   │   ├── nutrition/                   # Nutrition models
+│   │   ├── user/                        # User models
+│   │   ├── notification/                # Notification models
+│   │   ├── chat/                        # Chat models
+│   │   └── conversation/                # Conversation models
+│   ├── services/                        # 36 service files (refactored)
 │   │   ├── meal_service.py              # Core meal operations
-│   │   ├── meal_plan/                   # NEW: 4 components from meal_plan_orchestration_service
-│   │   │   ├── __init__.py
+│   │   ├── meal_plan/                   # 4 components (refactored)
 │   │   │   ├── meal_plan_validator.py
 │   │   │   ├── meal_plan_generator.py
 │   │   │   ├── meal_plan_formatter.py
 │   │   │   └── request_builder.py
-│   │   ├── meal_suggestion/             # NEW: 3 components from daily_meal_suggestion_service
-│   │   │   ├── __init__.py
+│   │   ├── meal_suggestion/             # 3 components (refactored)
 │   │   │   ├── json_extractor.py
 │   │   │   ├── suggestion_fallback_provider.py
 │   │   │   └── suggestion_prompt_builder.py
-│   │   ├── conversation/                # NEW: 3 components from conversation_service
-│   │   │   ├── __init__.py
+│   │   ├── conversation/                # 3 components (refactored)
 │   │   │   ├── conversation_parser.py
 │   │   │   ├── conversation_formatter.py
 │   │   │   └── conversation_handler.py
+│   │   ├── meal_plan_service.py
+│   │   ├── suggestion_orchestration_service.py   # Phase 06 NEW
 │   │   ├── user_service.py
 │   │   ├── nutrition_service.py
 │   │   ├── prompt_generation_service.py
-│   │   └── ...
+│   │   ├── tdee_service.py
+│   │   └── (10+ other services)
 │   ├── strategies/                      # Strategy implementations
-│   │   ├── meal_analysis_strategies.py
-│   │   └── meal_edit_strategies.py
-│   ├── ports/                           # Interface definitions (abstractions)
+│   │   ├── meal_analysis_strategies.py  # 5 concrete strategies
+│   │   └── meal_edit_strategies.py      # Replace, remove, add
+│   ├── ports/                           # Interface definitions
 │   │   ├── repositories/
 │   │   └── services/
-│   ├── parsers/                         # Response parsing logic
+│   ├── parsers/                         # Response parsing
 │   ├── mappers/                         # Domain model mappers
 │   ├── prompts/                         # AI prompt templates
-│   └── constants/                       # Domain constants & enums
+│   └── constants/                       # Enums & domain constants
 │
-└── infra/                               # Infrastructure Layer
-    ├── database/
-    │   ├── config.py                    # Database connection setup
+└── infra/                               # Infrastructure Layer (76 files, 7,408 LOC)
+    ├── database/                        # SQLAlchemy + Alembic
+    │   ├── config.py                    # Database connection
     │   ├── uow.py                       # Unit of Work pattern
-    │   ├── models/                      # SQLAlchemy ORM models
-    │   │   ├── base.py                  # Base model class
+    │   ├── models/                      # 16+ SQLAlchemy models
     │   │   ├── meal/
     │   │   ├── nutrition/
     │   │   ├── user/
@@ -203,213 +226,122 @@ src/
     │   │   ├── chat/
     │   │   ├── conversation/
     │   │   └── enums.py
-    │   └── migration_manager.py         # Migration orchestration
-    ├── repositories/                    # Data access layer (refactored)
+    │   └── migration_manager.py
+    ├── repositories/                    # 7+ data access implementations
     │   ├── meal_repository.py
     │   ├── chat_repository.py
     │   ├── user_repository.py
     │   ├── meal_plan_repository.py
-    │   ├── notification/                # NEW: 3 components from notification_repository
-    │   │   ├── __init__.py
+    │   ├── notification/                # 3 components (refactored)
     │   │   ├── fcm_token_operations.py
     │   │   ├── notification_preferences_operations.py
     │   │   └── reminder_query_builder.py
-    │   └── ...
+    │   └── (others)
     ├── services/                        # External service adapters
     │   ├── ai/
-    │   │   ├── gemini_service.py        # Google Gemini integration
-    │   │   └── openai_chat_service.py   # OpenAI Chat integration
-    │   ├── firebase_service.py          # Firebase auth & messaging
-    │   ├── firebase_auth_service.py     # Firebase auth helpers
-    │   ├── pinecone_service.py          # Vector DB integration
+    │   │   ├── gemini_service.py        # Google Gemini 2.5 Flash
+    │   │   └── openai_chat_service.py   # OpenAI GPT-4
+    │   ├── firebase_service.py          # Auth & messaging
+    │   ├── firebase_auth_service.py     # Auth helpers
+    │   ├── pinecone_service.py          # Vector DB
     │   ├── scheduled_notification_service.py
-    │   └── usda_service.py              # USDA food database
-    ├── adapters/                        # Third-party service adapters
+    │   └── usda_service.py              # Food database
+    ├── adapters/                        # Third-party adapters
     │   ├── cloudinary_adapter.py        # Image storage
     │   ├── storage_factory.py
-    │   └── ...
-    ├── cache/                           # Caching layer
-    │   ├── redis_client.py              # Redis connection
-    │   ├── cache_service.py             # Cache abstraction
-    │   ├── cache_keys.py                # Cache key definitions
-    │   ├── decorators.py                # Caching decorators
-    │   └── metrics.py                   # Cache metrics
+    │   └── (others)
+    ├── cache/                           # Redis caching
+    │   ├── redis_client.py
+    │   ├── cache_service.py
+    │   ├── cache_keys.py
+    │   ├── decorators.py
+    │   └── metrics.py
     ├── event_bus/                       # Event dispatcher
-    │   └── event_bus.py                 # Event bus implementation
+    │   └── event_bus.py                 # PyMediator implementation
     ├── websocket/                       # WebSocket management
-    │   └── connection_manager.py        # WebSocket connection pool
-    ├── config/                          # Configuration management
-    │   └── settings.py                  # Environment & settings
-    └── mappers/                         # Infra -> Domain mappers
-        └── ...
+    │   └── connection_manager.py
+    ├── config/                          # Configuration
+    │   └── settings.py
+    └── mappers/                         # Infra -> Domain converters
 ```
 
 ---
 
 ## Layer Responsibilities
 
-### 1. API Layer (`src/api/`)
+### 1. API Layer (`src/api/`) - 72 files, 8,278 LOC
 
-**Purpose**: Handle HTTP requests/responses and route them appropriately
+**Purpose**: Handle HTTP requests/responses
 
-**Key Components**:
-- **Routes** (`routes/v1/`): 13 endpoint files handling REST operations
-- **Schemas** (`schemas/`): 28+ Pydantic models for request/response validation
-- **Mappers** (`mappers/`): Convert domain objects to API response schemas
-- **Middleware**: CORS, authentication, error handling
-- **Dependencies** (`dependencies/`): FastAPI `Depends()` providers for injection
-
-**Example Routes**:
-```python
-# Meals: GET, POST (manual), PATCH (edit)
-# Meal Plans: POST (generate), GET, PUT (replace)
-# Chat: WebSocket, POST (message), GET (history)
-# Users: POST (sync, onboarding), PUT (metrics)
-# Foods: GET (search), GET (details)
-# Notifications: POST (token), PUT (preferences)
-# Feature Flags: GET (flag status), POST/PUT (admin)
-```
+**Components**:
+- **Routes** (13+ files): 70+ REST endpoints
+- **Schemas** (28+ Pydantic models): Request/response validation
+- **Mappers**: Domain to API conversion
+- **Middleware**: CORS, auth, error handling
+- **Dependencies**: FastAPI `Depends()` providers
 
 **Responsibilities**:
-- Validate incoming requests via Pydantic
+- Validate incoming requests
 - Call application commands/queries
 - Serialize responses to JSON
 - Handle HTTP status codes
-- Implement CORS and authentication
+- Implement authentication
 
-### 2. Application Layer (`src/app/`)
+### 2. Application Layer (`src/app/`) - 145 files, 6,340 LOC - CQRS
 
-**Purpose**: Implement CQRS pattern for decoupled command/query handling
+**Purpose**: Implement CQRS pattern for decoupled operations
 
-**Key Components**:
-- **Commands** (`commands/`): 19+ command definitions for state changes
-- **Queries** (`queries/`): 15+ query definitions for reads
-- **Command Handlers** (`handlers/command_handlers/`): 22+ implementations
-- **Query Handlers** (`handlers/query_handlers/`): 18+ implementations
-- **Events** (`events/`): Domain event definitions
-- **Event Handlers** (`handlers/event_handlers/`): Event subscribers
-
-**Command Examples**:
-```
-- UploadMealImageCommand
-- CreateManualMealCommand
-- EditMealCommand
-- GenerateMealPlanCommand
-- SendChatMessageCommand
-- UpdateUserProfileCommand
-- RegisterFCMTokenCommand
-```
-
-**Query Examples**:
-```
-- GetMealByIdQuery
-- GetMealHistoryQuery
-- GetMealPlanQuery
-- SearchFoodsQuery
-- GetChatThreadQuery
-- GetUserProfileQuery
-```
+**Components**:
+- **Commands** (34+): State change operations
+- **Queries** (30+): Read operations
+- **Command Handlers** (43+): Command implementations
+- **Query Handlers** (11+): Query implementations
+- **Events** (18): Domain events
+- **Event Handlers**: Event subscribers
 
 **Responsibilities**:
 - Implement command handlers (side effects)
 - Implement query handlers (reads)
 - Publish domain events
 - Coordinate with domain services
-- Manage transactions via Unit of Work
+- Manage transactions
 
-### 3. Domain Layer (`src/domain/`)
+### 3. Domain Layer (`src/domain/`) - 107 files, 11,282 LOC
 
-**Purpose**: Encapsulate core business logic independent of frameworks
+**Purpose**: Encapsulate core business logic
 
-**Key Components**:
-- **Models** (`model/`): 25+ domain entities (not ORM objects)
-- **Services** (`services/`): 15+ domain services with business logic
-- **Strategies** (`strategies/`): Pluggable algorithm implementations
-- **Ports** (`ports/`): Interface definitions (abstractions)
+**Components**:
+- **Models** (25+): Domain entities (not ORM)
+- **Services** (36 files): Business logic
+- **Strategies** (2 files): Pluggable algorithms
+- **Ports**: Interface definitions
 - **Constants**: Enums and domain constants
 
-**Domain Models**:
-```
-- Meal, MealItem, Nutrition
-- MealPlan, MealPlanDay, PlannedMeal
-- User, UserProfile, UserMetrics
-- Food, FoodItem, NutrientData
-- ChatThread, ChatMessage
-- Notification, NotificationPreference
-```
-
-**Domain Services**:
-```
-- MealService: Meal creation, analysis, editing logic
-- MealPlanService: Plan generation, optimization
-- UserService: Profile management, TDEE calculation
-- NutritionService: Nutrition aggregation, daily summaries
-- PromptGenerationService: LLM prompt templating
-```
-
-**Strategies**:
-```
-- MealEditStrategies: Replace, remove, add food strategies
-- MealAnalysisStrategies: Different AI analysis approaches
-```
-
 **Responsibilities**:
-- Define domain entities and value objects
-- Implement business logic as domain services
+- Define domain entities
+- Implement business logic
 - Validate business rules
 - Manage domain events
-- Provide ports (interfaces) for infrastructure
+- Provide port interfaces
 
-### 4. Infrastructure Layer (`src/infra/`)
+### 4. Infrastructure Layer (`src/infra/`) - 76 files, 7,408 LOC
 
-**Purpose**: Implement technical concerns and external integrations
+**Purpose**: Implement technical concerns and integrations
 
-**Key Components**:
-- **Database** (`database/`): SQLAlchemy ORM models, migrations
-- **Repositories** (`repositories/`): 7+ data access implementations
-- **Services** (`services/`): External API adapters (Gemini, OpenAI, Firebase)
-- **Adapters** (`adapters/`): Storage, cache, event implementations
-- **Cache** (`cache/`): Redis caching layer
-- **Event Bus** (`event_bus/`): Event dispatcher
-- **WebSocket** (`websocket/`): Connection management
-
-**ORM Models** (16+ SQLAlchemy models):
-```
-- Meal, MealImage, FoodItem, Nutrition
-- MealPlan, MealPlanDay, PlannedMeal
-- User, UserProfile, UserMetrics
-- ChatThread, ChatMessage
-- Conversation, ConversationMessage
-- NotificationPreference, UserFCMToken
-- FeatureFlag, Subscription
-```
-
-**Repositories**:
-```
-- MealRepository: Meal CRUD, history queries
-- ChatRepository: Thread and message storage
-- UserRepository: User and profile management
-- MealPlanRepository: Plan storage and retrieval
-- NotificationRepository: Preferences and tokens
-```
-
-**External Services**:
-```
-- GeminiService: Google Gemini vision API
-- OpenAIChatService: GPT-4 chat integration
-- FirebaseService: Auth and messaging
-- PineconeService: Vector embeddings
-- USDAService: Food database queries
-- CloudinaryAdapter: Image storage
-```
+**Components**:
+- **Database**: SQLAlchemy ORM, Alembic migrations (11 versions)
+- **Repositories** (7+): Data access implementations
+- **Services**: External API adapters
+- **Cache**: Redis caching layer
+- **Event Bus**: Event dispatcher
+- **Adapters**: Storage and integrations
 
 **Responsibilities**:
-- Map domain models to/from ORM models
+- Map domain to ORM models
 - Implement repository interfaces
 - Manage database transactions
 - Call external APIs
-- Cache data for performance
-- Handle persistence
+- Cache data
 
 ---
 
@@ -417,44 +349,22 @@ src/
 
 ### Critical Path Files
 
-| File | Purpose | Size |
-|------|---------|------|
-| `src/api/main.py` | FastAPI app initialization, lifespan hooks | Core |
-| `src/infra/database/config.py` | Database connection, engine setup | Critical |
-| `src/infra/database/models/base.py` | Base SQLAlchemy model, timestamps | Critical |
-| `src/infra/event_bus/event_bus.py` | CQRS event dispatcher | Core |
+| File | Purpose | Impact |
+|------|---------|--------|
+| `src/api/main.py` | FastAPI app initialization | Core |
+| `src/infra/database/config.py` | Database connection setup | Critical |
 | `src/infra/services/ai/gemini_service.py` | Meal image analysis | Critical |
-| `src/domain/services/meal_service.py` | Meal business logic | Large |
-| `src/domain/services/meal_plan_service.py` | Meal plan generation | Large |
-| `src/domain/services/prompt_generation_service.py` | LLM prompting | Large |
+| `src/domain/services/meal_service.py` | Meal business logic | Core |
+| `src/domain/services/suggestion_orchestration_service.py` | Session-based suggestions (Phase 06) | Core |
+| `src/infra/event_bus/event_bus.py` | CQRS event dispatcher | Core |
 
-### Largest Files (by token count)
+### Largest Components (by LOC)
 
-1. `tests/integration/test_timezone_aware_notifications.py` (6,202 tokens)
-2. `tests/unit/test_chat_repository.py` (6,156 tokens)
+1. `src/domain/services/prompt_generation_service.py` (5,381 tokens)
+2. `tests/unit/domain/services/test_meal_plan_service.py` (5,910 tokens)
 3. `tests/unit/domain/test_meal_edit_strategies.py` (5,941 tokens)
-4. `tests/unit/domain/services/test_meal_plan_service.py` (5,910 tokens)
-5. `src/domain/services/prompt_generation_service.py` (5,381 tokens)
-
-### Dependency Injection Points
-
-**Main FastAPI Dependencies**:
-```python
-# In src/api/base_dependencies.py
-- get_event_bus(): EventBus
-- get_db_session(): AsyncSession
-- get_cache_service(): CacheService
-- get_firebase_auth(): FirebaseAuth
-- get_current_user(): User (from Firebase token)
-```
-
-**Repository Factories**:
-```python
-- get_meal_repository(session)
-- get_user_repository(session)
-- get_chat_repository(session)
-- get_meal_plan_repository(session)
-```
+4. `tests/integration/test_timezone_aware_notifications.py` (6,202 tokens)
+5. `tests/unit/test_chat_repository.py` (6,156 tokens)
 
 ---
 
@@ -491,38 +401,28 @@ Infrastructure Repositories + Services
 ### External Dependencies (Top-level)
 
 **Core Framework**:
-```
-fastapi==0.115.0+          # Web framework
-pydantic==2.0+             # Data validation
-sqlalchemy==2.0+           # ORM
-```
+- fastapi==0.115.0+
+- pydantic==2.0+
+- sqlalchemy==2.0+
 
 **Database & Cache**:
-```
-mysql-connector-python     # MySQL driver
-redis==7.0+                # Cache layer
-alembic                    # Migrations
-```
+- mysql-connector-python
+- redis==7.0+
+- alembic
 
 **AI/ML**:
-```
-langchain-google-genai     # Gemini integration
-openai                     # GPT-4 API
-pinecone-client           # Vector DB
-```
+- langchain-google-genai
+- openai
+- pinecone-client
 
 **Firebase & Auth**:
-```
-firebase-admin            # Firebase SDK
-python-jose               # JWT handling
-```
+- firebase-admin
+- python-jose
 
 **Testing**:
-```
-pytest>=7.0               # Test framework
-pytest-asyncio            # Async test support
-factory-boy               # Test data generation
-```
+- pytest>=7.0
+- pytest-asyncio
+- factory-boy
 
 ---
 
@@ -531,9 +431,7 @@ factory-boy               # Test data generation
 ### Application Startup
 
 ```python
-# Primary entry point
-src/api/main.py::app
-
+# Primary entry point: src/api/main.py::app
 # Initialization sequence:
 1. FastAPI(lifespan=lifespan) creates app
 2. @lifespan yields startup code:
@@ -558,28 +456,6 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 docker run -p 8000:8000 mealtrack-backend:latest
 ```
 
-### Database Migrations
-
-```python
-# Orchestrated by MigrationManager
-src/infra/database/migration_manager.py
-
-# Alembic migrations stored at:
-migrations/versions/*.py
-
-# Current version count: 10+ migrations
-```
-
-### Background Jobs
-
-```python
-# Scheduled notification service (runs in background)
-src/infra/services/scheduled_notification_service.py
-
-# Startup: initialize_scheduled_notification_service()
-# Shutdown: await scheduled_service.stop()
-```
-
 ---
 
 ## Data Models
@@ -595,6 +471,20 @@ class Meal:
     total_nutrition: Nutrition
     consumed_at: datetime
     status: MealStatus  # PROCESSING, READY, FAILED
+
+# Meal Suggestions (Phase 06 NEW)
+class MealSuggestion:
+    suggestion_id: str
+    session_id: str
+    meal_name: str
+    macro_estimate: MacroEstimate
+    portion_type: MealPortionType
+
+class SuggestionSession:
+    session_id: str
+    user_id: str
+    suggestions: List[MealSuggestion]
+    created_at: datetime
 
 # User
 class User:
@@ -618,91 +508,55 @@ class ChatThread:
     context: Dict[str, Any]
 ```
 
-### ORM Models (SQLAlchemy)
+### ORM Models (SQLAlchemy - 27 tables)
 
-**Table Structure**:
-```sql
--- Users
-users (user_id, firebase_uid, created_at, updated_at)
-user_profiles (profile_id, user_id, age, weight, height)
+**Users**:
+- users, user_profiles, user_metrics
 
--- Meals
-meals (meal_id, user_id, consumed_at, status)
-meal_images (image_id, meal_id, image_url)
-food_items (item_id, meal_id, food_id, quantity)
-nutrition (nutrition_id, meal_id, calories, protein, carbs, fat)
+**Meals**:
+- meals, meal_images, food_items, nutrition
 
--- Meal Planning
-meal_plans (plan_id, user_id, start_date, end_date)
-meal_plan_days (day_id, plan_id, day_number)
-planned_meals (planned_meal_id, day_id, meal_id)
+**Meal Planning**:
+- meal_plans, meal_plan_days, planned_meals
 
--- Chat
-chat_threads (thread_id, user_id, created_at)
-chat_messages (message_id, thread_id, role, content)
+**Suggestions** (NEW v0.3):
+- meal_suggestions, suggestion_sessions
 
--- Notifications
-notification_preferences (pref_id, user_id, email_enabled, push_enabled)
-user_fcm_tokens (token_id, user_id, token, created_at)
+**Chat**:
+- chat_threads, chat_messages, conversations, conversation_messages
 
--- Features
-feature_flags (flag_id, flag_name, enabled, rollout_percentage)
-```
+**Notifications**:
+- notification_preferences, user_fcm_tokens
+
+**Features**:
+- feature_flags, subscriptions
 
 ---
 
 ## API Routes
 
-### Route Organization (70+ endpoints)
+### Route Organization (70+ endpoints across 15+ files)
 
 ```
 /v1/
-├── /health                          # Health checks
-├── /meals                           # Meal management
-│   ├── POST /image/analyze          # AI image analysis
-│   ├── POST /manual                 # Manual entry
-│   ├── GET /{id}                    # Get meal
-│   ├── PATCH /{id}                  # Edit meal
-│   └── GET /by-date                 # Query by date
-├── /ingredients                     # New: Ingredient recognition
-│   └── POST /recognize              # AI ingredient detection
-├── /meal-suggestions                # New: Meal recommendations
-│   ├── POST /generate               # Generate suggestions
-│   └── POST /{id}/save              # Save suggestion
-├── /meal-plans                      # Meal planning
-│   ├── POST /generate               # Standard generation
-│   ├── POST /generate/weekly-ingredient-based  # New: Ingredient-based
-│   ├── GET /{id}
-│   └── PUT /{id}/meals/{day}
-├── /foods                           # Food database
-│   ├── GET /search
-│   └── GET /{id}
-├── /chat                            # Chat endpoints
-│   ├── POST /threads
-│   ├── POST /threads/{id}/messages
-│   ├── GET /threads/{id}/messages
-│   └── WebSocket /ws/{thread_id}
-├── /users                           # User management
-│   ├── POST /sync
-│   ├── POST /onboarding             # Updated: with pain points
-│   └── POST /metrics/update
-├── /user-profiles                   # Profile management
-│   ├── GET /me
-│   ├── PUT /me                      # Updated: with timezone
-│   ├── GET /me/tdee
-│   └── POST /me/tdee
-├── /notifications                   # Push notifications
-│   ├── POST /tokens                 # FCM token registration
-│   ├── PUT /preferences
-│   └── GET /preferences
-├── /feature-flags                   # Feature management
-│   └── GET /{flag}
-├── /activities                      # Activity tracking
-│   └── GET /
-├── /webhooks                        # External webhooks
-│   └── POST /revenucat              # Updated: RevenueCat webhooks
-└── /monitoring                      # Monitoring/metrics
-    └── GET /metrics
+├── /health                          # Health checks (4 endpoints)
+├── /meals                           # Meal management (6 endpoints)
+├── /meal-suggestions                # Meal suggestions (7 endpoints - Phase 06 NEW)
+├── /meal-plans                      # Meal planning (3 endpoints)
+├── /ingredients                     # Ingredient recognition (2 endpoints - NEW v0.3)
+├── /foods                           # Food database (2 endpoints)
+├── /chat                            # Chat endpoints (3+ endpoints)
+│   ├── /threads
+│   ├── /threads/{id}/messages
+│   └── /ws/{thread_id}              # WebSocket
+├── /users                           # User management (5 endpoints)
+├── /user-profiles                   # Profile management (3 endpoints)
+├── /notifications                   # Push notifications (3 endpoints)
+├── /feature-flags                   # Feature management (3 endpoints)
+├── /activities                      # Activity tracking (1 endpoint)
+├── /daily-meals                     # Daily suggestions (1 endpoint)
+├── /webhooks                        # External webhooks (1 endpoint)
+└── /monitoring                      # Monitoring/metrics (1 endpoint)
 ```
 
 ---
@@ -714,11 +568,17 @@ feature_flags (flag_id, flag_name, enabled, rollout_percentage)
 ```
 src/domain/services/
 ├── meal_service.py                  # Meal creation, editing, analysis
-├── meal_plan_service.py             # Plan generation and optimization
-├── user_service.py                  # User and profile management
-├── nutrition_service.py             # Nutrition calculations and aggregations
+├── meal_plan_service.py             # Plan generation
+├── suggestion_orchestration_service.py  # NEW Phase 06: Session tracking
+├── user_service.py                  # User management
+├── nutrition_service.py             # Nutrition calculations
 ├── prompt_generation_service.py     # LLM prompt generation
-├── (and others for specific domains)
+├── tdee_service.py                  # TDEE calculation
+├── portion_calculation_service.py   # Portion sizing
+├── meal_plan/                       # 4 refactored components
+├── meal_suggestion/                 # 3 refactored components
+├── conversation/                    # 3 refactored components
+└── (7+ other services)
 ```
 
 ### Infrastructure Services (External Integration)
@@ -726,22 +586,13 @@ src/domain/services/
 ```
 src/infra/services/
 ├── ai/
-│   ├── gemini_service.py           # Google Gemini vision API
+│   ├── gemini_service.py           # Google Gemini 2.5 Flash vision
 │   └── openai_chat_service.py      # OpenAI GPT-4 chat
 ├── firebase_service.py              # Firebase auth & messaging
-├── firebase_auth_service.py         # Auth helper methods
-├── pinecone_service.py              # Vector DB operations
+├── firebase_auth_service.py         # Auth helpers
+├── pinecone_service.py              # Vector DB
 ├── scheduled_notification_service.py # Background notifications
 └── usda_service.py                  # USDA food database
-```
-
-### Adapter Pattern (External Services)
-
-```
-src/infra/adapters/
-├── cloudinary_adapter.py           # Image storage abstraction
-├── storage_factory.py              # Factory for storage providers
-└── (other adapters)
 ```
 
 ---
@@ -754,20 +605,18 @@ src/infra/adapters/
 tests/
 ├── conftest.py                      # Shared fixtures
 ├── factories/                       # Test data generators
-│   └── (factory-boy factories)
-├── unit/                            # Unit tests
+├── unit/                            # Unit tests (681 tests)
 │   ├── domain/
 │   │   ├── services/
 │   │   ├── test_meal_edit_strategies.py
-│   │   └── ...
+│   │   └── (others)
 │   ├── test_chat_repository.py
-│   └── ...
+│   └── (others)
 ├── integration/                     # Integration tests
 │   ├── test_meal_api.py
 │   ├── test_timezone_aware_notifications.py
-│   └── ...
+│   └── (others)
 └── fixtures/                        # Test data and mocks
-    └── ...
 ```
 
 ### Test Coverage
@@ -780,53 +629,32 @@ tests/
 | Infrastructure | 70%+ | Satisfactory |
 | **Overall** | **70%+** | Meets minimum |
 
-### Testing Strategy
+### Test Statistics
 
-1. **Unit Tests**: Fast, isolated, no database
-2. **Integration Tests**: With real MySQL test database
-3. **Database Isolation**: Transaction rollback per test
-4. **Mock Factories**: factory-boy for test data generation
-5. **External Service Mocks**: Mock AI/Firebase APIs
+- **Total Tests**: 681 (all passing)
+- **Test Files**: 57
+- **Coverage Target**: 70%+ (currently maintained)
+- **Test Markers**: unit, integration, slow, asyncio, skip, xfail
 
 ---
 
 ## Summary
 
-The MealTrack Backend implements a robust 4-layer clean architecture with 65+ core Python files organized by concern, totaling 150K+ tokens. Phase 03 refactoring reduced 4 monolithic files (1,963 LOC) into 13 specialized components (551 LOC, 72% reduction) while maintaining 100% test coverage and zero breaking changes. The CQRS pattern in the application layer decouples API routes from business logic, while the domain layer encapsulates core business rules independently. The infrastructure layer handles all external integrations (Google Gemini 2.0, OpenAI GPT-4, Firebase, Pinecone, RevenueCat, Cloudinary, etc.), making the system highly testable and maintainable.
+The MealTrack Backend implements a robust 4-layer clean architecture with 145+ source files organized by concern, totaling 473,592 tokens. Phase 03 refactoring (Dec 2024) reduced 4 monolithic files (1,963 LOC) into 13 specialized components (551 LOC, 72% reduction) while maintaining 100% test coverage and zero breaking changes.
 
-**Key Strengths (Post Phase-03)**:
-- Clear separation of concerns across 4 layers with refined module composition
-- Extract Method pattern applied to large domain services for improved maintainability
-- CQRS pattern for scalable command/query handling (40+ command/query handlers)
-- Comprehensive test suite (100% passing - 131/131 tests across all refactored components)
-- Event-driven architecture for loose coupling and reactive features
-- Well-organized module structure by domain with dedicated subdirectories (13 core features)
-- 70+ REST endpoints supporting diverse meal tracking workflows
-- New refactored components use dependency injection throughout
-- New features: ingredient recognition, meal suggestions, pain points tracking, timezone-aware notifications
+**Architecture Highlights**:
+- 4-Layer Clean Architecture with clear separation of concerns
+- CQRS pattern with 34+ commands and 30+ queries
+- Event-driven architecture with 18+ domain events
+- 70+ REST endpoints across 15+ route files
+- 27 database tables with 11 migrations
+- Comprehensive test suite (681 tests, 70%+ coverage)
+- Production-ready with Firebase, Google Gemini, OpenAI, Pinecone integrations
 
-**Phase 03 Refactoring Achievements**:
-- **meal_plan_orchestration_service.py**: 534 → 155 LOC (-71%), split into 4 modules (validator, generator, formatter, request_builder)
-- **daily_meal_suggestion_service.py**: 525 → 195 LOC (-63%), split into 3 modules (json_extractor, fallback_provider, prompt_builder)
-- **conversation_service.py**: 476 → 63 LOC (-87%), split into 3 modules (parser, formatter, handler)
-- **notification_repository.py**: 428 → 138 LOC (-68%), split into 3 modules (fcm_tokens, preferences, queries)
-- Zero breaking changes - all APIs remain compatible
-- Backward compatible module exports via __init__.py files
-- All tests passing with improved clarity and test organization
-
-**Recent Additions (v0.3.0 - v0.4.0)**:
-- Ingredient recognition API (`/v1/ingredients/recognize`)
-- Meal suggestions generation and saving
-- User pain points collection during onboarding
-- Timezone-aware notification scheduling
-- RevenueCat subscription webhook integration
-- Phase 03 large file refactoring completed (December 31, 2024)
-- 11 database migrations supporting all features
-
-**Growth Points**:
-- API response time optimization (p99 target <1s)
-- Integration test coverage for meal suggestion flows
-- Performance profiling and benchmarking suite
-- Comprehensive API documentation updates
-- Distributed tracing and monitoring system
-- Performance metrics for refactored components
+**Recent Additions (v0.3.0 → v0.4.0)**:
+- Phase 06 Session-Based Meal Suggestions (Jan 2026): SuggestionOrchestrationService, session tracking (4h TTL), 7 new endpoints
+- Phase 03 Large File Refactoring (Dec 2024): 72% LOC reduction, 13 new components
+- Ingredient recognition API
+- User pain points tracking
+- Timezone-aware notifications
+- RevenueCat webhook integration

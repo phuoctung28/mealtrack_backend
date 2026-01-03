@@ -1,8 +1,8 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Last Updated:** December 29, 2024
-**Version:** 0.3.0
-**Status:** Active Development
+**Last Updated:** January 3, 2026
+**Version:** 0.4.0
+**Status:** Active Development (Phase 06: Session-Based Meal Suggestions)
 
 ---
 
@@ -254,22 +254,39 @@ Empower users to understand their nutrition through intelligent, AI-driven meal 
 - [ ] Return structured ingredient data
 - [ ] Support 1000+ daily recognition requests
 
-### 11. Meal Suggestions
-**Status**: Active
-**Description**: Generate and save AI-driven meal recommendations.
+### 11. Meal Suggestions (Session-Based - Phase 06)
+**Status**: Active (Launched Jan 2026)
+**Description**: AI-driven meal recommendations with session tracking and portion customization.
 
 **Capabilities**:
-- Generate personalized meal suggestions
-- Consider dietary preferences and goals
-- Save suggestions as meals in history
-- Weekly suggestion generation
-- Ingredient-based meal planning
+- Generate 3 meal suggestions per session (cached in Redis)
+- Session tracking with 4-hour TTL (Redis-backed)
+- Accept suggestions with portion multiplier (1-4x)
+- Reject suggestions with user feedback for model improvement
+- Regenerate endpoint excludes previously shown suggestions
+- Fallback mechanism with nutritionally-balanced meals
+- GENERATION_TIMEOUT_SECONDS = 45s max per session
+- Compatible with dietary preferences and daily goals
+- 7 dedicated API endpoints for complete session lifecycle
+
+**New Endpoints (Phase 06)**:
+- `POST /v1/meal-suggestions/generate` - Create session with 3 suggestions
+- `POST /v1/meal-suggestions/regenerate` - Get new batch excluding shown
+- `GET /v1/meal-suggestions/{session_id}` - Retrieve session details
+- `POST /v1/meal-suggestions/{suggestion_id}/accept` - Accept with portion (1-4x)
+- `POST /v1/meal-suggestions/{suggestion_id}/reject` - Reject with optional feedback
+- `DELETE /v1/meal-suggestions/{session_id}` - Discard session
+- `GET /v1/meal-suggestions/{session_id}/history` - View session history
 
 **Acceptance Criteria**:
-- [ ] Generate suggestions in <5 seconds
-- [ ] Respect user dietary preferences 100%
-- [ ] Variety score >0.8 across suggestions
-- [ ] Support 50+ dietary restrictions
+- [ ] Generate suggestions in <10 seconds (current: 45s timeout, needs optimization)
+- [x] Respect user dietary preferences 100%
+- [x] Variety score >0.8 across suggestions
+- [x] Support 50+ dietary restrictions
+- [x] Session tracking with 4h TTL working
+- [x] Fallback meals generation working
+- [x] Portion multiplier (1-4x) calculation correct
+- [x] Reject feedback logged for model improvement
 
 ### 12. User Pain Points Tracking
 **Status**: Active
@@ -320,7 +337,7 @@ Empower users to understand their nutrition through intelligent, AI-driven meal 
 - **Cloud Storage**: Cloudinary or local file system
 
 ### External Integrations
-- **AI Vision**: Google Gemini 2.0 API
+- **AI Vision**: Google Gemini 2.5 Flash API
 - **LLM Chat**: OpenAI GPT-4 API
 - **Nutrition Data**: USDA FoodData Central API
 - **Vector DB**: Pinecone
@@ -668,7 +685,7 @@ https://api.mealtrack.app/v1
 - **Async**: asyncio + aiohttp
 
 ### AI/ML Services
-- **Vision AI**: Google Gemini 2.0 (via google-genai SDK)
+- **Vision AI**: Google Gemini 2.5 Flash (via google-genai SDK)
 - **Chat/LLM**: OpenAI GPT-4 (via openai SDK)
 - **Embeddings**: Pinecone (via pinecone SDK)
 - **LangChain**: Orchestration for LLM chains
@@ -729,9 +746,10 @@ https://api.mealtrack.app/v1
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 0.3.0 | Dec 29, 2024 | Added ingredient recognition, meal suggestions, pain points tracking, timezone-aware notifications (13 core features) |
-| 0.2.0 | Dec 2024 | Active development with 9 core features including chat system |
-| 0.1.0 | Nov 2024 | Initial MVP with image analysis and meal tracking |
+| 0.4.0 | Jan 3, 2026 | Phase 06: Session-based meal suggestions with 4h TTL, 3 suggestions per session, portion multipliers (1-4x), rejection feedback, fallback mechanism (GENERATION_TIMEOUT_SECONDS=45s) |
+| 0.3.0 | Dec 29, 2024 | Phase 05: Added ingredient recognition, meal suggestions, pain points tracking, timezone-aware notifications (13 core features) |
+| 0.2.0 | Dec 2024 | Phase 04: Active development with 9 core features including chat system |
+| 0.1.0 | Nov 2024 | Phase 01-03: Initial MVP with image analysis and meal tracking |
 
 ---
 

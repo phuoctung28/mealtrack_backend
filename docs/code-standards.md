@@ -1,9 +1,10 @@
 # MealTrack Backend - Code Standards & Conventions
 
-**Version:** 1.3
-**Last Updated:** December 31, 2024
+**Version:** 1.4
+**Last Updated:** January 3, 2026
 **Scope**: Python source code in `src/` directory (Python 3.11+)
-**Phase 03 Update**: File size guidelines updated post-large-file refactoring (72% LOC reduction achieved)
+**Refactoring Status**: Phase 03 complete (72% LOC reduction, 13 new components). Phase 06 session-based meal suggestions active.
+**Test Coverage**: 681 tests passing, 70%+ code coverage target maintained
 
 ---
 

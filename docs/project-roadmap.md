@@ -1,8 +1,8 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.3.0
-**Last Updated:** December 29, 2024
-**Status:** Active Development
+**Version:** 0.4.0
+**Last Updated:** January 3, 2026
+**Status:** Active Development (Phase 06: Session-Based Meal Suggestions)
 
 ---
 
@@ -12,10 +12,22 @@ This document outlines the development roadmap for MealTrack Backend, tracking c
 
 ---
 
-## Completed Features (v0.3.0)
+## Completed Features (v0.4.0 - Phase 06)
+
+### Session-Based Meal Suggestions (Phase 06 - NEW)
+- [x] SuggestionOrchestrationService with 4h TTL (Redis-backed)
+- [x] POST /v1/meal-suggestions/generate - Generate 3 suggestions + session
+- [x] POST /v1/meal-suggestions/regenerate - New batch, exclude shown
+- [x] GET /v1/meal-suggestions/{session_id} - Retrieve session
+- [x] POST /v1/meal-suggestions/{suggestion_id}/accept - Portion multiplier (1-4x)
+- [x] POST /v1/meal-suggestions/{suggestion_id}/reject - Rejection feedback
+- [x] DELETE /v1/meal-suggestions/{session_id} - Discard session
+- [x] Fallback mechanism with nutritionally-balanced meals
+- [ ] Suggestion generation <10 seconds (current: 45s timeout, needs optimization)
+- [x] 681+ tests passing (all refactored components)
 
 ### Core Meal Tracking (MVP - Completed)
-- [x] AI-powered meal image analysis (Google Gemini 2.0)
+- [x] AI-powered meal image analysis (Google Gemini 2.5 Flash)
 - [x] Meal tracking and history
 - [x] Manual meal entry
 - [x] Meal editing with food replacement/removal
@@ -105,6 +117,7 @@ This document outlines the development roadmap for MealTrack Backend, tracking c
    - [ ] Load testing and benchmarking
 
 2. **Enhanced Meal Suggestions**
+   - [ ] **Optimize generation time from 45s to <10s** (critical)
    - [ ] Multi-model AI suggestions
    - [ ] Ingredient-based ranking
    - [ ] User preference learning
@@ -292,30 +305,32 @@ This document outlines the development roadmap for MealTrack Backend, tracking c
 
 ## Release Timeline
 
-### v0.3.0 (December 2024) - Released
-- Ingredient recognition
-- Meal suggestions
-- Pain points tracking
-- Timezone-aware notifications
+### v0.4.0 (January 2026) - Released
+- Phase 06: Session-based meal suggestions with 4h TTL
+- 3 suggestions per session with portion multipliers (1-4x)
+- Rejection feedback collection
+- Fallback mechanism for AI failures
+- 681+ tests passing, 70%+ code coverage maintained
+- Updated Gemini to 2.5 Flash (improved speed & quality)
 
-### v0.4.0 (Q1 2025) - Planned
-- Performance optimization
+### v0.5.0 (Q2 2026) - Planned
+- Performance optimization (p99 latency <500ms)
 - Analytics dashboard
-- Enhanced meal suggestions
-- Improved documentation
+- Enhanced meal suggestions (multi-model AI)
+- Advanced personalization (ML-based rankings)
 
-### v0.5.0 (Q2 2025) - Planned
-- Social features
+### v0.6.0 (Q3 2026) - Planned
+- Social features (sharing, leaderboards)
 - Mobile optimization
-- Advanced personalization
-- Multiple integration support
+- Voice-based meal logging
+- HealthKit/Google Fit integration
 
-### v1.0.0 (Q3 2025) - Target
+### v1.0.0 (Q4 2026) - Target
 - Production-ready
-- Enterprise features
-- Comprehensive testing
-- Full documentation
+- Enterprise features (org accounts, admin dashboards)
 - Multi-region deployment
+- Kubernetes-ready infrastructure
+- SOC2 compliance
 
 ---
 
