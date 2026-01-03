@@ -17,6 +17,8 @@ class SuggestionSession:
     ingredients: List[str]
     cooking_time_minutes: int
     shown_suggestion_ids: List[str] = field(default_factory=list)
+    dietary_preferences: List[str] = field(default_factory=list)
+    allergies: List[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.utcnow)
     expires_at: Optional[datetime] = None
 

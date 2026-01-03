@@ -30,8 +30,8 @@ from src.domain.ports.meal_suggestion_repository_port import (
 )
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
-from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
+from src.domain.services.meal_suggestion.nutrition_enrichment_service import NutritionEnrichmentService
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 
 logger = logging.getLogger(__name__)
@@ -53,12 +53,16 @@ class SuggestionOrchestrationService:
         user_repo: UserRepositoryPort,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
+        nutrition_enrichment: NutritionEnrichmentService = None,
+        redis_client=None,
     ):
         self._generation = generation_service
         self._repo = suggestion_repo
         self._user_repo = user_repo
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
+        self._nutrition_enrichment = nutrition_enrichment or NutritionEnrichmentService()
+        self._redis_client = redis_client
 
     async def generate_suggestions(
         self,
@@ -69,26 +73,19 @@ class SuggestionOrchestrationService:
         cooking_time_minutes: int,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """Generate initial 3 suggestions and create session."""
-        # Get user's daily TDEE
-        user = self._user_repo.find_by_id(user_id)
-        if not user or not user.current_profile:
-            raise ValueError(f"User {user_id} not found or missing profile")
+        # Get user profile with caching (Phase 1 optimization)
+        profile = await self._user_repo.get_current_profile_cached(
+            user_id=user_id,
+            redis_client=self._redis_client
+        )
+        if not profile:
+            raise ValueError(f"User {user_id} profile not found")
 
         # Calculate daily TDEE from profile
-        daily_tdee = self._calculate_daily_tdee(user.current_profile)
+        daily_tdee = self._calculate_daily_tdee(profile)
 
         # Get meals_per_day from profile (default to 3)
-        meals_per_day = getattr(user.current_profile, "meals_per_day", 3)
-
-        # Calculate target calories using PortionCalculationService
-        portion_target = self._portion_service.get_target_for_meal_type(
-            meal_type=meal_portion_type,
-            daily_target=int(daily_tdee),
-            meals_per_day=meals_per_day,
-        )
-        target_calories = portion_target.target_calories
-        # Get meals_per_day from profile (default to 3)
-        meals_per_day = getattr(user.current_profile, "meals_per_day", 3)
+        meals_per_day = getattr(profile, "meals_per_day", 3)
 
         # Calculate target calories using PortionCalculationService
         portion_target = self._portion_service.get_target_for_meal_type(
@@ -98,7 +95,11 @@ class SuggestionOrchestrationService:
         )
         target_calories = portion_target.target_calories
 
-        # Create session
+        # Extract dietary preferences and allergies (Phase 1 optimization)
+        dietary_preferences = getattr(profile, 'dietary_preferences', None) or []
+        allergies = getattr(profile, 'allergies', None) or []
+
+        # Create session with dietary info
         session = SuggestionSession(
             id=f"session_{uuid.uuid4().hex[:16]}",
             user_id=user_id,
@@ -107,6 +108,8 @@ class SuggestionOrchestrationService:
             target_calories=target_calories,
             ingredients=ingredients,
             cooking_time_minutes=cooking_time_minutes,
+            dietary_preferences=dietary_preferences,
+            allergies=allergies,
         )
 
         # Generate with timeout
@@ -118,9 +121,8 @@ class SuggestionOrchestrationService:
         # Track shown IDs
         session.add_shown_ids([s.id for s in suggestions])
 
-        # Persist
-        await self._repo.save_session(session)
-        await self._repo.save_suggestions(suggestions)
+        # Persist with pipeline (Phase 1 optimization)
+        await self._repo.save_session_with_suggestions(session, suggestions)
 
         return session, suggestions
 
@@ -295,8 +297,7 @@ class SuggestionOrchestrationService:
                 f"prompt_len={len(prompt)} chars"
             )
 
-            # Call AI with timeout
-            # 3 suggestions with full recipe steps need ~8000 tokens
+            # Call AI with timeout (Phase 1: reduced tokens - no macros)
             logger.info(
                 f"Generating suggestions for session {session.id}, target: {session.target_calories} cal"
             )
@@ -306,7 +307,7 @@ class SuggestionOrchestrationService:
                     prompt,
                     system_message,
                     "json",
-                    8000,  # Explicit max_tokens for full recipe details
+                    4000,  # Reduced from 8000 (Phase 1: AI doesn't generate macros)
                 ),
                 timeout=self.GENERATION_TIMEOUT_SECONDS,
             )
@@ -319,26 +320,48 @@ class SuggestionOrchestrationService:
                 f"suggestions_count={len(raw_response.get('suggestions', []))} "
             )
 
-            # Parse and convert to domain objects
-            suggestions = self._parse_ai_response(raw_response, session)
+            # Parse AI response (now without macros)
+            raw_suggestions = self._parse_ai_response(raw_response, session)
+
+            # Phase 1 optimization: Enrich with nutrition calculation
+            enriched_suggestions = []
+            for suggestion in raw_suggestions:
+                enrichment = self._nutrition_enrichment.calculate_meal_nutrition(
+                    ingredients=suggestion.ingredients,
+                    target_calories=session.target_calories
+                )
+
+                # Update suggestion with calculated macros
+                suggestion.macros = enrichment.macros
+                suggestion.confidence_score = min(
+                    suggestion.confidence_score,
+                    enrichment.confidence_score
+                )
+
+                if enrichment.missing_ingredients:
+                    logger.debug(
+                        f"Missing nutrition data for {len(enrichment.missing_ingredients)} ingredients: "
+                        f"{', '.join(enrichment.missing_ingredients[:3])}"
+                    )
+
+                enriched_suggestions.append(suggestion)
 
             logger.info(
-                f"[MEAL-GEN-PARSED] session={session.id} | "
-                f"parsed_count={len(suggestions)} | "
-                f"names={[s.meal_name[:30] for s in suggestions]}"
+                f"[MEAL-GEN-ENRICHED] session={session.id} | "
+                f"enriched_count={len(enriched_suggestions)} | "
+                f"names={[s.meal_name[:30] for s in enriched_suggestions]}"
             )
 
             # Ensure exactly 3 suggestions
-            while len(suggestions) < self.SUGGESTIONS_COUNT:
+            while len(enriched_suggestions) < self.SUGGESTIONS_COUNT:
                 logger.warning(
                     f"[MEAL-GEN-FALLBACK] session={session.id} | "
-                    f"adding fallback suggestion #{len(suggestions) + 1} "
-                    f"(only {len(suggestions)}/{self.SUGGESTIONS_COUNT} parsed)"
+                    f"adding fallback suggestion #{len(enriched_suggestions) + 1} "
+                    f"(only {len(enriched_suggestions)}/{self.SUGGESTIONS_COUNT} parsed)"
                 )
-                suggestions.append(self._create_fallback(session, len(suggestions)))
+                enriched_suggestions.append(self._create_fallback(session, len(enriched_suggestions)))
 
-            return suggestions[: self.SUGGESTIONS_COUNT]
-            return suggestions[: self.SUGGESTIONS_COUNT]
+            return enriched_suggestions[: self.SUGGESTIONS_COUNT]
 
         except asyncio.TimeoutError:
             elapsed = time.time() - start_time
@@ -367,64 +390,43 @@ class SuggestionOrchestrationService:
             ]
 
     def _build_prompt(self, session: SuggestionSession, exclude_ids: List[str]) -> str:
-        """Build AI prompt for meal generation."""
+        """Build compact AI prompt - ingredients only, NO macros."""
+        # Limit ingredients to 10 for prompt efficiency
         ingredients_str = (
-            ", ".join(session.ingredients)
+            ", ".join(session.ingredients[:10])
             if session.ingredients
             else "any common ingredients"
         )
-        ingredients_str = (
-            ", ".join(session.ingredients)
-            if session.ingredients
-            else "any common ingredients"
-        )
-        return f"""Generate exactly 3 meal suggestions for {session.meal_type}.
 
-Requirements:
-- Target calories: {session.target_calories} per meal (±10%)
-- Available ingredients: {ingredients_str}
-- Max cooking time: {session.cooking_time_minutes} minutes
-- Excluded meal count: {len(exclude_ids)} (generate different meals)
+        # Add dietary constraints if present
+        constraints = []
+        if hasattr(session, 'dietary_preferences') and session.dietary_preferences:
+            constraints.append(f"Dietary: {', '.join(session.dietary_preferences)}")
+        if hasattr(session, 'allergies') and session.allergies:
+            constraints.append(f"Avoid: {', '.join(session.allergies)}")
 
-Return JSON with 'suggestions' array containing exactly 3 objects:
+        constraints_str = "\n" + "; ".join(constraints) if constraints else ""
+
+        exclude_note = f"\nExclude {len(exclude_ids)} previous meals" if exclude_ids else ""
+
+        return f"""Generate 3 {session.meal_type} meals (~{session.target_calories} cal, ≤{session.cooking_time_minutes}min).
+
+Ingredients: {ingredients_str}{constraints_str}{exclude_note}
+
+JSON (NO macros - backend calculates):
 {{
   "suggestions": [
     {{
       "name": "Meal Name",
-      "description": "Brief 1-2 sentence description",
-      "ingredients": [{{"name": "ingredient", "amount": 100, "unit": "g"}}],
-      "recipe_steps": [{{"step": 1, "instruction": "Step text", "duration_minutes": 5}}],
-      "macros": {{"calories": 500, "protein": 30, "carbs": 40, "fat": 15}},
-      "prep_time_minutes": 20,
-      "confidence_score": 0.85
+      "description": "Brief description",
+      "ingredients": [{{"name": "chicken", "amount": 200, "unit": "g"}}],
+      "recipe_steps": [{{"step": 1, "instruction": "Heat pan", "duration_minutes": 3}}],
+      "prep_time_minutes": 15
     }}
   ]
 }}
 
-IMPORTANT:
-- confidence_score must be 0.0-1.0 (not 1-5)
-- Include 4-8 recipe_steps per meal
-- Macros should match target calories
-Return JSON with 'suggestions' array containing exactly 3 objects:
-{{
-  "suggestions": [
-    {{
-      "name": "Meal Name",
-      "description": "Brief 1-2 sentence description",
-      "ingredients": [{{"name": "ingredient", "amount": 100, "unit": "g"}}],
-      "recipe_steps": [{{"step": 1, "instruction": "Step text", "duration_minutes": 5}}],
-      "macros": {{"calories": 500, "protein": 30, "carbs": 40, "fat": 15}},
-      "prep_time_minutes": 20,
-      "confidence_score": 0.85
-    }}
-  ]
-}}
-
-IMPORTANT:
-- confidence_score must be 0.0-1.0 (not 1-5)
-- Include 4-8 recipe_steps per meal
-- Macros should match target calories
-"""
+Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories/protein/carbs/fat."""
 
     def _parse_ai_response(
         self, raw_response: dict, session: SuggestionSession
