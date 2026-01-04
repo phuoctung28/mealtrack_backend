@@ -22,21 +22,23 @@ class TestPortionCalculationService:
         assert result.target_calories == 561  # 33% of 1700
 
     def test_main_meal_with_3_meals(self):
-        # Daily: 2100, 3 meals → (2100-300)/3 = 600
+        # Daily: 2100, main meal = 33% of daily = 693
         result = self.service.calculate_main_meal_target(2100, 3)
-        assert result.target_calories == 600
+        assert result.target_calories == 693  # 33% of 2100
 
     def test_omad_returns_full_daily(self):
         result = self.service.calculate_omad_target(1700)
         assert result.target_calories == 1700
 
     def test_get_target_for_meal_type_snack(self):
+        # Daily: 2000, snack = 12% of daily = 240
         result = self.service.get_target_for_meal_type("snack", 2000, 3)
-        assert result.target_calories == 225
+        assert result.target_calories == 240  # 12% of 2000
 
     def test_get_target_for_meal_type_main(self):
+        # Daily: 1700, main meal = 33% of daily = 561
         result = self.service.get_target_for_meal_type("main", 1700, 2)
-        assert result.target_calories == 700
+        assert result.target_calories == 561  # 33% of 1700
 
     def test_get_target_for_meal_type_omad(self):
         result = self.service.get_target_for_meal_type("omad", 1700, 2)

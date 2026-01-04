@@ -28,9 +28,9 @@ from src.infra.event_bus import PyMediatorEventBus, EventBus
 from src.infra.repositories.meal_repository import MealRepository
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def event_loop():
-    """Create an event loop for the test session."""
+    """Create an event loop for each test function."""
     import asyncio
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop

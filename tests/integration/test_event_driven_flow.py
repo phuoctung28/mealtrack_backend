@@ -103,7 +103,7 @@ class TestCompleteUserFlow:
             activity_level="moderately_active",
             goal="maintain_weight",
             dietary_preferences=["vegetarian"],
-            pain_points=[]
+            health_conditions=[]
         )
         
         suggestions_result = await event_bus.send(suggestions_command)
