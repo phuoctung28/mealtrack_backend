@@ -539,7 +539,9 @@ class TestAuthenticationIntegration:
             mock_verify.return_value = mock_decoded_token
             
             # Act
-            token = await verify_firebase_token(mock_credentials)
+            mock_request = Mock()
+            mock_request.state = Mock()
+            token = await verify_firebase_token(mock_request, mock_credentials)
             user_id = await get_current_user_id(token, mock_db)
             
             # Assert - Should still work
@@ -573,7 +575,9 @@ class TestAuthenticationIntegration:
             mock_verify.return_value = mock_decoded_token
             
             # Act
-            token = await verify_firebase_token(mock_credentials)
+            mock_request = Mock()
+            mock_request.state = Mock()
+            token = await verify_firebase_token(mock_request, mock_credentials)
             user_id = await get_current_user_id(token, mock_db)
             email = await get_current_user_email(token)
             
@@ -706,10 +710,17 @@ class TestAuthenticationEdgeCases:
             mock_verify.side_effect = mock_verify_side_effect
             
             # Act - Verify multiple tokens concurrently
+            mock_request1 = Mock()
+            mock_request1.state = Mock()
+            mock_request2 = Mock()
+            mock_request2.state = Mock()
+            mock_request3 = Mock()
+            mock_request3.state = Mock()
+            
             results = await asyncio.gather(
-                verify_firebase_token(mock_credentials1),
-                verify_firebase_token(mock_credentials2),
-                verify_firebase_token(mock_credentials3),
+                verify_firebase_token(mock_request1, mock_credentials1),
+                verify_firebase_token(mock_request2, mock_credentials2),
+                verify_firebase_token(mock_request3, mock_credentials3),
             )
             
             # Assert

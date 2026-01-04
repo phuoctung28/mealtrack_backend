@@ -15,6 +15,8 @@ from src.infra.database.models.user.profile import UserProfile
 def client(test_session):
     """Create a test client with database dependency override."""
     from src.api.dependencies.auth import get_current_user_id
+    from src.api.base_dependencies import get_suggestion_orchestration_service
+    from unittest.mock import Mock
     
     def override_get_db():
         try:
@@ -25,8 +27,13 @@ def client(test_session):
     def override_get_current_user_id():
         return "test_user_metrics"
     
+    def override_get_suggestion_orchestration_service():
+        # Mock the suggestion orchestration service to avoid Redis dependency
+        return Mock()
+    
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id
+    app.dependency_overrides[get_suggestion_orchestration_service] = override_get_suggestion_orchestration_service
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()

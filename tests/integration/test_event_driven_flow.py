@@ -47,7 +47,7 @@ class TestCompleteUserFlow:
             activity_level="moderately_active",
             fitness_goal="maintain_weight",
             dietary_preferences=["vegetarian"],
-            health_conditions=[]
+            pain_points=[]
         )
         
         onboarding_result = await event_bus.send(onboarding_command)
@@ -103,7 +103,7 @@ class TestCompleteUserFlow:
             activity_level="moderately_active",
             goal="maintain_weight",
             dietary_preferences=["vegetarian"],
-            health_conditions=[]
+            pain_points=[]
         )
         
         suggestions_result = await event_bus.send(suggestions_command)
@@ -217,7 +217,7 @@ class TestCompleteUserFlow:
                     activity_level="moderately_active",
                     fitness_goal="maintain_weight",
                     dietary_preferences=[],
-                    health_conditions=[]
+                    pain_points=[]
                 )
             )
 

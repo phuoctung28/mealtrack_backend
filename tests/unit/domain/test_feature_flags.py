@@ -43,8 +43,7 @@ class TestFeatureFlagsEndpoint:
         """Set up test client with mocked dependencies."""
         self.client = TestClient(app)
     
-    @pytest.mark.asyncio
-    async def test_get_feature_flags_current_environment(self):
+    def test_get_feature_flags_current_environment(self):
         """Test getting feature flags from database."""
         # This test validates the expected response structure
         response_data = MOCK_FEATURE_FLAGS_RESPONSE
@@ -58,8 +57,7 @@ class TestFeatureFlagsEndpoint:
         assert response_data["environment"] == "application"
         assert isinstance(response_data["flags"], dict)
     
-    @pytest.mark.asyncio
-    async def test_meal_planning_flag_can_be_disabled(self):
+    def test_meal_planning_flag_can_be_disabled(self):
         """Test that meal_planning flag can be disabled."""
         # Mock disabled flag response
         mock_response = {
@@ -74,8 +72,7 @@ class TestFeatureFlagsEndpoint:
         # Validate that the flag can be disabled
         assert mock_response["flags"]["meal_planning"] is False
     
-    @pytest.mark.asyncio
-    async def test_response_includes_valid_timestamp(self):
+    def test_response_includes_valid_timestamp(self):
         """Test that response includes valid ISO8601 timestamp."""
         response_data = MOCK_FEATURE_FLAGS_RESPONSE
         
@@ -85,8 +82,7 @@ class TestFeatureFlagsEndpoint:
         assert isinstance(response_data["updated_at"], str)
         assert "T" in response_data["updated_at"]  # ISO8601 format includes T separator
     
-    @pytest.mark.asyncio
-    async def test_get_individual_feature_flag_meal_planning(self):
+    def test_get_individual_feature_flag_meal_planning(self):
         """Test getting individual meal_planning feature flag."""
         response_data = MOCK_INDIVIDUAL_FLAG_RESPONSE
         
@@ -94,8 +90,7 @@ class TestFeatureFlagsEndpoint:
         assert response_data["enabled"] is True
         assert response_data["description"] == "Enable meal planning features"
     
-    @pytest.mark.asyncio
-    async def test_get_individual_feature_flag_activity_tracking(self):
+    def test_get_individual_feature_flag_activity_tracking(self):
         """Test getting individual activity_tracking feature flag."""
         mock_response = {
             "name": "activity_tracking",
@@ -108,8 +103,7 @@ class TestFeatureFlagsEndpoint:
         assert mock_response["name"] == "activity_tracking"
         assert mock_response["enabled"] is True
     
-    @pytest.mark.asyncio
-    async def test_get_individual_feature_flag_invalid_feature(self):
+    def test_get_individual_feature_flag_invalid_feature(self):
         """Test getting non-existent feature flag returns 404."""
         # Mock 404 response
         mock_404_response = {
@@ -129,8 +123,7 @@ class TestFeatureFlagsIntegration:
         """Set up test client."""
         self.client = TestClient(app)
     
-    @pytest.mark.asyncio
-    async def test_feature_flags_endpoint_performance(self):
+    def test_feature_flags_endpoint_performance(self):
         """Test that feature flags endpoint responds within acceptable time."""
         # Mock fast response time
         start_time = time.time()
@@ -154,8 +147,7 @@ class TestFeatureFlagsCRUD:
         """Set up test client with mocked dependencies."""
         self.client = TestClient(app)
     
-    @pytest.mark.asyncio
-    async def test_create_feature_flag_success(self):
+    def test_create_feature_flag_success(self):
         """Test creating a new feature flag."""
         # Mock successful creation response
         response_data = MOCK_CREATED_FLAG_RESPONSE
@@ -171,8 +163,7 @@ class TestFeatureFlagsCRUD:
         assert response_data["enabled"] is True
         assert response_data["description"] == "Test feature flag"
     
-    @pytest.mark.asyncio
-    async def test_create_feature_flag_duplicate_name(self):
+    def test_create_feature_flag_duplicate_name(self):
         """Test creating feature flag with duplicate name fails."""
         # Mock conflict response (409)
         mock_conflict_response = {
@@ -183,8 +174,7 @@ class TestFeatureFlagsCRUD:
         assert "detail" in mock_conflict_response
         assert "already exists" in mock_conflict_response["detail"]
     
-    @pytest.mark.asyncio
-    async def test_update_feature_flag_success(self):
+    def test_update_feature_flag_success(self):
         """Test updating an existing feature flag."""
         # Mock successful update response
         mock_updated_response = {
@@ -198,8 +188,7 @@ class TestFeatureFlagsCRUD:
         assert mock_updated_response["enabled"] is True
         assert mock_updated_response["description"] == "Updated description"
     
-    @pytest.mark.asyncio
-    async def test_update_feature_flag_partial(self):
+    def test_update_feature_flag_partial(self):
         """Test partially updating a feature flag."""
         # Mock partial update response
         mock_partial_response = {
@@ -213,8 +202,7 @@ class TestFeatureFlagsCRUD:
         assert mock_partial_response["enabled"] is True
         assert mock_partial_response["description"] == "Original description"
     
-    @pytest.mark.asyncio
-    async def test_update_nonexistent_feature_flag(self):
+    def test_update_nonexistent_feature_flag(self):
         """Test updating a non-existent feature flag returns 404."""
         # Mock 404 response
         mock_404_response = {
@@ -224,8 +212,7 @@ class TestFeatureFlagsCRUD:
         assert "detail" in mock_404_response
         assert "not found" in mock_404_response["detail"]
     
-    @pytest.mark.asyncio
-    async def test_get_feature_flags_empty_database(self):
+    def test_get_feature_flags_empty_database(self):
         """Test getting feature flags when database is empty."""
         # Mock empty response
         mock_empty_response = {
@@ -237,8 +224,7 @@ class TestFeatureFlagsCRUD:
         assert mock_empty_response["environment"] == "application"
         assert mock_empty_response["flags"] == {}
     
-    @pytest.mark.asyncio
-    async def test_get_individual_feature_flag_from_database(self):
+    def test_get_individual_feature_flag_from_database(self):
         """Test getting individual feature flag from database."""
         # Mock database feature response
         mock_db_response = {

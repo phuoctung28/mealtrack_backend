@@ -10,15 +10,16 @@ class TestPortionCalculationService:
         self.service = PortionCalculationService()
 
     def test_snack_returns_fixed_range(self):
-        result = self.service.calculate_snack_target()
-        assert result.target_calories == 225
-        assert result.min_calories == 150
-        assert result.max_calories == 300
+        # Daily: 2000, snack = 12% of daily = 240 (10-15% range)
+        result = self.service.calculate_snack_target(2000)
+        assert result.target_calories == 240  # 12% of 2000
+        assert result.min_calories == 200  # 10% of 2000
+        assert result.max_calories == 300  # 15% of 2000
 
     def test_main_meal_divides_by_meals_per_day(self):
-        # Daily: 1700, 2 meals → (1700-300)/2 = 700
+        # Daily: 1700, main meal = 33% of daily = 561
         result = self.service.calculate_main_meal_target(1700, 2)
-        assert result.target_calories == 700
+        assert result.target_calories == 561  # 33% of 1700
 
     def test_main_meal_with_3_meals(self):
         # Daily: 2100, 3 meals → (2100-300)/3 = 600
