@@ -54,7 +54,7 @@ class TdeeCalculationResponse(BaseModel):
                     "fat": 81.7,
                     "carbs": 294.0
                 },
-                "goal": "maintenance",
+                "goal": "recomp",
                 "activity_multiplier": 1.4,
                 "formula_used": "Mifflin-St Jeor"
             }

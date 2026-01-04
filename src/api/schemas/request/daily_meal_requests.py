@@ -27,8 +27,8 @@ class UserPreferencesRequest(BaseModel):
         description="Activity level"
     )
     goal: str = Field(
-        ..., 
-        pattern="^(lose_weight|maintain_weight|gain_weight|build_muscle)$",
+        ...,
+        pattern="^(cut|bulk|recomp)$",
         description="Fitness goal"
     )
     dietary_preferences: Optional[List[str]] = Field(
@@ -57,7 +57,7 @@ class UserPreferencesRequest(BaseModel):
                 "height": 180.0,
                 "weight": 75.0,
                 "activity_level": "moderately_active",
-                "goal": "build_muscle",
+                "goal": "bulk",
                 "dietary_preferences": ["vegetarian"],
                 "health_conditions": [],
                 "target_calories": 2800

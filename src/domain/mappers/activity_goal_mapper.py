@@ -26,23 +26,11 @@ class ActivityGoalMapper:
         "extra_active": ActivityLevel.EXTRA,
     }
 
-    # Goal mappings - all variations map to canonical enum values
+    # Goal mappings - canonical values only (mobile migration complete)
     GOAL_MAP: Dict[str, Goal] = {
-        # Canonical values
         "cut": Goal.CUT,
         "bulk": Goal.BULK,
         "recomp": Goal.RECOMP,
-        # Legacy/alternative names (for backward compatibility)
-        "cutting": Goal.CUT,
-        "bulking": Goal.BULK,
-        "maintenance": Goal.RECOMP,  # Map legacy maintenance to recomp
-        "maintain": Goal.RECOMP,
-        "maintain_weight": Goal.RECOMP,
-        "lose_weight": Goal.CUT,
-        "weight_loss": Goal.CUT,
-        "gain_weight": Goal.BULK,
-        "build_muscle": Goal.BULK,
-        "muscle_gain": Goal.BULK,
     }
 
     @classmethod
