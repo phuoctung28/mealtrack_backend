@@ -1,4 +1,5 @@
 """Conversation input parsing logic."""
+
 import re
 from typing import List, Tuple
 from src.domain.model.meal_planning import FitnessGoal, PlanDuration
@@ -21,7 +22,7 @@ class ConversationParser:
             "paleo": ["paleo"],
             "low_carb": ["low-carb", "low carb"],
             "dairy_free": ["dairy-free", "dairy free", "lactose"],
-            "pescatarian": ["pescatarian", "fish"]
+            "pescatarian": ["pescatarian", "fish"],
         }
 
         for pref, keywords in preference_keywords.items():
@@ -42,8 +43,20 @@ class ConversationParser:
             return []
 
         # Common allergens
-        allergens = ["nuts", "peanuts", "shellfish", "fish", "eggs", "milk", "dairy",
-                    "soy", "wheat", "gluten", "sesame", "tree nuts"]
+        allergens = [
+            "nuts",
+            "peanuts",
+            "shellfish",
+            "fish",
+            "eggs",
+            "milk",
+            "dairy",
+            "soy",
+            "wheat",
+            "gluten",
+            "sesame",
+            "tree nuts",
+        ]
 
         found_allergies = []
         for allergen in allergens:
@@ -57,20 +70,31 @@ class ConversationParser:
         """Parse fitness goal from user message."""
         message_lower = message.lower()
 
-        if "muscle" in message_lower or "gain" in message_lower or "bulk" in message_lower:
-            return FitnessGoal.MUSCLE_GAIN.value
-        elif "loss" in message_lower or "lose" in message_lower or "cut" in message_lower:
-            return FitnessGoal.WEIGHT_LOSS.value
-        elif "maintain" in message_lower or "maintenance" in message_lower:
-            return FitnessGoal.MAINTENANCE.value
+        if (
+            "muscle" in message_lower
+            or "gain" in message_lower
+            or "bulk" in message_lower
+        ):
+            return FitnessGoal.BULK.value
+        elif (
+            "loss" in message_lower or "lose" in message_lower or "cut" in message_lower
+        ):
+            return FitnessGoal.CUT.value
+        elif (
+            "recomp" in message_lower
+            or "recomposition" in message_lower
+            or "tone" in message_lower
+        ):
+            return FitnessGoal.RECOMP.value
         else:
-            return FitnessGoal.GENERAL_HEALTH.value
+            # Default to recomp (balanced approach)
+            return FitnessGoal.RECOMP.value
 
     @staticmethod
     def parse_meal_count(message: str) -> Tuple[int, int]:
         """Parse meal and snack count from user message."""
         # Extract numbers from message
-        numbers = re.findall(r'\d+', message)
+        numbers = re.findall(r"\d+", message)
 
         meals = 3  # default
         snacks = 0  # default
@@ -106,7 +130,7 @@ class ConversationParser:
     def parse_cooking_time(message: str) -> Tuple[int, int]:
         """Parse cooking time from user message."""
         # Extract numbers
-        numbers = re.findall(r'\d+', message)
+        numbers = re.findall(r"\d+", message)
 
         weekday_time = 30  # default
         weekend_time = 60  # default
@@ -127,8 +151,20 @@ class ConversationParser:
         message_lower = message.lower()
 
         # Common cuisines
-        cuisines = ["italian", "mexican", "asian", "chinese", "japanese", "thai",
-                   "indian", "mediterranean", "american", "french", "greek", "spanish"]
+        cuisines = [
+            "italian",
+            "mexican",
+            "asian",
+            "chinese",
+            "japanese",
+            "thai",
+            "indian",
+            "mediterranean",
+            "american",
+            "french",
+            "greek",
+            "spanish",
+        ]
 
         favorites = []
         for cuisine in cuisines:
@@ -137,12 +173,28 @@ class ConversationParser:
 
         # Parse dislikes
         dislikes = []
-        if "avoid" in message_lower or "don't like" in message_lower or "dislike" in message_lower:
+        if (
+            "avoid" in message_lower
+            or "don't like" in message_lower
+            or "dislike" in message_lower
+        ):
             # Simple parsing - in production, use NLP
-            dislike_section = message_lower.split("avoid")[-1] if "avoid" in message_lower else message_lower
+            dislike_section = (
+                message_lower.split("avoid")[-1]
+                if "avoid" in message_lower
+                else message_lower
+            )
 
             # Common ingredients to check
-            ingredients = ["tofu", "mushroom", "onion", "garlic", "spicy", "dairy", "egg"]
+            ingredients = [
+                "tofu",
+                "mushroom",
+                "onion",
+                "garlic",
+                "spicy",
+                "dairy",
+                "egg",
+            ]
             for ingredient in ingredients:
                 if ingredient in dislike_section:
                     dislikes.append(ingredient)
@@ -152,8 +204,19 @@ class ConversationParser:
     @staticmethod
     def is_affirmative(message: str) -> bool:
         """Check if message is affirmative."""
-        affirmative_words = ["yes", "yeah", "yep", "sure", "ok", "okay", "correct",
-                            "right", "sounds good", "perfect", "great"]
+        affirmative_words = [
+            "yes",
+            "yeah",
+            "yep",
+            "sure",
+            "ok",
+            "okay",
+            "correct",
+            "right",
+            "sounds good",
+            "perfect",
+            "great",
+        ]
         return any(word in message.lower() for word in affirmative_words)
 
     @staticmethod

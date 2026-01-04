@@ -29,9 +29,9 @@ class DietaryPreferenceEnum(str, enum.Enum):
 
 class FitnessGoalEnum(str, enum.Enum):
     """Fitness goal options."""
-    maintenance = "maintenance"
-    cutting = "cutting"
-    bulking = "bulking"
+    cut = "cut"
+    bulk = "bulk"
+    recomp = "recomp"
 
 
 class MealTypeEnum(str, enum.Enum):
@@ -82,6 +82,6 @@ class SexEnum(str, enum.Enum):
 
 class GoalEnum(str, enum.Enum):
     """Fitness goal for macro calculations."""
-    maintenance = "maintenance"
-    cutting = "cutting"
-    bulking = "bulking"
+    cut = "cut"
+    bulk = "bulk"
+    recomp = "recomp"

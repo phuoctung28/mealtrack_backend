@@ -66,7 +66,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
 
             # Handle fitness goal update with cooldown logic
             if command.fitness_goal is not None:
-                valid_goals = ['maintenance', 'cutting', 'bulking']
+                valid_goals = ['cut', 'bulk', 'recomp']
                 if command.fitness_goal not in valid_goals:
                     raise ValidationException(f"Fitness goal must be one of: {', '.join(valid_goals)}")
                 

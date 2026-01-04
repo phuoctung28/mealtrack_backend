@@ -39,7 +39,7 @@ class TestTdeeServiceGoalSpecificMacros:
             weight=80,
             body_fat_pct=None,
             activity_level=ActivityLevel.MODERATE,
-            goal=Goal.MAINTENANCE,
+            goal=Goal.RECOMP,
             unit_system=UnitSystem.METRIC
         )
 
@@ -55,7 +55,7 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_bulking_uses_300_calorie_surplus(self, service, base_request):
         """Verify bulking goal applies 300 calorie surplus to TDEE."""
-        base_request.goal = Goal.BULKING
+        base_request.goal = Goal.BULK
         response = service.calculate_tdee(base_request)
 
         # Expected: TDEE + 300 = 2759 + 300 = 3059
@@ -64,7 +64,7 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_bulking_macro_ratios(self, service, base_request):
         """Verify bulking uses 30% protein, 45% carbs, 25% fat ratios."""
-        base_request.goal = Goal.BULKING
+        base_request.goal = Goal.BULK
         response = service.calculate_tdee(base_request)
 
         calories = response.macros.calories
@@ -81,7 +81,7 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_bulking_macro_ratios_percentage(self, service, base_request):
         """Verify bulking macro percentages sum correctly."""
-        base_request.goal = Goal.BULKING
+        base_request.goal = Goal.BULK
         response = service.calculate_tdee(base_request)
 
         calories = response.macros.calories
@@ -100,7 +100,7 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_cutting_uses_500_calorie_deficit(self, service, base_request):
         """Verify cutting goal applies 500 calorie deficit to TDEE."""
-        base_request.goal = Goal.CUTTING
+        base_request.goal = Goal.CUT
         response = service.calculate_tdee(base_request)
 
         # Expected: TDEE - 500 = 2759 - 500 = 2259
@@ -109,7 +109,7 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_cutting_macro_ratios(self, service, base_request):
         """Verify cutting uses 35% protein, 40% carbs, 25% fat ratios."""
-        base_request.goal = Goal.CUTTING
+        base_request.goal = Goal.CUT
         response = service.calculate_tdee(base_request)
 
         calories = response.macros.calories
@@ -126,7 +126,7 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_cutting_macro_ratios_percentage(self, service, base_request):
         """Verify cutting macro percentages sum correctly."""
-        base_request.goal = Goal.CUTTING
+        base_request.goal = Goal.CUT
         response = service.calculate_tdee(base_request)
 
         calories = response.macros.calories
@@ -141,50 +141,6 @@ class TestTdeeServiceGoalSpecificMacros:
         # Should be approximately equal to target calories
         assert total_cals == pytest.approx(calories, rel=0.02)
 
-    # ===== MAINTENANCE TESTS =====
-
-    def test_maintenance_uses_tdee(self, service, base_request):
-        """Verify maintenance goal uses TDEE without adjustment."""
-        base_request.goal = Goal.MAINTENANCE
-        response = service.calculate_tdee(base_request)
-
-        # Expected: TDEE = 2759 (no adjustment)
-        expected_calories = 2759.0
-        assert response.macros.calories == pytest.approx(expected_calories, abs=0.1)
-
-    def test_maintenance_macro_ratios(self, service, base_request):
-        """Verify maintenance uses 30% protein, 45% carbs, 25% fat ratios."""
-        base_request.goal = Goal.MAINTENANCE
-        response = service.calculate_tdee(base_request)
-
-        calories = response.macros.calories
-
-        # Expected macros from ratios
-        expected_protein = (calories * 0.30) / 4
-        expected_carbs = (calories * 0.45) / 4
-        expected_fat = (calories * 0.25) / 9
-
-        # Allow ±1g tolerance for rounding
-        assert response.macros.protein == pytest.approx(expected_protein, abs=1)
-        assert response.macros.carbs == pytest.approx(expected_carbs, abs=1)
-        assert response.macros.fat == pytest.approx(expected_fat, abs=1)
-
-    def test_maintenance_macro_ratios_percentage(self, service, base_request):
-        """Verify maintenance macro percentages sum correctly."""
-        base_request.goal = Goal.MAINTENANCE
-        response = service.calculate_tdee(base_request)
-
-        calories = response.macros.calories
-
-        # Verify calorie composition
-        protein_cals = response.macros.protein * 4
-        carbs_cals = response.macros.carbs * 4
-        fat_cals = response.macros.fat * 9
-
-        total_cals = protein_cals + carbs_cals + fat_cals
-
-        # Should be approximately equal to target calories
-        assert total_cals == pytest.approx(calories, rel=0.02)
 
     # ===== RECOMP TESTS =====
 
@@ -240,7 +196,7 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_goal_enum_has_all_required_goals(self):
         """Verify Goal enum has all required goal types."""
-        required_goals = {'MAINTENANCE', 'CUTTING', 'BULKING', 'RECOMP'}
+        required_goals = {'CUT', 'BULK', 'RECOMP'}
         available_goals = {g.name for g in Goal}
         assert required_goals.issubset(available_goals)
 
@@ -274,51 +230,51 @@ class TestTdeeServiceGoalSpecificMacros:
 
     # ===== CROSS-GOAL COMPARISON TESTS =====
 
-    def test_bulking_calories_higher_than_maintenance(self, service, base_request):
-        """Verify bulking has higher calories than maintenance."""
-        base_request.goal = Goal.BULKING
+    def test_bulking_calories_higher_than_recomp(self, service, base_request):
+        """Verify bulking has higher calories than recomposition."""
+        base_request.goal = Goal.BULK
         bulking = service.calculate_tdee(base_request)
 
-        base_request.goal = Goal.MAINTENANCE
-        maintenance = service.calculate_tdee(base_request)
-
-        assert bulking.macros.calories > maintenance.macros.calories
-        assert bulking.macros.calories == pytest.approx(
-            maintenance.macros.calories + 300, abs=0.1
-        )
-
-    def test_cutting_calories_lower_than_maintenance(self, service, base_request):
-        """Verify cutting has lower calories than maintenance."""
-        base_request.goal = Goal.CUTTING
-        cutting = service.calculate_tdee(base_request)
-
-        base_request.goal = Goal.MAINTENANCE
-        maintenance = service.calculate_tdee(base_request)
-
-        assert cutting.macros.calories < maintenance.macros.calories
-        assert cutting.macros.calories == pytest.approx(
-            maintenance.macros.calories - 500, abs=0.1
-        )
-
-    def test_recomp_calories_equal_maintenance(self, service, base_request):
-        """Verify recomposition has same calories as maintenance."""
         base_request.goal = Goal.RECOMP
         recomp = service.calculate_tdee(base_request)
 
-        base_request.goal = Goal.MAINTENANCE
-        maintenance = service.calculate_tdee(base_request)
-
-        assert recomp.macros.calories == pytest.approx(
-            maintenance.macros.calories, abs=0.1
+        assert bulking.macros.calories > recomp.macros.calories
+        assert bulking.macros.calories == pytest.approx(
+            recomp.macros.calories + 300, abs=0.1
         )
+
+    def test_cutting_calories_lower_than_recomp(self, service, base_request):
+        """Verify cutting has lower calories than recomposition."""
+        base_request.goal = Goal.CUT
+        cutting = service.calculate_tdee(base_request)
+
+        base_request.goal = Goal.RECOMP
+        recomp = service.calculate_tdee(base_request)
+
+        assert cutting.macros.calories < recomp.macros.calories
+        assert cutting.macros.calories == pytest.approx(
+            recomp.macros.calories - 500, abs=0.1
+        )
+
+    def test_recomp_calories_equal_tdee(self, service, base_request):
+        """Verify recomposition calories equal TDEE (no calorie adjustment)."""
+        # Calculate TDEE independently
+        tdee_service = service
+        base_request.goal = Goal.RECOMP
+        response = tdee_service.calculate_tdee(base_request)
+
+        # Recomp should have no calorie adjustment (calories = TDEE)
+        # TDEE was already calculated and set in response
+        # Just verify that recomp adjustment is 0
+        assert response.macros.calories == pytest.approx(response.tdee, abs=0.1)
 
     def test_cutting_higher_protein_than_bulking(self, service, base_request):
         """Verify cutting has higher protein ratio than bulking."""
-        base_request.goal = Goal.CUTTING
+        base_request.goal = Goal.CUT
         cutting = service.calculate_tdee(base_request)
         cutting_protein_ratio = cutting.macros.protein * 4 / cutting.macros.calories
 
-        base_request.goal = Goal.BULKING
+        base_request.goal = Goal.BULK
         bulking = service.calculate_tdee(base_request)
         bulking_protein_ratio = bulking.macros.protein * 4 / bulking.macros.calories
 
@@ -329,11 +285,11 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_bulking_higher_carbs_than_cutting(self, service, base_request):
         """Verify bulking has higher carb ratio than cutting."""
-        base_request.goal = Goal.BULKING
+        base_request.goal = Goal.BULK
         bulking = service.calculate_tdee(base_request)
         bulking_carb_ratio = bulking.macros.carbs * 4 / bulking.macros.calories
 
-        base_request.goal = Goal.CUTTING
+        base_request.goal = Goal.CUT
         cutting = service.calculate_tdee(base_request)
         cutting_carb_ratio = cutting.macros.carbs * 4 / cutting.macros.calories
 
@@ -358,7 +314,7 @@ class TestTdeeServiceGoalSpecificMacros:
         """Verify TDEEConstants defines macro ratios for all goals."""
         assert hasattr(TDEEConstants, 'MACRO_RATIOS')
 
-        required_goals = {'bulking', 'cutting', 'maintenance', 'recomp'}
+        required_goals = {'bulk', 'cut', 'recomp'}
         available_goals = set(TDEEConstants.MACRO_RATIOS.keys())
 
         assert required_goals.issubset(available_goals)
@@ -382,7 +338,7 @@ class TestTdeeServiceGoalSpecificMacros:
             ActivityLevel.EXTRA
         ]
 
-        base_request.goal = Goal.BULKING
+        base_request.goal = Goal.BULK
 
         for activity in activity_levels:
             base_request.activity_level = activity
@@ -402,7 +358,7 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_macros_scale_with_calories(self, service, base_request):
         """Verify macros scale proportionally with calorie changes."""
-        base_request.goal = Goal.BULKING
+        base_request.goal = Goal.BULK
         base_request.weight = 80
         response_80kg = service.calculate_tdee(base_request)
 

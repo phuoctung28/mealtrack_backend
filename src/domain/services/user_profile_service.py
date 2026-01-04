@@ -63,7 +63,7 @@ class UserProfileService:
                 'age': 30,
                 'gender': 'male',
                 'activity_level': 'moderate',
-                'fitness_goal': 'maintenance',
+                'fitness_goal': 'recomp',
                 'health_conditions': []
             }
     
@@ -80,7 +80,7 @@ class UserProfileService:
         return UserPreferences(
             dietary_preferences=valid_prefs,
             allergies=data.get('allergies', []),
-            fitness_goal=FitnessGoal(data.get('fitness_goal', 'maintenance')),
+            fitness_goal=FitnessGoal(data.get('fitness_goal', 'recomp')),
             meals_per_day=data.get('meals_per_day', 3),
             snacks_per_day=1 if data.get('include_snacks', False) else 0,
             cooking_time_weekday=30,  # Default

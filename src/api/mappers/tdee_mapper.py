@@ -45,9 +45,8 @@ class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculation
         }
         
         goal_map = {
-            'maintenance': Goal.MAINTENANCE,
-            'cutting': Goal.CUTTING,
-            'bulking': Goal.BULKING,
+            'cut': Goal.CUT,
+            'bulk': Goal.BULK,
             'recomp': Goal.RECOMP
         }
         

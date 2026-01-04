@@ -155,7 +155,7 @@ class TestUserRepository:
             weight_kg=75.0,
             body_fat_percentage=15.0,
             activity_level="moderately_active",
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             target_weight_kg=75.0,
             meals_per_day=3,
             snacks_per_day=1,
@@ -173,7 +173,7 @@ class TestUserRepository:
         assert profile.body_fat_percentage == 15.0
         assert profile.is_current is True
         assert profile.activity_level == "moderately_active"
-        assert profile.fitness_goal == "maintenance"
+        assert profile.fitness_goal == "recomp"
         assert profile.meals_per_day == 3
         assert profile.snacks_per_day == 1
         assert profile.dietary_preferences == ["vegetarian"]
@@ -302,7 +302,7 @@ class TestUserRepository:
             height_cm=178.0,
             weight_kg=85.0,
             activity_level="sedentary",
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             target_weight_kg=85.0,
             meals_per_day=3,
             snacks_per_day=1
@@ -312,7 +312,7 @@ class TestUserRepository:
         updated_profile = user_repository.update_user_goals(
             user_id=sample_user.id,
             activity_level="very_active",
-            fitness_goal="bulking",
+            fitness_goal="bulk",
             target_weight_kg=90.0,
             meals_per_day=4,
             snacks_per_day=2
@@ -320,7 +320,7 @@ class TestUserRepository:
         
         assert updated_profile is not None
         assert updated_profile.activity_level == "very_active"
-        assert updated_profile.fitness_goal == "bulking"
+        assert updated_profile.fitness_goal == "bulk"
         assert updated_profile.target_weight_kg == 90.0
         assert updated_profile.meals_per_day == 4
         assert updated_profile.snacks_per_day == 2
@@ -335,24 +335,24 @@ class TestUserRepository:
             height_cm=168.0,
             weight_kg=62.0,
             activity_level="lightly_active",
-            fitness_goal="cutting",
+            fitness_goal="cut",
             target_weight_kg=58.0
         )
         
         # Update only fitness goal
         updated_profile = user_repository.update_user_goals(
             user_id=sample_user.id,
-            fitness_goal="maintenance"
+            fitness_goal="recomp"
         )
-        
-        assert updated_profile.fitness_goal == "maintenance"
+
+        assert updated_profile.fitness_goal == "recomp"
         assert updated_profile.activity_level == "lightly_active"  # Unchanged
 
     def test_update_user_goals_no_profile(self, user_repository, sample_user):
         """Test updating goals when no profile exists."""
         result = user_repository.update_user_goals(
             user_id=sample_user.id,
-            fitness_goal="bulking"
+            fitness_goal="bulk"
         )
         assert result is None
 

@@ -21,15 +21,15 @@ class TestUpdateUserMetricsCommand:
             weight_kg=75.0,
             activity_level="moderately_active",
             body_fat_percent=15.0,
-            fitness_goal="cutting",
+            fitness_goal="cut",
             override=True
         )
-        
+
         assert command.user_id == "test_user"
         assert command.weight_kg == 75.0
         assert command.activity_level == "moderately_active"
         assert command.body_fat_percent == 15.0
-        assert command.fitness_goal == "cutting"
+        assert command.fitness_goal == "cut"
         assert command.override is True
     
     def test_create_command_with_partial_fields(self):
@@ -63,7 +63,7 @@ class TestUpdateUserMetricsCommandHandler:
             height_cm=175.0,
             weight_kg=70.0,
             activity_level="moderate",
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             is_current=False
         )
         mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
@@ -95,7 +95,7 @@ class TestUpdateUserMetricsCommandHandler:
             height_cm=175.0,
             weight_kg=75.0,
             activity_level="moderate",
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             is_current=False
         )
         mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
@@ -125,7 +125,7 @@ class TestUpdateUserMetricsCommandHandler:
             height_cm=175.0,
             weight_kg=75.0,
             activity_level="moderate",
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             is_current=True,
             updated_at=datetime.utcnow() - timedelta(days=3)  # Updated 3 days ago
         )
@@ -134,7 +134,7 @@ class TestUpdateUserMetricsCommandHandler:
         handler = UpdateUserMetricsCommandHandler(db=mock_db)
         command = UpdateUserMetricsCommand(
             user_id="test_user",
-            fitness_goal="cutting",
+            fitness_goal="cut",
             override=False
         )
         
@@ -158,7 +158,7 @@ class TestUpdateUserMetricsCommandHandler:
             height_cm=175.0,
             weight_kg=75.0,
             activity_level="moderate",
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             is_current=True,
             updated_at=datetime.utcnow() - timedelta(days=3)  # Updated 3 days ago
         )
@@ -167,7 +167,7 @@ class TestUpdateUserMetricsCommandHandler:
         handler = UpdateUserMetricsCommandHandler(db=mock_db)
         command = UpdateUserMetricsCommand(
             user_id="test_user",
-            fitness_goal="cutting",
+            fitness_goal="cut",
             override=True  # Override cooldown
         )
         
@@ -175,7 +175,7 @@ class TestUpdateUserMetricsCommandHandler:
         await handler.handle(command)
         
         # Verify
-        assert mock_profile.fitness_goal == "cutting"
+        assert mock_profile.fitness_goal == "cut"
         assert mock_profile.is_current is True
         mock_db.commit.assert_called_once()
     
@@ -192,7 +192,7 @@ class TestUpdateUserMetricsCommandHandler:
             weight_kg=70.0,
             body_fat_percentage=20.0,
             activity_level="moderate",
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             is_current=False,
             updated_at=datetime.utcnow() - timedelta(days=10)  # Old enough
         )
@@ -204,7 +204,7 @@ class TestUpdateUserMetricsCommandHandler:
             weight_kg=72.5,
             activity_level="very_active",
             body_fat_percent=15.0,
-            fitness_goal="cutting"
+            fitness_goal="cut"
         )
         
         # Execute
@@ -214,7 +214,7 @@ class TestUpdateUserMetricsCommandHandler:
         assert mock_profile.weight_kg == 72.5
         assert mock_profile.activity_level == "very_active"
         assert mock_profile.body_fat_percentage == 15.0
-        assert mock_profile.fitness_goal == "cutting"
+        assert mock_profile.fitness_goal == "cut"
         assert mock_profile.is_current is True
     
     async def test_user_not_found(self):
@@ -260,7 +260,7 @@ class TestUpdateUserMetricsCommandHandler:
             height_cm=175.0,
             weight_kg=70.0,
             activity_level="moderate",
-            fitness_goal="maintenance"
+            fitness_goal="recomp"
         )
         mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
         
@@ -289,7 +289,7 @@ class TestUpdateUserMetricsCommandHandler:
             height_cm=175.0,
             weight_kg=70.0,
             activity_level="moderate",
-            fitness_goal="maintenance"
+            fitness_goal="recomp"
         )
         mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
         
@@ -317,7 +317,7 @@ class TestUpdateUserMetricsCommandHandler:
             height_cm=175.0,
             weight_kg=70.0,
             activity_level="moderate",
-            fitness_goal="maintenance"
+            fitness_goal="recomp"
         )
         mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
         
@@ -345,7 +345,7 @@ class TestUpdateUserMetricsCommandHandler:
             height_cm=175.0,
             weight_kg=70.0,
             activity_level="moderate",
-            fitness_goal="maintenance"
+            fitness_goal="recomp"
         )
         mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
         
@@ -373,7 +373,7 @@ class TestUpdateUserMetricsCommandHandler:
             height_cm=175.0,
             weight_kg=75.0,
             activity_level="moderate",
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             is_current=True,
             updated_at=datetime.utcnow() - timedelta(days=2)  # Very recent
         )
@@ -382,7 +382,7 @@ class TestUpdateUserMetricsCommandHandler:
         handler = UpdateUserMetricsCommandHandler(db=mock_db)
         command = UpdateUserMetricsCommand(
             user_id="test_user",
-            fitness_goal="maintenance",  # Same as current
+            fitness_goal="recomp",  # Same as current
             override=False
         )
         
@@ -390,6 +390,6 @@ class TestUpdateUserMetricsCommandHandler:
         await handler.handle(command)
         
         # Verify - no error, goal stays the same
-        assert mock_profile.fitness_goal == "maintenance"
+        assert mock_profile.fitness_goal == "recomp"
         mock_db.commit.assert_called_once()
 
