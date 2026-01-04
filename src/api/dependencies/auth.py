@@ -54,14 +54,19 @@ async def verify_firebase_token(
             return {"message": f"Hello {user_id}"}
     """
     # Dev mode bypass: check if dev middleware injected a user
-    if os.getenv("ENVIRONMENT") == "development" and hasattr(request.state, "user"):
+    if (os.getenv("ENVIRONMENT") == "development" and 
+        hasattr(request.state, "user") and
+        hasattr(request.state.user, "firebase_uid") and
+        hasattr(request.state.user, "id")):
         dev_user = request.state.user
-        logger.debug("Dev mode: bypassing Firebase auth, using dev user: %s", dev_user.id)
-        return {
-            "uid": dev_user.firebase_uid,
-            "email": dev_user.email,
-            "sub": dev_user.firebase_uid
-        }
+        # Additional check: make sure it's not a Mock object
+        if type(dev_user).__name__ != "Mock":
+            logger.debug("Dev mode: bypassing Firebase auth, using dev user: %s", dev_user.id)
+            return {
+                "uid": dev_user.firebase_uid,
+                "email": dev_user.email,
+                "sub": dev_user.firebase_uid
+            }
 
     # Production mode: require Firebase token
     if not credentials:

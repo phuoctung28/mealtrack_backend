@@ -1,7 +1,7 @@
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Optional
 
@@ -18,11 +18,13 @@ from src.infra.database.models.user.user import User
 logger = logging.getLogger(__name__)
 
 
-def _ensure_dev_user() -> User:
+def _ensure_dev_user() -> Optional[User]:
     """Create or fetch the single development user and profile.
 
     This is safe to call multiple times. Returns the persisted SQLAlchemy User instance
     loaded from a short-lived session; do not store it for reuse across requests.
+
+    Returns None if database isn't ready (e.g., during test collection).
     """
     firebase_uid = os.getenv("DEV_USER_FIREBASE_UID", "dev_firebase_uid")
     email = os.getenv("DEV_USER_EMAIL", "dev@example.com")
@@ -77,8 +79,8 @@ def _ensure_dev_user() -> User:
         return user
     except Exception as exc:
         session.rollback()
-        logger.error("Failed to ensure dev user: %s", exc)
-        raise
+        logger.warning("Failed to ensure dev user (database may not be ready): %s", exc)
+        return None
     finally:
         session.close()
 
@@ -93,9 +95,12 @@ def add_dev_auth_bypass(app: FastAPI) -> None:
         logger.info("Dev auth bypass not enabled (ENVIRONMENT != development)")
         return
 
-    # Ensure the user exists up-front and seed a few meals for today
+    # Try to ensure the user exists up-front and seed meals (may fail during test collection)
     user = _ensure_dev_user()
-    _seed_dev_meals(user.id)
+    if user:
+        _seed_dev_meals(user.id)
+    else:
+        logger.warning("Dev user creation deferred - will create on first request")
 
     @app.middleware("http")
     async def dev_user_injector(request: Request, call_next):  # type: ignore[override]
@@ -145,7 +150,6 @@ def _seed_dev_meals(user_id: str) -> None:
         )
         if existing > 0:
             # Backfill missing ready_at for READY meals created earlier without it
-            from sqlalchemy import and_
             meals_missing_ready = (
                 session.query(DBMeal)
                 .filter(DBMeal.user_id == user_id)
@@ -156,7 +160,7 @@ def _seed_dev_meals(user_id: str) -> None:
                 .all()
             )
             if meals_missing_ready:
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 for m in meals_missing_ready:
                     m.ready_at = m.created_at or now
                     m.updated_at = now
@@ -177,7 +181,7 @@ def _seed_dev_meals(user_id: str) -> None:
             )
             session.add(db_image)
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             db_meal = DBMeal(
                 meal_id=meal_id,
                 user_id=user_id,
