@@ -45,7 +45,7 @@ class TestSaveUserOnboardingCommandHandler:
             activity_level="moderate",
             fitness_goal="maintenance",
             dietary_preferences=["vegetarian"],
-            health_conditions=["diabetes"]
+            pain_points=["diabetes"]
         )
         
         # Act
@@ -97,7 +97,9 @@ class TestSaveUserOnboardingCommandHandler:
             height_cm=175,
             weight_kg=70,
             activity_level="moderate",
-            fitness_goal="maintenance"
+            fitness_goal="maintenance",
+            dietary_preferences=[],
+            pain_points=[]
         )
         
         # Act & Assert
@@ -133,7 +135,9 @@ class TestSaveUserOnboardingCommandHandler:
             height_cm=175,
             weight_kg=0,  # Invalid weight
             activity_level="moderate",
-            fitness_goal="maintenance"
+            fitness_goal="maintenance",
+            dietary_preferences=[],
+            pain_points=[]
         )
         
         # Act & Assert
@@ -155,7 +159,7 @@ class TestSaveUserOnboardingCommandHandler:
             activity_level="active",  # Different activity
             fitness_goal="cutting",  # Different goal
             dietary_preferences=["vegan"],
-            health_conditions=[]
+            pain_points=[]
         )
         
         # Act
