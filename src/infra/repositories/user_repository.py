@@ -226,7 +226,7 @@ class UserRepository:
                     "dietary_preferences": profile.dietary_preferences or [],
                     "allergies": profile.allergies or []
                 })
-                await redis_client.set(cache_key, cache_data, ex=3600)  # 1 hour TTL
+                await redis_client.set(cache_key, cache_data, ttl=3600)  # 1 hour TTL
                 logger.debug(f"Cached user profile {user_id}")
             except Exception as e:
                 logger.warning(f"Failed to cache profile: {e}")

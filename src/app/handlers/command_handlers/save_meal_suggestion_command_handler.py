@@ -222,3 +222,4 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, D
         
         return day_plan_orm
 
+

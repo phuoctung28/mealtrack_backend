@@ -280,3 +280,4 @@ class MealSuggestionService:
             "generation_token": f"gen_fallback_{uuid.uuid4().hex[:12]}"
         }
 
+

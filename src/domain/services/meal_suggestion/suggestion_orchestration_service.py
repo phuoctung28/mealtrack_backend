@@ -32,6 +32,7 @@ from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.services.meal_suggestion.nutrition_enrichment_service import NutritionEnrichmentService
+from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService, RecipeSearchCriteria
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ class SuggestionOrchestrationService:
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
         nutrition_enrichment: NutritionEnrichmentService = None,
+        recipe_search: RecipeSearchService = None,
         redis_client=None,
     ):
         self._generation = generation_service
@@ -62,6 +64,7 @@ class SuggestionOrchestrationService:
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
         self._nutrition_enrichment = nutrition_enrichment or NutritionEnrichmentService()
+        self._recipe_search = recipe_search  # Optional for Phase 2
         self._redis_client = redis_client
 
     async def generate_suggestions(
@@ -277,9 +280,72 @@ class SuggestionOrchestrationService:
         session: SuggestionSession,
         exclude_ids: List[str],
     ) -> List[MealSuggestion]:
-        """Generate suggestions with timeout, fallback on failure."""
+        """Generate suggestions with hybrid retrieval (Pinecone + AI fallback)."""
         start_time = time.time()
 
+        try:
+            # PHASE 2: Try Pinecone recipe search first (fast path)
+            if self._recipe_search:
+                logger.info(
+                    f"[RECIPE-SEARCH-ATTEMPT] session={session.id} | "
+                    f"meal_type={session.meal_type} | target_cal={session.target_calories}"
+                )
+
+                criteria = RecipeSearchCriteria(
+                    meal_type=session.meal_type,
+                    target_calories=session.target_calories,
+                    calorie_tolerance=100,
+                    max_cook_time=session.cooking_time_minutes,
+                    dietary_preferences=getattr(session, 'dietary_preferences', []),
+                    allergies=getattr(session, 'allergies', []),
+                    ingredients=session.ingredients,
+                    exclude_ids=exclude_ids
+                )
+
+                recipes = self._recipe_search.search_recipes(
+                    criteria=criteria,
+                    top_k=10  # Get 10 candidates
+                )
+
+                if len(recipes) >= 3:
+                    elapsed = time.time() - start_time
+                    logger.info(
+                        f"[RECIPE-SEARCH-SUCCESS] session={session.id} | "
+                        f"found={len(recipes)} recipes | elapsed={elapsed:.2f}s | Using top 3"
+                    )
+                    # Convert to MealSuggestion objects
+                    suggestions = [
+                        self._recipe_to_suggestion(recipe, session)
+                        for recipe in recipes[:3]
+                    ]
+                    return suggestions
+                else:
+                    logger.info(
+                        f"[RECIPE-SEARCH-INSUFFICIENT] session={session.id} | "
+                        f"Only {len(recipes)}/3 recipes found | Falling back to AI generation"
+                    )
+
+            # PHASE 1: AI generation fallback (slow path)
+            return await self._generate_with_ai(session, exclude_ids, start_time)
+
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(
+                f"[GENERATION-ERROR] session={session.id} | "
+                f"elapsed={elapsed:.2f}s | error={str(e)[:200]}",
+                exc_info=True
+            )
+            return [
+                self._create_fallback(session, i) for i in range(self.SUGGESTIONS_COUNT)
+            ]
+
+    async def _generate_with_ai(
+        self,
+        session: SuggestionSession,
+        exclude_ids: List[str],
+        start_time: float
+    ) -> List[MealSuggestion]:
+        """AI generation path (existing logic)."""
         try:
             # Build prompt
             prompt = self._build_prompt(session, exclude_ids)
@@ -287,7 +353,7 @@ class SuggestionOrchestrationService:
 
             # Log detailed request context
             logger.info(
-                f"[MEAL-GEN-START] session={session.id} | "
+                f"[AI-GENERATION] session={session.id} | "
                 f"meal_type={session.meal_type} | "
                 f"target_cal={session.target_calories} | "
                 f"ingredients={len(session.ingredients or [])} items | "
@@ -500,6 +566,45 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
             f"parsed={len(suggestions)}/{len(raw_suggestions)}"
         )
         return suggestions
+
+    def _recipe_to_suggestion(
+        self,
+        recipe,
+        session: SuggestionSession
+    ) -> MealSuggestion:
+        """Convert Pinecone recipe to MealSuggestion."""
+        return MealSuggestion(
+            id=f"sug_{uuid.uuid4().hex[:16]}",
+            session_id=session.id,
+            user_id=session.user_id,
+            meal_name=recipe.name,
+            description=recipe.description,
+            meal_type=MealType(session.meal_type),
+            macros=MacroEstimate(
+                calories=recipe.macros['calories'],
+                protein=recipe.macros['protein'],
+                carbs=recipe.macros['carbs'],
+                fat=recipe.macros['fat']
+            ),
+            ingredients=[
+                Ingredient(
+                    name=ing['name'],
+                    amount=ing['amount'],
+                    unit=ing['unit']
+                )
+                for ing in recipe.ingredients
+            ],
+            recipe_steps=[
+                RecipeStep(
+                    step=step['step'],
+                    instruction=step['instruction'],
+                    duration_minutes=step.get('duration_minutes')
+                )
+                for step in recipe.recipe_steps
+            ],
+            prep_time_minutes=recipe.prep_time_minutes,
+            confidence_score=recipe.confidence_score,
+        )
 
     def _create_fallback(
         self, session: SuggestionSession, index: int

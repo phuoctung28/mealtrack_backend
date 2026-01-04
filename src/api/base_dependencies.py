@@ -343,8 +343,10 @@ def get_meal_suggestion_repository():
 def get_suggestion_orchestration_service(
     db: Session = Depends(get_db),
 ):
-    """Get suggestion orchestration service (Phase 06)."""
+    """Get suggestion orchestration service with Phase 1 & 2 optimizations."""
     from src.domain.services.meal_suggestion.suggestion_orchestration_service import SuggestionOrchestrationService
+    from src.domain.services.meal_suggestion.nutrition_enrichment_service import NutritionEnrichmentService
+    from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
     from src.infra.adapters.meal_generation_service import MealGenerationService
     from src.infra.repositories.user_repository import UserRepository
 
@@ -352,10 +354,24 @@ def get_suggestion_orchestration_service(
     suggestion_repo = get_meal_suggestion_repository()
     user_repo = UserRepository(db)
 
+    # Phase 1 optimization: Nutrition enrichment
+    nutrition_enrichment = NutritionEnrichmentService()
+
+    # Phase 2 optimization: Recipe search (hybrid retrieval)
+    try:
+        recipe_search = RecipeSearchService()
+        logger.info("Recipe search service initialized for hybrid retrieval")
+    except Exception as e:
+        logger.warning(f"Recipe search not available, using AI-only generation: {e}")
+        recipe_search = None
+
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
         suggestion_repo=suggestion_repo,
         user_repo=user_repo,
+        nutrition_enrichment=nutrition_enrichment,
+        recipe_search=recipe_search,
+        redis_client=_redis_client,
     )
 
 
