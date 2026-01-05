@@ -66,7 +66,7 @@ class TestSaveUserOnboardingCommandHandler:
         assert saved_profile.height_cm == 175
         assert saved_profile.weight_kg == 70
         assert saved_profile.activity_level == "moderate"
-        assert saved_profile.fitness_goal == "maintenance"
+        assert saved_profile.fitness_goal == "recomp"
     
     @pytest.mark.asyncio
     async def test_save_user_onboarding_invalid_age(self, event_bus, test_session):

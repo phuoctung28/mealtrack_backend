@@ -14,6 +14,7 @@ from src.api.base_dependencies import get_db
 def client(test_session):
     """Create a test client with mocked dependencies."""
     from unittest.mock import Mock
+    from src.api.base_dependencies import get_suggestion_orchestration_service
     
     def override_get_db():
         try:
@@ -24,8 +25,13 @@ def client(test_session):
     def override_get_current_user_id():
         return "test_user"
     
+    def override_get_suggestion_orchestration_service():
+        # Mock the suggestion orchestration service to avoid Redis dependency
+        return Mock()
+    
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id
+    app.dependency_overrides[get_suggestion_orchestration_service] = override_get_suggestion_orchestration_service
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
@@ -36,6 +42,9 @@ class TestIngredientsAPI:
 
     def test_recognize_ingredient_success(self, client):
         """Test successful ingredient recognition."""
+        from src.api.dependencies.event_bus import get_configured_event_bus
+        import asyncio
+        
         mock_result = {
             "name": "chicken",
             "confidence": 0.95,
@@ -44,11 +53,15 @@ class TestIngredientsAPI:
             "message": "Ingredient recognized successfully"
         }
         
-        with patch('src.api.dependencies.event_bus.get_configured_event_bus') as mock_get_bus:
-            mock_bus = Mock()
-            mock_bus.send = Mock(return_value=mock_result)
-            mock_get_bus.return_value = mock_bus
-            
+        async def mock_send(command):
+            return mock_result
+        
+        mock_bus = Mock()
+        mock_bus.send = mock_send
+        
+        app.dependency_overrides[get_configured_event_bus] = lambda: mock_bus
+        
+        try:
             response = client.post(
                 "/v1/ingredients/recognize",
                 json={"image_data": "base64encodedimagedata"}
@@ -59,14 +72,22 @@ class TestIngredientsAPI:
             assert data["name"] == "chicken"
             assert data["confidence"] == 0.95
             assert data["success"] is True
+        finally:
+            app.dependency_overrides.pop(get_configured_event_bus, None)
 
     def test_recognize_ingredient_error_handling(self, client):
         """Test ingredient recognition error handling."""
-        with patch('src.api.dependencies.event_bus.get_configured_event_bus') as mock_get_bus:
-            mock_bus = Mock()
-            mock_bus.send = Mock(side_effect=Exception("Recognition failed"))
-            mock_get_bus.return_value = mock_bus
-            
+        from src.api.dependencies.event_bus import get_configured_event_bus
+        
+        async def mock_send(command):
+            raise Exception("Recognition failed")
+        
+        mock_bus = Mock()
+        mock_bus.send = mock_send
+        
+        app.dependency_overrides[get_configured_event_bus] = lambda: mock_bus
+        
+        try:
             response = client.post(
                 "/v1/ingredients/recognize",
                 json={"image_data": "base64encodedimagedata"}
@@ -74,6 +95,8 @@ class TestIngredientsAPI:
             
             # Should handle exception gracefully
             assert response.status_code in [400, 500]
+        finally:
+            app.dependency_overrides.pop(get_configured_event_bus, None)
 
     def test_ingredients_health(self, client):
         """Test ingredients health endpoint."""

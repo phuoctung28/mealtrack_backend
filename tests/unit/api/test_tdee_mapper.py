@@ -16,7 +16,7 @@ class TestTdeeMapper:
         self.mapper = TdeeMapper()
 
     def test_to_domain_male_sedentary_maintenance_metric(self):
-        """Test converting DTO to domain model - male, sedentary, maintenance, metric."""
+        """Test converting DTO to domain model - male, sedentary, recomp (maintenance equivalent), metric."""
         dto = TdeeCalculationRequest(
             age=30,
             sex="male",
@@ -24,7 +24,7 @@ class TestTdeeMapper:
             weight=70,
             body_fat_percentage=15.0,
             activity_level="sedentary",
-            goal="maintenance",
+            goal="recomp",
             unit_system="metric"
         )
         
@@ -56,7 +56,7 @@ class TestTdeeMapper:
         
         assert domain.sex.value == "female"
         assert domain.activity_level.value == "light"
-        assert domain.goal.value == "cutting"
+        assert domain.goal.value == "cut"
         assert domain.unit_system.value == "imperial"
 
     def test_to_domain_all_activity_levels(self):
@@ -127,7 +127,7 @@ class TestTdeeMapper:
             weight=70,
             body_fat_percentage=15.0,
             activity_level="moderate",
-            goal="maintenance",
+            goal="recomp",
             unit_system="metric"
         )
         
@@ -148,7 +148,7 @@ class TestTdeeMapper:
             weight=154,  # pounds
             body_fat_percentage=15.0,
             activity_level="moderate",
-            goal="maintenance",
+            goal="recomp",
             unit_system="imperial"
         )
         
