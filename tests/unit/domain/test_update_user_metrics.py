@@ -2,10 +2,9 @@
 Unit tests for update user metrics endpoint and handler.
 """
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import Mock, AsyncMock, MagicMock
+from unittest.mock import Mock
 
-from src.api.exceptions import ResourceNotFoundException, ValidationException, ConflictException
+from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.handlers.command_handlers.update_user_metrics_command_handler import UpdateUserMetricsCommandHandler
 from src.infra.database.models.user.profile import UserProfile
@@ -22,7 +21,6 @@ class TestUpdateUserMetricsCommand:
             activity_level="moderately_active",
             body_fat_percent=15.0,
             fitness_goal="cut",
-            override=True
         )
 
         assert command.user_id == "test_user"
@@ -30,21 +28,19 @@ class TestUpdateUserMetricsCommand:
         assert command.activity_level == "moderately_active"
         assert command.body_fat_percent == 15.0
         assert command.fitness_goal == "cut"
-        assert command.override is True
-    
+
     def test_create_command_with_partial_fields(self):
         """Test creating command with only some metrics."""
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             weight_kg=75.0
         )
-        
+
         assert command.user_id == "test_user"
         assert command.weight_kg == 75.0
         assert command.activity_level is None
         assert command.body_fat_percent is None
         assert command.fitness_goal is None
-        assert command.override is False
 
 
 @pytest.mark.asyncio
@@ -112,9 +108,9 @@ class TestUpdateUserMetricsCommandHandler:
         # Verify
         assert mock_profile.activity_level == "very_active"
         assert mock_profile.is_current is True
-    
-    async def test_update_fitness_goal_with_cooldown(self):
-        """Test updating fitness goal triggers cooldown check."""
+
+    async def test_update_fitness_goal_unlimited(self):
+        """Test updating fitness goal succeeds without cooldown."""
         # Setup
         mock_db = Mock()
         mock_profile = UserProfile(
@@ -127,58 +123,23 @@ class TestUpdateUserMetricsCommandHandler:
             activity_level="moderate",
             fitness_goal="recomp",
             is_current=True,
-            updated_at=datetime.utcnow() - timedelta(days=3)  # Updated 3 days ago
         )
         mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
-        
+
         handler = UpdateUserMetricsCommandHandler(db=mock_db)
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             fitness_goal="cut",
-            override=False
         )
-        
-        # Execute & Verify - should raise ConflictException
-        with pytest.raises(ConflictException) as exc_info:
-            await handler.handle(command)
-        
-        assert "Goal was updated recently" in str(exc_info.value.message)
-        assert "cooldown_until" in exc_info.value.details
-        mock_db.rollback.assert_called_once()
-    
-    async def test_update_fitness_goal_with_override(self):
-        """Test updating fitness goal with override bypasses cooldown."""
-        # Setup
-        mock_db = Mock()
-        mock_profile = UserProfile(
-            id="profile_1",
-            user_id="test_user",
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=75.0,
-            activity_level="moderate",
-            fitness_goal="recomp",
-            is_current=True,
-            updated_at=datetime.utcnow() - timedelta(days=3)  # Updated 3 days ago
-        )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
-        
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
-        command = UpdateUserMetricsCommand(
-            user_id="test_user",
-            fitness_goal="cut",
-            override=True  # Override cooldown
-        )
-        
-        # Execute
+
+        # Execute - should succeed without cooldown check
         await handler.handle(command)
-        
+
         # Verify
         assert mock_profile.fitness_goal == "cut"
         assert mock_profile.is_current is True
         mock_db.commit.assert_called_once()
-    
+
     async def test_update_all_metrics_together(self):
         """Test updating all metrics in one call."""
         # Setup
@@ -194,10 +155,9 @@ class TestUpdateUserMetricsCommandHandler:
             activity_level="moderate",
             fitness_goal="recomp",
             is_current=False,
-            updated_at=datetime.utcnow() - timedelta(days=10)  # Old enough
         )
         mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
-        
+
         handler = UpdateUserMetricsCommandHandler(db=mock_db)
         command = UpdateUserMetricsCommand(
             user_id="test_user",
@@ -360,36 +320,4 @@ class TestUpdateUserMetricsCommandHandler:
             await handler.handle(command)
         
         assert "Fitness goal must be one of" in str(exc_info.value)
-    
-    async def test_same_goal_no_cooldown_check(self):
-        """Test that updating to same goal doesn't trigger cooldown."""
-        # Setup
-        mock_db = Mock()
-        mock_profile = UserProfile(
-            id="profile_1",
-            user_id="test_user",
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=75.0,
-            activity_level="moderate",
-            fitness_goal="recomp",
-            is_current=True,
-            updated_at=datetime.utcnow() - timedelta(days=2)  # Very recent
-        )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
-        
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
-        command = UpdateUserMetricsCommand(
-            user_id="test_user",
-            fitness_goal="recomp",  # Same as current
-            override=False
-        )
-        
-        # Execute - should NOT raise ConflictException
-        await handler.handle(command)
-        
-        # Verify - no error, goal stays the same
-        assert mock_profile.fitness_goal == "recomp"
-        mock_db.commit.assert_called_once()
 

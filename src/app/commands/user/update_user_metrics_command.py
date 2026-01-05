@@ -12,5 +12,4 @@ class UpdateUserMetricsCommand:
     activity_level: str | None = None
     body_fat_percent: float | None = None
     fitness_goal: str | None = None
-    override: bool = False
 

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.exceptions import handle_exception, ConflictException, create_http_exception
+from src.api.exceptions import handle_exception
 from src.api.mappers.tdee_mapper import TdeeMapper
 from src.api.schemas.request import OnboardingCompleteRequest
 from src.api.schemas.request.user_profile_update_requests import UpdateMetricsRequest
@@ -154,7 +154,7 @@ async def update_user_metrics(
     """
     Update user metrics (weight, activity level, body fat, fitness goal) and return updated TDEE/macros.
     
-    Unified endpoint for profile updates. Supports goal cooldown with override.
+    Unified endpoint for profile updates.
     
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
@@ -166,16 +166,9 @@ async def update_user_metrics(
             activity_level=request.activity_level,
             body_fat_percent=request.body_fat_percent,
             fitness_goal=request.fitness_goal.value if request.fitness_goal else None,
-            override=request.override
         )
-        
-        # Handle goal cooldown conflicts
-        try:
-            await event_bus.send(command)
-        except Exception as e:
-            if isinstance(e, ConflictException) and not request.override:
-                raise create_http_exception(e) from e
-            raise handle_exception(e) from e
+
+        await event_bus.send(command)
 
         # Return updated TDEE/macros
         query = GetUserTdeeQuery(user_id=user_id)

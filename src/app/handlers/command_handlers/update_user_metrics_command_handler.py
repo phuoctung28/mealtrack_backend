@@ -2,13 +2,13 @@
 Command handler for updating user metrics.
 """
 import logging
-from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from src.api.exceptions import ResourceNotFoundException, ValidationException, ConflictException
+from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
+from src.infra.database.models.enums import FitnessGoalEnum, ActivityLevelEnum
 from src.app.events.base import EventHandler, handles
 from src.infra.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
@@ -53,9 +53,10 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 profile.weight_kg = command.weight_kg
 
             if command.activity_level is not None:
-                valid_levels = ['sedentary', 'light', 'moderate', 'active', 'extra', 
-                              'lightly_active', 'moderately_active', 'very_active', 'extra_active']
-                if command.activity_level not in valid_levels:
+                valid_levels = [e.value for e in ActivityLevelEnum]
+                # Also accept legacy aliases
+                legacy_aliases = ['sedentary', 'light', 'moderate', 'active', 'extra']
+                if command.activity_level not in valid_levels and command.activity_level not in legacy_aliases:
                     raise ValidationException(f"Activity level must be one of: {', '.join(valid_levels)}")
                 profile.activity_level = command.activity_level
 
@@ -64,28 +65,13 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     raise ValidationException("Body fat percentage must be between 0 and 70")
                 profile.body_fat_percentage = command.body_fat_percent
 
-            # Handle fitness goal update with cooldown logic
+            # Handle fitness goal update (unlimited changes allowed)
             if command.fitness_goal is not None:
-                valid_goals = ['cut', 'bulk', 'recomp']
+                valid_goals = [e.value for e in FitnessGoalEnum]
                 if command.fitness_goal not in valid_goals:
                     raise ValidationException(f"Fitness goal must be one of: {', '.join(valid_goals)}")
-                
-                # Check if goal is actually changing
-                if profile.fitness_goal != command.fitness_goal:
-                    # Apply 7-day cooldown unless override is requested
-                    if not command.override:
-                        last_changed = profile.updated_at or profile.created_at
-                        if last_changed:
-                            cooldown_until = last_changed + timedelta(days=7)
-                            if datetime.utcnow() < cooldown_until:
-                                raise ConflictException(
-                                    message="Goal was updated recently. Please wait before changing again.",
-                                    details={
-                                        "cooldown_until": cooldown_until.isoformat() + "Z"
-                                    }
-                                )
-                    
-                    profile.fitness_goal = command.fitness_goal
+
+                profile.fitness_goal = command.fitness_goal
 
             # Ensure this profile is marked as current
             profile.is_current = True
