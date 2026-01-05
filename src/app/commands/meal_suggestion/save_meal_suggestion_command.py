@@ -51,3 +51,4 @@ class SaveMealSuggestionCommand(Command):
         if self.meal_date is None:
             object.__setattr__(self, 'meal_date', date.today())
 
+

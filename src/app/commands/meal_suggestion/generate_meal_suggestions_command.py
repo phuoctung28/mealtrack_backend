@@ -48,3 +48,4 @@ class GenerateMealSuggestionsCommand(Command):
         if self.time_available_minutes is not None and self.time_available_minutes <= 0:
             raise ValueError("time_available_minutes must be greater than 0")
 
+

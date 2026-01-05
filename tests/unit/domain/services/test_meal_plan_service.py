@@ -22,7 +22,7 @@ def user_preferences():
     return UserPreferences(
         dietary_preferences=[DietaryPreference.VEGETARIAN],
         allergies=["peanuts", "shellfish"],
-        fitness_goal=FitnessGoal.MAINTENANCE,
+        fitness_goal=FitnessGoal.RECOMP,
         meals_per_day=3,
         snacks_per_day=1,
         cooking_time_weekday=30,

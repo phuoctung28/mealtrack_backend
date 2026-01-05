@@ -5,9 +5,10 @@ Provides Firebase token verification and user extraction.
 """
 
 import logging
+import os
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth as firebase_auth
 from sqlalchemy.orm import Session
@@ -16,25 +17,27 @@ from src.infra.database.config import get_db
 
 logger = logging.getLogger(__name__)
 
-# Security scheme for OpenAPI documentation
-security = HTTPBearer()
+# Security scheme for OpenAPI documentation (auto_error=False for dev bypass)
+security = HTTPBearer(auto_error=False)
 
 
 async def verify_firebase_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> dict:
     """
     Verify Firebase ID token and return decoded token.
+
+    In development mode (ENVIRONMENT=development), bypasses Firebase verification
+    and uses the dev user injected by middleware.
 
     This dependency extracts and verifies the Firebase ID token from the
     Authorization header. It should be used as a dependency for all
     protected endpoints.
 
-    Note: HTTPBearer with auto_error=True (default) automatically returns
-    401 if Authorization header is missing, so credentials will never be None.
-
     Args:
-        credentials: HTTP Bearer token credentials (guaranteed to exist)
+        request: FastAPI request object
+        credentials: HTTP Bearer token credentials (optional in dev mode)
 
     Returns:
         Decoded Firebase token containing user information
@@ -50,6 +53,29 @@ async def verify_firebase_token(
             user_id = token['uid']
             return {"message": f"Hello {user_id}"}
     """
+    # Dev mode bypass: check if dev middleware injected a user
+    if (os.getenv("ENVIRONMENT") == "development" and 
+        hasattr(request.state, "user") and
+        hasattr(request.state.user, "firebase_uid") and
+        hasattr(request.state.user, "id")):
+        dev_user = request.state.user
+        # Additional check: make sure it's not a Mock object
+        if type(dev_user).__name__ != "Mock":
+            logger.debug("Dev mode: bypassing Firebase auth, using dev user: %s", dev_user.id)
+            return {
+                "uid": dev_user.firebase_uid,
+                "email": dev_user.email,
+                "sub": dev_user.firebase_uid
+            }
+
+    # Production mode: require Firebase token
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     token = credentials.credentials
 
     try:

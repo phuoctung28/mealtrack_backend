@@ -19,7 +19,7 @@ class TestDailyMealMapper:
             height=175,
             weight=75,
             activity_level="moderately_active",
-            goal="maintain_weight",
+            goal="recomp",
             dietary_preferences=["vegan", "gluten_free"],
             health_conditions=["diabetes"],
             target_calories=2000,
@@ -35,7 +35,7 @@ class TestDailyMealMapper:
         assert result["height"] == 175
         assert result["weight"] == 75
         assert result["activity_level"] == "moderately_active"
-        assert result["goal"] == "maintain_weight"
+        assert result["goal"] == "recomp"
         assert result["dietary_preferences"] == ["vegan", "gluten_free"]
         assert result["health_conditions"] == ["diabetes"]
         assert result["target_calories"] == 2000
@@ -51,7 +51,7 @@ class TestDailyMealMapper:
             height=165,
             weight=60,
             activity_level="lightly_active",
-            goal="lose_weight",
+            goal="cut",
             dietary_preferences=None,
             health_conditions=None,
             target_calories=1800,

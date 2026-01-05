@@ -1,10 +1,12 @@
 """Repository for user-related database operations."""
+import json
 import logging
 from typing import Optional, List
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from src.infra.cache.cache_keys import CacheKeys
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
 
@@ -166,6 +168,78 @@ class UserRepository:
             UserProfile.is_current == True
         ).first()
     
+    def get_profile(self, user_id: str) -> Optional[UserProfile]:
+        """Get user profile by user ID (implements UserRepositoryPort interface)."""
+        return self.get_current_user_profile(user_id)
+
+    async def get_current_profile_cached(
+        self,
+        user_id: str,
+        redis_client=None
+    ) -> Optional[UserProfile]:
+        """
+        Get current profile with 1-hour Redis cache.
+        Optimized for meal suggestion generation.
+        """
+        # Use standard cache key to match invalidation logic in command handlers
+        cache_key, _ = CacheKeys.user_profile(user_id)
+        
+        # Try cache first
+        if redis_client:
+            try:
+                cached_data = await redis_client.get(cache_key)
+
+                if cached_data:
+                    data = json.loads(cached_data)
+                    # Reconstruct profile object
+                    profile = UserProfile()
+                    profile.id = data["id"]
+                    profile.user_id = data["user_id"]
+                    profile.age = data["age"]
+                    profile.gender = data["gender"]
+                    profile.height_cm = data["height_cm"]
+                    profile.weight_kg = data["weight_kg"]
+                    profile.body_fat_percentage = data.get("body_fat_percentage")
+                    profile.activity_level = data["activity_level"]
+                    profile.fitness_goal = data["fitness_goal"]
+                    profile.meals_per_day = data["meals_per_day"]
+                    profile.dietary_preferences = data.get("dietary_preferences", [])
+                    profile.allergies = data.get("allergies", [])
+                    logger.debug(f"Cache hit for user profile {user_id}")
+                    return profile
+            except Exception as e:
+                logger.warning(f"Failed to read profile from cache: {e}")
+
+        # Cache miss - query DB (optimized, no relationships)
+        profile = self.db.query(UserProfile).filter(
+            UserProfile.user_id == user_id,
+            UserProfile.is_current == True
+        ).first()
+
+        # Cache for 1 hour
+        if profile and redis_client:
+            try:
+                cache_data = json.dumps({
+                    "id": profile.id,
+                    "user_id": profile.user_id,
+                    "age": profile.age,
+                    "gender": profile.gender,
+                    "height_cm": profile.height_cm,
+                    "weight_kg": profile.weight_kg,
+                    "body_fat_percentage": profile.body_fat_percentage,
+                    "activity_level": profile.activity_level,
+                    "fitness_goal": profile.fitness_goal,
+                    "meals_per_day": profile.meals_per_day,
+                    "dietary_preferences": profile.dietary_preferences or [],
+                    "allergies": profile.allergies or []
+                })
+                await redis_client.set(cache_key, cache_data, ttl=3600)  # 1 hour TTL
+                logger.debug(f"Cached user profile {user_id}")
+            except Exception as e:
+                logger.warning(f"Failed to cache profile: {e}")
+
+        return profile
+
     def update_user_preferences(self, user_id: str, dietary_preferences: List[str] = None,
                               health_conditions: List[str] = None, allergies: List[str] = None) -> Optional[UserProfile]:
         """Update user preferences in their current profile."""

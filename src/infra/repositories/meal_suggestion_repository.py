@@ -48,6 +48,38 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
         await self._cache.set(key, data, ttl=ttl)
         logger.debug(f"Updated session {session.id}")
 
+    async def save_session_with_suggestions(
+        self,
+        session: SuggestionSession,
+        suggestions: List[MealSuggestion]
+    ) -> None:
+        """
+        Save session and all suggestions atomically using Redis pipeline.
+        Reduces 4 round-trips to 1 batch operation.
+        """
+        if not self._cache.client:
+            logger.warning("Redis client not available, skipping batch save")
+            return
+
+        async with self._cache.client.pipeline(transaction=False) as pipe:
+            # Session
+            session_key = f"suggestion_session:{session.id}"
+            session_data = self._serialize_session(session)
+            pipe.set(session_key, session_data, ex=self.TTL_SECONDS)
+
+            # All suggestions in batch
+            for suggestion in suggestions:
+                key = f"suggestion:{suggestion.session_id}:{suggestion.id}"
+                data = self._serialize_suggestion(suggestion)
+                pipe.set(key, data, ex=self.TTL_SECONDS)
+
+            # Execute all commands in single round-trip
+            await pipe.execute()
+
+        logger.debug(
+            f"Saved session {session.id} + {len(suggestions)} suggestions via pipeline"
+        )
+
     async def delete_session(self, session_id: str) -> None:
         """Delete session and all associated suggestions."""
         session_key = f"suggestion_session:{session_id}"
@@ -128,6 +160,8 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
             "ingredients": session.ingredients,
             "cooking_time_minutes": session.cooking_time_minutes,
             "shown_suggestion_ids": session.shown_suggestion_ids,
+            "dietary_preferences": getattr(session, 'dietary_preferences', []),
+            "allergies": getattr(session, 'allergies', []),
             "created_at": session.created_at.isoformat(),
             "expires_at": session.expires_at.isoformat() if session.expires_at else None,
         })
@@ -145,6 +179,8 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
             ingredients=obj["ingredients"],
             cooking_time_minutes=obj["cooking_time_minutes"],
             shown_suggestion_ids=obj.get("shown_suggestion_ids", []),
+            dietary_preferences=obj.get("dietary_preferences", []),
+            allergies=obj.get("allergies", []),
             created_at=datetime.fromisoformat(obj["created_at"]),
             expires_at=datetime.fromisoformat(obj["expires_at"]) if obj.get("expires_at") else None,
         )

@@ -45,7 +45,7 @@ class TestSaveUserOnboardingCommandHandler:
             activity_level="moderate",
             fitness_goal="recomp",
             dietary_preferences=["vegetarian"],
-            health_conditions=["diabetes"]
+            pain_points=["diabetes"]
         )
         
         # Act
@@ -66,7 +66,7 @@ class TestSaveUserOnboardingCommandHandler:
         assert saved_profile.height_cm == 175
         assert saved_profile.weight_kg == 70
         assert saved_profile.activity_level == "moderate"
-        assert saved_profile.fitness_goal == "maintenance"
+        assert saved_profile.fitness_goal == "recomp"
     
     @pytest.mark.asyncio
     async def test_save_user_onboarding_invalid_age(self, event_bus, test_session):
@@ -97,7 +97,9 @@ class TestSaveUserOnboardingCommandHandler:
             height_cm=175,
             weight_kg=70,
             activity_level="moderate",
-            fitness_goal="recomp"
+            fitness_goal="maintenance",
+            dietary_preferences=[],
+            pain_points=[]
         )
         
         # Act & Assert
@@ -133,7 +135,9 @@ class TestSaveUserOnboardingCommandHandler:
             height_cm=175,
             weight_kg=0,  # Invalid weight
             activity_level="moderate",
-            fitness_goal="recomp"
+            fitness_goal="maintenance",
+            dietary_preferences=[],
+            pain_points=[]
         )
         
         # Act & Assert
@@ -155,7 +159,7 @@ class TestSaveUserOnboardingCommandHandler:
             activity_level="active",  # Different activity
             fitness_goal="cut",  # Different goal
             dietary_preferences=["vegan"],
-            health_conditions=[]
+            pain_points=[]
         )
         
         # Act

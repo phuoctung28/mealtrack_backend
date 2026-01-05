@@ -30,6 +30,16 @@ jobs:
           --health-timeout=5s
           --health-retries=5
 
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
@@ -52,6 +62,7 @@ jobs:
           .github/scripts/ci-test.sh all
         env:
           DATABASE_URL: "mysql://test_user:test_password@127.0.0.1:3306/mealtrack_test"
+          REDIS_URL: "redis://127.0.0.1:6379/0"
           DB_HOST: 127.0.0.1
           DB_USER: test_user
           DB_PASS: test_password

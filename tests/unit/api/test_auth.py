@@ -38,7 +38,9 @@ class TestVerifyFirebaseToken:
             mock_verify.return_value = expected_decoded_token
             
             # Act
-            result = await verify_firebase_token(mock_credentials)
+            mock_request = Mock()
+            mock_request.state = Mock()
+            result = await verify_firebase_token(mock_request, mock_credentials)
             
             # Assert
             assert result == expected_decoded_token
@@ -57,8 +59,10 @@ class TestVerifyFirebaseToken:
             mock_verify.side_effect = firebase_auth.ExpiredIdTokenError("Token expired", cause=Exception("Expired"))
             
             # Act & Assert
+            mock_request = Mock()
+            mock_request.state = Mock()
             with pytest.raises(HTTPException) as exc_info:
-                await verify_firebase_token(mock_credentials)
+                await verify_firebase_token(mock_request, mock_credentials)
             
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             assert "expired" in exc_info.value.detail.lower()
@@ -75,8 +79,10 @@ class TestVerifyFirebaseToken:
             mock_verify.side_effect = firebase_auth.RevokedIdTokenError("Token revoked")
             
             # Act & Assert
+            mock_request = Mock()
+            mock_request.state = Mock()
             with pytest.raises(HTTPException) as exc_info:
-                await verify_firebase_token(mock_credentials)
+                await verify_firebase_token(mock_request, mock_credentials)
             
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             assert "revoked" in exc_info.value.detail.lower()
@@ -93,8 +99,10 @@ class TestVerifyFirebaseToken:
             mock_verify.side_effect = firebase_auth.InvalidIdTokenError("Invalid token")
             
             # Act & Assert
+            mock_request = Mock()
+            mock_request.state = Mock()
             with pytest.raises(HTTPException) as exc_info:
-                await verify_firebase_token(mock_credentials)
+                await verify_firebase_token(mock_request, mock_credentials)
             
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             assert "invalid" in exc_info.value.detail.lower()
@@ -111,8 +119,10 @@ class TestVerifyFirebaseToken:
             mock_verify.side_effect = firebase_auth.CertificateFetchError("Cannot fetch certificates", cause=Exception("Network error"))
             
             # Act & Assert
+            mock_request = Mock()
+            mock_request.state = Mock()
             with pytest.raises(HTTPException) as exc_info:
-                await verify_firebase_token(mock_credentials)
+                await verify_firebase_token(mock_request, mock_credentials)
             
             assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
             assert "unavailable" in exc_info.value.detail.lower()
@@ -128,8 +138,10 @@ class TestVerifyFirebaseToken:
             mock_verify.side_effect = Exception("Unexpected error")
             
             # Act & Assert
+            mock_request = Mock()
+            mock_request.state = Mock()
             with pytest.raises(HTTPException) as exc_info:
-                await verify_firebase_token(mock_credentials)
+                await verify_firebase_token(mock_request, mock_credentials)
             
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             assert "failed to verify" in exc_info.value.detail.lower()
@@ -154,7 +166,9 @@ class TestVerifyFirebaseToken:
             mock_verify.return_value = expected_decoded_token
             
             # Act
-            result = await verify_firebase_token(mock_credentials)
+            mock_request = Mock()
+            mock_request.state = Mock()
+            result = await verify_firebase_token(mock_request, mock_credentials)
             
             # Assert
             assert result == expected_decoded_token
@@ -478,7 +492,8 @@ class TestAuthenticationIntegration:
             mock_verify.return_value = mock_decoded_token
             
             # Act - Step 1: Verify token
-            token = await verify_firebase_token(mock_credentials)
+            mock_request = Mock()
+            token = await verify_firebase_token(mock_request, mock_credentials)
             
             # Assert - Token verified
             assert token["uid"] == "firebase_uid_123"
@@ -524,7 +539,9 @@ class TestAuthenticationIntegration:
             mock_verify.return_value = mock_decoded_token
             
             # Act
-            token = await verify_firebase_token(mock_credentials)
+            mock_request = Mock()
+            mock_request.state = Mock()
+            token = await verify_firebase_token(mock_request, mock_credentials)
             user_id = await get_current_user_id(token, mock_db)
             
             # Assert - Should still work
@@ -558,7 +575,9 @@ class TestAuthenticationIntegration:
             mock_verify.return_value = mock_decoded_token
             
             # Act
-            token = await verify_firebase_token(mock_credentials)
+            mock_request = Mock()
+            mock_request.state = Mock()
+            token = await verify_firebase_token(mock_request, mock_credentials)
             user_id = await get_current_user_id(token, mock_db)
             email = await get_current_user_email(token)
             
@@ -654,7 +673,9 @@ class TestAuthenticationEdgeCases:
             mock_verify.return_value = complex_decoded_token
             
             # Act
-            result = await verify_firebase_token(mock_credentials)
+            mock_request = Mock()
+            mock_request.state = Mock()
+            result = await verify_firebase_token(mock_request, mock_credentials)
             
             # Assert - All claims preserved
             assert result == complex_decoded_token
@@ -689,10 +710,17 @@ class TestAuthenticationEdgeCases:
             mock_verify.side_effect = mock_verify_side_effect
             
             # Act - Verify multiple tokens concurrently
+            mock_request1 = Mock()
+            mock_request1.state = Mock()
+            mock_request2 = Mock()
+            mock_request2.state = Mock()
+            mock_request3 = Mock()
+            mock_request3.state = Mock()
+            
             results = await asyncio.gather(
-                verify_firebase_token(mock_credentials1),
-                verify_firebase_token(mock_credentials2),
-                verify_firebase_token(mock_credentials3),
+                verify_firebase_token(mock_request1, mock_credentials1),
+                verify_firebase_token(mock_request2, mock_credentials2),
+                verify_firebase_token(mock_request3, mock_credentials3),
             )
             
             # Assert
