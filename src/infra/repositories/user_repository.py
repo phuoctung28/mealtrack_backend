@@ -6,6 +6,7 @@ from typing import Optional, List
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from src.infra.cache.cache_keys import CacheKeys
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
 
@@ -166,6 +167,10 @@ class UserRepository:
             UserProfile.user_id == user_id,
             UserProfile.is_current == True
         ).first()
+    
+    def get_profile(self, user_id: str) -> Optional[UserProfile]:
+        """Get user profile by user ID (implements UserRepositoryPort interface)."""
+        return self.get_current_user_profile(user_id)
 
     async def get_current_profile_cached(
         self,
@@ -176,9 +181,11 @@ class UserRepository:
         Get current profile with 1-hour Redis cache.
         Optimized for meal suggestion generation.
         """
+        # Use standard cache key to match invalidation logic in command handlers
+        cache_key, _ = CacheKeys.user_profile(user_id)
+        
         # Try cache first
         if redis_client:
-            cache_key = f"user_profile_current:{user_id}"
             try:
                 cached_data = await redis_client.get(cache_key)
 
