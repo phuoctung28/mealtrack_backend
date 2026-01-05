@@ -48,6 +48,7 @@ _cache_monitor = CacheMonitor()
 _image_store: Optional[ImageStorePort] = None
 _ai_chat_service: Optional[AIChatServicePort] = None
 _vision_service: Optional[VisionAIServicePort] = None
+_recipe_search_service = None  # RecipeSearchService singleton
 
 
 async def initialize_cache_layer() -> None:
@@ -350,6 +351,8 @@ def get_suggestion_orchestration_service(
     from src.infra.adapters.meal_generation_service import MealGenerationService
     from src.infra.repositories.user_repository import UserRepository
 
+    global _recipe_search_service
+
     meal_gen_service = MealGenerationService()
     suggestion_repo = get_meal_suggestion_repository()
     user_repo = UserRepository(db)
@@ -357,13 +360,17 @@ def get_suggestion_orchestration_service(
     # Phase 1 optimization: Nutrition enrichment
     nutrition_enrichment = NutritionEnrichmentService()
 
-    # Phase 2 optimization: Recipe search (hybrid retrieval)
-    try:
-        recipe_search = RecipeSearchService()
-        logger.info("Recipe search service initialized for hybrid retrieval")
-    except Exception as e:
-        logger.warning(f"Recipe search not available, using AI-only generation: {e}")
-        recipe_search = None
+    # Phase 2 optimization: Recipe search (hybrid retrieval) - singleton pattern
+    # Reuse service instance to avoid loading ~80MB SentenceTransformer model on every request
+    if _recipe_search_service is None:
+        try:
+            _recipe_search_service = RecipeSearchService()
+            logger.info("Recipe search service initialized for hybrid retrieval (singleton)")
+        except Exception as e:
+            logger.warning(f"Recipe search not available, using AI-only generation: {e}")
+            _recipe_search_service = None
+
+    recipe_search = _recipe_search_service
 
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
