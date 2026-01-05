@@ -59,7 +59,9 @@ class TestChatResponseBuilder:
         result = ChatResponseBuilder.build_message_response(msg_dict)
         
         assert result.structured_data is not None
-        assert result.structured_data.meals == [{"id": "meal-1", "name": "Chicken"}]
+        assert result.structured_data.meals is not None
+        assert len(result.structured_data.meals) == 1
+        assert result.structured_data.meals[0].name == "Chicken"
         assert result.structured_data.recipes == []
 
     def test_build_message_response_with_structured_data_recipes(self):

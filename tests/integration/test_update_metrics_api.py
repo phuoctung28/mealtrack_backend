@@ -175,7 +175,7 @@ class TestUpdateMetricsEndpoint:
         # Immediately try to change it again (should fail)
         response2 = client.post(
             "/v1/user-profiles/metrics",
-            json={"fitness_goal": "bulking"}
+            json={"fitness_goal": "bulk"}
         )
         
         assert response2.status_code == 409
@@ -197,7 +197,7 @@ class TestUpdateMetricsEndpoint:
         # Immediately change it again with override
         response2 = client.post(
             "/v1/user-profiles/metrics",
-            json={"fitness_goal": "bulking", "override": True}
+            json={"fitness_goal": "bulk", "override": True}
         )
         
         assert response2.status_code == 200

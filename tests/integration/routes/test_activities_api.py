@@ -82,17 +82,30 @@ class TestActivitiesAPI:
         response = client.get("/v1/activities/daily?date=invalid-date")
         
         assert response.status_code == 400
-        assert "Invalid date format" in response.json()["detail"]
+        detail = response.json()["detail"]
+        # Handle both string and dict detail formats
+        if isinstance(detail, dict):
+            assert "Invalid date format" in detail.get("message", "")
+        else:
+            assert "Invalid date format" in str(detail)
 
     def test_get_daily_activities_error_handling(self, client):
         """Test activities endpoint error handling."""
-        with patch('src.api.dependencies.event_bus.get_configured_event_bus') as mock_get_bus:
-            mock_bus = Mock()
-            mock_bus.send = Mock(side_effect=Exception("Query failed"))
-            mock_get_bus.return_value = mock_bus
-            
+        from src.api.dependencies.event_bus import get_configured_event_bus
+        
+        mock_bus = Mock()
+        mock_bus.send = Mock(side_effect=Exception("Query failed"))
+        
+        def override_get_bus():
+            return mock_bus
+        
+        app.dependency_overrides[get_configured_event_bus] = override_get_bus
+        
+        try:
             response = client.get("/v1/activities/daily")
             
             # Should handle exception gracefully
             assert response.status_code in [400, 500]
+        finally:
+            app.dependency_overrides.pop(get_configured_event_bus, None)
 

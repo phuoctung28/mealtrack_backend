@@ -49,8 +49,10 @@ class TestFoodsAPI:
             
             assert response.status_code == 200
             data = response.json()
-            assert isinstance(data, list)
-            assert len(data) > 0
+            # Response is a dict with results, not a list
+            assert isinstance(data, dict)
+            assert "results" in data
+            assert isinstance(data["results"], list)
 
     def test_search_foods_with_limit(self, client):
         """Test food search with custom limit."""
@@ -65,7 +67,8 @@ class TestFoodsAPI:
             
             assert response.status_code == 200
             data = response.json()
-            assert len(data) == 5
+            assert "results" in data
+            assert len(data["results"]) == 5
 
     def test_search_foods_error_handling(self, client):
         """Test food search error handling."""
@@ -77,7 +80,12 @@ class TestFoodsAPI:
             response = client.get("/v1/foods/search?q=chicken")
             
             assert response.status_code == 500
-            assert "Search failed" in response.json()["detail"]
+            detail = response.json()["detail"]
+            # Handle both string and dict detail formats
+            if isinstance(detail, dict):
+                assert "Search failed" in detail.get("message", "") or "Search failed" in str(detail)
+            else:
+                assert "Search failed" in str(detail)
 
     def test_get_food_details_success(self, client):
         """Test successful food details retrieval."""

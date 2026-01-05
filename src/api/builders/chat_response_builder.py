@@ -7,7 +7,8 @@ from typing import Dict, List, Optional
 from src.api.schemas.response.chat_responses import (
     MessageResponse,
     FollowUpQuestion,
-    StructuredData
+    StructuredData,
+    MealSuggestion
 )
 
 
@@ -47,8 +48,16 @@ class ChatResponseBuilder:
         if structured_data_raw and (
             structured_data_raw.get("meals") or structured_data_raw.get("recipes")
         ):
+            # Convert meal dicts to MealSuggestion objects
+            meals = None
+            if structured_data_raw.get("meals"):
+                meals = [
+                    MealSuggestion(**meal) if isinstance(meal, dict) else meal
+                    for meal in structured_data_raw.get("meals", [])
+                ]
+            
             structured_data = StructuredData(
-                meals=structured_data_raw.get("meals"),
+                meals=meals,
                 recipes=structured_data_raw.get("recipes")
             )
 

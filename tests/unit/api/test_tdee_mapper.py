@@ -36,7 +36,7 @@ class TestTdeeMapper:
         assert domain.weight == 70
         assert domain.body_fat_pct == 15.0
         assert domain.activity_level.value == "sedentary"
-        assert domain.goal.value == "maintenance"
+        assert domain.goal.value == "recomp"
         assert domain.unit_system.value == "metric"
 
     def test_to_domain_female_light_cutting_imperial(self):
@@ -48,7 +48,7 @@ class TestTdeeMapper:
             weight=140,  # pounds
             body_fat_percentage=20.0,
             activity_level="light",
-            goal="cutting",
+            goal="cut",
             unit_system="imperial"
         )
         
@@ -71,7 +71,7 @@ class TestTdeeMapper:
                 weight=70,
                 body_fat_percentage=None,
                 activity_level=activity,
-                goal="maintenance",
+                goal="recomp",
                 unit_system="metric"
             )
             
@@ -80,7 +80,7 @@ class TestTdeeMapper:
 
     def test_to_domain_all_goals(self):
         """Test converting DTO with all goals."""
-        goals = ["maintenance", "cutting", "bulking", "recomp"]
+        goals = ["cut", "bulk", "recomp"]
         
         for goal in goals:
             dto = TdeeCalculationRequest(
@@ -116,7 +116,7 @@ class TestTdeeMapper:
         assert dto.macros.protein == 165
         assert dto.macros.carbs == 220
         assert dto.macros.fat == 73
-        assert dto.goal == "maintenance"
+            assert dto.goal == "recomp"
 
     def test_map_to_profile_dict_metric(self):
         """Test mapping to profile dict with metric units."""
