@@ -35,7 +35,7 @@ class TestDailyMealMapper:
         assert result["height"] == 175
         assert result["weight"] == 75
         assert result["activity_level"] == "moderately_active"
-        assert result["goal"] == "maintain_weight"
+        assert result["goal"] == "recomp"
         assert result["dietary_preferences"] == ["vegan", "gluten_free"]
         assert result["health_conditions"] == ["diabetes"]
         assert result["target_calories"] == 2000

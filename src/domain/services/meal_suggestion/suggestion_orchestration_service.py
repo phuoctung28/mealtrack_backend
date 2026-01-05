@@ -266,9 +266,6 @@ class SuggestionOrchestrationService:
             logger.warning(
                 f"Failed to calculate TDEE: {e}. Using default 2000 calories."
             )
-            logger.warning(
-                f"Failed to calculate TDEE: {e}. Using default 2000 calories."
-            )
             return 2000.0
 
     async def _generate_with_timeout(
@@ -632,20 +629,13 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
                     step=1, instruction="Prepare ingredients", duration_minutes=5
                 ),
                 RecipeStep(
-                    step=1, instruction="Prepare ingredients", duration_minutes=5
+                    step=2, instruction="Cook meal", duration_minutes=15
                 ),
-                RecipeStep(step=2, instruction="Cook meal", duration_minutes=15),
+                RecipeStep(step=3, instruction="Serve and enjoy", duration_minutes=2),
             ],
             prep_time_minutes=20,
             confidence_score=0.5,
         )
-
-    def _normalize_confidence(self, score: float) -> float:
-        """Normalize confidence score to 0-1 range (AI may return 1-5 scale)."""
-        if score > 1.0:
-            # Assume 1-5 scale, convert to 0-1
-            return min(1.0, score / 5.0)
-        return max(0.0, min(1.0, score))
 
     def _normalize_confidence(self, score: float) -> float:
         """Normalize confidence score to 0-1 range (AI may return 1-5 scale)."""

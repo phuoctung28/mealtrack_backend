@@ -105,7 +105,7 @@ class TestTdeeMapper:
             bmr=1700.0,
             tdee=2200.0,
             macros=MacroTargets(calories=2200, protein=165, carbs=220, fat=73),
-            goal=Goal.MAINTENANCE
+            goal=Goal.RECOMP
         )
         
         dto = self.mapper.to_response_dto(domain)
@@ -116,7 +116,7 @@ class TestTdeeMapper:
         assert dto.macros.protein == 165
         assert dto.macros.carbs == 220
         assert dto.macros.fat == 73
-            assert dto.goal == "recomp"
+        assert dto.goal == "recomp"
 
     def test_map_to_profile_dict_metric(self):
         """Test mapping to profile dict with metric units."""
