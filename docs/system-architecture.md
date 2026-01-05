@@ -1,9 +1,9 @@
 # MealTrack Backend - System Architecture
 
-**Version:** 0.4.3
+**Version:** 0.4.4
 **Last Updated:** January 4, 2026
 **Architecture Pattern:** 4-Layer Clean Architecture with CQRS and Event-Driven Design
-**Status:** Phase 01 Backend Enum Unification Complete (Phase 06 Session-Based Meal Suggestions Active, 681+ tests passing)
+**Status:** Phase 03 Backend Legacy Cleanup Complete (All 3 phases: Backend unified, Mobile unified, Legacy cleanup. Phase 06 Session-Based Meal Suggestions Active, 681+ tests passing)
 
 ---
 
@@ -844,31 +844,21 @@ class TdeeService:
 
 ### Backward Compatibility: ActivityGoalMapper
 
-The `ActivityGoalMapper` class centralizes legacy alias handling, enabling seamless transition from old enum names to the unified system:
+**Phase 03 Status:** Legacy alias mappings removed (Greenfield Deployment)
+
+The backward compatibility layer has been removed as the system operates as a greenfield deployment. The `ActivityGoalMapper` now only supports canonical values:
 
 **File:** `src/domain/mappers/activity_goal_mapper.py`
 
 ```python
 class ActivityGoalMapper:
-    """Centralized mapper for goal strings to canonical Goal enum."""
+    """Mapper for goal strings to canonical Goal enum."""
 
     GOAL_MAP: Dict[str, Goal] = {
         # Canonical values (primary)
         "cut": Goal.CUT,
         "bulk": Goal.BULK,
         "recomp": Goal.RECOMP,
-
-        # Legacy/alternative names (backward compatibility)
-        "cutting": Goal.CUT,          # Old name variation
-        "bulking": Goal.BULK,         # Old name variation
-        "maintenance": Goal.RECOMP,   # Legacy maintenance
-        "maintain": Goal.RECOMP,      # Variation
-        "maintain_weight": Goal.RECOMP,
-        "lose_weight": Goal.CUT,      # Intent-based
-        "weight_loss": Goal.CUT,      # Old enum name
-        "gain_weight": Goal.BULK,     # Intent-based
-        "build_muscle": Goal.BULK,    # Intent-based
-        "muscle_gain": Goal.BULK,     # Old enum name
     }
 
     @classmethod
@@ -880,43 +870,31 @@ class ActivityGoalMapper:
         return cls.GOAL_MAP.get(goal.lower(), Goal.RECOMP)
 ```
 
-**13 Alias Mappings Support:**
-1. Direct: `cut`, `bulk`, `recomp`
-2. Legacy naming: `cutting`, `bulking`, `maintenance`
-3. Intent-based: `lose_weight`, `gain_weight`, `build_muscle`
-4. Legacy enum names: `weight_loss`, `muscle_gain`
-5. Variations: `maintain`, `maintain_weight`
+**3 Canonical Values Only:**
+1. `cut` - Caloric deficit (fat loss)
+2. `bulk` - Caloric surplus (muscle gain)
+3. `recomp` - Maintenance (body recomposition)
 
-### Critical Bug Fix
+### Phase 03 Cleanup: Removed Legacy Aliases
 
-**Issue:** `conversation_parser.py` referenced non-existent enum values
-- `FitnessGoal.MUSCLE_GAIN` (didn't exist)
-- `FitnessGoal.WEIGHT_LOSS` (didn't exist)
-- `FitnessGoal.GENERAL_HEALTH` (didn't exist)
+**Issues Fixed (Phase 03)**:
+- Removed 13 legacy alias mappings from ActivityGoalMapper
+- Cleaned up API schemas to use canonical values only
+- Updated response examples to use canonical values (cut, bulk, recomp)
+- Removed maintenance/cutting/bulking enum aliases
 
-**Solution:** Updated to unified enum with proper fallback
+**Files Modified (6 total)**:
+1. `src/domain/mappers/activity_goal_mapper.py` - Simplified to 3 mappings
+2. `src/api/schemas/request/daily_meal_requests.py` - Updated response examples
+3. `src/api/schemas/request/tdee_requests.py` - Updated response examples
+4. `src/api/schemas/response/tdee_responses.py` - Canonical values only
+5. `src/api/schemas/response/weekly_meal_plan_responses.py` - Canonical values only
+6. Integration tests updated to use canonical values
 
-```python
-@staticmethod
-def parse_fitness_goal(message: str) -> str:
-    """Parse fitness goal from user message."""
-    message_lower = message.lower()
-
-    # Bulk detection
-    if any(word in message_lower for word in ["muscle", "gain", "bulk", "build"]):
-        return FitnessGoal.BULK.value
-
-    # Cut detection
-    elif any(word in message_lower for word in ["loss", "lose", "cut", "lean"]):
-        return FitnessGoal.CUT.value
-
-    # Recomp detection
-    elif any(word in message_lower for word in ["recomp", "recomposition", "tone"]):
-        return FitnessGoal.RECOMP.value
-
-    # Default to RECOMP (balanced/safe default)
-    return FitnessGoal.RECOMP.value
-```
+**Migration Strategy**:
+- Greenfield deployment model: All legacy aliases removed
+- No backward compatibility required
+- Clients must use canonical 3-value set exclusively
 
 ### Usage Patterns
 

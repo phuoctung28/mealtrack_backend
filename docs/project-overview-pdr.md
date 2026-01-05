@@ -1,8 +1,8 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
 **Last Updated:** January 4, 2026
-**Version:** 0.4.1
-**Status:** Active Development (Phase 01 Enum Unification Complete, Phase 06 Session-Based Meal Suggestions Active)
+**Version:** 0.4.4
+**Status:** Active Development (Phase 01-03 Complete: Backend + Mobile Unification + Legacy Cleanup, Phase 06 Session-Based Meal Suggestions Active)
 
 ---
 
@@ -746,6 +746,7 @@ https://api.mealtrack.app/v1
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.4.4 | Jan 4, 2026 | Phase 03 Legacy Cleanup: Removed 13 ActivityGoalMapper aliases, simplified fitness goal enum to 3 canonical values (cut, bulk, recomp), updated 6 files with canonical response examples. All 681 tests passing. Greenfield deployment ready. |
 | 0.4.0 | Jan 3, 2026 | Phase 06: Session-based meal suggestions with 4h TTL, 3 suggestions per session, portion multipliers (1-4x), rejection feedback, fallback mechanism (GENERATION_TIMEOUT_SECONDS=45s) |
 | 0.3.0 | Dec 29, 2024 | Phase 05: Added ingredient recognition, meal suggestions, pain points tracking, timezone-aware notifications (13 core features) |
 | 0.2.0 | Dec 2024 | Phase 04: Active development with 9 core features including chat system |
