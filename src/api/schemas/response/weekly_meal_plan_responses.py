@@ -112,7 +112,7 @@ class WeeklyMealPlanResponse(BaseModel):
                     "health_conditions": [],
                     "allergies": ["nuts"],
                     "activity_level": "moderate",
-                    "fitness_goal": "maintenance",
+                    "fitness_goal": "recomp",
                     "meals_per_day": 3,
                     "snacks_per_day": 1
                 }

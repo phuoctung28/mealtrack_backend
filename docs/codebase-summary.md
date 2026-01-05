@@ -1,13 +1,13 @@
 # MealTrack Backend - Codebase Summary
 
-**Generated:** January 3, 2026
-**Codebase Stats**: 515 total files, 473,592 tokens, 2.2M+ characters
+**Generated:** January 4, 2026
+**Codebase Stats**: 515 total files, 474,298 tokens, 2.2M+ characters
 **Source Files**: ~145 Python files (src/)
 **Test Files**: 57 files with 681 test cases
 **Language**: Python 3.11+
 **Framework**: FastAPI 0.115.0+, SQLAlchemy 2.0
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
-**Status**: Phase 06 Session-Based Meal Suggestions Active (681+ tests passing, 70%+ code coverage)
+**Status**: Phase 03 Backend Legacy Cleanup Complete + Phase 06 Session-Based Meal Suggestions Active (681+ tests passing, 70%+ code coverage)
 
 ---
 
@@ -85,7 +85,9 @@ mealtrack_backend/
 | Domain Services | 36 files (refactored from 4 monolithic) |
 | Code Coverage | 70%+ maintained |
 
-### Phase 03 Refactoring Summary (Completed Dec 31, 2024)
+### Phase 03: Complete Refactoring & Legacy Cleanup (Completed Jan 4, 2026)
+
+**Stage 1 (Dec 31, 2024): Service Refactoring**
 
 4 large backend files refactored into 13 specialized components:
 
@@ -97,11 +99,24 @@ mealtrack_backend/
 | notification_repository.py | 428 | 138 | -68% | 3 modules |
 | **TOTAL** | **1,963** | **551** | **-72%** | **13 components** |
 
-**Key Achievements**:
-- All 681 tests passing (100%)
-- Zero breaking changes to API
-- New files use dependency injection
-- Module exports via __init__.py files
+**Stage 2 (Jan 4, 2026): Legacy Cleanup**
+
+Removed backward compatibility aliases for greenfield deployment:
+
+| Category | Removed | Impact |
+|----------|---------|--------|
+| ActivityGoalMapper aliases | 13 mappings → 3 canonical | Simplified enum handling |
+| API schemas | maintenance/cutting/bulking refs | Canonical 3-value set only |
+| Response examples | 5 updated | Consistent canonical values |
+| Test fixtures | Updated to canonical values | All 681 tests passing |
+
+**Phase 03 Achievement Summary**:
+- ✅ All 681 tests passing (100%)
+- ✅ Zero breaking changes to API interface
+- ✅ 72% LOC reduction (1,963 → 551 LOC)
+- ✅ 13 new specialized components
+- ✅ Legacy aliases removed (greenfield ready)
+- ✅ Canonical 3-value fitness goal enum throughout system
 
 ---
 
@@ -640,7 +655,12 @@ tests/
 
 ## Summary
 
-The MealTrack Backend implements a robust 4-layer clean architecture with 145+ source files organized by concern, totaling 473,592 tokens. Phase 03 refactoring (Dec 2024) reduced 4 monolithic files (1,963 LOC) into 13 specialized components (551 LOC, 72% reduction) while maintaining 100% test coverage and zero breaking changes.
+The MealTrack Backend implements a robust 4-layer clean architecture with 145+ source files organized by concern, totaling 474,298 tokens. Completion of all 3 unified phases (Phase 01: Backend 29 files, Phase 02: Mobile 21 files, Phase 03: Legacy cleanup 6 files) resulted in a cohesive, production-ready system.
+
+**Phase Completion Status**:
+- ✅ **Phase 01**: Backend unified - 29 files refactored, enum consolidation complete
+- ✅ **Phase 02**: Mobile unified - 21 files aligned with backend patterns
+- ✅ **Phase 03**: Legacy cleanup - 6 files cleaned, 13 legacy aliases removed
 
 **Architecture Highlights**:
 - 4-Layer Clean Architecture with clear separation of concerns
@@ -650,10 +670,12 @@ The MealTrack Backend implements a robust 4-layer clean architecture with 145+ s
 - 27 database tables with 11 migrations
 - Comprehensive test suite (681 tests, 70%+ coverage)
 - Production-ready with Firebase, Google Gemini, OpenAI, Pinecone integrations
+- Greenfield deployment model: No backward compatibility aliases
 
-**Recent Additions (v0.3.0 → v0.4.0)**:
-- Phase 06 Session-Based Meal Suggestions (Jan 2026): SuggestionOrchestrationService, session tracking (4h TTL), 7 new endpoints
-- Phase 03 Large File Refactoring (Dec 2024): 72% LOC reduction, 13 new components
+**Recent Additions (v0.3.0 → v0.4.4)**:
+- Phase 06 Session-Based Meal Suggestions (Jan 2026): SuggestionOrchestrationService, session tracking (4h TTL), 7 new endpoints, fallback mechanism
+- Phase 03 Legacy Cleanup (Jan 4, 2026): Removed 13 ActivityGoalMapper aliases, simplified fitness goal enum to 3 canonical values
+- Phase 03 Large File Refactoring (Dec 31, 2024): 72% LOC reduction (1,963 → 551), 13 new specialized components
 - Ingredient recognition API
 - User pain points tracking
 - Timezone-aware notifications

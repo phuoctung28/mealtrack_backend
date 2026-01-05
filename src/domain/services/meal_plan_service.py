@@ -173,10 +173,9 @@ class MealPlanService:
         allergies_str = ", ".join(preferences.allergies) if preferences.allergies else "none"
         
         fitness_goals = {
-            FitnessGoal.MUSCLE_GAIN: "high protein (30-40g), moderate carbs, healthy fats",
-            FitnessGoal.WEIGHT_LOSS: "moderate protein, lower carbs, controlled calories (300-500 for meals, 100-200 for snacks)",
-            FitnessGoal.MAINTENANCE: "balanced macros, appropriate portions",
-            FitnessGoal.GENERAL_HEALTH: "balanced nutrition with variety"
+            FitnessGoal.BULK: "high protein (30-40g), moderate carbs, healthy fats",
+            FitnessGoal.CUT: "moderate protein, lower carbs, controlled calories (300-500 for meals, 100-200 for snacks)",
+            FitnessGoal.RECOMP: "balanced macros with high protein, appropriate portions"
         }
         
         nutrition_guidance = fitness_goals.get(preferences.fitness_goal, "balanced nutrition")

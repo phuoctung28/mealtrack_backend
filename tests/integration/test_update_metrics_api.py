@@ -62,7 +62,7 @@ def setup_test_user(test_session):
         weight_kg=70.0,
         body_fat_percentage=20.0,
         activity_level="moderate",
-        fitness_goal="maintenance",
+        fitness_goal="recomp",
         meals_per_day=3,
         snacks_per_day=1,
         is_current=True,
@@ -134,14 +134,14 @@ class TestUpdateMetricsEndpoint:
         """Test updating only fitness goal."""
         response = client.post(
             "/v1/user-profiles/metrics",
-            json={"fitness_goal": "cutting"}
+            json={"fitness_goal": "cut"}
         )
         
         assert response.status_code == 200
         data = response.json()
         
         # Goal should affect calorie targets
-        assert data["goal"] == "cutting"
+        assert data["goal"] == "cut"
         assert "macros" in data
     
     def test_update_all_metrics_together(self, client, setup_test_user):
@@ -152,14 +152,14 @@ class TestUpdateMetricsEndpoint:
                 "weight_kg": 72.5,
                 "activity_level": "moderately_active",
                 "body_fat_percent": 15.0,
-                "fitness_goal": "bulking"
+                "fitness_goal": "bulk"
             }
         )
         
         assert response.status_code == 200
         data = response.json()
         
-        assert data["goal"] == "bulking"
+        assert data["goal"] == "bulk"
         assert "macros" in data
         assert data["macros"]["calories"] > 0
     
@@ -168,7 +168,7 @@ class TestUpdateMetricsEndpoint:
         # First update the goal
         response1 = client.post(
             "/v1/user-profiles/metrics",
-            json={"fitness_goal": "cutting"}
+            json={"fitness_goal": "cut"}
         )
         assert response1.status_code == 200
         
@@ -190,7 +190,7 @@ class TestUpdateMetricsEndpoint:
         # First update the goal
         response1 = client.post(
             "/v1/user-profiles/metrics",
-            json={"fitness_goal": "cutting"}
+            json={"fitness_goal": "cut"}
         )
         assert response1.status_code == 200
         
@@ -202,7 +202,7 @@ class TestUpdateMetricsEndpoint:
         
         assert response2.status_code == 200
         data = response2.json()
-        assert data["goal"] == "bulking"
+        assert data["goal"] == "bulk"
     
     def test_invalid_weight(self, client, setup_test_user):
         """Test validation error for invalid weight."""

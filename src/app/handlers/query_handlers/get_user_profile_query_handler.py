@@ -57,9 +57,8 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
         }
 
         goal_map = {
-            "maintenance": Goal.MAINTENANCE,
-            "cutting": Goal.CUTTING,
-            "bulking": Goal.BULKING,
+            "cut": Goal.CUT,
+            "bulk": Goal.BULK,
             "recomp": Goal.RECOMP
         }
 
@@ -69,7 +68,7 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
             height=profile.height_cm,
             weight=profile.weight_kg,
             activity_level=activity_map.get(profile.activity_level, ActivityLevel.MODERATE),
-            goal=goal_map.get(profile.fitness_goal, Goal.MAINTENANCE),
+            goal=goal_map.get(profile.fitness_goal, Goal.RECOMP),
             body_fat_pct=profile.body_fat_percentage,
             unit_system=UnitSystem.METRIC
         )

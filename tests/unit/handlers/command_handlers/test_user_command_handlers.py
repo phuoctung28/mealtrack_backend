@@ -43,7 +43,7 @@ class TestSaveUserOnboardingCommandHandler:
             height_cm=175,
             weight_kg=70,
             activity_level="moderate",
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             dietary_preferences=["vegetarian"],
             pain_points=["diabetes"]
         )
@@ -157,7 +157,7 @@ class TestSaveUserOnboardingCommandHandler:
             height_cm=180,  # Different height
             weight_kg=75,  # Different weight
             activity_level="active",  # Different activity
-            fitness_goal="cutting",  # Different goal
+            fitness_goal="cut",  # Different goal
             dietary_preferences=["vegan"],
             pain_points=[]
         )

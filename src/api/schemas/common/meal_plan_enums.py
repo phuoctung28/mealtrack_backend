@@ -14,10 +14,9 @@ class DietaryPreferenceSchema(str, Enum):
 
 
 class FitnessGoalSchema(str, Enum):
-    weight_loss = "weight_loss"
-    muscle_gain = "muscle_gain"
-    maintenance = "maintenance"
-    general_health = "general_health"
+    cut = "cut"
+    bulk = "bulk"
+    recomp = "recomp"
 
 
 class MealTypeSchema(str, Enum):

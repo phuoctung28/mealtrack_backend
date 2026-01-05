@@ -26,7 +26,7 @@ def user_profile():
         allergies=[],
         health_conditions=[],
         activity_level="moderately_active",
-        fitness_goal="maintenance",
+        fitness_goal="recomp",
         include_snacks=True
     )
 
@@ -110,7 +110,7 @@ class TestPromptGenerationService:
         prompt, system_message = service.generate_prompt_and_system_message(context)
         
         assert "daily meal plan" in prompt.lower() or "meal" in prompt.lower()
-        assert "maintenance" in prompt.lower()
+        assert "recomp" in prompt.lower()
         assert "moderately_active" in prompt.lower() or "activity" in prompt.lower()
         assert "vegetarian" in prompt.lower()
         assert system_message is not None
@@ -174,7 +174,7 @@ class TestPromptGenerationService:
         
         assert "dinner" in prompt.lower()
         assert "700" in prompt
-        assert "maintenance" in prompt.lower()
+        assert "recomp" in prompt.lower()
         assert system_message is not None
 
     def test_prompt_includes_dietary_preferences(self, service, nutrition_targets):
@@ -186,7 +186,7 @@ class TestPromptGenerationService:
             dietary_preferences=["vegan", "gluten_free"],
             health_conditions=[],
             allergies=[],
-            fitness_goal="cutting",
+            fitness_goal="cut",
             activity_level="very_active"
         )
         
@@ -211,7 +211,7 @@ class TestPromptGenerationService:
             dietary_preferences=[],
             health_conditions=[],
             allergies=["shellfish", "tree nuts", "dairy"],
-            fitness_goal="bulking",
+            fitness_goal="bulk",
             activity_level="extra_active"
         )
         
@@ -322,7 +322,7 @@ class TestPromptGenerationService:
             dietary_preferences=[],
             health_conditions=["diabetes", "hypertension"],
             allergies=[],
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             activity_level="lightly_active"
         )
         
@@ -348,7 +348,7 @@ class TestPromptGenerationService:
             dietary_preferences=[],
             health_conditions=[],
             allergies=[],
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             activity_level="moderately_active",
         )
         
@@ -378,7 +378,7 @@ class TestPromptGenerationService:
             dietary_preferences=[],
             health_conditions=[],
             allergies=[],
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             activity_level="moderately_active",
         )
         

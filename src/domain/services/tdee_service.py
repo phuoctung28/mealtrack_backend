@@ -64,31 +64,27 @@ class TdeeCalculationService:
         """Calculate macro targets using goal-specific ratios based on nutrition science.
 
         Different goals require different macro distributions:
-        - Bulking: Higher carbs for training energy, moderate protein
-        - Cutting: Higher protein to preserve muscle, lower carbs
-        - Maintenance: Balanced approach like bulking
+        - Bulk: Higher carbs for training energy, moderate protein
+        - Cut: Higher protein to preserve muscle, lower carbs
         - Recomp: High protein like cutting, moderate carbs for training
         """
         # Determine target calories based on goal
-        if goal == Goal.MAINTENANCE:
-            calories = tdee
-            goal_key = "maintenance"
-        elif goal == Goal.CUTTING:
+        if goal == Goal.CUT:
             calories = tdee - TDEEConstants.CUTTING_DEFICIT
-            goal_key = "cutting"
-        elif goal == Goal.BULKING:
+            goal_key = "cut"
+        elif goal == Goal.BULK:
             calories = tdee + TDEEConstants.BULKING_SURPLUS
-            goal_key = "bulking"
+            goal_key = "bulk"
         elif goal == Goal.RECOMP:
             calories = tdee + TDEEConstants.RECOMP_ADJUSTMENT
             goal_key = "recomp"
         else:
-            # Fallback to maintenance for unknown goals
+            # Fallback to recomp for unknown goals
             calories = tdee
-            goal_key = "maintenance"
+            goal_key = "recomp"
 
         # Get goal-specific macro ratios
-        macro_ratios = TDEEConstants.MACRO_RATIOS.get(goal_key, TDEEConstants.MACRO_RATIOS["maintenance"])
+        macro_ratios = TDEEConstants.MACRO_RATIOS.get(goal_key, TDEEConstants.MACRO_RATIOS["recomp"])
 
         # Calculate macros using goal-specific ratios
         # Protein: 4 cal/g, Carbs: 4 cal/g, Fat: 9 cal/g

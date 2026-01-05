@@ -151,14 +151,14 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, D
         # Create new meal plan
         dietary_prefs = []
         allergies = []
-        fitness_goal = FitnessGoalEnum.maintenance
+        fitness_goal = FitnessGoalEnum.recomp
         meals_per_day = 3
         snacks_per_day = 0
         
         if user_profile:
             dietary_prefs = user_profile.dietary_preferences or []
             allergies = user_profile.allergies or []
-            fitness_goal = FitnessGoalEnum(user_profile.fitness_goal) if user_profile.fitness_goal else FitnessGoalEnum.maintenance
+            fitness_goal = FitnessGoalEnum(user_profile.fitness_goal) if user_profile.fitness_goal else FitnessGoalEnum.recomp
             meals_per_day = user_profile.meals_per_day or 3
             snacks_per_day = user_profile.snacks_per_day or 0
         

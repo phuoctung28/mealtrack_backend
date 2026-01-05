@@ -24,9 +24,9 @@ class ActivityLevelEnum(str, Enum):
 
 class GoalEnum(str, Enum):
     """Enum for fitness goals."""
-    maintenance = "maintenance"
-    cutting = "cutting"
-    bulking = "bulking"
+    cut = "cut"
+    bulk = "bulk"
+    recomp = "recomp"
 
 
 class UnitSystemEnum(str, Enum):
@@ -88,7 +88,7 @@ class TdeeCalculationRequest(BaseModel):
                 "weight": 75.0,
                 "body_fat_percentage": 15.0,
                 "activity_level": "moderate",
-                "goal": "maintenance",
+                "goal": "recomp",
                 "unit_system": "metric"
             }
         }

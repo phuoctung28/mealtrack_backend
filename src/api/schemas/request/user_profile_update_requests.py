@@ -4,9 +4,9 @@ from pydantic import BaseModel, Field
 
 
 class GoalEnum(str, Enum):
-    maintenance = "maintenance"
-    cutting = "cutting"
-    bulking = "bulking"
+    cut = "cut"
+    bulk = "bulk"
+    recomp = "recomp"
 
 
 class UpdateFitnessGoalRequest(BaseModel):
@@ -19,7 +19,7 @@ class UpdateMetricsRequest(BaseModel):
     weight_kg: float | None = Field(None, description="Weight in kg", gt=0)
     activity_level: str | None = Field(None, description="Activity level")
     body_fat_percent: float | None = Field(None, description="Body fat percentage", ge=0, le=70)
-    fitness_goal: GoalEnum | None = Field(None, description="Fitness goal (maintenance, cutting, bulking)")
+    fitness_goal: GoalEnum | None = Field(None, description="Fitness goal (cut, bulk, recomp)")
     override: bool = Field(False, description="Allow bypassing goal cooldown guardrail")
 
 

@@ -330,7 +330,7 @@ def sample_user_profile(test_session, sample_user) -> UserProfile:
         height_cm=175,
         weight_kg=70,
         activity_level="moderate",
-        fitness_goal="maintenance",
+        fitness_goal="recomp",
         dietary_preferences=["vegetarian"],
         health_conditions=[],
         created_at=datetime.now(),

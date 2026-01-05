@@ -114,9 +114,8 @@ async def get_user_tdee(
 
         # Map goal string to enum
         goal_map = {
-            'maintenance': Goal.MAINTENANCE,
-            'cutting': Goal.CUTTING,
-            'bulking': Goal.BULKING,
+            'cut': Goal.CUT,
+            'bulk': Goal.BULK,
             'recomp': Goal.RECOMP
         }
 
@@ -183,9 +182,8 @@ async def update_user_metrics(
         result = await event_bus.send(query)
 
         goal_map = {
-            'maintenance': Goal.MAINTENANCE,
-            'cutting': Goal.CUTTING,
-            'bulking': Goal.BULKING,
+            'cut': Goal.CUT,
+            'bulk': Goal.BULK,
             'recomp': Goal.RECOMP
         }
 

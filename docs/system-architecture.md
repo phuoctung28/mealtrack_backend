@@ -1,9 +1,9 @@
 # MealTrack Backend - System Architecture
 
-**Version:** 0.4.2
-**Last Updated:** January 3, 2026
+**Version:** 0.4.4
+**Last Updated:** January 4, 2026
 **Architecture Pattern:** 4-Layer Clean Architecture with CQRS and Event-Driven Design
-**Status:** Phase 06 Session-Based Meal Suggestions Active (72% LOC reduction Phase 03, 681+ tests passing)
+**Status:** Phase 03 Backend Legacy Cleanup Complete (All 3 phases: Backend unified, Mobile unified, Legacy cleanup. Phase 06 Session-Based Meal Suggestions Active, 681+ tests passing)
 
 ---
 
@@ -13,13 +13,14 @@
 2. [Architecture Layers](#architecture-layers)
 3. [Component Interactions](#component-interactions)
 4. [Data Flow](#data-flow)
-5. [External Integrations](#external-integrations)
-6. [Database Design](#database-design)
-7. [Query Optimization & N+1 Prevention](#query-optimization--n1-prevention)
-8. [Caching Strategy](#caching-strategy)
-9. [Event-Driven Architecture](#event-driven-architecture)
-10. [Security Architecture](#security-architecture)
-11. [Deployment Architecture](#deployment-architecture)
+5. [Fitness Goal Enum Architecture](#fitness-goal-enum-architecture)
+6. [External Integrations](#external-integrations)
+7. [Database Design](#database-design)
+8. [Query Optimization & N+1 Prevention](#query-optimization--n1-prevention)
+9. [Caching Strategy](#caching-strategy)
+10. [Event-Driven Architecture](#event-driven-architecture)
+11. [Security Architecture](#security-architecture)
+12. [Deployment Architecture](#deployment-architecture)
 
 ---
 
@@ -675,6 +676,281 @@ GET /v1/meals/{meal_id}
 6. Return Response
    └─ MealResponse(meal)
 ```
+
+---
+
+## Fitness Goal Enum Architecture
+
+**Status:** Phase 01 Unification Complete (Jan 4, 2026)
+
+### Overview
+
+The fitness goal system has been unified to a canonical 3-value structure used consistently across all backend layers. This unification replaced 5 separate enum definitions and fixed critical bugs in goal parsing and validation.
+
+### Goal Enum Structure
+
+**Canonical Values:**
+
+```
+Goal Enum (Unified)
+├── CUT = "cut"      # Caloric deficit, fat loss focused
+│   ├── TDEE Adjustment: -500 kcal below calculated TDEE
+│   ├── Macro Ratio: Protein 35% | Carbs 40% | Fat 25%
+│   └── Use Case: Users focused on losing weight while preserving muscle
+│
+├── BULK = "bulk"    # Caloric surplus, muscle building focused
+│   ├── TDEE Adjustment: +300 kcal above calculated TDEE
+│   ├── Macro Ratio: Protein 30% | Carbs 45% | Fat 25%
+│   └── Use Case: Users focused on gaining muscle mass
+│
+└── RECOMP = "recomp" # Caloric maintenance, body recomposition
+    ├── TDEE Adjustment: 0 kcal (maintenance)
+    ├── Macro Ratio: Protein 35% | Carbs 40% | Fat 25%
+    └── Use Case: Balanced users wanting to maintain weight
+```
+
+### Multi-Layer Enum Pattern
+
+The architecture uses a consistent enum naming pattern across layers:
+
+**Layer 1: Database (Infrastructure)**
+- File: `src/infra/database/models/enums.py`
+- Enums: `FitnessGoalEnum`, `GoalEnum`
+- Values: lowercase (`cut`, `bulk`, `recomp`)
+- Purpose: Database storage and ORM mapping
+
+```python
+class FitnessGoalEnum(str, enum.Enum):
+    """Fitness goal options - database layer."""
+    cut = "cut"
+    bulk = "bulk"
+    recomp = "recomp"
+
+class GoalEnum(str, enum.Enum):
+    """Fitness goal for macro calculations - database layer."""
+    cut = "cut"
+    bulk = "bulk"
+    recomp = "recomp"
+```
+
+**Layer 2: Domain (Business Logic)**
+- File: `src/domain/model/user/tdee.py`
+- Enum: `Goal`
+- Values: UPPERCASE (`CUT`, `BULK`, `RECOMP`)
+- Purpose: Domain model, TDEE calculations, type safety
+
+```python
+class Goal(Enum):
+    """Fitness goal for TDEE calculations - domain layer."""
+    CUT = "cut"
+    BULK = "bulk"
+    RECOMP = "recomp"
+```
+
+**Layer 3: API Schema (Presentation)**
+- File: `src/api/schemas/request/user_profile_update_requests.py`
+- Enum: `GoalEnum`
+- Values: lowercase (`cut`, `bulk`, `recomp`)
+- Purpose: API request/response serialization
+
+```python
+class GoalEnum(str, Enum):
+    """Fitness goal for API schema - presentation layer."""
+    cut = "cut"
+    bulk = "bulk"
+    recomp = "recomp"
+```
+
+### TDEE Integration
+
+The Goal enum drives personalized TDEE calculations:
+
+```python
+@dataclass
+class TdeeRequest:
+    """Domain model for TDEE calculation request."""
+    age: int
+    sex: Sex
+    height: float
+    weight: float
+    activity_level: ActivityLevel
+    goal: Goal              # CUT | BULK | RECOMP
+
+@dataclass
+class TdeeResponse:
+    """Domain model for TDEE calculation response."""
+    bmr: float              # Basal Metabolic Rate
+    tdee: float             # Total Daily Energy Expenditure
+    goal: Goal              # Original goal from request
+    macros: MacroTargets    # Calculated macro targets
+    formula_used: Optional[str]  # e.g., "Mifflin-St Jeor"
+```
+
+**TDEE Service Logic:**
+
+```python
+# src/domain/services/tdee_service.py
+class TdeeService:
+    """Calculates TDEE based on goal."""
+
+    TDEE_ADJUSTMENTS = {
+        Goal.CUT: -500,      # Deficit for fat loss
+        Goal.BULK: +300,     # Surplus for muscle gain
+        Goal.RECOMP: 0,      # Maintenance for recomposition
+    }
+
+    MACRO_RATIOS = {
+        Goal.CUT: {
+            "protein": 0.35,
+            "carbs": 0.40,
+            "fat": 0.25,
+        },
+        Goal.BULK: {
+            "protein": 0.30,
+            "carbs": 0.45,
+            "fat": 0.25,
+        },
+        Goal.RECOMP: {
+            "protein": 0.35,
+            "carbs": 0.40,
+            "fat": 0.25,
+        },
+    }
+
+    async def calculate_tdee(
+        self,
+        request: TdeeRequest,
+    ) -> TdeeResponse:
+        """Calculate TDEE adjusted for fitness goal."""
+        bmr = self._calculate_bmr(request)
+        tdee = bmr * activity_multiplier
+
+        # Apply goal-based adjustment
+        adjusted_tdee = tdee + self.TDEE_ADJUSTMENTS[request.goal]
+
+        # Calculate goal-specific macros
+        macros = self._calculate_macros(
+            adjusted_tdee,
+            self.MACRO_RATIOS[request.goal],
+        )
+
+        return TdeeResponse(
+            bmr=bmr,
+            tdee=adjusted_tdee,
+            goal=request.goal,
+            macros=macros,
+        )
+```
+
+### Backward Compatibility: ActivityGoalMapper
+
+**Phase 03 Status:** Legacy alias mappings removed (Greenfield Deployment)
+
+The backward compatibility layer has been removed as the system operates as a greenfield deployment. The `ActivityGoalMapper` now only supports canonical values:
+
+**File:** `src/domain/mappers/activity_goal_mapper.py`
+
+```python
+class ActivityGoalMapper:
+    """Mapper for goal strings to canonical Goal enum."""
+
+    GOAL_MAP: Dict[str, Goal] = {
+        # Canonical values (primary)
+        "cut": Goal.CUT,
+        "bulk": Goal.BULK,
+        "recomp": Goal.RECOMP,
+    }
+
+    @classmethod
+    def map_goal(cls, goal: str) -> Goal:
+        """Map goal string to canonical Goal enum.
+
+        Fallback to RECOMP for unknown inputs.
+        """
+        return cls.GOAL_MAP.get(goal.lower(), Goal.RECOMP)
+```
+
+**3 Canonical Values Only:**
+1. `cut` - Caloric deficit (fat loss)
+2. `bulk` - Caloric surplus (muscle gain)
+3. `recomp` - Maintenance (body recomposition)
+
+### Phase 03 Cleanup: Removed Legacy Aliases
+
+**Issues Fixed (Phase 03)**:
+- Removed 13 legacy alias mappings from ActivityGoalMapper
+- Cleaned up API schemas to use canonical values only
+- Updated response examples to use canonical values (cut, bulk, recomp)
+- Removed maintenance/cutting/bulking enum aliases
+
+**Files Modified (6 total)**:
+1. `src/domain/mappers/activity_goal_mapper.py` - Simplified to 3 mappings
+2. `src/api/schemas/request/daily_meal_requests.py` - Updated response examples
+3. `src/api/schemas/request/tdee_requests.py` - Updated response examples
+4. `src/api/schemas/response/tdee_responses.py` - Canonical values only
+5. `src/api/schemas/response/weekly_meal_plan_responses.py` - Canonical values only
+6. Integration tests updated to use canonical values
+
+**Migration Strategy**:
+- Greenfield deployment model: All legacy aliases removed
+- No backward compatibility required
+- Clients must use canonical 3-value set exclusively
+
+### Usage Patterns
+
+**CQRS Command Validation:**
+
+```python
+# src/app/handlers/command_handlers/update_user_metrics_command_handler.py
+class UpdateUserMetricsCommandHandler:
+    """Validates goal against canonical 3-value set."""
+
+    VALID_GOALS = ['cut', 'bulk', 'recomp']
+
+    async def handle(self, command: UpdateUserMetricsCommand) -> None:
+        if command.fitness_goal not in self.VALID_GOALS:
+            raise ValueError(f"Invalid goal: {command.fitness_goal}")
+```
+
+**Meal Planning Service:**
+
+```python
+# src/domain/services/meal_plan_service.py
+async def generate_weekly_plan(
+    self,
+    user_preferences: UserPreferences,
+) -> MealPlan:
+    """Generate meal plan adjusted for fitness goal."""
+
+    # Use goal-specific macro targets
+    if user_preferences.fitness_goal == FitnessGoal.CUT:
+        # Higher protein for muscle preservation during cut
+        macro_targets = self._get_cut_macros(tdee)
+    elif user_preferences.fitness_goal == FitnessGoal.BULK:
+        # Higher carbs for energy during bulk
+        macro_targets = self._get_bulk_macros(tdee)
+    else:  # RECOMP
+        # Balanced macros
+        macro_targets = self._get_recomp_macros(tdee)
+
+    return await self._generate_meals(
+        preferences=user_preferences,
+        macro_targets=macro_targets,
+    )
+```
+
+### Testing & Validation
+
+**Test Coverage:** 50+ tests passing
+- Unit tests for Goal enum parsing
+- Integration tests for TDEE calculations
+- CQRS handler tests for goal-based processing
+- Fixture updates with unified enums
+
+**Type Safety:** mypy strict mode passing
+- All Goal enum references validated
+- No untyped returns on goal-related functions
+- Proper type hints in mappers and handlers
 
 ---
 
