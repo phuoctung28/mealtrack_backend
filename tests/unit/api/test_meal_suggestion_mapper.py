@@ -94,6 +94,19 @@ class TestMealSuggestionMapper:
                 recipe_steps=[],
                 prep_time_minutes=25,
                 confidence_score=0.85
+            ),
+            MealSuggestion(
+                id="suggestion-3",
+                session_id="session-123",
+                user_id="user-123",
+                meal_name="Meal 3",
+                description="Description 3",
+                meal_type=MealType.LUNCH,
+                macros=MacroEstimate(calories=620, protein=45, carbs=60, fat=22),
+                ingredients=[],
+                recipe_steps=[],
+                prep_time_minutes=30,
+                confidence_score=0.88
             )
         ]
         
@@ -103,19 +116,18 @@ class TestMealSuggestionMapper:
         assert result.meal_type == "main"
         assert result.meal_portion_type == "regular"
         assert result.target_calories == 600
-        assert len(result.suggestions) == 2
+        assert len(result.suggestions) == 3
         assert result.suggestions[0].id == "suggestion-1"
         assert result.suggestions[1].id == "suggestion-2"
+        assert result.suggestions[2].id == "suggestion-3"
         assert result.expires_at == session.expires_at
 
     def test_to_accepted_meal_response(self):
         """Test converting acceptance result to API response."""
-        from src.domain.model import Macros
-        
         result_dict = {
             "meal_id": "meal-123",
             "meal_name": "Accepted Meal",
-            "adjusted_macros": Macros(calories=550, protein=45, carbs=40, fat=18),
+            "adjusted_macros": MacroEstimate(calories=550, protein=45, carbs=40, fat=18),
             "saved_at": datetime.now()
         }
         

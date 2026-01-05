@@ -5,7 +5,7 @@ import pytest
 
 from src.api.mappers.tdee_mapper import TdeeMapper
 from src.api.schemas.request import TdeeCalculationRequest
-from src.domain.model.user import TdeeResponse, Macros
+from src.domain.model.user import TdeeResponse, MacroTargets
 
 
 class TestTdeeMapper:
@@ -99,16 +99,14 @@ class TestTdeeMapper:
 
     def test_to_response_dto(self):
         """Test converting domain model to response DTO."""
+        from src.domain.model.user import Goal
+        
         domain = TdeeResponse(
             bmr=1700.0,
             tdee=2200.0,
-            macros=Macros(calories=2200, protein=165, carbs=220, fat=73),
-            goal=None
+            macros=MacroTargets(calories=2200, protein=165, carbs=220, fat=73),
+            goal=Goal.MAINTENANCE
         )
-        
-        # Set goal manually for testing
-        from src.domain.model.user import Goal
-        domain.goal = Goal.MAINTENANCE
         
         dto = self.mapper.to_response_dto(domain)
         

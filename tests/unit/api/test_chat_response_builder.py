@@ -18,7 +18,7 @@ class TestChatResponseBuilder:
             "thread_id": "thread-456",
             "role": "assistant",
             "content": "Test message",
-            "created_at": datetime.now(),
+            "created_at": datetime.now().isoformat(),
             "metadata": {
                 "follow_ups": [
                     {"id": "f1", "text": "Question 1", "type": "question"},
@@ -47,7 +47,7 @@ class TestChatResponseBuilder:
             "thread_id": "thread-456",
             "role": "assistant",
             "content": "Test message",
-            "created_at": datetime.now(),
+            "created_at": datetime.now().isoformat(),
             "metadata": {
                 "structured_data": {
                     "meals": [{"id": "meal-1", "name": "Chicken"}],
@@ -69,7 +69,7 @@ class TestChatResponseBuilder:
             "thread_id": "thread-456",
             "role": "assistant",
             "content": "Test message",
-            "created_at": datetime.now(),
+            "created_at": datetime.now().isoformat(),
             "metadata": {
                 "structured_data": {
                     "meals": [],
@@ -90,7 +90,7 @@ class TestChatResponseBuilder:
             "thread_id": "thread-456",
             "role": "assistant",
             "content": "Test message",
-            "created_at": datetime.now(),
+            "created_at": datetime.now().isoformat(),
             "metadata": {}
         }
         
@@ -105,7 +105,7 @@ class TestChatResponseBuilder:
             "thread_id": "thread-456",
             "role": "assistant",
             "content": "Test message",
-            "created_at": datetime.now(),
+            "created_at": datetime.now().isoformat(),
             "metadata": {
                 "structured_data": {}
             }
@@ -122,7 +122,7 @@ class TestChatResponseBuilder:
             "thread_id": "thread-456",
             "role": "assistant",
             "content": "Test message",
-            "created_at": datetime.now(),
+            "created_at": datetime.now().isoformat(),
             "metadata": {
                 "follow_ups": [
                     {"text": "Question without id"},
@@ -148,7 +148,7 @@ class TestChatResponseBuilder:
                 "thread_id": "thread-1",
                 "role": "user",
                 "content": "Message 1",
-                "created_at": datetime.now(),
+                "created_at": datetime.now().isoformat(),
                 "metadata": {}
             },
             {
@@ -156,7 +156,7 @@ class TestChatResponseBuilder:
                 "thread_id": "thread-1",
                 "role": "assistant",
                 "content": "Message 2",
-                "created_at": datetime.now(),
+                "created_at": datetime.now().isoformat(),
                 "metadata": {
                     "follow_ups": [{"text": "Follow up"}]
                 }
@@ -176,7 +176,7 @@ class TestChatResponseBuilder:
         thread_data = {
             "thread_id": "thread-123",
             "title": "Test Thread",
-            "created_at": datetime.now()
+            "created_at": datetime.now().isoformat()
         }
         messages = [
             {
@@ -184,7 +184,7 @@ class TestChatResponseBuilder:
                 "thread_id": "thread-123",
                 "role": "user",
                 "content": "Test",
-                "created_at": datetime.now(),
+                "created_at": datetime.now().isoformat(),
                 "metadata": {}
             }
         ]
@@ -201,14 +201,14 @@ class TestChatResponseBuilder:
         thread_data = {
             "thread_id": "thread-123",
             "title": "Test Thread",
-            "created_at": datetime.now(),
+            "created_at": datetime.now().isoformat(),
             "messages": [
                 {
                     "message_id": "msg-1",
                     "thread_id": "thread-123",
                     "role": "user",
                     "content": "Test",
-                    "created_at": datetime.now(),
+                    "created_at": datetime.now().isoformat(),
                     "metadata": {}
                 }
             ]
@@ -226,7 +226,7 @@ class TestChatResponseBuilder:
         thread_data = {
             "thread_id": "thread-123",
             "title": "Test Thread",
-            "created_at": datetime.now()
+            "created_at": datetime.now().isoformat()
         }
         
         result = ChatResponseBuilder.build_thread_with_messages(thread_data)
