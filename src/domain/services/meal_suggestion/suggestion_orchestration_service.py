@@ -76,11 +76,8 @@ class SuggestionOrchestrationService:
         cooking_time_minutes: int,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """Generate initial 3 suggestions and create session."""
-        # Get user profile with caching (Phase 1 optimization)
-        profile = await self._user_repo.get_current_profile_cached(
-            user_id=user_id,
-            redis_client=self._redis_client
-        )
+        # Get user profile using port-compliant method
+        profile = await asyncio.to_thread(self._user_repo.get_profile, user_id)
         if not profile:
             raise ValueError(f"User {user_id} profile not found")
 
@@ -124,8 +121,9 @@ class SuggestionOrchestrationService:
         # Track shown IDs
         session.add_shown_ids([s.id for s in suggestions])
 
-        # Persist with pipeline (Phase 1 optimization)
-        await self._repo.save_session_with_suggestions(session, suggestions)
+        # Persist session and suggestions using port-compliant methods
+        await self._repo.save_session(session)
+        await self._repo.save_suggestions(suggestions)
 
         return session, suggestions
 
@@ -302,7 +300,10 @@ class SuggestionOrchestrationService:
                     exclude_ids=exclude_ids
                 )
 
-                recipes = self._recipe_search.search_recipes(
+                # Wrap synchronous blocking call to avoid event loop blocking
+                # search_recipes performs CPU-bound embedding generation and network I/O
+                recipes = await asyncio.to_thread(
+                    self._recipe_search.search_recipes,
                     criteria=criteria,
                     top_k=10  # Get 10 candidates
                 )

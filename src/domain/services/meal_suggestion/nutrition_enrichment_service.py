@@ -127,6 +127,43 @@ class NutritionEnrichmentService:
             missing_ingredients=missing
         )
 
+    def _convert_to_grams(self, quantity: float, unit: str) -> float:
+        """
+        Convert quantity in any unit to grams.
+        
+        Args:
+            quantity: The amount to convert
+            unit: The unit of measurement (case-insensitive)
+            
+        Returns:
+            Quantity in grams
+        """
+        unit_lower = unit.lower().strip()
+        
+        # Unit conversion table to grams (approximate conversions)
+        unit_conversions = {
+            # Weight units
+            'g': 1, 'gram': 1, 'grams': 1,
+            'kg': 1000, 'kilogram': 1000, 'kilograms': 1000,
+            'oz': 28.35, 'ounce': 28.35, 'ounces': 28.35,
+            'lb': 453.59, 'pound': 453.59, 'pounds': 453.59,
+            # Volume units (approximate, varies by ingredient)
+            'cup': 240, 'cups': 240,
+            'tbsp': 15, 'tablespoon': 15, 'tablespoons': 15, 'tbs': 15,
+            'tsp': 5, 'teaspoon': 5, 'teaspoons': 5,
+            'ml': 1, 'milliliter': 1, 'milliliters': 1,  # 1ml ≈ 1g for water-based
+            'l': 1000, 'liter': 1000, 'liters': 1000, 'litre': 1000, 'litres': 1000,
+            'fl oz': 30, 'fluid ounce': 30, 'fluid ounces': 30,
+            # Count units (approximate serving sizes)
+            'serving': 100, 'servings': 100,
+            'piece': 50, 'pieces': 50,  # Average piece size
+            'slice': 25, 'slices': 25,  # Average slice size
+            'unit': 100, 'units': 100,
+        }
+        
+        conversion_factor = unit_conversions.get(unit_lower, 1)
+        return quantity * conversion_factor
+
     def _estimate_nutrition(self, ingredient: Ingredient, target_calories: int, ingredient_count: int) -> dict:
         """
         Fallback nutrition estimation for missing ingredients.
@@ -178,8 +215,11 @@ class NutritionEnrichmentService:
             carbs_ratio = 0.70    # 70% from carbs
             fat_ratio = 0.05      # 5% from fat
 
-        # Calculate total calories based on amount
-        estimated_calories = ingredient.amount * cal_per_gram
+        # Convert ingredient amount to grams before calculating calories
+        amount_in_grams = self._convert_to_grams(ingredient.amount, ingredient.unit)
+        
+        # Calculate total calories based on amount in grams
+        estimated_calories = amount_in_grams * cal_per_gram
 
         # Calculate macros (calories from each macro / calories per gram of that macro)
         estimated_protein = (estimated_calories * protein_ratio) / 4  # 4 cal/g protein

@@ -108,6 +108,12 @@ class RecipeSearchService:
         if criteria.dietary_preferences:
             query_parts.extend(criteria.dietary_preferences)
 
+        # Add allergies as negative terms to help semantic search avoid allergen-containing recipes
+        if criteria.allergies:
+            # Add "no" prefix for each allergy to indicate exclusion
+            allergy_terms = [f"no {allergy}" for allergy in criteria.allergies]
+            query_parts.extend(allergy_terms)
+
         query_text = " ".join(query_parts)
 
         # Generate query embedding
@@ -133,6 +139,7 @@ class RecipeSearchService:
             logger.debug(
                 f"Searching recipes: meal_type={criteria.meal_type}, "
                 f"calories={criteria.target_calories}±{criteria.calorie_tolerance}, "
+                f"allergies={criteria.allergies or []}, "
                 f"query='{query_text}'"
             )
 
@@ -149,6 +156,9 @@ class RecipeSearchService:
 
             logger.info(f"Pinecone returned {len(matches)} recipe matches")
 
+            # Normalize allergies to lowercase for matching
+            normalized_allergies = [allergy.lower() for allergy in (criteria.allergies or [])]
+
             for match in matches:
                 metadata = match.get("metadata", {})
 
@@ -160,6 +170,21 @@ class RecipeSearchService:
                 except json.JSONDecodeError as e:
                     logger.warning(f"Failed to parse recipe metadata: {e}")
                     continue
+
+                # Filter out recipes containing allergens
+                if normalized_allergies:
+                    # Check if any ingredient name contains any allergy term
+                    ingredient_names = [ing.get("name", "").lower() for ing in ingredients if isinstance(ing, dict)]
+                    contains_allergen = any(
+                        any(allergy in ingredient_name for ingredient_name in ingredient_names)
+                        for allergy in normalized_allergies
+                    )
+                    if contains_allergen:
+                        logger.debug(
+                            f"Filtered out recipe {metadata.get('recipe_id')} "
+                            f"({metadata.get('name')}) - contains allergens"
+                        )
+                        continue
 
                 recipes.append(
                     RecipeSearchResult(
