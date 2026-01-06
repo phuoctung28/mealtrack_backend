@@ -56,7 +56,8 @@ class TestSuggestionFallbackProvider:
         assert isinstance(meal, PlannedMeal)
         assert meal.meal_type == MealType.SNACK
         assert meal.name == "Greek Yogurt with Berries"
-        assert meal.calories == 200
+        # Calories are scaled: 200 * (200/400) = 200 * 0.5 = 100
+        assert meal.calories == 100
         assert meal.is_vegetarian is True
         assert meal.is_gluten_free is True
 
