@@ -21,7 +21,6 @@ from datetime import datetime
 from typing import List, Dict, Optional
 import requests
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
 
 # Load environment variables
 load_dotenv()
@@ -130,16 +129,14 @@ class RecipeIndexPopulator:
         # Skip nutrition enrichment during population - use simple estimation
         self.nutrition_enrichment = None
 
-        # Initialize embedding model for local embedding generation
-        logger.info("Loading embedding model (all-MiniLM-L6-v2)...")
-        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-        logger.info("✅ Embedding model loaded")
+        # Using Pinecone Inference API for embeddings (no local model)
+        logger.info("Using Pinecone Inference API for embeddings (llama-text-embed-v2)")
 
         # Create index if it doesn't exist
         from pinecone import ServerlessSpec
 
         index_name = "recipes"
-        dimension = 384  # all-MiniLM-L6-v2 produces 384-dim embeddings
+        dimension = 384  # llama-text-embed-v2 with output_dimensionality=384
         existing_indexes = [idx['name'] for idx in self.pinecone.pc.list_indexes()]
 
         if index_name not in existing_indexes:
@@ -159,6 +156,27 @@ class RecipeIndexPopulator:
 
         self.recipes_index = self.pinecone.pc.Index(index_name)
         logger.info("Connected to Pinecone recipes index")
+
+    def _embed_passages(self, texts: list[str]) -> list[list[float]]:
+        """
+        Generate embeddings for documents using Pinecone Inference API.
+
+        Args:
+            texts: List of document texts (max 96 per batch)
+
+        Returns:
+            List of 384-dimension embedding vectors
+        """
+        try:
+            embeddings = self.pinecone.pc.inference.embed(
+                model="llama-text-embed-v2",
+                inputs=texts,
+                parameters={"input_type": "passage", "truncate": "END", "output_dimensionality": 384}
+            )
+            return [e["values"] for e in embeddings]
+        except Exception as e:
+            logger.error(f"Failed to generate embeddings: {e}")
+            raise
 
     async def populate_index(self):
         """Fetch recipes from TheMealDB and index in Pinecone."""
@@ -404,18 +422,24 @@ class RecipeIndexPopulator:
         return (amount, unit)
 
     def _upsert_batch(self, vectors: List[tuple]):
-        """Upsert batch of vectors to Pinecone with local embeddings."""
+        """Upsert batch of vectors to Pinecone using Inference API."""
         try:
-            # Generate embeddings for all texts in batch
+            # Generate embeddings using Pinecone Inference API
             texts = [embedding_text for _, embedding_text, _ in vectors]
-            embeddings = self.embedding_model.encode(texts, show_progress_bar=False)
+
+            # Batch in chunks of 96 (API limit)
+            all_embeddings = []
+            for i in range(0, len(texts), 96):
+                batch_texts = texts[i:i+96]
+                batch_embeddings = self._embed_passages(batch_texts)
+                all_embeddings.extend(batch_embeddings)
 
             # Format for Pinecone: list of dicts with id, values (embedding), and metadata
             formatted_vectors = []
             for i, (recipe_id, embedding_text, metadata) in enumerate(vectors):
                 formatted_vectors.append({
                     "id": recipe_id,
-                    "values": embeddings[i].tolist(),  # Convert numpy array to list
+                    "values": all_embeddings[i],
                     "metadata": metadata
                 })
 
