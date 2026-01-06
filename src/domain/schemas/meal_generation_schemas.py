@@ -49,14 +49,14 @@ class RecipeDetailsResponse(BaseModel):
     
     description: str = Field(description="Brief, appetizing description of the meal")
     ingredients: List[IngredientItem] = Field(
-        description="List of 4-6 ingredients with exact amounts",
-        min_length=4,
-        max_length=6
+        description="List of 3-8 ingredients with exact amounts",
+        min_length=3,
+        max_length=8
     )
     recipe_steps: List[RecipeStepItem] = Field(
-        description="List of 3-4 recipe steps with instructions and durations",
-        min_length=3,
-        max_length=4
+        description="List of 2-6 recipe steps with instructions and durations",
+        min_length=2,
+        max_length=6
     )
     prep_time_minutes: int = Field(
         description="Total preparation and cooking time in minutes",

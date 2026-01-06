@@ -350,28 +350,71 @@ Enjoy!'''
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
     @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
     def test_generate_meal_plan_structured_output_none_raises_error(self, mock_llm_class):
-        """Test structured output raises error when both parsed and raw fail."""
+        """Test E2 fallback: when structured output fails, tries legacy JSON mode."""
         service = MealGenerationService()
 
         mock_llm_instance = Mock()
         mock_structured_llm = Mock()
 
-        # Both parsed and raw fail
+        # Structured output fails (parsed=None, raw has invalid content)
         mock_response = {
             "parsed": None,
             "raw": Mock(content='invalid json content')
         }
         mock_structured_llm.invoke.return_value = mock_response
         mock_llm_instance.with_structured_output.return_value = mock_structured_llm
+
+        # Mock legacy LLM fallback to also fail
+        mock_legacy_response = Mock()
+        mock_legacy_response.content = 'still invalid json'
+        mock_llm_instance.invoke.return_value = mock_legacy_response
+
         mock_llm_class.return_value = mock_llm_instance
 
-        with pytest.raises(ValueError, match="Structured output returned None"):
+        # Should raise error mentioning both methods failed
+        with pytest.raises(ValueError, match="Both structured output and legacy JSON mode failed"):
             service.generate_meal_plan(
                 prompt="Generate meal names",
                 system_message="You are a chef",
                 response_type="json",
                 schema=MockMealNamesResponse
             )
+
+    @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
+    @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
+    def test_generate_meal_plan_e2_legacy_fallback_success(self, mock_llm_class):
+        """Test E2 fallback: structured output fails but legacy JSON succeeds."""
+        service = MealGenerationService()
+
+        mock_llm_instance = Mock()
+        mock_structured_llm = Mock()
+
+        # Structured output fails (parsed=None, empty raw)
+        mock_response = {
+            "parsed": None,
+            "raw": Mock(content='')  # Empty response
+        }
+        mock_structured_llm.invoke.return_value = mock_response
+        mock_llm_instance.with_structured_output.return_value = mock_structured_llm
+
+        # Mock legacy LLM fallback to succeed
+        mock_legacy_response = Mock()
+        mock_legacy_response.content = '{"meal_names": ["Legacy Success Meal"]}'
+        mock_llm_instance.invoke.return_value = mock_legacy_response
+
+        mock_llm_class.return_value = mock_llm_instance
+
+        result = service.generate_meal_plan(
+            prompt="Generate meal names",
+            system_message="You are a chef",
+            response_type="json",
+            schema=MockMealNamesResponse
+        )
+
+        # Should return the legacy fallback result
+        assert result == {"meal_names": ["Legacy Success Meal"]}
+        # Verify legacy LLM was invoked
+        assert mock_llm_instance.invoke.called
 
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
     @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')

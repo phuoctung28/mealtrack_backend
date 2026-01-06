@@ -105,28 +105,28 @@ class MealGenerationService(MealGenerationServicePort):
                 # NOTE: with_structured_output uses function calling, incompatible with response_mime_type
                 # Use include_raw=True to get raw response as fallback when parsing fails
                 llm_with_structure = llm.with_structured_output(schema, include_raw=True)
-                
+
                 # Create messages
                 messages = [
                     SystemMessage(content=system_message),
                     HumanMessage(content=prompt)
                 ]
-                
+
                 # Generate structured response (returns dict with 'raw' and 'parsed')
                 result = llm_with_structure.invoke(messages)
                 elapsed = time.time() - start_time
-                
+
                 # Extract parsed response (or None if parsing failed)
                 structured_response = result.get("parsed") if isinstance(result, dict) else result
                 raw_response = result.get("raw") if isinstance(result, dict) else None
-                
+
                 logger.info(
                     f"[STRUCTURED-RESPONSE] elapsed={elapsed:.2f}s | "
                     f"schema={schema.__name__} | "
                     f"parsed_type={type(structured_response).__name__} | "
                     f"has_raw={raw_response is not None}"
                 )
-                
+
                 # Handle None response - try to use raw response as fallback
                 if structured_response is None:
                     if raw_response and hasattr(raw_response, 'content'):
@@ -146,17 +146,45 @@ class MealGenerationService(MealGenerationServicePort):
                                 f"[STRUCTURED-OUTPUT-FALLBACK-FAILED] "
                                 f"JSON parse also failed: {json_err}"
                             )
-                    
-                    logger.error(
-                        f"[STRUCTURED-OUTPUT-NONE] schema={schema.__name__} | "
-                        f"elapsed={elapsed:.2f}s | "
-                        f"Model failed to generate valid structured data"
+
+                    # E2 FIX: Ultimate fallback to legacy JSON mode
+                    logger.warning(
+                        f"[E2-LEGACY-FALLBACK] schema={schema.__name__} | "
+                        f"Structured output completely failed, retrying with legacy JSON mode"
                     )
-                    raise ValueError(
-                        f"Structured output returned None for schema {schema.__name__}. "
-                        f"Model failed to generate data matching the required format."
-                    )
-                
+
+                    try:
+                        # Create new LLM with legacy JSON mode (response_mime_type)
+                        legacy_llm_config = {
+                            **self.base_llm_config,
+                            "max_output_tokens": max_tokens,
+                            "response_mime_type": "application/json"
+                        }
+                        legacy_llm = ChatGoogleGenerativeAI(**legacy_llm_config)
+
+                        # Retry with same prompt but legacy mode
+                        legacy_response = legacy_llm.invoke(messages)
+                        legacy_elapsed = time.time() - start_time
+
+                        logger.info(
+                            f"[E2-LEGACY-RESPONSE] elapsed={legacy_elapsed:.2f}s | "
+                            f"content_len={len(legacy_response.content)}"
+                        )
+
+                        # Parse legacy JSON response
+                        legacy_data = self._extract_json(legacy_response.content)
+                        logger.info(f"[E2-LEGACY-SUCCESS] Successfully parsed legacy JSON response")
+                        return legacy_data
+
+                    except Exception as legacy_err:
+                        logger.error(
+                            f"[E2-LEGACY-FAILED] Legacy fallback also failed: {legacy_err}"
+                        )
+                        raise ValueError(
+                            f"Both structured output and legacy JSON mode failed for schema {schema.__name__}. "
+                            f"Structured: None response. Legacy: {str(legacy_err)[:100]}"
+                        )
+
                 # Convert to dict for consistent interface
                 if hasattr(structured_response, 'model_dump'):
                     return structured_response.model_dump()

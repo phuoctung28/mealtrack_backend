@@ -255,7 +255,7 @@ OUTPUT (compact JSON, no whitespace):
 }}
 
 CRITICAL RULES:
-1. MUST include ALL fields: name, description, ingredients (4-6 items), recipe_steps (3-4 steps), prep_time_minutes
+1. MUST include ALL fields: name, description, ingredients (3-8 items), recipe_steps (2-6 steps), prep_time_minutes
 2. MUST complete entire JSON - do NOT truncate
 3. Name: Natural dish name (NOT "Quick/Speedy/Power Bowl"). Examples: "Garlic Butter Salmon", "Herb Chicken", "Spicy Beef"
 4. Ingredients: Use from INGREDIENTS list, exact amounts (g/ml/tbsp/tsp)
@@ -347,8 +347,8 @@ CRITICAL - Portion Sizing:
 
 Requirements:
 - Recipe must match the meal name "{meal_name}" exactly
-- Use 4-6 ingredients from the available list with specific amounts (g, ml, tbsp, tsp)
-- Provide 3-4 clear, actionable recipe steps with duration for each step
+- Use 3-8 ingredients from the available list with specific amounts (g, ml, tbsp, tsp)
+- Provide 2-6 clear, actionable recipe steps with duration for each step
 - Description should highlight the meal's key flavors and appeal
 - Total prep_time_minutes must be ≤{session.cooking_time_minutes}
 

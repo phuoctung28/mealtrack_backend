@@ -45,7 +45,7 @@ class SuggestionOrchestrationService:
 
     # Parallel generation constants
     PARALLEL_SINGLE_MEAL_TOKENS = 4000  # Token limit for complete JSON generation
-    PARALLEL_SINGLE_MEAL_TIMEOUT = 25  # Per-request timeout
+    PARALLEL_SINGLE_MEAL_TIMEOUT = 35
 
     def __init__(
         self,
@@ -473,7 +473,7 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
             for meal_name in meal_names
         ]
         
-        # Generate recipes in parallel with retry logic
+        # Generate recipes in parallel
         recipe_system = "You are a professional chef. Generate complete recipe details as valid JSON. CRITICAL: MUST finish entire JSON - include all fields."
 
         async def generate_recipe(prompt: str, meal_name: str, index: int) -> Optional[MealSuggestion]:
@@ -485,8 +485,8 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
                         prompt,
                         recipe_system,
                         "json",
-                        4000,  # Token limit for recipe generation
-                        RecipeDetailsResponse,  # Structured output schema (guarantees valid format)
+                        self.PARALLEL_SINGLE_MEAL_TOKENS,
+                        RecipeDetailsResponse,  # Structured output schema
                     ),
                     timeout=self.PARALLEL_SINGLE_MEAL_TIMEOUT,
                 )
@@ -541,27 +541,40 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
                 )
                 return None
 
-        # Initial generation - all 3 recipes in parallel
+        # E3 FIX: Stagger parallel requests to avoid rate limiting
+        # Start all 3 recipes in parallel but with 500ms delays between starts
         gen_start = time.time()
+
+        # Create tasks with staggered starts
+        tasks = []
+        for i in range(3):
+            if i > 0:
+                # Add 500ms delay before starting subsequent requests
+                await asyncio.sleep(0.5)
+                logger.debug(f"[E3-STAGGER] Starting request {i} after 500ms delay")
+
+            task = asyncio.create_task(
+                generate_recipe(recipe_prompts[i], meal_names[i], i)
+            )
+            tasks.append(task)
+
+        # Wait for all tasks to complete
         results: List[Optional[MealSuggestion]] = list(await asyncio.gather(
-            generate_recipe(recipe_prompts[0], meal_names[0], 0),
-            generate_recipe(recipe_prompts[1], meal_names[1], 1),
-            generate_recipe(recipe_prompts[2], meal_names[2], 2),
+            *tasks,
             return_exceptions=False,
         ))
 
-        # C2 FIX: No retry logic - return results immediately
         successful_results = [r for r in results if r is not None]
-        
+
         logger.info(
             f"[PHASE-2-COMPLETE] session={session.id} | "
             f"success={len(successful_results)}/3 | "
             f"gen_elapsed={time.time() - gen_start:.2f}s"
         )
 
-        # STEP 3: Return partial or complete results
+        # Return partial or complete results
         failed_indices = [i for i, r in enumerate(results) if r is None]
-        
+
         if failed_indices:
             failed_names = [meal_names[i] for i in failed_indices]
             logger.warning(
@@ -570,16 +583,12 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
                 f"failed={len(failed_indices)} | "
                 f"failed_meals={failed_names}"
             )
-            
-            # A3 FIX: If we have at least 1 successful meal, return it
-            # Otherwise, raise error
+
             if not successful_results:
                 raise RuntimeError(
-                    f"Failed to generate any recipes after {self.PARALLEL_MAX_RETRIES} retries. "
-                    f"All 3 meals failed: {failed_names}"
+                    f"Failed to generate any recipes. All 3 meals failed: {failed_names}"
                 )
-        
-        # Use successful results as-is (macros are placeholder estimates)
+
         suggestions = successful_results
 
         total_elapsed = time.time() - start_time
