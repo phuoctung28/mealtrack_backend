@@ -134,7 +134,12 @@ class TestPineconeNutritionService:
         mock_pinecone.return_value = mock_pc
         mock_ingredients_index = Mock()
         mock_usda_index = Mock()
-        
+
+        # Mock Pinecone Inference API
+        mock_pc.inference.embed.return_value = [
+            {"values": [0.1] * 384}  # 384-dim embedding
+        ]
+
         # Mock query result from ingredients index
         mock_ingredients_index.query.return_value = {
             'matches': [{
@@ -152,18 +157,16 @@ class TestPineconeNutritionService:
                 }
             }]
         }
-        
+
         def mock_index(name):
             if name == "ingredients":
                 return mock_ingredients_index
             elif name == "usda":
                 return mock_usda_index
-        
+
         mock_pc.Index.side_effect = mock_index
         mock_usda_index.describe_index_stats.return_value = {'total_vector_count': 456000}
-        
-        # No encoder needed - using Pinecone inference API
-        
+
         service = PineconeNutritionService(pinecone_api_key="test-key")
         
         # Act
@@ -184,7 +187,12 @@ class TestPineconeNutritionService:
         mock_pinecone.return_value = mock_pc
         mock_ingredients_index = Mock()
         mock_usda_index = Mock()
-        
+
+        # Mock Pinecone Inference API
+        mock_pc.inference.embed.return_value = [
+            {"values": [0.1] * 384}  # 384-dim embedding
+        ]
+
         # Mock low score from ingredients index
         mock_ingredients_index.query.return_value = {
             'matches': [{
@@ -192,7 +200,7 @@ class TestPineconeNutritionService:
                 'metadata': {'name': 'Low Match', 'calories': 100}
             }]
         }
-        
+
         # Mock better score from USDA index
         mock_usda_index.query.return_value = {
             'matches': [{
@@ -209,18 +217,16 @@ class TestPineconeNutritionService:
                 }
             }]
         }
-        
+
         def mock_index(name):
             if name == "ingredients":
                 return mock_ingredients_index
             elif name == "usda":
                 return mock_usda_index
-        
+
         mock_pc.Index.side_effect = mock_index
         mock_usda_index.describe_index_stats.return_value = {'total_vector_count': 456000}
-        
-        # No encoder needed - using Pinecone inference API
-        
+
         service = PineconeNutritionService(pinecone_api_key="test-key")
         
         # Act
@@ -242,22 +248,25 @@ class TestPineconeNutritionService:
         mock_pinecone.return_value = mock_pc
         mock_ingredients_index = Mock()
         mock_usda_index = Mock()
-        
+
+        # Mock Pinecone Inference API
+        mock_pc.inference.embed.return_value = [
+            {"values": [0.1] * 384}  # 384-dim embedding
+        ]
+
         # Mock no matches
         mock_ingredients_index.query.return_value = {'matches': []}
         mock_usda_index.query.return_value = {'matches': []}
-        
+
         def mock_index(name):
             if name == "ingredients":
                 return mock_ingredients_index
             elif name == "usda":
                 return mock_usda_index
-        
+
         mock_pc.Index.side_effect = mock_index
         mock_usda_index.describe_index_stats.return_value = {'total_vector_count': 456000}
-        
-        # No encoder needed - using Pinecone inference API
-        
+
         service = PineconeNutritionService(pinecone_api_key="test-key")
         
         # Act
@@ -292,7 +301,12 @@ class TestPineconeNutritionService:
         mock_pc = Mock()
         mock_pinecone.return_value = mock_pc
         mock_ingredients_index = Mock()
-        
+
+        # Mock Pinecone Inference API
+        mock_pc.inference.embed.return_value = [
+            {"values": [0.1] * 384}  # 384-dim embedding
+        ]
+
         # Mock search result
         mock_ingredients_index.query.return_value = {
             'matches': [{
@@ -309,11 +323,9 @@ class TestPineconeNutritionService:
                 }
             }]
         }
-        
+
         mock_pc.Index.return_value = mock_ingredients_index
-        
-        # No encoder needed - using Pinecone inference API
-        
+
         service = PineconeNutritionService(pinecone_api_key="test-key")
         
         # Act - request 200g of rice
@@ -333,15 +345,20 @@ class TestPineconeNutritionService:
         mock_pc = Mock()
         mock_pinecone.return_value = mock_pc
         mock_ingredients_index = Mock()
-        
+
+        # Mock Pinecone Inference API
+        mock_pc.inference.embed.return_value = [
+            {"values": [0.1] * 384}  # 384-dim embedding
+        ]
+
         # Mock different ingredients
         def mock_query(**kwargs):
             # Return different results based on call count
             if not hasattr(mock_query, 'call_count'):
                 mock_query.call_count = 0
-            
+
             mock_query.call_count += 1
-            
+
             if mock_query.call_count == 1:
                 return {
                     'matches': [{
@@ -376,12 +393,10 @@ class TestPineconeNutritionService:
                     }]
                 }
             return {'matches': []}
-        
+
         mock_ingredients_index.query.side_effect = mock_query
         mock_pc.Index.return_value = mock_ingredients_index
-        
-        # No encoder needed - using Pinecone inference API
-        
+
         service = PineconeNutritionService(pinecone_api_key="test-key")
         
         # Act - 200g chicken + 150g rice

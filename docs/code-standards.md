@@ -635,6 +635,185 @@ async def analyze_meal(request: AnalyzeRequest) -> AnalyzeResponse:
         )
 ```
 
+### External Service Integration Pattern
+
+**Vector Search Service (Pinecone Inference API)**:
+
+```python
+# src/infra/services/pinecone_service.py
+from pinecone import Pinecone
+from typing import Optional, Dict, List
+
+class PineconeNutritionService:
+    """Integrate Pinecone Inference API for vector embeddings & ingredient search."""
+
+    def __init__(self, pinecone_api_key: Optional[str] = None):
+        """Initialize with API key from env or parameter."""
+        api_key = pinecone_api_key or os.getenv("PINECONE_API_KEY")
+        if not api_key:
+            raise ValueError("PINECONE_API_KEY required")
+
+        self.pc = Pinecone(api_key=api_key)
+
+        # Connect to indexes with graceful fallback
+        try:
+            self.ingredients_index = self.pc.Index("ingredients")
+        except Exception:
+            self.ingredients_index = None
+
+        try:
+            self.usda_index = self.pc.Index("usda")
+        except Exception:
+            self.usda_index = None
+
+        if not self.ingredients_index and not self.usda_index:
+            raise ValueError("No Pinecone indexes available")
+
+    def _embed_text(
+        self,
+        texts: list[str],
+        input_type: str = "query"
+    ) -> list[list[float]]:
+        """Generate embeddings via Pinecone Inference API.
+
+        Args:
+            texts: Text strings to embed
+            input_type: "query" or "passage" context
+
+        Returns:
+            List of 384-dimension vectors
+        """
+        embeddings = self.pc.inference.embed(
+            model="llama-text-embed-v2",
+            inputs=texts,
+            parameters={
+                "input_type": input_type,
+                "truncate": "END",
+                "output_dimensionality": 384
+            }
+        )
+        return [e["values"] for e in embeddings]
+
+    def search_ingredient(self, query: str) -> Optional[Dict]:
+        """Search ingredients with two-index fallback.
+
+        Flow:
+        1. Embed query (384-dim)
+        2. Search ingredients_index (score > 0.35)
+        3. If score < 0.6, try usda_index
+        4. Return best match with nutrition metadata
+
+        Raises:
+            Gracefully logs errors, returns None on total failure
+        """
+        try:
+            query_embedding = self._embed_text([query], input_type="query")[0]
+        except Exception as e:
+            logger.error(f"Embedding generation failed: {e}")
+            return None
+
+        best_result = None
+        best_score = 0
+
+        # Primary: ingredients_index (optimized per-100g data)
+        if self.ingredients_index:
+            try:
+                results = self.ingredients_index.query(
+                    vector=query_embedding,
+                    top_k=1,
+                    include_metadata=True
+                )
+                if results and results.get('matches'):
+                    match = results['matches'][0]
+                    if match['score'] > 0.35:
+                        best_result = match
+                        best_score = match['score']
+            except Exception as e:
+                logger.error(f"Ingredients index query failed: {e}")
+
+        # Fallback: usda_index (broader coverage)
+        if self.usda_index and best_score < 0.6:
+            try:
+                results = self.usda_index.query(...)
+                if results and results.get('matches'):
+                    if results['matches'][0]['score'] > best_score * 1.2:
+                        best_result = results['matches'][0]
+            except Exception as e:
+                logger.error(f"USDA index query failed: {e}")
+
+        return self._format_result(best_result) if best_result else None
+
+    def _format_result(self, match: Dict) -> Dict:
+        """Extract nutrition metadata from vector match."""
+        metadata = match.get('metadata', {})
+        return {
+            'name': metadata.get('name', ''),
+            'score': match.get('score', 0),
+            'calories': float(metadata.get('calories', 0)),
+            'protein': float(metadata.get('protein', 0)),
+            'fat': float(metadata.get('fat', 0)),
+            'carbs': float(metadata.get('carbs', 0)),
+            'fiber': float(metadata.get('fiber', 0)),
+            'sugar': float(metadata.get('sugar', 0)),
+            'sodium': float(metadata.get('sodium', 0)),
+            'serving_size': metadata.get('serving_size', '100g')
+        }
+```
+
+**Key Patterns**:
+
+1. **Initialization**: Graceful failure if indexes unavailable (don't crash on init)
+2. **Error Handling**: Catch specific exceptions, log context, return None or fallback
+3. **Dual-Index Strategy**: Primary + secondary search with fallback logic
+4. **Type Safety**: Return `Optional[Dict]` instead of raising on no results
+5. **Metadata Extraction**: Parse API responses into domain objects
+6. **Unit Conversion**: Support multiple measurement units (g, oz, cup, etc.)
+7. **Scaling**: Nutrition per-100g baseline scaled to actual portions
+
+**Testing Pattern**:
+```python
+@patch('src.infra.services.pinecone_service.Pinecone')
+def test_search_ingredient_embeds_and_queries(mock_pinecone):
+    """Test embedding generation and index querying."""
+    # Mock Pinecone Inference API
+    mock_pc = Mock()
+    mock_pinecone.return_value = mock_pc
+    mock_pc.inference.embed.return_value = [
+        {"values": [0.1] * 384}  # 384-dim embedding
+    ]
+
+    # Mock index query response
+    mock_index = Mock()
+    mock_index.query.return_value = {
+        'matches': [{
+            'score': 0.85,
+            'metadata': {
+                'name': 'Chicken Breast',
+                'calories': 165,
+                'protein': 31,
+            }
+        }]
+    }
+    mock_pc.Index.return_value = mock_index
+
+    # Test
+    service = PineconeNutritionService(pinecone_api_key="test")
+    result = service.search_ingredient("chicken")
+
+    # Verify
+    assert result['name'] == 'Chicken Breast'
+    assert result['calories'] == 165
+    mock_pc.inference.embed.assert_called_with(
+        model="llama-text-embed-v2",
+        inputs=["chicken"],
+        parameters={
+            "input_type": "query",
+            "truncate": "END",
+            "output_dimensionality": 384
+        }
+    )
+```
+
 ---
 
 ## Testing Standards

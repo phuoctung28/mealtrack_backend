@@ -982,10 +982,11 @@ async def generate_weekly_plan(
        │   - Timezone-aware scheduling
        │   - User ID management
        │
-       ├─► Pinecone
-       │   - Vector embeddings
-       │   - Semantic search
-       │   - Food similarity queries
+       ├─► Pinecone (Phase 01 Inference Migration)
+       │   - Pinecone Inference API for embeddings (llama-text-embed-v2)
+       │   - Vector embeddings: 384-dimension via output_dimensionality
+       │   - Semantic search across ingredients & USDA indexes
+       │   - Food similarity queries with fallback logic
        │
        ├─► USDA FoodData Central
        │   - Nutrition database
@@ -1042,6 +1043,119 @@ except MealAnalysisError:
             if attempt == 2:
                 raise
 ```
+
+### Pinecone Integration (Phase 01 - Inference API Migration)
+
+**Architecture**: Pinecone Inference API replaces external embedding generation
+
+**Key Components**:
+
+```python
+# src/infra/services/pinecone_service.py
+class PineconeNutritionService:
+    """Service for ingredient search & nutrition with Pinecone Inference API."""
+
+    def __init__(self, pinecone_api_key: Optional[str] = None):
+        self.pc = Pinecone(api_key=pinecone_api_key)
+        self.ingredients_index = self.pc.Index("ingredients")  # Per-100g data
+        self.usda_index = self.pc.Index("usda")                # Food database
+
+    def _embed_text(self, texts: list[str], input_type: str = "query") -> list[list[float]]:
+        """Generate embeddings using Pinecone Inference API.
+
+        Args:
+            texts: List of text strings to embed
+            input_type: "query" for search queries, "passage" for documents
+
+        Returns:
+            List of 384-dimension embedding vectors
+        """
+        embeddings = self.pc.inference.embed(
+            model="llama-text-embed-v2",
+            inputs=texts,
+            parameters={
+                "input_type": input_type,
+                "truncate": "END",
+                "output_dimensionality": 384
+            }
+        )
+        return [e["values"] for e in embeddings]
+
+    def search_ingredient(self, query: str) -> Optional[Dict]:
+        """Search ingredients with fallback logic.
+
+        Flow:
+        1. Generate query embedding (384-dim via llama-text-embed-v2)
+        2. Search ingredients_index (threshold: 0.35)
+        3. If score < 0.6, search usda_index as fallback
+        4. Return best match with metadata (name, calories, protein, etc.)
+        """
+        query_embedding = self._embed_text([query], input_type="query")[0]
+
+        # Try ingredients index first (per-100g data)
+        if self.ingredients_index:
+            results = self.ingredients_index.query(
+                vector=query_embedding,
+                top_k=1,
+                include_metadata=True
+            )
+            # Return if score > 0.35
+
+        # Fallback to USDA if needed
+        if self.usda_index and best_score < 0.6:
+            results = self.usda_index.query(...)
+            # Return if better match found
+```
+
+**Flow Diagram**:
+```
+User Query: "chicken breast"
+    ↓
+_embed_text([query], "query")
+    ↓
+llama-text-embed-v2 model (384-dim)
+    ↓
+Query ingredients_index
+    ├─ score: 0.85 → Return
+    └─ score: 0.4 → Continue
+        ↓
+    Query usda_index
+        ├─ score: 0.75 → Return (better)
+        └─ score: < previous → Return original
+```
+
+**Indexes**:
+- `ingredients`: Specialized per-100g nutrition data
+- `usda`: USDA FoodData Central (456K+ foods)
+
+**Embedding Specs**:
+- Model: `llama-text-embed-v2`
+- Dimensions: 384 (via `output_dimensionality` parameter)
+- Input types: "query" (searches), "passage" (documents)
+- Truncation: "END" (truncate long texts)
+
+**Nutrition Scaling**:
+```python
+# Ingredient search returns per-100g nutrition
+result = search_ingredient("rice")
+# → calories=130, protein=2.7, carbs=28 (per 100g)
+
+# Scale to actual portion
+base_nutrition = NutritionData(serving_size_g=100, ...)
+actual_nutrition = base_nutrition.scale_to(200)  # 200g
+# → calories=260, protein=5.4, carbs=56
+```
+
+**Unit Conversions** (convert_to_grams):
+- Weight: g, kg, oz, lb
+- Volume: cup, tbsp, tsp
+- Default: serving (100g)
+
+**Error Handling**:
+- Index connection failures → graceful fallback
+- Embedding API errors → logged with retry logic
+- No matches → returns None
+- Low scores → secondary index search
 
 ---
 

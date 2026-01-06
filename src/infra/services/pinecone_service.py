@@ -76,6 +76,30 @@ class PineconeNutritionService:
             'serving': 100
         }
 
+    def _embed_text(
+        self, texts: list[str], input_type: str = "query"
+    ) -> list[list[float]]:
+        """
+        Generate embeddings using Pinecone Inference API.
+
+        Args:
+            texts: List of text strings to embed
+            input_type: "query" for search queries, "passage" for documents
+
+        Returns:
+            List of embedding vectors (384 dimensions each)
+        """
+        embeddings = self.pc.inference.embed(
+            model="llama-text-embed-v2",
+            inputs=texts,
+            parameters={
+                "input_type": input_type,
+                "truncate": "END",
+                "output_dimensionality": 384
+            }
+        )
+        return [e["values"] for e in embeddings]
+
     def search_ingredient(self, query: str) -> Optional[Dict]:
         """
         Search for ingredient in Pinecone indexes using vector similarity.
@@ -84,42 +108,40 @@ class PineconeNutritionService:
         best_result = None
         best_score = 0
 
+        # Generate embedding for search query using Pinecone Inference API
+        query_embedding = self._embed_text([query], input_type="query")[0]
+
         # Try ingredients index first (better per-100g data)
         if self.ingredients_index:
             try:
-                # Use Pinecone's query method with text input (inference API)
                 results = self.ingredients_index.query(
-                    vector=None,  # Let Pinecone generate embedding
-                    queries=[query],  # Pass text directly
+                    vector=query_embedding,
                     top_k=1,
                     include_metadata=True
                 )
-                
+
                 if results and 'matches' in results and results['matches']:
                     match = results['matches'][0]
                     if match['score'] > 0.35:
                         best_result = match
                         best_score = match['score']
             except Exception as e:
-                # Fallback: if inference API fails, try traditional vector search
-                # This would require pre-computed embeddings, but we'll skip for now
-                print(f"Pinecone inference failed, skipping ingredients search: {e}")
+                print(f"Ingredients index query failed: {e}")
 
         # Try USDA if no good match
         if self.usda_index and best_score < 0.6:
             try:
                 results = self.usda_index.query(
-                    vector=None,  # Let Pinecone generate embedding
-                    queries=[query],  # Pass text directly
+                    vector=query_embedding,
                     top_k=1,
                     include_metadata=True
                 )
-                
+
                 if results and 'matches' in results and results['matches']:
                     if results['matches'][0]['score'] > best_score * 1.2:
                         best_result = results['matches'][0]
             except Exception as e:
-                print(f"Pinecone inference failed, skipping USDA search: {e}")
+                print(f"USDA index query failed: {e}")
 
         if best_result:
             metadata = best_result['metadata']

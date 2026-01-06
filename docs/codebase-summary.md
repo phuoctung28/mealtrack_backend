@@ -258,7 +258,7 @@ src/
     │   │   └── openai_chat_service.py   # OpenAI GPT-4
     │   ├── firebase_service.py          # Auth & messaging
     │   ├── firebase_auth_service.py     # Auth helpers
-    │   ├── pinecone_service.py          # Vector DB
+    │   ├── pinecone_service.py          # Pinecone Inference API (Phase 01)
     │   ├── scheduled_notification_service.py
     │   └── usda_service.py              # Food database
     ├── adapters/                        # Third-party adapters
@@ -605,10 +605,47 @@ src/infra/services/
 │   └── openai_chat_service.py      # OpenAI GPT-4 chat
 ├── firebase_service.py              # Firebase auth & messaging
 ├── firebase_auth_service.py         # Auth helpers
-├── pinecone_service.py              # Vector DB
+├── pinecone_service.py              # Pinecone Inference API (Phase 01)
 ├── scheduled_notification_service.py # Background notifications
 └── usda_service.py                  # USDA food database
 ```
+
+**PineconeNutritionService (Phase 01 - Inference Migration)**:
+
+Integrates Pinecone's serverless Inference API for embedding generation, eliminating external embedding dependencies.
+
+```python
+# Key Methods
+_embed_text(texts, input_type="query")
+    → llama-text-embed-v2 model
+    → 384-dimension embeddings
+    → Supports "query" and "passage" input types
+
+search_ingredient(query)
+    → Generate query embedding
+    → Search ingredients_index (threshold: 0.35)
+    → Fallback: USDA index if score < 0.6
+    → Return: nutrition metadata per 100g
+
+get_scaled_nutrition(ingredient_name, quantity, unit)
+    → Search ingredient
+    → Scale nutrition to actual portion
+    → Converts units: g, kg, oz, cup, tbsp, tsp
+
+calculate_total_nutrition(ingredients)
+    → Sum nutrition across multiple ingredients
+    → Handles missing ingredients gracefully
+```
+
+**Indexes**:
+- `ingredients`: Per-100g nutrition data (optimized for individual tracking)
+- `usda`: USDA FoodData Central (456K+ foods, fallback source)
+
+**Embedding Model**:
+- Model: llama-text-embed-v2
+- Dimensions: 384 (via output_dimensionality parameter)
+- Truncation: "END" (end-of-sequence)
+- Input types: "query" (search), "passage" (documents)
 
 ---
 
