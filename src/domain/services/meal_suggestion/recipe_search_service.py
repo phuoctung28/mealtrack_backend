@@ -7,7 +7,6 @@ import logging
 from typing import List, Optional
 from dataclasses import dataclass
 
-from sentence_transformers import SentenceTransformer
 from src.infra.services.pinecone_service import PineconeNutritionService
 
 logger = logging.getLogger(__name__)
@@ -64,13 +63,8 @@ class RecipeSearchService:
                 logger.warning(f"Failed to initialize Pinecone service: {e}")
                 self._pinecone = None
 
-        # Load embedding model for query encoding
-        try:
-            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-            logger.info("Loaded embedding model for recipe search")
-        except Exception as e:
-            logger.warning(f"Failed to load embedding model: {e}")
-            self.embedding_model = None
+        # No local embedding model needed - use Pinecone Inference API
+        logger.info("Recipe search service initialized (using Pinecone Inference API)")
 
         self.recipes_index = None
         if self._pinecone:
@@ -79,6 +73,23 @@ class RecipeSearchService:
                 logger.info("Connected to Pinecone recipes index")
             except Exception as e:
                 logger.warning(f"Recipes index not available: {e}")
+
+    def _embed_query(self, text: str) -> list[float]:
+        """
+        Generate query embedding using Pinecone Inference API.
+
+        Args:
+            text: Query text to embed
+
+        Returns:
+            384-dimension embedding vector
+        """
+        embeddings = self._pinecone.pc.inference.embed(
+            model="llama-text-embed-v2",
+            inputs=[text],
+            parameters={"input_type": "query", "truncate": "END", "output_dimensionality": 384}
+        )
+        return embeddings[0]["values"]
 
     def search_recipes(
         self,
@@ -95,8 +106,8 @@ class RecipeSearchService:
         Returns:
             List of matching recipes, sorted by relevance
         """
-        if not self.recipes_index or not self.embedding_model:
-            logger.warning("Recipes index or embedding model not available, returning empty results")
+        if not self.recipes_index or not self._pinecone:
+            logger.warning("Recipes index or Pinecone service not available, returning empty results")
             return []
 
         # Build search query text
@@ -116,8 +127,8 @@ class RecipeSearchService:
 
         query_text = " ".join(query_parts)
 
-        # Generate query embedding
-        query_embedding = self.embedding_model.encode(query_text).tolist()
+        # Generate query embedding using Pinecone Inference API
+        query_embedding = self._embed_query(query_text)
 
         # Build metadata filters
         filters = {
