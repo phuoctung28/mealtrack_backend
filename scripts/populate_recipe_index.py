@@ -136,7 +136,7 @@ class RecipeIndexPopulator:
         from pinecone import ServerlessSpec
 
         index_name = "recipes"
-        dimension = 384  # llama-text-embed-v2 with output_dimensionality=384
+        dimension = 1024  # llama-text-embed-v2 default dimension
         existing_indexes = [idx['name'] for idx in self.pinecone.pc.list_indexes()]
 
         if index_name not in existing_indexes:
@@ -165,13 +165,13 @@ class RecipeIndexPopulator:
             texts: List of document texts (max 96 per batch)
 
         Returns:
-            List of 384-dimension embedding vectors
+            List of 1024-dimension embedding vectors
         """
         try:
             embeddings = self.pinecone.pc.inference.embed(
                 model="llama-text-embed-v2",
                 inputs=texts,
-                parameters={"input_type": "passage", "truncate": "END", "output_dimensionality": 384}
+                parameters={"input_type": "passage", "truncate": "END"}
             )
             return [e["values"] for e in embeddings]
         except Exception as e:

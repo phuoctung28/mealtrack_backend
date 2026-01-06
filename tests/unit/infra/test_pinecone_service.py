@@ -448,7 +448,7 @@ class TestPineconeNutritionService:
 
         # Mock Pinecone Inference API
         mock_pc.inference.embed.return_value = [
-            {"values": [0.1, 0.2, 0.3] + [0.0] * 381}  # 384-dim vector
+            {"values": [0.1, 0.2, 0.3] + [0.0] * 1021}  # 1024-dim vector
         ]
 
         service = PineconeNutritionService(pinecone_api_key="test-key")
@@ -463,11 +463,10 @@ class TestPineconeNutritionService:
             parameters={
                 "input_type": "query",
                 "truncate": "END",
-                "output_dimensionality": 384,
             },
         )
         assert len(result) == 1
-        assert len(result[0]) == 384
+        assert len(result[0]) == 1024  # llama-text-embed-v2 default dimension
 
 
 @pytest.mark.unit

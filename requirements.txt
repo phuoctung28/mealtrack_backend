@@ -11,7 +11,7 @@ langchain-google-genai
 
 # Vector search and embeddings
 pinecone>=7.0.0
-sentence-transformers>=3.0.0
+# sentence-transformers>=3.0.0  # Removed - using Pinecone Inference API
 
 # Cloud storage
 cloudinary==1.37.0

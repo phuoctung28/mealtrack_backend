@@ -82,12 +82,12 @@ class RecipeSearchService:
             text: Query text to embed
 
         Returns:
-            384-dimension embedding vector
+            1024-dimension embedding vector
         """
         embeddings = self._pinecone.pc.inference.embed(
             model="llama-text-embed-v2",
             inputs=[text],
-            parameters={"input_type": "query", "truncate": "END", "output_dimensionality": 384}
+            parameters={"input_type": "query", "truncate": "END"}
         )
         return embeddings[0]["values"]
 

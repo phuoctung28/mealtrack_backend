@@ -87,15 +87,14 @@ class PineconeNutritionService:
             input_type: "query" for search queries, "passage" for documents
 
         Returns:
-            List of embedding vectors (384 dimensions each)
+            List of embedding vectors (1024 dimensions each)
         """
         embeddings = self.pc.inference.embed(
             model="llama-text-embed-v2",
             inputs=texts,
             parameters={
                 "input_type": input_type,
-                "truncate": "END",
-                "output_dimensionality": 384
+                "truncate": "END"
             }
         )
         return [e["values"] for e in embeddings]
