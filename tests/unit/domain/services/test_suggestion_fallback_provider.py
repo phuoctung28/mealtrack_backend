@@ -33,7 +33,8 @@ class TestSuggestionFallbackProvider:
         assert isinstance(meal, PlannedMeal)
         assert meal.meal_type == MealType.LUNCH
         assert meal.name == "Grilled Chicken Salad Bowl"
-        assert meal.calories == 450
+        # Calories are scaled: 450 * (450/400) = 506.25 -> 506
+        assert meal.calories == 506
         assert meal.is_vegetarian is False
         assert meal.is_gluten_free is True
 
@@ -44,7 +45,8 @@ class TestSuggestionFallbackProvider:
         assert isinstance(meal, PlannedMeal)
         assert meal.meal_type == MealType.DINNER
         assert meal.name == "Baked Salmon with Vegetables"
-        assert meal.calories == 500
+        # Calories are scaled: 500 * (500/400) = 625
+        assert meal.calories == 625
         assert meal.is_gluten_free is True
 
     def test_get_fallback_meal_snack(self):

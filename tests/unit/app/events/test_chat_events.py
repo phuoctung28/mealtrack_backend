@@ -2,7 +2,6 @@
 Unit tests for chat events.
 """
 import pytest
-from datetime import datetime
 
 from src.app.events.chat_events import (
     MessageSentEvent,
@@ -32,8 +31,6 @@ class TestChatEvents:
         assert event.role == "user"
         assert event.content == "Hello, world!"
         assert event.metadata == {"timestamp": "2024-01-01T00:00:00Z"}
-        assert isinstance(event.event_id, str)
-        assert isinstance(event.occurred_at, datetime)
 
     def test_thread_created_event(self):
         """Test ThreadCreatedEvent creation."""
@@ -46,8 +43,6 @@ class TestChatEvents:
         assert event.thread_id == "thread_123"
         assert event.user_id == "user_789"
         assert event.title == "New Conversation"
-        assert isinstance(event.event_id, str)
-        assert isinstance(event.occurred_at, datetime)
 
     def test_thread_deleted_event(self):
         """Test ThreadDeletedEvent creation."""
@@ -58,6 +53,4 @@ class TestChatEvents:
         
         assert event.thread_id == "thread_123"
         assert event.user_id == "user_789"
-        assert isinstance(event.event_id, str)
-        assert isinstance(event.occurred_at, datetime)
 

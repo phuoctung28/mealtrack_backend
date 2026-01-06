@@ -53,10 +53,9 @@ class TestNutritionEnrichmentService:
 
     def test_init_without_pinecone_service(self):
         """Test initialization without Pinecone service."""
-        with pytest.raises(Exception):
-            # This will try to initialize Pinecone and may fail
-            service = NutritionEnrichmentService()
-        # But we can still create with None explicitly
+        # When pinecone_service=None, it tries to initialize PineconeNutritionService
+        # If that fails, it sets _pinecone to None (doesn't raise exception)
+        # We can create with None explicitly to avoid initialization attempt
         service = NutritionEnrichmentService(pinecone_service=None)
         assert service._pinecone is None
 
