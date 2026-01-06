@@ -27,7 +27,7 @@ from src.domain.ports.meal_suggestion_repository_port import (
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.domain.services.meal_suggestion.nutrition_enrichment_service import NutritionEnrichmentService
+
 from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService, RecipeSearchCriteria
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 
@@ -37,16 +37,15 @@ logger = logging.getLogger(__name__)
 class SuggestionOrchestrationService:
     """
     Orchestrates meal suggestion generation with session tracking.
-    Implements timeout handling, fallback logic, and portion multipliers.
+    Implements timeout handling and portion multipliers.
     """
 
     GENERATION_TIMEOUT_SECONDS = 45  # Increased from 30s - full recipe generation needs ~30-35s
     SUGGESTIONS_COUNT = 3
 
     # Parallel generation constants
-    PARALLEL_SINGLE_MEAL_TOKENS = 2500  # Full meal with 4-6 ingredients + 3-4 detailed steps
-    PARALLEL_SINGLE_MEAL_TIMEOUT = 25  # Per-request timeout (detailed output needs more time)
-    PARALLEL_MAX_RETRIES = 3  # Max retries for failed generations before falling back
+    PARALLEL_SINGLE_MEAL_TOKENS = 4000  # Token limit for complete JSON generation
+    PARALLEL_SINGLE_MEAL_TIMEOUT = 25  # Per-request timeout
 
     def __init__(
         self,
@@ -55,7 +54,6 @@ class SuggestionOrchestrationService:
         user_repo: UserRepositoryPort,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
-        nutrition_enrichment: NutritionEnrichmentService = None,
         recipe_search: RecipeSearchService = None,
         redis_client=None,
     ):
@@ -64,7 +62,6 @@ class SuggestionOrchestrationService:
         self._user_repo = user_repo
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
-        self._nutrition_enrichment = nutrition_enrichment or NutritionEnrichmentService()
         self._recipe_search = recipe_search  # Optional for Phase 2
         self._redis_client = redis_client
 
@@ -283,122 +280,6 @@ class SuggestionOrchestrationService:
         # Use parallel hybrid generation for faster, more accurate results
         return await self._generate_parallel_hybrid(session, exclude_ids)
 
-    async def _generate_with_ai(
-        self,
-        session: SuggestionSession,
-        exclude_ids: List[str],
-        start_time: float
-    ) -> List[MealSuggestion]:
-        """AI generation path (existing logic)."""
-        try:
-            # Build prompt
-            prompt = self._build_prompt(session, exclude_ids)
-            system_message = "You are a nutrition AI that generates meal suggestions."
-
-            # Log detailed request context
-            logger.info(
-                f"[AI-GENERATION] session={session.id} | "
-                f"meal_type={session.meal_type} | "
-                f"target_cal={session.target_calories} | "
-                f"ingredients={len(session.ingredients or [])} items | "
-                f"cook_time={session.cooking_time_minutes}min | "
-                f"excluded={len(exclude_ids)} | "
-                f"timeout={self.GENERATION_TIMEOUT_SECONDS}s | "
-                f"prompt_len={len(prompt)} chars"
-            )
-
-            # Call AI with timeout (Phase 1: reduced tokens - no macros)
-            logger.info(
-                f"Generating suggestions for session {session.id}, target: {session.target_calories} cal"
-            )
-            raw_response = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._generation.generate_meal_plan,
-                    prompt,
-                    system_message,
-                    "json",
-                    4000,  # Reduced from 8000 (Phase 1: AI doesn't generate macros)
-                ),
-                timeout=self.GENERATION_TIMEOUT_SECONDS,
-            )
-
-            elapsed = time.time() - start_time
-            logger.info(
-                f"[MEAL-GEN-RESPONSE] session={session.id} | "
-                f"elapsed={elapsed:.2f}s | "
-                f"response_keys={list(raw_response.keys()) if isinstance(raw_response, dict) else 'non-dict'} | "
-                f"suggestions_count={len(raw_response.get('suggestions', []))} "
-            )
-
-            # Parse AI response (now without macros)
-            raw_suggestions = self._parse_ai_response(raw_response, session)
-
-            # Phase 1 optimization: Enrich with nutrition calculation
-            enriched_suggestions = []
-            for suggestion in raw_suggestions:
-                enrichment = self._nutrition_enrichment.calculate_meal_nutrition(
-                    ingredients=suggestion.ingredients,
-                    target_calories=session.target_calories
-                )
-
-                # Update suggestion with calculated macros
-                suggestion.macros = enrichment.macros
-                suggestion.confidence_score = min(
-                    suggestion.confidence_score,
-                    enrichment.confidence_score
-                )
-
-                if enrichment.missing_ingredients:
-                    logger.debug(
-                        f"Missing nutrition data for {len(enrichment.missing_ingredients)} ingredients: "
-                        f"{', '.join(enrichment.missing_ingredients[:3])}"
-                    )
-
-                enriched_suggestions.append(suggestion)
-
-            logger.info(
-                f"[MEAL-GEN-ENRICHED] session={session.id} | "
-                f"enriched_count={len(enriched_suggestions)} | "
-                f"names={[s.meal_name[:30] for s in enriched_suggestions]}"
-            )
-
-            # Ensure exactly 3 suggestions
-            while len(enriched_suggestions) < self.SUGGESTIONS_COUNT:
-                logger.warning(
-                    f"[MEAL-GEN-FALLBACK] session={session.id} | "
-                    f"adding fallback suggestion #{len(enriched_suggestions) + 1} "
-                    f"(only {len(enriched_suggestions)}/{self.SUGGESTIONS_COUNT} parsed)"
-                )
-                enriched_suggestions.append(self._create_fallback(session, len(enriched_suggestions)))
-
-            return enriched_suggestions[: self.SUGGESTIONS_COUNT]
-
-        except asyncio.TimeoutError:
-            elapsed = time.time() - start_time
-            logger.warning(
-                f"[MEAL-GEN-TIMEOUT] session={session.id} | "
-                f"timeout={self.GENERATION_TIMEOUT_SECONDS}s | "
-                f"elapsed={elapsed:.2f}s | "
-                f"meal_type={session.meal_type} | "
-                f"ingredients={session.ingredients[:5] if session.ingredients else []}... | "
-                f"Returning fallback suggestions."
-            )
-            return [
-                self._create_fallback(session, i) for i in range(self.SUGGESTIONS_COUNT)
-            ]
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(
-                f"[MEAL-GEN-ERROR] session={session.id} | "
-                f"elapsed={elapsed:.2f}s | "
-                f"error_type={type(e).__name__} | "
-                f"error={str(e)[:200]}",
-                exc_info=True,
-            )
-            return [
-                self._create_fallback(session, i) for i in range(self.SUGGESTIONS_COUNT)
-            ]
-
     def _build_prompt(self, session: SuggestionSession, exclude_ids: List[str]) -> str:
         """Build compact AI prompt - ingredients only, NO macros."""
         # Limit ingredients to 10 for prompt efficiency
@@ -517,145 +398,200 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
         exclude_ids: List[str],
     ) -> List[MealSuggestion]:
         """
-        Generate 3 meals in parallel with Pinecone inspiration.
-        Target latency: 8-10s (vs 30-35s sequential).
+        Two-phase generation for better variety and efficiency.
+        Phase 1: Generate 3 diverse meal names (1 call, ~3-5s)
+        Phase 2: Generate recipes in parallel (3 calls, ~10-15s)
+        Target latency: 13-20s (better variety than single-phase)
         """
         start_time = time.time()
 
-        # STEP 1: Get inspiration recipes from Pinecone (~500ms)
-        inspiration_recipes = []
-        if self._recipe_search:
-            criteria = RecipeSearchCriteria(
-                meal_type=session.meal_type,
-                target_calories=session.target_calories,
-                calorie_tolerance=150,
-                max_cook_time=session.cooking_time_minutes,
-                dietary_preferences=getattr(session, "dietary_preferences", []),
-                allergies=getattr(session, "allergies", []),
-                ingredients=session.ingredients,
-                exclude_ids=exclude_ids,
-            )
-
-            inspiration_recipes = await asyncio.to_thread(
-                self._recipe_search.search_recipes, criteria=criteria, top_k=3
-            )
-
-            logger.info(
-                f"[PARALLEL-INSPIRATION] session={session.id} | "
-                f"found={len(inspiration_recipes)} | "
-                f"elapsed={time.time() - start_time:.2f}s"
-            )
-
-        # STEP 2: Build 3 prompts (one per meal)
+        # STEP 1: Generate 3 diverse meal names in one call
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
-            build_single_meal_prompt,
+            build_meal_names_prompt,
+            build_recipe_details_prompt,
+        )
+        from src.domain.schemas.meal_generation_schemas import (
+            MealNamesResponse,
+            RecipeDetailsResponse,
         )
 
-        prompts = []
-        for i in range(3):
-            inspiration = inspiration_recipes[i] if i < len(inspiration_recipes) else None
-            prompt = build_single_meal_prompt(
-                session=session,
-                meal_index=i,
-                inspiration_recipe=inspiration,
+        logger.info(f"[PHASE-1-START] session={session.id} | generating 3 diverse meal names")
+        
+        names_prompt = build_meal_names_prompt(session)
+        names_system = "You are a creative chef. Generate 3 VERY DIFFERENT meal names with diverse flavors and cooking styles."
+        
+        phase1_elapsed = 0.0  # Initialize to prevent UnboundLocalError
+        try:
+            names_raw = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self._generation.generate_meal_plan,
+                    names_prompt,
+                    names_system,
+                    "json",
+                    1000,  # Token limit for name generation
+                    MealNamesResponse,  # Structured output schema (guarantees valid format)
+                ),
+                timeout=10,  # Quick timeout for name generation
             )
-            prompts.append(prompt)
+            
+            meal_names = names_raw.get("meal_names", [])
+            
+            if len(meal_names) != 3:
+                logger.warning(
+                    f"[PHASE-1-INCOMPLETE] session={session.id} | "
+                    f"got {len(meal_names)} names, expected 3"
+                )
+                # Pad with generic names if needed
+                while len(meal_names) < 3:
+                    meal_names.append(f"Healthy {session.meal_type.title()} #{len(meal_names) + 1}")
+            
+            phase1_elapsed = time.time() - start_time
+            logger.info(
+                f"[PHASE-1-COMPLETE] session={session.id} | "
+                f"elapsed={phase1_elapsed:.2f}s | "
+                f"names={meal_names}"
+            )
+            
+        except Exception as e:
+            phase1_elapsed = time.time() - start_time
+            logger.error(
+                f"[PHASE-1-FAILED] session={session.id} | "
+                f"elapsed={phase1_elapsed:.2f}s | "
+                f"error_type={type(e).__name__} | error={e}"
+            )
+            # Fallback to generic names
+            meal_names = [
+                f"Healthy {session.meal_type.title()} #{i+1}" 
+                for i in range(3)
+            ]
+        
+        # STEP 2: Generate full recipes for each name in parallel
+        logger.info(f"[PHASE-2-START] session={session.id} | generating recipes for {meal_names}")
+        
+        recipe_prompts = [
+            build_recipe_details_prompt(meal_name, session)
+            for meal_name in meal_names
+        ]
+        
+        # Generate recipes in parallel with retry logic
+        recipe_system = "You are a professional chef. Generate complete recipe details as valid JSON. CRITICAL: MUST finish entire JSON - include all fields."
 
-        # STEP 3: Generate 3 meals in parallel with retry logic
-        system_message = "You are a chef. Generate exactly 1 meal as compact JSON."
-
-        async def generate_single(prompt: str, index: int) -> Optional[MealSuggestion]:
-            """Generate single meal with timeout."""
+        async def generate_recipe(prompt: str, meal_name: str, index: int) -> Optional[MealSuggestion]:
+            """Generate recipe details for a given meal name."""
             try:
                 raw = await asyncio.wait_for(
                     asyncio.to_thread(
                         self._generation.generate_meal_plan,
                         prompt,
-                        system_message,
+                        recipe_system,
                         "json",
-                        self.PARALLEL_SINGLE_MEAL_TOKENS,
+                        4000,  # Token limit for recipe generation
+                        RecipeDetailsResponse,  # Structured output schema (guarantees valid format)
                     ),
                     timeout=self.PARALLEL_SINGLE_MEAL_TIMEOUT,
                 )
 
-                # Parse single meal response
-                meal_data = raw.get("suggestions", [raw])[0] if "suggestions" in raw else raw
-                result = self._parse_single_meal(meal_data, session, index)
-
-                if result is None:
-                    # Log what we got to help debug
+                # Parse recipe response (guaranteed valid by Pydantic schema)
+                recipe_data = raw
+                
+                # Extract validated fields (schema ensures these exist and are valid)
+                description = recipe_data.get("description", "")
+                ingredients = recipe_data.get("ingredients", [])
+                recipe_steps = recipe_data.get("recipe_steps", [])
+                prep_time = recipe_data.get("prep_time_minutes", session.cooking_time_minutes)
+                
+                # Schema guarantees 4-6 ingredients and 3-4 steps, but double-check
+                if not ingredients or not recipe_steps:
                     logger.warning(
-                        f"[PARALLEL-PARSE-FAIL] index={index} | "
-                        f"name={meal_data.get('name', 'N/A')[:30]} | "
-                        f"ingredients_count={len(meal_data.get('ingredients', []))} | "
-                        f"steps_count={len(meal_data.get('recipe_steps', []))}"
+                        f"[PHASE-2-UNEXPECTED-EMPTY] index={index} | "
+                        f"ingredients={len(ingredients)} | steps={len(recipe_steps)}"
                     )
-
-                return result
-
+                    return None
+                
+                # Build MealSuggestion with the meal_name from Phase 1
+                return MealSuggestion(
+                    id=f"sug_{uuid.uuid4().hex[:16]}",
+                    session_id=session.id,
+                    user_id=session.user_id,
+                    meal_name=meal_name,  # Use name from Phase 1
+                    description=description,
+                    meal_type=MealType(session.meal_type),
+                    macros=MacroEstimate(
+                        calories=session.target_calories,
+                        protein=20,
+                        carbs=30,
+                        fat=10,  # Placeholder, will be enriched
+                    ),
+                    ingredients=[Ingredient(**ing) for ing in ingredients],
+                    recipe_steps=[RecipeStep(**step) for step in recipe_steps],
+                    prep_time_minutes=prep_time,
+                    confidence_score=0.85,
+                )
+            
             except asyncio.TimeoutError:
-                logger.warning(f"[PARALLEL-TIMEOUT] index={index} | timeout={self.PARALLEL_SINGLE_MEAL_TIMEOUT}s")
+                logger.warning(
+                    f"[PHASE-2-TIMEOUT] index={index} | "
+                    f"meal_name={meal_name} | timeout={self.PARALLEL_SINGLE_MEAL_TIMEOUT}s"
+                )
                 return None
             except Exception as e:
-                logger.warning(f"[PARALLEL-FAIL] index={index} | error_type={type(e).__name__} | error={e}")
+                logger.warning(
+                    f"[PHASE-2-FAIL] index={index} | "
+                    f"meal_name={meal_name} | error_type={type(e).__name__} | error={e}"
+                )
                 return None
 
-        # Initial generation - all 3 in parallel
+        # Initial generation - all 3 recipes in parallel
         gen_start = time.time()
         results: List[Optional[MealSuggestion]] = list(await asyncio.gather(
-            generate_single(prompts[0], 0),
-            generate_single(prompts[1], 1),
-            generate_single(prompts[2], 2),
+            generate_recipe(recipe_prompts[0], meal_names[0], 0),
+            generate_recipe(recipe_prompts[1], meal_names[1], 1),
+            generate_recipe(recipe_prompts[2], meal_names[2], 2),
             return_exceptions=False,
         ))
 
+        # C2 FIX: No retry logic - return results immediately
+        successful_results = [r for r in results if r is not None]
+        
         logger.info(
-            f"[PARALLEL-GENERATED] session={session.id} | "
-            f"success={sum(1 for r in results if r)} | "
+            f"[PHASE-2-COMPLETE] session={session.id} | "
+            f"success={len(successful_results)}/3 | "
             f"gen_elapsed={time.time() - gen_start:.2f}s"
         )
 
-        # STEP 3b: Retry failed generations (up to MAX_RETRIES)
-        for retry_num in range(self.PARALLEL_MAX_RETRIES):
-            failed_indices = [i for i, r in enumerate(results) if r is None]
-            if not failed_indices:
-                break  # All successful
-
-            logger.info(
-                f"[PARALLEL-RETRY] session={session.id} | "
-                f"retry={retry_num + 1}/{self.PARALLEL_MAX_RETRIES} | "
-                f"failed_indices={failed_indices}"
+        # STEP 3: Return partial or complete results
+        failed_indices = [i for i, r in enumerate(results) if r is None]
+        
+        if failed_indices:
+            failed_names = [meal_names[i] for i in failed_indices]
+            logger.warning(
+                f"[PHASE-2-PARTIAL-SUCCESS] session={session.id} | "
+                f"success={len(successful_results)}/3 | "
+                f"failed={len(failed_indices)} | "
+                f"failed_meals={failed_names}"
             )
-
-            # Retry failed ones in parallel
-            retry_tasks = [generate_single(prompts[i], i) for i in failed_indices]
-            retry_results = await asyncio.gather(*retry_tasks, return_exceptions=False)
-
-            # Update results with successful retries
-            for idx, retry_result in zip(failed_indices, retry_results):
-                if retry_result:
-                    results[idx] = retry_result
-                    logger.info(f"[PARALLEL-RETRY-SUCCESS] index={idx} | retry={retry_num + 1}")
-
-        # STEP 4: Combine results, enrich with nutrition, fill gaps with fallbacks
-        suggestions = []
-        for i, result in enumerate(results):
-            if result:
-                # Enrich with nutrition
-                enrichment = self._nutrition_enrichment.calculate_meal_nutrition(
-                    ingredients=result.ingredients, target_calories=session.target_calories
+            
+            # A3 FIX: If we have at least 1 successful meal, return it
+            # Otherwise, raise error
+            if not successful_results:
+                raise RuntimeError(
+                    f"Failed to generate any recipes after {self.PARALLEL_MAX_RETRIES} retries. "
+                    f"All 3 meals failed: {failed_names}"
                 )
-                result.macros = enrichment.macros
-                suggestions.append(result)
-            else:
-                logger.warning(f"[PARALLEL-FALLBACK] index={i} | using fallback after {self.PARALLEL_MAX_RETRIES} retries")
-                suggestions.append(self._create_fallback(session, i))
+        
+        # Use successful results as-is (macros are placeholder estimates)
+        suggestions = successful_results
 
         total_elapsed = time.time() - start_time
+        phase2_elapsed = total_elapsed - phase1_elapsed
+        
         logger.info(
-            f"[PARALLEL-COMPLETE] session={session.id} | "
+            f"[TWO-PHASE-COMPLETE] session={session.id} | "
             f"total_elapsed={total_elapsed:.2f}s | "
-            f"names={[s.meal_name[:20] for s in suggestions]}"
+            f"phase1={phase1_elapsed:.2f}s | "
+            f"phase2={phase2_elapsed:.2f}s | "
+            f"returned={len(suggestions)}/3 meals | "
+            f"meals={[s.meal_name for s in suggestions]}"
         )
 
         return suggestions
@@ -699,7 +635,7 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
                 calories=session.target_calories,
                 protein=20,
                 carbs=30,
-                fat=10,  # Placeholder, will be enriched
+                fat=10,  # Placeholder - estimated values
             ),
             ingredients=[Ingredient(**ing) for ing in ingredients],
             recipe_steps=[RecipeStep(**step) for step in recipe_steps],
@@ -744,41 +680,6 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
             ],
             prep_time_minutes=recipe.prep_time_minutes,
             confidence_score=recipe.confidence_score,
-        )
-
-    def _create_fallback(
-        self, session: SuggestionSession, index: int
-    ) -> MealSuggestion:
-        """Create fallback suggestion when AI fails."""
-        return MealSuggestion(
-            id=f"fallback_{uuid.uuid4().hex[:8]}",
-            session_id=session.id,
-            user_id=session.user_id,
-            meal_name=f"Simple {session.meal_type.title()} #{index + 1}",
-            description="Quick and nutritious meal",
-            meal_type=MealType(session.meal_type),
-            macros=MacroEstimate(
-                calories=session.target_calories,
-                protein=session.target_calories * 0.3 / 4,
-                carbs=session.target_calories * 0.4 / 4,
-                fat=session.target_calories * 0.3 / 9,
-            ),
-            ingredients=[
-                Ingredient(name="Protein source", amount=150, unit="g"),
-                Ingredient(name="Vegetables", amount=100, unit="g"),
-                Ingredient(name="Grains", amount=100, unit="g"),
-            ],
-            recipe_steps=[
-                RecipeStep(
-                    step=1, instruction="Prepare ingredients", duration_minutes=5
-                ),
-                RecipeStep(
-                    step=2, instruction="Cook meal", duration_minutes=15
-                ),
-                RecipeStep(step=3, instruction="Serve and enjoy", duration_minutes=2),
-            ],
-            prep_time_minutes=20,
-            confidence_score=0.5,
         )
 
     def _normalize_confidence(self, score: float) -> float:

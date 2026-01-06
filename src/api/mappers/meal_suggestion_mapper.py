@@ -57,6 +57,7 @@ def to_suggestions_list_response(
         meal_portion_type=session.meal_portion_type,
         target_calories=session.target_calories,
         suggestions=[to_meal_suggestion_response(s) for s in suggestions],
+        suggestion_count=len(suggestions),
         expires_at=session.expires_at,
     )
 

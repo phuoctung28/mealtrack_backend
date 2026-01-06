@@ -199,7 +199,7 @@ def build_single_meal_prompt(
     Args:
         session: User's session with preferences
         meal_index: Which meal (0, 1, 2) for variety
-        inspiration_recipe: Optional Pinecone recipe as reference
+        inspiration_recipe: Optional (DEPRECATED - not used)
 
     Returns:
         Compact prompt string
@@ -207,89 +207,151 @@ def build_single_meal_prompt(
     ingredients_list = session.ingredients[:8] if session.ingredients else []
     ingredients_str = ", ".join(ingredients_list) if ingredients_list else "common ingredients"
 
-    # Inspiration context (only if high confidence)
-    inspiration_ctx = ""
-    if inspiration_recipe and inspiration_recipe.confidence_score >= 0.6:
-        insp_ingredients = [
-            ing.get("name", "") for ing in inspiration_recipe.ingredients[:4]
-        ]
-        inspiration_ctx = f"""
-INSPIRATION (adapt to user's ingredients):
-- {inspiration_recipe.name}: {', '.join(insp_ingredients)}...
-"""
+    # REMOVED: Pinecone inspiration (using pure AI prompts for variety instead)
 
     # Identify protein ingredients for variety guidance
     protein_keywords = ["chicken", "beef", "pork", "fish", "salmon", "tuna", "shrimp", "tofu", "egg", "lamb", "turkey"]
     proteins_available = [ing for ing in ingredients_list if any(p in ing.lower() for p in protein_keywords)]
 
-    # Variety hints based on index - encourage different proteins
+    # Subtle variety through protein rotation (if multiple proteins available)
+    protein_hint = ""
     if len(proteins_available) > 1:
-        # Rotate through available proteins
         suggested_protein = proteins_available[meal_index % len(proteins_available)]
-        protein_hint = f"Feature {suggested_protein} as main protein"
-    else:
-        protein_hint = ""
+        protein_hint = f"Consider featuring {suggested_protein} as the main protein"
 
-    # Cooking style hints for variety (rotate per meal)
-    style_hints = [
-        "Asian-inspired with bold flavors",
-        "Mediterranean with herbs and olive oil",
-        "Classic homestyle comfort",
-    ]
-
-    # Naming style hints to avoid robotic names (rotate per meal)
-    naming_hints = [
-        "Herb-Crusted", "Golden", "Savory", "Zesty", "Garden-Fresh",
-        "Honey-Glazed", "Garlic-Butter", "Pan-Seared", "Citrus", "Rustic",
-    ]
-    suggested_naming = naming_hints[meal_index % len(naming_hints)]
+    # REMOVED: Style hints (Asian, Mediterranean, etc.) - creates bias
+    # REMOVED: Naming hints (Herb-Crusted, Golden, etc.) - creates repetitive patterns
 
     constraints = []
     if hasattr(session, "allergies") and session.allergies:
-        constraints.append(f"AVOID: {', '.join(session.allergies)}")
+        constraints.append(f"⚠️ MUST AVOID: {', '.join(session.allergies)}")
     if hasattr(session, "dietary_preferences") and session.dietary_preferences:
-        constraints.append(f"DIETARY: {', '.join(session.dietary_preferences)}")
+        constraints.append(f"Dietary preferences: {', '.join(session.dietary_preferences)}")
 
-    constraints_str = "\n".join(constraints)
+    constraints_str = "\n".join(constraints) if constraints else ""
 
-    # Build style section
-    style_section = style_hints[meal_index % len(style_hints)]
-    if protein_hint:
-        style_section = f"{protein_hint}. {style_section}"
+    return f"""Generate 1 complete {session.meal_type} meal (~{session.target_calories} cal, ≤{session.cooking_time_minutes}min).
 
-    return f"""Generate 1 {session.meal_type} meal (~{session.target_calories} cal, max {session.cooking_time_minutes} min cook time).
-
-INGREDIENTS TO USE: {ingredients_str}
+INGREDIENTS: {ingredients_str}
 {constraints_str}
-{inspiration_ctx}
-STYLE: {style_section}
-NAMING HINT: Consider "{suggested_naming}" style (e.g., "{suggested_naming} Chicken", "Garlic-Butter Steak")
+{protein_hint}
 
-REQUIRED JSON FORMAT:
+OUTPUT (compact JSON, no whitespace):
 {{
-  "name": "Restaurant-Style Dish Name",
-  "description": "Appetizing description that makes you hungry",
+  "name": "Dish Name",
+  "description": "Brief appetizing description",
   "ingredients": [
-    {{"name": "protein_from_list", "amount": 200, "unit": "g"}},
-    {{"name": "carb_from_list", "amount": 100, "unit": "g"}},
-    {{"name": "vegetable_from_list", "amount": 150, "unit": "g"}},
-    {{"name": "olive oil", "amount": 1, "unit": "tbsp"}}
+    {{"name": "ingredient1", "amount": 200, "unit": "g"}},
+    {{"name": "ingredient2", "amount": 100, "unit": "g"}},
+    {{"name": "ingredient3", "amount": 150, "unit": "g"}},
+    {{"name": "ingredient4", "amount": 1, "unit": "tbsp"}}
   ],
   "recipe_steps": [
-    {{"step": 1, "instruction": "Prepare main ingredient", "duration_minutes": 2}},
-    {{"step": 2, "instruction": "Heat oil in pan over medium-high heat", "duration_minutes": 1}},
-    {{"step": 3, "instruction": "Cook protein until done", "duration_minutes": 8}},
-    {{"step": 4, "instruction": "Combine and serve", "duration_minutes": 5}}
+    {{"step": 1, "instruction": "Action", "duration_minutes": 5}},
+    {{"step": 2, "instruction": "Action", "duration_minutes": 10}},
+    {{"step": 3, "instruction": "Action", "duration_minutes": 8}}
   ],
   "prep_time_minutes": 20
 }}
 
-STRICT RULES:
-- Name should sound like a restaurant menu item (NOT "Speedy", "Quick", "Power Bowl")
-- Description should be appetizing, not technical
-- MUST use ingredients from INGREDIENTS TO USE list
-- MUST include 4-6 ingredients with exact amounts
-- MUST include 3-4 detailed recipe steps with duration
-- Use specific quantities (g, ml, tbsp, tsp)
-- NO calories/protein/carbs/fat fields
-- Return ONLY valid JSON, no extra text"""
+CRITICAL RULES:
+1. MUST include ALL fields: name, description, ingredients (4-6 items), recipe_steps (3-4 steps), prep_time_minutes
+2. MUST complete entire JSON - do NOT truncate
+3. Name: Natural dish name (NOT "Quick/Speedy/Power Bowl"). Examples: "Garlic Butter Salmon", "Herb Chicken", "Spicy Beef"
+4. Ingredients: Use from INGREDIENTS list, exact amounts (g/ml/tbsp/tsp)
+5. Recipe steps: Clear instructions with duration_minutes
+6. Return ONLY valid JSON, no markdown/extra text
+7. NO calories/protein/carbs/fat fields
+
+⚠️ COMPLETE THE ENTIRE JSON BEFORE STOPPING - all arrays must close properly!
+
+"""
+
+
+def build_meal_names_prompt(
+    session: "SuggestionSession",
+) -> str:
+    """
+    Phase 1: Generate 3 diverse meal names only (with structured output schema).
+    
+    Args:
+        session: User's session with preferences
+        
+    Returns:
+        Prompt for generating 3 meal names
+    """
+    ingredients_list = session.ingredients[:6] if session.ingredients else []
+    ingredients_str = ", ".join(ingredients_list) if ingredients_list else "any ingredients"
+    
+    constraints = []
+    if hasattr(session, "allergies") and session.allergies:
+        constraints.append(f"⚠️ AVOID: {', '.join(session.allergies)}")
+    if hasattr(session, "dietary_preferences") and session.dietary_preferences:
+        constraints.append(f"Diet: {', '.join(session.dietary_preferences)}")
+    
+    constraints_str = " | " + " | ".join(constraints) if constraints else ""
+    
+    return f"""Generate exactly 3 VERY DIFFERENT {session.meal_type} meal names.
+
+Ingredients: {ingredients_str}{constraints_str}
+
+Requirements:
+- Each meal must use different cuisine/flavor profile (Asian, Mediterranean, Latin, American, etc.)
+- Each meal must use different cooking method (stir-fry, roasted, grilled, pan-seared, baked, etc.)
+- Use proteins/ingredients from the list above
+- Natural, appetizing names (NOT "Quick", "Speedy", "Power Bowl", "Healthy Bowl")
+- KEEP NAMES CONCISE (max 6-7 words, ~50 chars)
+- Good examples: "Spicy Thai Basil Chicken", "Honey-Glazed Salmon", "Herb-Roasted Pork"
+- Bad examples: "Spicy Gochujang Chicken and Broccoli Stir-fry with Steamed Jasmine Rice" (too long!)
+
+⚠️ CRITICAL: Generate 3 DISTINCTLY DIFFERENT, CONCISE meals with unique flavors!
+
+"""
+
+
+def build_recipe_details_prompt(
+    meal_name: str,
+    session: "SuggestionSession",
+) -> str:
+    """
+    Phase 2: Generate full recipe details for a specific meal name (with structured output schema).
+    
+    Args:
+        meal_name: The meal name to generate recipe for
+        session: User's session with preferences
+        
+    Returns:
+        Prompt for generating recipe details
+    """
+    ingredients_list = session.ingredients[:6] if session.ingredients else []
+    ingredients_str = ", ".join(ingredients_list) if ingredients_list else "any ingredients"
+    
+    constraints_parts = []
+    if hasattr(session, "allergies") and session.allergies:
+        constraints_parts.append(f"⚠️ AVOID: {', '.join(session.allergies)}")
+    if hasattr(session, "dietary_preferences") and session.dietary_preferences:
+        constraints_parts.append(f"Diet: {', '.join(session.dietary_preferences)}")
+    
+    constraints_str = " | ".join(constraints_parts) if constraints_parts else ""
+    
+    return f"""Generate complete recipe details for: "{meal_name}"
+
+Available ingredients: {ingredients_str}{' | ' + constraints_str if constraints_str else ''}
+Target: ~{session.target_calories} calories | ≤{session.cooking_time_minutes} minutes cooking time
+
+CRITICAL - Portion Sizing:
+- This meal should be approximately {session.target_calories} calories total
+- Use APPROPRIATE portion sizes (e.g., for 800 cal lunch: ~200g protein, ~150g carbs, ~100g vegetables)
+- For lower calorie targets (<600 cal), use smaller portions (e.g., 150g protein, 100g carbs)
+- For higher calorie targets (>1000 cal), use larger portions (e.g., 300g protein, 200g carbs)
+
+Requirements:
+- Recipe must match the meal name "{meal_name}" exactly
+- Use 4-6 ingredients from the available list with specific amounts (g, ml, tbsp, tsp)
+- Provide 3-4 clear, actionable recipe steps with duration for each step
+- Description should highlight the meal's key flavors and appeal
+- Total prep_time_minutes must be ≤{session.cooking_time_minutes}
+
+NOTE: Do NOT include nutrition data in response - backend calculates it automatically.
+
+"""

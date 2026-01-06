@@ -40,10 +40,18 @@ class MealGenerationService(MealGenerationServicePort):
                 "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
                 "temperature": 0.2,  # Lower temperature for consistency
                 "google_api_key": self.api_key,
-                "response_mime_type": "application/json",  # Always expect JSON
+                # NOTE: response_mime_type is set conditionally per request
+                # (incompatible with structured output / function calling)
             }
     
-    def generate_meal_plan(self, prompt: str, system_message: str, response_type: str = "json", max_tokens: int = None) -> Dict[str, Any]:
+    def generate_meal_plan(
+        self, 
+        prompt: str, 
+        system_message: str, 
+        response_type: str = "json", 
+        max_tokens: int = None,
+        schema: type = None
+    ) -> Dict[str, Any]:
         """
         Generate meal plan using provided prompt and system message.
         Single entry point for all meal generation.
@@ -53,6 +61,10 @@ class MealGenerationService(MealGenerationServicePort):
             system_message: System instructions
             response_type: Response format ("json" or "text")
             max_tokens: Optional max tokens override (defaults based on complexity)
+            schema: Optional Pydantic model for structured output (recommended for reliability)
+        
+        Returns:
+            Dict or Pydantic model instance (if schema provided)
         """
         if not self.api_key:
             raise RuntimeError("GOOGLE_API_KEY missing — cannot call Gemini.")
@@ -75,11 +87,85 @@ class MealGenerationService(MealGenerationServicePort):
             )
 
             # Create LLM instance with appropriate token limit
-            llm = ChatGoogleGenerativeAI(
+            # Add response_mime_type only if NOT using structured output (incompatible)
+            llm_config = {
                 **self.base_llm_config,
-                max_output_tokens=max_tokens
-            )
+                "max_output_tokens": max_tokens,
+            }
+            
+            # Only set response_mime_type for legacy JSON mode (not structured output)
+            if not schema and response_type == "json":
+                llm_config["response_mime_type"] = "application/json"
+            
+            llm = ChatGoogleGenerativeAI(**llm_config)
 
+            # Use structured output if schema provided (guarantees valid format)
+            if schema:
+                logger.info(f"[STRUCTURED-OUTPUT] using schema={schema.__name__}")
+                # NOTE: with_structured_output uses function calling, incompatible with response_mime_type
+                # Use include_raw=True to get raw response as fallback when parsing fails
+                llm_with_structure = llm.with_structured_output(schema, include_raw=True)
+                
+                # Create messages
+                messages = [
+                    SystemMessage(content=system_message),
+                    HumanMessage(content=prompt)
+                ]
+                
+                # Generate structured response (returns dict with 'raw' and 'parsed')
+                result = llm_with_structure.invoke(messages)
+                elapsed = time.time() - start_time
+                
+                # Extract parsed response (or None if parsing failed)
+                structured_response = result.get("parsed") if isinstance(result, dict) else result
+                raw_response = result.get("raw") if isinstance(result, dict) else None
+                
+                logger.info(
+                    f"[STRUCTURED-RESPONSE] elapsed={elapsed:.2f}s | "
+                    f"schema={schema.__name__} | "
+                    f"parsed_type={type(structured_response).__name__} | "
+                    f"has_raw={raw_response is not None}"
+                )
+                
+                # Handle None response - try to use raw response as fallback
+                if structured_response is None:
+                    if raw_response and hasattr(raw_response, 'content'):
+                        raw_content = raw_response.content
+                        logger.warning(
+                            f"[STRUCTURED-OUTPUT-FALLBACK] schema={schema.__name__} | "
+                            f"Attempting legacy JSON parse on raw content | "
+                            f"raw_len={len(raw_content) if raw_content else 0}"
+                        )
+                        # Try legacy JSON parsing as fallback
+                        try:
+                            fallback_data = self._extract_json(raw_content)
+                            logger.info(f"[STRUCTURED-OUTPUT-FALLBACK-SUCCESS] Parsed raw JSON successfully")
+                            return fallback_data
+                        except Exception as json_err:
+                            logger.error(
+                                f"[STRUCTURED-OUTPUT-FALLBACK-FAILED] "
+                                f"JSON parse also failed: {json_err}"
+                            )
+                    
+                    logger.error(
+                        f"[STRUCTURED-OUTPUT-NONE] schema={schema.__name__} | "
+                        f"elapsed={elapsed:.2f}s | "
+                        f"Model failed to generate valid structured data"
+                    )
+                    raise ValueError(
+                        f"Structured output returned None for schema {schema.__name__}. "
+                        f"Model failed to generate data matching the required format."
+                    )
+                
+                # Convert to dict for consistent interface
+                if hasattr(structured_response, 'model_dump'):
+                    return structured_response.model_dump()
+                elif hasattr(structured_response, 'dict'):
+                    return structured_response.dict()
+                else:
+                    return dict(structured_response)
+            
+            # Legacy JSON parsing (when no schema provided)
             # Create messages
             messages = [
                 SystemMessage(content=system_message),
