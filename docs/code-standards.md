@@ -770,16 +770,18 @@ class PineconeNutritionService:
 6. **Unit Conversion**: Support multiple measurement units (g, oz, cup, etc.)
 7. **Scaling**: Nutrition per-100g baseline scaled to actual portions
 
-**Testing Pattern**:
+**Testing Pattern** (Phase 04 - Inference API mocks):
 ```python
 @patch('src.infra.services.pinecone_service.Pinecone')
-def test_search_ingredient_embeds_and_queries(mock_pinecone):
-    """Test embedding generation and index querying."""
-    # Mock Pinecone Inference API
+def test_search_ingredient_uses_inference_api(mock_pinecone):
+    """Test embedding generation via Pinecone Inference API."""
+    # Arrange: Mock Pinecone client
     mock_pc = Mock()
     mock_pinecone.return_value = mock_pc
+
+    # Mock Inference API response (384-dim vectors)
     mock_pc.inference.embed.return_value = [
-        {"values": [0.1] * 384}  # 384-dim embedding
+        {"values": [0.1] * 384}
     ]
 
     # Mock index query response
@@ -796,22 +798,47 @@ def test_search_ingredient_embeds_and_queries(mock_pinecone):
     }
     mock_pc.Index.return_value = mock_index
 
-    # Test
+    # Act
     service = PineconeNutritionService(pinecone_api_key="test")
     result = service.search_ingredient("chicken")
 
-    # Verify
+    # Assert
     assert result['name'] == 'Chicken Breast'
     assert result['calories'] == 165
-    mock_pc.inference.embed.assert_called_with(
+
+    # Verify inference API called with correct params
+    mock_pc.inference.embed.assert_called_once_with(
         model="llama-text-embed-v2",
         inputs=["chicken"],
         parameters={
             "input_type": "query",
-            "truncate": "END",
-            "output_dimensionality": 384
+            "truncate": "END"
         }
     )
+
+@patch('src.infra.services.pinecone_service.Pinecone')
+def test_embed_text_calls_inference_api_correctly(mock_pinecone):
+    """Test _embed_text method calls Inference API with correct parameters."""
+    # Arrange
+    mock_pc = Mock()
+    mock_pinecone.return_value = mock_pc
+    mock_pc.Index.return_value = Mock()
+    mock_pc.inference.embed.return_value = [
+        {"values": [0.1, 0.2, 0.3] + [0.0] * 381}  # 384-dim
+    ]
+
+    # Act
+    service = PineconeNutritionService(pinecone_api_key="test")
+    result = service._embed_text(["test query"], input_type="query")
+
+    # Assert
+    mock_pc.inference.embed.assert_called_once_with(
+        model="llama-text-embed-v2",
+        inputs=["test query"],
+        parameters={"input_type": "query", "truncate": "END"}
+    )
+    assert len(result) == 1
+    assert len(result[0]) == 384
 ```
 
 ---
@@ -883,12 +910,17 @@ class TestMealService:
 ```python
 # Mark tests by type
 @pytest.mark.unit          # Unit tests
-@pytest.mark.integration   # Integration tests
+@pytest.mark.integration   # Integration tests (requires PINECONE_API_KEY for Pinecone tests)
 @pytest.mark.slow          # Slow tests
 @pytest.mark.asyncio       # Async tests
 @pytest.mark.skip          # Skip test
 @pytest.mark.xfail         # Expected to fail
 ```
+
+**External Service Testing**:
+- **Pinecone Integration Tests**: Require `PINECONE_API_KEY` env var + active indexes. Auto-skipped in CI if unavailable.
+- **Unit Tests with Mocks**: Use `@patch` to mock Pinecone Inference API, test embedding generation and index queries.
+- **Vector Dimensions**: Pinecone Inference API returns 384-dim vectors for `llama-text-embed-v2` model.
 
 ---
 

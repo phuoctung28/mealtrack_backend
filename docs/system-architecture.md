@@ -941,16 +941,25 @@ async def generate_weekly_plan(
 
 ### Testing & Validation
 
-**Test Coverage:** 50+ tests passing
+**Test Coverage:** 681+ tests passing (Phase 04 Pinecone Inference API tests included)
+- Unit tests (12/12): Pinecone service with Inference API mocks (384-dim vectors)
+- Integration tests (2/2): Mock Pinecone integration with skippable live tests
 - Unit tests for Goal enum parsing
 - Integration tests for TDEE calculations
 - CQRS handler tests for goal-based processing
 - Fixture updates with unified enums
 
+**Phase 04 Updates** (Pinecone Inference Migration):
+- New test: `test_embed_text_calls_inference_api_correctly` validates Inference API parameters
+- Removed SentenceTransformer encoder mocks - using Pinecone Inference API exclusively
+- Mock patterns use 384-dim vectors from llama-text-embed-v2 model
+- Integration tests auto-skip if PINECONE_API_KEY unavailable
+
 **Type Safety:** mypy strict mode passing
 - All Goal enum references validated
 - No untyped returns on goal-related functions
 - Proper type hints in mappers and handlers
+- Pinecone service type hints fully validated
 
 ---
 

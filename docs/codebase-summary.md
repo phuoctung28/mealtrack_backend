@@ -683,10 +683,11 @@ tests/
 
 ### Test Statistics
 
-- **Total Tests**: 681 (all passing)
+- **Total Tests**: 681 (all passing, Phase 04 updates included)
 - **Test Files**: 57
 - **Coverage Target**: 70%+ (currently maintained)
 - **Test Markers**: unit, integration, slow, asyncio, skip, xfail
+- **Phase 04 Updates**: Pinecone Inference API mocks (384-dim vectors), added `test_embed_text_calls_inference_api_correctly` test
 
 ---
 
