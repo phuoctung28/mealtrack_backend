@@ -7,12 +7,12 @@ from pydantic import BaseModel, Field
 
 
 class MealNamesResponse(BaseModel):
-    """Phase 1: Response containing 6 diverse meal names."""
+    """Phase 1: Response containing 4 diverse meal names."""
 
     meal_names: List[str] = Field(
-        description="List of exactly 6 diverse, concise meal names (max 60 chars each) with different cuisines and cooking styles",
-        min_length=6,
-        max_length=6
+        description="List of exactly 4 diverse, concise meal names (max 60 chars each) with different cuisines and cooking styles",
+        min_length=4,
+        max_length=4
     )
     
     # B2 FIX: Validate each meal name is reasonably short

@@ -272,41 +272,29 @@ def build_meal_names_prompt(
     session: "SuggestionSession",
 ) -> str:
     """
-    Phase 1: Generate 3 diverse meal names only (with structured output schema).
-    
+    Phase 1: Generate 4 diverse meal names (concise prompt for speed).
+
     Args:
         session: User's session with preferences
-        
+
     Returns:
-        Prompt for generating 3 meal names
+        Prompt for generating 4 meal names
     """
-    ingredients_list = session.ingredients[:6] if session.ingredients else []
-    ingredients_str = ", ".join(ingredients_list) if ingredients_list else "any ingredients"
-    
+    ingredients_list = session.ingredients[:4] if session.ingredients else []
+    ingredients_str = ", ".join(ingredients_list) if ingredients_list else "common ingredients"
+
     constraints = []
     if hasattr(session, "allergies") and session.allergies:
-        constraints.append(f"⚠️ AVOID: {', '.join(session.allergies)}")
+        constraints.append(f"Avoid: {', '.join(session.allergies)}")
     if hasattr(session, "dietary_preferences") and session.dietary_preferences:
-        constraints.append(f"Diet: {', '.join(session.dietary_preferences)}")
-    
+        constraints.append(f"Vegetarian" if "vegetarian" in " ".join(session.dietary_preferences).lower() else "Diet: OK")
+
     constraints_str = " | " + " | ".join(constraints) if constraints else ""
-    
-    return f"""Generate exactly 3 VERY DIFFERENT {session.meal_type} meal names.
 
+    return f"""Generate 4 different {session.meal_type} names, ~{session.target_calories}cal, ≤{session.cooking_time_minutes}min.
 Ingredients: {ingredients_str}{constraints_str}
-
-Requirements:
-- Each meal must use different cuisine/flavor profile (Asian, Mediterranean, Latin, American, etc.)
-- Each meal must use different cooking method (stir-fry, roasted, grilled, pan-seared, baked, etc.)
-- Use proteins/ingredients from the list above
-- Natural, appetizing names (NOT "Quick", "Speedy", "Power Bowl", "Healthy Bowl")
-- KEEP NAMES CONCISE (max 6-7 words, ~50 chars)
-- Good examples: "Spicy Thai Basil Chicken", "Honey-Glazed Salmon", "Herb-Roasted Pork"
-- Bad examples: "Spicy Gochujang Chicken and Broccoli Stir-fry with Steamed Jasmine Rice" (too long!)
-
-⚠️ CRITICAL: Generate 3 DISTINCTLY DIFFERENT, CONCISE meals with unique flavors!
-
-"""
+Cuisines: 4 distinct (Asian, Mediterranean, Latin, American)
+Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags."""
 
 
 def build_recipe_details_prompt(

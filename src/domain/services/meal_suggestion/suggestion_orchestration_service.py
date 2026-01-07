@@ -42,10 +42,12 @@ class SuggestionOrchestrationService:
 
     GENERATION_TIMEOUT_SECONDS = 45  # Increased from 30s - full recipe generation needs ~30-35s
     SUGGESTIONS_COUNT = 3
+    MIN_ACCEPTABLE_RESULTS = 2  # Return at least 2 meals for acceptable UX
 
     # Parallel generation constants
-    PARALLEL_SINGLE_MEAL_TOKENS = 4000  # Token limit for complete JSON generation
-    PARALLEL_SINGLE_MEAL_TIMEOUT = 35
+    PARALLEL_SINGLE_MEAL_TOKENS = 4000  # Full recipe with detailed ingredients/steps
+    PARALLEL_SINGLE_MEAL_TIMEOUT = 25   # Reduced from 35s (faster without description)
+    PARALLEL_STAGGER_MS = 500  # 500ms between requests to prevent rate limiting
 
     def __init__(
         self,
@@ -272,125 +274,12 @@ class SuggestionOrchestrationService:
         exclude_ids: List[str],
     ) -> List[MealSuggestion]:
         """
-        Generate suggestions using parallel hybrid approach.
-        Target latency: 8-10s (max 12s).
-
-        Uses Pinecone for inspiration + 3 parallel AI calls for customization.
+        Generate suggestions using 2-phase approach.
+        Phase 1: Generate 6 diverse meal names (~1s)
+        Phase 2: Generate 6 recipes in parallel, take first 3 successful (~8-10s)
+        Target latency: 9-12s (9-11s average, 12-14s P95)
         """
-        # Use parallel hybrid generation for faster, more accurate results
         return await self._generate_parallel_hybrid(session, exclude_ids)
-
-    def _build_prompt(self, session: SuggestionSession, exclude_ids: List[str]) -> str:
-        """Build compact AI prompt - ingredients only, NO macros."""
-        # Limit ingredients to 10 for prompt efficiency
-        ingredients_str = (
-            ", ".join(session.ingredients[:10])
-            if session.ingredients
-            else "any common ingredients"
-        )
-
-        # Add dietary constraints if present
-        constraints = []
-        if hasattr(session, 'dietary_preferences') and session.dietary_preferences:
-            constraints.append(f"Dietary: {', '.join(session.dietary_preferences)}")
-        if hasattr(session, 'allergies') and session.allergies:
-            constraints.append(f"Avoid: {', '.join(session.allergies)}")
-
-        constraints_str = "\n" + "; ".join(constraints) if constraints else ""
-
-        exclude_note = f"\nExclude {len(exclude_ids)} previous meals" if exclude_ids else ""
-
-        return f"""Generate 3 {session.meal_type} meals (~{session.target_calories} cal, ≤{session.cooking_time_minutes}min).
-
-Ingredients: {ingredients_str}{constraints_str}{exclude_note}
-
-JSON (NO macros - backend calculates):
-{{
-  "suggestions": [
-    {{
-      "name": "Meal Name",
-      "description": "Brief description",
-      "ingredients": [{{"name": "chicken", "amount": 200, "unit": "g"}}],
-      "recipe_steps": [{{"step": 1, "instruction": "Heat pan", "duration_minutes": 3}}],
-      "prep_time_minutes": 15
-    }}
-  ]
-}}
-
-Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories/protein/carbs/fat."""
-
-    def _parse_ai_response(
-        self, raw_response: dict, session: SuggestionSession
-    ) -> List[MealSuggestion]:
-        """Parse AI JSON response into domain objects."""
-        suggestions = []
-        raw_suggestions = raw_response.get("suggestions", [])
-
-        logger.debug(
-            f"[MEAL-PARSE-START] session={session.id} | "
-            f"raw_suggestions_count={len(raw_suggestions)} | "
-            f"response_type={type(raw_response).__name__}"
-        )
-
-        for idx, raw in enumerate(raw_suggestions):
-            try:
-                # Log what we're trying to parse
-                logger.debug(
-                    f"[MEAL-PARSE-ITEM] session={session.id} | "
-                    f"index={idx} | "
-                    f"name={raw.get('name', 'N/A')[:30]} | "
-                    f"has_macros={bool(raw.get('macros'))} | "
-                    f"ingredients_count={len(raw.get('ingredients', []))} | "
-                    f"steps_count={len(raw.get('recipe_steps', []))}"
-                )
-
-                suggestions.append(
-                    MealSuggestion(
-                        id=f"sug_{uuid.uuid4().hex[:16]}",
-                        session_id=session.id,
-                        user_id=session.user_id,
-                        meal_name=raw.get("name", "Unnamed Meal"),
-                        description=raw.get("description", ""),
-                        meal_type=MealType(session.meal_type),
-                        macros=MacroEstimate(
-                            calories=raw.get("macros", {}).get(
-                                "calories", session.target_calories
-                            ),
-                            protein=raw.get("macros", {}).get("protein", 20),
-                            carbs=raw.get("macros", {}).get("carbs", 30),
-                            fat=raw.get("macros", {}).get("fat", 10),
-                        ),
-                        ingredients=[
-                            Ingredient(**ing) for ing in raw.get("ingredients", [])
-                        ],
-                        recipe_steps=[
-                            RecipeStep(**step) for step in raw.get("recipe_steps", [])
-                        ],
-                        prep_time_minutes=raw.get(
-                            "prep_time_minutes", session.cooking_time_minutes
-                        ),
-                        confidence_score=self._normalize_confidence(
-                            raw.get("confidence_score", 0.85)
-                        ),
-                    )
-                )
-            except Exception as e:
-                # Log detailed parsing failure
-                raw_preview = str(raw)[:300] if raw else "None"
-                logger.warning(
-                    f"[MEAL-PARSE-FAIL] session={session.id} | "
-                    f"index={idx} | "
-                    f"error_type={type(e).__name__} | "
-                    f"error={str(e)[:100]} | "
-                    f"raw_preview={raw_preview}"
-                )
-                continue
-
-        logger.debug(
-            f"[MEAL-PARSE-COMPLETE] session={session.id} | "
-            f"parsed={len(suggestions)}/{len(raw_suggestions)}"
-        )
-        return suggestions
 
     async def _generate_parallel_hybrid(
         self,
@@ -398,14 +287,14 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
         exclude_ids: List[str],
     ) -> List[MealSuggestion]:
         """
-        Two-phase generation for better variety and efficiency.
-        Phase 1: Generate 3 diverse meal names (1 call, ~3-5s)
-        Phase 2: Generate recipes in parallel (3 calls, ~10-15s)
-        Target latency: 13-20s (better variety than single-phase)
+        Two-phase generation with over-generation for reliability.
+        Phase 1: Generate 4 diverse meal names (1 call, ~1-2s)
+        Phase 2: Generate 4 recipes in parallel, take first 3 successes (~6-8s)
+        Target latency: 7-10s (faster + more reliable with reduced API pressure)
         """
         start_time = time.time()
 
-        # STEP 1: Generate 3 diverse meal names in one call
+        # STEP 1: Generate 4 diverse meal names in one call
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
             build_meal_names_prompt,
             build_recipe_details_prompt,
@@ -415,10 +304,10 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
             RecipeDetailsResponse,
         )
 
-        logger.info(f"[PHASE-1-START] session={session.id} | generating 3 diverse meal names")
-        
+        logger.info(f"[PHASE-1-START] session={session.id} | generating 4 diverse meal names")
+
         names_prompt = build_meal_names_prompt(session)
-        names_system = "You are a creative chef. Generate 3 VERY DIFFERENT meal names with diverse flavors and cooking styles."
+        names_system = "You are a creative chef. Generate 4 VERY DIFFERENT meal names with diverse flavors and cooking styles."
         
         phase1_elapsed = 0.0  # Initialize to prevent UnboundLocalError
         try:
@@ -435,14 +324,23 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
             )
             
             meal_names = names_raw.get("meal_names", [])
-            
-            if len(meal_names) != 3:
+
+            # Deduplicate meal names while preserving order
+            seen = set()
+            unique_names = []
+            for name in meal_names:
+                if name.lower() not in seen:
+                    seen.add(name.lower())
+                    unique_names.append(name)
+            meal_names = unique_names
+
+            if len(meal_names) != 4:
                 logger.warning(
                     f"[PHASE-1-INCOMPLETE] session={session.id} | "
-                    f"got {len(meal_names)} names, expected 3"
+                    f"got {len(meal_names)} names, expected 4"
                 )
                 # Pad with generic names if needed
-                while len(meal_names) < 3:
+                while len(meal_names) < 4:
                     meal_names.append(f"Healthy {session.meal_type.title()} #{len(meal_names) + 1}")
             
             phase1_elapsed = time.time() - start_time
@@ -461,8 +359,8 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
             )
             # Fallback to generic names
             meal_names = [
-                f"Healthy {session.meal_type.title()} #{i+1}" 
-                for i in range(3)
+                f"Healthy {session.meal_type.title()} #{i+1}"
+                for i in range(4)
             ]
         
         # STEP 2: Generate full recipes for each name in parallel
@@ -495,7 +393,7 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
                 recipe_data = raw
                 
                 # Extract validated fields (schema ensures these exist and are valid)
-                description = recipe_data.get("description", "")
+                # NOTE: description field removed in Phase 01 schema optimization
                 ingredients = recipe_data.get("ingredients", [])
                 recipe_steps = recipe_data.get("recipe_steps", [])
                 prep_time = recipe_data.get("prep_time_minutes", session.cooking_time_minutes)
@@ -514,7 +412,7 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
                     session_id=session.id,
                     user_id=session.user_id,
                     meal_name=meal_name,  # Use name from Phase 1
-                    description=description,
+                    description="",  # Empty string (field removed from schema in Phase 01)
                     meal_type=MealType(session.meal_type),
                     macros=MacroEstimate(
                         calories=session.target_calories,
@@ -541,53 +439,67 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
                 )
                 return None
 
-        # E3 FIX: Stagger parallel requests to avoid rate limiting
-        # Start all 3 recipes in parallel but with 500ms delays between starts
+        # Over-generation strategy: Start 4 recipes, take first 3 successes
+        # Staggered starts (500ms) to prevent rate limiting
         gen_start = time.time()
 
         # Create tasks with staggered starts
         tasks = []
-        for i in range(3):
+        for i in range(4):
             if i > 0:
-                # Add 500ms delay before starting subsequent requests
-                await asyncio.sleep(0.5)
-                logger.debug(f"[E3-STAGGER] Starting request {i} after 500ms delay")
+                # Add 500ms delay to prevent rate limiting (reduced from 6 to 4 parallel)
+                await asyncio.sleep(self.PARALLEL_STAGGER_MS / 1000)
+                logger.debug(f"[STAGGER] Starting request {i} after {self.PARALLEL_STAGGER_MS}ms delay")
 
             task = asyncio.create_task(
                 generate_recipe(recipe_prompts[i], meal_names[i], i)
             )
             tasks.append(task)
 
-        # Wait for all tasks to complete
-        results: List[Optional[MealSuggestion]] = list(await asyncio.gather(
-            *tasks,
-            return_exceptions=False,
-        ))
-
-        successful_results = [r for r in results if r is not None]
+        # Use as_completed to get first 3 successes and cancel remaining (S1 fix: cancel inside loop)
+        successful_results = []
+        for coro in asyncio.as_completed(tasks):
+            try:
+                result = await coro
+                if result is not None:
+                    successful_results.append(result)
+                    logger.debug(f"[SUCCESS] Got meal {len(successful_results)}/3")
+                    if len(successful_results) >= 3:
+                        # Cancel remaining tasks immediately (S1: cleaner pattern)
+                        cancelled_count = sum(1 for task in tasks if not task.done() and not task.cancel() is False)
+                        logger.info(f"[EARLY-STOP] Got 3 meals, cancelled {cancelled_count} remaining tasks")
+                        break
+            except Exception as e:
+                logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
+                continue
 
         logger.info(
             f"[PHASE-2-COMPLETE] session={session.id} | "
-            f"success={len(successful_results)}/3 | "
+            f"success={len(successful_results)}/4 | "
             f"gen_elapsed={time.time() - gen_start:.2f}s"
         )
 
-        # Return partial or complete results
-        failed_indices = [i for i, r in enumerate(results) if r is None]
-
-        if failed_indices:
-            failed_names = [meal_names[i] for i in failed_indices]
-            logger.warning(
-                f"[PHASE-2-PARTIAL-SUCCESS] session={session.id} | "
-                f"success={len(successful_results)}/3 | "
-                f"failed={len(failed_indices)} | "
-                f"failed_meals={failed_names}"
-            )
-
+        # W2 fix: Check for minimum acceptable results
+        if len(successful_results) < self.MIN_ACCEPTABLE_RESULTS:
             if not successful_results:
                 raise RuntimeError(
-                    f"Failed to generate any recipes. All 3 meals failed: {failed_names}"
+                    f"Failed to generate any recipes from 4 attempts"
                 )
+            else:
+                logger.error(
+                    f"[PHASE-2-INSUFFICIENT] session={session.id} | "
+                    f"only {len(successful_results)} meals (minimum {self.MIN_ACCEPTABLE_RESULTS} required)"
+                )
+                raise RuntimeError(
+                    f"Insufficient recipes generated: {len(successful_results)}/{self.MIN_ACCEPTABLE_RESULTS} minimum"
+                )
+
+        # Log if partial success but acceptable
+        if len(successful_results) < 3:
+            logger.warning(
+                f"[PHASE-2-PARTIAL] session={session.id} | "
+                f"returning {len(successful_results)}/3 meals (above minimum threshold)"
+            )
 
         suggestions = successful_results
 
@@ -599,97 +511,11 @@ Rules: 3 meals, specific portions (e.g., "200g chicken"), 4-6 steps, NO calories
             f"total_elapsed={total_elapsed:.2f}s | "
             f"phase1={phase1_elapsed:.2f}s | "
             f"phase2={phase2_elapsed:.2f}s | "
-            f"returned={len(suggestions)}/3 meals | "
+            f"returned={len(suggestions)} meals (target 3) | "
             f"meals={[s.meal_name for s in suggestions]}"
         )
 
         return suggestions
-
-    def _parse_single_meal(
-        self,
-        meal_data: dict,
-        session: SuggestionSession,
-        index: int,
-    ) -> Optional[MealSuggestion]:
-        """
-        Parse single meal JSON into MealSuggestion.
-        Returns None if response is incomplete (missing ingredients/steps).
-        """
-        # Validate required fields
-        ingredients = meal_data.get("ingredients", [])
-        recipe_steps = meal_data.get("recipe_steps", [])
-
-        if not ingredients or len(ingredients) < 2:
-            logger.warning(
-                f"[PARSE-INVALID] index={index} | reason=missing_ingredients | "
-                f"count={len(ingredients)}"
-            )
-            return None
-
-        if not recipe_steps or len(recipe_steps) < 2:
-            logger.warning(
-                f"[PARSE-INVALID] index={index} | reason=missing_recipe_steps | "
-                f"count={len(recipe_steps)}"
-            )
-            return None
-
-        return MealSuggestion(
-            id=f"sug_{uuid.uuid4().hex[:16]}",
-            session_id=session.id,
-            user_id=session.user_id,
-            meal_name=meal_data.get("name", f"Meal {index + 1}"),
-            description=meal_data.get("description", ""),
-            meal_type=MealType(session.meal_type),
-            macros=MacroEstimate(
-                calories=session.target_calories,
-                protein=20,
-                carbs=30,
-                fat=10,  # Placeholder - estimated values
-            ),
-            ingredients=[Ingredient(**ing) for ing in ingredients],
-            recipe_steps=[RecipeStep(**step) for step in recipe_steps],
-            prep_time_minutes=meal_data.get("prep_time_minutes", 20),
-            confidence_score=0.85,
-        )
-
-    def _recipe_to_suggestion(
-        self,
-        recipe,
-        session: SuggestionSession
-    ) -> MealSuggestion:
-        """Convert Pinecone recipe to MealSuggestion."""
-        return MealSuggestion(
-            id=f"sug_{uuid.uuid4().hex[:16]}",
-            session_id=session.id,
-            user_id=session.user_id,
-            meal_name=recipe.name,
-            description=recipe.description,
-            meal_type=MealType(session.meal_type),
-            macros=MacroEstimate(
-                calories=recipe.macros['calories'],
-                protein=recipe.macros['protein'],
-                carbs=recipe.macros['carbs'],
-                fat=recipe.macros['fat']
-            ),
-            ingredients=[
-                Ingredient(
-                    name=ing['name'],
-                    amount=ing['amount'],
-                    unit=ing['unit']
-                )
-                for ing in recipe.ingredients
-            ],
-            recipe_steps=[
-                RecipeStep(
-                    step=step['step'],
-                    instruction=step['instruction'],
-                    duration_minutes=step.get('duration_minutes')
-                )
-                for step in recipe.recipe_steps
-            ],
-            prep_time_minutes=recipe.prep_time_minutes,
-            confidence_score=recipe.confidence_score,
-        )
 
     def _normalize_confidence(self, score: float) -> float:
         """Normalize confidence score to 0-1 range (AI may return 1-5 scale)."""
