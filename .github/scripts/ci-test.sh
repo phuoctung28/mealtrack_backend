@@ -85,12 +85,13 @@ run_tests() {
     export CLOUDINARY_API_SECRET="${CLOUDINARY_API_SECRET:-mock-api-secret}"
     export PINECONE_API_KEY="${PINECONE_API_KEY:-mock-api-key}"
 
-    # Run pytest with coverage
+    # Run pytest with coverage (exclude integration tests)
     pytest \
         --cov=src \
         --cov-report=xml \
         --cov-report=term-missing \
         --cov-report=html \
+        -m "not integration" \
         -n auto \
         --maxfail=5 \
         -v

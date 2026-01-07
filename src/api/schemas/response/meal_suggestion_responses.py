@@ -73,7 +73,8 @@ MealSuggestionItem = MealSuggestionResponse
 
 class SuggestionsListResponse(BaseModel):
     """
-    Response containing exactly 3 meal suggestions (Phase 06).
+    Response containing 1-3 meal suggestions (Phase 06).
+    Note: May return fewer than 3 if some generations fail.
     """
 
     session_id: str = Field(..., description="Suggestion session ID for tracking")
@@ -87,7 +88,10 @@ class SuggestionsListResponse(BaseModel):
         ..., description="Calculated target calories for this portion type"
     )
     suggestions: List[MealSuggestionResponse] = Field(
-        ..., min_length=3, max_length=3, description="Exactly 3 meal suggestions"
+        ..., min_length=1, max_length=3, description="1-3 meal suggestions (may be partial if generation fails)"
+    )
+    suggestion_count: int = Field(
+        ..., ge=1, le=3, description="Number of suggestions returned (1-3)"
     )
     expires_at: datetime = Field(
         ..., description="Session expiration timestamp (4 hours)"

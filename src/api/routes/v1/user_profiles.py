@@ -166,6 +166,7 @@ async def update_user_metrics(
             activity_level=request.activity_level,
             body_fat_percent=request.body_fat_percent,
             fitness_goal=request.fitness_goal.value if request.fitness_goal else None,
+            override=request.override,
         )
 
         await event_bus.send(command)

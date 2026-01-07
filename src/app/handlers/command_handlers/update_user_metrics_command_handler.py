@@ -2,11 +2,12 @@
 Command handler for updating user metrics.
 """
 import logging
+from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from src.api.exceptions import ResourceNotFoundException, ValidationException
+from src.api.exceptions import ResourceNotFoundException, ValidationException, ConflictException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.infra.database.models.enums import FitnessGoalEnum, ActivityLevelEnum
 from src.app.events.base import EventHandler, handles
@@ -65,13 +66,34 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     raise ValidationException("Body fat percentage must be between 0 and 70")
                 profile.body_fat_percentage = command.body_fat_percent
 
-            # Handle fitness goal update (unlimited changes allowed)
+            # Handle fitness goal update with cooldown logic
             if command.fitness_goal is not None:
                 valid_goals = [e.value for e in FitnessGoalEnum]
                 if command.fitness_goal not in valid_goals:
                     raise ValidationException(f"Fitness goal must be one of: {', '.join(valid_goals)}")
-
-                profile.fitness_goal = command.fitness_goal
+                
+                # Check if goal is actually changing
+                if profile.fitness_goal != command.fitness_goal:
+                    # Apply 7-day cooldown unless override is requested
+                    if not command.override:
+                        # Refresh profile to get latest updated_at from database
+                        self.db.refresh(profile)
+                        last_changed = profile.updated_at or profile.created_at
+                        if last_changed:
+                            # Compare naive datetimes (database stores naive UTC)
+                            cooldown_until = last_changed + timedelta(days=7)
+                            now = datetime.utcnow()
+                            if now < cooldown_until:
+                                # Format cooldown_until as ISO with Z suffix for UTC
+                                cooldown_iso = cooldown_until.isoformat() + "Z"
+                                raise ConflictException(
+                                    message="Goal was updated recently. Please wait before changing again.",
+                                    details={
+                                        "cooldown_until": cooldown_iso
+                                    }
+                                )
+                    
+                    profile.fitness_goal = command.fitness_goal
 
             # Ensure this profile is marked as current
             profile.is_current = True

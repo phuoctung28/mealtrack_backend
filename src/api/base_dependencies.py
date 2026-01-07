@@ -346,7 +346,6 @@ def get_suggestion_orchestration_service(
 ):
     """Get suggestion orchestration service with Phase 1 & 2 optimizations."""
     from src.domain.services.meal_suggestion.suggestion_orchestration_service import SuggestionOrchestrationService
-    from src.domain.services.meal_suggestion.nutrition_enrichment_service import NutritionEnrichmentService
     from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
     from src.infra.adapters.meal_generation_service import MealGenerationService
     from src.infra.repositories.user_repository import UserRepository
@@ -356,9 +355,6 @@ def get_suggestion_orchestration_service(
     meal_gen_service = MealGenerationService()
     suggestion_repo = get_meal_suggestion_repository()
     user_repo = UserRepository(db)
-
-    # Phase 1 optimization: Nutrition enrichment
-    nutrition_enrichment = NutritionEnrichmentService()
 
     # Phase 2 optimization: Recipe search (hybrid retrieval) - singleton pattern
     # Reuse service instance to avoid loading ~80MB SentenceTransformer model on every request
@@ -376,7 +372,6 @@ def get_suggestion_orchestration_service(
         generation_service=meal_gen_service,
         suggestion_repo=suggestion_repo,
         user_repo=user_repo,
-        nutrition_enrichment=nutrition_enrichment,
         recipe_search=recipe_search,
         redis_client=_redis_client,
     )

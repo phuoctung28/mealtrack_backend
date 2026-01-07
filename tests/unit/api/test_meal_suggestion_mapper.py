@@ -120,7 +120,61 @@ class TestMealSuggestionMapper:
         assert result.suggestions[0].id == "suggestion-1"
         assert result.suggestions[1].id == "suggestion-2"
         assert result.suggestions[2].id == "suggestion-3"
+        assert result.suggestion_count == 3
         assert result.expires_at == session.expires_at
+
+    def test_to_suggestions_list_response_partial(self):
+        """Test converting partial suggestions (1-2) to list response."""
+        session = SuggestionSession(
+            id="session-456",
+            user_id="user-456",
+            meal_type="lunch",
+            meal_portion_type="main",
+            target_calories=500,
+            ingredients=[],
+            cooking_time_minutes=20,
+            expires_at=datetime.now() + timedelta(hours=4)
+        )
+
+        from src.domain.model.meal_suggestion import MealType
+
+        # Only 2 suggestions (partial success scenario)
+        suggestions = [
+            MealSuggestion(
+                id="suggestion-1",
+                session_id="session-456",
+                user_id="user-456",
+                meal_name="Meal 1",
+                description="Description 1",
+                meal_type=MealType.LUNCH,
+                macros=MacroEstimate(calories=500, protein=35, carbs=50, fat=18),
+                ingredients=[],
+                recipe_steps=[],
+                prep_time_minutes=20,
+                confidence_score=0.9
+            ),
+            MealSuggestion(
+                id="suggestion-2",
+                session_id="session-456",
+                user_id="user-456",
+                meal_name="Meal 2",
+                description="Description 2",
+                meal_type=MealType.LUNCH,
+                macros=MacroEstimate(calories=480, protein=30, carbs=55, fat=15),
+                ingredients=[],
+                recipe_steps=[],
+                prep_time_minutes=25,
+                confidence_score=0.85
+            ),
+        ]
+
+        result = to_suggestions_list_response(session, suggestions)
+
+        assert result.session_id == "session-456"
+        assert len(result.suggestions) == 2
+        assert result.suggestion_count == 2
+        assert result.suggestions[0].id == "suggestion-1"
+        assert result.suggestions[1].id == "suggestion-2"
 
     def test_to_accepted_meal_response(self):
         """Test converting acceptance result to API response."""

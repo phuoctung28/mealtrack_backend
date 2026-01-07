@@ -1,6 +1,10 @@
 """Prompt building for meal suggestions."""
-from typing import Dict, Any
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from src.domain.model.meal_planning import MealType, SimpleMacroTargets
+
+if TYPE_CHECKING:
+    from src.domain.model.meal_suggestion import SuggestionSession
+    from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchResult
 
 
 class SuggestionPromptBuilder:
@@ -181,3 +185,161 @@ Return ONLY a JSON object with this structure:
 }}"""
 
         return prompt
+
+
+def build_single_meal_prompt(
+    session: "SuggestionSession",
+    meal_index: int,
+    inspiration_recipe: Optional["RecipeSearchResult"] = None,
+) -> str:
+    """
+    Build compact prompt for generating a single meal.
+    Target: ~500 output tokens for fast generation.
+
+    Args:
+        session: User's session with preferences
+        meal_index: Which meal (0, 1, 2) for variety
+        inspiration_recipe: Optional (DEPRECATED - not used)
+
+    Returns:
+        Compact prompt string
+    """
+    ingredients_list = session.ingredients[:8] if session.ingredients else []
+    ingredients_str = ", ".join(ingredients_list) if ingredients_list else "common ingredients"
+
+    # REMOVED: Pinecone inspiration (using pure AI prompts for variety instead)
+
+    # Identify protein ingredients for variety guidance
+    protein_keywords = ["chicken", "beef", "pork", "fish", "salmon", "tuna", "shrimp", "tofu", "egg", "lamb", "turkey"]
+    proteins_available = [ing for ing in ingredients_list if any(p in ing.lower() for p in protein_keywords)]
+
+    # Subtle variety through protein rotation (if multiple proteins available)
+    protein_hint = ""
+    if len(proteins_available) > 1:
+        suggested_protein = proteins_available[meal_index % len(proteins_available)]
+        protein_hint = f"Consider featuring {suggested_protein} as the main protein"
+
+    # REMOVED: Style hints (Asian, Mediterranean, etc.) - creates bias
+    # REMOVED: Naming hints (Herb-Crusted, Golden, etc.) - creates repetitive patterns
+
+    constraints = []
+    if hasattr(session, "allergies") and session.allergies:
+        constraints.append(f"⚠️ MUST AVOID: {', '.join(session.allergies)}")
+    if hasattr(session, "dietary_preferences") and session.dietary_preferences:
+        constraints.append(f"Dietary preferences: {', '.join(session.dietary_preferences)}")
+
+    constraints_str = "\n".join(constraints) if constraints else ""
+
+    return f"""Generate 1 complete {session.meal_type} meal (~{session.target_calories} cal, ≤{session.cooking_time_minutes}min).
+
+INGREDIENTS: {ingredients_str}
+{constraints_str}
+{protein_hint}
+
+OUTPUT (compact JSON, no whitespace):
+{{
+  "name": "Dish Name",
+  "description": "Brief appetizing description",
+  "ingredients": [
+    {{"name": "ingredient1", "amount": 200, "unit": "g"}},
+    {{"name": "ingredient2", "amount": 100, "unit": "g"}},
+    {{"name": "ingredient3", "amount": 150, "unit": "g"}},
+    {{"name": "ingredient4", "amount": 1, "unit": "tbsp"}}
+  ],
+  "recipe_steps": [
+    {{"step": 1, "instruction": "Action", "duration_minutes": 5}},
+    {{"step": 2, "instruction": "Action", "duration_minutes": 10}},
+    {{"step": 3, "instruction": "Action", "duration_minutes": 8}}
+  ],
+  "prep_time_minutes": 20
+}}
+
+CRITICAL RULES:
+1. MUST include ALL fields: name, description, ingredients (3-8 items), recipe_steps (2-6 steps), prep_time_minutes
+2. MUST complete entire JSON - do NOT truncate
+3. Name: Natural dish name (NOT "Quick/Speedy/Power Bowl"). Examples: "Garlic Butter Salmon", "Herb Chicken", "Spicy Beef"
+4. Ingredients: Use from INGREDIENTS list, exact amounts (g/ml/tbsp/tsp)
+5. Recipe steps: Clear instructions with duration_minutes
+6. Return ONLY valid JSON, no markdown/extra text
+7. NO calories/protein/carbs/fat fields
+
+⚠️ COMPLETE THE ENTIRE JSON BEFORE STOPPING - all arrays must close properly!
+
+"""
+
+
+def build_meal_names_prompt(
+    session: "SuggestionSession",
+) -> str:
+    """
+    Phase 1: Generate 4 diverse meal names (concise prompt for speed).
+
+    Args:
+        session: User's session with preferences
+
+    Returns:
+        Prompt for generating 4 meal names
+    """
+    ingredients_list = session.ingredients[:4] if session.ingredients else []
+    ingredients_str = ", ".join(ingredients_list) if ingredients_list else "common ingredients"
+
+    constraints = []
+    if hasattr(session, "allergies") and session.allergies:
+        constraints.append(f"Avoid: {', '.join(session.allergies)}")
+    if hasattr(session, "dietary_preferences") and session.dietary_preferences:
+        constraints.append(f"Vegetarian" if "vegetarian" in " ".join(session.dietary_preferences).lower() else "Diet: OK")
+
+    constraints_str = " | " + " | ".join(constraints) if constraints else ""
+
+    return f"""Generate 4 different {session.meal_type} names, ~{session.target_calories}cal, ≤{session.cooking_time_minutes}min.
+Ingredients: {ingredients_str}{constraints_str}
+Cuisines: 4 distinct (Asian, Mediterranean, Latin, American)
+Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags."""
+
+
+def build_recipe_details_prompt(
+    meal_name: str,
+    session: "SuggestionSession",
+) -> str:
+    """
+    Phase 2: Generate full recipe details for a specific meal name (with structured output schema).
+    
+    Args:
+        meal_name: The meal name to generate recipe for
+        session: User's session with preferences
+        
+    Returns:
+        Prompt for generating recipe details
+    """
+    ingredients_list = session.ingredients[:6] if session.ingredients else []
+    ingredients_str = ", ".join(ingredients_list) if ingredients_list else "any ingredients"
+    
+    constraints_parts = []
+    if hasattr(session, "allergies") and session.allergies:
+        constraints_parts.append(f"⚠️ AVOID: {', '.join(session.allergies)}")
+    if hasattr(session, "dietary_preferences") and session.dietary_preferences:
+        constraints_parts.append(f"Diet: {', '.join(session.dietary_preferences)}")
+    
+    constraints_str = " | ".join(constraints_parts) if constraints_parts else ""
+    
+    return f"""Generate complete recipe details for: "{meal_name}"
+
+Available ingredients: {ingredients_str}{' | ' + constraints_str if constraints_str else ''}
+Target: ~{session.target_calories} calories | ≤{session.cooking_time_minutes} minutes cooking time
+
+CRITICAL - Portion Sizing:
+- This meal should be approximately {session.target_calories} calories total
+- Use APPROPRIATE portion sizes (e.g., for 800 cal lunch: ~200g protein, ~150g carbs, ~100g vegetables)
+- For lower calorie targets (<600 cal), use smaller portions (e.g., 150g protein, 100g carbs)
+- For higher calorie targets (>1000 cal), use larger portions (e.g., 300g protein, 200g carbs)
+
+Requirements:
+- Recipe must match the meal name "{meal_name}" exactly
+- Use 3-8 ingredients from the available list with specific amounts (g, ml, tbsp, tsp)
+- Provide 2-6 clear, actionable recipe steps with duration for each step
+- Description should highlight the meal's key flavors and appeal
+- Total prep_time_minutes must be ≤{session.cooking_time_minutes}
+
+NOTE: Do NOT include nutrition data in response - backend calculates it automatically.
+
+"""
