@@ -4,12 +4,12 @@ import os
 from typing import List, Dict
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from src.domain.model.meal_planning import PlannedMeal, MealType
 from src.domain.services.meal_suggestion.json_extractor import JsonExtractor
 from src.domain.services.meal_suggestion.suggestion_fallback_provider import SuggestionFallbackProvider
 from src.domain.services.meal_suggestion.suggestion_prompt_builder import SuggestionPromptBuilder
+from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
 logger = logging.getLogger(__name__)
 
@@ -18,17 +18,9 @@ class DailyMealSuggestionService:
     """Service for generating daily meal suggestions based on user preferences from onboarding"""
 
     def __init__(self):
-        self.google_api_key = os.getenv("GOOGLE_API_KEY")
-        if not self.google_api_key:
-            raise ValueError("GOOGLE_API_KEY environment variable not set")
-
-        self.model = ChatGoogleGenerativeAI(
-            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            temperature=0.7,
-            max_output_tokens=4000,  # Increased for multiple meals
-            google_api_key=self.google_api_key,
-            convert_system_message_to_human=True
-        )
+        self._model_manager = GeminiModelManager.get_instance()
+        # Use standard temperature=0.7 to share model instance across all services
+        self.model = self._model_manager.get_model()
 
         # Initialize extracted components
         self.json_extractor = JsonExtractor()

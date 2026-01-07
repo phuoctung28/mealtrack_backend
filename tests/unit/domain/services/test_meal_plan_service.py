@@ -73,7 +73,7 @@ class TestMealPlanServiceInitialization:
     def test_initialization_with_api_key(self, mock_google_api_key):
         """Test successful initialization with API key."""
         service = MealPlanService()
-        assert service.google_api_key == "test-api-key"
+        assert service._model_manager is not None
         assert service._model is None  # Lazy loaded
 
     def test_initialization_without_api_key(self):
@@ -82,26 +82,31 @@ class TestMealPlanServiceInitialization:
             with pytest.raises(ValueError, match="GOOGLE_API_KEY environment variable not set"):
                 MealPlanService()
 
-    def test_model_lazy_loading(self, mock_google_api_key):
+    @patch('src.domain.services.meal_plan_service.GeminiModelManager')
+    def test_model_lazy_loading(self, mock_manager_class, mock_google_api_key):
         """Test that model is lazy loaded."""
+        # Mock the singleton manager
+        mock_manager_instance = Mock()
+        mock_manager_class.get_instance.return_value = mock_manager_instance
+        
+        # Mock model instance
+        mock_model = Mock()
+        mock_manager_instance.get_model.return_value = mock_model
+        
         # Create service
         service = MealPlanService()
         assert service._model is None
         
-        # Access the model property - this will actually instantiate the real model
-        # In a real test, we'd mock ChatGoogleGenerativeAI at the module level
-        # For now, we just verify the model gets created
-        try:
-            model = service.model
-            assert service._model is not None
-            
-            # Verify subsequent access returns same instance
-            model2 = service.model
-            assert model is model2
-        except Exception:
-            # If Google API isn't available in test environment, that's fine
-            # The lazy loading pattern is still correct
-            pass
+        # Access the model property - this should use the manager
+        model = service.model
+        assert service._model is not None
+        assert service._model == mock_model
+        
+        # Verify subsequent access returns same instance
+        model2 = service.model
+        assert model is model2
+        # Manager should only be called once (cached)
+        assert mock_manager_instance.get_model.call_count == 1
 
 
 class TestGenerateMealPlan:

@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     DB_SSL_VERIFY_IDENTITY: bool = Field(default=False)
 
     # Connection pool tuning
-    UVICORN_WORKERS: int = Field(default=4)
+    UVICORN_WORKERS: int = Field(default=1)
     POOL_SIZE_PER_WORKER: int = Field(default=5)
     POOL_MAX_OVERFLOW: int = Field(default=10)
     POOL_TIMEOUT: int = Field(default=30)

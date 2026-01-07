@@ -149,49 +149,33 @@ def get_vision_service() -> VisionAIServicePort:
 # AI Chat Service (singleton pattern)
 def get_ai_chat_service() -> AIChatServicePort:
     """
-    Get the AI chat service instance (singleton) using the LLM provider factory.
+    Get the AI chat service instance (singleton).
 
-    Supports multiple LLM providers (OpenAI, Gemini) with auto-detection.
-    Provider selection priority:
-    1. LLM_PROVIDER environment variable (if set)
-    2. Auto-detect from available API keys (OPENAI_API_KEY > GOOGLE_API_KEY)
+    Uses GeminiChatService which internally uses the GeminiModelManager singleton
+    to share model instances across all services.
 
     Returns:
-        AIChatServicePort: The configured LLM provider instance
+        AIChatServicePort: The configured Gemini chat service
 
     Raises:
-        ValueError: If no LLM provider can be configured (no API keys available)
+        ValueError: If GOOGLE_API_KEY is not configured
     """
     global _ai_chat_service
     if _ai_chat_service is not None:
         return _ai_chat_service
 
-    from src.infra.services.ai.llm_provider_factory import LLMProviderFactory
-    from src.infra.config.settings import settings
+    from src.infra.services.ai.gemini_chat_service import GeminiChatService
 
     try:
-        provider = settings.LLM_PROVIDER
-        if provider:
-            logger.info(f"Using configured LLM provider: {provider}")
-
-        # Get model from settings if available
-        model = None
-        if provider == "openai":
-            model = settings.OPENAI_MODEL
-        elif provider == "gemini":
-            model = settings.GEMINI_MODEL
-
-        _ai_chat_service = LLMProviderFactory.create_provider(
-            provider=provider,
-            model=model
-        )
+        # GeminiChatService uses the singleton model manager internally
+        _ai_chat_service = GeminiChatService()
+        logger.info("AI chat service initialized (using shared singleton model)")
         return _ai_chat_service
     except ValueError as e:
-        logger.error(f"Failed to create LLM provider: {e}")
+        logger.error(f"Failed to create AI chat service: {e}")
         raise ValueError(
             "AI chat service is not available. "
-            "Please configure at least one LLM provider by setting "
-            "OPENAI_API_KEY or GOOGLE_API_KEY environment variable."
+            "Please configure GOOGLE_API_KEY environment variable."
         ) from e
 
 

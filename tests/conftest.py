@@ -37,6 +37,25 @@ def event_loop():
     loop.close()
 
 
+@pytest.fixture(autouse=True)
+def reset_gemini_model_manager():
+    """
+    Reset GeminiModelManager singleton before and after each test.
+    
+    This ensures tests don't share state through the singleton,
+    preventing test pollution and ensuring isolation.
+    """
+    from src.infra.services.ai.gemini_model_manager import GeminiModelManager
+    
+    # Reset before test
+    GeminiModelManager.reset_instance()
+    
+    yield
+    
+    # Reset after test
+    GeminiModelManager.reset_instance()
+
+
 @pytest.fixture(scope="session")
 def worker_id(request):
     """Get worker ID for parallel testing, defaults to 'master' for non-parallel runs."""
