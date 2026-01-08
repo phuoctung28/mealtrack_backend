@@ -141,12 +141,64 @@ class MealSuggestionRequest(BaseModel):
 #     exclude_ids: List[str] = Field(default_factory=list)
 
 
-# DEPRECATED: SaveMealSuggestionRequest is no longer needed.
-# Meal suggestions are saved directly through the main meal creation flow.
-#
-# class SaveMealSuggestionRequest(BaseModel):
-#     """DEPRECATED: Use main meal creation endpoint instead."""
-#     suggestion_id: str
-#     name: str
-#     # ... (full schema removed for brevity)
+class SaveMealSuggestionRequest(BaseModel):
+    """
+    Request schema for saving a meal suggestion to planned_meals table.
+    This adds the meal to the user's daily meal plan (suggested meals).
+    """
+    suggestion_id: str = Field(..., description="ID of the suggestion being saved")
+    name: str = Field(..., description="Name of the meal")
+    meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
+        ..., description="Type of meal"
+    )
+    calories: int = Field(..., gt=0, description="Total calories (after portion multiplier)")
+    protein: float = Field(..., ge=0, description="Protein in grams")
+    carbs: float = Field(..., ge=0, description="Carbohydrates in grams")
+    fat: float = Field(..., ge=0, description="Fat in grams")
+    description: Optional[str] = Field(None, description="Meal description")
+    estimated_cook_time_minutes: Optional[int] = Field(
+        None, ge=0, description="Estimated cooking time in minutes"
+    )
+    ingredients_list: List[str] = Field(
+        default_factory=list, description="List of ingredients as strings"
+    )
+    instructions: List[str] = Field(
+        default_factory=list, description="List of cooking instructions"
+    )
+    portion_multiplier: int = Field(
+        default=1, ge=1, description="Portion multiplier (1x, 2x, etc.)"
+    )
+    meal_date: str = Field(
+        ..., description="Target date for the meal (YYYY-MM-DD format)"
+    )
+
+    @field_validator("meal_date")
+    @classmethod
+    def validate_date_format(cls, v: str) -> str:
+        """Validate date format is YYYY-MM-DD."""
+        from datetime import datetime
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+            return v
+        except ValueError:
+            raise ValueError("meal_date must be in YYYY-MM-DD format")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "suggestion_id": "suggestion_123",
+                "name": "Grilled Chicken Salad",
+                "meal_type": "lunch",
+                "calories": 450,
+                "protein": 35.0,
+                "carbs": 25.0,
+                "fat": 20.0,
+                "description": "Healthy grilled chicken salad",
+                "estimated_cook_time_minutes": 30,
+                "ingredients_list": ["chicken breast", "lettuce", "tomatoes"],
+                "instructions": ["Grill chicken", "Chop vegetables", "Mix together"],
+                "portion_multiplier": 1,
+                "meal_date": "2024-01-15"
+            }
+        }
 
