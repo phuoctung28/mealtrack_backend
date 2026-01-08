@@ -171,7 +171,7 @@ class MealCoreService:
         """
         errors = []
         
-        if not meal.name:
+        if not meal.name or not meal.name.strip():
             errors.append("Meal name is required")
         
         if not meal.food_items:

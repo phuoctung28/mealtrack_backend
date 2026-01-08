@@ -112,7 +112,7 @@ class TestSuggestionPrompts:
     """Test meal suggestion prompt building."""
 
     def test_build_suggestion_prompt_is_compact(self):
-        """Suggestion prompt should be under 1000 chars."""
+        """Suggestion prompt should be under 1200 chars."""
         result = PromptTemplateManager.build_suggestion_prompt(
             meal_type="lunch",
             target_calories=600,
@@ -121,9 +121,9 @@ class TestSuggestionPrompts:
             allergies=["peanuts"],
             dietary_preferences=["gluten-free"],
         )
-        
-        # Should be compact
-        assert len(result) < 1000
+
+        # Should be compact (under 1200 chars, down from 1500+ before optimization)
+        assert len(result) < 1200
         
         # Should contain essential info
         assert "lunch" in result

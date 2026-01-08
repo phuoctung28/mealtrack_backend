@@ -19,11 +19,18 @@ def service():
 def mock_suggestions():
     """Create mock meal suggestions."""
     def make_suggestion(name, calories, prep_time, ingredients):
+        # Create ingredient mocks with name attribute
+        ingredient_mocks = []
+        for ing in ingredients:
+            ing_mock = Mock()
+            ing_mock.name = ing
+            ingredient_mocks.append(ing_mock)
+        
         return Mock(
             meal_name=name,
             macros=Mock(calories=calories),
             prep_time_minutes=prep_time,
-            ingredients=[Mock(name=ing) for ing in ingredients],
+            ingredients=ingredient_mocks,
             confidence_score=0.85,
         )
     
