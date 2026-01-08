@@ -379,17 +379,18 @@ class TestHeartbeat:
         ws = MockWebSocket()
         await ws.accept()
         
-        # Simulate heartbeat timeout
+        # Simulate heartbeat timeout - use a delay that simulates waiting
         async def wait_for_heartbeat():
             try:
-                await asyncio.wait_for(
-                    ws.receive_json(),
-                    timeout=HEARTBEAT_TIMEOUT
-                )
+                # Wait a bit, then try to receive
+                await asyncio.sleep(HEARTBEAT_TIMEOUT)
+                # Try to receive - will raise WebSocketDisconnect if no messages
+                await ws.receive_json()
                 return True
-            except asyncio.TimeoutError:
+            except WebSocketDisconnect:
+                # No heartbeat received - connection should be considered timed out
                 return False
         
-        # No heartbeat sent, should timeout
+        # No heartbeat sent, should timeout/disconnect
         received = await wait_for_heartbeat()
         assert received is False
