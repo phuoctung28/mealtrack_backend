@@ -3,11 +3,11 @@ Unit tests for PromptGenerationService.
 """
 import pytest
 
-from src.domain.services.prompt_generation_service import PromptGenerationService
 from src.domain.model import (
     MealGenerationContext, MealGenerationRequest, MealGenerationType,
     UserDietaryProfile, UserNutritionTargets, IngredientConstraints, MealType
 )
+from src.domain.services.prompt_generation_service import PromptGenerationService
 
 
 @pytest.fixture

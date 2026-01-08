@@ -1,9 +1,10 @@
 """
 Unit tests for RequestLoggerMiddleware.
 """
+from unittest.mock import Mock
+
 import pytest
-from unittest.mock import AsyncMock, Mock, patch
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api.middleware.request_logger import (

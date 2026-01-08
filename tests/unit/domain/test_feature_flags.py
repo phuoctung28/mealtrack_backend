@@ -1,12 +1,12 @@
 """
 Unit tests for feature flags functionality using mocked dependencies.
 """
-import pytest
-from fastapi.testclient import TestClient
 import time
 
-from src.api.main import app
+import pytest
+from fastapi.testclient import TestClient
 
+from src.api.main import app
 
 # Mock responses for API endpoints
 MOCK_FEATURE_FLAGS_RESPONSE = {

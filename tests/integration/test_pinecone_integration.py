@@ -2,11 +2,12 @@
 Integration tests for Pinecone meal nutrition flow.
 """
 
-import pytest
 import os
 from unittest.mock import Mock, patch
 
-from src.infra.services.pinecone_service import PineconeNutritionService, NutritionData
+import pytest
+
+from src.infra.services.pinecone_service import PineconeNutritionService
 
 
 def _pinecone_indexes_available():

@@ -4,7 +4,9 @@ Unit tests for PineconeNutritionService.
 
 import os
 from unittest.mock import Mock, patch
+
 import pytest
+
 from src.infra.services.pinecone_service import (
     PineconeNutritionService,
     NutritionData,

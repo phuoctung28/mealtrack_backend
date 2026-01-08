@@ -1,10 +1,12 @@
 """
 Unit tests for RevenueCat service.
 """
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch, MagicMock
+
 import httpx
+import pytest
+
 from src.domain.services.revenuecat_service import RevenueCatService
 
 

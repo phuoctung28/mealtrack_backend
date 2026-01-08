@@ -1,14 +1,13 @@
 """
 Unit tests for meal suggestion mappers.
 """
-import pytest
 from datetime import datetime, timedelta
 
-from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession, MacroEstimate, Ingredient, RecipeStep
 from src.api.mappers.meal_suggestion_mapper import (
     to_meal_suggestion_response,
     to_suggestions_list_response,
 )
+from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession, MacroEstimate, Ingredient, RecipeStep
 
 
 class TestMealSuggestionMapper:

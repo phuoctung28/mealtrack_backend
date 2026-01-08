@@ -1,10 +1,9 @@
 """
 Unit tests for food database feature: search, details, and manual meal creation.
 """
-import pytest
-
-from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
+
+import pytest
 
 
 # Stub service and cache for tests

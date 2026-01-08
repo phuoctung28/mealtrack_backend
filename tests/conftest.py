@@ -10,20 +10,20 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition, FoodItem
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
-from tests.fixtures.mock_image_store import MockImageStore
-from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIService
 from src.infra.database.config import Base
 # Import all models to ensure they're registered with Base metadata
 from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
+from src.infra.event_bus import PyMediatorEventBus, EventBus
+from src.infra.repositories.meal_repository import MealRepository
 from tests.fixtures.database.test_config import (
     get_test_database_url,
     create_test_engine
 )
-from src.infra.event_bus import PyMediatorEventBus, EventBus
-from src.infra.repositories.meal_repository import MealRepository
+from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIService
+from tests.fixtures.mock_image_store import MockImageStore
 
 
 @pytest.fixture(scope="function")

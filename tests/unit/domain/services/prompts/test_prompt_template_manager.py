@@ -2,15 +2,14 @@
 Unit tests for PromptTemplateManager.
 Verifies token reduction and correctness of compressed prompts.
 """
-import pytest
 
-from src.domain.services.prompts.prompt_template_manager import PromptTemplateManager
 from src.domain.services.prompts.prompt_constants import (
     INGREDIENT_RULES,
     SEASONING_RULES,
     JSON_SCHEMAS,
     GOAL_GUIDANCE,
 )
+from src.domain.services.prompts.prompt_template_manager import PromptTemplateManager
 
 
 class TestPromptConstants:

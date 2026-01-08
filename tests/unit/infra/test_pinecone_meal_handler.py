@@ -2,11 +2,11 @@
 Unit tests for meal command handlers with Pinecone integration.
 """
 import os
-import pytest
-from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime
+from unittest.mock import Mock, patch, AsyncMock
 
-from src.api.exceptions import ValidationException, ResourceNotFoundException
+import pytest
+
 from src.app.commands.meal import (
     EditMealCommand,
     FoodItemChange,

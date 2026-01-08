@@ -1,8 +1,9 @@
 """
 Unit tests for NotificationPreferences.update_preferences method.
 """
-import pytest
 from datetime import datetime
+
+import pytest
 
 from src.domain.model.notification.notification_preferences import NotificationPreferences
 

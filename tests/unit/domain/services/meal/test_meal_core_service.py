@@ -2,12 +2,13 @@
 Unit tests for MealCoreService.
 Tests meal operations and meal type determination.
 """
-import pytest
-from datetime import datetime, time
+from datetime import datetime
 from unittest.mock import Mock
 
-from src.domain.services.meal.meal_core_service import MealCoreService
+import pytest
+
 from src.domain.model.meal_planning import MealType
+from src.domain.services.meal.meal_core_service import MealCoreService
 
 
 @pytest.fixture

@@ -1,9 +1,10 @@
 """
 Unit tests for RecipeSearchService.
 """
-import pytest
 import json
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
+
+import pytest
 
 from src.domain.services.meal_suggestion.recipe_search_service import (
     RecipeSearchService,

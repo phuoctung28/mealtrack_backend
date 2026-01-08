@@ -1,7 +1,6 @@
 """
 Unit tests for IngredientIdentificationStrategy.
 """
-import pytest
 
 from src.domain.strategies.meal_analysis_strategy import (
     IngredientIdentificationStrategy,

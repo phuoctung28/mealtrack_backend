@@ -1,11 +1,11 @@
 """
 Unit tests for RevenueCat webhook handler.
 """
-import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
 
 from src.api.routes.v1.webhooks import (
     revenuecat_webhook,

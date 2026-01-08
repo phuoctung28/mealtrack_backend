@@ -3,6 +3,7 @@ Unit tests for SyncUserCommandHandler.
 """
 from datetime import datetime
 from unittest.mock import Mock
+
 import pytest
 from sqlalchemy.orm import Session
 

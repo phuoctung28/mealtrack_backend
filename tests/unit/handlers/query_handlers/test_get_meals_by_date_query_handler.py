@@ -3,10 +3,11 @@ Unit tests for GetMealsByDateQueryHandler.
 
 Tests cover meal retrieval by date, error handling, and dependency management.
 """
+import uuid
 from datetime import date, datetime
 from unittest.mock import Mock
+
 import pytest
-import uuid
 
 from src.app.handlers.query_handlers.get_meals_by_date_query_handler import GetMealsByDateQueryHandler
 from src.app.queries.meal_plan import GetMealsByDateQuery

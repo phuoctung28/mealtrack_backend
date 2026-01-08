@@ -1,7 +1,5 @@
 """Tests for meal suggestion request schemas."""
 
-import pytest
-
 from src.api.schemas.request.meal_suggestion_requests import (
     MealSuggestionRequest,
     MealSizeEnum,

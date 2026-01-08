@@ -1,11 +1,10 @@
 """
 Unit tests for ChatResponseBuilder.
 """
-import pytest
 from datetime import datetime
 
 from src.api.mappers.chat_response_builder import ChatResponseBuilder
-from src.api.schemas.response.chat_responses import MessageResponse, FollowUpQuestion, StructuredData
+from src.api.schemas.response.chat_responses import MessageResponse
 
 
 class TestChatResponseBuilder:

@@ -8,16 +8,15 @@ Tests the refactored _calculate_all_macro_targets method to verify:
 """
 import pytest
 
+from src.domain.constants import TDEEConstants
 from src.domain.model.user import (
     TdeeRequest,
-    MacroTargets,
     Sex,
     ActivityLevel,
     Goal,
     UnitSystem
 )
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.domain.constants import TDEEConstants
 
 
 class TestTdeeServiceGoalSpecificMacros:
