@@ -11,7 +11,7 @@ import logging
 from typing import Awaitable, Callable, Optional, Any, TypeVar, ParamSpec
 
 from src.infra.cache.cache_service import CacheService
-from src.infra.cache.cache_keys import CacheKeys
+from src.domain.cache.cache_keys import CacheKeys
 
 logger = logging.getLogger(__name__)
 

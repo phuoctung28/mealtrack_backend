@@ -15,7 +15,7 @@ from src.api.schemas.response.feature_flag_responses import (
     FeatureFlagUpdatedResponse
 )
 from src.api.base_dependencies import get_cache_service, get_db
-from src.infra.cache.cache_keys import CacheKeys
+from src.domain.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.feature_flag import FeatureFlag
 

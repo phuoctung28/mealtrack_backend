@@ -11,7 +11,7 @@ from src.infra.cache.decorators import (
     invalidate_on_write,
     CacheTTL,
 )
-from src.infra.cache.cache_keys import CacheKeys
+from src.domain.cache.cache_keys import CacheKeys
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ class MockService:
         return {"key": key, "value": "test"}
     
     @invalidate_on_write(
-        key_patterns=lambda self, user_id, **_: [f"user:{user_id}"]
+        key_patterns=lambda self, user_id, *args, **kwargs: [f"user:{user_id}"]
     )
     async def update_user(self, user_id: str, data: dict) -> bool:
         self.call_count += 1

@@ -6,7 +6,7 @@ import uuid
 from typing import List, Dict, Any, Optional
 
 from src.domain.prompts.meal_suggestion_prompt import generate_meal_suggestion_prompt
-from src.infra.adapters.meal_generation_service import MealGenerationService
+from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +18,9 @@ class MealSuggestionService:
     Reuses the MealGenerationService for AI generation with specialized prompts.
     """
     
-    def __init__(self):
+    def __init__(self, meal_generation_service: MealGenerationServicePort):
         """Initialize the service with meal generation adapter."""
-        self.meal_generation_service = MealGenerationService()
+        self.meal_generation_service = meal_generation_service
     
     def generate_suggestions(
         self,

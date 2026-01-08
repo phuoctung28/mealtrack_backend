@@ -9,7 +9,7 @@ from src.app.commands.meal import AddCustomIngredientCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.services.meal_service import MealService
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.infra.cache.cache_keys import CacheKeys
+from src.domain.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
 
 logger = logging.getLogger(__name__)

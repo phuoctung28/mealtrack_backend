@@ -30,7 +30,7 @@ from src.domain.services.tdee_service import TdeeCalculationService
 
 from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService, RecipeSearchCriteria
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
-from src.infra.cache.cache_keys import CacheKeys
+from src.domain.cache.cache_keys import CacheKeys
 
 logger = logging.getLogger(__name__)
 

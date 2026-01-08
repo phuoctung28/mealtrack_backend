@@ -7,7 +7,7 @@ from unittest.mock import Mock, AsyncMock, patch
 from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
     SuggestionOrchestrationService,
 )
-from src.infra.cache.cache_keys import CacheKeys
+from src.domain.cache.cache_keys import CacheKeys
 
 
 @pytest.fixture

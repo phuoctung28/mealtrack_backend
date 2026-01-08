@@ -13,7 +13,7 @@ from src.app.events.meal import MealEditedEvent
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition import FoodItem, Macros
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.infra.cache.cache_keys import CacheKeys
+from src.domain.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
 from src.infra.services.pinecone_service import get_pinecone_service
 

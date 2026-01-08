@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from src.api.schemas.common.auth_enums import AuthProviderEnum
+from src.domain.model.auth import AuthProviderEnum
 
 
 @dataclass
