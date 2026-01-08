@@ -11,7 +11,7 @@ from src.api.schemas.response.chat_responses import (
     ThreadResponse,
     ThreadListResponse
 )
-from src.api.builders.chat_response_builder import ChatResponseBuilder
+from src.api.mappers.chat_response_builder import ChatResponseBuilder
 from src.app.commands.chat import CreateThreadCommand, DeleteThreadCommand
 from src.app.queries.chat import GetThreadsQuery, GetThreadQuery
 from src.infra.event_bus import EventBus
