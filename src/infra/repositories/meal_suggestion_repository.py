@@ -129,26 +129,6 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
         await self._cache.set(key, data, ttl=ttl)
         logger.debug(f"Updated suggestion {suggestion.id}")
 
-    async def get_session_suggestions(
-        self, session_id: str
-    ) -> List[MealSuggestion]:
-        """Get all suggestions for a session."""
-        pattern = f"suggestion:{session_id}:*"
-        if not self._cache.client:
-            return []
-
-        keys = await self._cache.client.keys(pattern)
-        if not keys:
-            return []
-
-        suggestions = []
-        for key in keys:
-            data = await self._cache.get(key)
-            if data:
-                suggestions.append(self._deserialize_suggestion(data))
-
-        return suggestions
-
     def _serialize_session(self, session: SuggestionSession) -> str:
         """Serialize session to JSON string."""
         return json.dumps({

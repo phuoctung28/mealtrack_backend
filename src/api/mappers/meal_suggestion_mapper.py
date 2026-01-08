@@ -9,7 +9,6 @@ from src.api.schemas.response.meal_suggestion_responses import (
     IngredientResponse,
     RecipeStepResponse,
     SuggestionsListResponse,
-    AcceptedMealResponse,
 )
 
 
@@ -62,16 +61,3 @@ def to_suggestions_list_response(
     )
 
 
-def to_accepted_meal_response(result: dict) -> AcceptedMealResponse:
-    """Convert acceptance result to API response."""
-    return AcceptedMealResponse(
-        meal_id=result["meal_id"],
-        meal_name=result["meal_name"],
-        macros=MacroEstimateResponse(
-            calories=result["adjusted_macros"].calories,
-            protein=result["adjusted_macros"].protein,
-            carbs=result["adjusted_macros"].carbs,
-            fat=result["adjusted_macros"].fat,
-        ),
-        saved_at=result["saved_at"],
-    )

@@ -14,7 +14,6 @@ from typing import List, Optional, Tuple
 from src.domain.model.meal_suggestion import (
     MealSuggestion,
     SuggestionSession,
-    SuggestionStatus,
     MacroEstimate,
     Ingredient,
     RecipeStep,
@@ -28,7 +27,6 @@ from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
 
-from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService, RecipeSearchCriteria
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 from src.domain.cache.cache_keys import CacheKeys
 
@@ -57,7 +55,6 @@ class SuggestionOrchestrationService:
         user_repo: UserRepositoryPort,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
-        recipe_search: RecipeSearchService = None,
         redis_client=None,
     ):
         self._generation = generation_service
@@ -65,7 +62,6 @@ class SuggestionOrchestrationService:
         self._user_repo = user_repo
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
-        self._recipe_search = recipe_search  # Optional for Phase 2
         self._redis_client = redis_client
 
     async def generate_suggestions(
@@ -155,72 +151,6 @@ class SuggestionOrchestrationService:
 
         return session, suggestions
 
-    async def get_session_suggestions(
-        self,
-        user_id: str,
-        session_id: str,
-    ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
-        """Get current session suggestions."""
-        session = await self._repo.get_session(session_id)
-        if not session or session.user_id != user_id:
-            raise ValueError(f"Session {session_id} not found")
-
-        suggestions = await self._repo.get_session_suggestions(session_id)
-        return session, suggestions
-
-    async def accept_suggestion(
-        self,
-        user_id: str,
-        suggestion_id: str,
-        portion_multiplier: int,
-        consumed_at: Optional[datetime],
-    ) -> dict:
-        """Accept suggestion with portion multiplier (returns meal data for saving)."""
-        suggestion = await self._repo.get_suggestion(suggestion_id)
-        if not suggestion or suggestion.user_id != user_id:
-            raise ValueError(f"Suggestion {suggestion_id} not found")
-
-        # Apply portion multiplier
-        adjusted_macros = suggestion.macros.multiply(portion_multiplier)
-
-        # Mark as accepted
-        suggestion.status = SuggestionStatus.ACCEPTED
-        await self._repo.update_suggestion(suggestion)
-
-        return {
-            "meal_id": f"meal_{uuid.uuid4().hex[:16]}",
-            "meal_name": suggestion.meal_name,
-            "adjusted_macros": adjusted_macros,
-            "saved_at": consumed_at or datetime.utcnow(),
-            "suggestion": suggestion,
-        }
-
-    async def reject_suggestion(
-        self,
-        user_id: str,
-        suggestion_id: str,
-        feedback: Optional[str],
-    ) -> None:
-        """Reject suggestion with optional feedback."""
-        suggestion = await self._repo.get_suggestion(suggestion_id)
-        if not suggestion or suggestion.user_id != user_id:
-            raise ValueError(f"Suggestion {suggestion_id} not found")
-
-        suggestion.status = SuggestionStatus.REJECTED
-        await self._repo.update_suggestion(suggestion)
-        logger.info(f"Rejected suggestion {suggestion_id}: {feedback}")
-
-    async def discard_session(
-        self,
-        user_id: str,
-        session_id: str,
-    ) -> None:
-        """Discard entire session and cleanup."""
-        session = await self._repo.get_session(session_id)
-        if not session or session.user_id != user_id:
-            raise ValueError(f"Session {session_id} not found")
-
-        await self._repo.delete_session(session_id)
 
     def _calculate_daily_tdee(self, profile) -> float:
         """
@@ -547,10 +477,3 @@ class SuggestionOrchestrationService:
         )
 
         return suggestions
-
-    def _normalize_confidence(self, score: float) -> float:
-        """Normalize confidence score to 0-1 range (AI may return 1-5 scale)."""
-        if score > 1.0:
-            # Assume 1-5 scale, convert to 0-1
-            return min(1.0, score / 5.0)
-        return max(0.0, min(1.0, score))

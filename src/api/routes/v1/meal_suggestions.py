@@ -14,27 +14,19 @@ from src.api.schemas.request.meal_suggestion_requests import (
     MealSuggestionRequest,
     SaveMealSuggestionRequest,
     RegenerateSuggestionsRequest,
-    AcceptSuggestionRequest,
-    RejectSuggestionRequest,
 )
 from src.api.schemas.response.meal_suggestion_responses import (
     SaveMealSuggestionResponse,
     SuggestionsListResponse,
-    AcceptedMealResponse,
 )
 from src.api.mappers.meal_suggestion_mapper import (
     to_suggestions_list_response,
-    to_accepted_meal_response,
 )
 from src.app.commands.meal_suggestion import (
     GenerateMealSuggestionsCommand,
     SaveMealSuggestionCommand,
     RegenerateSuggestionsCommand,
-    AcceptSuggestionCommand,
-    RejectSuggestionCommand,
-    DiscardSessionCommand,
 )
-from src.app.queries.meal_suggestion import GetSessionSuggestionsQuery
 from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/meal-suggestions", tags=["Meal Suggestions"])
@@ -184,103 +176,3 @@ async def regenerate_suggestions(
         raise handle_exception(e) from e
 
 
-@router.get("/{session_id}", response_model=SuggestionsListResponse)
-async def get_session_suggestions(
-    session_id: str,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus),
-):
-    """
-    [Phase 06] Get current session's suggestions.
-
-    Retrieves all suggestions generated in this session.
-    Returns 404 if session expired (4h TTL).
-    """
-    try:
-        query = GetSessionSuggestionsQuery(
-            user_id=user_id,
-            session_id=session_id,
-        )
-
-        session, suggestions = await event_bus.send(query)
-        return to_suggestions_list_response(session, suggestions)
-
-    except Exception as e:
-        raise handle_exception(e) from e
-
-
-@router.post("/{suggestion_id}/accept", response_model=AcceptedMealResponse)
-async def accept_suggestion(
-    suggestion_id: str,
-    request: AcceptSuggestionRequest,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus),
-):
-    """
-    [Phase 06] Accept suggestion with portion multiplier (1x-4x).
-
-    Applies portion multiplier to macros and saves to meal history.
-    Marks suggestion as accepted.
-    """
-    try:
-        command = AcceptSuggestionCommand(
-            user_id=user_id,
-            suggestion_id=suggestion_id,
-            portion_multiplier=request.portion_multiplier,
-            consumed_at=request.consumed_at,
-        )
-
-        result = await event_bus.send(command)
-        return to_accepted_meal_response(result)
-
-    except Exception as e:
-        raise handle_exception(e) from e
-
-
-@router.post("/{suggestion_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
-async def reject_suggestion(
-    suggestion_id: str,
-    request: RejectSuggestionRequest,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus),
-):
-    """
-    [Phase 06] Reject suggestion with optional feedback.
-
-    Marks suggestion as rejected. Feedback used for analytics/improvement.
-    """
-    try:
-        command = RejectSuggestionCommand(
-            user_id=user_id,
-            suggestion_id=suggestion_id,
-            feedback=request.feedback if hasattr(request, "feedback") else None,
-        )
-
-        await event_bus.send(command)
-
-    except Exception as e:
-        raise handle_exception(e) from e
-
-
-@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def discard_session(
-    session_id: str,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus),
-):
-    """
-    [Phase 06] Discard entire suggestion session.
-
-    Deletes session and all associated suggestions from cache.
-    Used when user cancels the flow.
-    """
-    try:
-        command = DiscardSessionCommand(
-            user_id=user_id,
-            session_id=session_id,
-        )
-
-        await event_bus.send(command)
-
-    except Exception as e:
-        raise handle_exception(e) from e

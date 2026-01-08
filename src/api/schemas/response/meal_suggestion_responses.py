@@ -102,31 +102,9 @@ class SuggestionsListResponse(BaseModel):
 MealSuggestionsResponse = SuggestionsListResponse
 
 
-class AcceptedMealResponse(BaseModel):
-    """Response after accepting suggestion with portion multiplier."""
-
-    meal_id: str = Field(..., description="ID of saved meal in history")
-    meal_name: str = Field(..., description="Name of the meal")
-    macros: MacroEstimateResponse = Field(
-        ..., description="Adjusted macros (after portion multiplier)"
-    )
-    saved_at: datetime = Field(..., description="Timestamp when meal was saved")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "meal_id": "meal_12345",
-                "meal_name": "Grilled Chicken Rice Bowl",
-                "macros": {"protein": 70.0, "carbs": 80.0, "fat": 30.0},
-                "saved_at": "2025-12-30T12:00:00Z",
-            }
-        }
-
-
 class SaveMealSuggestionResponse(BaseModel):
     """
     Response after saving a meal suggestion to history.
-    (LEGACY - use AcceptedMealResponse instead)
     """
 
     success: bool = Field(..., description="Whether the save was successful")

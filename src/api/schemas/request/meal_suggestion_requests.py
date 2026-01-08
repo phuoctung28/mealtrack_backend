@@ -144,39 +144,9 @@ class RegenerateSuggestionsRequest(BaseModel):
         }
 
 
-class AcceptSuggestionRequest(BaseModel):
-    """Request to accept suggestion with portion multiplier."""
-
-    portion_multiplier: int = Field(
-        default=1, ge=1, le=4, description="Portion multiplier (1x, 2x, 3x, 4x)"
-    )
-    consumed_at: Optional[datetime] = Field(
-        None, description="Optional consumption timestamp (defaults to now)"
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {"portion_multiplier": 2, "consumed_at": "2025-12-30T12:00:00Z"}
-        }
-
-
-class RejectSuggestionRequest(BaseModel):
-    """Request to reject suggestion with optional feedback."""
-
-    feedback: Optional[str] = Field(
-        None,
-        max_length=500,
-        description="Optional feedback on why suggestion was rejected",
-    )
-
-    class Config:
-        json_schema_extra = {"example": {"feedback": "Too spicy for my taste"}}
-
-
 class SaveMealSuggestionRequest(BaseModel):
     """
     Request schema for saving a selected meal suggestion to meal history.
-    (LEGACY - use AcceptSuggestionRequest instead)
     """
 
     suggestion_id: str = Field(..., description="ID of the suggestion to save")

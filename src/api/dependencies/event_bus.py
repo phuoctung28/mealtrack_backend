@@ -39,11 +39,7 @@ from src.app.commands.meal_suggestion import (
     GenerateMealSuggestionsCommand,
     SaveMealSuggestionCommand,
     RegenerateSuggestionsCommand,
-    AcceptSuggestionCommand,
-    RejectSuggestionCommand,
-    DiscardSessionCommand,
 )
-from src.app.queries.meal_suggestion import GetSessionSuggestionsQuery
 from src.app.commands.notification import (
     RegisterFcmTokenCommand,
     DeleteFcmTokenCommand,
@@ -79,10 +75,6 @@ from src.app.handlers.command_handlers import (
     GenerateMealSuggestionsCommandHandler,
     SaveMealSuggestionCommandHandler,
     RegenerateSuggestionsHandler,
-    GetSessionSuggestionsHandler,
-    AcceptSuggestionHandler,
-    RejectSuggestionHandler,
-    DiscardSessionHandler,
 )
 from src.app.handlers.command_handlers import (
     RegisterFcmTokenCommandHandler,
@@ -364,22 +356,6 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         RegenerateSuggestionsCommand,
         RegenerateSuggestionsHandler(suggestion_service),
-    )
-    event_bus.register_handler(
-        GetSessionSuggestionsQuery,
-        GetSessionSuggestionsHandler(suggestion_service),
-    )
-    event_bus.register_handler(
-        AcceptSuggestionCommand,
-        AcceptSuggestionHandler(suggestion_service),
-    )
-    event_bus.register_handler(
-        RejectSuggestionCommand,
-        RejectSuggestionHandler(suggestion_service),
-    )
-    event_bus.register_handler(
-        DiscardSessionCommand,
-        DiscardSessionHandler(suggestion_service),
     )
 
     # Register user handlers

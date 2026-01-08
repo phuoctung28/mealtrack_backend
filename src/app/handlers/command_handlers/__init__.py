@@ -18,11 +18,7 @@ from .generate_single_meal_command_handler import GenerateSingleMealCommandHandl
 from .generate_meal_suggestions_command_handler import GenerateMealSuggestionsCommandHandler
 from .save_meal_suggestion_command_handler import SaveMealSuggestionCommandHandler
 # Session-based suggestion handlers (new orchestration-based)
-from .accept_suggestion_handler import AcceptSuggestionHandler
-from .discard_session_handler import DiscardSessionHandler
-from .get_session_suggestions_handler import GetSessionSuggestionsHandler
 from .regenerate_suggestions_handler import RegenerateSuggestionsHandler
-from .reject_suggestion_handler import RejectSuggestionHandler
 # User handlers (newly extracted)
 from .save_user_onboarding_command_handler import SaveUserOnboardingCommandHandler
 from .sync_user_command_handler import SyncUserCommandHandler
@@ -57,10 +53,6 @@ __all__ = [
     "SaveMealSuggestionCommandHandler",
     # Session-based suggestion handlers (new orchestration-based)
     "RegenerateSuggestionsHandler",
-    "GetSessionSuggestionsHandler",
-    "AcceptSuggestionHandler",
-    "RejectSuggestionHandler",
-    "DiscardSessionHandler",
     # Standalone handlers
     "CreateManualMealCommandHandler",
     "GenerateWeeklyIngredientBasedMealPlanCommandHandler",

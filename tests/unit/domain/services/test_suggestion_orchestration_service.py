@@ -37,7 +37,6 @@ def mock_suggestion_repo():
     repo.save_suggestions = AsyncMock()
     repo.get_session = AsyncMock()
     repo.update_session = AsyncMock()
-    repo.get_session_suggestions = AsyncMock()
     repo.get_suggestion = AsyncMock()
     repo.update_suggestion = AsyncMock()
     repo.delete_session = AsyncMock()
