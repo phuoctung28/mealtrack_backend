@@ -3,7 +3,7 @@ Handler for ingredient recognition command.
 """
 import base64
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from src.app.commands.ingredient import RecognizeIngredientCommand
 from src.app.events.base import EventHandler, handles

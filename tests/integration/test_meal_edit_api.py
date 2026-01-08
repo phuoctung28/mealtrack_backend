@@ -2,13 +2,11 @@
 Integration tests for meal edit API endpoints.
 """
 import os
+
 import pytest
-import json
-from datetime import datetime
 from fastapi.testclient import TestClient
 
 from src.api.main import app
-from src.domain.model import MealStatus
 
 
 def _pinecone_indexes_available():

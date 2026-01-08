@@ -1,5 +1,4 @@
 """Tests for PortionCalculationService."""
-import pytest
 from src.domain.services.portion_calculation_service import PortionCalculationService
 
 

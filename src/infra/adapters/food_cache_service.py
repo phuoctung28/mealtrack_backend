@@ -11,8 +11,8 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
-from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.cache.cache_keys import CacheKeys
+from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.infra.cache.cache_service import CacheService
 
 logger = logging.getLogger(__name__)

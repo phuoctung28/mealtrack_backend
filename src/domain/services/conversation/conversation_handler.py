@@ -4,10 +4,10 @@ from typing import Optional, Tuple
 
 from src.domain.model.conversation import Conversation, ConversationContext, ConversationState
 from src.domain.model.meal_planning import (
-    UserPreferences, DietaryPreference, FitnessGoal, PlanDuration, MealPlan, MealType
+    UserPreferences, DietaryPreference, FitnessGoal, PlanDuration
 )
-from src.domain.services.conversation.conversation_parser import ConversationParser
 from src.domain.services.conversation.conversation_formatter import ConversationFormatter
+from src.domain.services.conversation.conversation_parser import ConversationParser
 from src.domain.services.meal_plan_service import MealPlanService
 
 logger = logging.getLogger(__name__)

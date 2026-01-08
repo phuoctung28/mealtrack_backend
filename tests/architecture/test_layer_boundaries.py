@@ -3,8 +3,6 @@ Architectural enforcement tests.
 Ensures layer boundaries are respected (Domain never imports Infra).
 """
 import ast
-import os
-import pytest
 from pathlib import Path
 from typing import List, Set, Tuple
 

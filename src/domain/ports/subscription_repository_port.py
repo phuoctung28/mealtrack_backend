@@ -2,8 +2,8 @@
 SubscriptionRepositoryPort - Interface for subscription repository operations.
 """
 from abc import ABC, abstractmethod
-from typing import Optional, List
 from datetime import datetime
+from typing import Optional, List
 
 from src.domain.model.subscription import Subscription
 

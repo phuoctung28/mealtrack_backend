@@ -1,9 +1,9 @@
 """
 Unit tests for enhanced cache decorators.
 """
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, Mock, patch
-import asyncio
 
 from src.infra.cache.decorators import (
     cached,
@@ -11,7 +11,6 @@ from src.infra.cache.decorators import (
     invalidate_on_write,
     CacheTTL,
 )
-from src.domain.cache.cache_keys import CacheKeys
 
 
 @pytest.fixture

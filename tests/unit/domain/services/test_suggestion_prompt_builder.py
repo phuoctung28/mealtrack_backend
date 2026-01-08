@@ -4,11 +4,11 @@ Tests that prompts request 6 names, no description, and other optimizations.
 """
 import pytest
 
+from src.domain.model.meal_suggestion import SuggestionSession
 from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
     build_meal_names_prompt,
     build_recipe_details_prompt,
 )
-from src.domain.model.meal_suggestion import SuggestionSession, MealType
 
 
 @pytest.fixture

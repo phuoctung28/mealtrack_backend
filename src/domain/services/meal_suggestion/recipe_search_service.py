@@ -4,8 +4,8 @@ Enables fast meal suggestion retrieval via semantic search.
 """
 import json
 import logging
-from typing import List, Optional
 from dataclasses import dataclass
+from typing import List, Optional
 
 from src.infra.services.pinecone_service import PineconeNutritionService
 

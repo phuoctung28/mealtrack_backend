@@ -3,23 +3,20 @@ Unit tests for SuggestionOrchestrationService 2-phase generation.
 Tests Phase 1 (6 names), Phase 2 (6 parallel recipes, take first 3).
 """
 import asyncio
+from unittest.mock import Mock, AsyncMock
+
 import pytest
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from typing import List
 
 from src.domain.model.meal_suggestion import (
     MealSuggestion,
     SuggestionSession,
     MealType,
 )
-from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
-    SuggestionOrchestrationService,
-)
 from src.domain.schemas.meal_generation_schemas import (
     MealNamesResponse,
-    RecipeDetailsResponse,
-    IngredientItem,
-    RecipeStepItem,
+)
+from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
+    SuggestionOrchestrationService,
 )
 
 
@@ -37,7 +34,6 @@ def mock_suggestion_repo():
     repo.save_suggestions = AsyncMock()
     repo.get_session = AsyncMock()
     repo.update_session = AsyncMock()
-    repo.get_session_suggestions = AsyncMock()
     repo.get_suggestion = AsyncMock()
     repo.update_suggestion = AsyncMock()
     repo.delete_session = AsyncMock()

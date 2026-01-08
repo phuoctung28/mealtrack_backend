@@ -2,9 +2,8 @@
 Unit tests for meal edit command handlers.
 """
 import os
+
 import pytest
-import uuid
-from datetime import datetime
 
 from src.api.exceptions import ValidationException, ResourceNotFoundException
 from src.app.commands.meal import (
@@ -14,7 +13,6 @@ from src.app.commands.meal import (
     CustomNutritionData
 )
 from src.app.events.meal import MealEditedEvent
-from src.domain.model import MealStatus, FoodItem, Macros
 
 
 def _pinecone_indexes_available():

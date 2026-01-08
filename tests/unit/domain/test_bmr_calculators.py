@@ -3,12 +3,12 @@ Unit tests for BMR calculator services.
 """
 import pytest
 
+from src.domain.model import Sex
 from src.domain.services.bmr_calculator import (
     MifflinStJeorCalculator,
     KatchMcArdleCalculator,
     BMRCalculatorFactory
 )
-from src.domain.model import Sex
 
 
 class TestMifflinStJeorCalculator:

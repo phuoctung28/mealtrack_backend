@@ -1,12 +1,12 @@
 """
 Integration tests for foods API endpoints.
 """
+from unittest.mock import Mock
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch
 
 from src.api.main import app
-from src.api.dependencies.event_bus import get_food_search_event_bus
 
 
 @pytest.fixture

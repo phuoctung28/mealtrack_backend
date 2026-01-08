@@ -1,12 +1,13 @@
 """
 Unit tests for DailyMealSuggestionService.
 """
-import pytest
-from unittest.mock import patch
 import json
+from unittest.mock import patch
 
-from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
+import pytest
+
 from src.domain.model import MealType, PlannedMeal, SimpleMacroTargets
+from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
 
 
 @pytest.fixture

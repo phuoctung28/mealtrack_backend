@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session
 
 from src.app.commands.meal_plan import GenerateWeeklyIngredientBasedMealPlanCommand
 from src.app.events.base import EventHandler, handles
+from src.domain.model.meal_planning import PlanDuration
 from src.domain.services.meal_plan_persistence_service import MealPlanPersistenceService
 from src.domain.services.user_profile_service import UserProfileService
-from src.domain.model.meal_planning import PlanDuration
 from src.domain.services.weekly_ingredient_based_meal_plan_service import (
     WeeklyIngredientBasedMealPlanService,
 )

@@ -2,8 +2,8 @@
 MealPlanRepositoryPort - Interface for meal plan repository operations.
 """
 from abc import ABC, abstractmethod
-from typing import Optional, List
 from datetime import date
+from typing import Optional, List
 
 from src.domain.model.meal_planning import MealPlan, PlannedMeal, DailyMealPlan
 

@@ -1,21 +1,21 @@
 """
 Unit tests for NotificationRepository.
 """
-import pytest
-import uuid
 from datetime import datetime, timezone
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
+
+import pytest
 
 from src.domain.model.notification import (
     UserFcmToken,
     NotificationPreferences,
     DeviceType
 )
-from src.infra.repositories.notification_repository import NotificationRepository
 from src.infra.database.models.notification import (
     UserFcmToken as DBUserFcmToken,
     NotificationPreferences as DBNotificationPreferences
 )
+from src.infra.repositories.notification_repository import NotificationRepository
 
 # Test UUIDs - using fixed UUIDs for consistency in tests
 TEST_USER_ID = "00000000-0000-0000-0000-000000000001"

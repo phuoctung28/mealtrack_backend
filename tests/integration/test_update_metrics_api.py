@@ -1,12 +1,13 @@
 """
 Integration tests for update user metrics API endpoint.
 """
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
 from fastapi.testclient import TestClient
 
-from src.api.main import app
 from src.api.base_dependencies import get_db
+from src.api.main import app
 from src.infra.database.models.user import User
 from src.infra.database.models.user.profile import UserProfile
 

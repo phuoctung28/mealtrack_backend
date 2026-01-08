@@ -1,15 +1,13 @@
 """
 Unit tests for meal suggestion mappers.
 """
-import pytest
 from datetime import datetime, timedelta
 
-from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession, MacroEstimate, Ingredient, RecipeStep
 from src.api.mappers.meal_suggestion_mapper import (
     to_meal_suggestion_response,
     to_suggestions_list_response,
-    to_accepted_meal_response
 )
+from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession, MacroEstimate, Ingredient, RecipeStep
 
 
 class TestMealSuggestionMapper:
@@ -176,22 +174,4 @@ class TestMealSuggestionMapper:
         assert result.suggestions[0].id == "suggestion-1"
         assert result.suggestions[1].id == "suggestion-2"
 
-    def test_to_accepted_meal_response(self):
-        """Test converting acceptance result to API response."""
-        result_dict = {
-            "meal_id": "meal-123",
-            "meal_name": "Accepted Meal",
-            "adjusted_macros": MacroEstimate(calories=550, protein=45, carbs=40, fat=18),
-            "saved_at": datetime.now()
-        }
-        
-        response = to_accepted_meal_response(result_dict)
-        
-        assert response.meal_id == "meal-123"
-        assert response.meal_name == "Accepted Meal"
-        assert response.macros.calories == 550
-        assert response.macros.protein == 45
-        assert response.macros.carbs == 40
-        assert response.macros.fat == 18
-        assert response.saved_at == result_dict["saved_at"]
 

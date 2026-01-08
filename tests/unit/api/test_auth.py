@@ -5,6 +5,7 @@ Tests cover Firebase token verification, user ID extraction,
 email extraction, and optional authentication.
 """
 from unittest.mock import Mock, patch
+
 import pytest
 from fastapi import HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials

@@ -1,10 +1,11 @@
 """
 Unit tests for MealGenerationService.
 """
-import pytest
-from unittest.mock import Mock, patch
-from pydantic import BaseModel, Field
 from typing import List
+from unittest.mock import Mock, patch
+
+import pytest
+from pydantic import BaseModel, Field
 
 from src.infra.adapters.meal_generation_service import MealGenerationService
 

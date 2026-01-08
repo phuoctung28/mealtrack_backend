@@ -3,6 +3,7 @@ Pydantic schemas for structured meal generation output.
 Used with LangChain's with_structured_output() for guaranteed valid responses.
 """
 from typing import List
+
 from pydantic import BaseModel, Field
 
 

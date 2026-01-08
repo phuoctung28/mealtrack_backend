@@ -1,8 +1,8 @@
 """
 Mock implementation of AI chat service for testing.
 """
-import logging
 import asyncio
+import logging
 from typing import List, Dict, Any, Optional, AsyncIterator
 
 from src.domain.ports.ai_chat_service_port import AIChatServicePort

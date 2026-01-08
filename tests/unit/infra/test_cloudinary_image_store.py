@@ -5,8 +5,8 @@ import os
 import uuid
 from unittest.mock import Mock, patch
 
-import pytest
 import cloudinary.exceptions
+import pytest
 
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 

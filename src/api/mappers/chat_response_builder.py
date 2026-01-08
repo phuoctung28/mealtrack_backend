@@ -2,7 +2,7 @@
 Chat response builder for constructing API responses.
 Extracts response building logic from route handlers.
 """
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from src.api.schemas.response.chat_responses import (
     MessageResponse,

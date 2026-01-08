@@ -3,11 +3,12 @@ Integration tests for delete account API endpoint.
 Tests the complete flow from API request to database changes.
 """
 from unittest.mock import patch
-from firebase_admin.auth import UserNotFoundError
-import pytest
 
-from src.infra.database.models.user import User
+import pytest
+from firebase_admin.auth import UserNotFoundError
+
 from src.app.commands.user import DeleteUserCommand
+from src.infra.database.models.user import User
 
 
 @pytest.mark.integration

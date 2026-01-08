@@ -2,6 +2,7 @@
 Database model for chat threads.
 """
 from datetime import datetime
+
 from sqlalchemy import Column, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 

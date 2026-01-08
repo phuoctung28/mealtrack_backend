@@ -1,7 +1,6 @@
 """
 Unit tests for TDEE mapper.
 """
-import pytest
 
 from src.api.mappers.tdee_mapper import TdeeMapper
 from src.api.schemas.request import TdeeCalculationRequest

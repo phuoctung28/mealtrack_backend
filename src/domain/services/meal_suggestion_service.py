@@ -5,8 +5,8 @@ import logging
 import uuid
 from typing import List, Dict, Any, Optional
 
-from src.domain.prompts.meal_suggestion_prompt import generate_meal_suggestion_prompt
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.domain.prompts.meal_suggestion_prompt import generate_meal_suggestion_prompt
 
 logger = logging.getLogger(__name__)
 

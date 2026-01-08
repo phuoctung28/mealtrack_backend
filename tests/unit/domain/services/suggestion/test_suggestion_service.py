@@ -1,12 +1,13 @@
 """
 Unit tests for consolidated SuggestionService.
 """
-import pytest
-from datetime import datetime, date
+from datetime import datetime
 from unittest.mock import Mock
 
-from src.domain.services.suggestion.suggestion_service import SuggestionService
+import pytest
+
 from src.domain.model.meal_planning import MealType
+from src.domain.services.suggestion.suggestion_service import SuggestionService
 
 
 @pytest.fixture

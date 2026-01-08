@@ -1,13 +1,14 @@
 """
 Unit tests for TDEE caching in SuggestionOrchestrationService.
 """
-import pytest
 from unittest.mock import Mock, AsyncMock, patch
 
+import pytest
+
+from src.domain.cache.cache_keys import CacheKeys
 from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
     SuggestionOrchestrationService,
 )
-from src.domain.cache.cache_keys import CacheKeys
 
 
 @pytest.fixture

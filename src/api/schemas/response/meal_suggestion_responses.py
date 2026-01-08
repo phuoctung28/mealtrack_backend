@@ -102,46 +102,19 @@ class SuggestionsListResponse(BaseModel):
 MealSuggestionsResponse = SuggestionsListResponse
 
 
-class AcceptedMealResponse(BaseModel):
-    """Response after accepting suggestion with portion multiplier."""
-
-    meal_id: str = Field(..., description="ID of saved meal in history")
-    meal_name: str = Field(..., description="Name of the meal")
-    macros: MacroEstimateResponse = Field(
-        ..., description="Adjusted macros (after portion multiplier)"
-    )
-    saved_at: datetime = Field(..., description="Timestamp when meal was saved")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "meal_id": "meal_12345",
-                "meal_name": "Grilled Chicken Rice Bowl",
-                "macros": {"protein": 70.0, "carbs": 80.0, "fat": 30.0},
-                "saved_at": "2025-12-30T12:00:00Z",
-            }
-        }
-
-
 class SaveMealSuggestionResponse(BaseModel):
     """
-    Response after saving a meal suggestion to history.
-    (LEGACY - use AcceptedMealResponse instead)
+    Response schema for saving a meal suggestion to planned_meals.
     """
-
-    success: bool = Field(..., description="Whether the save was successful")
-    message: str = Field(..., description="Status message")
-    meal_id: Optional[str] = Field(
-        None, description="ID of the saved meal in the database"
-    )
+    planned_meal_id: str = Field(..., description="ID of the created planned meal")
+    message: str = Field(..., description="Success message")
     meal_date: str = Field(..., description="Date the meal was saved for (YYYY-MM-DD)")
 
     class Config:
         json_schema_extra = {
             "example": {
-                "success": True,
-                "message": "Meal suggestion saved successfully to your meal history",
-                "meal_id": "12345",
-                "meal_date": "2024-01-15",
+                "planned_meal_id": "planned_meal_123",
+                "message": "Meal suggestion saved successfully",
+                "meal_date": "2024-01-15"
             }
         }

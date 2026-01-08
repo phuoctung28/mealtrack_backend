@@ -5,7 +5,6 @@ Provides default meals when AI generation fails.
 import logging
 from typing import List, Dict, Optional
 
-from src.domain.model.meal_planning import MealType
 from src.domain.model.meal_suggestion import MealSuggestion, MacroEstimate
 
 logger = logging.getLogger(__name__)

@@ -6,12 +6,12 @@ from fastapi import APIRouter, Depends, Query
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
+from src.api.mappers.chat_response_builder import ChatResponseBuilder
 from src.api.schemas.request.chat_requests import CreateThreadRequest
 from src.api.schemas.response.chat_responses import (
     ThreadResponse,
     ThreadListResponse
 )
-from src.api.mappers.chat_response_builder import ChatResponseBuilder
 from src.app.commands.chat import CreateThreadCommand, DeleteThreadCommand
 from src.app.queries.chat import GetThreadsQuery, GetThreadQuery
 from src.infra.event_bus import EventBus

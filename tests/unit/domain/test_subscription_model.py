@@ -1,8 +1,8 @@
 """
 Unit tests for Subscription model.
 """
-import pytest
 from datetime import datetime, timedelta
+
 from src.infra.database.models.subscription import Subscription
 
 

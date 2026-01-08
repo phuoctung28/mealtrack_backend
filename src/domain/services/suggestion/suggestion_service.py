@@ -7,7 +7,7 @@ from datetime import datetime, date
 from typing import List, Optional, Dict, Any
 
 from src.domain.model.meal_planning import MealType
-from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
+from src.domain.model.meal_suggestion import MealSuggestion
 from src.domain.services.meal.meal_core_service import MealCoreService
 
 logger = logging.getLogger(__name__)

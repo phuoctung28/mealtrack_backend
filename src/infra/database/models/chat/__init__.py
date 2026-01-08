@@ -1,6 +1,6 @@
 """Chat database models."""
-from .thread import ChatThread
 from .message import ChatMessage
+from .thread import ChatThread
 
 __all__ = [
     "ChatThread",

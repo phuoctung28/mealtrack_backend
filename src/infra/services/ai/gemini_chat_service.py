@@ -7,8 +7,8 @@ import os
 from typing import List, Dict, Any, Optional, AsyncIterator
 
 from src.domain.ports.ai_chat_service_port import AIChatServicePort
-from src.infra.services.ai.prompts import SystemPrompts
 from src.infra.services.ai.gemini_model_manager import GeminiModelManager
+from src.infra.services.ai.prompts import SystemPrompts
 
 logger = logging.getLogger(__name__)
 

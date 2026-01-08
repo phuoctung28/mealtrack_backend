@@ -6,9 +6,9 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_data_service_port import FoodDataServicePort
-from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
@@ -24,14 +24,12 @@ from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.cache.cache_service import CacheService
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
+from src.infra.config.settings import settings
 from src.infra.database.config import SessionLocal
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
-from src.infra.services.ai.openai_chat_service import OpenAIChatService
 from src.infra.services.firebase_service import FirebaseService
 from src.infra.services.scheduled_notification_service import ScheduledNotificationService
-from src.infra.config.settings import settings
-
 
 # Note: Old handler imports removed - using event-driven architecture now
 # from src.app.handlers.activity_handler import ActivityHandler
@@ -48,8 +46,6 @@ _cache_monitor = CacheMonitor()
 _image_store: Optional[ImageStorePort] = None
 _ai_chat_service: Optional[AIChatServicePort] = None
 _vision_service: Optional[VisionAIServicePort] = None
-_recipe_search_service = None  # RecipeSearchService singleton
-
 
 async def initialize_cache_layer() -> None:
     """Initialize Redis cache if enabled."""
@@ -330,33 +326,18 @@ def get_suggestion_orchestration_service(
 ):
     """Get suggestion orchestration service with Phase 1 & 2 optimizations."""
     from src.domain.services.meal_suggestion.suggestion_orchestration_service import SuggestionOrchestrationService
-    from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
     from src.infra.adapters.meal_generation_service import MealGenerationService
     from src.infra.repositories.user_repository import UserRepository
 
-    global _recipe_search_service
 
     meal_gen_service = MealGenerationService()
     suggestion_repo = get_meal_suggestion_repository()
     user_repo = UserRepository(db)
 
-    # Phase 2 optimization: Recipe search (hybrid retrieval) - singleton pattern
-    # Reuse service instance to avoid loading ~80MB SentenceTransformer model on every request
-    if _recipe_search_service is None:
-        try:
-            _recipe_search_service = RecipeSearchService()
-            logger.info("Recipe search service initialized for hybrid retrieval (singleton)")
-        except Exception as e:
-            logger.warning(f"Recipe search not available, using AI-only generation: {e}")
-            _recipe_search_service = None
-
-    recipe_search = _recipe_search_service
-
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
         suggestion_repo=suggestion_repo,
         user_repo=user_repo,
-        recipe_search=recipe_search,
         redis_client=_redis_client,
     )
 

@@ -7,9 +7,9 @@ from typing import Dict, Any
 
 from src.app.commands.chat import SendMessageCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.ports.chat_repository_port import ChatRepositoryPort
-from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.app.services.chat import MessageOrchestrationService
+from src.domain.ports.ai_chat_service_port import AIChatServicePort
+from src.domain.ports.chat_repository_port import ChatRepositoryPort
 
 logger = logging.getLogger(__name__)
 

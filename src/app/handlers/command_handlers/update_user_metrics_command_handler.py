@@ -9,10 +9,10 @@ from sqlalchemy.orm import Session
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException, ConflictException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
-from src.infra.database.models.enums import FitnessGoalEnum, ActivityLevelEnum
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
+from src.infra.database.models.enums import FitnessGoalEnum, ActivityLevelEnum
 from src.infra.database.models.user.profile import UserProfile
 
 logger = logging.getLogger(__name__)

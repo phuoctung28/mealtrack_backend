@@ -1,9 +1,10 @@
 """
 Unit tests for meal edit domain model functionality.
 """
-import pytest
 import uuid
 from datetime import datetime
+
+import pytest
 
 from src.domain.model import Meal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 

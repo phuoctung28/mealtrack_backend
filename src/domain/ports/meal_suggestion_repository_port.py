@@ -43,9 +43,3 @@ class MealSuggestionRepositoryPort(ABC):
         """Update suggestion (e.g., status change)."""
         pass
 
-    @abstractmethod
-    async def get_session_suggestions(
-        self, session_id: str
-    ) -> List[MealSuggestion]:
-        """Get all suggestions for a session."""
-        pass

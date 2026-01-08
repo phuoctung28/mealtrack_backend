@@ -3,12 +3,10 @@ WebSocket edge case tests.
 Tests error handling, concurrency, and reliability scenarios.
 """
 import asyncio
-import pytest
-from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime, timedelta
 
-from fastapi import WebSocket, WebSocketDisconnect
-from fastapi.testclient import TestClient
+import pytest
+from fastapi import WebSocketDisconnect
 
 
 class MockWebSocket:
