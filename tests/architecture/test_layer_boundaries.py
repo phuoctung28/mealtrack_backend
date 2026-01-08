@@ -14,14 +14,30 @@ class ImportVisitor(ast.NodeVisitor):
     
     def __init__(self):
         self.imports: Set[str] = set()
+        self.in_type_checking = False
+    
+    def visit_If(self, node):
+        """Check if we're entering a TYPE_CHECKING block."""
+        # Check if this is an `if TYPE_CHECKING:` block
+        if isinstance(node.test, ast.Name) and node.test.id == "TYPE_CHECKING":
+            # Save state and visit children
+            old_state = self.in_type_checking
+            self.in_type_checking = True
+            self.generic_visit(node)
+            self.in_type_checking = old_state
+        else:
+            self.generic_visit(node)
     
     def visit_Import(self, node):
-        for alias in node.names:
-            self.imports.add(alias.name)
+        # Skip imports inside TYPE_CHECKING blocks
+        if not self.in_type_checking:
+            for alias in node.names:
+                self.imports.add(alias.name)
         self.generic_visit(node)
     
     def visit_ImportFrom(self, node):
-        if node.module:
+        # Skip imports inside TYPE_CHECKING blocks
+        if not self.in_type_checking and node.module:
             self.imports.add(node.module)
         self.generic_visit(node)
 

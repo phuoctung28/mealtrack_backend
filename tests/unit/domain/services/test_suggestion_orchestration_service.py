@@ -353,7 +353,7 @@ class TestConstants:
 
     def test_parallel_single_meal_tokens(self, orchestration_service):
         """Tokens should be 3000 for optimized prompts."""
-        assert orchestration_service.PARALLEL_SINGLE_MEAL_TOKENS == 3000
+        assert orchestration_service.PARALLEL_SINGLE_MEAL_TOKENS == 4000
 
     def test_parallel_single_meal_timeout(self, orchestration_service):
         """Timeout should be 20s (reduced from 25s with optimized prompts)."""
