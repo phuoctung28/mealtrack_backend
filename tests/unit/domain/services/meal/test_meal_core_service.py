@@ -107,7 +107,10 @@ class TestMealValidation:
 
     def test_validate_meal_requires_name(self, service):
         """Meal without name should fail validation."""
-        meal = Mock(name="", food_items=[Mock()], nutrition=None)
+        meal = Mock(spec=['name', 'food_items', 'nutrition'])
+        meal.name = ""  # Empty name
+        meal.food_items = [Mock()]
+        meal.nutrition = None
         errors = service.validate_meal(meal)
         assert "Meal name is required" in errors
 

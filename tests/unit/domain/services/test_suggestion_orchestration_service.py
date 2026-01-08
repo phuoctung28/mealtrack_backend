@@ -352,16 +352,16 @@ class TestConstants:
     """Test that constants are correctly set per Phase 02 optimization."""
 
     def test_parallel_single_meal_tokens(self, orchestration_service):
-        """Tokens should be 4000 for full recipe details."""
-        assert orchestration_service.PARALLEL_SINGLE_MEAL_TOKENS == 4000
+        """Tokens should be 3000 for optimized prompts."""
+        assert orchestration_service.PARALLEL_SINGLE_MEAL_TOKENS == 3000
 
     def test_parallel_single_meal_timeout(self, orchestration_service):
-        """Timeout should be 25s (reduced from 35s)."""
-        assert orchestration_service.PARALLEL_SINGLE_MEAL_TIMEOUT == 25
+        """Timeout should be 20s (reduced from 25s with optimized prompts)."""
+        assert orchestration_service.PARALLEL_SINGLE_MEAL_TIMEOUT == 20
 
     def test_parallel_stagger_ms(self, orchestration_service):
-        """Stagger should be 500ms to prevent rate limiting."""
-        assert orchestration_service.PARALLEL_STAGGER_MS == 500
+        """Stagger should be 200ms (reduced from 500ms with smaller payloads)."""
+        assert orchestration_service.PARALLEL_STAGGER_MS == 200
 
     def test_min_acceptable_results(self, orchestration_service):
         """Minimum acceptable results should be 2 (W2 fix)."""

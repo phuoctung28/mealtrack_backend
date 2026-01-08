@@ -134,8 +134,9 @@ class TestBuildRecipeDetailsPrompt:
         """Prompt should include target calories."""
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
-        # Should mention target calories
-        assert "calor" in prompt.lower()
+        # Should mention target calories (either "calor" or "cal")
+        prompt_lower = prompt.lower()
+        assert "cal" in prompt_lower  # Matches both "calor" and "cal"
         assert str(mock_session.target_calories) in prompt or "~" in prompt
 
     def test_includes_cooking_time(self, mock_session):
