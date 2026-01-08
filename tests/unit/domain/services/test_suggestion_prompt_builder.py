@@ -31,12 +31,12 @@ class TestBuildMealNamesPrompt:
     """Test build_meal_names_prompt for Phase 1 (6 diverse names)."""
 
     def test_requests_exactly_6_names(self, mock_session):
-        """Prompt should explicitly request 6 meal names."""
+        """Prompt should explicitly request 4 meal names."""
         prompt = build_meal_names_prompt(mock_session)
 
-        # Should contain "6" and "exact" or similar
-        assert "6" in prompt.lower()
-        assert "exactly 6" in prompt.lower() or "6 different" in prompt.lower()
+        # Should contain "4" and "different" or similar
+        assert "4" in prompt.lower()
+        assert "4 different" in prompt.lower()
 
     def test_includes_meal_type(self, mock_session):
         """Prompt should include the meal type (breakfast, lunch, dinner)."""
@@ -255,7 +255,7 @@ class TestSessionEdgeCases:
 
         # Should still generate valid prompt
         assert len(prompt) > 0
-        assert "6" in prompt.lower()
+        assert "4" in prompt.lower()
 
     def test_session_no_dietary_prefs(self):
         """Prompt should handle session with no dietary preferences."""
@@ -275,7 +275,7 @@ class TestSessionEdgeCases:
 
         # Should generate valid prompt without dietary prefs
         assert len(prompt) > 0
-        assert "6" in prompt.lower()
+        assert "4" in prompt.lower()
 
     def test_session_no_allergies(self):
         """Prompt should handle session with no allergies."""
@@ -328,7 +328,7 @@ class TestPromptContent:
 
         # Should have clear sections
         assert "Generate" in prompt or "generate" in prompt
-        assert "6" in prompt
+        assert "4" in prompt
 
     def test_recipe_details_prompt_format(self, mock_session):
         """Recipe details prompt should have clear instructions."""

@@ -86,6 +86,7 @@ class MealGenerationService(MealGenerationServicePort):
             
             # Use standard temperature=0.7 to share model instance across all services
             llm = self._model_manager.get_model(
+                max_output_tokens=max_tokens,
                 response_mime_type=response_mime_type
             )
 
@@ -146,6 +147,7 @@ class MealGenerationService(MealGenerationServicePort):
                     try:
                         # Get legacy LLM with JSON mode from singleton manager
                         legacy_llm = self._model_manager.get_model(
+                            max_output_tokens=max_tokens,
                             response_mime_type="application/json"
                         )
 

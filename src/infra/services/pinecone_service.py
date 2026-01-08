@@ -60,6 +60,45 @@ class PineconeNutritionService:
         self._ingredients_index = None
         self._usda_index = None
         self._indexes_initialized = False
+        
+        # Unit conversion table (always initialize)
+        self.unit_conversions = {
+            # Weight
+            "g": 1,
+            "gram": 1,
+            "grams": 1,
+            "kg": 1000,
+            "kilogram": 1000,
+            "kilograms": 1000,
+            "oz": 28.35,
+            "ounce": 28.35,
+            "ounces": 28.35,
+            "lb": 453.59,
+            "pound": 453.59,
+            "pounds": 453.59,
+            # Volume (approximate for water-like density)
+            "ml": 1,
+            "milliliter": 1,
+            "milliliters": 1,
+            "l": 1000,
+            "liter": 1000,
+            "liters": 1000,
+            "cup": 240,
+            "cups": 240,
+            "tbsp": 15,
+            "tablespoon": 15,
+            "tablespoons": 15,
+            "tsp": 5,
+            "teaspoon": 5,
+            "teaspoons": 5,
+            # Count (assume average piece weight)
+            "piece": 50,
+            "pieces": 50,
+            "item": 50,
+            "items": 50,
+            "serving": 100,
+            "servings": 100,
+        }
     
     @property
     def ingredients_index(self):
@@ -95,16 +134,6 @@ class PineconeNutritionService:
             raise ValueError("No Pinecone indexes available. Ensure 'ingredients' or 'usda' index exists.")
         
         self._indexes_initialized = True
-
-        # Unit conversion table
-        self.unit_conversions = {
-            'g': 1, 'gram': 1, 'grams': 1,
-            'kg': 1000, 'oz': 28.35, 'lb': 453.59,
-            'cup': 240, 'cups': 240,
-            'tbsp': 15, 'tablespoon': 15,
-            'tsp': 5, 'teaspoon': 5,
-            'serving': 100
-        }
 
     def _embed_text(
         self, texts: list[str], input_type: str = "query"

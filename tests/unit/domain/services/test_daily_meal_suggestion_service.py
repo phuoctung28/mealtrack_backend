@@ -47,7 +47,7 @@ class TestDailyMealSuggestionService:
     def test_init_with_api_key(self):
         """Test successful initialization."""
         service = DailyMealSuggestionService()
-        assert service.google_api_key == 'test_key'
+        assert service._model_manager is not None
         assert service.model is not None
 
     def test_calculate_meal_distribution_without_snack(self, service):
