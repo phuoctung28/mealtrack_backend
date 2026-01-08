@@ -3,7 +3,7 @@ Activities API endpoints - Event-driven architecture.
 """
 
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 

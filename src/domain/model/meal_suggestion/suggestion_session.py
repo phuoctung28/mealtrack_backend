@@ -17,6 +17,7 @@ class SuggestionSession:
     ingredients: List[str]
     cooking_time_minutes: int
     shown_suggestion_ids: List[str] = field(default_factory=list)
+    shown_meal_names: List[str] = field(default_factory=list)  # Track meal names for exclusion
     dietary_preferences: List[str] = field(default_factory=list)
     allergies: List[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.utcnow)
@@ -25,6 +26,10 @@ class SuggestionSession:
     def add_shown_ids(self, ids: List[str]) -> None:
         """Add newly shown suggestion IDs to exclusion list."""
         self.shown_suggestion_ids.extend(ids)
+    
+    def add_shown_meals(self, meal_names: List[str]) -> None:
+        """Add newly shown meal names to exclusion list."""
+        self.shown_meal_names.extend(meal_names)
 
     def __post_init__(self) -> None:
         """Set expiration if not provided."""

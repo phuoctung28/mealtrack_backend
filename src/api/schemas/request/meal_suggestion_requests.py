@@ -3,7 +3,6 @@ Request schemas for meal suggestion generation.
 """
 
 import warnings
-from datetime import datetime
 from enum import Enum
 from typing import List, Literal, Optional
 
@@ -55,6 +54,8 @@ class MealSuggestionRequest(BaseModel):
 
     Generates exactly 3 meal suggestions based on:
     - meal_type, meal_portion_type (or legacy meal_size), ingredients, cooking_time
+    
+    If session_id is provided, generates NEW suggestions excluding previously shown meals.
     """
 
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
@@ -89,9 +90,13 @@ class MealSuggestionRequest(BaseModel):
         gt=0,
         description="Optional calorie target override (calculated from portion type if not provided)",
     )
+    session_id: Optional[str] = Field(
+        None,
+        description="Optional session ID for regeneration (automatically excludes previously shown meals)",
+    )
     exclude_ids: List[str] = Field(
         default_factory=list,
-        description="List of meal IDs to exclude (for regeneration)",
+        description="DEPRECATED: Use session_id instead for automatic exclusion",
     )
 
     @field_validator("meal_size", mode="before")
@@ -127,21 +132,13 @@ class MealSuggestionRequest(BaseModel):
         }
 
 
-class RegenerateSuggestionsRequest(BaseModel):
-    """Request to regenerate 3 NEW meal ideas (excludes shown)."""
-
-    session_id: str = Field(..., description="Suggestion session ID")
-    exclude_ids: List[str] = Field(
-        default_factory=list, description="Suggestion IDs to exclude from regeneration"
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "session_id": "session_abc123",
-                "exclude_ids": ["meal_lunch_1234", "meal_lunch_5678"],
-            }
-        }
+# DEPRECATED: RegenerateSuggestionsRequest is no longer needed.
+# Use MealSuggestionRequest with session_id parameter to regenerate with automatic exclusion.
+# 
+# class RegenerateSuggestionsRequest(BaseModel):
+#     """DEPRECATED: Use MealSuggestionRequest with session_id instead."""
+#     session_id: str
+#     exclude_ids: List[str] = Field(default_factory=list)
 
 
 class SaveMealSuggestionRequest(BaseModel):

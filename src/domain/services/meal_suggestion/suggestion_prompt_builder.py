@@ -1,5 +1,5 @@
 """Prompt building for meal suggestions using PromptTemplateManager."""
-from typing import Dict, Any, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 from src.domain.model.meal_planning import MealType, SimpleMacroTargets
 from src.domain.services.prompts import PromptTemplateManager
@@ -129,10 +129,17 @@ def build_single_meal_prompt(
     )
 
 
-def build_meal_names_prompt(session: "SuggestionSession") -> str:
+def build_meal_names_prompt(
+    session: "SuggestionSession", 
+    exclude_meal_names: Optional[List[str]] = None
+) -> str:
     """
     Phase 1: Generate 4 diverse meal names (uses PromptTemplateManager).
     Target: ~200 tokens.
+    
+    Args:
+        session: The suggestion session with user preferences
+        exclude_meal_names: List of meal names to avoid (for regeneration)
     """
     return PromptTemplateManager.build_meal_names_prompt(
         meal_type=session.meal_type,
@@ -141,6 +148,7 @@ def build_meal_names_prompt(session: "SuggestionSession") -> str:
         ingredients=session.ingredients[:4] if session.ingredients else [],
         allergies=getattr(session, "allergies", None),
         dietary_preferences=getattr(session, "dietary_preferences", None),
+        exclude_meal_names=exclude_meal_names,
     )
 
 

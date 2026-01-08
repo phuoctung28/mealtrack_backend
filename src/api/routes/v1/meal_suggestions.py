@@ -5,27 +5,25 @@ Includes both legacy endpoints and new session-based endpoints.
 
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
+from src.api.mappers.meal_suggestion_mapper import (
+    to_suggestions_list_response,
+)
 from src.api.schemas.request.meal_suggestion_requests import (
     MealSuggestionRequest,
     SaveMealSuggestionRequest,
-    RegenerateSuggestionsRequest,
 )
 from src.api.schemas.response.meal_suggestion_responses import (
     SaveMealSuggestionResponse,
     SuggestionsListResponse,
 )
-from src.api.mappers.meal_suggestion_mapper import (
-    to_suggestions_list_response,
-)
 from src.app.commands.meal_suggestion import (
     GenerateMealSuggestionsCommand,
     SaveMealSuggestionCommand,
-    RegenerateSuggestionsCommand,
 )
 from src.infra.event_bus import EventBus
 
@@ -125,10 +123,18 @@ async def generate_suggestions(
     """
     [Phase 06] Generate 3 meal suggestions with session tracking.
 
+    **Initial Generation (no session_id):**
+    - Creates new session and generates 3 meal suggestions
+    - Returns session_id for future regeneration
+    
+    **Regeneration (with session_id):**
+    - Automatically excludes previously shown meals from the session
+    - Generates 3 NEW different meal suggestions
+    - No need for separate /regenerate endpoint!
+    
     Uses meal_portion_type (snack/main/omad) to calculate target calories from user's TDEE.
-    Creates a session that tracks shown suggestions for regeneration.
     Session expires after 4 hours.
-
+    
     Backward compatible: accepts deprecated meal_size (S/M/L/XL/OMAD) and maps to new types.
     """
     try:
@@ -140,7 +146,7 @@ async def generate_suggestions(
             meal_portion_type=portion_type.value,
             ingredients=request.ingredients,
             time_available_minutes=request.cooking_time_minutes.value,
-            exclude_ids=[],
+            session_id=request.session_id,  # Pass session_id for regeneration
         )
 
         session, suggestions = await event_bus.send(command)
@@ -150,29 +156,7 @@ async def generate_suggestions(
         raise handle_exception(e) from e
 
 
-@router.post("/regenerate", response_model=SuggestionsListResponse)
-async def regenerate_suggestions(
-    request: RegenerateSuggestionsRequest,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus),
-):
-    """
-    [Phase 06] Regenerate 3 NEW suggestions excluding previously shown.
-
-    Requires session_id from initial generation.
-    Excludes all previously shown suggestions plus explicitly passed exclude_ids.
-    """
-    try:
-        command = RegenerateSuggestionsCommand(
-            user_id=user_id,
-            session_id=request.session_id,
-            exclude_ids=request.exclude_ids,
-        )
-
-        session, suggestions = await event_bus.send(command)
-        return to_suggestions_list_response(session, suggestions)
-
-    except Exception as e:
-        raise handle_exception(e) from e
+# REMOVED: /regenerate endpoint is no longer needed.
+# Use POST /generate with session_id parameter to regenerate with automatic exclusion.
 
 

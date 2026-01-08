@@ -7,8 +7,8 @@ from typing import Dict, Any, Optional
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.domain.model.chat import Message, ThreadStatus
-from src.domain.ports.chat_repository_port import ChatRepositoryPort
 from src.domain.ports.ai_chat_service_port import AIChatServicePort
+from src.domain.ports.chat_repository_port import ChatRepositoryPort
 from .ai_response_coordinator import AIResponseCoordinator
 from .chat_notification_service import ChatNotificationService
 

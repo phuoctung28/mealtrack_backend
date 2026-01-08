@@ -20,6 +20,11 @@ from .daily_nutrition_response import (
     DailyNutritionResponse,
     MacrosResponse as DailyMacrosResponse
 )
+# Ingredient recognition responses
+from .ingredient_recognition_responses import (
+    IngredientRecognitionResponse,
+    IngredientCategoryEnum
+)
 # Ingredient responses
 # Macros responses
 # Meal plan responses
@@ -32,13 +37,6 @@ from .meal_plan_responses import (
     UserPreferenceSummarySchema,
     MealsByDateResponse,
     MealPlanGenerationStatusResponse
-)
-# Meal suggestion responses
-from .meal_suggestion_responses import (
-    MealSuggestionItem,
-    MealSuggestionsResponse,
-    SaveMealSuggestionResponse,
-    MacrosSchema as MealSuggestionMacrosSchema
 )
 # Meal responses
 from .meal_responses import (
@@ -53,6 +51,13 @@ from .meal_responses import (
     FoodItemResponse,
     ManualMealCreationResponse,
     MealStatusEnum
+)
+# Meal suggestion responses
+from .meal_suggestion_responses import (
+    MealSuggestionItem,
+    MealSuggestionsResponse,
+    SaveMealSuggestionResponse,
+    MacrosSchema as MealSuggestionMacrosSchema
 )
 # Onboarding responses
 from .onboarding_responses import (
@@ -85,11 +90,6 @@ from .weekly_meal_plan_responses import (
     WeeklyMealResponse,
     NutritionInfo,
     UserPreferencesResponse
-)
-# Ingredient recognition responses
-from .ingredient_recognition_responses import (
-    IngredientRecognitionResponse,
-    IngredientCategoryEnum
 )
 
 __all__ = [

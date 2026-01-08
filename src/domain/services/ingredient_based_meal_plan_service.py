@@ -6,8 +6,8 @@ import logging
 from typing import Dict, Any
 
 from src.domain.model.meal_planning import DailyMealPlan
-from src.domain.services.meal_plan_orchestration_service import MealPlanOrchestrationService
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.domain.services.meal_plan_orchestration_service import MealPlanOrchestrationService
 
 logger = logging.getLogger(__name__)
 

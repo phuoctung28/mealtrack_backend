@@ -5,18 +5,17 @@ and weekly_ingredient_based_meal_plan_service.py.
 """
 import logging
 from datetime import date, timedelta
-from typing import List, Optional, Dict, Any
+from typing import Optional
 
 from src.domain.model.meal_planning import (
     MealPlan,
     DayPlan,
-    PlannedMeal,
     MealGenerationRequest,
     MealGenerationType,
 )
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.domain.services.prompts import PromptTemplateManager
 from src.domain.services.meal_plan.meal_plan_formatter import MealPlanFormatter
+from src.domain.services.prompts import PromptTemplateManager
 
 logger = logging.getLogger(__name__)
 

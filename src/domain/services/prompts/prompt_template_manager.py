@@ -2,7 +2,7 @@
 Centralized prompt template manager for meal generation.
 Reduces prompt tokens through template compression and reuse.
 """
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 from .prompt_constants import (
     INGREDIENT_RULES,
@@ -177,6 +177,7 @@ RULES:
         ingredients: List[str],
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
+        exclude_meal_names: Optional[List[str]] = None,
     ) -> str:
         """
         Build prompt for Phase 1 meal name generation.
@@ -193,10 +194,15 @@ RULES:
         
         constraints_str = " | " + " | ".join(constraints) if constraints else ""
         
+        # Add exclusion list for regeneration
+        exclude_str = ""
+        if exclude_meal_names:
+            exclude_str = f"\nDO NOT suggest: {', '.join(exclude_meal_names[:10])}"  # Limit to 10 to keep prompt short
+        
         return f"""Generate 4 different {meal_type} names, ~{target_calories}cal, ≤{cooking_time_minutes}min.
 Ingredients: {ing_str}{constraints_str}
 Cuisines: 4 distinct (Asian, Mediterranean, Latin, American)
-Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags."""
+Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}"""
 
     @classmethod
     def build_recipe_details_prompt(

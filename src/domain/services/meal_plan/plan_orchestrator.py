@@ -9,11 +9,10 @@ from typing import Optional, List, Dict, Any
 from src.domain.model.meal_planning import (
     MealPlan,
     MealGenerationRequest,
-    MealGenerationType,
 )
 from src.domain.ports.meal_plan_repository_port import MealPlanRepositoryPort
-from src.domain.services.meal_plan.plan_generator import PlanGenerator
 from src.domain.services.meal_plan.meal_plan_validator import MealPlanValidator
+from src.domain.services.meal_plan.plan_generator import PlanGenerator
 
 logger = logging.getLogger(__name__)
 

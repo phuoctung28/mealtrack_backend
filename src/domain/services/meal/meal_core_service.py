@@ -4,11 +4,11 @@ Consolidates meal_service.py and meal_type_determination_service.py.
 """
 import logging
 from datetime import datetime, time
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 
 from src.domain.model.meal import Meal
-from src.domain.model.nutrition import FoodItem, Nutrition, Macros
 from src.domain.model.meal_planning import MealType
+from src.domain.model.nutrition import FoodItem, Nutrition, Macros
 
 logger = logging.getLogger(__name__)
 

@@ -5,8 +5,8 @@ Uses the unified orchestration service.
 import logging
 from typing import Any, Dict
 
-from src.domain.services.meal_plan_orchestration_service import MealPlanOrchestrationService
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.domain.services.meal_plan_orchestration_service import MealPlanOrchestrationService
 
 logger = logging.getLogger(__name__)
 

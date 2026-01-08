@@ -4,10 +4,9 @@ Follows clean architecture pattern with single LLM handling different prompts.
 """
 import json
 import logging
-import os
 import re
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 

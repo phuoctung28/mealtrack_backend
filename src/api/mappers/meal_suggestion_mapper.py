@@ -2,7 +2,6 @@
 
 from typing import List
 
-from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.api.schemas.response.meal_suggestion_responses import (
     MealSuggestionResponse,
     MacroEstimateResponse,
@@ -10,6 +9,7 @@ from src.api.schemas.response.meal_suggestion_responses import (
     RecipeStepResponse,
     SuggestionsListResponse,
 )
+from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 
 
 def to_meal_suggestion_response(suggestion: MealSuggestion) -> MealSuggestionResponse:

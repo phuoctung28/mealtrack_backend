@@ -2,8 +2,8 @@
 UserRepositoryPort - Interface for user repository operations.
 """
 from abc import ABC, abstractmethod
-from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime
+from typing import Optional, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     # Only import for type checking, not at runtime

@@ -6,9 +6,9 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_data_service_port import FoodDataServicePort
-from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
@@ -24,14 +24,12 @@ from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.cache.cache_service import CacheService
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
+from src.infra.config.settings import settings
 from src.infra.database.config import SessionLocal
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
-from src.infra.services.ai.openai_chat_service import OpenAIChatService
 from src.infra.services.firebase_service import FirebaseService
 from src.infra.services.scheduled_notification_service import ScheduledNotificationService
-from src.infra.config.settings import settings
-
 
 # Note: Old handler imports removed - using event-driven architecture now
 # from src.app.handlers.activity_handler import ActivityHandler

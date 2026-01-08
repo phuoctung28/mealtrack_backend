@@ -8,10 +8,10 @@ import functools
 import hashlib
 import json
 import logging
-from typing import Awaitable, Callable, Optional, Any, TypeVar, ParamSpec
+from typing import Awaitable, Callable, Optional, TypeVar, ParamSpec
 
-from src.infra.cache.cache_service import CacheService
 from src.domain.cache.cache_keys import CacheKeys
+from src.infra.cache.cache_service import CacheService
 
 logger = logging.getLogger(__name__)
 

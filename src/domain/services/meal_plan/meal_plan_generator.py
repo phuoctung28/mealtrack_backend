@@ -1,7 +1,7 @@
 """Meal plan generation logic."""
 import logging
-from typing import Dict, Any, List
 from datetime import date, datetime, timedelta
+from typing import Dict, Any
 
 from src.domain.model.meal_planning import (
     DailyMealPlan, GeneratedMeal, NutritionSummary, MealType,

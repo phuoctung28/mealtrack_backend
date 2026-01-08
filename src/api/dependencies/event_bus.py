@@ -20,10 +20,16 @@ from src.api.base_dependencies import (
     get_cache_service,
     get_suggestion_orchestration_service,
 )
+from src.app.commands.chat import (
+    CreateThreadCommand,
+    SendMessageCommand,
+    DeleteThreadCommand,
+)
 from src.app.commands.daily_meal import (
     GenerateDailyMealSuggestionsCommand,
     GenerateSingleMealCommand,
 )
+from src.app.commands.ingredient import RecognizeIngredientCommand
 # Import all commands
 from src.app.commands.meal import (
     UploadMealImageImmediatelyCommand,
@@ -38,7 +44,6 @@ from src.app.commands.meal_plan import (
 from src.app.commands.meal_suggestion import (
     GenerateMealSuggestionsCommand,
     SaveMealSuggestionCommand,
-    RegenerateSuggestionsCommand,
 )
 from src.app.commands.notification import (
     RegisterFcmTokenCommand,
@@ -74,21 +79,28 @@ from src.app.handlers.command_handlers import (
     GenerateWeeklyIngredientBasedMealPlanCommandHandler,
     GenerateMealSuggestionsCommandHandler,
     SaveMealSuggestionCommandHandler,
-    RegenerateSuggestionsHandler,
+)
+# Ingredient handlers
+from src.app.handlers.command_handlers import (
+    RecognizeIngredientCommandHandler,
 )
 from src.app.handlers.command_handlers import (
     RegisterFcmTokenCommandHandler,
     DeleteFcmTokenCommandHandler,
     UpdateNotificationPreferencesCommandHandler,
 )
-# Ingredient handlers
-from src.app.handlers.command_handlers import (
-    RecognizeIngredientCommandHandler,
+# Chat handlers
+from src.app.handlers.command_handlers.chat import (
+    CreateThreadCommandHandler,
+    SendMessageCommandHandler,
+    DeleteThreadCommandHandler,
 )
-from src.app.commands.ingredient import RecognizeIngredientCommand
 # Import event handlers
 from src.app.handlers.event_handlers.meal_analysis_event_handler import (
     MealAnalysisEventHandler,
+)
+from src.app.handlers.query_handlers import (
+    GetNotificationPreferencesQueryHandler,
 )
 # Import all query handlers from module
 from src.app.handlers.query_handlers import (
@@ -109,31 +121,17 @@ from src.app.handlers.query_handlers import (
     GetMealPlanningSummaryQueryHandler,
     GetUserMetricsQueryHandler,
 )
-from src.app.handlers.query_handlers import (
-    GetNotificationPreferencesQueryHandler,
-)
-# Chat handlers
-from src.app.handlers.command_handlers.chat import (
-    CreateThreadCommandHandler,
-    SendMessageCommandHandler,
-    DeleteThreadCommandHandler,
-)
 from src.app.handlers.query_handlers.chat import (
     GetThreadsQueryHandler,
     GetThreadQueryHandler,
     GetMessagesQueryHandler,
 )
-from src.app.commands.chat import (
-    CreateThreadCommand,
-    SendMessageCommand,
-    DeleteThreadCommand,
-)
+from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.chat import (
     GetThreadsQuery,
     GetThreadQuery,
     GetMessagesQuery,
 )
-from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.daily_meal import (
     GetMealSuggestionsForProfileQuery,
     GetSingleMealForProfileQuery,
@@ -352,10 +350,6 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         SaveMealSuggestionCommand,
         SaveMealSuggestionCommandHandler(db=db),
-    )
-    event_bus.register_handler(
-        RegenerateSuggestionsCommand,
-        RegenerateSuggestionsHandler(suggestion_service),
     )
 
     # Register user handlers

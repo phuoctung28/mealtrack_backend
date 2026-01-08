@@ -7,19 +7,18 @@ from datetime import date
 from typing import Dict, Any
 
 from src.domain.model.meal_planning import (
-    DailyMealPlan, MealGenerationRequest, MealGenerationType,
-    UserDietaryProfile, UserNutritionTargets, IngredientConstraints,
-    MealGenerationContext, MealType
+    DailyMealPlan, MealGenerationType,
+    MealType
 )
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.fallback_meal_service import FallbackMealService
 from src.domain.services.meal_distribution_service import MealDistributionService
+from src.domain.services.meal_plan.meal_plan_formatter import MealPlanFormatter
+from src.domain.services.meal_plan.meal_plan_generator import MealPlanGenerator
+from src.domain.services.meal_plan.meal_plan_validator import MealPlanValidator
+from src.domain.services.meal_plan.request_builder import RequestBuilder
 from src.domain.services.meal_type_determination_service import MealTypeDeterminationService
 from src.domain.services.prompt_generation_service import PromptGenerationService
-from src.domain.services.meal_plan.meal_plan_validator import MealPlanValidator
-from src.domain.services.meal_plan.meal_plan_generator import MealPlanGenerator
-from src.domain.services.meal_plan.meal_plan_formatter import MealPlanFormatter
-from src.domain.services.meal_plan.request_builder import RequestBuilder
 
 logger = logging.getLogger(__name__)
 
