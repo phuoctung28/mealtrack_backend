@@ -109,8 +109,15 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
             raise
 
     async def _invalidate_user_profile(self, user_id: str):
+        """Invalidate user profile and TDEE cache."""
         if not self.cache_service:
             return
-        cache_key, _ = CacheKeys.user_profile(user_id)
-        await self.cache_service.invalidate(cache_key)
+        
+        # Invalidate profile cache
+        profile_key, _ = CacheKeys.user_profile(user_id)
+        await self.cache_service.invalidate(profile_key)
+        
+        # Invalidate TDEE cache (new)
+        tdee_key, _ = CacheKeys.user_tdee(user_id)
+        await self.cache_service.invalidate(tdee_key)
 

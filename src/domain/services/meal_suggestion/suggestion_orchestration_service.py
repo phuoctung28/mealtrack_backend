@@ -30,6 +30,7 @@ from src.domain.services.tdee_service import TdeeCalculationService
 
 from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService, RecipeSearchCriteria
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
+from src.infra.cache.cache_keys import CacheKeys
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +41,14 @@ class SuggestionOrchestrationService:
     Implements timeout handling and portion multipliers.
     """
 
-    GENERATION_TIMEOUT_SECONDS = 45  # Increased from 30s - full recipe generation needs ~30-35s
+    GENERATION_TIMEOUT_SECONDS = 35  # Reduced from 45s with optimized prompts
     SUGGESTIONS_COUNT = 3
     MIN_ACCEPTABLE_RESULTS = 2  # Return at least 2 meals for acceptable UX
 
-    # Parallel generation constants
-    PARALLEL_SINGLE_MEAL_TOKENS = 4000  # Full recipe with detailed ingredients/steps
-    PARALLEL_SINGLE_MEAL_TIMEOUT = 25   # Reduced from 35s (faster without description)
-    PARALLEL_STAGGER_MS = 500  # 500ms between requests to prevent rate limiting
+    # Parallel generation constants (OPTIMIZED)
+    PARALLEL_SINGLE_MEAL_TOKENS = 3000  # Reduced from 4000 with compressed prompts
+    PARALLEL_SINGLE_MEAL_TIMEOUT = 20   # Reduced from 25s (faster with smaller prompts)
+    PARALLEL_STAGGER_MS = 200  # Reduced from 500ms (API handles smaller payloads faster)
 
     def __init__(
         self,
@@ -81,8 +82,8 @@ class SuggestionOrchestrationService:
         if not profile:
             raise ValueError(f"User {user_id} profile not found")
 
-        # Calculate daily TDEE from profile
-        daily_tdee = self._calculate_daily_tdee(profile)
+        # Use cached TDEE (changed from direct calculation)
+        daily_tdee = await self._get_cached_tdee(user_id, profile)
 
         # Get meals_per_day from profile (default to 3)
         meals_per_day = getattr(profile, "meals_per_day", 3)
@@ -267,6 +268,36 @@ class SuggestionOrchestrationService:
                 f"Failed to calculate TDEE: {e}. Using default 2000 calories."
             )
             return 2000.0
+
+    async def _get_cached_tdee(self, user_id: str, profile) -> float:
+        """
+        Get TDEE from cache or calculate and cache it.
+        Uses 24h TTL since TDEE changes only when profile changes.
+        """
+        if not self._redis_client:
+            # No cache available, calculate directly
+            return self._calculate_daily_tdee(profile)
+        
+        cache_key, ttl = CacheKeys.user_tdee(user_id)
+        
+        try:
+            cached = await self._redis_client.get(cache_key)
+            if cached:
+                logger.debug(f"TDEE cache HIT for user {user_id}")
+                return float(cached)
+        except Exception as e:
+            logger.warning(f"TDEE cache GET failed: {e}")
+        
+        # Calculate and cache
+        tdee = self._calculate_daily_tdee(profile)
+        
+        try:
+            await self._redis_client.set(cache_key, str(tdee), ttl)
+            logger.debug(f"TDEE cached for user {user_id}: {tdee}")
+        except Exception as e:
+            logger.warning(f"TDEE cache SET failed: {e}")
+        
+        return tdee
 
     async def _generate_with_timeout(
         self,

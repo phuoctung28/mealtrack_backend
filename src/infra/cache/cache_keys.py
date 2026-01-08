@@ -20,6 +20,11 @@ class CacheKeys:
         return (f"user:profile:{user_id}", CacheKeys.TTL_30_DAYS)
 
     @staticmethod
+    def user_tdee(user_id: str) -> tuple[str, int]:
+        """Cache key for user TDEE calculation. 24h TTL."""
+        return (f"user:tdee:{user_id}", CacheKeys.TTL_1_DAY)
+
+    @staticmethod
     def daily_macros(user_id: str, target_date: date) -> tuple[str, int]:
         return (
             f"user:{user_id}:macros:{target_date.isoformat()}",
