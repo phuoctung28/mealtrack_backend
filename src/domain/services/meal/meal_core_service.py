@@ -6,7 +6,8 @@ import logging
 from datetime import datetime, time
 from typing import Optional, List, Dict, Any
 
-from src.domain.model.meal import Meal, FoodItem, MealNutrition
+from src.domain.model.meal import Meal
+from src.domain.model.nutrition import FoodItem, Nutrition, Macros
 from src.domain.model.meal_planning import MealType
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,7 @@ class MealCoreService:
         
         return meal
 
-    def calculate_nutrition(self, food_items: List[FoodItem]) -> MealNutrition:
+    def calculate_nutrition(self, food_items: List[FoodItem]) -> Nutrition:
         """
         Calculate total nutrition from food items.
         
@@ -93,22 +94,21 @@ class MealCoreService:
         total_protein = 0.0
         total_carbs = 0.0
         total_fat = 0.0
-        total_fiber = 0.0
         
         for item in food_items:
-            if item.nutrition:
-                total_calories += item.nutrition.calories or 0
-                total_protein += item.nutrition.protein or 0
-                total_carbs += item.nutrition.carbs or 0
-                total_fat += item.nutrition.fat or 0
-                total_fiber += item.nutrition.fiber or 0
+            total_calories += item.calories or 0
+            total_protein += item.macros.protein or 0
+            total_carbs += item.macros.carbs or 0
+            total_fat += item.macros.fat or 0
         
-        return MealNutrition(
+        return Nutrition(
             calories=round(total_calories, 1),
-            protein=round(total_protein, 1),
-            carbs=round(total_carbs, 1),
-            fat=round(total_fat, 1),
-            fiber=round(total_fiber, 1),
+            macros=Macros(
+                protein=round(total_protein, 1),
+                carbs=round(total_carbs, 1),
+                fat=round(total_fat, 1),
+            ),
+            food_items=food_items,
         )
 
     def determine_meal_type(
@@ -180,7 +180,7 @@ class MealCoreService:
         if meal.nutrition:
             if meal.nutrition.calories < 0:
                 errors.append("Calories cannot be negative")
-            if meal.nutrition.protein < 0:
+            if meal.nutrition.macros.protein < 0:
                 errors.append("Protein cannot be negative")
         
         return errors

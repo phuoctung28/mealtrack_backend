@@ -73,30 +73,33 @@ class TestNutritionCalculation:
 
     def test_calculate_nutrition_aggregates_items(self, service):
         """Should sum nutrition from all items."""
+        from src.domain.model.nutrition import Macros
+        
         items = [
-            Mock(nutrition=Mock(calories=200, protein=15, carbs=20, fat=8, fiber=3)),
-            Mock(nutrition=Mock(calories=300, protein=25, carbs=30, fat=12, fiber=5)),
+            Mock(calories=200, macros=Macros(protein=15, carbs=20, fat=8)),
+            Mock(calories=300, macros=Macros(protein=25, carbs=30, fat=12)),
         ]
         
         result = service.calculate_nutrition(items)
         
         assert result.calories == 500
-        assert result.protein == 40
-        assert result.carbs == 50
-        assert result.fat == 20
-        assert result.fiber == 8
+        assert result.macros.protein == 40
+        assert result.macros.carbs == 50
+        assert result.macros.fat == 20
 
     def test_calculate_nutrition_handles_missing_values(self, service):
-        """Should handle items with None nutrition values."""
+        """Should handle items with zero nutrition values."""
+        from src.domain.model.nutrition import Macros
+        
         items = [
-            Mock(nutrition=Mock(calories=100, protein=None, carbs=10, fat=5, fiber=None)),
+            Mock(calories=100, macros=Macros(protein=0, carbs=10, fat=5)),
         ]
         
         result = service.calculate_nutrition(items)
         
         assert result.calories == 100
-        assert result.protein == 0
-        assert result.carbs == 10
+        assert result.macros.protein == 0
+        assert result.macros.carbs == 10
 
 
 class TestMealValidation:
@@ -116,10 +119,12 @@ class TestMealValidation:
 
     def test_validate_meal_valid_returns_empty(self, service):
         """Valid meal should return empty error list."""
+        from src.domain.model.nutrition import Macros
+        
         meal = Mock(
             name="Test Meal",
             food_items=[Mock()],
-            nutrition=Mock(calories=100, protein=10)
+            nutrition=Mock(calories=100, macros=Macros(protein=10, carbs=20, fat=5))
         )
         errors = service.validate_meal(meal)
         assert len(errors) == 0
