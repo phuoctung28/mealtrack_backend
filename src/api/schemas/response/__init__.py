@@ -56,7 +56,6 @@ from .meal_responses import (
 from .meal_suggestion_responses import (
     MealSuggestionItem,
     MealSuggestionsResponse,
-    SaveMealSuggestionResponse,
     MacrosSchema as MealSuggestionMacrosSchema
 )
 # Onboarding responses
@@ -137,7 +136,6 @@ __all__ = [
     # Meal suggestion
     'MealSuggestionItem',
     'MealSuggestionsResponse',
-    'SaveMealSuggestionResponse',
     'MealSuggestionMacrosSchema',
 
     # Weekly meal plan

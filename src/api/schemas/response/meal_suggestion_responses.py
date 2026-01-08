@@ -102,24 +102,12 @@ class SuggestionsListResponse(BaseModel):
 MealSuggestionsResponse = SuggestionsListResponse
 
 
-class SaveMealSuggestionResponse(BaseModel):
-    """
-    Response after saving a meal suggestion to history.
-    """
-
-    success: bool = Field(..., description="Whether the save was successful")
-    message: str = Field(..., description="Status message")
-    meal_id: Optional[str] = Field(
-        None, description="ID of the saved meal in the database"
-    )
-    meal_date: str = Field(..., description="Date the meal was saved for (YYYY-MM-DD)")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "success": True,
-                "message": "Meal suggestion saved successfully to your meal history",
-                "meal_id": "12345",
-                "meal_date": "2024-01-15",
-            }
-        }
+# DEPRECATED: SaveMealSuggestionResponse is no longer needed.
+# Use main meal creation response instead.
+#
+# class SaveMealSuggestionResponse(BaseModel):
+#     """DEPRECATED: Use main meal creation response instead."""
+#     success: bool
+#     message: str
+#     meal_id: Optional[str]
+#     meal_date: str

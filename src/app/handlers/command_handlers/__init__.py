@@ -21,7 +21,6 @@ from .generate_single_meal_command_handler import GenerateSingleMealCommandHandl
 from .recognize_ingredient_command_handler import RecognizeIngredientCommandHandler
 # Notification handlers
 from .register_fcm_token_command_handler import RegisterFcmTokenCommandHandler
-from .save_meal_suggestion_command_handler import SaveMealSuggestionCommandHandler
 # User handlers (newly extracted)
 from .save_user_onboarding_command_handler import SaveUserOnboardingCommandHandler
 from .sync_user_command_handler import SyncUserCommandHandler
@@ -48,7 +47,6 @@ __all__ = [
     "GenerateSingleMealCommandHandler",
     # Meal Suggestion handlers (supports both initial generation and regeneration via session_id)
     "GenerateMealSuggestionsCommandHandler",
-    "SaveMealSuggestionCommandHandler",
     # Standalone handlers
     "CreateManualMealCommandHandler",
     "GenerateWeeklyIngredientBasedMealPlanCommandHandler",

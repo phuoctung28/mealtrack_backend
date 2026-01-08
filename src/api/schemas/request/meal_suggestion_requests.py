@@ -141,57 +141,12 @@ class MealSuggestionRequest(BaseModel):
 #     exclude_ids: List[str] = Field(default_factory=list)
 
 
-class SaveMealSuggestionRequest(BaseModel):
-    """
-    Request schema for saving a selected meal suggestion to meal history.
-    """
-
-    suggestion_id: str = Field(..., description="ID of the suggestion to save")
-    name: str = Field(..., description="Name of the meal")
-    description: str = Field(default="", description="Description of the meal")
-    meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
-        ..., description="Type of meal"
-    )
-    estimated_cook_time_minutes: int = Field(
-        ..., description="Total cooking time in minutes"
-    )
-    calories: int = Field(..., description="Calories for the meal")
-    protein: float = Field(..., description="Protein in grams")
-    carbs: float = Field(..., description="Carbohydrates in grams")
-    fat: float = Field(..., description="Fat in grams")
-    portion_multiplier: int = Field(
-        default=1,
-        ge=1,
-        le=4,
-        description="Portion multiplier (1x, 2x, 3x, 4x) - scales macros before saving",
-    )
-    ingredients_list: List[str] = Field(
-        default_factory=list, description="List of ingredients"
-    )
-    instructions: List[str] = Field(
-        default_factory=list, description="Cooking instructions"
-    )
-    meal_date: Optional[str] = Field(
-        None,
-        description="Date to save the meal for (YYYY-MM-DD format), defaults to today",
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "suggestion_id": "meal_lunch_1234",
-                "name": "Grilled Chicken with Rice",
-                "description": "Healthy high-protein lunch",
-                "meal_type": "lunch",
-                "estimated_cook_time_minutes": 25,
-                "calories": 520,
-                "protein": 45.0,
-                "carbs": 55.0,
-                "fat": 12.0,
-                "portion_multiplier": 1,
-                "ingredients_list": ["chicken breast", "brown rice", "broccoli"],
-                "instructions": ["Grill chicken", "Cook rice", "Steam broccoli"],
-                "meal_date": "2024-01-15",
-            }
-        }
+# DEPRECATED: SaveMealSuggestionRequest is no longer needed.
+# Meal suggestions are saved directly through the main meal creation flow.
+#
+# class SaveMealSuggestionRequest(BaseModel):
+#     """DEPRECATED: Use main meal creation endpoint instead."""
+#     suggestion_id: str
+#     name: str
+#     # ... (full schema removed for brevity)
 

@@ -32,10 +32,7 @@ from .meal_requests import (
     MacrosRequest
 )
 # Meal suggestion requests
-from .meal_suggestion_requests import (
-    MealSuggestionRequest,
-    SaveMealSuggestionRequest
-)
+from .meal_suggestion_requests import MealSuggestionRequest
 # Onboarding requests
 from .onboarding_requests import (
     OnboardingCompleteRequest
@@ -90,7 +87,6 @@ __all__ = [
     
     # Meal suggestion
     'MealSuggestionRequest',
-    'SaveMealSuggestionRequest',
     
     # Onboarding
     'OnboardingCompleteRequest',
