@@ -9,11 +9,10 @@ from typing import List, Optional, Dict, Any
 
 from src.domain.model.meal_planning import (
     MealPlan,
-    MealPlanDay,
+    DayPlan,
     PlannedMeal,
     MealGenerationRequest,
     MealGenerationType,
-    NutritionTargets,
 )
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.prompts import PromptTemplateManager
@@ -75,7 +74,7 @@ class PlanGenerator:
         self,
         request: MealGenerationRequest,
         target_date: date,
-    ) -> MealPlanDay:
+    ) -> DayPlan:
         """
         Generate meals for a single day.
         
@@ -84,7 +83,7 @@ class PlanGenerator:
             target_date: Target date
             
         Returns:
-            MealPlanDay with generated meals
+            DayPlan with generated meals
         """
         # Build prompt for single day
         prompt, system = self._build_daily_prompt(request)
@@ -100,7 +99,7 @@ class PlanGenerator:
         # Parse and format
         meals = self._formatter.parse_daily_response(raw_result)
         
-        return MealPlanDay(
+        return DayPlan(
             date=target_date,
             day_name=target_date.strftime("%A"),
             meals=meals,
