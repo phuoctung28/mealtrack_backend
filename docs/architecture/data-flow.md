@@ -28,3 +28,30 @@ Uses SQLAlchemy eager loading strategies:
 Implemented for real-time meal recommendations.
 - **TTL**: 4 hours in Redis.
 - **Flow**: Generate 3 suggestions → Accept/Reject → Track session state.
+
+## Multilingual Meal Suggestions (Phase 01)
+
+Language parameter flows through entire suggestion pipeline:
+
+1. **API Layer** (`MealSuggestionRequest.language`)
+   - Validated by `validate_language_code()` field validator
+   - Defaults to "en"
+   - Valid codes: en, vi, es, fr, de, ja, zh
+   - Invalid codes fallback to "en" with warning
+
+2. **Command Layer** (`GenerateMealSuggestionsCommand.language`)
+   - Carries language from request to handler
+
+3. **Handler Layer** (`GenerateMealSuggestionsCommandHandler`)
+   - Passes language to `SuggestionOrchestrationService.generate_suggestions()`
+
+4. **Domain Layer** (`SuggestionOrchestrationService`)
+   - Accepts `language: str = "en"` parameter
+   - Stores in `SuggestionSession.language`
+   - Passed to meal generation service for localized output
+
+5. **Storage** (Redis/DB)
+   - Language stored with session for 4-hour lifetime
+   - Persists through regeneration and user interactions
+
+**Result**: All meal names, descriptions, and cooking instructions generated in requested language.

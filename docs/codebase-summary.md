@@ -164,8 +164,8 @@ Integrates Pinecone's Inference API with `llama-text-embed-v2` for 1024-dimensio
 **Meal Service**:
 Manages meal lifecycle from PROCESSING to READY via state machine.
 
-**Suggestion Orchestration Service (Phase 06)**:
-Handles session-based suggestions with 4h TTL in Redis.
+**Suggestion Orchestration Service (Phase 06, Phase 01 Multilingual)**:
+Handles session-based suggestions with 4h TTL in Redis. Supports 7 languages (en, vi, es, fr, de, ja, zh) via ISO 639-1 language codes with English fallback for invalid codes.
 
 ---
 
