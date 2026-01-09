@@ -1,19 +1,8 @@
 """
 Authentication-related enums for API schemas.
+DEPRECATED: Import from src.domain.model.auth instead.
 """
-from enum import Enum
+# Re-export from domain for backward compatibility
+from src.domain.model.auth import AuthProviderEnum
 
-
-class AuthProviderEnum(str, Enum):
-    """Authentication provider enumeration."""
-    GOOGLE = "google"
-    APPLE = "apple"
-    
-    @classmethod
-    def from_string(cls, value: str) -> 'AuthProviderEnum':
-        """Convert string to AuthProviderEnum with validation."""
-        try:
-            return cls(value.lower())
-        except ValueError:
-            # Default to email for unknown providers
-            return cls.GOOGLE
+__all__ = ["AuthProviderEnum"]

@@ -5,8 +5,8 @@ Uses the unified orchestration service.
 import logging
 from typing import Any, Dict
 
+from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.meal_plan_orchestration_service import MealPlanOrchestrationService
-from src.infra.adapters.meal_generation_service import MealGenerationService
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,7 @@ class WeeklyIngredientBasedMealPlanService:
     Delegates to unified orchestration service.
     """
 
-    def __init__(self) -> None:
-        meal_generation_service = MealGenerationService()
+    def __init__(self, meal_generation_service: MealGenerationServicePort) -> None:
         self.orchestration_service = MealPlanOrchestrationService(meal_generation_service)
 
     def generate_weekly_meal_plan(self, request: Dict[str, Any]) -> Dict[str, Any]:

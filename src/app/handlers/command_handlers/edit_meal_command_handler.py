@@ -10,10 +10,10 @@ from src.api.exceptions import ValidationException, ResourceNotFoundException
 from src.app.commands.meal import EditMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import MealEditedEvent
+from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition import FoodItem, Macros
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.infra.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
 from src.infra.services.pinecone_service import get_pinecone_service
 

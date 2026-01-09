@@ -13,10 +13,7 @@ from .meal_plan import (
 )
 
 # Import from meal_suggestion module
-from .meal_suggestion import (
-    GenerateMealSuggestionsCommand,
-    SaveMealSuggestionCommand,
-)
+from .meal_suggestion import GenerateMealSuggestionsCommand
 # TDEE commands removed - not used in API
 # Import from user module
 from .user import (
@@ -33,5 +30,4 @@ __all__ = [
     "GenerateWeeklyIngredientBasedMealPlanCommand",
     # Meal suggestion commands
     "GenerateMealSuggestionsCommand",
-    "SaveMealSuggestionCommand",
 ]

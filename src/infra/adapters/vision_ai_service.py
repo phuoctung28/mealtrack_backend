@@ -1,19 +1,18 @@
 import base64
 import json
 import logging
-import os
 import re
 from typing import Dict, Any, List
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.strategies.meal_analysis_strategy import (
     MealAnalysisStrategy,
     AnalysisStrategyFactory
 )
+from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
 # Load environment variables
 load_dotenv()
@@ -28,18 +27,10 @@ class VisionAIService(VisionAIServicePort):
     """
     
     def __init__(self):
-        """Initialize the Gemini client."""
-        self.api_key = os.getenv("GOOGLE_API_KEY")
-        if not self.api_key:
-            raise ValueError("GOOGLE_API_KEY environment variable is not set")
-            
-        self.model = ChatGoogleGenerativeAI(
-            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            temperature=0.2,
-            max_output_tokens=4096,
-            google_api_key=self.api_key,
-            convert_system_message_to_human=True
-        )
+        """Initialize the Gemini client using singleton manager."""
+        self._model_manager = GeminiModelManager.get_instance()
+        # Use standard temperature=0.7 to share model instance across all services
+        self.model = self._model_manager.get_model()
         
     def analyze_with_strategy(self, image_bytes: bytes, strategy: MealAnalysisStrategy) -> Dict[str, Any]:
         """

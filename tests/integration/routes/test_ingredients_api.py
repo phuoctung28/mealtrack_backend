@@ -1,13 +1,14 @@
 """
 Integration tests for ingredients API endpoints.
 """
+from unittest.mock import Mock
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch
 
-from src.api.main import app
-from src.api.dependencies.auth import get_current_user_id
 from src.api.base_dependencies import get_db
+from src.api.dependencies.auth import get_current_user_id
+from src.api.main import app
 
 
 @pytest.fixture
@@ -43,8 +44,7 @@ class TestIngredientsAPI:
     def test_recognize_ingredient_success(self, client):
         """Test successful ingredient recognition."""
         from src.api.dependencies.event_bus import get_configured_event_bus
-        import asyncio
-        
+
         mock_result = {
             "name": "chicken",
             "confidence": 0.95,

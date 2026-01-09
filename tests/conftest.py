@@ -10,22 +10,20 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition, FoodItem
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
-from src.infra.adapters.mock_image_store import MockImageStore
-from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIService
 from src.infra.database.config import Base
 # Import all models to ensure they're registered with Base metadata
 from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
-from src.infra.database.models.nutrition.food_item import FoodItem as FoodItemModel
-from src.infra.database.models.nutrition.nutrition import Nutrition as NutritionModel
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
+from src.infra.event_bus import PyMediatorEventBus, EventBus
+from src.infra.repositories.meal_repository import MealRepository
 from tests.fixtures.database.test_config import (
     get_test_database_url,
     create_test_engine
 )
-from src.infra.event_bus import PyMediatorEventBus, EventBus
-from src.infra.repositories.meal_repository import MealRepository
+from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIService
+from tests.fixtures.mock_image_store import MockImageStore
 
 
 @pytest.fixture(scope="function")
@@ -35,6 +33,25 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
+
+@pytest.fixture(autouse=True)
+def reset_gemini_model_manager():
+    """
+    Reset GeminiModelManager singleton before and after each test.
+    
+    This ensures tests don't share state through the singleton,
+    preventing test pollution and ensuring isolation.
+    """
+    from src.infra.services.ai.gemini_model_manager import GeminiModelManager
+    
+    # Reset before test
+    GeminiModelManager.reset_instance()
+    
+    yield
+    
+    # Reset after test
+    GeminiModelManager.reset_instance()
 
 
 @pytest.fixture(scope="session")
@@ -214,7 +231,7 @@ def event_bus(
     from src.app.commands.daily_meal.generate_daily_meal_suggestions_command import GenerateDailyMealSuggestionsCommand
     from src.infra.repositories.user_repository import UserRepository
     from src.domain.services.tdee_service import TdeeCalculationService
-    from src.infra.adapters.mock_meal_suggestion_service import MockMealSuggestionService
+    from tests.fixtures.mock_meal_suggestion_service import MockMealSuggestionService
     
     event_bus = PyMediatorEventBus()
     

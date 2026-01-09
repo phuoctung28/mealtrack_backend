@@ -1,16 +1,17 @@
 """
 Unit tests for DeleteUserCommandHandler.
 """
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.infra.database.config import Base
-from src.infra.database.models.user import User
+from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user import DeleteUserCommand
 from src.app.handlers.command_handlers.delete_user_command_handler import DeleteUserCommandHandler
-from src.api.exceptions import ResourceNotFoundException
+from src.infra.database.config import Base
+from src.infra.database.models.user import User
 
 
 @pytest.fixture(scope="function")

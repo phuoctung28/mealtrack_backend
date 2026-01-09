@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user import SaveUserOnboardingCommand
 from src.app.events.base import EventHandler, handles
-from src.infra.cache.cache_keys import CacheKeys
+from src.domain.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.user import User
 from src.infra.database.models.user.profile import UserProfile

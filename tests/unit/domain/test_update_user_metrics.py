@@ -1,8 +1,9 @@
 """
 Unit tests for update user metrics endpoint and handler.
 """
-import pytest
 from unittest.mock import Mock
+
+import pytest
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand

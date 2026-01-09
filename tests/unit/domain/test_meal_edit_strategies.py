@@ -4,18 +4,19 @@ Unit tests for meal edit strategies.
 Tests cover the strategy pattern implementation for add, update, and remove operations
 on food items during meal editing.
 """
-from unittest.mock import Mock, patch
-import pytest
 import uuid
+from unittest.mock import Mock
 
+import pytest
+
+from src.app.commands.meal.edit_meal_command import FoodItemChange, CustomNutritionData
+from src.domain.model import FoodItem, Macros
 from src.domain.strategies.meal_edit_strategies import (
     RemoveFoodItemStrategy,
     UpdateFoodItemStrategy,
     AddFoodItemStrategy,
     FoodItemChangeStrategyFactory,
 )
-from src.app.commands.meal.edit_meal_command import FoodItemChange, CustomNutritionData
-from src.domain.model import FoodItem, Macros
 
 
 class TestRemoveFoodItemStrategy:

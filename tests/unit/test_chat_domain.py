@@ -1,8 +1,9 @@
 """
 Unit tests for chat domain models.
 """
-import pytest
 from datetime import datetime
+
+import pytest
 
 from src.domain.model.chat import Thread, Message, MessageRole, ThreadStatus
 

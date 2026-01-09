@@ -3,7 +3,6 @@ Request schemas for meal suggestion generation.
 """
 
 import warnings
-from datetime import datetime
 from enum import Enum
 from typing import List, Literal, Optional
 
@@ -55,6 +54,8 @@ class MealSuggestionRequest(BaseModel):
 
     Generates exactly 3 meal suggestions based on:
     - meal_type, meal_portion_type (or legacy meal_size), ingredients, cooking_time
+    
+    If session_id is provided, generates NEW suggestions excluding previously shown meals.
     """
 
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
@@ -89,9 +90,13 @@ class MealSuggestionRequest(BaseModel):
         gt=0,
         description="Optional calorie target override (calculated from portion type if not provided)",
     )
+    session_id: Optional[str] = Field(
+        None,
+        description="Optional session ID for regeneration (automatically excludes previously shown meals)",
+    )
     exclude_ids: List[str] = Field(
         default_factory=list,
-        description="List of meal IDs to exclude (for regeneration)",
+        description="DEPRECATED: Use session_id instead for automatic exclusion",
     )
 
     @field_validator("meal_size", mode="before")
@@ -127,104 +132,73 @@ class MealSuggestionRequest(BaseModel):
         }
 
 
-class RegenerateSuggestionsRequest(BaseModel):
-    """Request to regenerate 3 NEW meal ideas (excludes shown)."""
-
-    session_id: str = Field(..., description="Suggestion session ID")
-    exclude_ids: List[str] = Field(
-        default_factory=list, description="Suggestion IDs to exclude from regeneration"
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "session_id": "session_abc123",
-                "exclude_ids": ["meal_lunch_1234", "meal_lunch_5678"],
-            }
-        }
-
-
-class AcceptSuggestionRequest(BaseModel):
-    """Request to accept suggestion with portion multiplier."""
-
-    portion_multiplier: int = Field(
-        default=1, ge=1, le=4, description="Portion multiplier (1x, 2x, 3x, 4x)"
-    )
-    consumed_at: Optional[datetime] = Field(
-        None, description="Optional consumption timestamp (defaults to now)"
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {"portion_multiplier": 2, "consumed_at": "2025-12-30T12:00:00Z"}
-        }
-
-
-class RejectSuggestionRequest(BaseModel):
-    """Request to reject suggestion with optional feedback."""
-
-    feedback: Optional[str] = Field(
-        None,
-        max_length=500,
-        description="Optional feedback on why suggestion was rejected",
-    )
-
-    class Config:
-        json_schema_extra = {"example": {"feedback": "Too spicy for my taste"}}
+# DEPRECATED: RegenerateSuggestionsRequest is no longer needed.
+# Use MealSuggestionRequest with session_id parameter to regenerate with automatic exclusion.
+# 
+# class RegenerateSuggestionsRequest(BaseModel):
+#     """DEPRECATED: Use MealSuggestionRequest with session_id instead."""
+#     session_id: str
+#     exclude_ids: List[str] = Field(default_factory=list)
 
 
 class SaveMealSuggestionRequest(BaseModel):
     """
-    Request schema for saving a selected meal suggestion to meal history.
-    (LEGACY - use AcceptSuggestionRequest instead)
+    Request schema for saving a meal suggestion to planned_meals table.
+    This adds the meal to the user's daily meal plan (suggested meals).
     """
-
-    suggestion_id: str = Field(..., description="ID of the suggestion to save")
+    suggestion_id: str = Field(..., description="ID of the suggestion being saved")
     name: str = Field(..., description="Name of the meal")
-    description: str = Field(default="", description="Description of the meal")
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
         ..., description="Type of meal"
     )
-    estimated_cook_time_minutes: int = Field(
-        ..., description="Total cooking time in minutes"
-    )
-    calories: int = Field(..., description="Calories for the meal")
-    protein: float = Field(..., description="Protein in grams")
-    carbs: float = Field(..., description="Carbohydrates in grams")
-    fat: float = Field(..., description="Fat in grams")
-    portion_multiplier: int = Field(
-        default=1,
-        ge=1,
-        le=4,
-        description="Portion multiplier (1x, 2x, 3x, 4x) - scales macros before saving",
+    calories: int = Field(..., gt=0, description="Total calories (after portion multiplier)")
+    protein: float = Field(..., ge=0, description="Protein in grams")
+    carbs: float = Field(..., ge=0, description="Carbohydrates in grams")
+    fat: float = Field(..., ge=0, description="Fat in grams")
+    description: Optional[str] = Field(None, description="Meal description")
+    estimated_cook_time_minutes: Optional[int] = Field(
+        None, ge=0, description="Estimated cooking time in minutes"
     )
     ingredients_list: List[str] = Field(
-        default_factory=list, description="List of ingredients"
+        default_factory=list, description="List of ingredients as strings"
     )
     instructions: List[str] = Field(
-        default_factory=list, description="Cooking instructions"
+        default_factory=list, description="List of cooking instructions"
     )
-    meal_date: Optional[str] = Field(
-        None,
-        description="Date to save the meal for (YYYY-MM-DD format), defaults to today",
+    portion_multiplier: int = Field(
+        default=1, ge=1, description="Portion multiplier (1x, 2x, etc.)"
     )
+    meal_date: str = Field(
+        ..., description="Target date for the meal (YYYY-MM-DD format)"
+    )
+
+    @field_validator("meal_date")
+    @classmethod
+    def validate_date_format(cls, v: str) -> str:
+        """Validate date format is YYYY-MM-DD."""
+        from datetime import datetime
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+            return v
+        except ValueError:
+            raise ValueError("meal_date must be in YYYY-MM-DD format")
 
     class Config:
         json_schema_extra = {
             "example": {
-                "suggestion_id": "meal_lunch_1234",
-                "name": "Grilled Chicken with Rice",
-                "description": "Healthy high-protein lunch",
+                "suggestion_id": "suggestion_123",
+                "name": "Grilled Chicken Salad",
                 "meal_type": "lunch",
-                "estimated_cook_time_minutes": 25,
-                "calories": 520,
-                "protein": 45.0,
-                "carbs": 55.0,
-                "fat": 12.0,
+                "calories": 450,
+                "protein": 35.0,
+                "carbs": 25.0,
+                "fat": 20.0,
+                "description": "Healthy grilled chicken salad",
+                "estimated_cook_time_minutes": 30,
+                "ingredients_list": ["chicken breast", "lettuce", "tomatoes"],
+                "instructions": ["Grill chicken", "Chop vegetables", "Mix together"],
                 "portion_multiplier": 1,
-                "ingredients_list": ["chicken breast", "brown rice", "broccoli"],
-                "instructions": ["Grill chicken", "Cook rice", "Steam broccoli"],
-                "meal_date": "2024-01-15",
+                "meal_date": "2024-01-15"
             }
         }
 

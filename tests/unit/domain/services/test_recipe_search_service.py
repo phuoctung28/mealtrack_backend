@@ -1,9 +1,10 @@
 """
 Unit tests for RecipeSearchService.
 """
-import pytest
 import json
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
+
+import pytest
 
 from src.domain.services.meal_suggestion.recipe_search_service import (
     RecipeSearchService,
@@ -81,7 +82,11 @@ class TestRecipeSearchService:
     @pytest.fixture
     def service_without_pinecone(self):
         """Create service without Pinecone."""
-        return RecipeSearchService(pinecone_service=None)
+        with patch('src.domain.services.meal_suggestion.recipe_search_service.PineconeNutritionService') as mock_pinecone:
+            # Mock to raise exception so service._pinecone becomes None
+            mock_pinecone.side_effect = Exception("No Pinecone API key")
+            service = RecipeSearchService(pinecone_service=None)
+            return service
 
     @pytest.fixture
     def sample_criteria(self):
@@ -99,9 +104,14 @@ class TestRecipeSearchService:
         service = RecipeSearchService(pinecone_service=mock_pinecone_service)
         assert service._pinecone == mock_pinecone_service
 
-    def test_init_without_pinecone_service(self):
+    @patch('src.domain.services.meal_suggestion.recipe_search_service.PineconeNutritionService')
+    def test_init_without_pinecone_service(self, mock_pinecone_class):
         """Test initialization without Pinecone service."""
+        # Mock PineconeNutritionService to raise an exception
+        mock_pinecone_class.side_effect = Exception("Pinecone API key not found")
+        
         service = RecipeSearchService(pinecone_service=None)
+        # When initialization fails, _pinecone should be None
         assert service._pinecone is None
         assert service.recipes_index is None
 

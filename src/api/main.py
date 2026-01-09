@@ -8,7 +8,6 @@ includes routes, and handles application lifecycle events.
 import json
 import logging
 import os
-import time
 from contextlib import asynccontextmanager
 
 import firebase_admin
@@ -17,7 +16,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from firebase_admin import credentials
-from sqlalchemy import text
 
 from src.api.base_dependencies import (
     initialize_cache_layer,
@@ -25,22 +23,22 @@ from src.api.base_dependencies import (
     shutdown_cache_layer,
 )
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
+from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.v1.activities import router as activities_router
-from src.api.routes.v1.feature_flags import router as feature_flags_router
-from src.api.routes.v1.foods import router as foods_router
-from src.api.routes.v1.monitoring import router as monitoring_router
-
 from src.api.routes.v1.chat import router as chat_router
 from src.api.routes.v1.chat_ws import router as chat_ws_router
+from src.api.routes.v1.feature_flags import router as feature_flags_router
+from src.api.routes.v1.foods import router as foods_router
+from src.api.routes.v1.health import router as health_router
+from src.api.routes.v1.ingredients import router as ingredients_router
 from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
 from src.api.routes.v1.meals import router as meals_router
+from src.api.routes.v1.monitoring import router as monitoring_router
 from src.api.routes.v1.notifications import router as notifications_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
-from src.api.routes.v1.health import router as health_router
-from src.api.routes.v1.ingredients import router as ingredients_router
 from src.infra.database.config import engine
 from src.infra.database.migration_manager import MigrationManager
 
@@ -190,6 +188,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request/Response logging
+app.add_middleware(RequestLoggerMiddleware)
 
 # Dev auth bypass: inject a fixed user during development
 add_dev_auth_bypass(app)

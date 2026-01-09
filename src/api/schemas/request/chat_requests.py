@@ -2,6 +2,7 @@
 Request schemas for chat endpoints.
 """
 from typing import Optional, Dict, Any
+
 from pydantic import BaseModel, Field
 
 

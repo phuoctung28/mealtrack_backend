@@ -2,6 +2,7 @@
 
 import re
 from typing import List, Tuple
+
 from src.domain.model.meal_planning import FitnessGoal, PlanDuration
 
 

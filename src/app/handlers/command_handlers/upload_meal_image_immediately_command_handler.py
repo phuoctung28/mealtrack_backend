@@ -3,18 +3,18 @@ Handler for immediate meal image upload and analysis.
 """
 import logging
 from datetime import datetime
-from uuid import uuid4
 from typing import Optional
+from uuid import uuid4
 
 from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.app.events.base import EventHandler, handles
+from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal import MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.infra.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
 
 logger = logging.getLogger(__name__)

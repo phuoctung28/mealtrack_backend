@@ -3,8 +3,8 @@ Unit tests for SuggestionFallbackProvider.
 """
 import pytest
 
-from src.domain.services.meal_suggestion.suggestion_fallback_provider import SuggestionFallbackProvider
 from src.domain.model.meal_planning import MealType, PlannedMeal
+from src.domain.services.meal_suggestion.suggestion_fallback_provider import SuggestionFallbackProvider
 
 
 @pytest.mark.unit

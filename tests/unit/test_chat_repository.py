@@ -1,10 +1,9 @@
 """
 Unit tests for ChatRepository.
 """
+from unittest.mock import Mock, patch
+
 import pytest
-import uuid
-from datetime import datetime
-from unittest.mock import Mock, MagicMock, patch
 
 from src.domain.model.chat import (
     Thread,
@@ -12,11 +11,11 @@ from src.domain.model.chat import (
     MessageRole,
     ThreadStatus
 )
-from src.infra.repositories.chat_repository import ChatRepository
 from src.infra.database.models.chat import (
     ChatThread as DBChatThread,
     ChatMessage as DBChatMessage
 )
+from src.infra.repositories.chat_repository import ChatRepository
 
 # Test UUIDs - using fixed UUIDs for consistency in tests
 TEST_USER_ID = "00000000-0000-0000-0000-000000000001"

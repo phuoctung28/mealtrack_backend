@@ -2,10 +2,10 @@
 MealPlanRepositoryPort - Interface for meal plan repository operations.
 """
 from abc import ABC, abstractmethod
-from typing import Optional, List
 from datetime import date
+from typing import Optional, List
 
-from src.domain.model.meal_planning import MealPlan, DailyMeal, PlannedMeal
+from src.domain.model.meal_planning import MealPlan, PlannedMeal, DailyMealPlan
 
 
 class MealPlanRepositoryPort(ABC):
@@ -51,12 +51,12 @@ class MealPlanRepositoryPort(ABC):
         self, 
         user_id: str, 
         meal_date: date
-    ) -> List[DailyMeal]:
+    ) -> List[DailyMealPlan]:
         """Get daily meals for a specific date."""
         pass
     
     @abstractmethod
-    def save_daily_meal(self, daily_meal: DailyMeal) -> DailyMeal:
+    def save_daily_meal(self, daily_meal: DailyMealPlan) -> DailyMealPlan:
         """Save or update a daily meal."""
         pass
     

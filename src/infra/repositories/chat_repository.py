@@ -3,11 +3,11 @@ Chat repository implementation using SQLAlchemy.
 """
 import json
 import logging
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
 
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from src.domain.model.chat import Thread, Message, ThreadStatus
 from src.domain.ports.chat_repository_port import ChatRepositoryPort

@@ -42,7 +42,11 @@ class NutritionData:
 
 
 class PineconeNutritionService:
-    """Service for searching ingredients and calculating nutrition using Pinecone"""
+    """
+    Service for searching ingredients and calculating nutrition using Pinecone.
+    
+    Memory optimization: Uses lazy loading for indexes to avoid upfront memory allocation.
+    """
 
     def __init__(self, pinecone_api_key: Optional[str] = None):
         api_key = pinecone_api_key or os.getenv("PINECONE_API_KEY")
@@ -52,29 +56,84 @@ class PineconeNutritionService:
         self.pc = Pinecone(api_key=api_key)
         # No encoder needed - use Pinecone inference API
 
+        # Lazy load indexes (only connect when needed)
+        self._ingredients_index = None
+        self._usda_index = None
+        self._indexes_initialized = False
+        
+        # Unit conversion table (always initialize)
+        self.unit_conversions = {
+            # Weight
+            "g": 1,
+            "gram": 1,
+            "grams": 1,
+            "kg": 1000,
+            "kilogram": 1000,
+            "kilograms": 1000,
+            "oz": 28.35,
+            "ounce": 28.35,
+            "ounces": 28.35,
+            "lb": 453.59,
+            "pound": 453.59,
+            "pounds": 453.59,
+            # Volume (approximate for water-like density)
+            "ml": 1,
+            "milliliter": 1,
+            "milliliters": 1,
+            "l": 1000,
+            "liter": 1000,
+            "liters": 1000,
+            "cup": 240,
+            "cups": 240,
+            "tbsp": 15,
+            "tablespoon": 15,
+            "tablespoons": 15,
+            "tsp": 5,
+            "teaspoon": 5,
+            "teaspoons": 5,
+            # Count (assume average piece weight)
+            "piece": 50,
+            "pieces": 50,
+            "item": 50,
+            "items": 50,
+            "serving": 100,
+            "servings": 100,
+        }
+    
+    @property
+    def ingredients_index(self):
+        """Lazy load ingredients index."""
+        if not self._indexes_initialized:
+            self._init_indexes()
+        return self._ingredients_index
+    
+    @property
+    def usda_index(self):
+        """Lazy load USDA index."""
+        if not self._indexes_initialized:
+            self._init_indexes()
+        return self._usda_index
+    
+    def _init_indexes(self):
+        """Initialize Pinecone indexes on first use."""
+        if self._indexes_initialized:
+            return
+        
         # Connect to existing indexes
         try:
-            self.ingredients_index = self.pc.Index("ingredients")
+            self._ingredients_index = self.pc.Index("ingredients")
         except Exception:
-            self.ingredients_index = None
+            self._ingredients_index = None
 
         try:
-            self.usda_index = self.pc.Index("usda")
+            self._usda_index = self.pc.Index("usda")
         except Exception:
-            self.usda_index = None
+            self._usda_index = None
 
-        if not self.ingredients_index and not self.usda_index:
+        if not self._ingredients_index and not self._usda_index:
             raise ValueError("No Pinecone indexes available. Ensure 'ingredients' or 'usda' index exists.")
-
-        # Unit conversion table
-        self.unit_conversions = {
-            'g': 1, 'gram': 1, 'grams': 1,
-            'kg': 1000, 'oz': 28.35, 'lb': 453.59,
-            'cup': 240, 'cups': 240,
-            'tbsp': 15, 'tablespoon': 15,
-            'tsp': 5, 'teaspoon': 5,
-            'serving': 100
-        }
+        
+        self._indexes_initialized = True
 
     def _embed_text(
         self, texts: list[str], input_type: str = "query"

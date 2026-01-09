@@ -32,21 +32,21 @@ class Settings(BaseSettings):
     DB_SSL_VERIFY_CERT: bool = Field(default=False)
     DB_SSL_VERIFY_IDENTITY: bool = Field(default=False)
 
-    # Connection pool tuning
-    UVICORN_WORKERS: int = Field(default=4)
-    POOL_SIZE_PER_WORKER: int = Field(default=5)
-    POOL_MAX_OVERFLOW: int = Field(default=10)
+    # Connection pool tuning (optimized for 512MB instances)
+    UVICORN_WORKERS: int = Field(default=1, description="Number of worker processes (1 for low-memory)")
+    POOL_SIZE_PER_WORKER: int = Field(default=2, description="DB connections per worker (reduced from 5)")
+    POOL_MAX_OVERFLOW: int = Field(default=3, description="Max overflow connections (reduced from 10)")
     POOL_TIMEOUT: int = Field(default=30)
     POOL_RECYCLE: int = Field(default=300)
     POOL_ECHO: bool = Field(default=False)
 
-    # Redis configuration
+    # Redis configuration (optimized for low-memory)
     REDIS_HOST: str = Field(default="localhost")
     REDIS_PORT: int = Field(default=6379)
     REDIS_DB: int = Field(default=0)
     REDIS_PASSWORD: str | None = Field(default=None)
     REDIS_SSL: bool = Field(default=False)
-    REDIS_MAX_CONNECTIONS: int = Field(default=50)
+    REDIS_MAX_CONNECTIONS: int = Field(default=10, description="Max Redis connections (reduced from 50)")
 
     # Cache configuration
     CACHE_ENABLED: bool = Field(default=True)

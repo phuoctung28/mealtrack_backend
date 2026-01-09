@@ -2,7 +2,6 @@
 import logging
 from typing import Optional
 
-import firebase_admin.auth
 from firebase_admin import auth
 from firebase_admin.auth import UserNotFoundError
 

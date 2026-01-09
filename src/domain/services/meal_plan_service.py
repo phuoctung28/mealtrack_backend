@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from datetime import date, timedelta
 from typing import List, Dict, Optional
 
@@ -10,6 +9,7 @@ from src.domain.model.meal_planning import (
     MealPlan, PlannedMeal, DayPlan, UserPreferences,
     FitnessGoal, MealType, PlanDuration
 )
+from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
 logger = logging.getLogger(__name__)
 
@@ -18,24 +18,15 @@ class MealPlanService:
     """Service for generating and managing meal plans using AI"""
     
     def __init__(self):
-        self.google_api_key = os.getenv("GOOGLE_API_KEY")
-        if not self.google_api_key:
-            raise ValueError("GOOGLE_API_KEY environment variable not set")
-        
+        self._model_manager = GeminiModelManager.get_instance()
         self._model = None  # Lazy load
         
     @property
     def model(self):
-        """Lazy load the ChatGoogleGenerativeAI model."""
+        """Lazy load the ChatGoogleGenerativeAI model using singleton manager."""
         if self._model is None:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            self._model = ChatGoogleGenerativeAI(
-                model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-                temperature=0.8,
-                max_output_tokens=1000,
-                google_api_key=self.google_api_key,
-                convert_system_message_to_human=True
-            )
+            # Use standard temperature=0.7 to share model instance across all services
+            self._model = self._model_manager.get_model()
         return self._model
     
     def generate_meal_plan(self, user_id: str, preferences: UserPreferences) -> MealPlan:

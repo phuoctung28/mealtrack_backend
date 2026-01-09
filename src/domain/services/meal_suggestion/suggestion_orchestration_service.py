@@ -8,18 +8,18 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime
 from typing import List, Optional, Tuple
 
+from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal_suggestion import (
     MealSuggestion,
     SuggestionSession,
-    SuggestionStatus,
     MacroEstimate,
     Ingredient,
     RecipeStep,
     MealType,
 )
+from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
@@ -27,9 +27,6 @@ from src.domain.ports.meal_suggestion_repository_port import (
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
-
-from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService, RecipeSearchCriteria
-from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +37,14 @@ class SuggestionOrchestrationService:
     Implements timeout handling and portion multipliers.
     """
 
-    GENERATION_TIMEOUT_SECONDS = 45  # Increased from 30s - full recipe generation needs ~30-35s
+    GENERATION_TIMEOUT_SECONDS = 35  # Reduced from 45s with optimized prompts
     SUGGESTIONS_COUNT = 3
     MIN_ACCEPTABLE_RESULTS = 2  # Return at least 2 meals for acceptable UX
 
-    # Parallel generation constants
-    PARALLEL_SINGLE_MEAL_TOKENS = 4000  # Full recipe with detailed ingredients/steps
-    PARALLEL_SINGLE_MEAL_TIMEOUT = 25   # Reduced from 35s (faster without description)
-    PARALLEL_STAGGER_MS = 500  # 500ms between requests to prevent rate limiting
+    # Parallel generation constants (OPTIMIZED)
+    PARALLEL_SINGLE_MEAL_TOKENS = 4000  # Reduced from 4000 with compressed prompts
+    PARALLEL_SINGLE_MEAL_TIMEOUT = 20   # Reduced from 25s (faster with smaller prompts)
+    PARALLEL_STAGGER_MS = 200  # Reduced from 500ms (API handles smaller payloads faster)
 
     def __init__(
         self,
@@ -56,7 +53,6 @@ class SuggestionOrchestrationService:
         user_repo: UserRepositoryPort,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
-        recipe_search: RecipeSearchService = None,
         redis_client=None,
     ):
         self._generation = generation_service
@@ -64,7 +60,6 @@ class SuggestionOrchestrationService:
         self._user_repo = user_repo
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
-        self._recipe_search = recipe_search  # Optional for Phase 2
         self._redis_client = redis_client
 
     async def generate_suggestions(
@@ -74,152 +69,82 @@ class SuggestionOrchestrationService:
         meal_portion_type: str,
         ingredients: List[str],
         cooking_time_minutes: int,
+        session_id: Optional[str] = None,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
-        """Generate initial 3 suggestions and create session."""
-        # Get user profile using port-compliant method
-        profile = await asyncio.to_thread(self._user_repo.get_profile, user_id)
-        if not profile:
-            raise ValueError(f"User {user_id} profile not found")
+        """
+        Generate 3 suggestions. If session_id provided, generates NEW meals 
+        excluding previously shown ones. Otherwise creates new session.
+        """
+        # Check if regenerating from existing session
+        if session_id:
+            session = await self._repo.get_session(session_id)
+            if not session or session.user_id != user_id:
+                raise ValueError(f"Session {session_id} not found or unauthorized")
+            
+            # Use existing session's shown meal names as exclusions
+            exclude_meal_names = session.shown_meal_names
+            logger.info(
+                f"Regenerating for session {session_id}, "
+                f"excluding {len(exclude_meal_names)} previous meals"
+            )
+        else:
+            # Get user profile using port-compliant method
+            profile = await asyncio.to_thread(self._user_repo.get_profile, user_id)
+            if not profile:
+                raise ValueError(f"User {user_id} profile not found")
 
-        # Calculate daily TDEE from profile
-        daily_tdee = self._calculate_daily_tdee(profile)
+            # Use cached TDEE (changed from direct calculation)
+            daily_tdee = await self._get_cached_tdee(user_id, profile)
 
-        # Get meals_per_day from profile (default to 3)
-        meals_per_day = getattr(profile, "meals_per_day", 3)
+            # Get meals_per_day from profile (default to 3)
+            meals_per_day = getattr(profile, "meals_per_day", 3)
 
-        # Calculate target calories using PortionCalculationService
-        portion_target = self._portion_service.get_target_for_meal_type(
-            meal_type=meal_portion_type,
-            daily_target=int(daily_tdee),
-            meals_per_day=meals_per_day,
-        )
-        target_calories = portion_target.target_calories
+            # Calculate target calories using PortionCalculationService
+            portion_target = self._portion_service.get_target_for_meal_type(
+                meal_type=meal_portion_type,
+                daily_target=int(daily_tdee),
+                meals_per_day=meals_per_day,
+            )
+            target_calories = portion_target.target_calories
 
-        # Extract dietary preferences and allergies (Phase 1 optimization)
-        dietary_preferences = getattr(profile, 'dietary_preferences', None) or []
-        allergies = getattr(profile, 'allergies', None) or []
+            # Extract dietary preferences and allergies (Phase 1 optimization)
+            dietary_preferences = getattr(profile, 'dietary_preferences', None) or []
+            allergies = getattr(profile, 'allergies', None) or []
 
-        # Create session with dietary info
-        session = SuggestionSession(
-            id=f"session_{uuid.uuid4().hex[:16]}",
-            user_id=user_id,
-            meal_type=meal_type,
-            meal_portion_type=meal_portion_type,
-            target_calories=target_calories,
-            ingredients=ingredients,
-            cooking_time_minutes=cooking_time_minutes,
-            dietary_preferences=dietary_preferences,
-            allergies=allergies,
-        )
+            # Create new session with dietary info
+            session = SuggestionSession(
+                id=f"session_{uuid.uuid4().hex[:16]}",
+                user_id=user_id,
+                meal_type=meal_type,
+                meal_portion_type=meal_portion_type,
+                target_calories=target_calories,
+                ingredients=ingredients,
+                cooking_time_minutes=cooking_time_minutes,
+                dietary_preferences=dietary_preferences,
+                allergies=allergies,
+            )
+            exclude_meal_names = []
+            logger.info(f"Creating new session {session.id}")
 
-        # Generate with timeout
+        # Generate with timeout, excluding previous meal names
         suggestions = await self._generate_with_timeout(
             session=session,
-            exclude_ids=[],
+            exclude_meal_names=exclude_meal_names,
         )
 
-        # Track shown IDs
+        # Track shown IDs and meal names
         session.add_shown_ids([s.id for s in suggestions])
+        session.add_shown_meals([s.meal_name for s in suggestions])
 
         # Persist session and suggestions using port-compliant methods
-        await self._repo.save_session(session)
+        if session_id:
+            await self._repo.update_session(session)
+        else:
+            await self._repo.save_session(session)
         await self._repo.save_suggestions(suggestions)
 
         return session, suggestions
 
-    async def regenerate_suggestions(
-        self,
-        user_id: str,
-        session_id: str,
-        exclude_ids: List[str],
-    ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
-        """Regenerate 3 NEW suggestions excluding previously shown."""
-        session = await self._repo.get_session(session_id)
-        if not session or session.user_id != user_id:
-            raise ValueError(f"Session {session_id} not found")
-
-        # Combine shown with explicitly excluded
-        all_excluded = list(set(session.shown_suggestion_ids + exclude_ids))
-
-        # Generate new suggestions
-        suggestions = await self._generate_with_timeout(
-            session=session,
-            exclude_ids=all_excluded,
-        )
-
-        # Update session
-        session.add_shown_ids([s.id for s in suggestions])
-        await self._repo.update_session(session)
-        await self._repo.save_suggestions(suggestions)
-
-        return session, suggestions
-
-    async def get_session_suggestions(
-        self,
-        user_id: str,
-        session_id: str,
-    ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
-        """Get current session suggestions."""
-        session = await self._repo.get_session(session_id)
-        if not session or session.user_id != user_id:
-            raise ValueError(f"Session {session_id} not found")
-
-        suggestions = await self._repo.get_session_suggestions(session_id)
-        return session, suggestions
-
-    async def accept_suggestion(
-        self,
-        user_id: str,
-        suggestion_id: str,
-        portion_multiplier: int,
-        consumed_at: Optional[datetime],
-    ) -> dict:
-        """Accept suggestion with portion multiplier (returns meal data for saving)."""
-        suggestion = await self._repo.get_suggestion(suggestion_id)
-        if not suggestion or suggestion.user_id != user_id:
-            raise ValueError(f"Suggestion {suggestion_id} not found")
-
-        # Apply portion multiplier
-        adjusted_macros = suggestion.macros.multiply(portion_multiplier)
-
-        # Mark as accepted
-        suggestion.status = SuggestionStatus.ACCEPTED
-        await self._repo.update_suggestion(suggestion)
-
-        return {
-            "meal_id": f"meal_{uuid.uuid4().hex[:16]}",
-            "meal_name": suggestion.meal_name,
-            "adjusted_macros": adjusted_macros,
-            "saved_at": consumed_at or datetime.utcnow(),
-            "suggestion": suggestion,
-        }
-
-    async def reject_suggestion(
-        self,
-        user_id: str,
-        suggestion_id: str,
-        feedback: Optional[str],
-    ) -> None:
-        """Reject suggestion with optional feedback."""
-        suggestion = await self._repo.get_suggestion(suggestion_id)
-        if not suggestion or suggestion.user_id != user_id:
-            raise ValueError(f"Suggestion {suggestion_id} not found")
-
-        suggestion.status = SuggestionStatus.REJECTED
-        await self._repo.update_suggestion(suggestion)
-        logger.info(f"Rejected suggestion {suggestion_id}: {feedback}")
-
-    async def discard_session(
-        self,
-        user_id: str,
-        session_id: str,
-    ) -> None:
-        """Discard entire session and cleanup."""
-        session = await self._repo.get_session(session_id)
-        if not session or session.user_id != user_id:
-            raise ValueError(f"Session {session_id} not found")
-
-        await self._repo.delete_session(session_id)
 
     def _calculate_daily_tdee(self, profile) -> float:
         """
@@ -268,29 +193,63 @@ class SuggestionOrchestrationService:
             )
             return 2000.0
 
+    async def _get_cached_tdee(self, user_id: str, profile) -> float:
+        """
+        Get TDEE from cache or calculate and cache it.
+        Uses 24h TTL since TDEE changes only when profile changes.
+        """
+        if not self._redis_client:
+            # No cache available, calculate directly
+            return self._calculate_daily_tdee(profile)
+        
+        cache_key, ttl = CacheKeys.user_tdee(user_id)
+        
+        try:
+            cached = await self._redis_client.get(cache_key)
+            if cached:
+                logger.debug(f"TDEE cache HIT for user {user_id}")
+                return float(cached)
+        except Exception as e:
+            logger.warning(f"TDEE cache GET failed: {e}")
+        
+        # Calculate and cache
+        tdee = self._calculate_daily_tdee(profile)
+        
+        try:
+            await self._redis_client.set(cache_key, str(tdee), ttl)
+            logger.debug(f"TDEE cached for user {user_id}: {tdee}")
+        except Exception as e:
+            logger.warning(f"TDEE cache SET failed: {e}")
+        
+        return tdee
+
     async def _generate_with_timeout(
         self,
         session: SuggestionSession,
-        exclude_ids: List[str],
+        exclude_meal_names: List[str],
     ) -> List[MealSuggestion]:
         """
         Generate suggestions using 2-phase approach.
-        Phase 1: Generate 6 diverse meal names (~1s)
-        Phase 2: Generate 6 recipes in parallel, take first 3 successful (~8-10s)
+        Phase 1: Generate 4 diverse meal names (~1s)
+        Phase 2: Generate 4 recipes in parallel, take first 3 successful (~8-10s)
         Target latency: 9-12s (9-11s average, 12-14s P95)
         """
-        return await self._generate_parallel_hybrid(session, exclude_ids)
+        return await self._generate_parallel_hybrid(session, exclude_meal_names)
 
     async def _generate_parallel_hybrid(
         self,
         session: SuggestionSession,
-        exclude_ids: List[str],
+        exclude_meal_names: List[str],
     ) -> List[MealSuggestion]:
         """
         Two-phase generation with over-generation for reliability.
         Phase 1: Generate 4 diverse meal names (1 call, ~1-2s)
         Phase 2: Generate 4 recipes in parallel, take first 3 successes (~6-8s)
         Target latency: 7-10s (faster + more reliable with reduced API pressure)
+        
+        Args:
+            session: The suggestion session with user preferences
+            exclude_meal_names: List of meal names to avoid (from previous generations)
         """
         start_time = time.time()
 
@@ -304,9 +263,13 @@ class SuggestionOrchestrationService:
             RecipeDetailsResponse,
         )
 
-        logger.info(f"[PHASE-1-START] session={session.id} | generating 4 diverse meal names")
+        logger.info(
+            f"[PHASE-1-START] session={session.id} | "
+            f"generating 4 diverse meal names | "
+            f"excluding {len(exclude_meal_names)} previous meals"
+        )
 
-        names_prompt = build_meal_names_prompt(session)
+        names_prompt = build_meal_names_prompt(session, exclude_meal_names)
         names_system = "You are a creative chef. Generate 4 VERY DIFFERENT meal names with diverse flavors and cooking styles."
         
         phase1_elapsed = 0.0  # Initialize to prevent UnboundLocalError
@@ -516,10 +479,3 @@ class SuggestionOrchestrationService:
         )
 
         return suggestions
-
-    def _normalize_confidence(self, score: float) -> float:
-        """Normalize confidence score to 0-1 range (AI may return 1-5 scale)."""
-        if score > 1.0:
-            # Assume 1-5 scale, convert to 0-1
-            return min(1.0, score / 5.0)
-        return max(0.0, min(1.0, score))

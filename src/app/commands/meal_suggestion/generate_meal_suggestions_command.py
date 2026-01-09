@@ -13,7 +13,7 @@ class GenerateMealSuggestionsCommand(Command):
     Command to generate exactly 3 meal suggestions based on user inputs.
     
     Supports optional ingredients, time constraints, dietary preferences,
-    and calorie targets. Also supports regeneration by excluding previous suggestions.
+    and calorie targets. Also supports regeneration via session_id.
     """
     
     # User identification
@@ -27,7 +27,7 @@ class GenerateMealSuggestionsCommand(Command):
     # Optional inputs
     ingredients: List[str]  # Available ingredients
     time_available_minutes: Optional[int]  # Time constraint
-    exclude_ids: List[str]  # Meal IDs to exclude (for regeneration)
+    session_id: Optional[str] = None  # Session ID for regeneration (auto-excludes previous meals)
     
     def __post_init__(self):
         """Validate command data."""

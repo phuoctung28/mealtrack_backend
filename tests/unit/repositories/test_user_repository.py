@@ -4,11 +4,10 @@ Unit tests for UserRepository.
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import IntegrityError
 
 from src.infra.database.config import Base
-from src.infra.database.models.user.user import User
 from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.user.user import User
 from src.infra.repositories.user_repository import UserRepository
 
 

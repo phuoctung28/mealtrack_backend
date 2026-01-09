@@ -1,7 +1,6 @@
 """
 Unit tests for SubscriptionRepository.
 """
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import Mock
 

@@ -1,13 +1,21 @@
-"""Meal plan service components."""
-from src.domain.services.meal_plan.meal_plan_validator import MealPlanValidator, ValidationResult
-from src.domain.services.meal_plan.meal_plan_generator import MealPlanGenerator
-from src.domain.services.meal_plan.meal_plan_formatter import MealPlanFormatter
-from src.domain.services.meal_plan.request_builder import RequestBuilder
+"""Meal plan domain services."""
+from .meal_plan_formatter import MealPlanFormatter
+# Legacy imports (backward compatibility)
+from .meal_plan_generator import MealPlanGenerator
+from .meal_plan_validator import MealPlanValidator, ValidationResult
+from .plan_generator import PlanGenerator
+# New consolidated services
+from .plan_orchestrator import PlanOrchestrator
+from .request_builder import RequestBuilder
 
 __all__ = [
+    # New consolidated services
+    "PlanOrchestrator",
+    "PlanGenerator",
+    "MealPlanFormatter",
     "MealPlanValidator",
     "ValidationResult",
-    "MealPlanGenerator",
-    "MealPlanFormatter",
     "RequestBuilder",
+    # Legacy (deprecated)
+    "MealPlanGenerator",
 ]

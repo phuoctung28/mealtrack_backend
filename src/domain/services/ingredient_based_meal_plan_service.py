@@ -6,8 +6,8 @@ import logging
 from typing import Dict, Any
 
 from src.domain.model.meal_planning import DailyMealPlan
+from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.meal_plan_orchestration_service import MealPlanOrchestrationService
-from src.infra.adapters.meal_generation_service import MealGenerationService
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +15,7 @@ logger = logging.getLogger(__name__)
 class IngredientBasedMealPlanService:
     """Service for generating daily ingredient-based meal plans."""
     
-    def __init__(self):
-        meal_generation_service = MealGenerationService()
+    def __init__(self, meal_generation_service: MealGenerationServicePort):
         self.orchestration_service = MealPlanOrchestrationService(meal_generation_service)
     
     def generate_ingredient_based_meal_plan(self, request_data: Dict[str, Any]) -> DailyMealPlan:

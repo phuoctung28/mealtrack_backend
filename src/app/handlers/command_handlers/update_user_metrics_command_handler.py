@@ -9,10 +9,10 @@ from sqlalchemy.orm import Session
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException, ConflictException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
-from src.infra.database.models.enums import FitnessGoalEnum, ActivityLevelEnum
 from src.app.events.base import EventHandler, handles
-from src.infra.cache.cache_keys import CacheKeys
+from src.domain.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
+from src.infra.database.models.enums import FitnessGoalEnum, ActivityLevelEnum
 from src.infra.database.models.user.profile import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -109,8 +109,15 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
             raise
 
     async def _invalidate_user_profile(self, user_id: str):
+        """Invalidate user profile and TDEE cache."""
         if not self.cache_service:
             return
-        cache_key, _ = CacheKeys.user_profile(user_id)
-        await self.cache_service.invalidate(cache_key)
+        
+        # Invalidate profile cache
+        profile_key, _ = CacheKeys.user_profile(user_id)
+        await self.cache_service.invalidate(profile_key)
+        
+        # Invalidate TDEE cache (new)
+        tdee_key, _ = CacheKeys.user_tdee(user_id)
+        await self.cache_service.invalidate(tdee_key)
 

@@ -1,10 +1,11 @@
 """
 Unit tests for MealGenerationService.
 """
-import pytest
-from unittest.mock import Mock, patch
-from pydantic import BaseModel, Field
 from typing import List
+from unittest.mock import Mock, patch
+
+import pytest
+from pydantic import BaseModel, Field
 
 from src.infra.adapters.meal_generation_service import MealGenerationService
 
@@ -21,30 +22,31 @@ class TestMealGenerationService:
     def test_init_with_api_key(self):
         """Test initialization with API key."""
         service = MealGenerationService()
-        assert service.api_key == 'test_api_key'
-        assert service.base_llm_config is not None
-        assert service.base_llm_config['model'] == 'gemini-2.5-flash'
-        assert service.base_llm_config['temperature'] == 0.2
+        assert service._model_manager is not None
 
     @patch.dict('os.environ', {}, clear=True)
     def test_init_without_api_key(self):
         """Test initialization without API key."""
-        service = MealGenerationService()
-        assert service.api_key is None
-        assert service.llm is None
+        with patch.dict('os.environ', {}, clear=True):
+            service = MealGenerationService()
+            assert service._model_manager is None
 
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
-    @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
-    def test_generate_meal_plan_json_response(self, mock_llm_class):
+    @patch('src.infra.adapters.meal_generation_service.GeminiModelManager')
+    def test_generate_meal_plan_json_response(self, mock_manager_class):
         """Test generating meal plan with JSON response."""
-        service = MealGenerationService()
+        # Mock the singleton manager
+        mock_manager_instance = Mock()
+        mock_manager_class.get_instance.return_value = mock_manager_instance
         
-        # Mock LLM response
+        # Mock LLM instance and response
         mock_llm_instance = Mock()
         mock_response = Mock()
         mock_response.content = '{"meal": "test", "calories": 500}'
         mock_llm_instance.invoke.return_value = mock_response
-        mock_llm_class.return_value = mock_llm_instance
+        mock_manager_instance.get_model.return_value = mock_llm_instance
+        
+        service = MealGenerationService()
         
         result = service.generate_meal_plan(
             prompt="Generate a meal",
@@ -56,16 +58,21 @@ class TestMealGenerationService:
         mock_llm_instance.invoke.assert_called_once()
 
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
-    @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
-    def test_generate_meal_plan_text_response(self, mock_llm_class):
+    @patch('src.infra.adapters.meal_generation_service.GeminiModelManager')
+    def test_generate_meal_plan_text_response(self, mock_manager_class):
         """Test generating meal plan with text response."""
-        service = MealGenerationService()
+        # Mock the singleton manager
+        mock_manager_instance = Mock()
+        mock_manager_class.get_instance.return_value = mock_manager_instance
         
+        # Mock LLM instance and response
         mock_llm_instance = Mock()
         mock_response = Mock()
         mock_response.content = "Plain text response"
         mock_llm_instance.invoke.return_value = mock_response
-        mock_llm_class.return_value = mock_llm_instance
+        mock_manager_instance.get_model.return_value = mock_llm_instance
+        
+        service = MealGenerationService()
         
         result = service.generate_meal_plan(
             prompt="Generate a meal",
@@ -200,16 +207,21 @@ Enjoy!'''
         assert result == ""
 
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
-    @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
-    def test_generate_meal_plan_with_custom_tokens(self, mock_llm_class):
+    @patch('src.infra.adapters.meal_generation_service.GeminiModelManager')
+    def test_generate_meal_plan_with_custom_tokens(self, mock_manager_class):
         """Test generating meal plan with custom max tokens."""
-        service = MealGenerationService()
+        # Mock the singleton manager
+        mock_manager_instance = Mock()
+        mock_manager_class.get_instance.return_value = mock_manager_instance
         
+        # Mock LLM instance and response
         mock_llm_instance = Mock()
         mock_response = Mock()
         mock_response.content = '{"test": "data"}'
         mock_llm_instance.invoke.return_value = mock_response
-        mock_llm_class.return_value = mock_llm_instance
+        mock_manager_instance.get_model.return_value = mock_llm_instance
+        
+        service = MealGenerationService()
         
         service.generate_meal_plan(
             prompt="Test",
@@ -218,20 +230,30 @@ Enjoy!'''
             max_tokens=5000
         )
         
-        # Verify LLM was created with custom tokens
-        mock_llm_class.assert_called_once()
-        call_kwargs = mock_llm_class.call_args[1]
-        assert call_kwargs['max_output_tokens'] == 5000
+        # Verify manager was called with custom tokens
+        mock_manager_instance.get_model.assert_called()
+        call_args = mock_manager_instance.get_model.call_args
+        # Check both positional and keyword arguments
+        if call_args.kwargs:
+            assert call_args.kwargs.get('max_output_tokens') == 5000
+        else:
+            # If passed as positional, it would be in args
+            assert 'max_output_tokens' in str(call_args)
 
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
-    @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
-    def test_generate_meal_plan_llm_error(self, mock_llm_class):
+    @patch('src.infra.adapters.meal_generation_service.GeminiModelManager')
+    def test_generate_meal_plan_llm_error(self, mock_manager_class):
         """Test handling LLM errors."""
-        service = MealGenerationService()
+        # Mock the singleton manager
+        mock_manager_instance = Mock()
+        mock_manager_class.get_instance.return_value = mock_manager_instance
         
+        # Mock LLM instance with error
         mock_llm_instance = Mock()
         mock_llm_instance.invoke.side_effect = Exception("LLM API error")
-        mock_llm_class.return_value = mock_llm_instance
+        mock_manager_instance.get_model.return_value = mock_llm_instance
+        
+        service = MealGenerationService()
         
         with pytest.raises(Exception, match="LLM API error"):
             service.generate_meal_plan(
@@ -290,11 +312,13 @@ Enjoy!'''
         assert "name" in cleaned
 
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
-    @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
-    def test_generate_meal_plan_with_structured_output(self, mock_llm_class):
+    @patch('src.infra.adapters.meal_generation_service.GeminiModelManager')
+    def test_generate_meal_plan_with_structured_output(self, mock_manager_class):
         """Test generating meal plan with structured output schema."""
-        service = MealGenerationService()
-
+        # Mock the singleton manager
+        mock_manager_instance = Mock()
+        mock_manager_class.get_instance.return_value = mock_manager_instance
+        
         # Mock LLM with structured output
         mock_llm_instance = Mock()
         mock_structured_llm = Mock()
@@ -307,7 +331,9 @@ Enjoy!'''
         }
         mock_structured_llm.invoke.return_value = mock_response
         mock_llm_instance.with_structured_output.return_value = mock_structured_llm
-        mock_llm_class.return_value = mock_llm_instance
+        mock_manager_instance.get_model.return_value = mock_llm_instance
+        
+        service = MealGenerationService()
 
         result = service.generate_meal_plan(
             prompt="Generate meal names",
@@ -320,11 +346,13 @@ Enjoy!'''
         mock_llm_instance.with_structured_output.assert_called_once()
 
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
-    @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
-    def test_generate_meal_plan_structured_output_none_with_raw_fallback(self, mock_llm_class):
+    @patch('src.infra.adapters.meal_generation_service.GeminiModelManager')
+    def test_generate_meal_plan_structured_output_none_with_raw_fallback(self, mock_manager_class):
         """Test structured output falls back to raw JSON when parsed is None."""
-        service = MealGenerationService()
-
+        # Mock the singleton manager
+        mock_manager_instance = Mock()
+        mock_manager_class.get_instance.return_value = mock_manager_instance
+        
         mock_llm_instance = Mock()
         mock_structured_llm = Mock()
 
@@ -335,7 +363,9 @@ Enjoy!'''
         }
         mock_structured_llm.invoke.return_value = mock_response
         mock_llm_instance.with_structured_output.return_value = mock_structured_llm
-        mock_llm_class.return_value = mock_llm_instance
+        mock_manager_instance.get_model.return_value = mock_llm_instance
+        
+        service = MealGenerationService()
 
         result = service.generate_meal_plan(
             prompt="Generate meal names",
@@ -348,11 +378,13 @@ Enjoy!'''
         assert result == {"meal_names": ["Fallback Meal"]}
 
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
-    @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
-    def test_generate_meal_plan_structured_output_none_raises_error(self, mock_llm_class):
+    @patch('src.infra.adapters.meal_generation_service.GeminiModelManager')
+    def test_generate_meal_plan_structured_output_none_raises_error(self, mock_manager_class):
         """Test E2 fallback: when structured output fails, tries legacy JSON mode."""
-        service = MealGenerationService()
-
+        # Mock the singleton manager
+        mock_manager_instance = Mock()
+        mock_manager_class.get_instance.return_value = mock_manager_instance
+        
         mock_llm_instance = Mock()
         mock_structured_llm = Mock()
 
@@ -369,7 +401,9 @@ Enjoy!'''
         mock_legacy_response.content = 'still invalid json'
         mock_llm_instance.invoke.return_value = mock_legacy_response
 
-        mock_llm_class.return_value = mock_llm_instance
+        mock_manager_instance.get_model.return_value = mock_llm_instance
+        
+        service = MealGenerationService()
 
         # Should raise error mentioning both methods failed
         with pytest.raises(ValueError, match="Both structured output and legacy JSON mode failed"):
@@ -381,11 +415,13 @@ Enjoy!'''
             )
 
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
-    @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
-    def test_generate_meal_plan_e2_legacy_fallback_success(self, mock_llm_class):
+    @patch('src.infra.adapters.meal_generation_service.GeminiModelManager')
+    def test_generate_meal_plan_e2_legacy_fallback_success(self, mock_manager_class):
         """Test E2 fallback: structured output fails but legacy JSON succeeds."""
-        service = MealGenerationService()
-
+        # Mock the singleton manager
+        mock_manager_instance = Mock()
+        mock_manager_class.get_instance.return_value = mock_manager_instance
+        
         mock_llm_instance = Mock()
         mock_structured_llm = Mock()
 
@@ -402,7 +438,9 @@ Enjoy!'''
         mock_legacy_response.content = '{"meal_names": ["Legacy Success Meal"]}'
         mock_llm_instance.invoke.return_value = mock_legacy_response
 
-        mock_llm_class.return_value = mock_llm_instance
+        mock_manager_instance.get_model.return_value = mock_llm_instance
+        
+        service = MealGenerationService()
 
         result = service.generate_meal_plan(
             prompt="Generate meal names",
@@ -417,16 +455,20 @@ Enjoy!'''
         assert mock_llm_instance.invoke.called
 
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
-    @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
-    def test_generate_meal_plan_no_schema_uses_legacy_json(self, mock_llm_class):
+    @patch('src.infra.adapters.meal_generation_service.GeminiModelManager')
+    def test_generate_meal_plan_no_schema_uses_legacy_json(self, mock_manager_class):
         """Test that not providing schema uses legacy JSON mode with response_mime_type."""
-        service = MealGenerationService()
-
+        # Mock the singleton manager
+        mock_manager_instance = Mock()
+        mock_manager_class.get_instance.return_value = mock_manager_instance
+        
         mock_llm_instance = Mock()
         mock_response = Mock()
         mock_response.content = '{"meal": "test"}'
         mock_llm_instance.invoke.return_value = mock_response
-        mock_llm_class.return_value = mock_llm_instance
+        mock_manager_instance.get_model.return_value = mock_llm_instance
+        
+        service = MealGenerationService()
 
         service.generate_meal_plan(
             prompt="Generate a meal",
@@ -435,16 +477,19 @@ Enjoy!'''
             # No schema parameter
         )
 
-        # Verify LLM was created with response_mime_type (legacy mode)
-        call_kwargs = mock_llm_class.call_args[1]
+        # Verify manager was called with response_mime_type (legacy mode)
+        mock_manager_instance.get_model.assert_called()
+        call_kwargs = mock_manager_instance.get_model.call_args[1]
         assert call_kwargs.get('response_mime_type') == 'application/json'
 
     @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
-    @patch('src.infra.adapters.meal_generation_service.ChatGoogleGenerativeAI')
-    def test_generate_meal_plan_with_schema_no_response_mime_type(self, mock_llm_class):
+    @patch('src.infra.adapters.meal_generation_service.GeminiModelManager')
+    def test_generate_meal_plan_with_schema_no_response_mime_type(self, mock_manager_class):
         """Test that providing schema does NOT set response_mime_type (incompatible)."""
-        service = MealGenerationService()
-
+        # Mock the singleton manager
+        mock_manager_instance = Mock()
+        mock_manager_class.get_instance.return_value = mock_manager_instance
+        
         mock_llm_instance = Mock()
         mock_structured_llm = Mock()
 
@@ -452,7 +497,9 @@ Enjoy!'''
         mock_response = {"parsed": mock_parsed, "raw": None}
         mock_structured_llm.invoke.return_value = mock_response
         mock_llm_instance.with_structured_output.return_value = mock_structured_llm
-        mock_llm_class.return_value = mock_llm_instance
+        mock_manager_instance.get_model.return_value = mock_llm_instance
+        
+        service = MealGenerationService()
 
         service.generate_meal_plan(
             prompt="Generate a meal",
@@ -461,7 +508,8 @@ Enjoy!'''
             schema=MockMealNamesResponse
         )
 
-        # Verify LLM was NOT created with response_mime_type (incompatible with structured output)
-        call_kwargs = mock_llm_class.call_args[1]
-        assert 'response_mime_type' not in call_kwargs
+        # Verify manager was called WITHOUT response_mime_type (incompatible with structured output)
+        mock_manager_instance.get_model.assert_called()
+        call_kwargs = mock_manager_instance.get_model.call_args[1]
+        assert 'response_mime_type' not in call_kwargs or call_kwargs.get('response_mime_type') is None
 

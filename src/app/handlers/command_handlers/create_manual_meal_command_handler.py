@@ -8,11 +8,11 @@ from uuid import uuid4
 
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.events.base import EventHandler
+from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal import MealImage
 from src.domain.model.nutrition import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem as DomainFoodItem
-from src.infra.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
 
 

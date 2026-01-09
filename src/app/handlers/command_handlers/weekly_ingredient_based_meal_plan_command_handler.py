@@ -10,12 +10,13 @@ from sqlalchemy.orm import Session
 
 from src.app.commands.meal_plan import GenerateWeeklyIngredientBasedMealPlanCommand
 from src.app.events.base import EventHandler, handles
+from src.domain.model.meal_planning import PlanDuration
 from src.domain.services.meal_plan_persistence_service import MealPlanPersistenceService
 from src.domain.services.user_profile_service import UserProfileService
-from src.domain.model.meal_planning import PlanDuration
 from src.domain.services.weekly_ingredient_based_meal_plan_service import (
     WeeklyIngredientBasedMealPlanService,
 )
+from src.infra.adapters.meal_generation_service import MealGenerationService
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,8 @@ class GenerateWeeklyIngredientBasedMealPlanCommandHandler(
 
     def __init__(self, db: Optional[Session] = None) -> None:
         self.db: Optional[Session] = db
-        self.meal_plan_service = WeeklyIngredientBasedMealPlanService()
+        meal_generation_service = MealGenerationService()
+        self.meal_plan_service = WeeklyIngredientBasedMealPlanService(meal_generation_service)
         self.user_profile_service = UserProfileService(db) if db else None
         self.persistence_service = MealPlanPersistenceService(db) if db else None
 

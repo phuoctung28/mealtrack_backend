@@ -129,26 +129,6 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
         await self._cache.set(key, data, ttl=ttl)
         logger.debug(f"Updated suggestion {suggestion.id}")
 
-    async def get_session_suggestions(
-        self, session_id: str
-    ) -> List[MealSuggestion]:
-        """Get all suggestions for a session."""
-        pattern = f"suggestion:{session_id}:*"
-        if not self._cache.client:
-            return []
-
-        keys = await self._cache.client.keys(pattern)
-        if not keys:
-            return []
-
-        suggestions = []
-        for key in keys:
-            data = await self._cache.get(key)
-            if data:
-                suggestions.append(self._deserialize_suggestion(data))
-
-        return suggestions
-
     def _serialize_session(self, session: SuggestionSession) -> str:
         """Serialize session to JSON string."""
         return json.dumps({
@@ -160,6 +140,7 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
             "ingredients": session.ingredients,
             "cooking_time_minutes": session.cooking_time_minutes,
             "shown_suggestion_ids": session.shown_suggestion_ids,
+            "shown_meal_names": getattr(session, 'shown_meal_names', []),
             "dietary_preferences": getattr(session, 'dietary_preferences', []),
             "allergies": getattr(session, 'allergies', []),
             "created_at": session.created_at.isoformat(),
@@ -179,6 +160,7 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
             ingredients=obj["ingredients"],
             cooking_time_minutes=obj["cooking_time_minutes"],
             shown_suggestion_ids=obj.get("shown_suggestion_ids", []),
+            shown_meal_names=obj.get("shown_meal_names", []),
             dietary_preferences=obj.get("dietary_preferences", []),
             allergies=obj.get("allergies", []),
             created_at=datetime.fromisoformat(obj["created_at"]),

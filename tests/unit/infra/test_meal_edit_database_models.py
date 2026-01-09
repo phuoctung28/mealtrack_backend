@@ -1,9 +1,10 @@
 """
 Unit tests for meal edit database model functionality.
 """
-import pytest
 import uuid
 from datetime import datetime
+
+import pytest
 
 from src.domain.model import Meal as DomainMeal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 from src.infra.database.models.meal.meal import Meal as MealModel

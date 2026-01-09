@@ -4,15 +4,14 @@ Follows clean architecture pattern with single LLM handling different prompts.
 """
 import json
 import logging
-import os
 import re
 import time
 from typing import Dict, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
 logger = logging.getLogger(__name__)
 
@@ -29,20 +28,12 @@ class MealGenerationService(MealGenerationServicePort):
     """
     
     def __init__(self):
-        """Initialize the single Gemini LLM client."""
-        self.api_key = os.getenv("GOOGLE_API_KEY")
-        if not self.api_key:
+        """Initialize the service with singleton model manager."""
+        try:
+            self._model_manager = GeminiModelManager.get_instance()
+        except ValueError:
             logger.warning("GOOGLE_API_KEY not found. AI meal generation will not be available.")
-            self.llm = None
-        else:
-            # Base LLM configuration - will be customized per request
-            self.base_llm_config = {
-                "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-                "temperature": 0.2,  # Lower temperature for consistency
-                "google_api_key": self.api_key,
-                # NOTE: response_mime_type is set conditionally per request
-                # (incompatible with structured output / function calling)
-            }
+            self._model_manager = None
     
     def generate_meal_plan(
         self, 
@@ -66,7 +57,7 @@ class MealGenerationService(MealGenerationServicePort):
         Returns:
             Dict or Pydantic model instance (if schema provided)
         """
-        if not self.api_key:
+        if not self._model_manager:
             raise RuntimeError("GOOGLE_API_KEY missing — cannot call Gemini.")
 
         start_time = time.time()
@@ -77,7 +68,7 @@ class MealGenerationService(MealGenerationServicePort):
                 max_tokens = self._determine_optimal_tokens(prompt, system_message)
 
             # Log request config
-            model_name = self.base_llm_config.get("model", "unknown")
+            model_name = self._model_manager.model_name
             logger.info(
                 f"[AI-REQUEST] model={model_name} | "
                 f"max_tokens={max_tokens} | "
@@ -86,18 +77,17 @@ class MealGenerationService(MealGenerationServicePort):
                 f"response_type={response_type}"
             )
 
-            # Create LLM instance with appropriate token limit
-            # Add response_mime_type only if NOT using structured output (incompatible)
-            llm_config = {
-                **self.base_llm_config,
-                "max_output_tokens": max_tokens,
-            }
-            
+            # Get LLM instance from singleton manager
             # Only set response_mime_type for legacy JSON mode (not structured output)
+            response_mime_type = None
             if not schema and response_type == "json":
-                llm_config["response_mime_type"] = "application/json"
+                response_mime_type = "application/json"
             
-            llm = ChatGoogleGenerativeAI(**llm_config)
+            # Use standard temperature=0.7 to share model instance across all services
+            llm = self._model_manager.get_model(
+                max_output_tokens=max_tokens,
+                response_mime_type=response_mime_type
+            )
 
             # Use structured output if schema provided (guarantees valid format)
             if schema:
@@ -154,13 +144,11 @@ class MealGenerationService(MealGenerationServicePort):
                     )
 
                     try:
-                        # Create new LLM with legacy JSON mode (response_mime_type)
-                        legacy_llm_config = {
-                            **self.base_llm_config,
-                            "max_output_tokens": max_tokens,
-                            "response_mime_type": "application/json"
-                        }
-                        legacy_llm = ChatGoogleGenerativeAI(**legacy_llm_config)
+                        # Get legacy LLM with JSON mode from singleton manager
+                        legacy_llm = self._model_manager.get_model(
+                            max_output_tokens=max_tokens,
+                            response_mime_type="application/json"
+                        )
 
                         # Retry with same prompt but legacy mode
                         legacy_response = legacy_llm.invoke(messages)

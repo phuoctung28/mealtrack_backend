@@ -7,6 +7,7 @@ import os
 from typing import List, Dict, Any, Optional, AsyncIterator
 
 from src.domain.ports.ai_chat_service_port import AIChatServicePort
+from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 from src.infra.services.ai.prompts import SystemPrompts
 
 logger = logging.getLogger(__name__)
@@ -21,41 +22,35 @@ class GeminiChatService(AIChatServicePort):
         model: str = None,
         system_prompt: Optional[str] = None
     ):
-        self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
         self.model_name = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.system_prompt = system_prompt or SystemPrompts.get_meal_planning_prompt()
-        self.client = None
-
-        if self.api_key:
-            try:
-                from langchain_google_genai import ChatGoogleGenerativeAI
-                self.client = ChatGoogleGenerativeAI(
-                    model=self.model_name,
-                    temperature=0.7,
-                    google_api_key=self.api_key,
-                    convert_system_message_to_human=True
-                )
-                logger.info(f"Gemini chat service initialized with model {self.model_name}")
-            except ImportError:
-                logger.warning("langchain-google-genai package not installed. Install with: pip install langchain-google-genai")
-            except Exception as e:
-                logger.error(f"Failed to initialize Gemini client: {e}")
-                logger.info(f"Tip: Using same model as food scanning: {self.model_name}")
-        else:
-            logger.warning("GOOGLE_API_KEY not set. AI responses will not be available.")
+        
+        try:
+            self._model_manager = GeminiModelManager.get_instance()
+            # Use standard temperature=0.7 to share model instance across all services
+            self.client = self._model_manager.get_model()
+            logger.info(f"Gemini chat service initialized with model {self.model_name}")
+        except ValueError as e:
+            logger.warning(f"GOOGLE_API_KEY not set. AI responses will not be available: {e}")
+            self._model_manager = None
+            self.client = None
+        except ImportError:
+            logger.warning("langchain-google-genai package not installed. Install with: pip install langchain-google-genai")
+            self._model_manager = None
+            self.client = None
+        except Exception as e:
+            logger.error(f"Failed to initialize Gemini client: {e}")
+            self._model_manager = None
+            self.client = None
 
     def _get_client_for_temperature(self, temperature: float):
         """Get a client configured for the specified temperature."""
-        if temperature == 0.7:
-            return self.client
-
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(
-            model=self.model_name,
-            temperature=temperature,
-            google_api_key=self.api_key,
-            convert_system_message_to_human=True
-        )
+        if not self._model_manager:
+            raise RuntimeError("Model manager not initialized. Check API key.")
+        
+        # Use standard temperature=0.7 to share model instance across all services
+        # (temperature parameter ignored for consistency)
+        return self._model_manager.get_model()
 
     def _format_messages(
         self,

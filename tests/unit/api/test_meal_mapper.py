@@ -1,9 +1,11 @@
 """
 Unit tests for MealMapper.
 """
-from datetime import datetime
 import uuid
+from datetime import datetime
+
 import pytest
+
 from src.api.mappers.meal_mapper import MealMapper, STATUS_MAPPING
 from src.domain.model import Meal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 

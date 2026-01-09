@@ -1,8 +1,8 @@
 """
 Unit tests for user command handlers.
 """
-from datetime import datetime
 import uuid
+from datetime import datetime
 
 import pytest
 

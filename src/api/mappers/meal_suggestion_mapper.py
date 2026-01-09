@@ -2,15 +2,14 @@
 
 from typing import List
 
-from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.api.schemas.response.meal_suggestion_responses import (
     MealSuggestionResponse,
     MacroEstimateResponse,
     IngredientResponse,
     RecipeStepResponse,
     SuggestionsListResponse,
-    AcceptedMealResponse,
 )
+from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 
 
 def to_meal_suggestion_response(suggestion: MealSuggestion) -> MealSuggestionResponse:
@@ -62,16 +61,3 @@ def to_suggestions_list_response(
     )
 
 
-def to_accepted_meal_response(result: dict) -> AcceptedMealResponse:
-    """Convert acceptance result to API response."""
-    return AcceptedMealResponse(
-        meal_id=result["meal_id"],
-        meal_name=result["meal_name"],
-        macros=MacroEstimateResponse(
-            calories=result["adjusted_macros"].calories,
-            protein=result["adjusted_macros"].protein,
-            carbs=result["adjusted_macros"].carbs,
-            fat=result["adjusted_macros"].fat,
-        ),
-        saved_at=result["saved_at"],
-    )

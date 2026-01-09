@@ -10,8 +10,8 @@ This test verifies that:
 import pytest
 from sqlalchemy import inspect
 
-from src.infra.database.models.user.user import User
 from src.infra.database.models.notification.notification_preferences import NotificationPreferences
+from src.infra.database.models.user.user import User
 
 
 @pytest.mark.integration
@@ -88,7 +88,6 @@ class TestMigration010:
     
     def test_notification_preferences_last_water_reminder_at_nullable(self, test_session):
         """Test that last_water_reminder_at can be None."""
-        from datetime import datetime
         import uuid
         
         from src.domain.model.notification import NotificationPreferences as DomainNotificationPreferences

@@ -1,9 +1,10 @@
 """
 Unit tests for premium access middleware.
 """
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi import HTTPException, Request
 
 from src.api.middleware.premium_check import require_premium, get_premium_status

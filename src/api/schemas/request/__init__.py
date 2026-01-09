@@ -12,10 +12,9 @@ from .daily_meal_requests import (
 from .ingredient_based_meal_plan_requests import (
     IngredientBasedMealPlanRequest
 )
-# Meal suggestion requests
-from .meal_suggestion_requests import (
-    MealSuggestionRequest,
-    SaveMealSuggestionRequest
+# Ingredient recognition requests
+from .ingredient_recognition_requests import (
+    IngredientRecognitionRequest
 )
 # Meal plan requests
 from .meal_plan_requests import (
@@ -32,6 +31,8 @@ from .meal_requests import (
     AnalyzeMealImageRequest,
     MacrosRequest
 )
+# Meal suggestion requests
+from .meal_suggestion_requests import MealSuggestionRequest
 # Onboarding requests
 from .onboarding_requests import (
     OnboardingCompleteRequest
@@ -53,10 +54,6 @@ from .user_requests import (
 )
 # Common enums
 from ..common.auth_enums import AuthProviderEnum
-# Ingredient recognition requests
-from .ingredient_recognition_requests import (
-    IngredientRecognitionRequest
-)
 
 __all__ = [
     # Daily meal
@@ -90,7 +87,6 @@ __all__ = [
     
     # Meal suggestion
     'MealSuggestionRequest',
-    'SaveMealSuggestionRequest',
     
     # Onboarding
     'OnboardingCompleteRequest',

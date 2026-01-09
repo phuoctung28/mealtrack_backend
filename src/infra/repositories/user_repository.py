@@ -6,7 +6,7 @@ from typing import Optional, List
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from src.infra.cache.cache_keys import CacheKeys
+from src.domain.cache.cache_keys import CacheKeys
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
 

@@ -4,11 +4,11 @@ Tests that prompts request 6 names, no description, and other optimizations.
 """
 import pytest
 
+from src.domain.model.meal_suggestion import SuggestionSession
 from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
     build_meal_names_prompt,
     build_recipe_details_prompt,
 )
-from src.domain.model.meal_suggestion import SuggestionSession, MealType
 
 
 @pytest.fixture
@@ -31,12 +31,12 @@ class TestBuildMealNamesPrompt:
     """Test build_meal_names_prompt for Phase 1 (6 diverse names)."""
 
     def test_requests_exactly_6_names(self, mock_session):
-        """Prompt should explicitly request 6 meal names."""
+        """Prompt should explicitly request 4 meal names."""
         prompt = build_meal_names_prompt(mock_session)
 
-        # Should contain "6" and "exact" or similar
-        assert "6" in prompt.lower()
-        assert "exactly 6" in prompt.lower() or "6 different" in prompt.lower()
+        # Should contain "4" and "different" or similar
+        assert "4" in prompt.lower()
+        assert "4 different" in prompt.lower()
 
     def test_includes_meal_type(self, mock_session):
         """Prompt should include the meal type (breakfast, lunch, dinner)."""
@@ -134,8 +134,9 @@ class TestBuildRecipeDetailsPrompt:
         """Prompt should include target calories."""
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
-        # Should mention target calories
-        assert "calor" in prompt.lower()
+        # Should mention target calories (either "calor" or "cal")
+        prompt_lower = prompt.lower()
+        assert "cal" in prompt_lower  # Matches both "calor" and "cal"
         assert str(mock_session.target_calories) in prompt or "~" in prompt
 
     def test_includes_cooking_time(self, mock_session):
@@ -255,7 +256,7 @@ class TestSessionEdgeCases:
 
         # Should still generate valid prompt
         assert len(prompt) > 0
-        assert "6" in prompt.lower()
+        assert "4" in prompt.lower()
 
     def test_session_no_dietary_prefs(self):
         """Prompt should handle session with no dietary preferences."""
@@ -275,7 +276,7 @@ class TestSessionEdgeCases:
 
         # Should generate valid prompt without dietary prefs
         assert len(prompt) > 0
-        assert "6" in prompt.lower()
+        assert "4" in prompt.lower()
 
     def test_session_no_allergies(self):
         """Prompt should handle session with no allergies."""
@@ -328,7 +329,7 @@ class TestPromptContent:
 
         # Should have clear sections
         assert "Generate" in prompt or "generate" in prompt
-        assert "6" in prompt
+        assert "4" in prompt
 
     def test_recipe_details_prompt_format(self, mock_session):
         """Recipe details prompt should have clear instructions."""

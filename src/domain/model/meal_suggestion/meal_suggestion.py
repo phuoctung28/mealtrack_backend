@@ -1,8 +1,8 @@
 """Meal suggestion domain entities."""
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
 from enum import Enum
+from typing import List, Optional
 
 
 class MealType(str, Enum):

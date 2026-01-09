@@ -26,12 +26,12 @@ from src.app.commands.meal import (
     FoodItemChange,
     CustomNutritionData
 )
-from src.app.commands.meal.delete_meal_command import DeleteMealCommand
-from src.app.commands.meal.upload_meal_image_immediately_command import UploadMealImageImmediatelyCommand
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
     ManualMealItem,
 )
+from src.app.commands.meal.delete_meal_command import DeleteMealCommand
+from src.app.commands.meal.upload_meal_image_immediately_command import UploadMealImageImmediatelyCommand
 from src.app.queries.meal import (
     GetMealByIdQuery,
     GetDailyMacrosQuery

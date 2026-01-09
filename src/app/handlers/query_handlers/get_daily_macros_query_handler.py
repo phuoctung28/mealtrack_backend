@@ -8,9 +8,9 @@ from typing import Dict, Any, Optional
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetDailyMacrosQuery
+from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.infra.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
 
 logger = logging.getLogger(__name__)

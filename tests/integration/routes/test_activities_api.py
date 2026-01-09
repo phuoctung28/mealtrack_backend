@@ -1,14 +1,14 @@
 """
 Integration tests for activities API endpoints.
 """
-import pytest
-from datetime import datetime
-from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
 
-from src.api.main import app
-from src.api.dependencies.auth import get_current_user_id
+import pytest
+from fastapi.testclient import TestClient
+
 from src.api.base_dependencies import get_db
+from src.api.dependencies.auth import get_current_user_id
+from src.api.main import app
 
 
 @pytest.fixture
