@@ -1,8 +1,8 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Version:** 0.4.5
-**Last Updated:** January 7, 2026
-**Status:** Phase 05 Pinecone Inference Migration Complete. Phase 06 Session-Based Meal Suggestions Active.
+**Version:** 0.4.6
+**Last Updated:** January 9, 2026
+**Status:** Phase 02 Language Prompt Integration Complete. Phase 06 Session-Based Meal Suggestions Active.
 
 ---
 
@@ -32,11 +32,12 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 - Estimates portion sizes and macro-nutritional content.
 - Returns results in < 3 seconds (READY state machine).
 
-### 2. Session-Based Meal Suggestions (Phase 06, Phase 01 Multilingual)
+### 2. Session-Based Meal Suggestions (Phase 06)
 - Generates 3 personalized suggestions per session.
 - Tracks session state in Redis with a 4-hour TTL.
 - Supports portion multipliers (1-4x) and rejection feedback.
-- Multilingual support: 7 languages (en, vi, es, fr, de, ja, zh) with fallback to English for invalid codes.
+- **Phase 01 Multilingual**: 7 languages (en, vi, es, fr, de, ja, zh) with fallback to English.
+- **Phase 02 Prompt Integration**: Language-aware prompt generation with injected instructions (LANGUAGE_NAMES mapping, helper functions, system message customization).
 
 ### 3. Intelligent Meal Planning
 - AI-generated 7-day meal plans.
@@ -71,6 +72,7 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.4.6 | Jan 9, 2026 | Phase 02: Language prompt integration (LANGUAGE_NAMES, language instructions, updated prompts). |
 | 0.4.6 | Jan 9, 2026 | Phase 01: Meal suggestions multilingual support (7 languages, ISO 639-1 codes). |
 | 0.4.5 | Jan 7, 2026 | Phase 05 Pinecone Migration (1024-dim). Documentation split for modularity. |
 | 0.4.4 | Jan 4, 2026 | Phase 03 Cleanup: Unified fitness goal enums to 3 canonical values. |

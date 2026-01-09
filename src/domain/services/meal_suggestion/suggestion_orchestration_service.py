@@ -3,7 +3,6 @@ Orchestration service for Phase 06 meal suggestions with full recipe support.
 Handles session tracking, AI generation with timeout, and portion multipliers.
 """
 
-
 import asyncio
 import logging
 import time
@@ -27,6 +26,9 @@ from src.domain.ports.meal_suggestion_repository_port import (
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
+
+from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
+from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +165,6 @@ class SuggestionOrchestrationService:
                 "moderate": ActivityLevel.MODERATE,
                 "active": ActivityLevel.ACTIVE,
                 "extra": ActivityLevel.EXTRA,
-                "extra": ActivityLevel.EXTRA,
             }
 
             goal_map = {
@@ -259,6 +260,7 @@ class SuggestionOrchestrationService:
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
             build_meal_names_prompt,
             build_recipe_details_prompt,
+            get_language_name,
         )
         from src.domain.schemas.meal_generation_schemas import (
             MealNamesResponse,
@@ -266,14 +268,31 @@ class SuggestionOrchestrationService:
         )
 
         logger.info(
+            
             f"[PHASE-1-START] session={session.id} | "
             f"generating 4 diverse meal names | "
             f"excluding {len(exclude_meal_names)} previous meals"
+        
         )
 
+        # Get language context
+        language = getattr(session, "language", "en")
+        lang_name = get_language_name(language)
+
+        # Build language-aware system messages
+        if language != "en":
+            names_system = (
+                f"You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
+                f"diverse flavors and cooking styles. Generate all names in {lang_name}."
+            )
+        else:
+            names_system = (
+                "You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
+                "diverse flavors and cooking styles."
+            )
+
         names_prompt = build_meal_names_prompt(session, exclude_meal_names)
-        names_system = "You are a creative chef. Generate 4 VERY DIFFERENT meal names with diverse flavors and cooking styles."
-        
+
         phase1_elapsed = 0.0  # Initialize to prevent UnboundLocalError
         try:
             names_raw = await asyncio.wait_for(
@@ -287,7 +306,7 @@ class SuggestionOrchestrationService:
                 ),
                 timeout=10,  # Quick timeout for name generation
             )
-            
+
             meal_names = names_raw.get("meal_names", [])
 
             # Deduplicate meal names while preserving order
@@ -306,15 +325,17 @@ class SuggestionOrchestrationService:
                 )
                 # Pad with generic names if needed
                 while len(meal_names) < 4:
-                    meal_names.append(f"Healthy {session.meal_type.title()} #{len(meal_names) + 1}")
-            
+                    meal_names.append(
+                        f"Healthy {session.meal_type.title()} #{len(meal_names) + 1}"
+                    )
+
             phase1_elapsed = time.time() - start_time
             logger.info(
                 f"[PHASE-1-COMPLETE] session={session.id} | "
                 f"elapsed={phase1_elapsed:.2f}s | "
                 f"names={meal_names}"
             )
-            
+
         except Exception as e:
             phase1_elapsed = time.time() - start_time
             logger.error(
@@ -324,22 +345,33 @@ class SuggestionOrchestrationService:
             )
             # Fallback to generic names
             meal_names = [
-                f"Healthy {session.meal_type.title()} #{i+1}"
-                for i in range(4)
+                f"Healthy {session.meal_type.title()} #{i+1}" for i in range(4)
             ]
-        
-        # STEP 2: Generate full recipes for each name in parallel
-        logger.info(f"[PHASE-2-START] session={session.id} | generating recipes for {meal_names}")
-        
-        recipe_prompts = [
-            build_recipe_details_prompt(meal_name, session)
-            for meal_name in meal_names
-        ]
-        
-        # Generate recipes in parallel
-        recipe_system = "You are a professional chef. Generate complete recipe details as valid JSON. CRITICAL: MUST finish entire JSON - include all fields."
 
-        async def generate_recipe(prompt: str, meal_name: str, index: int) -> Optional[MealSuggestion]:
+        # STEP 2: Generate full recipes for each name in parallel
+        logger.info(
+            f"[PHASE-2-START] session={session.id} | generating recipes for {meal_names}"
+        )
+
+        recipe_prompts = [
+            build_recipe_details_prompt(meal_name, session) for meal_name in meal_names
+        ]
+
+        # Generate recipes in parallel with language-aware system message
+        if language != "en":
+            recipe_system = (
+                f"You are a professional chef. Generate complete recipe details as "
+                f"valid JSON in {lang_name}. CRITICAL: MUST finish entire JSON - include all fields."
+            )
+        else:
+            recipe_system = (
+                "You are a professional chef. Generate complete recipe details as "
+                "valid JSON. CRITICAL: MUST finish entire JSON - include all fields."
+            )
+
+        async def generate_recipe(
+            prompt: str, meal_name: str, index: int
+        ) -> Optional[MealSuggestion]:
             """Generate recipe details for a given meal name."""
             try:
                 raw = await asyncio.wait_for(
@@ -356,13 +388,15 @@ class SuggestionOrchestrationService:
 
                 # Parse recipe response (guaranteed valid by Pydantic schema)
                 recipe_data = raw
-                
+
                 # Extract validated fields (schema ensures these exist and are valid)
                 # NOTE: description field removed in Phase 01 schema optimization
                 ingredients = recipe_data.get("ingredients", [])
                 recipe_steps = recipe_data.get("recipe_steps", [])
-                prep_time = recipe_data.get("prep_time_minutes", session.cooking_time_minutes)
-                
+                prep_time = recipe_data.get(
+                    "prep_time_minutes", session.cooking_time_minutes
+                )
+
                 # Schema guarantees 4-6 ingredients and 3-4 steps, but double-check
                 if not ingredients or not recipe_steps:
                     logger.warning(
@@ -370,7 +404,7 @@ class SuggestionOrchestrationService:
                         f"ingredients={len(ingredients)} | steps={len(recipe_steps)}"
                     )
                     return None
-                
+
                 # Build MealSuggestion with the meal_name from Phase 1
                 return MealSuggestion(
                     id=f"sug_{uuid.uuid4().hex[:16]}",
@@ -390,7 +424,7 @@ class SuggestionOrchestrationService:
                     prep_time_minutes=prep_time,
                     confidence_score=0.85,
                 )
-            
+
             except asyncio.TimeoutError:
                 logger.warning(
                     f"[PHASE-2-TIMEOUT] index={index} | "
@@ -414,7 +448,9 @@ class SuggestionOrchestrationService:
             if i > 0:
                 # Add 500ms delay to prevent rate limiting (reduced from 6 to 4 parallel)
                 await asyncio.sleep(self.PARALLEL_STAGGER_MS / 1000)
-                logger.debug(f"[STAGGER] Starting request {i} after {self.PARALLEL_STAGGER_MS}ms delay")
+                logger.debug(
+                    f"[STAGGER] Starting request {i} after {self.PARALLEL_STAGGER_MS}ms delay"
+                )
 
             task = asyncio.create_task(
                 generate_recipe(recipe_prompts[i], meal_names[i], i)
@@ -431,8 +467,14 @@ class SuggestionOrchestrationService:
                     logger.debug(f"[SUCCESS] Got meal {len(successful_results)}/3")
                     if len(successful_results) >= 3:
                         # Cancel remaining tasks immediately (S1: cleaner pattern)
-                        cancelled_count = sum(1 for task in tasks if not task.done() and not task.cancel() is False)
-                        logger.info(f"[EARLY-STOP] Got 3 meals, cancelled {cancelled_count} remaining tasks")
+                        cancelled_count = sum(
+                            1
+                            for task in tasks
+                            if not task.done() and not task.cancel() is False
+                        )
+                        logger.info(
+                            f"[EARLY-STOP] Got 3 meals, cancelled {cancelled_count} remaining tasks"
+                        )
                         break
             except Exception as e:
                 logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
@@ -447,9 +489,7 @@ class SuggestionOrchestrationService:
         # W2 fix: Check for minimum acceptable results
         if len(successful_results) < self.MIN_ACCEPTABLE_RESULTS:
             if not successful_results:
-                raise RuntimeError(
-                    f"Failed to generate any recipes from 4 attempts"
-                )
+                raise RuntimeError(f"Failed to generate any recipes from 4 attempts")
             else:
                 logger.error(
                     f"[PHASE-2-INSUFFICIENT] session={session.id} | "
@@ -470,7 +510,7 @@ class SuggestionOrchestrationService:
 
         total_elapsed = time.time() - start_time
         phase2_elapsed = total_elapsed - phase1_elapsed
-        
+
         logger.info(
             f"[TWO-PHASE-COMPLETE] session={session.id} | "
             f"total_elapsed={total_elapsed:.2f}s | "

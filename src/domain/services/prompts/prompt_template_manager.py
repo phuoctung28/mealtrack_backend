@@ -15,6 +15,16 @@ from .prompt_constants import (
     SYSTEM_MESSAGES,
 )
 
+# Language code to full name mapping (ISO 639-1)
+LANGUAGE_NAMES = {
+    "en": "English",
+    "vi": "Vietnamese",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "ja": "Japanese",
+    "zh": "Chinese",
+}
 
 class PromptTemplateManager:
     """
@@ -51,6 +61,19 @@ class PromptTemplateManager:
     def get_system_message(cls, message_type: str) -> str:
         """Get system message for specified type."""
         return SYSTEM_MESSAGES.get(message_type, SYSTEM_MESSAGES["meal_planning"])
+
+    @classmethod
+    def get_language_instruction(code: str) -> str:
+        """Generate language instruction for AI prompts."""
+        if code == "en":
+            return ""  # No instruction needed for English
+        """Get full language name from ISO 639-1 code."""
+        lang_name = LANGUAGE_NAMES.get(code, "English")
+        return (
+            f"\n\n⚠️ IMPORTANT: Generate ALL text content "
+            f"(name, description, ingredients, instructions) in {lang_name}. "
+            f"Use natural {lang_name} food terminology and phrasing."
+        )
 
     @classmethod
     def build_base_requirements(
@@ -175,6 +198,7 @@ RULES:
         target_calories: int,
         cooking_time_minutes: int,
         ingredients: List[str],
+        language: str = "en",
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
         exclude_meal_names: Optional[List[str]] = None,
@@ -198,11 +222,13 @@ RULES:
         exclude_str = ""
         if exclude_meal_names:
             exclude_str = f"\nDO NOT suggest: {', '.join(exclude_meal_names[:10])}"  # Limit to 10 to keep prompt short
+
+        language_instruction = get_language_instruction(language)
         
         return f"""Generate 4 different {meal_type} names, ~{target_calories}cal, ≤{cooking_time_minutes}min.
 Ingredients: {ing_str}{constraints_str}
 Cuisines: 4 distinct (Asian, Mediterranean, Latin, American)
-Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}"""
+Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}.{language_instruction}."""
 
     @classmethod
     def build_recipe_details_prompt(

@@ -1,6 +1,9 @@
-# Multilingual Meal Suggestions (Phase 01)
+# Multilingual Meal Suggestions (Phase 01 → Phase 02)
 
 Developer guide for implementing and maintaining language support in meal suggestions.
+
+**Phase 01**: API-level language validation & session storage
+**Phase 02**: Prompt builder language integration with helper functions
 
 ## Overview
 
@@ -17,6 +20,95 @@ Meal suggestion generation supports 7 ISO 639-1 language codes. The language par
 | de | German | European market |
 | ja | Japanese | Asia-specific |
 | zh | Mandarin Chinese | Large Asia market |
+
+## Phase 02: Prompt Builder Language Integration
+
+### Overview
+Phase 02 adds language-aware prompt generation to the meal suggestion orchestration. Language instructions are injected directly into AI prompts to ensure consistent multilingual output.
+
+### New Components
+
+#### 1. LANGUAGE_NAMES Mapping
+**File**: `src/domain/services/meal_suggestion/suggestion_prompt_builder.py`
+
+```python
+LANGUAGE_NAMES = {
+    "en": "English",
+    "vi": "Vietnamese",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "ja": "Japanese",
+    "zh": "Chinese",
+}
+```
+
+Maps ISO 639-1 codes to full language names for prompt generation.
+
+#### 2. Helper Functions
+
+**`get_language_name(code: str) -> str`**
+- Returns full language name from code
+- Defaults to "English" for unknown codes
+- Used in system messages and language instructions
+
+**`get_language_instruction(code: str) -> str`**
+- Generates language instruction suffix for prompts
+- Returns empty string for English (no extra instruction)
+- Injects warning block for non-English: "⚠️ IMPORTANT: Generate ALL text content in {language}..."
+- Applied to both `build_meal_names_prompt()` and `build_recipe_details_prompt()`
+
+#### 3. Updated Prompt Functions
+
+**`build_meal_names_prompt(session: SuggestionSession) -> str`**
+- Now injects language instruction at end of prompt
+- Format: `...\nNames: Natural, concise... {language_instruction}`
+- Ensures AI generates meal names in correct language
+
+**`build_recipe_details_prompt(meal_name: str, session: SuggestionSession) -> str`**
+- Now injects language instruction before JSON output spec
+- Format: `...Do NOT include nutrition data...{language_instruction}`
+- Ensures recipe content (ingredients, instructions) in correct language
+
+### Orchestration Service Integration
+
+**File**: `src/domain/services/meal_suggestion/suggestion_orchestration_service.py`
+
+#### Phase 1: Language-Aware Name Generation
+```python
+# Build language-aware system messages
+if language != "en":
+    names_system = (
+        f"You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
+        f"diverse flavors and cooking styles. Generate all names in {lang_name}."
+    )
+else:
+    names_system = (
+        "You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
+        "diverse flavors and cooking styles."
+    )
+
+names_prompt = build_meal_names_prompt(session)
+```
+
+#### Phase 2: Language-Aware Recipe Generation
+```python
+# Generate recipes in parallel with language-aware system message
+if language != "en":
+    recipe_system = (
+        f"You are a professional chef. Generate complete recipe details as "
+        f"valid JSON in {lang_name}. CRITICAL: MUST finish entire JSON - include all fields."
+    )
+else:
+    recipe_system = (
+        "You are a professional chef. Generate complete recipe details as "
+        "valid JSON. CRITICAL: MUST finish entire JSON - include all fields."
+    )
+```
+
+**Result**: All meal names, ingredients, and cooking instructions generated in target language.
+
+---
 
 ## Implementation Details
 

@@ -1,13 +1,13 @@
 # MealTrack Backend - Codebase Summary
 
-**Generated:** January 7, 2026
-**Codebase Stats**: 398 source files, 267,486 tokens, 1.2M+ characters
-**Source Files**: ~322 Python files (src/)
+**Generated:** January 9, 2026
+**Codebase Stats**: 547 files, 752k+ tokens, 3.5M+ characters
+**Source Files**: ~320+ Python files (src/)
 **Test Files**: 76 files with 681+ test cases
 **Language**: Python 3.11+
 **Framework**: FastAPI 0.115.0+, SQLAlchemy 2.0
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
-**Status**: Phase 05 Pinecone Inference Migration Complete (1024-dim vectors). Phase 06 Session-Based Meal Suggestions Active.
+**Status**: Phase 02 Complete (Language Prompt Integration). Phase 06 Session-Based Suggestions Active.
 
 ---
 
