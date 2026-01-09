@@ -16,6 +16,7 @@ class SuggestionSession:
     target_calories: int
     ingredients: List[str]
     cooking_time_minutes: int
+    language: str = "en"  # ISO 639-1 language code (en, vi, es, fr, de, ja, zh)
     shown_suggestion_ids: List[str] = field(default_factory=list)
     shown_meal_names: List[str] = field(default_factory=list)  # Track meal names for exclusion
     dietary_preferences: List[str] = field(default_factory=list)

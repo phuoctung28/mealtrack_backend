@@ -11,23 +11,24 @@ from src.app.events.base import Command
 class GenerateMealSuggestionsCommand(Command):
     """
     Command to generate exactly 3 meal suggestions based on user inputs.
-    
+
     Supports optional ingredients, time constraints, dietary preferences,
-    and calorie targets. Also supports regeneration via session_id.
+    calorie targets, and multilingual output. Also supports regeneration via session_id.
     """
-    
+
     # User identification
     user_id: str
-    
+
     # Required input
     meal_type: str  # breakfast, lunch, dinner, snack
 
     meal_portion_type: str  # snack, main, omad
-    
+
     # Optional inputs
     ingredients: List[str]  # Available ingredients
     time_available_minutes: Optional[int]  # Time constraint
     session_id: Optional[str] = None  # Session ID for regeneration (auto-excludes previous meals)
+    language: str = "en"  # ISO 639-1 language code (en, vi, es, fr, de, ja, zh)
     
     def __post_init__(self):
         """Validate command data."""

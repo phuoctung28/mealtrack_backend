@@ -70,6 +70,7 @@ class SuggestionOrchestrationService:
         ingredients: List[str],
         cooking_time_minutes: int,
         session_id: Optional[str] = None,
+        language: str = "en",
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """
         Generate 3 suggestions. If session_id provided, generates NEW meals 
@@ -111,7 +112,7 @@ class SuggestionOrchestrationService:
             dietary_preferences = getattr(profile, 'dietary_preferences', None) or []
             allergies = getattr(profile, 'allergies', None) or []
 
-            # Create new session with dietary info
+            # Create new session with dietary info and language
             session = SuggestionSession(
                 id=f"session_{uuid.uuid4().hex[:16]}",
                 user_id=user_id,
@@ -120,7 +121,8 @@ class SuggestionOrchestrationService:
                 target_calories=target_calories,
                 ingredients=ingredients,
                 cooking_time_minutes=cooking_time_minutes,
-                dietary_preferences=dietary_preferences,
+                language=language,
+            dietary_preferences=dietary_preferences,
                 allergies=allergies,
             )
             exclude_meal_names = []

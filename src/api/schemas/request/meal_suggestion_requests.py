@@ -53,7 +53,7 @@ class MealSuggestionRequest(BaseModel):
     Request schema for generating meal suggestions.
 
     Generates exactly 3 meal suggestions based on:
-    - meal_type, meal_portion_type (or legacy meal_size), ingredients, cooking_time
+    - meal_type, meal_portion_type (or legacy meal_size), ingredients, cooking_time, language
     
     If session_id is provided, generates NEW suggestions excluding previously shown meals.
     """
@@ -98,6 +98,10 @@ class MealSuggestionRequest(BaseModel):
         default_factory=list,
         description="DEPRECATED: Use session_id instead for automatic exclusion",
     )
+    language: str = Field(
+        default="en",
+        description="ISO 639-1 language code for meal suggestions (en, vi, es, fr, de, ja, zh)",
+    )
 
     @field_validator("meal_size", mode="before")
     @classmethod
@@ -109,6 +113,21 @@ class MealSuggestionRequest(BaseModel):
                 stacklevel=2,
             )
         return v
+
+    @field_validator("language")
+    @classmethod
+    def validate_language_code(cls, v: str) -> str:
+        """Validate language code and fallback to 'en' if invalid."""
+        valid_languages = {"en", "vi", "es", "fr", "de", "ja", "zh"}
+        normalized = v.lower().strip()
+        if normalized not in valid_languages:
+            warnings.warn(
+                f"Unsupported language code '{v}', falling back to 'en'",
+                UserWarning,
+                stacklevel=2,
+            )
+            return "en"
+        return normalized
 
     def get_effective_portion_type(self) -> MealPortionTypeEnum:
         """Get effective portion type, preferring new field over legacy."""
