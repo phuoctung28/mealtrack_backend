@@ -7,6 +7,7 @@ from typing import List, Optional
 from .prompt_constants import (
     INGREDIENT_RULES,
     INGREDIENT_RULES_DETAILED,
+    LANGUAGE_NAMES,
     SEASONING_RULES,
     SEASONING_RULES_DETAILED,
     NUTRITION_RULES,
@@ -14,17 +15,6 @@ from .prompt_constants import (
     GOAL_GUIDANCE,
     SYSTEM_MESSAGES,
 )
-
-# Language code to full name mapping (ISO 639-1)
-LANGUAGE_NAMES = {
-    "en": "English",
-    "vi": "Vietnamese",
-    "es": "Spanish",
-    "fr": "French",
-    "de": "German",
-    "ja": "Japanese",
-    "zh": "Chinese",
-}
 
 class PromptTemplateManager:
     """
@@ -223,7 +213,7 @@ RULES:
         if exclude_meal_names:
             exclude_str = f"\nDO NOT suggest: {', '.join(exclude_meal_names[:10])}"  # Limit to 10 to keep prompt short
 
-        language_instruction = get_language_instruction(language)
+        language_instruction = PromptTemplateManager.get_language_instruction(language)
         
         return f"""Generate 4 different {meal_type} names, ~{target_calories}cal, ≤{cooking_time_minutes}min.
 Ingredients: {ing_str}{constraints_str}

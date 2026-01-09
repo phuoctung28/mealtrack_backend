@@ -153,3 +153,16 @@ SYSTEM_MESSAGES = {
     "chef": "You are a professional chef. Generate complete recipe details as valid JSON.",
     "creative_chef": "You are a creative chef. Generate diverse meal names with different cuisines.",
 }
+
+# =============================================================================
+# LANGUAGE NAMES (Compressed)
+# =============================================================================
+LANGUAGE_NAMES = {
+    "en": "English",
+    "vi": "Vietnamese",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "ja": "Japanese",
+    "zh": "Chinese",
+}
