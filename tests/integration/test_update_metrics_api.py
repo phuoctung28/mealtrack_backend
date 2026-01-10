@@ -64,11 +64,17 @@ def client(test_session):
             # Handle both Depends() pattern and direct calls
             return mock_suggestion_service
         
+        # Patch ScopedSession to return test_session for handlers
+        from src.infra.database.config import ScopedSession
+        def mock_scoped_session_call(*args, **kwargs):
+            return test_session
+        
         with patch('src.api.base_dependencies.get_suggestion_orchestration_service', side_effect=mock_get_suggestion_service):
             with patch('src.api.base_dependencies.get_cache_service', return_value=mock_cache_service):
                 with patch('src.api.base_dependencies.get_food_cache_service', return_value=mock_food_cache):
-                    from src.api.dependencies.event_bus import get_configured_event_bus as real_get_bus
-                    return real_get_bus()
+                    with patch.object(ScopedSession, '__call__', side_effect=mock_scoped_session_call):
+                        from src.api.dependencies.event_bus import get_configured_event_bus as real_get_bus
+                        return real_get_bus()
     
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id

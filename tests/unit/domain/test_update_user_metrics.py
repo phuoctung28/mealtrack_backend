@@ -233,8 +233,11 @@ class TestUpdateUserMetricsCommandHandler:
         
         # Execute & Verify
         with patch.object(ScopedSession, '__call__', return_value=mock_db):
-            with pytest.raises(ResourceNotFoundException):
+            with pytest.raises(ResourceNotFoundException) as exc_info:
                 await handler.handle(command)
+            
+            # Verify the exception message
+            assert "nonexistent_user" in str(exc_info.value)
             # Rollback is called in the exception handler
             mock_db.rollback.assert_called_once()
     
