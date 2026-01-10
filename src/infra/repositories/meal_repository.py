@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.model.nutrition import Macros, Micros, Nutrition, FoodItem
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.infra.database.config import SessionLocal
+from src.infra.database.config import ScopedSession
 from src.infra.database.models.meal.meal import Meal as DBMeal
 from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
 from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
@@ -34,7 +34,8 @@ class MealRepository(MealRepositoryPort):
         if self.db:
             return self.db
         else:
-            return SessionLocal()
+            # Use ScopedSession to get current request's session
+            return ScopedSession()
     
     def _close_db_if_created(self, db):
         """Close the database session if we created it."""

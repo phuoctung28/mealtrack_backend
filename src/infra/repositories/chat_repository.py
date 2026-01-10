@@ -35,8 +35,8 @@ class ChatRepository(ChatRepositoryPort):
         if self.db:
             db = self.db
         else:
-            from src.infra.database.config import SessionLocal
-            db = SessionLocal()
+            from src.infra.database.config import ScopedSession
+            db = ScopedSession()
         
         try:
             # Check if thread exists
@@ -87,8 +87,8 @@ class ChatRepository(ChatRepositoryPort):
         if self.db:
             db = self.db
         else:
-            from src.infra.database.config import SessionLocal
-            db = SessionLocal()
+            from src.infra.database.config import ScopedSession
+            db = ScopedSession()
         
         try:
             db_thread = db.query(ChatThread).filter(ChatThread.id == thread_id).first()
@@ -115,8 +115,8 @@ class ChatRepository(ChatRepositoryPort):
         if self.db:
             db = self.db
         else:
-            from src.infra.database.config import SessionLocal
-            db = SessionLocal()
+            from src.infra.database.config import ScopedSession
+            db = ScopedSession()
         
         try:
             # Create subquery for message counts to avoid N+1 queries
@@ -162,8 +162,8 @@ class ChatRepository(ChatRepositoryPort):
         if self.db:
             db = self.db
         else:
-            from src.infra.database.config import SessionLocal
-            db = SessionLocal()
+            from src.infra.database.config import ScopedSession
+            db = ScopedSession()
         
         try:
             db_thread = db.query(ChatThread).filter(ChatThread.id == thread_id).first()
@@ -193,8 +193,8 @@ class ChatRepository(ChatRepositoryPort):
         if self.db:
             db = self.db
         else:
-            from src.infra.database.config import SessionLocal
-            db = SessionLocal()
+            from src.infra.database.config import ScopedSession
+            db = ScopedSession()
         
         try:
             # Check if message exists
@@ -248,8 +248,8 @@ class ChatRepository(ChatRepositoryPort):
         if self.db:
             db = self.db
         else:
-            from src.infra.database.config import SessionLocal
-            db = SessionLocal()
+            from src.infra.database.config import ScopedSession
+            db = ScopedSession()
         
         try:
             query = db.query(ChatMessage).filter(ChatMessage.thread_id == thread_id)
@@ -271,8 +271,8 @@ class ChatRepository(ChatRepositoryPort):
         if self.db:
             db = self.db
         else:
-            from src.infra.database.config import SessionLocal
-            db = SessionLocal()
+            from src.infra.database.config import ScopedSession
+            db = ScopedSession()
         
         try:
             query = db.query(func.count(ChatThread.id)).filter(ChatThread.user_id == user_id)
@@ -293,8 +293,8 @@ class ChatRepository(ChatRepositoryPort):
         if self.db:
             db = self.db
         else:
-            from src.infra.database.config import SessionLocal
-            db = SessionLocal()
+            from src.infra.database.config import ScopedSession
+            db = ScopedSession()
         
         try:
             return db.query(func.count(ChatMessage.id)).filter(

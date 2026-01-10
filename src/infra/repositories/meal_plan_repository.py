@@ -7,7 +7,7 @@ from typing import Optional
 from sqlalchemy.orm import Session, selectinload
 
 from src.domain.model.meal_planning import MealPlan
-from src.infra.database.config import SessionLocal
+from src.infra.database.config import ScopedSession
 from src.infra.database.models.enums import FitnessGoalEnum, PlanDurationEnum, MealTypeEnum
 from src.infra.database.models.meal_planning.meal_plan import MealPlan as DBMealPlan
 from src.infra.database.models.meal_planning.meal_plan_day import MealPlanDay as DBMealPlanDay
@@ -28,7 +28,7 @@ class MealPlanRepository:
         if self.db:
             return self.db
         else:
-            return SessionLocal()
+            return ScopedSession()
     
     def _close_db_if_created(self, db):
         if self.db is None and db is not None:

@@ -155,6 +155,49 @@ def test_session(test_engine) -> Generator[Session, None, None]:
             pass  # Connection might already be closed
 
 
+@pytest.fixture(autouse=True)
+def mock_scoped_session(test_session):
+    """
+    Automatically patch ScopedSession to return test_session for all tests.
+    
+    This allows handlers that use ScopedSession() to work with test database sessions.
+    ScopedSession uses a scopefunc that returns _request_id.get(), so we set that
+    and register our test_session with ScopedSession's registry.
+    """
+    from unittest.mock import patch
+    from src.infra.database.config import ScopedSession, _request_id
+    import uuid
+    
+    # Set a unique request ID for this test
+    request_id = str(uuid.uuid4())
+    token = _request_id.set(request_id)
+    
+    # Register test_session with ScopedSession for this request ID
+    # ScopedSession.registry is a dict-like object that maps scope -> session
+    try:
+        # Register the test session for this scope
+        ScopedSession.registry.setdefault(request_id, test_session)
+        
+        # Patch ScopedSession.__call__ to return test_session
+        original_call = ScopedSession.__call__
+        
+        def mock_call():
+            return test_session
+        
+        ScopedSession.__call__ = mock_call
+        
+        yield
+        
+    finally:
+        # Clean up
+        try:
+            ScopedSession.__call__ = original_call
+            ScopedSession.remove()
+        except:
+            pass
+        _request_id.reset(token)
+
+
 @pytest.fixture
 def mock_image_store() -> MockImageStore:
     """Mock image store for testing."""

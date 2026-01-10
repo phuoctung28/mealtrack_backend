@@ -6,11 +6,10 @@ import logging
 from datetime import datetime
 from typing import Dict, Any
 
-from sqlalchemy.orm import Session
-
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user.sync_user_command import UpdateUserLastAccessedCommand
 from src.app.events.base import EventHandler, handles
+from src.infra.database.config import ScopedSession
 from src.infra.database.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -20,21 +19,13 @@ logger = logging.getLogger(__name__)
 class UpdateUserLastAccessedCommandHandler(EventHandler[UpdateUserLastAccessedCommand, Dict[str, Any]]):
     """Handler for updating user's last accessed timestamp."""
 
-    def __init__(self, db: Session = None):
-        self.db = db
-
-    def set_dependencies(self, db: Session):
-        """Set dependencies for dependency injection."""
-        self.db = db
-
     async def handle(self, command: UpdateUserLastAccessedCommand) -> Dict[str, Any]:
         """Update user's last accessed timestamp."""
-        if not self.db:
-            raise RuntimeError("Database session not configured")
+        db = ScopedSession()
 
         try:
             # Find user by firebase_uid
-            user = self.db.query(User).filter(
+            user = db.query(User).filter(
                 User.firebase_uid == command.firebase_uid
             ).first()
 
@@ -45,7 +36,7 @@ class UpdateUserLastAccessedCommandHandler(EventHandler[UpdateUserLastAccessedCo
             last_accessed = command.last_accessed or datetime.utcnow()
             user.last_accessed = last_accessed
 
-            self.db.commit()
+            db.commit()
 
             return {
                 "firebase_uid": command.firebase_uid,
@@ -55,6 +46,6 @@ class UpdateUserLastAccessedCommandHandler(EventHandler[UpdateUserLastAccessedCo
             }
 
         except Exception as e:
-            self.db.rollback()
+            db.rollback()
             logger.error(f"Error updating last accessed: {str(e)}")
             raise

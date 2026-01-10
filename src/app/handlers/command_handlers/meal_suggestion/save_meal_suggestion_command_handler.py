@@ -5,11 +5,9 @@ import logging
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy.orm import Session
-
 from src.app.commands.meal_suggestion import SaveMealSuggestionCommand
 from src.app.events.base import EventHandler, handles
-from src.infra.database.config import SessionLocal
+from src.infra.database.config import ScopedSession
 from src.infra.database.models.enums import MealTypeEnum
 from src.infra.database.models.meal_planning.meal_plan import MealPlan as DBMealPlan
 from src.infra.database.models.meal_planning.meal_plan_day import MealPlanDay as DBMealPlanDay
@@ -24,20 +22,6 @@ class SaveMealSuggestionCommandHandler(
 ):
     """Handler for saving meal suggestions to planned_meals table."""
 
-    def __init__(self, db: Session = None):
-        self.db = db
-
-    def _get_db(self) -> Session:
-        """Get database session."""
-        if self.db:
-            return self.db
-        return SessionLocal()
-
-    def _close_db_if_created(self, db: Session):
-        """Close database session if we created it."""
-        if self.db is None and db is not None:
-            db.close()
-
     async def handle(self, command: SaveMealSuggestionCommand) -> str:
         """
         Save meal suggestion to planned_meals table.
@@ -50,7 +34,7 @@ class SaveMealSuggestionCommandHandler(
         Returns:
             planned_meal_id: ID of the created planned meal
         """
-        db = self._get_db()
+        db = ScopedSession()
         
         try:
             # Parse meal_date
@@ -131,5 +115,3 @@ class SaveMealSuggestionCommandHandler(
             db.rollback()
             logger.error(f"Failed to save meal suggestion: {e}", exc_info=True)
             raise
-        finally:
-            self._close_db_if_created(db)

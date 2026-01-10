@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from src.domain.model.notification import UserFcmToken, NotificationPreferences
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
-from src.infra.database.config import SessionLocal
+from src.infra.database.config import ScopedSession
 from src.infra.repositories.notification.fcm_token_operations import FcmTokenOperations
 from src.infra.repositories.notification.notification_preferences_operations import NotificationPreferencesOperations
 from src.infra.repositories.notification.reminder_query_builder import ReminderQueryBuilder
@@ -27,7 +27,7 @@ class NotificationRepository(NotificationRepositoryPort):
         if self.db:
             return self.db
         else:
-            return SessionLocal()
+            return ScopedSession()
 
     def _close_db_if_created(self, db):
         """Close the database session if we created it."""
