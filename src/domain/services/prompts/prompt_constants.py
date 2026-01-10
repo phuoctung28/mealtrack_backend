@@ -166,3 +166,48 @@ LANGUAGE_NAMES = {
     "ja": "Japanese",
     "zh": "Chinese",
 }
+
+
+# =============================================================================
+# FALLBACK MEAL NAMES (Localized)
+# =============================================================================
+FALLBACK_MEAL_NAMES = {
+    "en": {
+        "breakfast": "Healthy Breakfast",
+        "lunch": "Healthy Lunch",
+        "dinner": "Healthy Dinner",
+        "snack": "Healthy Snack",
+    },
+    "vi": {
+        "breakfast": "Bữa sáng lành mạnh",
+        "lunch": "Bữa trưa lành mạnh",
+        "dinner": "Bữa tối lành mạnh",
+        "snack": "Bữa phụ lành mạnh",
+    },
+    # Future: Add other languages as needed
+    # "es": {"breakfast": "Desayuno saludable", ...},
+    # "fr": {"breakfast": "Petit-déjeuner sain", ...},
+}
+
+
+def get_fallback_meal_name(language: str, meal_type: str, index: int) -> str:
+    """Get localized fallback meal name.
+
+    Args:
+        language: ISO 639-1 language code (e.g., 'en', 'vi')
+        meal_type: Meal type ('breakfast', 'lunch', 'dinner', 'snack')
+        index: Index number for the fallback (1-based)
+
+    Returns:
+        Localized fallback name like "Healthy Breakfast #1"
+    """
+    # Normalize language code
+    lang = language.lower()[:2] if language else "en"
+
+    # Get language-specific names, default to English
+    names = FALLBACK_MEAL_NAMES.get(lang, FALLBACK_MEAL_NAMES["en"])
+
+    # Get meal type specific name, default to generic
+    base_name = names.get(meal_type.lower(), f"Healthy {meal_type.title()}")
+
+    return f"{base_name} #{index}"

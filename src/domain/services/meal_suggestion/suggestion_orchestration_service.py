@@ -26,6 +26,7 @@ from src.domain.ports.meal_suggestion_repository_port import (
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
+from src.domain.services.prompts.prompt_constants import get_fallback_meal_name
 
 from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
@@ -323,10 +324,14 @@ class SuggestionOrchestrationService:
                     f"[PHASE-1-INCOMPLETE] session={session.id} | "
                     f"got {len(meal_names)} names, expected 4"
                 )
-                # Pad with generic names if needed
+                # Pad with localized fallback names if needed
                 while len(meal_names) < 4:
                     meal_names.append(
-                        f"Healthy {session.meal_type.title()} #{len(meal_names) + 1}"
+                        get_fallback_meal_name(
+                            session.language,
+                            session.meal_type,
+                            len(meal_names) + 1
+                        )
                     )
 
             phase1_elapsed = time.time() - start_time
@@ -343,9 +348,10 @@ class SuggestionOrchestrationService:
                 f"elapsed={phase1_elapsed:.2f}s | "
                 f"error_type={type(e).__name__} | error={e}"
             )
-            # Fallback to generic names
+            # Fallback to localized names
             meal_names = [
-                f"Healthy {session.meal_type.title()} #{i+1}" for i in range(4)
+                get_fallback_meal_name(session.language, session.meal_type, i + 1)
+                for i in range(4)
             ]
 
         # STEP 2: Generate full recipes for each name in parallel
