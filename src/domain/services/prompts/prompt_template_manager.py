@@ -237,16 +237,17 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         Target: ~400 tokens.
         """
         ing_str = ", ".join(ingredients[:6]) if ingredients else "any ingredients"
-        
+
         constraints_parts = []
         if allergies:
             constraints_parts.append(f"⚠️ AVOID: {', '.join(allergies)}")
         if dietary_preferences:
             constraints_parts.append(f"Diet: {', '.join(dietary_preferences)}")
-        
+
         constraints_str = " | ".join(constraints_parts) if constraints_parts else ""
+
         language_instruction = cls.get_language_instruction(language)
-        
+
         return f"""Generate complete recipe for: "{meal_name}"
 
 Ingredients: {ing_str}{' | ' + constraints_str if constraints_str else ''}

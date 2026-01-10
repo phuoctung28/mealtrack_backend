@@ -26,7 +26,7 @@ from src.domain.ports.meal_suggestion_repository_port import (
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.domain.services.prompts.prompt_constants import get_fallback_meal_name
+from src.domain.services.prompts.prompt_constants import LANGUAGE_NAMES, get_fallback_meal_name
 
 from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
@@ -261,7 +261,6 @@ class SuggestionOrchestrationService:
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
             build_meal_names_prompt,
             build_recipe_details_prompt,
-            get_language_name,
         )
         from src.domain.schemas.meal_generation_schemas import (
             MealNamesResponse,
@@ -276,9 +275,11 @@ class SuggestionOrchestrationService:
         
         )
 
+        names_prompt = build_meal_names_prompt(session, exclude_meal_names)
+
         # Get language context
-        language = getattr(session, "language", "en")
-        lang_name = get_language_name(language)
+        language = session.language
+        lang_name = LANGUAGE_NAMES.get(language, "English")
 
         # Build language-aware system messages
         if language != "en":
@@ -291,8 +292,6 @@ class SuggestionOrchestrationService:
                 "You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
                 "diverse flavors and cooking styles."
             )
-
-        names_prompt = build_meal_names_prompt(session, exclude_meal_names)
 
         phase1_elapsed = 0.0  # Initialize to prevent UnboundLocalError
         try:
