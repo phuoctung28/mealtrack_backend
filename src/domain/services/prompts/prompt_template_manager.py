@@ -53,11 +53,11 @@ class PromptTemplateManager:
         return SYSTEM_MESSAGES.get(message_type, SYSTEM_MESSAGES["meal_planning"])
 
     @classmethod
-    def get_language_instruction(code: str) -> str:
+    def get_language_instruction(cls, code: str) -> str:
         """Generate language instruction for AI prompts."""
         if code == "en":
             return ""  # No instruction needed for English
-        """Get full language name from ISO 639-1 code."""
+        # Get full language name from ISO 639-1 code
         lang_name = LANGUAGE_NAMES.get(code, "English")
         return (
             f"\n\n⚠️ IMPORTANT: Generate ALL text content "
@@ -228,6 +228,7 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         target_calories: int,
         cooking_time_minutes: int,
         ingredients: List[str],
+        language: str = "en",
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
     ) -> str:
@@ -244,6 +245,7 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
             constraints_parts.append(f"Diet: {', '.join(dietary_preferences)}")
         
         constraints_str = " | ".join(constraints_parts) if constraints_parts else ""
+        language_instruction = cls.get_language_instruction(language)
         
         return f"""Generate complete recipe for: "{meal_name}"
 
@@ -259,5 +261,5 @@ REQUIREMENTS:
 - 2-6 clear recipe steps with duration
 - Total prep_time ≤{cooking_time_minutes} min
 
-NO nutrition data in response - backend calculates automatically.
+NO nutrition data in response - backend calculates automatically.{language_instruction}
 """
