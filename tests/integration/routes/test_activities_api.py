@@ -15,7 +15,11 @@ from src.api.main import app
 def client(test_session):
     """Create a test client with mocked dependencies."""
     from unittest.mock import Mock
-    from src.api.base_dependencies import get_suggestion_orchestration_service
+    from src.api.base_dependencies import (
+        get_suggestion_orchestration_service,
+        get_cache_service,
+        get_food_cache_service,
+    )
     
     def override_get_db():
         try:
@@ -30,9 +34,22 @@ def client(test_session):
         # Mock the suggestion orchestration service to avoid Redis dependency
         return Mock()
     
+    def override_get_cache_service():
+        # Return None to disable cache (or return a mock if needed)
+        return None
+    
+    def override_get_food_cache_service():
+        # Mock food cache service to avoid Redis dependency
+        mock_food_cache = Mock()
+        mock_food_cache.get = Mock(return_value=None)
+        mock_food_cache.set = Mock(return_value=True)
+        return mock_food_cache
+    
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id
     app.dependency_overrides[get_suggestion_orchestration_service] = override_get_suggestion_orchestration_service
+    app.dependency_overrides[get_cache_service] = override_get_cache_service
+    app.dependency_overrides[get_food_cache_service] = override_get_food_cache_service
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
