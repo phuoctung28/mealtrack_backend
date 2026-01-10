@@ -11,6 +11,36 @@ from src.app.handlers.command_handlers.update_user_metrics_command_handler impor
 from src.infra.database.models.user.profile import UserProfile
 
 
+def setup_mock_db_with_profile(mock_profile):
+    """Helper to set up mock database with profile query chain."""
+    mock_db = Mock()
+    mock_query = Mock()
+    mock_filter = Mock()
+    mock_query.filter.return_value = mock_filter
+    mock_filter.first.return_value = mock_profile
+    mock_db.query.return_value = mock_query
+    mock_db.add = Mock()
+    mock_db.commit = Mock()
+    mock_db.refresh = Mock()
+    mock_db.rollback = Mock()
+    return mock_db
+
+
+def setup_mock_db_without_profile():
+    """Helper to set up mock database that returns None (no profile found)."""
+    mock_db = Mock()
+    mock_query = Mock()
+    mock_filter = Mock()
+    mock_query.filter.return_value = mock_filter
+    mock_filter.first.return_value = None
+    mock_db.query.return_value = mock_query
+    mock_db.add = Mock()
+    mock_db.commit = Mock()
+    mock_db.refresh = Mock()
+    mock_db.rollback = Mock()
+    return mock_db
+
+
 class TestUpdateUserMetricsCommand:
     """Test UpdateUserMetricsCommand data class."""
     
@@ -53,7 +83,6 @@ class TestUpdateUserMetricsCommandHandler:
         from src.infra.database.config import ScopedSession
         
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -65,7 +94,7 @@ class TestUpdateUserMetricsCommandHandler:
             fitness_goal="recomp",
             is_current=False
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
@@ -88,7 +117,6 @@ class TestUpdateUserMetricsCommandHandler:
         from src.infra.database.config import ScopedSession
         
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -100,7 +128,7 @@ class TestUpdateUserMetricsCommandHandler:
             fitness_goal="recomp",
             is_current=False
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
@@ -121,7 +149,6 @@ class TestUpdateUserMetricsCommandHandler:
         from src.infra.database.config import ScopedSession
         
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -133,7 +160,7 @@ class TestUpdateUserMetricsCommandHandler:
             fitness_goal="recomp",
             is_current=True,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
 
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
@@ -155,7 +182,6 @@ class TestUpdateUserMetricsCommandHandler:
         from src.infra.database.config import ScopedSession
         
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -168,7 +194,7 @@ class TestUpdateUserMetricsCommandHandler:
             fitness_goal="recomp",
             is_current=False,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
 
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
@@ -195,8 +221,7 @@ class TestUpdateUserMetricsCommandHandler:
         from src.infra.database.config import ScopedSession
         
         # Setup
-        mock_db = Mock()
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db = setup_mock_db_without_profile()
         
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
@@ -208,15 +233,15 @@ class TestUpdateUserMetricsCommandHandler:
         with patch.object(ScopedSession, '__call__', return_value=mock_db):
             with pytest.raises(ResourceNotFoundException):
                 await handler.handle(command)
-        
-        mock_db.rollback.assert_called_once()
+            # Rollback is called in the exception handler
+            mock_db.rollback.assert_called_once()
     
     async def test_no_metrics_provided(self):
         """Test error when no metrics are provided."""
         from src.infra.database.config import ScopedSession
         
         # Setup
-        mock_db = Mock()
+        mock_db = setup_mock_db_without_profile()
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(user_id="test_user")
         
@@ -232,7 +257,6 @@ class TestUpdateUserMetricsCommandHandler:
         from src.infra.database.config import ScopedSession
         
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -243,7 +267,7 @@ class TestUpdateUserMetricsCommandHandler:
             activity_level="moderate",
             fitness_goal="recomp"
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
@@ -264,7 +288,6 @@ class TestUpdateUserMetricsCommandHandler:
         from src.infra.database.config import ScopedSession
         
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -275,7 +298,7 @@ class TestUpdateUserMetricsCommandHandler:
             activity_level="moderate",
             fitness_goal="recomp"
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
@@ -295,7 +318,6 @@ class TestUpdateUserMetricsCommandHandler:
         from src.infra.database.config import ScopedSession
         
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -306,7 +328,7 @@ class TestUpdateUserMetricsCommandHandler:
             activity_level="moderate",
             fitness_goal="recomp"
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
@@ -326,7 +348,6 @@ class TestUpdateUserMetricsCommandHandler:
         from src.infra.database.config import ScopedSession
         
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -337,7 +358,7 @@ class TestUpdateUserMetricsCommandHandler:
             activity_level="moderate",
             fitness_goal="recomp"
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(

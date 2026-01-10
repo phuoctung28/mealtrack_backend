@@ -189,6 +189,24 @@ def mock_scoped_session(test_session):
             pass
 
 
+@pytest.fixture(autouse=True)
+def reset_event_bus_singleton():
+    """
+    Reset the event bus singleton before each test to prevent state leakage.
+    This ensures that event bus initialization happens fresh for each test.
+    """
+    from src.api.dependencies.event_bus import _configured_event_bus
+    
+    # Reset singleton before test
+    import src.api.dependencies.event_bus as event_bus_module
+    event_bus_module._configured_event_bus = None
+    
+    yield
+    
+    # Reset singleton after test
+    event_bus_module._configured_event_bus = None
+
+
 @pytest.fixture
 def mock_image_store() -> MockImageStore:
     """Mock image store for testing."""
