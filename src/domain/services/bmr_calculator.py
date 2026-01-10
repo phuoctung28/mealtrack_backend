@@ -6,6 +6,7 @@ Provides different formulas for calculating BMR based on available user data:
 - Katch-McArdle: More accurate formula using lean body mass (requires body fat %)
 """
 from abc import ABC, abstractmethod
+from typing import Optional
 
 from src.domain.model.user import Sex
 
@@ -20,7 +21,7 @@ class BMRCalculator(ABC):
         height_cm: float,
         age: int,
         sex: Sex,
-        body_fat_pct: float | None = None
+        body_fat_pct: Optional[float] = None
     ) -> float:
         """Calculate BMR based on user attributes."""
         pass
@@ -49,7 +50,7 @@ class MifflinStJeorCalculator(BMRCalculator):
         height_cm: float,
         age: int,
         sex: Sex,
-        body_fat_pct: float | None = None
+        body_fat_pct: Optional[float] = None
     ) -> float:
         """Calculate BMR using Mifflin-St Jeor equation."""
         base = 10 * weight_kg + 6.25 * height_cm - 5 * age
@@ -85,7 +86,7 @@ class KatchMcArdleCalculator(BMRCalculator):
         height_cm: float,
         age: int,
         sex: Sex,
-        body_fat_pct: float | None = None
+        body_fat_pct: Optional[float] = None
     ) -> float:
         """Calculate BMR using Katch-McArdle equation."""
         if body_fat_pct is None:

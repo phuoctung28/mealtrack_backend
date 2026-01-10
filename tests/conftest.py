@@ -155,6 +155,58 @@ def test_session(test_engine) -> Generator[Session, None, None]:
             pass  # Connection might already be closed
 
 
+@pytest.fixture(autouse=True)
+def mock_scoped_session(test_session):
+    """
+    Automatically patch ScopedSession to return test_session for all tests.
+    
+    This allows handlers that use ScopedSession() to work with test database sessions.
+    We patch ScopedSession.__call__ to return test_session directly.
+    """
+    from unittest.mock import patch
+    from src.infra.database.config import ScopedSession
+    
+    # Store original __call__ method
+    original_call = getattr(ScopedSession, '__call__', None)
+    
+    # Create a function that always returns test_session
+    def mock_call(*args, **kwargs):
+        return test_session
+    
+    # Patch __call__ method
+    ScopedSession.__call__ = mock_call
+    
+    try:
+        yield
+    finally:
+        # Restore original
+        if original_call is not None:
+            ScopedSession.__call__ = original_call
+        # Clean up
+        try:
+            ScopedSession.remove()
+        except:
+            pass
+
+
+@pytest.fixture(autouse=True)
+def reset_event_bus_singleton():
+    """
+    Reset the event bus singleton before each test to prevent state leakage.
+    This ensures that event bus initialization happens fresh for each test.
+    """
+    from src.api.dependencies.event_bus import _configured_event_bus
+    
+    # Reset singleton before test
+    import src.api.dependencies.event_bus as event_bus_module
+    event_bus_module._configured_event_bus = None
+    
+    yield
+    
+    # Reset singleton after test
+    event_bus_module._configured_event_bus = None
+
+
 @pytest.fixture
 def mock_image_store() -> MockImageStore:
     """Mock image store for testing."""

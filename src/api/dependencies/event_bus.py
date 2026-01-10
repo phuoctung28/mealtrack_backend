@@ -158,8 +158,9 @@ from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.infra.cache.cache_service import CacheService
 from src.infra.event_bus import PyMediatorEventBus, EventBus
 
-# Singleton lightweight event bus for food search (no heavy dependencies)
+# Singleton event buses
 _food_search_event_bus: Optional[EventBus] = None
+_configured_event_bus: Optional[EventBus] = None
 
 
 def get_food_search_event_bus() -> EventBus:
@@ -206,31 +207,55 @@ def get_food_search_event_bus() -> EventBus:
     return _food_search_event_bus
 
 
-async def get_configured_event_bus(
-    db: Session = Depends(get_db),
-    image_store = Depends(get_image_store),
-    meal_repository = Depends(get_meal_repository),
-    notification_repository = Depends(get_notification_repository),
-    vision_service = Depends(get_vision_service),
-    gpt_parser = Depends(get_gpt_parser),
-    food_data_service: FoodDataServicePort = Depends(get_food_data_service),
-    food_cache_service: FoodCacheServicePort = Depends(get_food_cache_service),
-    food_mapping_service: FoodMappingServicePort = Depends(get_food_mapping_service),
-    cache_service: Optional[CacheService] = Depends(get_cache_service),
-    ai_chat_service: AIChatServicePort = Depends(get_ai_chat_service),
-    suggestion_service = Depends(get_suggestion_orchestration_service),
-) -> EventBus:
+def get_configured_event_bus() -> EventBus:
     """
-    Get an event bus with all handlers configured.
+    Get a singleton event bus with all handlers configured.
+    
+    This is now a singleton to prevent memory leaks from creating new event buses
+    and dynamically generated handler classes on every request.
+    
+    Handlers use ScopedSession to access the current request's database session,
+    ensuring proper isolation while allowing the event bus to be reused.
+    
+    Returns:
+        EventBus: Singleton event bus instance
     """
+    global _configured_event_bus
+    
+    if _configured_event_bus is not None:
+        return _configured_event_bus
+    
+    # Get singleton services (these are safe to reuse)
+    from src.api.base_dependencies import (
+        get_image_store,
+        get_vision_service,
+        get_gpt_parser,
+        get_food_data_service,
+        get_food_cache_service,
+        get_food_mapping_service,
+        get_cache_service,
+        get_ai_chat_service,
+        get_suggestion_orchestration_service,
+    )
+    
+    image_store = get_image_store()
+    vision_service = get_vision_service()
+    gpt_parser = get_gpt_parser()
+    food_data_service = get_food_data_service()
+    food_cache_service = get_food_cache_service()
+    food_mapping_service = get_food_mapping_service()
+    cache_service = get_cache_service()
+    ai_chat_service = get_ai_chat_service()
+    suggestion_service = get_suggestion_orchestration_service()
+    
     event_bus = PyMediatorEventBus()
 
     # Register meal command handlers
+    # Note: Handlers now use ScopedSession internally instead of receiving db in constructor
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
             image_store=image_store,
-            meal_repository=meal_repository,
             vision_service=vision_service,
             gpt_parser=gpt_parser,
             cache_service=cache_service,
@@ -241,7 +266,6 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         EditMealCommand,
         EditMealCommandHandler(
-            meal_repository=meal_repository,
             food_service=food_data_service,
             nutrition_calculator=None,  # TODO: Add nutrition calculator if needed
             cache_service=cache_service,
@@ -251,7 +275,6 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         AddCustomIngredientCommand,
         AddCustomIngredientCommandHandler(
-            meal_repository=meal_repository,
             cache_service=cache_service,
         ),
     )
@@ -259,7 +282,6 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         DeleteMealCommand,
         DeleteMealCommandHandler(
-            meal_repository=meal_repository,
             cache_service=cache_service,
         ),
     )
@@ -268,7 +290,6 @@ async def get_configured_event_bus(
     event_bus.register_handler(
         CreateManualMealCommand,
         CreateManualMealCommandHandler(
-            meal_repository=meal_repository,
             food_data_service=food_data_service,
             mapping_service=food_mapping_service,
             cache_service=cache_service,
@@ -290,21 +311,20 @@ async def get_configured_event_bus(
     )
 
     # Register meal query handlers
+    # Handlers use ScopedSession internally
     event_bus.register_handler(
-        GetMealByIdQuery, GetMealByIdQueryHandler(meal_repository)
+        GetMealByIdQuery, GetMealByIdQueryHandler()
     )
     event_bus.register_handler(
         GetDailyMacrosQuery,
         GetDailyMacrosQueryHandler(
-            meal_repository,
-            db,
             cache_service=cache_service,
         ),
     )
 
     # Register activity query handlers
     event_bus.register_handler(
-        GetDailyActivitiesQuery, GetDailyActivitiesQueryHandler(meal_repository)
+        GetDailyActivitiesQuery, GetDailyActivitiesQueryHandler()
     )
 
     # Register daily meal handlers
@@ -317,26 +337,26 @@ async def get_configured_event_bus(
     )
     event_bus.register_handler(
         GetMealSuggestionsForProfileQuery,
-        GetMealSuggestionsForProfileQueryHandler(db),
+        GetMealSuggestionsForProfileQueryHandler(),
     )
     event_bus.register_handler(
-        GetSingleMealForProfileQuery, GetSingleMealForProfileQueryHandler(db)
+        GetSingleMealForProfileQuery, GetSingleMealForProfileQueryHandler()
     )
     event_bus.register_handler(
-        GetMealPlanningSummaryQuery, GetMealPlanningSummaryQueryHandler(db)
+        GetMealPlanningSummaryQuery, GetMealPlanningSummaryQueryHandler()
     )
 
     # Register meal plan handlers
     event_bus.register_handler(
         GenerateWeeklyIngredientBasedMealPlanCommand,
-        GenerateWeeklyIngredientBasedMealPlanCommandHandler(db),
+        GenerateWeeklyIngredientBasedMealPlanCommandHandler(),
     )
     event_bus.register_handler(GetMealPlanQuery, GetMealPlanQueryHandler())
     event_bus.register_handler(
-        GetMealsFromPlanByDateQuery, GetMealsFromPlanByDateQueryHandler(db)
+        GetMealsFromPlanByDateQuery, GetMealsFromPlanByDateQueryHandler()
     )
     event_bus.register_handler(
-        GetMealsByDateQuery, GetMealsByDateQueryHandler(meal_repository)
+        GetMealsByDateQuery, GetMealsByDateQueryHandler()
     )
     
     # Register meal suggestion handlers
@@ -346,60 +366,60 @@ async def get_configured_event_bus(
     )
     event_bus.register_handler(
         SaveMealSuggestionCommand,
-        SaveMealSuggestionCommandHandler(db=db),
+        SaveMealSuggestionCommandHandler(),
     )
 
     # Register user handlers
     event_bus.register_handler(
         SaveUserOnboardingCommand,
-        SaveUserOnboardingCommandHandler(db, cache_service=cache_service),
+        SaveUserOnboardingCommandHandler(cache_service=cache_service),
     )
-    event_bus.register_handler(SyncUserCommand, SyncUserCommandHandler(db))
+    event_bus.register_handler(SyncUserCommand, SyncUserCommandHandler())
     event_bus.register_handler(
-        UpdateUserLastAccessedCommand, UpdateUserLastAccessedCommandHandler(db)
+        UpdateUserLastAccessedCommand, UpdateUserLastAccessedCommandHandler()
     )
     event_bus.register_handler(
         CompleteOnboardingCommand,
-        CompleteOnboardingCommandHandler(db, cache_service=cache_service),
+        CompleteOnboardingCommandHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
-        DeleteUserCommand, DeleteUserCommandHandler(db)
+        DeleteUserCommand, DeleteUserCommandHandler()
     )
     event_bus.register_handler(
         UpdateUserMetricsCommand,
-        UpdateUserMetricsCommandHandler(db, cache_service=cache_service),
+        UpdateUserMetricsCommandHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
         GetUserProfileQuery,
-        GetUserProfileQueryHandler(db),
+        GetUserProfileQueryHandler(),
     )
     event_bus.register_handler(
-        GetUserByFirebaseUidQuery, GetUserByFirebaseUidQueryHandler(db)
+        GetUserByFirebaseUidQuery, GetUserByFirebaseUidQueryHandler()
     )
     event_bus.register_handler(
-        GetUserOnboardingStatusQuery, GetUserOnboardingStatusQueryHandler(db)
+        GetUserOnboardingStatusQuery, GetUserOnboardingStatusQueryHandler()
     )
     event_bus.register_handler(
-        GetUserMetricsQuery, GetUserMetricsQueryHandler(db)
+        GetUserMetricsQuery, GetUserMetricsQueryHandler()
     )
-    event_bus.register_handler(GetUserTdeeQuery, GetUserTdeeQueryHandler(db))
+    event_bus.register_handler(GetUserTdeeQuery, GetUserTdeeQueryHandler())
 
     # Register notification handlers
     event_bus.register_handler(
         RegisterFcmTokenCommand,
-        RegisterFcmTokenCommandHandler(notification_repository, db)
+        RegisterFcmTokenCommandHandler()
     )
     event_bus.register_handler(
         DeleteFcmTokenCommand,
-        DeleteFcmTokenCommandHandler(notification_repository)
+        DeleteFcmTokenCommandHandler()
     )
     event_bus.register_handler(
         UpdateNotificationPreferencesCommand,
-        UpdateNotificationPreferencesCommandHandler(notification_repository)
+        UpdateNotificationPreferencesCommandHandler()
     )
     event_bus.register_handler(
         GetNotificationPreferencesQuery,
-        GetNotificationPreferencesQueryHandler(notification_repository)
+        GetNotificationPreferencesQueryHandler()
     )
 
     # Register ingredient recognition handler
@@ -409,38 +429,34 @@ async def get_configured_event_bus(
     )
 
     # Register chat handlers
-    from src.infra.repositories.chat_repository import ChatRepository
-    
-    chat_repository = ChatRepository(db)
-    
+    # Chat handlers use ScopedSession internally
     event_bus.register_handler(
         CreateThreadCommand,
-        CreateThreadCommandHandler(chat_repository)
+        CreateThreadCommandHandler()
     )
     event_bus.register_handler(
         SendMessageCommand,
-        SendMessageCommandHandler(chat_repository, ai_chat_service)
+        SendMessageCommandHandler(ai_chat_service)
     )
     event_bus.register_handler(
         DeleteThreadCommand,
-        DeleteThreadCommandHandler(chat_repository)
+        DeleteThreadCommandHandler()
     )
     event_bus.register_handler(
         GetThreadsQuery,
-        GetThreadsQueryHandler(chat_repository)
+        GetThreadsQueryHandler()
     )
     event_bus.register_handler(
         GetThreadQuery,
-        GetThreadQueryHandler(chat_repository)
+        GetThreadQueryHandler()
     )
     event_bus.register_handler(
         GetMessagesQuery,
-        GetMessagesQueryHandler(chat_repository)
+        GetMessagesQueryHandler()
     )
 
     # Register domain event subscribers
     meal_analysis_handler = MealAnalysisEventHandler(
-        meal_repository=meal_repository,
         vision_service=vision_service,
         gpt_parser=gpt_parser,
         image_store=image_store,
@@ -449,4 +465,5 @@ async def get_configured_event_bus(
         MealImageUploadedEvent, meal_analysis_handler
     )
 
-    return event_bus
+    _configured_event_bus = event_bus
+    return _configured_event_bus

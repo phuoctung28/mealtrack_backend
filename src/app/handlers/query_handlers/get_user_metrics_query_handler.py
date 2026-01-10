@@ -5,11 +5,10 @@ Auto-extracted for better maintainability.
 import logging
 from typing import Dict, Any
 
-from sqlalchemy.orm import Session
-
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import handles, EventHandler
 from src.app.queries.user import GetUserMetricsQuery
+from src.infra.database.config import ScopedSession
 from src.infra.database.models.user.profile import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -18,20 +17,12 @@ logger = logging.getLogger(__name__)
 class GetUserMetricsQueryHandler(EventHandler[GetUserMetricsQuery, Dict[str, Any]]):
     """Handler for getting user's current metrics for settings display."""
 
-    def __init__(self, db: Session = None):
-        self.db = db
-
-    def set_dependencies(self, db: Session):
-        """Set dependencies for dependency injection."""
-        self.db = db
-
     async def handle(self, query: GetUserMetricsQuery) -> Dict[str, Any]:
         """Get user's current metrics."""
-        if not self.db:
-            raise RuntimeError("Database session not configured")
+        db = ScopedSession()
 
         # Get current user profile
-        profile = self.db.query(UserProfile).filter(
+        profile = db.query(UserProfile).filter(
             UserProfile.user_id == query.user_id,
             UserProfile.is_current == True
         ).first()

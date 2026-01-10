@@ -4,9 +4,7 @@ Works with Python 3.11 and the simplified WeeklyIngredientBasedMealPlanService.
 """
 
 import logging
-from typing import Any, Dict, Optional
-
-from sqlalchemy.orm import Session
+from typing import Any, Dict
 
 from src.app.commands.meal_plan import GenerateWeeklyIngredientBasedMealPlanCommand
 from src.app.events.base import EventHandler, handles
@@ -17,6 +15,7 @@ from src.domain.services.weekly_ingredient_based_meal_plan_service import (
     WeeklyIngredientBasedMealPlanService,
 )
 from src.infra.adapters.meal_generation_service import MealGenerationService
+from src.infra.database.config import ScopedSession
 
 logger = logging.getLogger(__name__)
 
@@ -27,21 +26,9 @@ class GenerateWeeklyIngredientBasedMealPlanCommandHandler(
 ):
     """Generate and persist a Monday-to-Sunday meal plan."""
 
-    def __init__(self, db: Optional[Session] = None) -> None:
-        self.db: Optional[Session] = db
+    def __init__(self) -> None:
         meal_generation_service = MealGenerationService()
         self.meal_plan_service = WeeklyIngredientBasedMealPlanService(meal_generation_service)
-        self.user_profile_service = UserProfileService(db) if db else None
-        self.persistence_service = MealPlanPersistenceService(db) if db else None
-
-    # ------------------------------------------------------------------ #
-    # dependency injection                                               #
-    # ------------------------------------------------------------------ #
-
-    def set_dependencies(self, db: Session) -> None:
-        self.db = db
-        self.user_profile_service = UserProfileService(db)
-        self.persistence_service = MealPlanPersistenceService(db)
 
     # ------------------------------------------------------------------ #
     # main handler                                                       #
@@ -50,8 +37,9 @@ class GenerateWeeklyIngredientBasedMealPlanCommandHandler(
     async def handle(
         self, command: GenerateWeeklyIngredientBasedMealPlanCommand
     ) -> Dict[str, Any]:
-        if not self.db:
-            raise RuntimeError("Database session not configured")
+        db = ScopedSession()
+        user_profile_service = UserProfileService(db)
+        persistence_service = MealPlanPersistenceService(db)
 
         logger.info(
             "Generating weekly ingredient-based meal plan for user %s (%d ingredients)",
@@ -60,7 +48,7 @@ class GenerateWeeklyIngredientBasedMealPlanCommandHandler(
         )
 
         # ── 1. get user profile data using shared service ──────────────
-        user_data = await self.user_profile_service.get_user_profile_or_defaults(command.user_id)
+        user_data = await user_profile_service.get_user_profile_or_defaults(command.user_id)
         
         # ── 2. calculate next Monday-Sunday dates ───────────────────────
         from datetime import datetime, timedelta
@@ -92,14 +80,13 @@ class GenerateWeeklyIngredientBasedMealPlanCommandHandler(
         logger.info("Meal plan generated for user %s", command.user_id)
 
         # ── 3. persist meal plan using shared service ───────────────────
-        if self.persistence_service:
-            user_preferences = self.user_profile_service.create_user_preferences_from_data(
-                user_data, PlanDuration.WEEKLY
-            )
-            plan_id = self.persistence_service.save_weekly_meal_plan(
-                plan_json, user_preferences, command.user_id
-            )
-            plan_json["plan_id"] = plan_id
+        user_preferences = user_profile_service.create_user_preferences_from_data(
+            user_data, PlanDuration.WEEKLY
+        )
+        plan_id = persistence_service.save_weekly_meal_plan(
+            plan_json, user_preferences, command.user_id
+        )
+        plan_json["plan_id"] = plan_id
 
         return plan_json
 

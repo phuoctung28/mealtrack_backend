@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 from src.domain.model.meal_planning import MealType, SimpleMacroTargets
 from src.domain.services.prompts import PromptTemplateManager
+from src.domain.services.prompts.prompt_constants import LANGUAGE_NAMES
 
 if TYPE_CHECKING:
     from src.domain.model.meal_suggestion import SuggestionSession
@@ -168,3 +169,13 @@ def build_recipe_details_prompt(meal_name: str, session: "SuggestionSession") ->
         allergies=getattr(session, "allergies", None),
         dietary_preferences=getattr(session, "dietary_preferences", None),
     )
+
+
+def get_language_name(code: str) -> str:
+    """Get full language name from ISO 639-1 code."""
+    return LANGUAGE_NAMES.get(code, "English")
+
+
+def get_language_instruction(code: str) -> str:
+    """Get language instruction for AI prompts."""
+    return PromptTemplateManager.get_language_instruction(code)

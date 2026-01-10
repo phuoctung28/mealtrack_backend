@@ -57,7 +57,7 @@ class PromptTemplateManager:
         """Generate language instruction for AI prompts."""
         if code == "en":
             return ""  # No instruction needed for English
-        """Get full language name from ISO 639-1 code."""
+        # Get full language name from ISO 639-1 code
         lang_name = LANGUAGE_NAMES.get(code, "English")
         return (
             f"\n\n⚠️ IMPORTANT: Generate ALL text content "

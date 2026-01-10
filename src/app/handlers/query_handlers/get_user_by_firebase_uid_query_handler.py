@@ -6,11 +6,10 @@ import logging
 import os
 from typing import Dict, Any
 
-from sqlalchemy.orm import Session
-
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.user.get_user_by_firebase_uid_query import GetUserByFirebaseUidQuery
+from src.infra.database.config import ScopedSession
 from src.infra.database.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -20,20 +19,12 @@ logger = logging.getLogger(__name__)
 class GetUserByFirebaseUidQueryHandler(EventHandler[GetUserByFirebaseUidQuery, Dict[str, Any]]):
     """Handler for getting user by Firebase UID."""
 
-    def __init__(self, db: Session = None):
-        self.db = db
-
-    def set_dependencies(self, db: Session):
-        """Set dependencies for dependency injection."""
-        self.db = db
-
     async def handle(self, query: GetUserByFirebaseUidQuery) -> Dict[str, Any]:
         """Get user by Firebase UID."""
-        if not self.db:
-            raise RuntimeError("Database session not configured")
+        db = ScopedSession()
 
         # Get user by firebase_uid
-        user = self.db.query(User).filter(
+        user = db.query(User).filter(
             User.firebase_uid == query.firebase_uid
         ).first()
 

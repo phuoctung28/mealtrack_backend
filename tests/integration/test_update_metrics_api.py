@@ -16,8 +16,32 @@ from src.infra.database.models.user.profile import UserProfile
 def client(test_session):
     """Create a test client with database dependency override."""
     from src.api.dependencies.auth import get_current_user_id
-    from src.api.base_dependencies import get_suggestion_orchestration_service
-    from unittest.mock import Mock
+    from src.api.base_dependencies import (
+        get_suggestion_orchestration_service,
+        get_cache_service,
+        get_food_cache_service,
+    )
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.infra.database.config import ScopedSession
+    from unittest.mock import Mock, patch
+    
+    # Reset event bus singleton before setting up client
+    import src.api.dependencies.event_bus as event_bus_module
+    event_bus_module._configured_event_bus = None
+    
+    # Create mocks for services
+    mock_suggestion_service = Mock()
+    mock_cache_service = None  # Disable cache
+    mock_food_cache = Mock()
+    mock_food_cache.get = Mock(return_value=None)
+    mock_food_cache.set = Mock(return_value=True)
+    
+    # Patch ScopedSession at module level for the entire test
+    # This ensures handlers get test_session when they call ScopedSession()
+    original_scoped_session_call = getattr(ScopedSession, '__call__', None)
+    def mock_scoped_session_call(*args, **kwargs):
+        return test_session
+    ScopedSession.__call__ = mock_scoped_session_call
     
     def override_get_db():
         try:
@@ -28,16 +52,49 @@ def client(test_session):
     def override_get_current_user_id():
         return "test_user_metrics"
     
-    def override_get_suggestion_orchestration_service():
-        # Mock the suggestion orchestration service to avoid Redis dependency
-        return Mock()
+    def override_get_suggestion_orchestration_service(db=None):
+        # Accept db parameter but ignore it, return mock
+        return mock_suggestion_service
+    
+    def override_get_cache_service():
+        return mock_cache_service
+    
+    def override_get_food_cache_service():
+        return mock_food_cache
+    
+    def override_get_configured_event_bus():
+        # Patch service getters at module level so get_configured_event_bus() gets mocked versions
+        # Reset singleton first
+        event_bus_module._configured_event_bus = None
+        
+        # Create a wrapper that handles both Depends() calls and direct calls
+        def mock_get_suggestion_service(*args, **kwargs):
+            # Handle both Depends() pattern and direct calls
+            return mock_suggestion_service
+        
+        with patch('src.api.base_dependencies.get_suggestion_orchestration_service', side_effect=mock_get_suggestion_service):
+            with patch('src.api.base_dependencies.get_cache_service', return_value=mock_cache_service):
+                with patch('src.api.base_dependencies.get_food_cache_service', return_value=mock_food_cache):
+                    from src.api.dependencies.event_bus import get_configured_event_bus as real_get_bus
+                    return real_get_bus()
     
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id
     app.dependency_overrides[get_suggestion_orchestration_service] = override_get_suggestion_orchestration_service
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
+    app.dependency_overrides[get_cache_service] = override_get_cache_service
+    app.dependency_overrides[get_food_cache_service] = override_get_food_cache_service
+    app.dependency_overrides[get_configured_event_bus] = override_get_configured_event_bus
+    
+    try:
+        client = TestClient(app)
+        yield client
+    finally:
+        # Cleanup
+        app.dependency_overrides.clear()
+        event_bus_module._configured_event_bus = None
+        # Restore original ScopedSession.__call__
+        if original_scoped_session_call is not None:
+            ScopedSession.__call__ = original_scoped_session_call
 
 
 @pytest.fixture

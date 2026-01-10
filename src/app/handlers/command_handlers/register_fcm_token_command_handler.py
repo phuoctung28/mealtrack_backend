@@ -5,13 +5,12 @@ Handler for registering FCM tokens.
 import logging
 from typing import Any, Dict, Optional
 
-from sqlalchemy.orm import Session
-
 from src.app.commands.notification import RegisterFcmTokenCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.notification import UserFcmToken, DeviceType
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
 from src.domain.services.timezone_utils import is_valid_timezone
+from src.infra.database.config import ScopedSession
 from src.infra.repositories.user_repository import UserRepository
 
 logger = logging.getLogger(__name__)
@@ -25,26 +24,17 @@ class RegisterFcmTokenCommandHandler(
 
     def __init__(
         self,
-        notification_repository: NotificationRepositoryPort = None,
-        db: Optional[Session] = None
+        notification_repository: NotificationRepositoryPort = None
     ):
         self.notification_repository = notification_repository
-        self.db = db
-        self.user_repository = UserRepository(db) if db else None
-
-    def set_dependencies(self, **kwargs):
-        """Set dependencies for dependency injection."""
-        self.notification_repository = kwargs.get(
-            "notification_repository", self.notification_repository
-        )
-        self.db = kwargs.get("db", self.db)
-        if self.db:
-            self.user_repository = UserRepository(self.db)
 
     async def handle(self, command: RegisterFcmTokenCommand) -> Dict[str, Any]:
         """Handle FCM token registration with old token cleanup."""
         if not self.notification_repository:
             raise RuntimeError("Notification repository not configured")
+
+        db = ScopedSession()
+        user_repository = UserRepository(db)
 
         try:
             device_type = (
@@ -80,9 +70,9 @@ class RegisterFcmTokenCommandHandler(
             saved_token = self.notification_repository.save_fcm_token(fcm_token)
 
             # 3. Update user timezone if provided and valid
-            if command.timezone and self.user_repository:
+            if command.timezone:
                 if is_valid_timezone(command.timezone):
-                    self.user_repository.update_user_timezone(command.user_id, command.timezone)
+                    user_repository.update_user_timezone(command.user_id, command.timezone)
                     logger.info(f"Updated timezone for user {command.user_id}: {command.timezone}")
                 else:
                     logger.warning(f"Invalid timezone from user {command.user_id}: {command.timezone}")

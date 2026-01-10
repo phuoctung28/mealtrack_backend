@@ -25,7 +25,7 @@ from src.infra.cache.cache_service import CacheService
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
 from src.infra.config.settings import settings
-from src.infra.database.config import SessionLocal
+from src.infra.database.config import SessionLocal, get_db as get_db_from_config
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
 from src.infra.services.firebase_service import FirebaseService
@@ -86,14 +86,14 @@ def get_db():
     """
     Get a database session.
     
+    Uses scoped session from config for request isolation.
+    This allows singleton services to safely access the current request's session.
+    
     Yields:
         Session: SQLAlchemy database session
     """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    # Delegate to the config's get_db which handles scoped sessions
+    yield from get_db_from_config()
 
 
 # Image Store (singleton pattern)

@@ -5,13 +5,12 @@ Auto-extracted for better maintainability.
 import logging
 from typing import Dict, Any
 
-from sqlalchemy.orm import Session
-
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
+from src.infra.database.config import ScopedSession
 from src.infra.database.models.user.profile import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -21,23 +20,15 @@ logger = logging.getLogger(__name__)
 class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
     """Handler for getting user's TDEE calculation."""
 
-    def __init__(self, db: Session = None, tdee_service: TdeeCalculationService = None):
-        self.db = db
+    def __init__(self, tdee_service: TdeeCalculationService = None):
         self.tdee_service = tdee_service or TdeeCalculationService()
-
-    def set_dependencies(self, db: Session, tdee_service: TdeeCalculationService = None):
-        """Set dependencies for dependency injection."""
-        self.db = db
-        if tdee_service:
-            self.tdee_service = tdee_service
 
     async def handle(self, query: GetUserTdeeQuery) -> Dict[str, Any]:
         """Get user's TDEE calculation based on current profile."""
-        if not self.db:
-            raise RuntimeError("Database session not configured")
+        db = ScopedSession()
 
         # Get current user profile
-        profile = self.db.query(UserProfile).filter(
+        profile = db.query(UserProfile).filter(
             UserProfile.user_id == query.user_id,
             UserProfile.is_current == True
         ).first()
