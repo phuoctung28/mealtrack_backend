@@ -161,41 +161,32 @@ def mock_scoped_session(test_session):
     Automatically patch ScopedSession to return test_session for all tests.
     
     This allows handlers that use ScopedSession() to work with test database sessions.
-    ScopedSession uses a scopefunc that returns _request_id.get(), so we set that
-    and register our test_session with ScopedSession's registry.
+    We patch ScopedSession.__call__ to return test_session directly.
     """
     from unittest.mock import patch
-    from src.infra.database.config import ScopedSession, _request_id
-    import uuid
+    from src.infra.database.config import ScopedSession
     
-    # Set a unique request ID for this test
-    request_id = str(uuid.uuid4())
-    token = _request_id.set(request_id)
+    # Store original __call__ method
+    original_call = getattr(ScopedSession, '__call__', None)
     
-    # Register test_session with ScopedSession for this request ID
-    # ScopedSession.registry is a dict-like object that maps scope -> session
+    # Create a function that always returns test_session
+    def mock_call(*args, **kwargs):
+        return test_session
+    
+    # Patch __call__ method
+    ScopedSession.__call__ = mock_call
+    
     try:
-        # Register the test session for this scope
-        ScopedSession.registry.setdefault(request_id, test_session)
-        
-        # Patch ScopedSession.__call__ to return test_session
-        original_call = ScopedSession.__call__
-        
-        def mock_call():
-            return test_session
-        
-        ScopedSession.__call__ = mock_call
-        
         yield
-        
     finally:
+        # Restore original
+        if original_call is not None:
+            ScopedSession.__call__ = original_call
         # Clean up
         try:
-            ScopedSession.__call__ = original_call
             ScopedSession.remove()
         except:
             pass
-        _request_id.reset(token)
 
 
 @pytest.fixture
