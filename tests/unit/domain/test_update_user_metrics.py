@@ -15,9 +15,10 @@ def setup_mock_db_with_profile(mock_profile):
     """Helper to set up mock database with profile query chain."""
     mock_db = Mock()
     mock_query = Mock()
-    mock_filter = Mock()
-    mock_query.filter.return_value = mock_filter
-    mock_filter.first.return_value = mock_profile
+    # Chain: db.query(UserProfile).filter(...).first()
+    mock_filter_result = Mock()
+    mock_filter_result.first.return_value = mock_profile
+    mock_query.filter.return_value = mock_filter_result
     mock_db.query.return_value = mock_query
     mock_db.add = Mock()
     mock_db.commit = Mock()
@@ -30,9 +31,10 @@ def setup_mock_db_without_profile():
     """Helper to set up mock database that returns None (no profile found)."""
     mock_db = Mock()
     mock_query = Mock()
-    mock_filter = Mock()
-    mock_query.filter.return_value = mock_filter
-    mock_filter.first.return_value = None
+    # Chain: db.query(UserProfile).filter(...).first()
+    mock_filter_result = Mock()
+    mock_filter_result.first.return_value = None
+    mock_query.filter.return_value = mock_filter_result
     mock_db.query.return_value = mock_query
     mock_db.add = Mock()
     mock_db.commit = Mock()
