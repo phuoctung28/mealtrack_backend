@@ -5,6 +5,8 @@ Auto-extracted for better maintainability.
 import logging
 import re
 from datetime import datetime
+
+from src.domain.services.timezone_utils import utc_now
 from typing import Dict, Any
 
 from src.app.commands.user.sync_user_command import SyncUserCommand
@@ -155,7 +157,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
             updated = True
 
         # Always update last_accessed
-        user.last_accessed = datetime.utcnow()
+        user.last_accessed = utc_now()
         updated = True
 
         return updated
@@ -187,7 +189,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
             counter += 1
             # Prevent infinite loop
             if counter > 999:
-                username = f"{base_username}{datetime.utcnow().microsecond}"
+                username = f"{base_username}{utc_now().microsecond}"
                 break
 
         return username

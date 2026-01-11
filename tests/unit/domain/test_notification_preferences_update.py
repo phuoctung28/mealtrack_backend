@@ -1,7 +1,7 @@
 """
 Unit tests for NotificationPreferences.update_preferences method.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -14,19 +14,19 @@ class TestNotificationPreferencesUpdate:
     
     def test_update_preferences_preserves_last_water_reminder_at(self):
         """Test that updating preferences preserves last_water_reminder_at value."""
-        # Arrange: Create preferences with last_water_reminder_at set
-        original_time = datetime(2025, 12, 7, 10, 30, 0)
+        # Arrange: Create preferences with last_water_reminder_at set (timezone-aware UTC)
+        original_time = datetime(2025, 12, 7, 10, 30, 0, tzinfo=timezone.utc)
         prefs = NotificationPreferences(
             preferences_id="00000000-0000-0000-0000-000000000001",
             user_id="00000000-0000-0000-0000-000000000002",
             last_water_reminder_at=original_time
         )
-        
+
         # Act: Update meal reminder time (should preserve last_water_reminder_at)
         updated_prefs = prefs.update_preferences(
             breakfast_time_minutes=540  # 9:00 AM
         )
-        
+
         # Assert: last_water_reminder_at should be preserved
         assert updated_prefs.last_water_reminder_at == original_time
         assert updated_prefs.breakfast_time_minutes == 540
@@ -53,21 +53,21 @@ class TestNotificationPreferencesUpdate:
     
     def test_update_preferences_updates_updated_at(self):
         """Test that updating preferences updates the updated_at timestamp."""
-        # Arrange
-        original_updated_at = datetime(2025, 12, 7, 10, 0, 0)
+        # Arrange (timezone-aware UTC)
+        original_updated_at = datetime(2025, 12, 7, 10, 0, 0, tzinfo=timezone.utc)
         prefs = NotificationPreferences(
             preferences_id="00000000-0000-0000-0000-000000000001",
             user_id="00000000-0000-0000-0000-000000000002",
             updated_at=original_updated_at
         )
-        
+
         # Act
         import time
         time.sleep(0.01)  # Small delay to ensure timestamp difference
         updated_prefs = prefs.update_preferences(
             meal_reminders_enabled=False
         )
-        
+
         # Assert: updated_at should be newer
         assert updated_prefs.updated_at > original_updated_at
         assert updated_prefs.meal_reminders_enabled is False

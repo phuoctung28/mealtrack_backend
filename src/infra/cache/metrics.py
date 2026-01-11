@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+
+from src.domain.services.timezone_utils import utc_now
 from typing import Dict
 
 
@@ -27,7 +29,7 @@ class CacheMonitor:
 
     def __init__(self):
         self.metrics = CacheMetrics()
-        self.last_reset = datetime.utcnow()
+        self.last_reset = utc_now()
 
     def record_hit(self) -> None:
         self.metrics.hits += 1
@@ -52,5 +54,5 @@ class CacheMonitor:
 
     def reset(self) -> None:
         self.metrics = CacheMetrics()
-        self.last_reset = datetime.utcnow()
+        self.last_reset = utc_now()
 

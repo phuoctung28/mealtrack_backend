@@ -4,6 +4,8 @@ Auto-extracted for better maintainability.
 """
 import logging
 from datetime import datetime
+
+from src.domain.services.timezone_utils import utc_now
 from typing import Dict, Any
 
 from src.api.exceptions import ResourceNotFoundException
@@ -33,7 +35,7 @@ class UpdateUserLastAccessedCommandHandler(EventHandler[UpdateUserLastAccessedCo
                 raise ResourceNotFoundException(f"User with Firebase UID {command.firebase_uid} not found")
 
             # Update last_accessed timestamp
-            last_accessed = command.last_accessed or datetime.utcnow()
+            last_accessed = command.last_accessed or utc_now()
             user.last_accessed = last_accessed
 
             db.commit()

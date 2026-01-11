@@ -15,7 +15,7 @@ from src.domain.services.weekly_ingredient_based_meal_plan_service import (
     WeeklyIngredientBasedMealPlanService,
 )
 from src.infra.adapters.meal_generation_service import MealGenerationService
-from src.infra.database.config import ScopedSession
+from src.domain.services.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class GenerateWeeklyIngredientBasedMealPlanCommandHandler(
         
         # ── 2. calculate next Monday-Sunday dates ───────────────────────
         from datetime import datetime, timedelta
-        today = datetime.now().date()
+        today = utc_now().date()
         days_since_monday = today.weekday()  # Monday = 0
         # Calculate next Monday
         days_until_next_monday = 7 - days_since_monday if days_since_monday != 0 else 7

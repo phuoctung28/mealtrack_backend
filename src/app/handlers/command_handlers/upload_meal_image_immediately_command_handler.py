@@ -16,6 +16,7 @@ from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.infra.cache.cache_service import CacheService
+from src.domain.services.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +71,8 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     image_id = parts[-1].split(".")[0]
             
             # Determine the meal date - use target_date if provided, otherwise use now
-            meal_date = command.target_date if command.target_date else datetime.now().date()
-            meal_datetime = datetime.combine(meal_date, datetime.now().time())
+            meal_date = command.target_date if command.target_date else utc_now().date()
+            meal_datetime = datetime.combine(meal_date, utc_now().time())
             
             logger.info(f"Creating meal record for date: {meal_date}")
             
@@ -104,7 +105,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             # Update meal with analysis results
             meal.dish_name = dish_name or "Unknown dish"
             meal.status = MealStatus.READY
-            meal.ready_at = datetime.now()
+            meal.ready_at = utc_now()
             meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)
             
             # Use the parsed nutrition directly

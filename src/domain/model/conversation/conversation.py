@@ -4,6 +4,8 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict
 
+from src.domain.services.timezone_utils import utc_now
+
 
 class ConversationState(str, Enum):
     GREETING = "greeting"
@@ -40,7 +42,7 @@ class Message:
         self.message_id = str(uuid.uuid4())
         self.role = role
         self.content = content
-        self.timestamp = datetime.utcnow()
+        self.timestamp = utc_now()
         self.metadata = metadata or {}
     
     def to_dict(self) -> Dict:
@@ -116,18 +118,18 @@ class Conversation:
         self.state = ConversationState.GREETING
         self.context = ConversationContext()
         self.messages = []
-        self.created_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
-    
+        self.created_at = utc_now()
+        self.updated_at = utc_now()
+
     def add_message(self, role: MessageRole, content: str, metadata: Optional[Dict] = None) -> Message:
         message = Message(role, content, metadata)
         self.messages.append(message)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = utc_now()
         return message
-    
+
     def update_state(self, new_state: ConversationState):
         self.state = new_state
-        self.updated_at = datetime.utcnow()
+        self.updated_at = utc_now()
     
     def get_last_assistant_message(self) -> Optional[Message]:
         for message in reversed(self.messages):

@@ -4,6 +4,7 @@ from datetime import datetime, date
 from typing import Optional, Dict, Any
 
 from ..nutrition import Macros
+from src.domain.services.timezone_utils import utc_now
 
 
 @dataclass
@@ -54,7 +55,7 @@ class UserMacros:
             target_date=target_date,
             target_calories=target_calories,
             target_macros=target_macros,
-            created_at=datetime.now(),
+            created_at=utc_now(),
             **kwargs
         )
     
@@ -76,7 +77,7 @@ class UserMacros:
             carbs=self.consumed_macros.carbs + macros.carbs,
             fat=self.consumed_macros.fat + macros.fat,
         )
-        
+
         return UserMacros(
             user_macros_id=self.user_macros_id,
             user_id=self.user_id,
@@ -86,7 +87,7 @@ class UserMacros:
             consumed_calories=new_consumed_calories,
             consumed_macros=new_consumed_macros,
             created_at=self.created_at,
-            updated_at=datetime.now(),
+            updated_at=utc_now(),
             onboard_data=self.onboard_data
         )
     

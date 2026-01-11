@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 from .enums import DeviceType
+from src.domain.services.timezone_utils import utc_now
 
 
 @dataclass
@@ -47,8 +48,8 @@ class UserFcmToken:
             user_id=user_id,
             fcm_token=fcm_token,
             device_type=device_type,
-            created_at=datetime.now(),
-            updated_at=datetime.now()
+            created_at=utc_now(),
+            updated_at=utc_now()
         )
     
     def deactivate(self) -> 'UserFcmToken':
@@ -60,7 +61,7 @@ class UserFcmToken:
             device_type=self.device_type,
             is_active=False,
             created_at=self.created_at,
-            updated_at=datetime.now()
+            updated_at=utc_now()
         )
     
     def to_dict(self) -> dict:

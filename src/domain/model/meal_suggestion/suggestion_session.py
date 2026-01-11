@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import List, Optional
 
+from src.domain.services.timezone_utils import utc_now
+
 
 @dataclass
 class SuggestionSession:
@@ -21,7 +23,7 @@ class SuggestionSession:
     shown_meal_names: List[str] = field(default_factory=list)  # Track meal names for exclusion
     dietary_preferences: List[str] = field(default_factory=list)
     allergies: List[str] = field(default_factory=list)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
     expires_at: Optional[datetime] = None
 
     def add_shown_ids(self, ids: List[str]) -> None:

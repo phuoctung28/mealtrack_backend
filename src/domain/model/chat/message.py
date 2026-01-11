@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+from src.domain.services.timezone_utils import utc_now, format_iso_utc
 from .chat_enums import MessageRole
 
 
@@ -59,10 +60,10 @@ class Message:
             thread_id=thread_id,
             role=MessageRole.USER,
             content=content,
-            created_at=datetime.utcnow(),
+            created_at=utc_now(),
             metadata=metadata or {}
         )
-    
+
     @classmethod
     def create_assistant_message(
         cls,
@@ -76,10 +77,10 @@ class Message:
             thread_id=thread_id,
             role=MessageRole.ASSISTANT,
             content=content,
-            created_at=datetime.utcnow(),
+            created_at=utc_now(),
             metadata=metadata or {}
         )
-    
+
     @classmethod
     def create_system_message(
         cls,
@@ -93,7 +94,7 @@ class Message:
             thread_id=thread_id,
             role=MessageRole.SYSTEM,
             content=content,
-            created_at=datetime.utcnow(),
+            created_at=utc_now(),
             metadata=metadata or {}
         )
     
@@ -104,7 +105,7 @@ class Message:
             "thread_id": self.thread_id,
             "role": str(self.role),
             "content": self.content,
-            "created_at": self.created_at.isoformat(),
+            "created_at": format_iso_utc(self.created_at),
             "metadata": self.metadata or {}
         }
 

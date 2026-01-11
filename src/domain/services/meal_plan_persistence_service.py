@@ -8,6 +8,8 @@ from typing import Dict, Any
 
 from sqlalchemy.orm import Session
 
+from src.domain.services.timezone_utils import utc_now
+
 from src.domain.model.meal_planning import UserPreferences
 from src.infra.database.models.enums import (
     FitnessGoalEnum,
@@ -56,7 +58,7 @@ class MealPlanPersistenceService:
             # Create day plan for today
             day_plan_orm = MealPlanDayORM(
                 meal_plan_id=meal_plan_orm.id,
-                date=datetime.now().date()
+                date=utc_now().date()
             )
             self.db.add(day_plan_orm)
             self.db.flush()
@@ -103,7 +105,7 @@ class MealPlanPersistenceService:
             self.db.flush()
             
             # Create day plans for the week
-            today = datetime.now().date()
+            today = utc_now().date()
             weekday_index = {
                 "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
                 "friday": 4, "saturday": 5, "sunday": 6,

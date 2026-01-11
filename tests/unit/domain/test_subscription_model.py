@@ -1,7 +1,7 @@
 """
 Unit tests for Subscription model.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.infra.database.models.subscription import Subscription
 
@@ -11,6 +11,7 @@ class TestSubscriptionModel:
     
     def test_subscription_is_active_when_status_active_and_not_expired(self):
         """Test that subscription is active when status is active and not expired."""
+        now = datetime.now(timezone.utc)
         subscription = Subscription(
             id="sub_123",
             user_id="user_123",
@@ -18,14 +19,15 @@ class TestSubscriptionModel:
             product_id="premium_monthly",
             platform="ios",
             status="active",
-            purchased_at=datetime.now(),
-            expires_at=datetime.now() + timedelta(days=30)
+            purchased_at=now,
+            expires_at=now + timedelta(days=30)
         )
-        
+
         assert subscription.is_active() is True
-    
+
     def test_subscription_not_active_when_expired(self):
         """Test that subscription is not active when expired."""
+        now = datetime.now(timezone.utc)
         subscription = Subscription(
             id="sub_123",
             user_id="user_123",
@@ -33,14 +35,15 @@ class TestSubscriptionModel:
             product_id="premium_monthly",
             platform="ios",
             status="active",
-            purchased_at=datetime.now() - timedelta(days=31),
-            expires_at=datetime.now() - timedelta(days=1)
+            purchased_at=now - timedelta(days=31),
+            expires_at=now - timedelta(days=1)
         )
-        
+
         assert subscription.is_active() is False
-    
+
     def test_subscription_not_active_when_status_not_active(self):
         """Test that subscription is not active when status is not active."""
+        now = datetime.now(timezone.utc)
         subscription = Subscription(
             id="sub_123",
             user_id="user_123",
@@ -48,10 +51,10 @@ class TestSubscriptionModel:
             product_id="premium_monthly",
             platform="ios",
             status="cancelled",
-            purchased_at=datetime.now(),
-            expires_at=datetime.now() + timedelta(days=30)
+            purchased_at=now,
+            expires_at=now + timedelta(days=30)
         )
-        
+
         assert subscription.is_active() is False
     
     def test_subscription_is_monthly(self):

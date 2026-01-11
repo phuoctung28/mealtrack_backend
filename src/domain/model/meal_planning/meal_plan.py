@@ -4,6 +4,8 @@ from datetime import datetime, date
 from enum import Enum
 from typing import List, Optional, Dict
 
+from src.domain.services.timezone_utils import utc_now
+
 
 class DietaryPreference(str, Enum):
     VEGAN = "vegan"
@@ -164,22 +166,22 @@ class MealPlan:
         self.user_id = user_id
         self.preferences = preferences
         self.days = days
-        self.created_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
-    
+        self.created_at = utc_now()
+        self.updated_at = utc_now()
+
     def get_day(self, date: date) -> Optional[DayPlan]:
         for day in self.days:
             if day.date == date:
                 return day
         return None
-    
+
     def replace_meal(self, date: date, meal_id: str, new_meal: PlannedMeal) -> bool:
         day = self.get_day(date)
         if day:
             for i, meal in enumerate(day.meals):
                 if meal.meal_id == meal_id:
                     day.meals[i] = new_meal
-                    self.updated_at = datetime.utcnow()
+                    self.updated_at = utc_now()
                     return True
         return False
     

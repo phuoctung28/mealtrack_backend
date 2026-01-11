@@ -2,7 +2,6 @@
 Handler for adding custom ingredients to meals.
 """
 import logging
-from datetime import datetime
 from typing import Dict, Any, Optional
 
 from src.app.commands.meal import AddCustomIngredientCommand
@@ -10,6 +9,7 @@ from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.services.meal_service import MealService
+from src.domain.services.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
 
 logger = logging.getLogger(__name__)
@@ -55,6 +55,6 @@ class AddCustomIngredientCommandHandler(EventHandler[AddCustomIngredientCommand,
     async def _invalidate_daily_macros(self, meal):
         if not self.cache_service or not meal:
             return
-        created_at = meal.created_at or datetime.utcnow()
+        created_at = meal.created_at or utc_now()
         cache_key, _ = CacheKeys.daily_macros(meal.user_id, created_at.date())
         await self.cache_service.invalidate(cache_key)

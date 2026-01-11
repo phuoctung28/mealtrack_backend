@@ -5,6 +5,10 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
+from src.domain.services.timezone_utils import utc_now
+
+from sqlalchemy.orm import Session
+
 from src.api.exceptions import ResourceNotFoundException, ValidationException, ConflictException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.base import EventHandler, handles
@@ -75,7 +79,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                         if last_changed:
                             # Compare naive datetimes (database stores naive UTC)
                             cooldown_until = last_changed + timedelta(days=7)
-                            now = datetime.utcnow()
+                            now = utc_now()
                             if now < cooldown_until:
                                 # Format cooldown_until as ISO with Z suffix for UTC
                                 cooldown_iso = cooldown_until.isoformat() + "Z"

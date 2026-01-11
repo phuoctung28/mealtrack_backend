@@ -1,7 +1,6 @@
 """
 Feature flags API endpoints for application-level feature control.
 """
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -16,6 +15,7 @@ from src.api.schemas.response.feature_flag_responses import (
     FeatureFlagUpdatedResponse
 )
 from src.domain.cache.cache_keys import CacheKeys
+from src.domain.services.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.feature_flag import FeatureFlag
 
@@ -43,7 +43,7 @@ async def get_feature_flags(
 
     response = FeatureFlagsResponse(
         flags=flags_dict,
-        updated_at=datetime.utcnow()
+        updated_at=utc_now()
     )
 
     if cache_service:
@@ -170,8 +170,8 @@ async def update_feature_flag(
         feature_flag.enabled = request.enabled
     if request.description is not None:
         feature_flag.description = request.description
-    
-    feature_flag.updated_at = datetime.utcnow()
+
+    feature_flag.updated_at = utc_now()
     
     db.commit()
     db.refresh(feature_flag)

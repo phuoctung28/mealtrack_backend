@@ -3,7 +3,6 @@ Chat repository implementation using SQLAlchemy.
 """
 import json
 import logging
-from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import func
@@ -11,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from src.domain.model.chat import Thread, Message, ThreadStatus
 from src.domain.ports.chat_repository_port import ChatRepositoryPort
+from src.domain.services.timezone_utils import utc_now
 from src.infra.database.models.chat import ChatThread, ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -173,7 +173,7 @@ class ChatRepository(ChatRepositoryPort):
             
             db_thread.status = 'deleted'
             db_thread.is_active = False
-            db_thread.updated_at = datetime.utcnow()
+            db_thread.updated_at = utc_now()
             
             db.commit()
             return True
@@ -221,7 +221,7 @@ class ChatRepository(ChatRepositoryPort):
             # Update thread's updated_at
             db_thread = db.query(ChatThread).filter(ChatThread.id == message.thread_id).first()
             if db_thread:
-                db_thread.updated_at = datetime.utcnow()
+                db_thread.updated_at = utc_now()
             
             db.commit()
             db.refresh(db_message)

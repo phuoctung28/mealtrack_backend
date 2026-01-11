@@ -14,6 +14,7 @@ from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.repositories.meal_repository import MealRepository
+from src.domain.services.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +98,7 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             # Update meal with analysis results (same as UploadMealImageImmediatelyHandler)
             meal.dish_name = dish_name or "Unknown dish"
             meal.status = MealStatus.READY
-            meal.ready_at = datetime.now()
+            meal.ready_at = utc_now()
             meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)
             
             # Use the parsed nutrition directly (same as UploadMealImageImmediatelyHandler)

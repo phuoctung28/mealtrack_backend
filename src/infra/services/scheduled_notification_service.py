@@ -3,7 +3,9 @@ Scheduled notification service for sending push notifications at specific times.
 """
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+
+from src.domain.services.timezone_utils import utc_now, timezone
 from typing import Dict, List
 
 from src.domain.model.notification import NotificationType
@@ -186,7 +188,7 @@ class ScheduledNotificationService:
                 title="🧪 Test Notification",
                 body="This is a test notification from the backend",
                 notification_type=NotificationType.PROGRESS_NOTIFICATION,
-                data={"type": "test", "timestamp": datetime.now().isoformat()}
+                data={"type": "test", "timestamp": utc_now().isoformat()}
             )
             
             logger.info(f"Test notification sent to user {user_id}: {result}")

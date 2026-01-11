@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from src.infra.database.models.subscription import Subscription
 from src.infra.repositories.base import BaseRepository
+from src.domain.services.timezone_utils import utc_now
 
 
 class SubscriptionRepository(BaseRepository[Subscription]):
@@ -55,13 +56,13 @@ class SubscriptionRepository(BaseRepository[Subscription]):
         return self.session.query(Subscription).filter(
             and_(
                 Subscription.status == 'active',
-                Subscription.expires_at < datetime.now()
+                Subscription.expires_at < utc_now()
             )
         ).all()
     
     def update_subscription_status(
-        self, 
-        subscription_id: str, 
+        self,
+        subscription_id: str,
         status: str,
         expires_at: Optional[datetime] = None
     ) -> Optional[Subscription]:
@@ -69,7 +70,7 @@ class SubscriptionRepository(BaseRepository[Subscription]):
         subscription = self.get(subscription_id)
         if subscription:
             subscription.status = status
-            subscription.updated_at = datetime.now()
+            subscription.updated_at = utc_now()
             if expires_at:
                 subscription.expires_at = expires_at
             self.session.commit()

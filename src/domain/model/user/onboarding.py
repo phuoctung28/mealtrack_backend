@@ -4,6 +4,8 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict, Any, Union
 
+from src.domain.services.timezone_utils import utc_now
+
 
 class OnboardingSectionType(Enum):
     """Types of onboarding sections."""
@@ -99,7 +101,7 @@ class OnboardingSection:
             section_type=section_type,
             order=order,
             fields=fields,
-            created_at=datetime.now()
+            created_at=utc_now()
         )
     
     def to_dict(self) -> dict:
@@ -156,8 +158,8 @@ class OnboardingResponse:
             user_id=user_id,
             section_id=section_id,
             field_responses=field_responses,
-            completed_at=datetime.now(),
-            created_at=datetime.now()
+            completed_at=utc_now(),
+            created_at=utc_now()
         )
     
     def to_dict(self) -> dict:

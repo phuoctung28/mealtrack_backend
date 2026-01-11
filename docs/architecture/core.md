@@ -1,7 +1,7 @@
 # Core Architecture
 
-**Version:** 0.4.5
-**Last Updated:** January 7, 2026
+**Version:** 0.4.7
+**Last Updated:** January 11, 2026
 
 ## System Overview
 

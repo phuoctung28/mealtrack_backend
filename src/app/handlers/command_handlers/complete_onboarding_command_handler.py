@@ -4,6 +4,8 @@ Auto-extracted for better maintainability.
 """
 import logging
 from datetime import datetime
+
+from src.domain.services.timezone_utils import utc_now
 from typing import Dict, Any, Optional
 
 from src.api.exceptions import ResourceNotFoundException
@@ -48,7 +50,7 @@ class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, D
 
             # Set onboarding as completed
             user.onboarding_completed = True
-            user.last_accessed = datetime.utcnow()
+            user.last_accessed = utc_now()
 
             db.commit()
             await self._invalidate_user_profile(user.id)

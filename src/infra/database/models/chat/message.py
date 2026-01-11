@@ -1,11 +1,10 @@
 """
 Database model for chat messages.
 """
-from datetime import datetime
-
 from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Index
 from sqlalchemy.orm import relationship
 
+from src.domain.services.timezone_utils import utc_now
 from src.infra.database.config import Base
 from src.infra.database.models.base import BaseMixin
 
@@ -25,7 +24,7 @@ class ChatMessage(Base, BaseMixin):
     metadata_ = Column('metadata', Text, nullable=True)  # Store as JSON string
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False, index=True)
     
     # Relationships
     thread = relationship("ChatThread", back_populates="messages")
