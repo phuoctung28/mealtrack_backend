@@ -1,9 +1,9 @@
 # MealTrack Backend - Codebase Summary
 
-**Generated:** January 9, 2026
-**Codebase Stats**: 547 files, 752k+ tokens, 3.5M+ characters
-**Source Files**: ~320+ Python files (src/)
-**Test Files**: 76 files with 681+ test cases
+**Generated:** January 11, 2026
+**Codebase Stats**: 500 files, ~35.7K LOC in src/, 92 test files
+**Source Files**: 408 Python files (src/)
+**Test Files**: 92 files with 681+ test cases
 **Language**: Python 3.11+
 **Framework**: FastAPI 0.115.0+, SQLAlchemy 2.0
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
@@ -70,18 +70,17 @@ mealtrack_backend/
 
 | Metric | Value |
 |--------|-------|
-| Total Files | 398 source files |
-| Source Files (src/) | ~322 files |
-| Test Files | 76 files |
+| Total Source Files | 408 Python files |
+| Source Directory (src/) | 408 files |
+| Test Files | 92 files |
 | Total Test Cases | 681+ tests |
-| Total Tokens | 267,486 |
-| Total Characters | 1.2M+ |
-| Lines of Code (src/) | ~34,132 LOC |
+| Lines of Code (src/) | 35,663 LOC |
 | API Endpoints | 70+ REST endpoints |
 | CQRS Commands | 40+ command definitions |
 | CQRS Queries | 35+ query definitions |
 | Database Tables | 27 tables across 12 migrations |
 | Code Coverage | 70%+ maintained |
+| External Service Integrations | 7 (Gemini, GPT-4, Pinecone, Firebase, Cloudinary, RevenueCat, Redis) |
 
 ---
 
