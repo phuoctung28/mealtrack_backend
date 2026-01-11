@@ -4,6 +4,8 @@ Consolidates meal_service.py and meal_type_determination_service.py.
 """
 import logging
 from datetime import datetime, time
+
+from src.domain.services.timezone_utils import utc_now
 from typing import Optional, List, Dict
 
 from src.domain.model.meal import Meal
@@ -125,7 +127,7 @@ class MealCoreService:
             Appropriate MealType enum
         """
         if meal_time is None:
-            meal_time = datetime.now()
+            meal_time = utc_now()
         
         t = meal_time.time()
         

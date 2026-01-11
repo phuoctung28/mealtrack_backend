@@ -3,6 +3,8 @@ Activities API endpoints - Event-driven architecture.
 """
 
 from datetime import datetime
+
+from src.domain.services.timezone_utils import utc_now
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -46,7 +48,7 @@ async def get_daily_activities(
             except ValueError as e:
                 raise ValidationException("Invalid date format. Use YYYY-MM-DD") from e
         else:
-            target_date = datetime.now()
+            target_date = utc_now()
 
         # Send query
         query = GetDailyActivitiesQuery(user_id=user_id, target_date=target_date)

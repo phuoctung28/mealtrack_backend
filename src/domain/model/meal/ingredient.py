@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from ..nutrition import Macros, Micros
+from src.domain.services.timezone_utils import utc_now
 
 
 @dataclass
@@ -46,7 +47,7 @@ class Ingredient:
             name=name,
             quantity=quantity,
             unit=unit,
-            created_at=datetime.now(),
+            created_at=utc_now(),
             **kwargs
         )
     
@@ -62,7 +63,7 @@ class Ingredient:
             macros=macros,
             micros=micros,
             created_at=self.created_at,
-            updated_at=datetime.now()
+            updated_at=utc_now()
         )
     
     def to_dict(self) -> dict:

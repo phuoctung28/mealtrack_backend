@@ -6,6 +6,7 @@ from typing import Optional
 
 from .meal_image import MealImage
 from ..nutrition import Nutrition
+from src.domain.services.timezone_utils import utc_now, format_iso_utc
 
 
 class MealStatus(Enum):
@@ -74,7 +75,7 @@ class Meal:
             meal_id=str(uuid.uuid4()),
             user_id=user_id,
             status=MealStatus.PROCESSING,
-            created_at=datetime.now(),
+            created_at=utc_now(),
             image=image
         )
     
@@ -128,7 +129,7 @@ class Meal:
             image=self.image,
             dish_name=dish_name,
             nutrition=nutrition,
-            ready_at=datetime.now(),
+            ready_at=utc_now(),
             error_message=self.error_message,
             raw_gpt_json=self.raw_gpt_json,
             updated_at=self.updated_at,
@@ -171,8 +172,8 @@ class Meal:
             ready_at=self.ready_at,
             error_message=self.error_message,
             raw_gpt_json=self.raw_gpt_json,
-            updated_at=datetime.now(),
-            last_edited_at=datetime.now(),
+            updated_at=utc_now(),
+            last_edited_at=utc_now(),
             edit_count=self.edit_count + 1,
             is_manually_edited=True,
             meal_type=self.meal_type
@@ -191,7 +192,7 @@ class Meal:
             ready_at=self.ready_at,
             error_message=self.error_message,
             raw_gpt_json=self.raw_gpt_json,
-            updated_at=datetime.now(),
+            updated_at=utc_now(),
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
             is_manually_edited=self.is_manually_edited,
@@ -204,20 +205,20 @@ class Meal:
             "meal_id": self.meal_id,
             "user_id": self.user_id,
             "status": str(self.status),
-            "created_at": self.created_at.isoformat(),
+            "created_at": format_iso_utc(self.created_at),
             "image": self.image.to_dict()
         }
-        
+
         if self.dish_name is not None:
             result["dish_name"] = self.dish_name
-            
+
         if self.nutrition is not None:
             result["nutrition"] = self.nutrition.to_dict()
-            
+
         if self.ready_at is not None:
-            result["ready_at"] = self.ready_at.isoformat()
-            
+            result["ready_at"] = format_iso_utc(self.ready_at)
+
         if self.error_message is not None:
             result["error_message"] = self.error_message
-        
+
         return result 

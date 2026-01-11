@@ -14,6 +14,7 @@ from src.domain.model.meal import MealImage
 from src.domain.model.nutrition import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem as DomainFoodItem
 from src.infra.cache.cache_service import CacheService
+from src.domain.services.timezone_utils import utc_now
 
 
 class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any]):
@@ -91,8 +92,8 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         )
 
         # Determine the meal date - use target_date if provided, otherwise use now
-        meal_date = event.target_date if event.target_date else datetime.now().date()
-        meal_datetime = datetime.combine(meal_date, datetime.now().time())
+        meal_date = event.target_date if event.target_date else utc_now().date()
+        meal_datetime = datetime.combine(meal_date, utc_now().time())
         
         meal = Meal(
             meal_id=str(uuid4()),

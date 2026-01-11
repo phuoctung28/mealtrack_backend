@@ -4,6 +4,8 @@ Notification preferences domain model.
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+
+from src.domain.services.timezone_utils import utc_now, format_iso_utc
 from typing import Optional
 
 from .enums import NotificationType
@@ -90,8 +92,8 @@ class NotificationPreferences:
             dinner_time_minutes=1080,    # 6:00 PM
             sleep_reminder_time_minutes=1320,  # 10:00 PM
             water_reminder_interval_hours=2,  # Every 2 hours
-            created_at=datetime.now(),
-            updated_at=datetime.now()
+            created_at=utc_now(),
+            updated_at=utc_now()
         )
     
     def update_preferences(
@@ -136,7 +138,7 @@ class NotificationPreferences:
             last_water_reminder_at=self.last_water_reminder_at,
             sleep_reminder_time_minutes=sleep_reminder_time_minutes if sleep_reminder_time_minutes is not None else self.sleep_reminder_time_minutes,
             created_at=self.created_at,
-            updated_at=datetime.now()
+            updated_at=utc_now()
         )
     
     def is_notification_type_enabled(self, notification_type: NotificationType) -> bool:
@@ -169,9 +171,9 @@ class NotificationPreferences:
             "lunch_time_minutes": self.lunch_time_minutes,
             "dinner_time_minutes": self.dinner_time_minutes,
             "water_reminder_interval_hours": self.water_reminder_interval_hours,
-            "last_water_reminder_at": self.last_water_reminder_at.isoformat() if self.last_water_reminder_at else None,
+            "last_water_reminder_at": format_iso_utc(self.last_water_reminder_at),
             "sleep_reminder_time_minutes": self.sleep_reminder_time_minutes,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": format_iso_utc(self.created_at),
+            "updated_at": format_iso_utc(self.updated_at),
         }
 

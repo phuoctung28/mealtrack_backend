@@ -7,6 +7,8 @@ import logging
 import os
 import uuid
 from datetime import datetime
+
+from src.domain.services.timezone_utils import utc_now
 from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Header
@@ -115,7 +117,7 @@ def handle_purchase(uow, user, event):
         product_id=event.get("product_id"),
         platform=parse_platform(event.get("store")),
         status="active",
-        purchased_at=parse_timestamp(event.get("purchased_at_ms")) or datetime.now(),
+        purchased_at=parse_timestamp(event.get("purchased_at_ms")) or utc_now(),
         expires_at=parse_timestamp(event.get("expiration_at_ms")),
         store_transaction_id=event.get("transaction_id"),
         is_sandbox=event.get("environment") == "SANDBOX",
@@ -135,7 +137,7 @@ def handle_renewal(uow, user, event):
     if subscription:
         subscription.expires_at = parse_timestamp(event.get("expiration_at_ms"))
         subscription.status = "active"
-        subscription.updated_at = datetime.now()
+        subscription.updated_at = utc_now()
         logger.info(f"User {user.id} renewed subscription until {subscription.expires_at}")
     else:
         logger.warning(f"Subscription not found for renewal, creating new one")
@@ -151,8 +153,8 @@ def handle_cancellation(uow, user, event):
     
     if subscription:
         subscription.status = "cancelled"
-        subscription.cancelled_at = datetime.now()
-        subscription.updated_at = datetime.now()
+        subscription.cancelled_at = utc_now()
+        subscription.updated_at = utc_now()
         # Note: User still has access until expires_at
         logger.info(f"User {user.id} cancelled subscription (expires {subscription.expires_at})")
 
@@ -166,7 +168,7 @@ def handle_expiration(uow, user, event):
     
     if subscription:
         subscription.status = "expired"
-        subscription.updated_at = datetime.now()
+        subscription.updated_at = utc_now()
         logger.info(f"User {user.id} subscription expired")
 
 
@@ -179,7 +181,7 @@ def handle_billing_issue(uow, user, event):
     
     if subscription:
         subscription.status = "billing_issue"
-        subscription.updated_at = datetime.now()
+        subscription.updated_at = utc_now()
         logger.warning(f"Billing issue for user {user.id}")
         # TODO: Send notification to user
 
@@ -195,7 +197,7 @@ def handle_product_change(uow, user, event):
         subscription.product_id = event.get("product_id")
         subscription.expires_at = parse_timestamp(event.get("expiration_at_ms"))
         subscription.status = "active"
-        subscription.updated_at = datetime.now()
+        subscription.updated_at = utc_now()
         logger.info(f"User {user.id} changed to {subscription.product_id}")
 
 

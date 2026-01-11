@@ -7,6 +7,7 @@ from sqlalchemy.orm import relationship
 from src.infra.database.config import Base
 from src.infra.database.models.base import TimestampMixin
 from src.infra.database.models.enums import MealStatusEnum
+from src.domain.services.timezone_utils import utc_now
 
 
 class Meal(Base, TimestampMixin):
@@ -73,7 +74,7 @@ class Meal(Base, TimestampMixin):
             user_id=user_id,
             status=MealStatusMapper.to_db(domain_model.status),
             created_at=domain_model.created_at,
-            updated_at=getattr(domain_model, "updated_at", None) or datetime.now(),
+            updated_at=getattr(domain_model, "updated_at", None) or utc_now(),
             dish_name=getattr(domain_model, "dish_name", None),
             ready_at=getattr(domain_model, "ready_at", None),
             error_message=getattr(domain_model, "error_message", None),

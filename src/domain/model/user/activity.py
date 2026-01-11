@@ -4,6 +4,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any
 
+from src.domain.services.timezone_utils import utc_now
+
 
 class ActivityType(Enum):
     """Types of activities that can be tracked."""
@@ -47,7 +49,7 @@ class Activity:
             activity_id=str(uuid.uuid4()),
             activity_type=activity_type,
             title=title,
-            created_at=datetime.now(),
+            created_at=utc_now(),
             **kwargs
         )
     

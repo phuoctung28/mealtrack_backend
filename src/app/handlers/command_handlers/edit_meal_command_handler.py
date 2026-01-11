@@ -4,6 +4,8 @@ Handler for editing meal ingredients.
 import logging
 import uuid
 from datetime import datetime
+
+from src.domain.services.timezone_utils import utc_now
 from typing import Dict, Any, Optional
 
 from src.api.exceptions import ValidationException, ResourceNotFoundException
@@ -227,6 +229,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
     async def _invalidate_daily_macros(self, meal):
         if not self.cache_service or not meal:
             return
-        created_at = meal.created_at or datetime.utcnow()
+        created_at = meal.created_at or utc_now()
         cache_key, _ = CacheKeys.daily_macros(meal.user_id, created_at.date())
         await self.cache_service.invalidate(cache_key)

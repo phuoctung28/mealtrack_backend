@@ -6,6 +6,8 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
+from src.domain.services.timezone_utils import utc_now
+
 
 class MealType(str, Enum):
     """Types of meals."""
@@ -90,4 +92,4 @@ class MealSuggestion:
     prep_time_minutes: int
     confidence_score: float = 0.9
     status: SuggestionStatus = SuggestionStatus.PENDING
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=utc_now)

@@ -10,6 +10,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.domain.model.meal import MealStatus
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.domain.services.timezone_utils import format_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         return {
             "id": meal.meal_id,
             "type": "meal",
-            "timestamp": meal.created_at.isoformat() if meal.created_at else target_date.isoformat(),
+            "timestamp": format_iso_utc(meal.created_at) if meal.created_at else format_iso_utc(target_date),
             "title": meal.dish_name or "Unknown Meal",
             "meal_type": meal_type,
             "calories": round(meal.nutrition.calories, 1) if meal.nutrition else 0,

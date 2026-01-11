@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 
+from src.domain.services.timezone_utils import utc_now, format_iso_utc
 from .chat_enums import ThreadStatus
 from .message import Message
 
@@ -54,7 +55,7 @@ class Thread:
         metadata: Optional[Dict[str, Any]] = None
     ) -> 'Thread':
         """Factory method to create a new thread."""
-        now = datetime.utcnow()
+        now = utc_now()
         return cls(
             thread_id=str(uuid.uuid4()),
             user_id=user_id,
@@ -65,26 +66,26 @@ class Thread:
             metadata=metadata or {},
             messages=[]
         )
-    
+
     def add_message(self, message: Message) -> 'Thread':
         """Add a message to the thread and return updated thread."""
         if message.thread_id != self.thread_id:
             raise ValueError(f"Message thread_id {message.thread_id} does not match thread {self.thread_id}")
-        
+
         # Create new thread with updated messages
         updated_messages = self.messages + [message]
-        
+
         return Thread(
             thread_id=self.thread_id,
             user_id=self.user_id,
             title=self.title,
             status=self.status,
             created_at=self.created_at,
-            updated_at=datetime.utcnow(),
+            updated_at=utc_now(),
             metadata=self.metadata,
             messages=updated_messages
         )
-    
+
     def archive(self) -> 'Thread':
         """Archive the thread."""
         return Thread(
@@ -93,11 +94,11 @@ class Thread:
             title=self.title,
             status=ThreadStatus.ARCHIVED,
             created_at=self.created_at,
-            updated_at=datetime.utcnow(),
+            updated_at=utc_now(),
             metadata=self.metadata,
             messages=self.messages
         )
-    
+
     def delete(self) -> 'Thread':
         """Soft delete the thread."""
         return Thread(
@@ -106,23 +107,23 @@ class Thread:
             title=self.title,
             status=ThreadStatus.DELETED,
             created_at=self.created_at,
-            updated_at=datetime.utcnow(),
+            updated_at=utc_now(),
             metadata=self.metadata,
             messages=self.messages
         )
-    
+
     def update_title(self, title: str) -> 'Thread':
         """Update thread title."""
         if len(title) > 255:
             raise ValueError(f"Title too long (max 255 chars): {len(title)}")
-        
+
         return Thread(
             thread_id=self.thread_id,
             user_id=self.user_id,
             title=title,
             status=self.status,
             created_at=self.created_at,
-            updated_at=datetime.utcnow(),
+            updated_at=utc_now(),
             metadata=self.metadata,
             messages=self.messages
         )
@@ -145,18 +146,18 @@ class Thread:
             "user_id": self.user_id,
             "title": self.title,
             "status": str(self.status),
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "created_at": format_iso_utc(self.created_at),
+            "updated_at": format_iso_utc(self.updated_at),
             "metadata": self.metadata or {},
             "message_count": self.get_message_count()
         }
-        
+
         last_message = self.get_last_message()
         if last_message:
-            result["last_message_at"] = last_message.created_at.isoformat()
-        
+            result["last_message_at"] = format_iso_utc(last_message.created_at)
+
         if include_messages:
             result["messages"] = [msg.to_dict() for msg in self.messages]
-        
+
         return result
 

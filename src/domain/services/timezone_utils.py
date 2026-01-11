@@ -1,9 +1,47 @@
-"""Timezone utilities for notification scheduling."""
+"""Timezone utilities for notification scheduling and datetime operations."""
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 logger = logging.getLogger(__name__)
+
+
+def utc_now() -> datetime:
+    """Return timezone-aware UTC datetime.
+
+    Use this instead of datetime.now() or datetime.utcnow().
+    """
+    return datetime.now(timezone.utc)
+
+
+def format_iso_utc(dt: Optional[datetime]) -> Optional[str]:
+    """Format datetime as ISO 8601 with UTC timezone suffix.
+
+    Args:
+        dt: Datetime to format (can be naive or aware)
+
+    Returns:
+        ISO string with timezone, or None if dt is None
+    """
+    if dt is None:
+        return None
+    # If naive, assume UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
+
+def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Ensure datetime is timezone-aware UTC.
+
+    Converts naive datetimes by assuming they are UTC.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 # Default timezone
 DEFAULT_TIMEZONE = "UTC"

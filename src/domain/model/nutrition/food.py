@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from .macros import Macros
+from src.domain.services.timezone_utils import utc_now
 
 
 @dataclass
@@ -45,7 +46,7 @@ class Food:
         return cls(
             food_id=str(uuid.uuid4()),
             name=name,
-            created_at=datetime.now(),
+            created_at=utc_now(),
             **kwargs
         )
     
@@ -63,7 +64,7 @@ class Food:
             barcode=self.barcode,
             image_url=self.image_url,
             created_at=self.created_at,
-            updated_at=datetime.now(),
+            updated_at=utc_now(),
             is_verified=self.is_verified
         )
     

@@ -4,6 +4,8 @@ Performs soft delete in database and hard delete in Firebase Auth.
 """
 import logging
 from datetime import datetime
+
+from src.domain.services.timezone_utils import utc_now
 from typing import Dict, Any
 
 from sqlalchemy.orm import Session
@@ -66,7 +68,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
 
             # Step 2: Soft delete in database
             user.is_active = False
-            user.last_accessed = datetime.utcnow()
+            user.last_accessed = utc_now()
 
             # Commit database changes first
             self.db.commit()

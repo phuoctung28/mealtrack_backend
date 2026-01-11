@@ -10,6 +10,7 @@ from src.domain.model.meal_planning import (
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.fallback_meal_service import FallbackMealService
 from src.domain.services.prompt_generation_service import PromptGenerationService
+from src.domain.services.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class MealPlanGenerator:
             start_date = request_data["start_date_obj"]
         else:
             # Fallback to current week calculation
-            today = datetime.now().date()
+            today = utc_now().date()
             days_since_monday = today.weekday()
             start_date = today - timedelta(days=days_since_monday)
 

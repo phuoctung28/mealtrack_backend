@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List
 
 from src.domain.model.meal_planning import MealGenerationRequest
+from src.domain.services.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class MealPlanFormatter:
             end_date = request_data["end_date_obj"]
         else:
             # Fallback to current week calculation
-            today = datetime.now().date()
+            today = utc_now().date()
             days_since_monday = today.weekday()  # Monday = 0
             start_date = today - timedelta(days=days_since_monday)
             end_date = start_date + timedelta(days=6)

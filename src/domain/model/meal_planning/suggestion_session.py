@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from src.domain.model.meal_planning.meal_suggestion import MealType, MealSize
+from src.domain.services.timezone_utils import utc_now
 
 
 @dataclass
@@ -25,7 +26,7 @@ class SuggestionSession:
     ingredient_image_url: Optional[str]
     cooking_time_minutes: int
     shown_suggestion_ids: List[str] = field(default_factory=list)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
     expires_at: Optional[datetime] = None
 
     def __post_init__(self) -> None:
@@ -39,4 +40,4 @@ class SuggestionSession:
 
     def is_expired(self) -> bool:
         """Check if session has expired."""
-        return datetime.utcnow() > self.expires_at
+        return utc_now() > self.expires_at
