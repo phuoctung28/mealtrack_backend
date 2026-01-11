@@ -161,32 +161,18 @@ def mock_scoped_session(test_session):
     Automatically patch ScopedSession to return test_session for all tests.
     
     This allows handlers that use ScopedSession() to work with test database sessions.
-    We patch ScopedSession.__call__ to return test_session directly.
+    We patch ScopedSession to return test_session directly.
     """
-    from unittest.mock import patch
+    from unittest.mock import patch, MagicMock
     from src.infra.database.config import ScopedSession
     
-    # Store original __call__ method
-    original_call = getattr(ScopedSession, '__call__', None)
+    # Create a mock that always returns test_session
+    mock_session_factory = MagicMock(return_value=test_session)
     
-    # Create a function that always returns test_session
-    def mock_call(*args, **kwargs):
-        return test_session
-    
-    # Patch __call__ method
-    ScopedSession.__call__ = mock_call
-    
-    try:
-        yield
-    finally:
-        # Restore original
-        if original_call is not None:
-            ScopedSession.__call__ = original_call
-        # Clean up
-        try:
-            ScopedSession.remove()
-        except:
-            pass
+    # Patch both __call__ and the registry
+    with patch.object(ScopedSession, '__call__', return_value=test_session):
+        with patch.object(ScopedSession.registry, 'setdefault', return_value=test_session):
+            yield
 
 
 @pytest.fixture(autouse=True)

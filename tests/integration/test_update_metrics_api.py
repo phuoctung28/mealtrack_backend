@@ -22,7 +22,6 @@ def client(test_session):
         get_food_cache_service,
     )
     from src.api.dependencies.event_bus import get_configured_event_bus
-    from src.infra.database.config import ScopedSession
     from unittest.mock import Mock, patch
     
     # Reset event bus singleton before setting up client
@@ -35,13 +34,6 @@ def client(test_session):
     mock_food_cache = Mock()
     mock_food_cache.get = Mock(return_value=None)
     mock_food_cache.set = Mock(return_value=True)
-    
-    # Patch ScopedSession at module level for the entire test
-    # This ensures handlers get test_session when they call ScopedSession()
-    original_scoped_session_call = getattr(ScopedSession, '__call__', None)
-    def mock_scoped_session_call(*args, **kwargs):
-        return test_session
-    ScopedSession.__call__ = mock_scoped_session_call
     
     def override_get_db():
         try:
@@ -85,16 +77,12 @@ def client(test_session):
     app.dependency_overrides[get_food_cache_service] = override_get_food_cache_service
     app.dependency_overrides[get_configured_event_bus] = override_get_configured_event_bus
     
-    try:
-        client = TestClient(app)
-        yield client
-    finally:
-        # Cleanup
-        app.dependency_overrides.clear()
-        event_bus_module._configured_event_bus = None
-        # Restore original ScopedSession.__call__
-        if original_scoped_session_call is not None:
-            ScopedSession.__call__ = original_scoped_session_call
+    client = TestClient(app)
+    yield client
+    
+    # Cleanup
+    app.dependency_overrides.clear()
+    event_bus_module._configured_event_bus = None
 
 
 @pytest.fixture
@@ -110,6 +98,7 @@ def setup_test_user(test_session):
         is_active=True
     )
     test_session.add(user)
+    test_session.flush()  # Ensure user is in DB before profile
     
     # Create profile
     profile = UserProfile(
@@ -128,6 +117,7 @@ def setup_test_user(test_session):
     )
     test_session.add(profile)
     test_session.commit()
+    test_session.flush()  # Ensure changes are visible
     
     yield user, profile
     
