@@ -21,3 +21,4 @@ class UploadMealImageImmediatelyCommand(Command):
     content_type: str
     target_date: Optional[date] = None
     language: str = "en"
+    user_description: Optional[str] = None  # User-provided context for better accuracy

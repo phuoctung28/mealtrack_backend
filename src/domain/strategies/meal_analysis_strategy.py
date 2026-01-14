@@ -320,6 +320,73 @@ class IngredientIdentificationStrategy(MealAnalysisStrategy):
         return "IngredientIdentification"
 
 
+class UserContextAwareAnalysisStrategy(MealAnalysisStrategy):
+    """
+    Analysis strategy that incorporates user-provided context.
+    Used when user provides a description alongside their photo.
+
+    NOTE: Content is generated in English. Translation to user's
+    preferred language happens post-generation via TranslationService.
+    """
+
+    def __init__(self, user_description: str):
+        self.user_description = user_description
+        logger.info(
+            f"Created UserContextAwareAnalysisStrategy: desc_len={len(user_description)}"
+        )
+
+    def get_analysis_prompt(self) -> str:
+        return """
+You are a nutrition analysis assistant that can analyze food in images.
+Examine the image carefully and provide detailed nutritional information.
+
+**IMPORTANT**: The user has provided additional context about this meal.
+Use their description to ENHANCE accuracy, especially for:
+- Modifications (sugar, sauce, oil levels)
+- Hidden ingredients (cheese inside, sauce on side)
+- Preparation method (fried vs baked vs grilled)
+- Portion context (half portion, extra large)
+
+**CONFLICT RESOLUTION**:
+- PRIORITIZE VISUAL for: food identification, base ingredients
+- PRIORITIZE USER INPUT for: modifications, hidden items, preparation
+
+Return your analysis in the following JSON format:
+{
+  "dish_name": "Overall dish name",
+  "foods": [
+    {
+      "name": "Food name",
+      "quantity": 1.0,
+      "unit": "serving/g/oz/cup/etc",
+      "calories": 100,
+      "macros": {"protein": 10, "carbs": 20, "fat": 5}
+    }
+  ],
+  "total_calories": 100,
+  "confidence": 0.85,
+  "user_context_applied": true
+}
+
+- Include a dish_name field with the overall dish name
+- Each food item should include name, estimated quantity, unit of measurement, calories, and macros
+- All macros should be in grams
+- Confidence should be between 0 (low) and 1 (high) based on how certain you are
+- Set user_context_applied: true to indicate user context was used
+- Always return well-formed JSON
+"""
+
+    def get_user_message(self) -> str:
+        return f"""Analyze this food image and provide nutritional information.
+
+USER CONTEXT: {self.user_description}
+
+Use the user's description to improve your analysis accuracy."""
+
+    def get_strategy_name(self) -> str:
+        return "UserContextAware"
+
+
 class AnalysisStrategyFactory:
     """
     Factory class for creating meal analysis strategies.
@@ -352,6 +419,18 @@ class AnalysisStrategyFactory:
     def create_ingredient_identification_strategy() -> MealAnalysisStrategy:
         """Create an ingredient identification strategy for photo recognition."""
         return IngredientIdentificationStrategy()
+
+    @staticmethod
+    def create_user_context_strategy(user_description: str) -> MealAnalysisStrategy:
+        """Create a user-context-aware analysis strategy.
+
+        Args:
+            user_description: Sanitized user-provided description
+
+        Returns:
+            MealAnalysisStrategy: Strategy that incorporates user context
+        """
+        return UserContextAwareAnalysisStrategy(user_description)
 
     @staticmethod
     def create_combined_strategy(

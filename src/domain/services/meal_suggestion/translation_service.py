@@ -612,6 +612,11 @@ from typing import Any, Dict, List, Tuple, Union
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.prompts.prompt_constants import LANGUAGE_NAMES
 
+# Import for type hints - avoid circular import at runtime
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.domain.model.meal_suggestion.meal_suggestion import MealSuggestion
+
 logger = logging.getLogger(__name__)
 
 
@@ -691,6 +696,106 @@ class TranslationService:
             "structured_data": translated_data,
             "translated_to": target_language,
         }
+
+    async def translate_meal_suggestion(
+        self, suggestion: "MealSuggestion", target_language: str
+    ) -> "MealSuggestion":
+        """
+        Translate a MealSuggestion to target language.
+
+        Args:
+            suggestion: The MealSuggestion dataclass to translate
+            target_language: ISO 639-1 language code (e.g., 'vi', 'es')
+
+        Returns:
+            New MealSuggestion with translated content
+        """
+        from dataclasses import replace
+        from src.domain.model.meal_suggestion.meal_suggestion import (
+            Ingredient,
+            RecipeStep,
+        )
+
+        if target_language == "en":
+            return suggestion  # No translation needed
+
+        # Extract translatable strings from the suggestion
+        strings_to_translate = []
+        paths = []
+
+        # meal_name
+        if suggestion.meal_name:
+            strings_to_translate.append(suggestion.meal_name)
+            paths.append("meal_name")
+
+        # description
+        if suggestion.description:
+            strings_to_translate.append(suggestion.description)
+            paths.append("description")
+
+        # ingredients - translate names
+        for i, ing in enumerate(suggestion.ingredients):
+            if ing.name:
+                strings_to_translate.append(ing.name)
+                paths.append(f"ingredients[{i}].name")
+
+        # recipe_steps - translate instructions
+        for i, step in enumerate(suggestion.recipe_steps):
+            if step.instruction:
+                strings_to_translate.append(step.instruction)
+                paths.append(f"recipe_steps[{i}].instruction")
+
+        if not strings_to_translate:
+            logger.warning("No translatable strings found in meal suggestion")
+            return suggestion
+
+        logger.info(
+            f"Translating {len(strings_to_translate)} strings from meal suggestion "
+            f"to {target_language}"
+        )
+
+        # Batch translate
+        translated_strings = await self._batch_translate(
+            strings_to_translate, target_language
+        )
+
+        # Create translation map
+        translation_map = dict(zip(paths, translated_strings))
+
+        # Build translated suggestion
+        translated_meal_name = translation_map.get("meal_name", suggestion.meal_name)
+        translated_description = translation_map.get("description", suggestion.description)
+
+        # Translate ingredients
+        translated_ingredients = []
+        for i, ing in enumerate(suggestion.ingredients):
+            path = f"ingredients[{i}].name"
+            translated_name = translation_map.get(path, ing.name)
+            translated_ingredients.append(
+                Ingredient(name=translated_name, amount=ing.amount, unit=ing.unit)
+            )
+
+        # Translate recipe steps
+        translated_steps = []
+        for i, step in enumerate(suggestion.recipe_steps):
+            path = f"recipe_steps[{i}].instruction"
+            translated_instruction = translation_map.get(path, step.instruction)
+            translated_steps.append(
+                RecipeStep(
+                    step=step.step,
+                    instruction=translated_instruction,
+                    duration_minutes=step.duration_minutes,
+                )
+            )
+
+        # Return new MealSuggestion with translated content
+        return replace(
+            suggestion,
+            meal_name=translated_meal_name,
+            description=translated_description,
+            ingredients=translated_ingredients,
+            recipe_steps=translated_steps,
+        )
 
     def _extract_translatable_strings(
         self, obj: Any, path: str = ""

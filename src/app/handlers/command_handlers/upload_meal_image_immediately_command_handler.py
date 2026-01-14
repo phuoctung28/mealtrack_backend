@@ -99,8 +99,15 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             logger.info(f"Created meal record {saved_meal.meal_id} with ANALYZING status")
             
             # Perform AI analysis (generates content in English)
-            logger.info(f"Performing AI vision analysis for meal {saved_meal.meal_id}")
-            vision_result = self.vision_service.analyze(command.file_contents)
+            # Use UserContextAwareAnalysisStrategy if user provided description
+            if command.user_description:
+                from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+                logger.info(f"Performing AI vision analysis with user context for meal {saved_meal.meal_id}")
+                strategy = AnalysisStrategyFactory.create_user_context_strategy(command.user_description)
+                vision_result = self.vision_service.analyze_with_strategy(command.file_contents, strategy)
+            else:
+                logger.info(f"Performing AI vision analysis for meal {saved_meal.meal_id}")
+                vision_result = self.vision_service.analyze(command.file_contents)
 
             # Translate if needed (post-generation translation approach)
             if command.language != "en" and self.translation_service:
