@@ -64,14 +64,28 @@ def worker_id(request):
 
 @pytest.fixture(scope="session")
 def test_engine(worker_id, request):
-    """Create a test database engine."""
-    # Check if we're running unit tests (tests/unit/) or integration tests
-    test_paths = [str(item.fspath) for item in request.session.items]
-    is_unit_test = any('tests/unit' in path for path in test_paths)
-    is_integration_test = any('tests/integration' in path for path in test_paths)
+    """Create a test database engine.
     
-    # Use SQLite in-memory for unit tests, real database for integration tests
-    if is_unit_test and not is_integration_test:
+    For unit tests: Uses SQLite in-memory database (faster, no external dependencies)
+    For integration tests: Uses MySQL database (when integration tests are explicitly run)
+    """
+    # Try to detect if we're running integration tests
+    # Since pytest.ini has --ignore=tests/integration for unit tests by default,
+    # if we reach here with integration tests, they must be explicitly run
+    try:
+        if hasattr(request.session, 'items') and request.session.items:
+            test_paths = [str(item.fspath) for item in request.session.items]
+            has_integration_tests = any('tests/integration' in path for path in test_paths)
+        else:
+            # Default to SQLite for unit tests if we can't determine
+            has_integration_tests = False
+    except (AttributeError, TypeError):
+        # Default to SQLite for unit tests if detection fails
+        has_integration_tests = False
+    
+    # Use SQLite in-memory for unit tests (default)
+    # Use real MySQL database only when integration tests are explicitly run
+    if not has_integration_tests:
         # Use SQLite in-memory database for unit tests
         engine = create_engine(
             "sqlite:///:memory:",
