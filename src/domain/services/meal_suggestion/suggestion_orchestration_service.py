@@ -26,9 +26,10 @@ from src.domain.ports.meal_suggestion_repository_port import (
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.domain.services.prompts.prompt_constants import LANGUAGE_NAMES, get_fallback_meal_name
+from src.domain.services.prompts.prompt_constants import get_fallback_meal_name
 
 from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
+from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,7 @@ class SuggestionOrchestrationService:
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
         self._redis_client = redis_client
+        self._translation_service = TranslationService(generation_service)
 
     async def generate_suggestions(
         self,
@@ -277,21 +279,11 @@ class SuggestionOrchestrationService:
 
         names_prompt = build_meal_names_prompt(session, exclude_meal_names)
 
-        # Get language context
-        language = session.language
-        lang_name = LANGUAGE_NAMES.get(language, "English")
-
-        # Build language-aware system messages
-        if language != "en":
-            names_system = (
-                f"You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
-                f"diverse flavors and cooking styles. Generate all names in {lang_name}."
-            )
-        else:
-            names_system = (
-                "You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
-                "diverse flavors and cooking styles."
-            )
+        # Always generate in English (translation happens in Phase 3)
+        names_system = (
+            "You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
+            "diverse flavors and cooking styles."
+        )
 
         phase1_elapsed = 0.0  # Initialize to prevent UnboundLocalError
         try:
@@ -323,11 +315,11 @@ class SuggestionOrchestrationService:
                     f"[PHASE-1-INCOMPLETE] session={session.id} | "
                     f"got {len(meal_names)} names, expected 4"
                 )
-                # Pad with localized fallback names if needed
+                # Pad with English fallback names if needed (will be translated in Phase 3)
                 while len(meal_names) < 4:
                     meal_names.append(
                         get_fallback_meal_name(
-                            session.language,
+                            "en",  # Always use English fallbacks
                             session.meal_type,
                             len(meal_names) + 1
                         )
@@ -347,9 +339,9 @@ class SuggestionOrchestrationService:
                 f"elapsed={phase1_elapsed:.2f}s | "
                 f"error_type={type(e).__name__} | error={e}"
             )
-            # Fallback to localized names
+            # Fallback to English names (will be translated in Phase 3)
             meal_names = [
-                get_fallback_meal_name(session.language, session.meal_type, i + 1)
+                get_fallback_meal_name("en", session.meal_type, i + 1)
                 for i in range(4)
             ]
 
@@ -362,17 +354,11 @@ class SuggestionOrchestrationService:
             build_recipe_details_prompt(meal_name, session) for meal_name in meal_names
         ]
 
-        # Generate recipes in parallel with language-aware system message
-        if language != "en":
-            recipe_system = (
-                f"You are a professional chef. Generate complete recipe details as "
-                f"valid JSON in {lang_name}. CRITICAL: MUST finish entire JSON - include all fields."
-            )
-        else:
-            recipe_system = (
-                "You are a professional chef. Generate complete recipe details as "
-                "valid JSON. CRITICAL: MUST finish entire JSON - include all fields."
-            )
+        # Always generate in English (translation happens in Phase 3)
+        recipe_system = (
+            "You are a professional chef. Generate complete recipe details as "
+            "valid JSON. CRITICAL: MUST finish entire JSON - include all fields."
+        )
 
         async def generate_recipe(
             prompt: str, meal_name: str, index: int
@@ -524,5 +510,25 @@ class SuggestionOrchestrationService:
             f"returned={len(suggestions)} meals (target 3) | "
             f"meals={[s.meal_name for s in suggestions]}"
         )
+
+        # PHASE 3: Translate if non-English (single batch API call)
+        if session.language != "en":
+            logger.info(
+                f"[PHASE-3-START] session={session.id} | translating to {session.language}"
+            )
+            phase3_start = time.time()
+
+            # Batch translate all suggestions in one API call
+            translated_suggestions = await self._translation_service.translate_meal_suggestions_batch(
+                suggestions, session.language
+            )
+
+            phase3_elapsed = time.time() - phase3_start
+            logger.info(
+                f"[PHASE-3-COMPLETE] session={session.id} | "
+                f"elapsed={phase3_elapsed:.2f}s | "
+                f"translated {len(translated_suggestions)} meals (batch mode)"
+            )
+            suggestions = translated_suggestions
 
         return suggestions
