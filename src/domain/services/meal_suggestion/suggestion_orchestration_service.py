@@ -417,6 +417,12 @@ class SuggestionOrchestrationService:
                     )
                     return None
 
+                # Extract macros from AI response with fallbacks
+                calories = recipe_data.get("calories", session.target_calories)
+                protein = recipe_data.get("protein", 20.0)
+                carbs = recipe_data.get("carbs", 30.0)
+                fat = recipe_data.get("fat", 10.0)
+
                 # Build MealSuggestion with the meal_name from Phase 1
                 return MealSuggestion(
                     id=f"sug_{uuid.uuid4().hex[:16]}",
@@ -426,10 +432,10 @@ class SuggestionOrchestrationService:
                     description="",  # Empty string (field removed from schema in Phase 01)
                     meal_type=MealType(session.meal_type),
                     macros=MacroEstimate(
-                        calories=session.target_calories,
-                        protein=20,
-                        carbs=30,
-                        fat=10,  # Placeholder, will be enriched
+                        calories=calories,
+                        protein=protein,
+                        carbs=carbs,
+                        fat=fat,
                     ),
                     ingredients=[Ingredient(**ing) for ing in ingredients],
                     recipe_steps=[RecipeStep(**step) for step in recipe_steps],

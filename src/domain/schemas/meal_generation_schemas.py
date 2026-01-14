@@ -63,3 +63,23 @@ class RecipeDetailsResponse(BaseModel):
         ge=5,
         le=120
     )
+    calories: int = Field(
+        description="Total calories (kcal) calculated from all ingredients",
+        ge=50,
+        le=3000
+    )
+    protein: float = Field(
+        description="Total protein (grams) calculated from all ingredients",
+        ge=0,
+        le=300
+    )
+    carbs: float = Field(
+        description="Total carbohydrates (grams) calculated from all ingredients",
+        ge=0,
+        le=500
+    )
+    fat: float = Field(
+        description="Total fat (grams) calculated from all ingredients",
+        ge=0,
+        le=200
+    )

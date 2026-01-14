@@ -89,12 +89,20 @@ class TestRecipeDetailsResponse:
                 RecipeStepItem(step=2, instruction="Cook chicken", duration_minutes=10),
                 RecipeStepItem(step=3, instruction="Add broccoli", duration_minutes=5),
             ],
-            prep_time_minutes=20
+            prep_time_minutes=20,
+            calories=450,
+            protein=45.5,
+            carbs=25.0,
+            fat=18.0
         )
         assert not hasattr(response, 'description'), "Response should not have description field"
         assert len(response.ingredients) == 3
         assert len(response.recipe_steps) == 3
         assert response.prep_time_minutes == 20
+        assert response.calories == 450
+        assert response.protein == 45.5
+        assert response.carbs == 25.0
+        assert response.fat == 18.0
 
     def test_rejects_missing_ingredients(self):
         """Invalid: missing ingredients."""
@@ -224,11 +232,17 @@ class TestRecipeDetailsResponse:
                 RecipeStepItem(step=1, instruction="Do A", duration_minutes=2),
                 RecipeStepItem(step=2, instruction="Do B", duration_minutes=3),
             ],
-            prep_time_minutes=5
+            prep_time_minutes=5,
+            calories=50,
+            protein=1.0,
+            carbs=2.0,
+            fat=0.5
         )
         assert len(response.ingredients) == 3
         assert len(response.recipe_steps) == 2
         assert response.prep_time_minutes == 5
+        assert response.calories == 50
+        assert response.protein == 1.0
 
     def test_valid_edge_case_max_values(self):
         """Valid: maximum allowed values (8 ingredients, 6 steps, 120 min prep)."""
@@ -241,11 +255,17 @@ class TestRecipeDetailsResponse:
                 RecipeStepItem(step=i, instruction=f"Step {i}", duration_minutes=20)
                 for i in range(1, 7)  # 6 steps
             ],
-            prep_time_minutes=120
+            prep_time_minutes=120,
+            calories=2800,
+            protein=180.0,
+            carbs=350.0,
+            fat=95.0
         )
         assert len(response.ingredients) == 8
         assert len(response.recipe_steps) == 6
         assert response.prep_time_minutes == 120
+        assert response.calories == 2800
+        assert response.protein == 180.0
 
 
 class TestIngredientItem:

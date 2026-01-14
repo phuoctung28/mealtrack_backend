@@ -244,6 +244,12 @@ REQUIREMENTS:
 - 3-8 ingredients with amounts (g/ml/tbsp)
 - 2-6 clear recipe steps with duration
 - Total prep_time ≤{cooking_time_minutes} min
+- Calculate total macros from ingredients:
+  * calories (kcal)
+  * protein (grams)
+  * carbs (grams)
+  * fat (grams)
+  * IMPORTANT: Each ingredient has macros - sum them up accurately
 
-NO nutrition data in response - backend calculates automatically.
+CRITICAL: Macros MUST match ingredient amounts. Use standard nutrition data.
 """
