@@ -5,6 +5,7 @@ Recursively traverses schemas, extracts translatable strings, and translates the
 import asyncio
 import json
 import logging
+import time
 from dataclasses import asdict, fields
 from enum import Enum
 from typing import Any, Dict, List, Tuple
@@ -125,15 +126,106 @@ class TranslationService:
 
         unique_strings = list(unique_strings_dict.keys())
 
-        logger.debug(
+        logger.info(
             f"Extracted {len(all_items)} total strings, {len(unique_strings)} unique"
         )
 
-        # Single API call for all unique strings
-        translated_unique = await self._batch_translate(unique_strings, target_language)
+        # Split into short and long strings for better token management
+        # Long strings (>150 chars) are typically recipe instructions
+        # Also filter out very short strings (likely units/abbrevs that don't need translation)
+        short_strings = []
+        long_strings = []
+        skip_strings = []
+        
+        for s in unique_strings:
+            # Skip very short strings (units like "g", "ml", "tsp", "oz")
+            if len(s) <= 3 and s.lower() in {"g", "ml", "kg", "l", "oz", "lb", "cup", "tsp", "tbsp"}:
+                skip_strings.append(s)
+            elif len(s) <= 150:
+                short_strings.append(s)
+            else:
+                long_strings.append(s)
 
-        # Create translation map from original to translated
-        translation_map = dict(zip(unique_strings, translated_unique))
+        logger.info(
+            f"Split: {len(short_strings)} short, {len(long_strings)} long, {len(skip_strings)} skipped"
+        )
+
+        # Translate short and long strings in PARALLEL (not sequential)
+        translation_tasks = []
+        
+        # Add short strings batch task
+        if short_strings:
+            translation_tasks.append(
+                self._batch_translate(short_strings, target_language)
+            )
+        
+        # Add long strings batch tasks (5 at a time, but all in parallel)
+        long_string_batches = []
+        if long_strings:
+            batch_size = 5
+            for i in range(0, len(long_strings), batch_size):
+                batch = long_strings[i : i + batch_size]
+                long_string_batches.append(batch)
+                translation_tasks.append(
+                    self._batch_translate(batch, target_language)
+                )
+            logger.info(
+                f"Translating in parallel: 1 short batch + {len(long_string_batches)} long batches"
+            )
+        
+        # Execute all translation tasks in parallel with timeout
+        translation_start = time.time()
+        try:
+            # 15 second timeout for all parallel translations
+            translated_results = await asyncio.wait_for(
+                asyncio.gather(*translation_tasks, return_exceptions=True),
+                timeout=15.0
+            )
+            translation_elapsed = time.time() - translation_start
+            
+            logger.info(
+                f"Parallel translation completed in {translation_elapsed:.2f}s "
+                f"({len(translation_tasks)} concurrent API calls)"
+            )
+        except asyncio.TimeoutError:
+            translation_elapsed = time.time() - translation_start
+            logger.error(
+                f"Translation timeout after {translation_elapsed:.2f}s! "
+                f"Returning original suggestions without translation."
+            )
+            return suggestions  # Return originals on timeout
+        
+        # Unpack results
+        translated_short = []
+        translated_long = []
+        
+        result_idx = 0
+        if short_strings:
+            result = translated_results[result_idx]
+            if isinstance(result, Exception):
+                logger.error(f"Short strings translation failed: {result}")
+                translated_short = short_strings  # Fallback
+            else:
+                translated_short = result
+            result_idx += 1
+        
+        if long_strings:
+            for batch_result in translated_results[result_idx:]:
+                if isinstance(batch_result, Exception):
+                    logger.error(f"Long strings batch translation failed: {batch_result}")
+                    # Skip this batch, will be handled by fallback
+                    continue
+                translated_long.extend(batch_result)
+
+        # Combine translations maintaining original order
+        translation_map = {}
+        for orig, trans in zip(short_strings, translated_short):
+            translation_map[orig] = trans
+        for orig, trans in zip(long_strings, translated_long):
+            translation_map[orig] = trans
+        # Skipped strings map to themselves (no translation)
+        for orig in skip_strings:
+            translation_map[orig] = orig
 
         # Reconstruct each suggestion with its translations
         translated_suggestions = []
@@ -253,7 +345,7 @@ class TranslationService:
         self, strings: List[str], target_language: str
     ) -> List[str]:
         """
-        Translate strings using Gemini API.
+        Translate strings using Gemini API with dynamic token sizing.
 
         Args:
             strings: List of strings to translate
@@ -267,24 +359,37 @@ class TranslationService:
 
         lang_name = LANGUAGE_NAMES.get(target_language, "English")
 
-        prompt = f"""Translate these {len(strings)} text strings to {lang_name}.
-Preserve:
-- Technical terms (g, ml, tbsp, tsp, cup, minutes)
-- Numbers and units
-- Formatting and structure
+        # Dynamic token limit calculation
+        # Estimate: ~2 tokens per word for input, ~2x for translation output
+        estimated_input_tokens = sum(len(s.split()) * 2 for s in strings)
+        token_limit = max(4000, int(estimated_input_tokens * 2.5))
+        token_limit = min(token_limit, 8000)  # Cap at 8000 to avoid timeouts
 
-Input (JSON array): {json.dumps(strings, ensure_ascii=False)}
+        logger.info(
+            f"Translating {len(strings)} strings to {lang_name} | "
+            f"estimated_tokens={estimated_input_tokens} | token_limit={token_limit}"
+        )
 
-Output format: Return a JSON object with a "translations" key containing an array of {len(strings)} translated strings in the same order as input.
+        prompt = f"""Translate ALL {len(strings)} text strings below to {lang_name}.
 
-Example:
-{{
-  "translations": ["translated_string_1", "translated_string_2", ...]
-}}"""
+CRITICAL RULES:
+1. Translate EVERY single string - do NOT skip any
+2. Translate ALL food terms: "salt" → "muối", "black pepper" → "tiêu đen", "chicken breast" → "ức gà"
+3. Translate ALL cooking instructions to natural {lang_name}
+4. Keep measurement units UNCHANGED: g, ml, tbsp, tsp, cup, oz, minutes
+5. Keep numbers EXACTLY as-is
+6. Return EXACTLY {len(strings)} translations in SAME ORDER as input
+
+Input strings ({len(strings)} total):
+{json.dumps(strings, ensure_ascii=False, indent=2)}
+
+Output: Return ONLY a JSON object with a "translations" array containing EXACTLY {len(strings)} translated strings."""
 
         system_message = (
-            "You are a professional translator specializing in food and recipe content. "
-            "Return only valid JSON. Preserve all technical terms, units, and numbers exactly as they appear."
+            f"You are a professional {lang_name} translator specializing in recipe and food content. "
+            f"Your task is to translate ALL content to natural, fluent {lang_name}. "
+            f"CRITICAL: You MUST translate all {len(strings)} strings completely. "
+            f"Return ONLY valid JSON with all {len(strings)} translations."
         )
 
         try:
@@ -293,26 +398,46 @@ Example:
                 prompt,
                 system_message,
                 "json",
-                2000,  # Token limit for translation
+                token_limit,  # Dynamic token limit
             )
 
             # Extract translations from response
             translations = result.get("translations", [])
 
+            # Validate translation count
             if len(translations) != len(strings):
-                logger.warning(
+                logger.error(
                     f"Translation count mismatch: expected {len(strings)}, got {len(translations)}. "
-                    f"Using original strings for missing translations."
+                    f"First 3 input: {strings[:3]} | First 3 output: {translations[:3]}"
                 )
                 # Pad with original strings if needed
                 while len(translations) < len(strings):
-                    translations.append(strings[len(translations)])
+                    missing_idx = len(translations)
+                    logger.warning(
+                        f"Missing translation at index {missing_idx}: {strings[missing_idx][:50]}..."
+                    )
+                    translations.append(strings[missing_idx])
+
+            # Validate each translation is non-empty
+            for i in range(len(strings)):
+                if not translations[i] or not translations[i].strip():
+                    logger.warning(
+                        f"Empty translation at index {i}, using original: {strings[i][:50]}..."
+                    )
+                    translations[i] = strings[i]
+
+            # Log sample translations for debugging
+            if translations:
+                logger.debug(
+                    f"Sample translations: '{strings[0][:30]}' → '{translations[0][:30]}'"
+                )
 
             return translations[: len(strings)]  # Ensure exact count
 
         except Exception as e:
             logger.error(
-                f"Translation failed: {e}. Returning original strings as fallback."
+                f"Translation failed: {type(e).__name__}: {str(e)[:200]}. "
+                f"Returning original strings as fallback."
             )
             return strings  # Fallback to original
 

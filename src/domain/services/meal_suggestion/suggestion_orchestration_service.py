@@ -511,18 +511,18 @@ class SuggestionOrchestrationService:
             f"meals={[s.meal_name for s in suggestions]}"
         )
 
-        # PHASE 3: Translate if non-English (single batch API call)
+        # PHASE 3: Translate if non-English (internal 15s timeout in translation service)
         if session.language != "en":
             logger.info(
                 f"[PHASE-3-START] session={session.id} | translating to {session.language}"
             )
             phase3_start = time.time()
 
-            # Batch translate all suggestions in one API call
+            # Translation service has internal 15s timeout with parallel batches
             translated_suggestions = await self._translation_service.translate_meal_suggestions_batch(
                 suggestions, session.language
             )
-
+            
             phase3_elapsed = time.time() - phase3_start
             logger.info(
                 f"[PHASE-3-COMPLETE] session={session.id} | "
