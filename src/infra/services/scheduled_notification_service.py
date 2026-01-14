@@ -304,7 +304,7 @@ class ScheduledNotificationService:
         self,
         user_id: str,
         notification_type: str = "test"
-    ) -> Dict[str, Any]:
+    ) -> Dict[str, any]:
         """Send a test notification to a user."""
         try:
             result = await self.notification_service.send_notification(
