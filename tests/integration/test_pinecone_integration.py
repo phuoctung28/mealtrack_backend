@@ -11,14 +11,21 @@ from src.infra.services.pinecone_service import PineconeNutritionService
 
 
 def _pinecone_indexes_available():
-    """Check if Pinecone indexes are actually available."""
+    """Check if Pinecone indexes are actually available and contain searchable data."""
     if not os.getenv("PINECONE_API_KEY"):
+        return False
+    # Skip live tests in CI - they require real indexed data
+    if os.getenv("CI") or os.getenv("GITHUB_ACTIONS"):
         return False
     try:
         from src.infra.services.pinecone_service import PineconeNutritionService
 
         service = PineconeNutritionService()
-        return service.ingredients_index is not None or service.usda_index is not None
+        if not (service.ingredients_index is not None or service.usda_index is not None):
+            return False
+        # Verify we can actually search and find data
+        result = service.search_ingredient("chicken")
+        return result is not None
     except (ValueError, Exception):
         return False
 

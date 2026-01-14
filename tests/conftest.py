@@ -26,6 +26,41 @@ from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIServ
 from tests.fixtures.mock_image_store import MockImageStore
 
 
+def _is_db_available() -> bool:
+    """Check if the test database is available."""
+    try:
+        from tests.fixtures.database.test_config import get_test_database_url
+        from sqlalchemy import create_engine, text
+
+        url = get_test_database_url()
+        engine = create_engine(url, pool_pre_ping=True, connect_args={'connect_timeout': 3})
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        engine.dispose()
+        return True
+    except Exception:
+        return False
+
+
+# Cache the result to avoid repeated connection checks
+_db_available = None
+
+
+def is_db_available() -> bool:
+    """Check if DB is available (cached)."""
+    global _db_available
+    if _db_available is None:
+        _db_available = _is_db_available()
+    return _db_available
+
+
+# Marker to skip tests when DB is unavailable
+requires_db = pytest.mark.skipif(
+    not is_db_available(),
+    reason="Database not available"
+)
+
+
 @pytest.fixture(scope="function")
 def event_loop():
     """Create an event loop for each test function."""
@@ -65,6 +100,9 @@ def worker_id(request):
 @pytest.fixture(scope="session")
 def test_engine(worker_id):
     """Create a test database engine."""
+    if not is_db_available():
+        pytest.skip("Database not available")
+
     engine = create_test_engine()
     
     # Create test database if it doesn't exist
