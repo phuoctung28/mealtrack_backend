@@ -19,6 +19,7 @@ from src.api.base_dependencies import (
     get_food_mapping_service,
     get_cache_service,
     get_suggestion_orchestration_service,
+    get_translation_service,
 )
 from src.app.commands.chat import (
     CreateThreadCommand,
@@ -155,6 +156,7 @@ from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_data_service_port import FoodDataServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
+from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.infra.cache.cache_service import CacheService
 from src.infra.event_bus import PyMediatorEventBus, EventBus
 
@@ -236,6 +238,7 @@ def get_configured_event_bus() -> EventBus:
         get_cache_service,
         get_ai_chat_service,
         get_suggestion_orchestration_service,
+        get_translation_service
     )
     
     image_store = get_image_store()
@@ -247,6 +250,7 @@ def get_configured_event_bus() -> EventBus:
     cache_service = get_cache_service()
     ai_chat_service = get_ai_chat_service()
     suggestion_service = get_suggestion_orchestration_service()
+    translation_service = get_translation_service()
     
     event_bus = PyMediatorEventBus()
 
@@ -259,6 +263,7 @@ def get_configured_event_bus() -> EventBus:
             vision_service=vision_service,
             gpt_parser=gpt_parser,
             cache_service=cache_service,
+            translation_service=translation_service,
         ),
     )
 

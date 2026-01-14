@@ -65,6 +65,7 @@ async def analyze_meal_image_immediate(
     file: UploadFile = File(...),
     user_id: str = Depends(get_current_user_id),
     target_date: Optional[str] = Query(None, description="Target date in YYYY-MM-DD format for meal association"),
+    language: str = Query("en", description="ISO 639-1 language code for response (en, vi, es, fr, de, ja, zh)"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -113,15 +114,20 @@ async def analyze_meal_image_immediate(
                     error_code="INVALID_DATE_FORMAT",
                     details={"date": target_date}
                 ) from e
-        
+
+        # Validate language code - default to 'en' if invalid
+        valid_languages = ["en", "vi", "es", "fr", "de", "ja", "zh"]
+        validated_language = language if language in valid_languages else "en"
+
         # Process the upload and analysis immediately
-        logger.info("Processing meal photo for immediate analysis (target_date: %s)", parsed_target_date)
-        
+        logger.info("Processing meal photo for immediate analysis (target_date: %s, language: %s)", parsed_target_date, validated_language)
+
         command = UploadMealImageImmediatelyCommand(
             user_id=user_id,
             file_contents=contents,
             content_type=file.content_type,
-            target_date=parsed_target_date
+            target_date=parsed_target_date,
+            language=validated_language
         )
         
         logger.info("Uploading and analyzing meal immediately")

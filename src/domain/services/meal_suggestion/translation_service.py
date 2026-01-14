@@ -595,3 +595,365 @@ Output: Return ONLY a JSON object with a "translations" array containing EXACTLY
                 field_values[field_name] = value
 
         return dataclass_type(**field_values)
+"""
+Translation service for meal content translation.
+Recursively traverses schemas, extracts translatable strings, and translates them using Gemini.
+
+NOTE: This service implements the post-generation translation approach (PR #61).
+Content is generated in English, then translated to target language.
+"""
+import asyncio
+import functools
+import json
+import logging
+from enum import Enum
+from typing import Any, Dict, List, Tuple, Union
+
+from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.domain.services.prompts.prompt_constants import LANGUAGE_NAMES
+
+logger = logging.getLogger(__name__)
+
+
+class TranslationService:
+    """
+    Translates meal content by recursively extracting translatable strings
+    and batch translating them using Gemini API.
+
+    Supports:
+    - MealSuggestion (meal suggestions)
+    - Dict[str, Any] (meal analysis results)
+    """
+
+    def __init__(self, generation_service: MealGenerationServicePort):
+        """
+        Initialize translation service.
+
+        Args:
+            generation_service: Service for calling Gemini API
+        """
+        self._generation_service = generation_service
+
+    async def translate_meal_analysis(
+        self, analysis_result: Dict[str, Any], target_language: str
+    ) -> Dict[str, Any]:
+        """
+        Translate meal analysis result to target language.
+
+        Args:
+            analysis_result: The meal analysis dictionary from VisionAIService
+            target_language: ISO 639-1 language code (e.g., 'vi', 'es')
+
+        Returns:
+            New dictionary with translated content
+        """
+        if target_language == "en":
+            return analysis_result  # No translation needed
+
+        # Extract structured_data which contains the actual content
+        structured_data = analysis_result.get("structured_data", {})
+        if not structured_data:
+            logger.warning("No structured_data in analysis result")
+            return analysis_result
+
+        # Extract translatable strings from structured_data
+        translatable_items = self._extract_translatable_strings(structured_data)
+
+        if not translatable_items:
+            logger.warning("No translatable strings found in meal analysis")
+            return analysis_result
+
+        # Extract strings for translation
+        strings_to_translate = [item[1] for item in translatable_items]
+        paths = [item[0] for item in translatable_items]
+
+        logger.info(
+            f"Translating {len(strings_to_translate)} strings from meal analysis "
+            f"to {target_language}"
+        )
+
+        # Batch translate
+        translated_strings = await self._batch_translate(
+            strings_to_translate, target_language
+        )
+
+        # Create mapping from path to translated string
+        translation_map = dict(zip(paths, translated_strings))
+
+        # Reconstruct structured_data with translations
+        translated_data = self._reconstruct_dict_with_translations(
+            structured_data, translation_map
+        )
+
+        # Return full result with translated structured_data
+        return {
+            **analysis_result,
+            "structured_data": translated_data,
+            "translated_to": target_language,
+        }
+
+    def _extract_translatable_strings(
+        self, obj: Any, path: str = ""
+    ) -> List[Tuple[str, str]]:
+        """
+        Recursively extract translatable strings with their paths.
+
+        Args:
+            obj: Object to traverse (dataclass, dict, list, etc.)
+            path: Current path in the object hierarchy
+
+        Returns:
+            List of (path, string) tuples for translatable content
+        """
+        translatable = []
+
+        if isinstance(obj, str):
+            # Only translate non-empty strings that are not IDs
+            if obj and not self._is_id_path(path):
+                translatable.append((path, obj))
+
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                item_path = f"{path}[{i}]" if path else f"[{i}]"
+                translatable.extend(
+                    self._extract_translatable_strings(item, item_path)
+                )
+
+        elif hasattr(obj, "__dict__"):  # Dataclass or object
+            for key, value in obj.__dict__.items():
+                if self._should_skip_field(key, value):
+                    continue
+                field_path = f"{path}.{key}" if path else key
+                translatable.extend(
+                    self._extract_translatable_strings(value, field_path)
+                )
+
+        elif isinstance(obj, dict):
+            for key, value in obj.items():
+                if self._should_skip_field(key, value):
+                    continue
+                field_path = f"{path}.{key}" if path else key
+                translatable.extend(
+                    self._extract_translatable_strings(value, field_path)
+                )
+
+        return translatable
+
+    def _should_skip_field(self, key: str, value: Any) -> bool:
+        """
+        Determine if a field should be skipped during translation.
+
+        Args:
+            key: Field name
+            value: Field value
+
+        Returns:
+            True if field should be skipped
+        """
+        # Skip IDs
+        if key.endswith("_id") or key == "id":
+            return True
+
+        # Skip non-string types
+        if isinstance(value, (int, float, bool, type(None))):
+            return True
+
+        # Skip enum types
+        if isinstance(value, Enum):
+            return True
+
+        # Skip datetime objects
+        if hasattr(value, "isoformat"):
+            return True
+
+        # Skip unit fields (measurement units should stay in English)
+        if key == "unit":
+            return True
+
+        return False
+
+    def _is_id_path(self, path: str) -> bool:
+        """Check if a path represents an ID field."""
+        return path.endswith("_id") or path.endswith(".id") or path == "id"
+
+    async def _batch_translate(
+        self, strings: List[str], target_language: str
+    ) -> List[str]:
+        """
+        Translate strings using Gemini API with dynamic token sizing.
+
+        Args:
+            strings: List of strings to translate
+            target_language: Target language code
+
+        Returns:
+            List of translated strings in same order
+        """
+        if not strings:
+            return []
+
+        lang_name = LANGUAGE_NAMES.get(target_language, "English")
+
+        # Dynamic token limit calculation
+        estimated_input_tokens = sum(len(s.split()) * 2 for s in strings)
+        token_limit = max(4000, int(estimated_input_tokens * 2.5))
+        token_limit = min(token_limit, 8000)
+
+        logger.info(
+            f"Translating {len(strings)} strings to {lang_name} | "
+            f"estimated_tokens={estimated_input_tokens} | token_limit={token_limit}"
+        )
+
+        prompt = f"""Translate ALL {len(strings)} text strings below to {lang_name}.
+
+CRITICAL RULES:
+1. Translate EVERY single string - do NOT skip any
+2. Translate ALL food terms: "salt" → "muối", "black pepper" → "tiêu đen", "chicken breast" → "ức gà"
+3. Translate ALL cooking instructions to natural {lang_name}
+4. Keep measurement units UNCHANGED: g, ml, tbsp, tsp, cup, oz, minutes
+5. Keep numbers EXACTLY as-is
+6. Return EXACTLY {len(strings)} translations in SAME ORDER as input
+
+Input strings ({len(strings)} total):
+{json.dumps(strings, ensure_ascii=False, indent=2)}
+
+Output: Return ONLY a JSON object with a "translations" array containing EXACTLY {len(strings)} translated strings."""
+
+        system_message = (
+            f"You are a professional {lang_name} translator specializing in recipe and food content. "
+            f"Your task is to translate ALL content to natural, fluent {lang_name}. "
+            f"CRITICAL: You MUST translate all {len(strings)} strings completely. "
+            f"Return ONLY valid JSON with all {len(strings)} translations."
+        )
+
+        try:
+            generate_func = functools.partial(
+                self._generation_service.generate_meal_plan,
+                prompt,
+                system_message,
+                "json",
+                token_limit,
+            )
+            result = await asyncio.to_thread(generate_func)
+
+            translations = result.get("translations", [])
+
+            # Validate translation count
+            if len(translations) != len(strings):
+                logger.error(
+                    f"Translation count mismatch: expected {len(strings)}, got {len(translations)}"
+                )
+                while len(translations) < len(strings):
+                    missing_idx = len(translations)
+                    translations.append(strings[missing_idx])
+
+            # Validate each translation is non-empty
+            for i in range(len(strings)):
+                if i < len(translations) and (not translations[i] or not translations[i].strip()):
+                    translations[i] = strings[i]
+
+            return translations[: len(strings)]
+
+        except Exception as e:
+            logger.error(
+                f"Translation failed: {type(e).__name__}: {str(e)[:200]}. "
+                f"Returning original strings as fallback."
+            )
+            return strings
+
+    def _reconstruct_dict_with_translations(
+        self, obj_dict: Dict[str, Any], translation_map: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """
+        Reconstruct dictionary with translated strings.
+
+        Args:
+            obj_dict: Original dictionary
+            translation_map: Mapping from path to translated string
+
+        Returns:
+            New dictionary with translated content
+        """
+        result = obj_dict.copy()
+
+        for path, translated_value in translation_map.items():
+            self._set_nested_value(result, path, translated_value)
+
+        return result
+
+    def _set_nested_value(self, obj_dict: dict, path: str, value: Any) -> None:
+        """
+        Set a value in a nested dict using a path string.
+
+        Args:
+            obj_dict: Dictionary to modify
+            path: Path like "dish_name" or "foods[0].name"
+            value: Value to set
+        """
+        parts = self._parse_path(path)
+        if not parts:
+            return
+
+        current = obj_dict
+        for part in parts[:-1]:
+            if isinstance(part, int):
+                if isinstance(current, list) and 0 <= part < len(current):
+                    current = current[part]
+                else:
+                    return
+            else:
+                if isinstance(current, dict) and part in current:
+                    current = current[part]
+                else:
+                    return
+
+        last_part = parts[-1]
+        if isinstance(last_part, int):
+            if isinstance(current, list) and 0 <= last_part < len(current):
+                current[last_part] = value
+        else:
+            if isinstance(current, dict) and last_part in current:
+                current[last_part] = value
+
+    def _parse_path(self, path: str) -> List[Union[str, int]]:
+        """
+        Parse a path string into a list of keys/indices.
+
+        Args:
+            path: Path like "dish_name" or "foods[0].name"
+
+        Returns:
+            List of keys (str) and indices (int)
+        """
+        parts = []
+        current_key = ""
+        i = 0
+
+        while i < len(path):
+            if path[i] == "[":
+                if current_key:
+                    parts.append(current_key)
+                    current_key = ""
+                j = i + 1
+                while j < len(path) and path[j] != "]":
+                    j += 1
+                if j < len(path):
+                    index_str = path[i + 1 : j]
+                    try:
+                        parts.append(int(index_str))
+                    except ValueError:
+                        return []
+                    i = j + 1
+            elif path[i] == ".":
+                if current_key:
+                    parts.append(current_key)
+                    current_key = ""
+                i += 1
+            else:
+                current_key += path[i]
+                i += 1
+
+        if current_key:
+            parts.append(current_key)
+
+        return parts

@@ -342,5 +342,14 @@ def get_suggestion_orchestration_service(
     )
 
 
+def get_translation_service():
+    """Get translation service for post-generation translation."""
+    from src.domain.services.meal_suggestion.translation_service import TranslationService
+    from src.infra.adapters.meal_generation_service import MealGenerationService
+
+    meal_gen_service = MealGenerationService()
+    return TranslationService(generation_service=meal_gen_service)
+
+
 # Note: Old handler functions removed - using event-driven architecture now
 # The event bus configuration in event_bus.py handles all dependencies

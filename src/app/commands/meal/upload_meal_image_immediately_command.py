@@ -12,7 +12,7 @@ from src.app.events.base import Command
 class UploadMealImageImmediatelyCommand(Command):
     """
     Command to upload and immediately analyze a meal image.
-    
+
     This command combines upload and analysis in a single synchronous operation,
     returning complete nutritional analysis without background processing.
     """
@@ -20,3 +20,4 @@ class UploadMealImageImmediatelyCommand(Command):
     file_contents: bytes
     content_type: str
     target_date: Optional[date] = None
+    language: str = "en"

@@ -15,6 +15,7 @@ from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
+from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.infra.cache.cache_service import CacheService
 from src.domain.services.timezone_utils import utc_now
 
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 @handles(UploadMealImageImmediatelyCommand)
 class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyCommand, Meal]):
     """Handler for immediate meal image upload and analysis."""
-    
+
     def __init__(
         self,
         image_store: ImageStorePort = None,
@@ -32,13 +33,15 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         cache_service: Optional[CacheService] = None,
+        translation_service: Optional[TranslationService] = None,
     ):
         self.image_store = image_store
         self.meal_repository = meal_repository
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
         self.cache_service = cache_service
-    
+        self.translation_service = translation_service
+
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
         self.image_store = kwargs.get('image_store', self.image_store)
@@ -46,6 +49,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         self.vision_service = kwargs.get('vision_service', self.vision_service)
         self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
         self.cache_service = kwargs.get('cache_service', self.cache_service)
+        self.translation_service = kwargs.get('translation_service', self.translation_service)
     
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
@@ -94,10 +98,17 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             saved_meal = self.meal_repository.save(meal)
             logger.info(f"Created meal record {saved_meal.meal_id} with ANALYZING status")
             
-            # Perform AI analysis immediately
+            # Perform AI analysis (generates content in English)
             logger.info(f"Performing AI vision analysis for meal {saved_meal.meal_id}")
             vision_result = self.vision_service.analyze(command.file_contents)
-            
+
+            # Translate if needed (post-generation translation approach)
+            if command.language != "en" and self.translation_service:
+                logger.info(f"Translating meal analysis to {command.language}")
+                vision_result = await self.translation_service.translate_meal_analysis(
+                    vision_result, command.language
+                )
+
             # Parse the response
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
             dish_name = self.gpt_parser.parse_dish_name(vision_result)
