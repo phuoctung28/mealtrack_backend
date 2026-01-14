@@ -14,32 +14,6 @@ jobs:
     name: 🧪 Test
     runs-on: ubuntu-latest
 
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: mealtrack_test
-          MYSQL_USER: test_user
-          MYSQL_PASSWORD: test_password
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
@@ -56,16 +30,28 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: ${{ runner.os }}-pip-
 
-      - name: 🧪 Run Tests
+      - name: 📦 Install Dependencies
         run: |
-          chmod +x .github/scripts/ci-test.sh
-          .github/scripts/ci-test.sh all
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: 🧪 Run Unit Tests
+        run: |
+          pytest \
+            tests/unit \
+            --ignore=tests/integration \
+            -m "not integration" \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-report=html \
+            --cov-fail-under=70 \
+            -v
         env:
-          DATABASE_URL: "mysql://test_user:test_password@127.0.0.1:3306/mealtrack_test"
-          REDIS_URL: "redis://127.0.0.1:6379/0"
-          DB_HOST: 127.0.0.1
-          DB_USER: test_user
-          DB_PASS: test_password
+          PYTHONPATH: .
+          CI: true
+          TESTING: true
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
@@ -85,6 +71,3 @@ jobs:
           path: |
             coverage.xml
             htmlcov/
-            test_summary.md
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
