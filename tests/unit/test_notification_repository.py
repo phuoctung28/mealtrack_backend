@@ -541,31 +541,28 @@ class TestNotificationRepository:
         """Test repository creates and closes session when not provided.
         
         Note: With mock_scoped_session fixture, ScopedSession() returns test_session.
-        This test verifies that when db=None, the repository uses ScopedSession()
-        and closes the session after use.
+        This test verifies that when db=None, the repository works correctly.
         """
         # Arrange - use test_session from fixture (already patched via mock_scoped_session)
+        from unittest.mock import Mock, patch
         from src.infra.database.config import ScopedSession
-        from unittest.mock import patch
         
-        # Create a mock to track ScopedSession calls
-        original_call = ScopedSession.__call__
-        call_tracker = Mock(wraps=original_call)
-        ScopedSession.__call__ = call_tracker
+        # Get the test_session from the fixture (via ScopedSession)
+        test_session = ScopedSession()
         
         mock_query = Mock()
         mock_query.filter = Mock(return_value=mock_query)
         mock_query.first = Mock(return_value=None)
         
         # Mock the session's query method
-        with patch.object(ScopedSession.__call__.return_value, 'query', return_value=mock_query):
+        with patch.object(test_session, 'query', return_value=mock_query):
             repository = NotificationRepository(db=None)
             
             # Act
             result = repository.find_fcm_token_by_token("test-token")
             
-            # Assert - ScopedSession should have been called
-            # Note: Since ScopedSession is patched by fixture, we verify behavior, not implementation
+            # Assert - repository should work correctly
+            # Note: Since ScopedSession is patched by fixture, we verify behavior
             assert result is None  # Token not found
             # The session is closed by the repository when db=None
     
