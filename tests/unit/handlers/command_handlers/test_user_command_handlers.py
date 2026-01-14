@@ -3,11 +3,13 @@ Unit tests for user command handlers.
 """
 import uuid
 from datetime import datetime
+from unittest.mock import patch, MagicMock
 
 import pytest
 
 from src.api.exceptions import ValidationException
 from src.app.commands.user import SaveUserOnboardingCommand
+from src.infra.database.config import ScopedSession
 
 
 @pytest.mark.unit
@@ -48,8 +50,9 @@ class TestSaveUserOnboardingCommandHandler:
             pain_points=["diabetes"]
         )
         
-        # Act
-        result = await event_bus.send(command)
+        # Act - patch ScopedSession to return test_session
+        with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.ScopedSession', MagicMock(return_value=test_session)):
+            result = await event_bus.send(command)
         
         # Assert - SaveUserOnboardingCommand should return None
         assert result is None
@@ -162,8 +165,9 @@ class TestSaveUserOnboardingCommandHandler:
             pain_points=[]
         )
         
-        # Act
-        result = await event_bus.send(command)
+        # Act - patch ScopedSession to return test_session
+        with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.ScopedSession', MagicMock(return_value=test_session)):
+            result = await event_bus.send(command)
         
         # Assert - SaveUserOnboardingCommand should return None
         assert result is None

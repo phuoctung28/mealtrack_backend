@@ -2,7 +2,7 @@
 Unit tests for SyncUserCommandHandler.
 """
 from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 from sqlalchemy.orm import Session
@@ -50,7 +50,7 @@ class TestSyncUserCommandHandler:
         mock_query.first.return_value = None
         mock_db_session.query.return_value = mock_query
         
-        with patch.object(ScopedSession, '__call__', return_value=mock_db_session):
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=mock_db_session)):
             # Mock the created user
             mock_user = Mock(spec=User)
             mock_user.id = "user-123"
@@ -95,7 +95,7 @@ class TestSyncUserCommandHandler:
         # Single atomic commit for both user and notification preferences
         mock_db_session.commit.assert_called_once()
         # Verify notification preferences were added to session for new user
-        handler._create_default_notification_preferences_without_commit.assert_called_once_with(mock_user.id)
+        handler._create_default_notification_preferences_without_commit.assert_called_once_with(mock_user.id, mock_db_session)
 
     @pytest.mark.asyncio
     async def test_handle_update_existing_user(self, handler, mock_db_session):
@@ -148,7 +148,7 @@ class TestSyncUserCommandHandler:
         # Mock notification preferences (should NOT be called for existing users)
         handler._create_default_notification_preferences_without_commit = Mock()
         
-        with patch.object(ScopedSession, '__call__', return_value=mock_db_session):
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=mock_db_session)):
             result = await handler.handle(command)
             
             assert result["created"] is False
@@ -200,7 +200,7 @@ class TestSyncUserCommandHandler:
         # Simulate no changes
         handler._update_existing_user = Mock(return_value=True)  # last_accessed always updates
         
-        with patch.object(ScopedSession, '__call__', return_value=mock_db_session):
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=mock_db_session)):
             result = await handler.handle(command)
             
             assert result["created"] is False
@@ -249,7 +249,7 @@ class TestSyncUserCommandHandler:
         
         handler._update_existing_user = Mock(return_value=True)
         
-        with patch.object(ScopedSession, '__call__', return_value=mock_db_session):
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=mock_db_session)):
             result = await handler.handle(command)
             
             assert result["user"]["is_premium"] is True
@@ -272,7 +272,7 @@ class TestSyncUserCommandHandler:
         mock_db_session.query.side_effect = Exception("Database error")
         mock_db_session.rollback = Mock()
         
-        with patch.object(ScopedSession, '__call__', return_value=mock_db_session):
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=mock_db_session)):
             with pytest.raises(Exception, match="Database error"):
                 await handler.handle(command)
             
@@ -350,7 +350,7 @@ class TestSyncUserCommandHandler:
         )
         
         # Mock ScopedSession to return None
-        with patch.object(ScopedSession, '__call__', return_value=None):
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=None)):
             # Should raise AttributeError when trying to use None session
             with pytest.raises((AttributeError, RuntimeError)):
                 await handler.handle(command)

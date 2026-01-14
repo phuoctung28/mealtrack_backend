@@ -1,7 +1,7 @@
 """
 Unit tests for DeleteUserCommandHandler.
 """
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 from sqlalchemy import create_engine
@@ -81,7 +81,7 @@ class TestDeleteUserCommandHandler:
         # Arrange
         command = DeleteUserCommand(firebase_uid=active_user.firebase_uid)
 
-        with patch.object(ScopedSession, '__call__', return_value=db_session):
+        with patch('src.app.handlers.command_handlers.delete_user_command_handler.ScopedSession', MagicMock(return_value=db_session)):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
                 mock_firebase.return_value = True
 
@@ -109,7 +109,7 @@ class TestDeleteUserCommandHandler:
         command = DeleteUserCommand(firebase_uid=active_user.firebase_uid)
         user_id = active_user.id
 
-        with patch.object(ScopedSession, '__call__', return_value=db_session):
+        with patch('src.app.handlers.command_handlers.delete_user_command_handler.ScopedSession', MagicMock(return_value=db_session)):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
                 mock_firebase.return_value = True
 
@@ -138,7 +138,7 @@ class TestDeleteUserCommandHandler:
         command = DeleteUserCommand(firebase_uid=inactive_user.firebase_uid)
 
         # Act & Assert
-        with patch.object(ScopedSession, '__call__', return_value=db_session):
+        with patch('src.app.handlers.command_handlers.delete_user_command_handler.ScopedSession', MagicMock(return_value=db_session)):
             with pytest.raises(ResourceNotFoundException):
                 await delete_handler.handle(command)
 
@@ -151,7 +151,7 @@ class TestDeleteUserCommandHandler:
         command = DeleteUserCommand(firebase_uid="nonexistent_firebase_uid")
 
         # Act & Assert
-        with patch.object(ScopedSession, '__call__', return_value=db_session):
+        with patch('src.app.handlers.command_handlers.delete_user_command_handler.ScopedSession', MagicMock(return_value=db_session)):
             with pytest.raises(ResourceNotFoundException):
                 await delete_handler.handle(command)
 
@@ -164,7 +164,7 @@ class TestDeleteUserCommandHandler:
         command = DeleteUserCommand(firebase_uid=active_user.firebase_uid)
         user_id = active_user.id
 
-        with patch.object(ScopedSession, '__call__', return_value=db_session):
+        with patch('src.app.handlers.command_handlers.delete_user_command_handler.ScopedSession', MagicMock(return_value=db_session)):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
                 mock_firebase.side_effect = Exception("Firebase service unavailable")
 
@@ -187,7 +187,7 @@ class TestDeleteUserCommandHandler:
         
         command = DeleteUserCommand(firebase_uid="some_uid")
         
-        with patch.object(ScopedSession, '__call__', return_value=None):
+        with patch('src.app.handlers.command_handlers.delete_user_command_handler.ScopedSession', MagicMock(return_value=None)):
             # Act & Assert - should handle gracefully or raise appropriate error
             # Since ScopedSession is mocked to return None, handler will fail when trying to use db
             with pytest.raises((AttributeError, RuntimeError)):
@@ -202,7 +202,7 @@ class TestDeleteUserCommandHandler:
         command = DeleteUserCommand(firebase_uid=active_user.firebase_uid)
         user_id = active_user.id
 
-        with patch.object(ScopedSession, '__call__', return_value=db_session):
+        with patch('src.app.handlers.command_handlers.delete_user_command_handler.ScopedSession', MagicMock(return_value=db_session)):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
                 mock_firebase.return_value = True
 
@@ -238,7 +238,7 @@ class TestDeleteUserCommandHandler:
             
             mock_db.commit = failing_commit
             
-            with patch.object(ScopedSession, '__call__', return_value=mock_db):
+            with patch('src.app.handlers.command_handlers.delete_user_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
                 # Act & Assert
                 with pytest.raises(Exception, match="Failed to delete user account"):
                     await delete_handler.handle(command)
@@ -270,7 +270,7 @@ class TestDeleteUserCommandHandlerIntegration:
         handler = DeleteUserCommandHandler()
         command = DeleteUserCommand(firebase_uid=user.firebase_uid)
 
-        with patch.object(ScopedSession, '__call__', return_value=db_session):
+        with patch('src.app.handlers.command_handlers.delete_user_command_handler.ScopedSession', MagicMock(return_value=db_session)):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
                 mock_firebase.return_value = True
 
@@ -311,7 +311,7 @@ class TestDeleteUserCommandHandlerIntegration:
 
         handler = DeleteUserCommandHandler()
 
-        with patch.object(ScopedSession, '__call__', return_value=db_session):
+        with patch('src.app.handlers.command_handlers.delete_user_command_handler.ScopedSession', MagicMock(return_value=db_session)):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
                 mock_firebase.return_value = True
 
@@ -350,7 +350,7 @@ class TestDeleteUserCommandHandlerIntegration:
 
         handler = DeleteUserCommandHandler()
 
-        with patch.object(ScopedSession, '__call__', return_value=db_session):
+        with patch('src.app.handlers.command_handlers.delete_user_command_handler.ScopedSession', MagicMock(return_value=db_session)):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
                 mock_firebase.return_value = True
 

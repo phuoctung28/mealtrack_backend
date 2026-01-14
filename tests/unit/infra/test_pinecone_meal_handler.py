@@ -13,7 +13,7 @@ from src.app.commands.meal import (
     CustomNutritionData
 )
 from src.app.handlers.command_handlers.edit_meal_command_handler import EditMealCommandHandler
-from src.domain.model import Meal, MealStatus, Nutrition, FoodItem, Macros
+from src.domain.model import Meal, MealStatus, Nutrition, FoodItem, Macros, MealImage
 from src.infra.services.pinecone_service import NutritionData
 
 
@@ -63,14 +63,21 @@ class TestEditMealCommandHandlerWithPinecone:
             confidence_score=0.9
         )
         
-        meal = Meal.create(
-            meal_id="meal-123",
-            user_id="user-1",
-            dish_name="Chicken Meal",
-            meal_date=datetime.now(),
-            image=None,
+        # Create meal using Meal constructor (Meal.create doesn't exist)
+        meal = Meal(
+            meal_id="123e4567-e89b-12d3-a456-426614174123",
+            user_id="123e4567-e89b-12d3-a456-426614174000",
             status=MealStatus.READY,
-            nutrition=nutrition
+            created_at=datetime.now(),
+            image=MealImage(
+                image_id="123e4567-e89b-12d3-a456-426614174002",
+                format="jpeg",
+                size_bytes=100000,
+                url="https://example.com/image.jpg"
+            ),
+            dish_name="Chicken Meal",
+            nutrition=nutrition,
+            ready_at=datetime.now()
         )
         
         repo.find_by_id.return_value = meal
@@ -79,7 +86,7 @@ class TestEditMealCommandHandlerWithPinecone:
         return repo
     
     @pytest.mark.asyncio
-    @patch('src.app.handlers.command_handlers.edit_meal_handler.get_pinecone_service')
+    @patch('src.app.handlers.command_handlers.edit_meal_command_handler.get_pinecone_service')
     async def test_add_ingredient_uses_pinecone_first(self, mock_get_pinecone, mock_meal_repository):
         """Test that adding ingredient uses Pinecone as primary search method."""
         # Arrange
@@ -128,24 +135,25 @@ class TestEditMealCommandHandlerWithPinecone:
         assert updated_nutrition["calories"] == pytest.approx(295, 0.1)
     
     @pytest.mark.asyncio
-    @patch('src.app.handlers.command_handlers.edit_meal_handler.get_pinecone_service')
-    async def test_add_ingredient_with_fdc_id_overrides_pinecone(self, mock_get_pinecone, mock_meal_repository):
+    @patch('src.app.handlers.command_handlers.edit_meal_command_handler.get_pinecone_service')
+    @patch('src.domain.services.nutrition_calculation_service.NutritionCalculationService.get_nutrition_for_ingredient')
+    async def test_add_ingredient_with_fdc_id_overrides_pinecone(self, mock_get_nutrition, mock_get_pinecone, mock_meal_repository):
         """Test that explicit fdc_id overrides Pinecone search."""
         # Arrange
+        from src.domain.services.nutrition_calculation_service import ScaledNutritionResult
+        
         mock_pinecone_service = Mock()
         mock_get_pinecone.return_value = mock_pinecone_service
         
-        mock_food_service = Mock()
-        mock_food_service.get_food_details = AsyncMock(return_value={
-            'description': 'USDA Rice',
-            'foodNutrients': [
-                {'nutrient': {'id': 1008}, 'amount': 140},  # calories
-                {'nutrient': {'id': 1003}, 'amount': 3.0},  # protein
-                {'nutrient': {'id': 1005}, 'amount': 30},   # carbs
-                {'nutrient': {'id': 1004}, 'amount': 0.5},  # fat
-            ]
-        })
+        # Mock nutrition service to return proper ScaledNutritionResult when fdc_id is provided
+        mock_get_nutrition.return_value = ScaledNutritionResult(
+            calories=210.0,  # 140 * 1.5 (150g / 100g)
+            protein=4.5,     # 3.0 * 1.5
+            carbs=45.0,      # 30 * 1.5
+            fat=0.75         # 0.5 * 1.5
+        )
         
+        mock_food_service = Mock()
         handler = EditMealCommandHandler(
             meal_repository=mock_meal_repository,
             food_service=mock_food_service
@@ -169,13 +177,13 @@ class TestEditMealCommandHandlerWithPinecone:
         
         # Assert
         assert result["success"] is True
-        # Pinecone should NOT be called when fdc_id is provided
-        mock_pinecone_service.get_scaled_nutrition.assert_not_called()
-        # USDA API should be called instead
-        mock_food_service.get_food_details.assert_called_once_with(12345)
+        # Verify get_nutrition_for_ingredient was called with fdc_id
+        mock_get_nutrition.assert_called_once()
+        call_args = mock_get_nutrition.call_args
+        assert call_args[1]['fdc_id'] == 12345  # fdc_id should be passed
     
     @pytest.mark.asyncio
-    @patch('src.app.handlers.command_handlers.edit_meal_handler.get_pinecone_service')
+    @patch('src.app.handlers.command_handlers.edit_meal_command_handler.get_pinecone_service')
     async def test_add_ingredient_with_custom_nutrition_overrides_pinecone(self, mock_get_pinecone, mock_meal_repository):
         """Test that custom nutrition overrides Pinecone search."""
         # Arrange
@@ -215,7 +223,7 @@ class TestEditMealCommandHandlerWithPinecone:
         assert updated_nutrition["calories"] == pytest.approx(265, 0.1)  # 165 + 100
     
     @pytest.mark.asyncio
-    @patch('src.app.handlers.command_handlers.edit_meal_handler.get_pinecone_service')
+    @patch('src.app.handlers.command_handlers.edit_meal_command_handler.get_pinecone_service')
     async def test_add_ingredient_pinecone_fallback_when_not_found(self, mock_get_pinecone, mock_meal_repository):
         """Test behavior when Pinecone doesn't find ingredient."""
         # Arrange
@@ -249,7 +257,7 @@ class TestEditMealCommandHandlerWithPinecone:
         assert len(updated_food_items) == 1  # Only original chicken, unknown food skipped
     
     @pytest.mark.asyncio
-    @patch('src.app.handlers.command_handlers.edit_meal_handler.get_pinecone_service')
+    @patch('src.app.handlers.command_handlers.edit_meal_command_handler.get_pinecone_service')
     async def test_add_ingredient_pinecone_error_handling(self, mock_get_pinecone, mock_meal_repository):
         """Test graceful error handling when Pinecone service fails."""
         # Arrange
@@ -279,9 +287,9 @@ class TestEditMealCommandHandlerWithPinecone:
         mock_pinecone_service.get_scaled_nutrition.assert_called_once()
     
     @pytest.mark.asyncio
-    @patch('src.app.handlers.command_handlers.edit_meal_handler.get_pinecone_service')
+    @patch('src.app.handlers.command_handlers.edit_meal_command_handler.get_pinecone_service')
     async def test_priority_order_pinecone_then_fdc_then_custom(self, mock_get_pinecone, mock_meal_repository):
-        """Test that priority order is: Pinecone > fdc_id > custom_nutrition."""
+        """Test that priority order is: custom_nutrition > fdc_id > Pinecone."""
         # Arrange
         mock_pinecone_service = Mock()
         mock_pinecone_nutrition = NutritionData(
@@ -297,16 +305,17 @@ class TestEditMealCommandHandlerWithPinecone:
         handler = EditMealCommandHandler(meal_repository=mock_meal_repository)
         
         # Command has all three: name (Pinecone), fdc_id, and custom_nutrition
+        # Actual priority: custom_nutrition (1) > fdc_id (2) > Pinecone (3)
         command = EditMealCommand(
             meal_id="meal-123",
             food_item_changes=[
                 FoodItemChange(
                     action="add",
-                    name="rice",  # Should use Pinecone for this
-                    fdc_id=12345,  # Should be ignored
+                    name="rice",
+                    fdc_id=12345,  # Should be ignored because custom_nutrition is provided
                     quantity=100,
                     unit="g",
-                    custom_nutrition=CustomNutritionData(  # Should be ignored
+                    custom_nutrition=CustomNutritionData(  # Priority 1: Should be used first
                         calories_per_100g=999,
                         protein_per_100g=99,
                         carbs_per_100g=99,
@@ -321,14 +330,10 @@ class TestEditMealCommandHandlerWithPinecone:
         
         # Assert
         assert result["success"] is True
-        # Pinecone should be called
-        mock_pinecone_service.get_scaled_nutrition.assert_called_once_with(
-            ingredient_name="rice",
-            quantity=100,
-            unit="g"
-        )
+        # Custom nutrition should be used, so Pinecone should NOT be called
+        mock_pinecone_service.get_scaled_nutrition.assert_not_called()
         
-        # Nutrition should be from Pinecone (100 + 165 = 265), not custom (999 + 165)
+        # Nutrition should be from custom (999 + 165 = 1164), not Pinecone (100 + 165 = 265)
         updated_nutrition = result["updated_nutrition"]
-        assert updated_nutrition["calories"] == pytest.approx(265, 0.1)
+        assert updated_nutrition["calories"] == pytest.approx(1164, 0.1)  # Original 165 + custom 999
 

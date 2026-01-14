@@ -198,13 +198,12 @@ def mock_scoped_session(test_session, request):
     """
     Automatically patch ScopedSession to return test_session for integration tests only.
     
-    This allows handlers that use ScopedSession() to work with test database sessions.
-    Unit tests can override this by patching ScopedSession themselves.
+    Unit tests can use their own mocks by patching ScopedSession within their test methods.
+    Integration tests get the real database session (MySQL).
     """
-    from unittest.mock import patch
     from src.infra.database.config import ScopedSession
     
-    # Only apply to integration tests (tests in tests/integration/)
+    # Only patch for integration tests
     test_path = str(request.node.fspath)
     is_integration_test = 'tests/integration' in test_path
     
@@ -221,7 +220,7 @@ def mock_scoped_session(test_session, request):
     def mock_call(*args, **kwargs):
         return test_session
     
-    # Patch __call__ method
+    # Patch __call__ method for integration tests
     ScopedSession.__call__ = mock_call
     
     try:

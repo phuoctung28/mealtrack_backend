@@ -1,7 +1,7 @@
 """
 Unit tests for update user metrics endpoint and handler.
 """
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 
@@ -104,8 +104,8 @@ class TestUpdateUserMetricsCommandHandler:
             weight_kg=75.0
         )
         
-        # Execute
-        with patch.object(ScopedSession, '__call__', return_value=mock_db):
+        # Execute - patch ScopedSession in the handler module
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
             await handler.handle(command)
         
         # Verify
@@ -138,8 +138,8 @@ class TestUpdateUserMetricsCommandHandler:
             activity_level="very_active"
         )
         
-        # Execute
-        with patch.object(ScopedSession, '__call__', return_value=mock_db):
+        # Execute - patch ScopedSession in the handler module
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
             await handler.handle(command)
         
         # Verify
@@ -171,7 +171,7 @@ class TestUpdateUserMetricsCommandHandler:
         )
 
         # Execute - should succeed without cooldown check
-        with patch.object(ScopedSession, '__call__', return_value=mock_db):
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
             await handler.handle(command)
         
         # Verify
@@ -207,8 +207,8 @@ class TestUpdateUserMetricsCommandHandler:
             fitness_goal="cut"
         )
         
-        # Execute
-        with patch.object(ScopedSession, '__call__', return_value=mock_db):
+        # Execute - patch ScopedSession in the handler module
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
             await handler.handle(command)
         
         # Verify all fields updated
@@ -232,7 +232,7 @@ class TestUpdateUserMetricsCommandHandler:
         )
         
         # Execute & Verify
-        with patch.object(ScopedSession, '__call__', return_value=mock_db):
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
             with pytest.raises(ResourceNotFoundException) as exc_info:
                 await handler.handle(command)
                 # Rollback is called in the exception handler (before exception is re-raised)
@@ -251,7 +251,7 @@ class TestUpdateUserMetricsCommandHandler:
         command = UpdateUserMetricsCommand(user_id="test_user")
         
         # Execute & Verify
-        with patch.object(ScopedSession, '__call__', return_value=mock_db):
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
             with pytest.raises(ValidationException) as exc_info:
                 await handler.handle(command)
         
@@ -281,7 +281,7 @@ class TestUpdateUserMetricsCommandHandler:
         )
         
         # Execute & Verify
-        with patch.object(ScopedSession, '__call__', return_value=mock_db):
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
             with pytest.raises(ValidationException) as exc_info:
                 await handler.handle(command)
         
@@ -312,7 +312,7 @@ class TestUpdateUserMetricsCommandHandler:
         )
         
         # Execute & Verify
-        with patch.object(ScopedSession, '__call__', return_value=mock_db):
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
             with pytest.raises(ValidationException) as exc_info:
                 await handler.handle(command)
         
@@ -342,7 +342,7 @@ class TestUpdateUserMetricsCommandHandler:
         )
         
         # Execute & Verify
-        with patch.object(ScopedSession, '__call__', return_value=mock_db):
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
             with pytest.raises(ValidationException) as exc_info:
                 await handler.handle(command)
         
@@ -372,7 +372,7 @@ class TestUpdateUserMetricsCommandHandler:
         )
         
         # Execute & Verify
-        with patch.object(ScopedSession, '__call__', return_value=mock_db):
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
             with pytest.raises(ValidationException) as exc_info:
                 await handler.handle(command)
         
