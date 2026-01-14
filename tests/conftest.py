@@ -156,16 +156,26 @@ def test_session(test_engine) -> Generator[Session, None, None]:
 
 
 @pytest.fixture(autouse=True)
-def mock_scoped_session(test_session):
+def mock_scoped_session(test_session, request):
     """
-    Automatically patch ScopedSession to return test_session for all tests.
+    Automatically patch ScopedSession to return test_session for integration tests only.
     
     This allows handlers that use ScopedSession() to work with test database sessions.
-    We patch ScopedSession.__call__ to return test_session directly.
+    Unit tests can override this by patching ScopedSession themselves.
     """
     from unittest.mock import patch
     from src.infra.database.config import ScopedSession
     
+    # Only apply to integration tests (tests in tests/integration/)
+    test_path = str(request.node.fspath)
+    is_integration_test = 'tests/integration' in test_path
+    
+    if not is_integration_test:
+        # For unit tests, don't patch - let them use their own mocks
+        yield
+        return
+    
+    # For integration tests, patch ScopedSession to return test_session
     # Store original __call__ method
     original_call = getattr(ScopedSession, '__call__', None)
     
