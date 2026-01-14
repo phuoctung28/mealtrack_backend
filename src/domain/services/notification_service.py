@@ -39,6 +39,30 @@ MEAL_REMINDER_CONFIG = {
     },
 }
 
+# Daily summary notification configuration
+DAILY_SUMMARY_CONFIG = {
+    "zero_logs": {
+        "title": "📝 Log Your Meals",
+        "body": "No meals logged today. Add them from memory to track your progress!",
+    },
+    "on_target": {
+        "title": "🎉 Great Job Today!",
+        "body_template": "You hit {percentage}% of your calorie goal. View your daily success!",
+    },
+    "under_goal": {
+        "title": "📊 Daily Summary",
+        "body_template": "You're {deficit} cal short today. Consider a healthy snack!",
+    },
+    "slightly_over": {
+        "title": "💡 Daily Summary",
+        "body_template": "You went {excess} cal over today. No worries - track carefully tomorrow!",
+    },
+    "way_over": {
+        "title": "📝 Daily Summary",
+        "body_template": "You went {excess} cal over today. Stay mindful - tomorrow is a fresh start!",
+    },
+}
+
 
 class NotificationService:
     """Service for sending push notifications."""
@@ -159,6 +183,55 @@ class NotificationService:
             notification_type=NotificationType.SLEEP_REMINDER,
             data={"type": "sleep_reminder"},
         )
+
+    async def send_daily_summary(
+        self,
+        user_id: str,
+        calories_consumed: float,
+        calorie_goal: float,
+        meals_logged: int,
+    ) -> Dict[str, Any]:
+        """Send daily summary notification with conditional logic based on calorie consumption."""
+        title, body = self._get_summary_message(calories_consumed, calorie_goal, meals_logged)
+
+        return await self.send_notification(
+            user_id=user_id,
+            title=title,
+            body=body,
+            notification_type=NotificationType.DAILY_SUMMARY,
+            data={
+                "type": "daily_summary",
+                "calories_consumed": str(int(calories_consumed)),
+                "calorie_goal": str(int(calorie_goal)),
+                "meals_logged": str(meals_logged),
+            },
+        )
+
+    def _get_summary_message(
+        self, consumed: float, goal: float, meals_logged: int
+    ) -> tuple[str, str]:
+        """Get title and body for summary based on consumption level."""
+        if meals_logged == 0:
+            cfg = DAILY_SUMMARY_CONFIG["zero_logs"]
+            return cfg["title"], cfg["body"]
+
+        percentage = (consumed / goal) * 100 if goal > 0 else 0
+
+        if 95 <= percentage <= 105:  # ±5%
+            cfg = DAILY_SUMMARY_CONFIG["on_target"]
+            return cfg["title"], cfg["body_template"].format(percentage=int(percentage))
+        elif percentage < 95:
+            deficit = int(goal - consumed)
+            cfg = DAILY_SUMMARY_CONFIG["under_goal"]
+            return cfg["title"], cfg["body_template"].format(deficit=deficit)
+        elif 105 < percentage <= 120:  # 10-20% over
+            excess = int(consumed - goal)
+            cfg = DAILY_SUMMARY_CONFIG["slightly_over"]
+            return cfg["title"], cfg["body_template"].format(excess=excess)
+        else:  # 20%+ over
+            excess = int(consumed - goal)
+            cfg = DAILY_SUMMARY_CONFIG["way_over"]
+            return cfg["title"], cfg["body_template"].format(excess=excess)
 
     async def send_progress_notification(
         self, user_id: str, title: str, body: str, data: Optional[Dict[str, str]] = None

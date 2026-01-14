@@ -189,3 +189,41 @@ class ReminderQueryBuilder:
                     matching_users.append(user_id)
 
         return matching_users
+
+    @staticmethod
+    def find_users_for_daily_summary(db: Session, current_utc: datetime) -> List[str]:
+        """
+        Find users who should receive daily summary at 9PM local time.
+
+        Converts UTC to each user's local time and matches against daily_summary_time_minutes.
+
+        Args:
+            db: Database session
+            current_utc: Current UTC datetime
+
+        Returns:
+            List of user IDs who should receive daily summary at their configured time
+        """
+        results = (
+            db.query(
+                DBNotificationPreferences.user_id,
+                DBNotificationPreferences.daily_summary_time_minutes,
+                User.timezone
+            )
+            .join(User, DBNotificationPreferences.user_id == User.id)
+            .filter(DBNotificationPreferences.progress_notifications_enabled == True)
+            .all()
+        )
+
+        matching_users = []
+        for user_id, pref_minutes, timezone in results:
+            user_timezone = timezone or DEFAULT_TIMEZONE
+            local_minutes = utc_to_local_minutes(current_utc, user_timezone)
+
+            # Default to 1260 (9:00 PM) if NULL
+            summary_time = pref_minutes if pref_minutes is not None else 1260
+
+            if local_minutes == summary_time:
+                matching_users.append(user_id)
+
+        return matching_users

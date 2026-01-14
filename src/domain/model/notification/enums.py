@@ -20,9 +20,10 @@ class NotificationType(Enum):
     MEAL_REMINDER_DINNER = "meal_reminder_dinner"
     WATER_REMINDER = "water_reminder"
     SLEEP_REMINDER = "sleep_reminder"
+    DAILY_SUMMARY = "daily_summary"
     PROGRESS_NOTIFICATION = "progress_notification"
     REENGAGEMENT_NOTIFICATION = "reengagement_notification"
-    
+
     def __str__(self):
         return self.value
 

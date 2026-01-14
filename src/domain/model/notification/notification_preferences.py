@@ -17,6 +17,7 @@ NOTIFICATION_TYPE_TO_FIELD = {
     NotificationType.MEAL_REMINDER_DINNER: "meal_reminders_enabled",
     NotificationType.WATER_REMINDER: "water_reminders_enabled",
     NotificationType.SLEEP_REMINDER: "sleep_reminders_enabled",
+    NotificationType.DAILY_SUMMARY: "progress_notifications_enabled",
     NotificationType.PROGRESS_NOTIFICATION: "progress_notifications_enabled",
     NotificationType.REENGAGEMENT_NOTIFICATION: "reengagement_notifications_enabled",
 }
@@ -41,6 +42,7 @@ class NotificationPreferences:
     water_reminder_time_minutes: Optional[int] = 960  # 4:00 PM default
     last_water_reminder_at: Optional[datetime] = None
     sleep_reminder_time_minutes: Optional[int] = None
+    daily_summary_time_minutes: Optional[int] = 1260  # 9:00 PM default
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     
@@ -63,6 +65,7 @@ class NotificationPreferences:
         self._validate_time_minutes(self.dinner_time_minutes, "dinner_time_minutes")
         self._validate_time_minutes(self.water_reminder_time_minutes, "water_reminder_time_minutes")
         self._validate_time_minutes(self.sleep_reminder_time_minutes, "sleep_reminder_time_minutes")
+        self._validate_time_minutes(self.daily_summary_time_minutes, "daily_summary_time_minutes")
         
         # Validate water interval
         if self.water_reminder_interval_hours <= 0:
@@ -95,6 +98,7 @@ class NotificationPreferences:
             sleep_reminder_time_minutes=1320,  # 10:00 PM
             water_reminder_interval_hours=2,  # Every 2 hours
             water_reminder_time_minutes=960,  # 4:00 PM
+            daily_summary_time_minutes=1260,  # 9:00 PM
             created_at=utc_now(),
             updated_at=utc_now()
         )
@@ -112,6 +116,7 @@ class NotificationPreferences:
         water_reminder_interval_hours: Optional[int] = None,
         water_reminder_time_minutes: Optional[int] = None,
         sleep_reminder_time_minutes: Optional[int] = None,
+        daily_summary_time_minutes: Optional[int] = None,
     ) -> 'NotificationPreferences':
         """Update notification preferences with new values."""
         # Validate time constraints before updating
@@ -125,6 +130,8 @@ class NotificationPreferences:
             self._validate_time_minutes(water_reminder_time_minutes, "water_reminder_time_minutes")
         if sleep_reminder_time_minutes is not None:
             self._validate_time_minutes(sleep_reminder_time_minutes, "sleep_reminder_time_minutes")
+        if daily_summary_time_minutes is not None:
+            self._validate_time_minutes(daily_summary_time_minutes, "daily_summary_time_minutes")
 
         if water_reminder_interval_hours is not None and water_reminder_interval_hours <= 0:
             raise ValueError("water_reminder_interval_hours must be positive")
@@ -144,6 +151,7 @@ class NotificationPreferences:
             water_reminder_time_minutes=water_reminder_time_minutes if water_reminder_time_minutes is not None else self.water_reminder_time_minutes,
             last_water_reminder_at=self.last_water_reminder_at,
             sleep_reminder_time_minutes=sleep_reminder_time_minutes if sleep_reminder_time_minutes is not None else self.sleep_reminder_time_minutes,
+            daily_summary_time_minutes=daily_summary_time_minutes if daily_summary_time_minutes is not None else self.daily_summary_time_minutes,
             created_at=self.created_at,
             updated_at=utc_now()
         )
@@ -181,6 +189,7 @@ class NotificationPreferences:
             "water_reminder_time_minutes": self.water_reminder_time_minutes,
             "last_water_reminder_at": format_iso_utc(self.last_water_reminder_at),
             "sleep_reminder_time_minutes": self.sleep_reminder_time_minutes,
+            "daily_summary_time_minutes": self.daily_summary_time_minutes,
             "created_at": format_iso_utc(self.created_at),
             "updated_at": format_iso_utc(self.updated_at),
         }

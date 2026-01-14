@@ -34,7 +34,10 @@ class NotificationPreferences(Base, BaseMixin):
     
     # Sleep Reminder Timing (minutes from midnight)
     sleep_reminder_time_minutes = Column(Integer, nullable=True)
-    
+
+    # Daily Summary Timing (minutes from midnight)
+    daily_summary_time_minutes = Column(Integer, nullable=True, default=1260)
+
     # Constraints
     __table_args__ = (
         CheckConstraint('breakfast_time_minutes >= 0 AND breakfast_time_minutes < 1440', name='check_breakfast_time'),
@@ -42,6 +45,7 @@ class NotificationPreferences(Base, BaseMixin):
         CheckConstraint('dinner_time_minutes >= 0 AND dinner_time_minutes < 1440', name='check_dinner_time'),
         CheckConstraint('water_reminder_interval_hours > 0', name='check_water_interval'),
         CheckConstraint('sleep_reminder_time_minutes >= 0 AND sleep_reminder_time_minutes < 1440', name='check_sleep_time'),
+        CheckConstraint('daily_summary_time_minutes >= 0 AND daily_summary_time_minutes < 1440', name='check_daily_summary_time'),
     )
     
     # Relationships - removed to avoid circular import issues
@@ -65,6 +69,7 @@ class NotificationPreferences(Base, BaseMixin):
             water_reminder_time_minutes=self.water_reminder_time_minutes,
             last_water_reminder_at=self.last_water_reminder_at,
             sleep_reminder_time_minutes=self.sleep_reminder_time_minutes,
+            daily_summary_time_minutes=self.daily_summary_time_minutes,
             created_at=self.created_at,
             updated_at=self.updated_at
         )
