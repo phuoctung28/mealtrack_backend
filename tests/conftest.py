@@ -385,15 +385,27 @@ def event_bus(
     )
     
     # Register user handlers
-    save_user_handler = SaveUserOnboardingCommandHandler(db=test_session)
+    # Note: Handlers now use ScopedSession internally instead of receiving db in constructor
+    save_user_handler = SaveUserOnboardingCommandHandler(cache_service=None)
     event_bus.register_handler(
         SaveUserOnboardingCommand,
         save_user_handler
     )
     
+    # Note: GetUserProfileQueryHandler might still need test_session - check its signature
+    # Note: GetUserProfileQueryHandler now uses ScopedSession internally
+    # It only takes tdee_service parameter (optional)
     event_bus.register_handler(
         GetUserProfileQuery,
-        GetUserProfileQueryHandler(test_session)
+        GetUserProfileQueryHandler()
+    )
+    
+    # DeleteUserCommandHandler doesn't take any parameters (uses ScopedSession internally)
+    from src.app.commands.user import DeleteUserCommand
+    from src.app.handlers.command_handlers.delete_user_command_handler import DeleteUserCommandHandler
+    event_bus.register_handler(
+        DeleteUserCommand,
+        DeleteUserCommandHandler()
     )
     
     # Register daily meal handlers
@@ -404,14 +416,6 @@ def event_bus(
             suggestion_service=mock_suggestion_service,
             tdee_service=TdeeCalculationService()
         )
-    )
-
-    # Register delete user command handler
-    from src.app.commands.user.delete_user_command import DeleteUserCommand
-    from src.app.handlers.command_handlers.delete_user_command_handler import DeleteUserCommandHandler
-    event_bus.register_handler(
-        DeleteUserCommand,
-        DeleteUserCommandHandler(db=test_session)
     )
 
     return event_bus
