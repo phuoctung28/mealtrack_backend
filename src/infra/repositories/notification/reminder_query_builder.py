@@ -142,55 +142,6 @@ class ReminderQueryBuilder:
         return matching_users
 
     @staticmethod
-    def find_users_for_water_reminder(db: Session, current_utc: datetime) -> List[str]:
-        """
-        Find users who should receive water reminders based on interval and quiet hours.
-
-        Skips users whose local time is in quiet hours (sleep → breakfast).
-
-        Args:
-            db: Database session
-            current_utc: Current UTC datetime
-
-        Returns:
-            List of user IDs due for water reminder
-        """
-        results = (
-            db.query(
-                DBNotificationPreferences.user_id,
-                DBNotificationPreferences.water_reminder_interval_hours,
-                DBNotificationPreferences.last_water_reminder_at,
-                DBNotificationPreferences.sleep_reminder_time_minutes,
-                DBNotificationPreferences.breakfast_time_minutes,
-                User.timezone
-            )
-            .join(User, DBNotificationPreferences.user_id == User.id)
-            .filter(DBNotificationPreferences.water_reminders_enabled == True)
-            .all()
-        )
-
-        matching_users = []
-        for (user_id, interval_hours, last_sent,
-             sleep_time, breakfast_time, timezone) in results:
-
-            user_timezone = timezone or DEFAULT_TIMEZONE
-            local_minutes = utc_to_local_minutes(current_utc, user_timezone)
-
-            if is_in_quiet_hours(local_minutes, sleep_time, breakfast_time):
-                continue
-
-            if last_sent is None:
-                matching_users.append(user_id)
-            else:
-                current_naive = current_utc.replace(tzinfo=None)
-                last_sent_naive = last_sent.replace(tzinfo=None) if last_sent.tzinfo else last_sent
-                hours_since_last = (current_naive - last_sent_naive).total_seconds() / 3600
-                if hours_since_last >= interval_hours:
-                    matching_users.append(user_id)
-
-        return matching_users
-
-    @staticmethod
     def find_users_for_daily_summary(db: Session, current_utc: datetime) -> List[str]:
         """
         Find users who should receive daily summary at 9PM local time.

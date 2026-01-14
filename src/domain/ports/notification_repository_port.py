@@ -174,19 +174,6 @@ class NotificationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def find_users_for_water_reminder(self, current_utc: datetime) -> List[str]:
-        """
-        Finds user IDs who should receive water reminders based on their interval setting.
-
-        Args:
-            current_utc: Current UTC datetime
-
-        Returns:
-            List of user IDs due for water reminder
-        """
-        pass
-
-    @abstractmethod
     def find_users_for_daily_summary(self, current_utc: datetime) -> List[str]:
         """
         Finds user IDs who should receive daily summary at 9PM local time.

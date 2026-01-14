@@ -12,9 +12,7 @@ from .enums import NotificationType
 
 # Map notification types to their corresponding preference fields
 NOTIFICATION_TYPE_TO_FIELD = {
-    NotificationType.MEAL_REMINDER_BREAKFAST: "meal_reminders_enabled",
     NotificationType.MEAL_REMINDER_LUNCH: "meal_reminders_enabled",
-    NotificationType.MEAL_REMINDER_DINNER: "meal_reminders_enabled",
     NotificationType.WATER_REMINDER: "water_reminders_enabled",
     NotificationType.SLEEP_REMINDER: "sleep_reminders_enabled",
     NotificationType.DAILY_SUMMARY: "progress_notifications_enabled",

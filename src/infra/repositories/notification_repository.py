@@ -129,14 +129,6 @@ class NotificationRepository(NotificationRepositoryPort):
         finally:
             self._close_db_if_created(db)
 
-    def find_users_for_water_reminder(self, current_utc: datetime) -> List[str]:
-        """Find users who should receive water reminders based on interval and quiet hours."""
-        db = self._get_db()
-        try:
-            return self.query_builder.find_users_for_water_reminder(db, current_utc)
-        finally:
-            self._close_db_if_created(db)
-
     def find_users_for_daily_summary(self, current_utc: datetime) -> List[str]:
         """Find user IDs who should receive daily summary at 9PM local time."""
         db = self._get_db()
