@@ -101,6 +101,47 @@ class ReminderQueryBuilder:
         return matching_users
 
     @staticmethod
+    def find_users_for_fixed_water_reminder(db: Session, current_utc: datetime) -> List[str]:
+        """
+        Find users who should receive water reminders at their fixed reminder time.
+
+        Converts UTC to each user's local time and matches against water_reminder_time_minutes.
+
+        Args:
+            db: Database session
+            current_utc: Current UTC datetime
+
+        Returns:
+            List of user IDs who should receive reminder at their configured time
+        """
+        results = (
+            db.query(
+                DBNotificationPreferences.user_id,
+                DBNotificationPreferences.water_reminder_time_minutes,
+                User.timezone
+            )
+            .join(User, DBNotificationPreferences.user_id == User.id)
+            .filter(
+                DBNotificationPreferences.water_reminders_enabled == True,
+                DBNotificationPreferences.water_reminder_time_minutes.isnot(None)
+            )
+            .all()
+        )
+
+        matching_users = []
+        for user_id, pref_minutes, timezone in results:
+            user_timezone = timezone or DEFAULT_TIMEZONE
+            local_minutes = utc_to_local_minutes(current_utc, user_timezone)
+
+            # Default to 960 (4:00 PM) if NULL
+            target_time = pref_minutes if pref_minutes is not None else 960
+
+            if local_minutes == target_time:
+                matching_users.append(user_id)
+
+        return matching_users
+
+    @staticmethod
     def find_users_for_water_reminder(db: Session, current_utc: datetime) -> List[str]:
         """
         Find users who should receive water reminders based on interval and quiet hours.

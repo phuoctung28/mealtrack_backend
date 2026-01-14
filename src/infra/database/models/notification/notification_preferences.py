@@ -28,6 +28,7 @@ class NotificationPreferences(Base, BaseMixin):
     
     # Water Reminder Settings
     water_reminder_interval_hours = Column(Integer, default=2, nullable=False)
+    water_reminder_time_minutes = Column(Integer, nullable=True, default=960)
     # Use timezone=True to store timezone-aware datetimes (required for UTC comparisons)
     last_water_reminder_at = Column(DateTime(timezone=True), nullable=True)
     
@@ -48,7 +49,7 @@ class NotificationPreferences(Base, BaseMixin):
     def to_domain(self):
         """Convert database model to domain model."""
         from src.domain.model.notification import NotificationPreferences as DomainNotificationPreferences
-        
+
         return DomainNotificationPreferences(
             preferences_id=self.id,
             user_id=self.user_id,
@@ -61,6 +62,7 @@ class NotificationPreferences(Base, BaseMixin):
             lunch_time_minutes=self.lunch_time_minutes,
             dinner_time_minutes=self.dinner_time_minutes,
             water_reminder_interval_hours=self.water_reminder_interval_hours,
+            water_reminder_time_minutes=self.water_reminder_time_minutes,
             last_water_reminder_at=self.last_water_reminder_at,
             sleep_reminder_time_minutes=self.sleep_reminder_time_minutes,
             created_at=self.created_at,

@@ -103,31 +103,30 @@ class ScheduledNotificationService:
             logger.error(f"Error checking notifications: {e}")
     
     async def _check_meal_reminders(self, current_utc: datetime):
-        """Check if any users need meal reminders at the current UTC time."""
+        """Check if any users need lunch reminders at the current UTC time (12:00 PM)."""
         try:
-            meal_types = ["breakfast", "lunch", "dinner"]
-            
-            for meal_type in meal_types:
-                user_ids = self.notification_repository.find_users_for_meal_reminder(
-                    meal_type, current_utc  # Pass datetime, not minutes
-                )
-                
-                for user_id in user_ids:
-                    try:
-                        result = await self.notification_service.send_meal_reminder(
-                            user_id, meal_type
-                        )
-                        
-                        if result.get("success"):
-                            logger.info(f"Meal reminder sent to user {user_id} for {meal_type}")
-                        else:
-                            logger.warning(f"Failed to send meal reminder to user {user_id}: {result}")
-                            
-                    except Exception as e:
-                        logger.error(f"Error sending meal reminder to user {user_id}: {e}")
-                        
+            # Only check lunch reminder (breakfast/dinner removed)
+            meal_type = "lunch"
+            user_ids = self.notification_repository.find_users_for_meal_reminder(
+                meal_type, current_utc
+            )
+
+            for user_id in user_ids:
+                try:
+                    result = await self.notification_service.send_meal_reminder(
+                        user_id, meal_type
+                    )
+
+                    if result.get("success"):
+                        logger.info(f"Lunch reminder sent to user {user_id}")
+                    else:
+                        logger.warning(f"Failed to send lunch reminder to user {user_id}: {result}")
+
+                except Exception as e:
+                    logger.error(f"Error sending lunch reminder to user {user_id}: {e}")
+
         except Exception as e:
-            logger.error(f"Error checking meal reminders: {e}")
+            logger.error(f"Error checking lunch reminders: {e}")
     
     async def _check_sleep_reminders(self, current_utc: datetime):
         """Check if any users need sleep reminders at the current UTC time."""
@@ -152,27 +151,22 @@ class ScheduledNotificationService:
             logger.error(f"Error checking sleep reminders: {e}")
     
     async def _check_water_reminders(self, current_utc: datetime):
-        """Check if any users need water reminders based on their interval."""
+        """Check if any users need water reminders at their fixed time (default 4:00 PM)."""
         try:
-            user_ids = self.notification_repository.find_users_for_water_reminder(current_utc)
+            user_ids = self.notification_repository.find_users_for_fixed_water_reminder(current_utc)
 
-            # Limit to avoid sending too many at once
-            limited_user_ids = user_ids[:self.WATER_REMINDER_MAX_BATCH_SIZE]
-            
-            for user_id in limited_user_ids:
+            for user_id in user_ids:
                 try:
                     result = await self.notification_service.send_water_reminder(user_id)
-                    
+
                     if result.get("success"):
-                        # Update last sent timestamp
-                        self.notification_repository.update_last_water_reminder(user_id, current_utc)
-                        logger.info(f"Water reminder sent to user {user_id}")
+                        logger.info(f"Fixed-time water reminder sent to user {user_id}")
                     else:
                         logger.warning(f"Failed to send water reminder to user {user_id}: {result}")
-                        
+
                 except Exception as e:
                     logger.error(f"Error sending water reminder to user {user_id}: {e}")
-                    
+
         except Exception as e:
             logger.error(f"Error checking water reminders: {e}")
     
