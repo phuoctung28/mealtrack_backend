@@ -63,65 +63,89 @@ def worker_id(request):
 
 
 @pytest.fixture(scope="session")
-def test_engine(worker_id):
+def test_engine(worker_id, request):
     """Create a test database engine."""
-    engine = create_test_engine()
+    # Check if we're running unit tests (tests/unit/) or integration tests
+    test_paths = [str(item.fspath) for item in request.session.items]
+    is_unit_test = any('tests/unit' in path for path in test_paths)
+    is_integration_test = any('tests/integration' in path for path in test_paths)
     
-    # Create test database if it doesn't exist
-    temp_engine = create_engine(
-        get_test_database_url().rsplit('/', 1)[0],
-        isolation_level='AUTOCOMMIT'
-    )
-    try:
-        with temp_engine.connect() as conn:
-            db_name = get_test_database_url().rsplit('/', 1)[1].split('?')[0]
-            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
-    finally:
-        temp_engine.dispose()
-    
-    # Import all models to ensure they're registered with Base.metadata
-    from src.infra.database import models  # noqa: F401
-
-    # Only one worker should create tables to avoid race conditions
-    if worker_id in ("master", "gw0"):
-        # Drop all tables first to ensure clean state
-        with engine.begin() as conn:
-            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
-            Base.metadata.drop_all(bind=engine)
-            conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+    # Use SQLite in-memory for unit tests, real database for integration tests
+    if is_unit_test and not is_integration_test:
+        # Use SQLite in-memory database for unit tests
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            echo=False
+        )
+        
+        # Import all models to ensure they're registered with Base.metadata
+        from src.infra.database import models  # noqa: F401
         
         # Create all tables
         Base.metadata.create_all(bind=engine)
         
-    # Other workers wait for tables to be created
-    elif worker_id != "master":
-        import time
-        from sqlalchemy import inspect
+        yield engine
+        engine.dispose()
+    else:
+        # Use real database for integration tests
+        engine = create_test_engine()
         
-        # Wait up to 30 seconds for tables to be created
-        max_wait = 30
-        wait_interval = 0.5
-        waited = 0
+        # Create test database if it doesn't exist
+        temp_engine = create_engine(
+            get_test_database_url().rsplit('/', 1)[0],
+            isolation_level='AUTOCOMMIT'
+        )
+        try:
+            with temp_engine.connect() as conn:
+                db_name = get_test_database_url().rsplit('/', 1)[1].split('?')[0]
+                conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
+        finally:
+            temp_engine.dispose()
         
-        while waited < max_wait:
-            try:
-                inspector = inspect(engine)
-                tables = inspector.get_table_names()
-                # Check if key tables exist
-                if 'nutrition' in tables and 'meal' in tables and 'food_item' in tables:
-                    break
-            except Exception:
-                pass
+        # Import all models to ensure they're registered with Base.metadata
+        from src.infra.database import models  # noqa: F401
+
+        # Only one worker should create tables to avoid race conditions
+        if worker_id in ("master", "gw0"):
+            # Drop all tables first to ensure clean state
+            with engine.begin() as conn:
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+                Base.metadata.drop_all(bind=engine)
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
             
-            time.sleep(wait_interval)
-            waited += wait_interval
-        
-        # If tables still don't exist, try creating them ourselves
-        if waited >= max_wait:
+            # Create all tables
             Base.metadata.create_all(bind=engine)
-    
-    yield engine
-    engine.dispose()
+        
+        # Other workers wait for tables to be created
+        elif worker_id != "master":
+            import time
+            from sqlalchemy import inspect
+            
+            # Wait up to 30 seconds for tables to be created
+            max_wait = 30
+            wait_interval = 0.5
+            waited = 0
+            
+            while waited < max_wait:
+                try:
+                    inspector = inspect(engine)
+                    tables = inspector.get_table_names()
+                    # Check if key tables exist
+                    if 'nutrition' in tables and 'meal' in tables and 'food_item' in tables:
+                        break
+                except Exception:
+                    pass
+                
+                time.sleep(wait_interval)
+                waited += wait_interval
+            
+            # If tables still don't exist, try creating them ourselves
+            if waited >= max_wait:
+                Base.metadata.create_all(bind=engine)
+        
+        yield engine
+        engine.dispose()
 
 
 @pytest.fixture(scope="function")

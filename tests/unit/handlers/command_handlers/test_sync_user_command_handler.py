@@ -46,43 +46,44 @@ class TestSyncUserCommandHandler:
         
         # Mock query to return None (user doesn't exist)
         mock_query = Mock()
-        mock_query.filter.return_value.first.return_value = None
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = None
         mock_db_session.query.return_value = mock_query
         
         with patch.object(ScopedSession, '__call__', return_value=mock_db_session):
             # Mock the created user
             mock_user = Mock(spec=User)
-        mock_user.id = "user-123"
-        mock_user.firebase_uid = "firebase_123"
-        mock_user.email = "newuser@example.com"
-        mock_user.username = "newuser"
-        mock_user.first_name = "New"
-        mock_user.last_name = "User"
-        mock_user.phone_number = "+1234567890"
-        mock_user.display_name = "New User"
-        mock_user.photo_url = "https://example.com/photo.jpg"
-        mock_user.provider = "google"
-        mock_user.is_active = True
-        mock_user.onboarding_completed = False
-        mock_user.last_accessed = datetime.utcnow()
-        mock_user.created_at = datetime.utcnow()
-        mock_user.updated_at = datetime.utcnow()
-        mock_user.is_premium.return_value = False
-        mock_user.get_active_subscription.return_value = None
-        
-        # Mock refresh to return the user
-        mock_db_session.refresh.return_value = None
-        mock_db_session.add = Mock()
-        mock_db_session.flush = Mock()
-        mock_db_session.commit = Mock()
-        
-        # Set up the handler to use the mock user
-        handler._create_new_user = Mock(return_value=mock_user)
-        
-        # Mock the notification preference creation to avoid actual database calls
-        handler._create_default_notification_preferences_without_commit = Mock()
-        
-        result = await handler.handle(command)
+            mock_user.id = "user-123"
+            mock_user.firebase_uid = "firebase_123"
+            mock_user.email = "newuser@example.com"
+            mock_user.username = "newuser"
+            mock_user.first_name = "New"
+            mock_user.last_name = "User"
+            mock_user.phone_number = "+1234567890"
+            mock_user.display_name = "New User"
+            mock_user.photo_url = "https://example.com/photo.jpg"
+            mock_user.provider = "google"
+            mock_user.is_active = True
+            mock_user.onboarding_completed = False
+            mock_user.last_accessed = datetime.utcnow()
+            mock_user.created_at = datetime.utcnow()
+            mock_user.updated_at = datetime.utcnow()
+            mock_user.is_premium.return_value = False
+            mock_user.get_active_subscription.return_value = None
+            
+            # Mock refresh to return the user
+            mock_db_session.refresh = Mock()
+            mock_db_session.add = Mock()
+            mock_db_session.flush = Mock()
+            mock_db_session.commit = Mock()
+            
+            # Set up the handler to use the mock user
+            handler._create_new_user = Mock(return_value=mock_user)
+            
+            # Mock the notification preference creation to avoid actual database calls
+            handler._create_default_notification_preferences_without_commit = Mock()
+            
+            result = await handler.handle(command)
         
         assert result["created"] is True
         assert result["updated"] is False
@@ -135,7 +136,8 @@ class TestSyncUserCommandHandler:
         
         # Mock query to return existing user
         mock_query = Mock()
-        mock_query.filter.return_value.first.return_value = mock_user
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = mock_user
         mock_db_session.query.return_value = mock_query
         
         mock_db_session.commit = Mock()
