@@ -7,6 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 from ..common.auth_enums import AuthProviderEnum
+from src.domain.services.timezone_utils import utc_now
 
 
 class UserSyncRequest(BaseModel):
@@ -27,7 +28,7 @@ class UserSyncRequest(BaseModel):
 class UserUpdateLastAccessedRequest(BaseModel):
     """Request to update user's last accessed timestamp."""
     firebase_uid: str = Field(..., description="Firebase user unique identifier")
-    last_accessed: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Last accessed timestamp")
+    last_accessed: Optional[datetime] = Field(default_factory=utc_now, description="Last accessed timestamp")
 
 
 class UserCreateRequest(BaseModel):

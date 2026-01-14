@@ -7,6 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 from ..common.auth_enums import AuthProviderEnum
+from src.domain.services.timezone_utils import utc_now
 
 
 class SubscriptionInfo(BaseModel):
@@ -63,7 +64,7 @@ class UserUpdateResponse(BaseModel):
     firebase_uid: str = Field(..., description="Firebase user unique identifier")
     updated: bool = Field(..., description="Whether update was successful")
     message: str = Field(..., description="Operation result message")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Update timestamp")
+    timestamp: datetime = Field(default_factory=utc_now, description="Update timestamp")
 
 
 class OnboardingCompletionResponse(BaseModel):

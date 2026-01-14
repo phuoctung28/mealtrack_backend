@@ -98,36 +98,38 @@ class ScheduledNotificationService:
 
             # Check water reminders (based on user intervals)
             await self._check_water_reminders(current_time)
-                
+
+            # Check daily summary notifications
+            await self._check_daily_summary(current_time)
+
         except Exception as e:
             logger.error(f"Error checking notifications: {e}")
     
     async def _check_meal_reminders(self, current_utc: datetime):
-        """Check if any users need meal reminders at the current UTC time."""
+        """Check if any users need lunch reminders at the current UTC time (12:00 PM)."""
         try:
-            meal_types = ["breakfast", "lunch", "dinner"]
-            
-            for meal_type in meal_types:
-                user_ids = self.notification_repository.find_users_for_meal_reminder(
-                    meal_type, current_utc  # Pass datetime, not minutes
-                )
-                
-                for user_id in user_ids:
-                    try:
-                        result = await self.notification_service.send_meal_reminder(
-                            user_id, meal_type
-                        )
-                        
-                        if result.get("success"):
-                            logger.info(f"Meal reminder sent to user {user_id} for {meal_type}")
-                        else:
-                            logger.warning(f"Failed to send meal reminder to user {user_id}: {result}")
-                            
-                    except Exception as e:
-                        logger.error(f"Error sending meal reminder to user {user_id}: {e}")
-                        
+            # Only check lunch reminder (breakfast/dinner removed)
+            meal_type = "lunch"
+            user_ids = self.notification_repository.find_users_for_meal_reminder(
+                meal_type, current_utc
+            )
+
+            for user_id in user_ids:
+                try:
+                    result = await self.notification_service.send_meal_reminder(
+                        user_id, meal_type
+                    )
+
+                    if result.get("success"):
+                        logger.info(f"Lunch reminder sent to user {user_id}")
+                    else:
+                        logger.warning(f"Failed to send lunch reminder to user {user_id}: {result}")
+
+                except Exception as e:
+                    logger.error(f"Error sending lunch reminder to user {user_id}: {e}")
+
         except Exception as e:
-            logger.error(f"Error checking meal reminders: {e}")
+            logger.error(f"Error checking lunch reminders: {e}")
     
     async def _check_sleep_reminders(self, current_utc: datetime):
         """Check if any users need sleep reminders at the current UTC time."""
@@ -152,30 +154,152 @@ class ScheduledNotificationService:
             logger.error(f"Error checking sleep reminders: {e}")
     
     async def _check_water_reminders(self, current_utc: datetime):
-        """Check if any users need water reminders based on their interval."""
+        """Check if any users need water reminders at their fixed time (default 4:00 PM)."""
         try:
-            user_ids = self.notification_repository.find_users_for_water_reminder(current_utc)
+            user_ids = self.notification_repository.find_users_for_fixed_water_reminder(current_utc)
 
-            # Limit to avoid sending too many at once
-            limited_user_ids = user_ids[:self.WATER_REMINDER_MAX_BATCH_SIZE]
-            
-            for user_id in limited_user_ids:
+            for user_id in user_ids:
                 try:
                     result = await self.notification_service.send_water_reminder(user_id)
-                    
+
                     if result.get("success"):
-                        # Update last sent timestamp
-                        self.notification_repository.update_last_water_reminder(user_id, current_utc)
-                        logger.info(f"Water reminder sent to user {user_id}")
+                        logger.info(f"Fixed-time water reminder sent to user {user_id}")
                     else:
                         logger.warning(f"Failed to send water reminder to user {user_id}: {result}")
-                        
+
                 except Exception as e:
                     logger.error(f"Error sending water reminder to user {user_id}: {e}")
-                    
+
         except Exception as e:
             logger.error(f"Error checking water reminders: {e}")
-    
+
+    async def _check_daily_summary(self, current_utc: datetime):
+        """Check if any users need daily summary at 9PM local time."""
+        try:
+            user_ids = self.notification_repository.find_users_for_daily_summary(current_utc)
+
+            for user_id in user_ids:
+                try:
+                    # Get user's daily nutrition data
+                    today = current_utc.date()
+                    daily_summary = await self._get_user_daily_summary(user_id, today)
+
+                    result = await self.notification_service.send_daily_summary(
+                        user_id=user_id,
+                        calories_consumed=daily_summary["calories_consumed"],
+                        calorie_goal=daily_summary["calorie_goal"],
+                        meals_logged=daily_summary["meals_logged"]
+                    )
+
+                    if result.get("success"):
+                        logger.info(f"Daily summary sent to user {user_id}")
+                    else:
+                        logger.warning(f"Failed to send daily summary: {result}")
+
+                except Exception as e:
+                    logger.error(f"Error sending daily summary to user {user_id}: {e}")
+
+        except Exception as e:
+            logger.error(f"Error checking daily summary: {e}")
+
+    async def _get_user_daily_summary(self, user_id: str, date) -> dict:
+        """Get user's daily nutrition summary for the given date.
+
+        Returns dict with:
+        - calories_consumed: total calories for the day
+        - calorie_goal: user's target calorie intake (TDEE-based)
+        - meals_logged: count of meals logged
+        """
+        # Get meals for the day (synchronous call)
+        from src.infra.database.config import SessionLocal
+        from src.infra.repositories.meal_repository import MealRepository
+
+        db = SessionLocal()
+        try:
+            meal_repo = MealRepository(db)
+            meals = meal_repo.find_by_date(date, user_id=user_id)
+
+            # Count meals
+            meals_logged = len(meals)
+
+            # Calculate total calories consumed from all meals
+            calories_consumed = 0
+            for meal in meals:
+                if meal.nutrition and hasattr(meal.nutrition, 'calories'):
+                    calories_consumed += meal.nutrition.calories
+
+            # Get user profile to calculate calorie goal
+            from src.infra.repositories.user_repository import UserRepository
+            user_repo = UserRepository(db)
+            profile = user_repo.get_current_user_profile(user_id)
+
+            # Calculate TDEE based on profile (Harris-Benedict formula)
+            calorie_goal = 2000  # Default
+            if profile:
+                calorie_goal = self._calculate_tdee(
+                    age=profile.age,
+                    gender=profile.gender,
+                    height_cm=profile.height_cm,
+                    weight_kg=profile.weight_kg,
+                    activity_level=profile.activity_level,
+                    fitness_goal=profile.fitness_goal,
+                )
+
+            return {
+                "calories_consumed": calories_consumed,
+                "calorie_goal": calorie_goal,
+                "meals_logged": meals_logged,
+            }
+        finally:
+            db.close()
+
+    def _calculate_tdee(self, age: int, gender: str, height_cm: float, weight_kg: float,
+                        activity_level: str, fitness_goal: str) -> float:
+        """Calculate Total Daily Energy Expenditure using Harris-Benedict formula with activity multiplier.
+
+        Args:
+            age: Age in years
+            gender: 'male', 'female', 'other'
+            height_cm: Height in centimeters
+            weight_kg: Weight in kilograms
+            activity_level: 'sedentary', 'light', 'moderate', 'active', 'extra'
+            fitness_goal: 'maintenance', 'cutting', 'bulking'
+
+        Returns:
+            Estimated daily calorie goal
+        """
+        # Harris-Benedict BMR formula
+        if gender == "male":
+            bmr = 88.362 + (13.397 * weight_kg) + (4.799 * height_cm) - (5.677 * age)
+        elif gender == "female":
+            bmr = 447.593 + (9.247 * weight_kg) + (3.098 * height_cm) - (4.330 * age)
+        else:
+            # Average for other
+            male_bmr = 88.362 + (13.397 * weight_kg) + (4.799 * height_cm) - (5.677 * age)
+            female_bmr = 447.593 + (9.247 * weight_kg) + (3.098 * height_cm) - (4.330 * age)
+            bmr = (male_bmr + female_bmr) / 2
+
+        # Activity level multipliers
+        activity_multipliers = {
+            "sedentary": 1.2,
+            "light": 1.375,
+            "moderate": 1.55,
+            "active": 1.725,
+            "extra": 1.9,
+        }
+        activity_multiplier = activity_multipliers.get(activity_level, 1.55)
+
+        # Calculate TDEE
+        tdee = bmr * activity_multiplier
+
+        # Adjust for fitness goal
+        if fitness_goal == "cutting":
+            tdee *= 0.85  # 15% deficit
+        elif fitness_goal == "bulking":
+            tdee *= 1.10  # 10% surplus
+
+        return tdee
+
     async def send_test_notification(
         self,
         user_id: str,

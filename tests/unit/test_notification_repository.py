@@ -450,30 +450,6 @@ class TestNotificationRepository:
         assert len(result) == 1
         assert "user-1" in result
     
-    def test_find_users_for_water_reminder(self, repository, mock_db_session):
-        """Test finding users for water reminder with quiet hours filtering."""
-        # Arrange - mock returns tuples of
-        # (user_id, interval_hours, last_sent, sleep_time, breakfast_time, timezone)
-        # User 1: interval passed, outside quiet hours (12:00 noon)
-        # User 2: interval passed, outside quiet hours (12:00 noon)
-        mock_query = Mock()
-        mock_query.join = Mock(return_value=mock_query)
-        mock_query.filter = Mock(return_value=mock_query)
-        mock_query.all = Mock(return_value=[
-            ("user-1", 2, None, 1320, 480, "UTC"),  # Never sent, sleep=22:00, wake=08:00
-            ("user-2", 2, datetime(2024, 12, 7, 9, 0, tzinfo=timezone.utc), 1320, 480, "UTC")
-        ])
-        mock_db_session.query = Mock(return_value=mock_query)
-
-        # Act - 12:00 UTC (noon, outside quiet hours 22:00-08:00)
-        current_utc = datetime(2024, 12, 7, 12, 0, tzinfo=timezone.utc)
-        result = repository.find_users_for_water_reminder(current_utc)
-
-        # Assert - both should be returned (outside quiet hours, interval passed)
-        assert len(result) == 2
-        assert "user-1" in result
-        assert "user-2" in result
-    
     # Error Handling Tests
     
     def test_save_fcm_token_error_rollback(self, repository, mock_db_session):

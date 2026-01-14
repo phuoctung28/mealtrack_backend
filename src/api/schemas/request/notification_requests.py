@@ -38,12 +38,12 @@ class NotificationPreferencesUpdateRequest(BaseModel):
     reengagement_notifications_enabled: Optional[bool] = Field(None, description="Enable/disable reengagement notifications")
     
     # Meal timing (minutes from midnight: 0-1439)
-    breakfast_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="Breakfast reminder time (minutes from midnight)")
+    breakfast_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="[DEPRECATED] Breakfast reminder time (minutes from midnight)", deprecated=True)
     lunch_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="Lunch reminder time (minutes from midnight)")
-    dinner_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="Dinner reminder time (minutes from midnight)")
-    
+    dinner_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="[DEPRECATED] Dinner reminder time (minutes from midnight)", deprecated=True)
+
     # Water reminder settings
-    water_reminder_interval_hours: Optional[int] = Field(None, gt=0, description="Water reminder interval in hours")
+    water_reminder_interval_hours: Optional[int] = Field(None, gt=0, description="[DEPRECATED] Water reminder interval in hours", deprecated=True)
     
     # Sleep reminder timing
     sleep_reminder_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="Sleep reminder time (minutes from midnight)")
