@@ -1,6 +1,7 @@
 """
-Unit tests for SuggestionPromptBuilder (Phase 01, 02 & 04).
-Tests that prompts request 6 names, no description, and multilingual support.
+Unit tests for SuggestionPromptBuilder (Phase 1 & 2).
+Tests that prompts request 4 names, no description, and generate in English.
+Translation happens in Phase 3 post-generation.
 """
 import pytest
 
@@ -29,7 +30,7 @@ def mock_session():
 
 
 class TestBuildMealNamesPrompt:
-    """Test build_meal_names_prompt for Phase 1 (6 diverse names)."""
+    """Test build_meal_names_prompt for Phase 1 (4 diverse names)."""
 
     def test_requests_exactly_6_names(self, mock_session):
         """Prompt should explicitly request 4 meal names."""
@@ -58,7 +59,7 @@ class TestBuildMealNamesPrompt:
         """Prompt should emphasize diverse cuisines."""
         prompt = build_meal_names_prompt(mock_session)
 
-        # Should mention diverse cuisines (4 different cuisines in Phase 02)
+        # Should mention diverse cuisines (4 different cuisines)
         assert "4 different" in prompt or "different" in prompt.lower()
         assert "cuisine" in prompt.lower() or "asian" in prompt.lower()
 
@@ -255,7 +256,7 @@ class TestSessionEdgeCases:
 
         prompt = build_meal_names_prompt(session)
 
-        # Should still generate valid prompt (Phase 02 changed to 4 names)
+        # Should still generate valid prompt (4 names)
         assert len(prompt) > 0
         assert "4" in prompt.lower()
 
@@ -275,7 +276,7 @@ class TestSessionEdgeCases:
 
         prompt = build_meal_names_prompt(session)
 
-        # Should generate valid prompt without dietary prefs (Phase 02: 4 names)
+        # Should generate valid prompt without dietary prefs (4 names)
         assert len(prompt) > 0
         assert "4" in prompt.lower()
 
@@ -328,7 +329,7 @@ class TestPromptContent:
         """Meal names prompt should have clear structure."""
         prompt = build_meal_names_prompt(mock_session)
 
-        # Should have clear sections (Phase 02 changed to 4 names)
+        # Should have clear sections (4 names)
         assert "Generate" in prompt or "generate" in prompt
         assert "4" in prompt
 
@@ -358,133 +359,3 @@ class TestPromptContent:
         assert len(recipe_prompt) < 2000
 
 
-class TestLanguageHelpers:
-    """Test language helper functions (Phase 04)."""
-
-    def test_get_language_instruction_english_empty(self):
-        """English should return empty instruction (no need to specify)."""
-        assert PromptTemplateManager.get_language_instruction("en") == ""
-
-    def test_get_language_instruction_vietnamese_contains_instruction(self):
-        """Vietnamese should return instruction with language name."""
-        result = PromptTemplateManager.get_language_instruction("vi")
-        assert "Vietnamese" in result or "tiếng Việt" in result.lower()
-        assert len(result) > 0  # Should have instruction
-
-    def test_get_language_instruction_spanish_contains_instruction(self):
-        """Spanish should return instruction with language name."""
-        result = PromptTemplateManager.get_language_instruction("es")
-        assert "Spanish" in result or "español" in result.lower()
-        assert len(result) > 0  # Should have instruction
-
-    def test_get_language_instruction_all_supported_languages(self):
-        """All 7 supported languages should return valid instructions."""
-        languages = ["en", "vi", "es", "fr", "de", "ja", "zh"]
-        for lang in languages:
-            result = PromptTemplateManager.get_language_instruction(lang)
-            if lang == "en":
-                assert result == ""
-            else:
-                assert len(result) > 0
-
-
-class TestMultilingualPromptGeneration:
-    """Test multilingual prompt generation (Phase 04)."""
-
-    def test_english_meal_names_no_language_instruction(self):
-        """English prompts should not include language instruction."""
-        session = SuggestionSession(
-            id="test",
-            user_id="user1",
-            meal_type="lunch",
-            meal_portion_type="main",
-            target_calories=600,
-            ingredients=["chicken", "rice"],
-            cooking_time_minutes=30,
-            language="en",
-        )
-        prompt = build_meal_names_prompt(session)
-
-        assert "Vietnamese" not in prompt
-        assert "Spanish" not in prompt
-
-    def test_vietnamese_meal_names_includes_language_instruction(self):
-        """Vietnamese prompts should include Vietnamese language instruction."""
-        session = SuggestionSession(
-            id="test",
-            user_id="user1",
-            meal_type="lunch",
-            meal_portion_type="main",
-            target_calories=600,
-            ingredients=["chicken", "rice"],
-            cooking_time_minutes=30,
-            language="vi",
-        )
-        prompt = build_meal_names_prompt(session)
-
-        # Should contain Vietnamese language indicator
-        assert "Vietnamese" in prompt or "tiếng Việt" in prompt.lower()
-
-    def test_vietnamese_recipe_details_includes_language_instruction(self):
-        """Vietnamese recipe prompts should include language instruction."""
-        session = SuggestionSession(
-            id="test",
-            user_id="user1",
-            meal_type="lunch",
-            meal_portion_type="main",
-            target_calories=600,
-            ingredients=["chicken", "rice"],
-            cooking_time_minutes=30,
-            language="vi",
-        )
-        prompt = build_recipe_details_prompt("Gà Nướng Mật Ong", session)
-
-        assert "Gà Nướng Mật Ong" in prompt
-        # Should contain Vietnamese language indicator
-        assert "Vietnamese" in prompt or "tiếng Việt" in prompt.lower()
-
-    def test_english_recipe_details_no_language_instruction(self):
-        """English recipe prompts should not include language instruction."""
-        session = SuggestionSession(
-            id="test",
-            user_id="user1",
-            meal_type="lunch",
-            meal_portion_type="main",
-            target_calories=600,
-            ingredients=["chicken", "rice"],
-            cooking_time_minutes=30,
-            language="en",
-        )
-        prompt = build_recipe_details_prompt("Honey Glazed Chicken", session)
-
-        assert "Vietnamese" not in prompt
-        assert "Spanish" not in prompt
-
-    def test_all_supported_languages_generate_valid_prompts(self):
-        """All 7 supported languages should generate valid prompts."""
-        languages = ["en", "vi", "es", "fr", "de", "ja", "zh"]
-
-        for lang in languages:
-            session = SuggestionSession(
-                id="test",
-                user_id="user1",
-                meal_type="lunch",
-                meal_portion_type="main",
-                target_calories=600,
-                ingredients=["chicken", "rice"],
-                cooking_time_minutes=30,
-                language=lang,
-            )
-
-            # Should generate non-empty prompts
-            names_prompt = build_meal_names_prompt(session)
-            recipe_prompt = build_recipe_details_prompt("Test Meal", session)
-
-            assert len(names_prompt) > 0
-            assert len(recipe_prompt) > 0
-
-            # Non-English should have some language indicator (not necessarily "IMPORTANT")
-            if lang != "en":
-                # Just verify prompts are longer for non-English (contain language instructions)
-                assert len(names_prompt) > 100
-                assert len(recipe_prompt) > 100

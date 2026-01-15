@@ -1,6 +1,7 @@
 """
 Unit tests for SuggestionOrchestrationService 2-phase generation.
-Tests Phase 1 (6 names), Phase 2 (6 parallel recipes, take first 3).
+Tests Phase 1 (4 names), Phase 2 (4 parallel recipes, take first 3).
+Translation happens in Phase 3 post-generation.
 """
 import asyncio
 from unittest.mock import Mock, AsyncMock
@@ -240,8 +241,8 @@ class TestPhase2ParallelGeneration:
         assert len(successful) >= 3
 
     @pytest.mark.asyncio
-    async def test_phase2_staggered_starts_500ms(self):
-        """Phase 2 should stagger requests by 500ms to prevent rate limiting."""
+    async def test_phase2_staggered_starts_200ms(self):
+        """Phase 2 should stagger requests by 200ms to prevent rate limiting."""
         start_times = []
 
         async def simulated_request(index):
@@ -253,7 +254,7 @@ class TestPhase2ParallelGeneration:
         tasks = []
         for i in range(4):
             if i > 0:
-                await asyncio.sleep(0.5)  # 500ms stagger
+                await asyncio.sleep(0.2)  # 200ms stagger (optimized from 500ms)
             task = asyncio.create_task(simulated_request(i))
             tasks.append(task)
 
