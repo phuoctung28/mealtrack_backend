@@ -529,7 +529,7 @@ class SuggestionOrchestrationService:
         phase3_elapsed = 0.0
         if session.language and session.language != "en":
             phase3_start = time.time()
-            lang_name = LANGUAGE_NAMES.get(session.language, session.language)
+            lang_name = target_lang
             logger.info(
                 f"[PHASE-3-START] session={session.id} | "
                 f"translating {len(suggestions)} meals to {lang_name}"
