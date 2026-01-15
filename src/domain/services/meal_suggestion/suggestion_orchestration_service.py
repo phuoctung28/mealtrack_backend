@@ -428,6 +428,34 @@ class SuggestionOrchestrationService:
                     f"meal_name={meal_name} | error_type={type(e).__name__} | error={e}"
                 )
                 return None
+        
+        async def generate_and_translate_if_needed(
+            prompt: str, meal_name: str, index: int
+        ) -> Optional[MealSuggestion]:
+            """
+            Generate a recipe and, if the session language is not English,
+            translate it immediately. This pipelines the generation and translation.
+            """
+            suggestion = await generate_recipe(prompt, meal_name, index)
+            if suggestion and session.language != "en":
+                try:
+                    logger.debug(f"[TRANSLATION-START] index={index} | meal_name={meal_name}")
+                    translated_list = await self._translation_service.translate_meal_suggestions_batch(
+                        [suggestion], session.language
+                    )
+                    if translated_list:
+                        logger.debug(f"[TRANSLATION-SUCCESS] index={index} | meal_name={meal_name}")
+                        return translated_list[0]
+                    else:
+                        logger.warning(f"[TRANSLATION-EMPTY] index={index} | meal_name={meal_name}")
+                        return None  # Treat translation failure as a full failure for this candidate
+                except Exception as e:
+                    logger.error(
+                        f"[TRANSLATION-FAIL] index={index} | meal_name={meal_name} | "
+                        f"error_type={type(e).__name__} | error={e}"
+                    )
+                    return None # Treat translation failure as a full failure
+            return suggestion
 
         # Over-generation strategy: Start 4 recipes, take first 3 successes
         # Staggered starts (500ms) to prevent rate limiting
@@ -444,7 +472,7 @@ class SuggestionOrchestrationService:
                 )
 
             task = asyncio.create_task(
-                generate_recipe(recipe_prompts[i], meal_names[i], i)
+                generate_and_translate_if_needed(recipe_prompts[i], meal_names[i], i)
             )
             tasks.append(task)
 
@@ -471,10 +499,11 @@ class SuggestionOrchestrationService:
                 logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
                 continue
 
+        phase2_and_3_elapsed = time.time() - gen_start
         logger.info(
             f"[PHASE-2-COMPLETE] session={session.id} | "
             f"success={len(successful_results)}/4 | "
-            f"gen_elapsed={time.time() - gen_start:.2f}s"
+            f"gen_elapsed={phase2_and_3_elapsed:.2f}s"
         )
 
         # W2 fix: Check for minimum acceptable results
@@ -500,35 +529,14 @@ class SuggestionOrchestrationService:
         suggestions = successful_results
 
         total_elapsed = time.time() - start_time
-        phase2_elapsed = total_elapsed - phase1_elapsed
-
+        
         logger.info(
-            f"[TWO-PHASE-COMPLETE] session={session.id} | "
+            f"[PIPELINE-COMPLETE] session={session.id} | "
             f"total_elapsed={total_elapsed:.2f}s | "
             f"phase1={phase1_elapsed:.2f}s | "
-            f"phase2={phase2_elapsed:.2f}s | "
+            f"phase2_and_translation={phase2_and_3_elapsed:.2f}s | "
             f"returned={len(suggestions)} meals (target 3) | "
             f"meals={[s.meal_name for s in suggestions]}"
         )
-
-        # PHASE 3: Translate if non-English (internal 15s timeout in translation service)
-        if session.language != "en":
-            logger.info(
-                f"[PHASE-3-START] session={session.id} | translating to {session.language}"
-            )
-            phase3_start = time.time()
-
-            # Translation service has internal 15s timeout with parallel batches
-            translated_suggestions = await self._translation_service.translate_meal_suggestions_batch(
-                suggestions, session.language
-            )
-            
-            phase3_elapsed = time.time() - phase3_start
-            logger.info(
-                f"[PHASE-3-COMPLETE] session={session.id} | "
-                f"elapsed={phase3_elapsed:.2f}s | "
-                f"translated {len(translated_suggestions)} meals (batch mode)"
-            )
-            suggestions = translated_suggestions
 
         return suggestions
