@@ -34,14 +34,12 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         cache_service: Optional[CacheService] = None,
-        translation_service: Optional[TranslationService] = None,
     ):
         self.image_store = image_store
         self.meal_repository = meal_repository
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
         self.cache_service = cache_service
-        self.translation_service = translation_service
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
@@ -50,7 +48,6 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         self.vision_service = kwargs.get('vision_service', self.vision_service)
         self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
         self.cache_service = kwargs.get('cache_service', self.cache_service)
-        self.translation_service = kwargs.get('translation_service', self.translation_service)
     
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
@@ -129,9 +126,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"[PHASE-2-START] meal={saved_meal.meal_id} | "
                     f"translating to {command.language}"
                 )
-                vision_result = await self.translation_service.translate_meal_analysis(
-                    vision_result, command.language
-                )
+                # vision_result = 
                 phase2_elapsed = time.time() - phase2_start
                 logger.info(
                     f"[PHASE-2-COMPLETE] meal={saved_meal.meal_id} | "

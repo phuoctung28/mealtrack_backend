@@ -26,7 +26,6 @@ from src.domain.ports.meal_suggestion_repository_port import (
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.domain.services.prompts.prompt_constants import get_fallback_meal_name
 
 from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
 from src.domain.services.meal_suggestion.translation_service import TranslationService
@@ -58,7 +57,6 @@ class SuggestionOrchestrationService:
         user_repo: UserRepositoryPort,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
-        translation_service: TranslationService = None,
         redis_client=None,
     ):
         self._generation = generation_service
@@ -66,7 +64,6 @@ class SuggestionOrchestrationService:
         self._user_repo = user_repo
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
-        self._translation_service = translation_service or TranslationService(generation_service)
         self._redis_client = redis_client
         self._translation_service = TranslationService(generation_service)
 

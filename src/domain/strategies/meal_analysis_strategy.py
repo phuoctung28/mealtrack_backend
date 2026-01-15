@@ -10,9 +10,6 @@ class MealAnalysisStrategy(ABC):
 
     This implements the Strategy pattern for different types of context-aware
     meal analysis (basic, portion-aware, ingredient-aware, etc.)
-
-    NOTE: All strategies generate content in English. Translation to user's
-    language happens post-generation via TranslationService (PR #61 approach).
     """
 
     @abstractmethod
