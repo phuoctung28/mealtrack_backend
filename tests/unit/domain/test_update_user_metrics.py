@@ -1,7 +1,7 @@
 """
 Unit tests for update user metrics endpoint and handler.
 """
-from unittest.mock import Mock
+from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 
@@ -9,6 +9,38 @@ from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.handlers.command_handlers.update_user_metrics_command_handler import UpdateUserMetricsCommandHandler
 from src.infra.database.models.user.profile import UserProfile
+
+
+def setup_mock_db_with_profile(mock_profile):
+    """Helper to set up mock database with profile query chain."""
+    mock_db = Mock()
+    mock_query = Mock()
+    # Chain: db.query(UserProfile).filter(...).first()
+    # In SQLAlchemy, filter() returns the same query object for chaining
+    mock_query.filter.return_value = mock_query
+    mock_query.first.return_value = mock_profile
+    mock_db.query.return_value = mock_query
+    mock_db.add = Mock()
+    mock_db.commit = Mock()
+    mock_db.refresh = Mock()
+    mock_db.rollback = Mock()
+    return mock_db
+
+
+def setup_mock_db_without_profile():
+    """Helper to set up mock database that returns None (no profile found)."""
+    mock_db = Mock()
+    mock_query = Mock()
+    # Chain: db.query(UserProfile).filter(...).first()
+    # In SQLAlchemy, filter() returns the same query object for chaining
+    mock_query.filter.return_value = mock_query
+    mock_query.first.return_value = None
+    mock_db.query.return_value = mock_query
+    mock_db.add = Mock()
+    mock_db.commit = Mock()
+    mock_db.refresh = Mock()
+    mock_db.rollback = Mock()
+    return mock_db
 
 
 class TestUpdateUserMetricsCommand:
@@ -50,8 +82,9 @@ class TestUpdateUserMetricsCommandHandler:
     
     async def test_update_weight_only(self):
         """Test updating only weight."""
+        from src.infra.database.config import ScopedSession
+        
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -63,16 +96,17 @@ class TestUpdateUserMetricsCommandHandler:
             fitness_goal="recomp",
             is_current=False
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
+        handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             weight_kg=75.0
         )
         
-        # Execute
-        await handler.handle(command)
+        # Execute - patch ScopedSession in the handler module
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
+            await handler.handle(command)
         
         # Verify
         assert mock_profile.weight_kg == 75.0
@@ -82,8 +116,9 @@ class TestUpdateUserMetricsCommandHandler:
     
     async def test_update_activity_level_only(self):
         """Test updating only activity level."""
+        from src.infra.database.config import ScopedSession
+        
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -95,16 +130,17 @@ class TestUpdateUserMetricsCommandHandler:
             fitness_goal="recomp",
             is_current=False
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
+        handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             activity_level="very_active"
         )
         
-        # Execute
-        await handler.handle(command)
+        # Execute - patch ScopedSession in the handler module
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
+            await handler.handle(command)
         
         # Verify
         assert mock_profile.activity_level == "very_active"
@@ -112,8 +148,9 @@ class TestUpdateUserMetricsCommandHandler:
 
     async def test_update_fitness_goal_unlimited(self):
         """Test updating fitness goal succeeds without cooldown."""
+        from src.infra.database.config import ScopedSession
+        
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -125,17 +162,18 @@ class TestUpdateUserMetricsCommandHandler:
             fitness_goal="recomp",
             is_current=True,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
 
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
+        handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             fitness_goal="cut",
         )
 
         # Execute - should succeed without cooldown check
-        await handler.handle(command)
-
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
+            await handler.handle(command)
+        
         # Verify
         assert mock_profile.fitness_goal == "cut"
         assert mock_profile.is_current is True
@@ -143,8 +181,9 @@ class TestUpdateUserMetricsCommandHandler:
 
     async def test_update_all_metrics_together(self):
         """Test updating all metrics in one call."""
+        from src.infra.database.config import ScopedSession
+        
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -157,9 +196,9 @@ class TestUpdateUserMetricsCommandHandler:
             fitness_goal="recomp",
             is_current=False,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
 
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
+        handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             weight_kg=72.5,
@@ -168,8 +207,9 @@ class TestUpdateUserMetricsCommandHandler:
             fitness_goal="cut"
         )
         
-        # Execute
-        await handler.handle(command)
+        # Execute - patch ScopedSession in the handler module
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
+            await handler.handle(command)
         
         # Verify all fields updated
         assert mock_profile.weight_kg == 72.5
@@ -180,39 +220,48 @@ class TestUpdateUserMetricsCommandHandler:
     
     async def test_user_not_found(self):
         """Test error when user profile doesn't exist."""
-        # Setup
-        mock_db = Mock()
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        from src.infra.database.config import ScopedSession
         
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
+        # Setup
+        mock_db = setup_mock_db_without_profile()
+        
+        handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="nonexistent_user",
             weight_kg=75.0
         )
         
         # Execute & Verify
-        with pytest.raises(ResourceNotFoundException):
-            await handler.handle(command)
-        
-        mock_db.rollback.assert_called_once()
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
+            with pytest.raises(ResourceNotFoundException) as exc_info:
+                await handler.handle(command)
+                # Rollback is called in the exception handler (before exception is re-raised)
+                mock_db.rollback.assert_called_once()
+            
+            # Verify the exception message
+            assert "nonexistent_user" in str(exc_info.value)
     
     async def test_no_metrics_provided(self):
         """Test error when no metrics are provided."""
+        from src.infra.database.config import ScopedSession
+        
         # Setup
-        mock_db = Mock()
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
+        mock_db = setup_mock_db_without_profile()
+        handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(user_id="test_user")
         
         # Execute & Verify
-        with pytest.raises(ValidationException) as exc_info:
-            await handler.handle(command)
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
+            with pytest.raises(ValidationException) as exc_info:
+                await handler.handle(command)
         
         assert "At least one metric must be provided" in str(exc_info.value)
     
     async def test_invalid_weight(self):
         """Test validation for invalid weight."""
+        from src.infra.database.config import ScopedSession
+        
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -223,25 +272,27 @@ class TestUpdateUserMetricsCommandHandler:
             activity_level="moderate",
             fitness_goal="recomp"
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
+        handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             weight_kg=-5.0  # Invalid
         )
         
         # Execute & Verify
-        with pytest.raises(ValidationException) as exc_info:
-            await handler.handle(command)
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
+            with pytest.raises(ValidationException) as exc_info:
+                await handler.handle(command)
         
         assert "Weight must be greater than 0" in str(exc_info.value)
         mock_db.rollback.assert_called_once()
     
     async def test_invalid_body_fat(self):
         """Test validation for body fat out of range."""
+        from src.infra.database.config import ScopedSession
+        
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -252,24 +303,26 @@ class TestUpdateUserMetricsCommandHandler:
             activity_level="moderate",
             fitness_goal="recomp"
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
+        handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             body_fat_percent=75.0  # Too high
         )
         
         # Execute & Verify
-        with pytest.raises(ValidationException) as exc_info:
-            await handler.handle(command)
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
+            with pytest.raises(ValidationException) as exc_info:
+                await handler.handle(command)
         
         assert "Body fat percentage must be between 0 and 70" in str(exc_info.value)
     
     async def test_invalid_activity_level(self):
         """Test validation for invalid activity level."""
+        from src.infra.database.config import ScopedSession
+        
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -280,24 +333,26 @@ class TestUpdateUserMetricsCommandHandler:
             activity_level="moderate",
             fitness_goal="recomp"
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
+        handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             activity_level="super_duper_active"  # Invalid
         )
         
         # Execute & Verify
-        with pytest.raises(ValidationException) as exc_info:
-            await handler.handle(command)
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
+            with pytest.raises(ValidationException) as exc_info:
+                await handler.handle(command)
         
         assert "Activity level must be one of" in str(exc_info.value)
     
     async def test_invalid_fitness_goal(self):
         """Test validation for invalid fitness goal."""
+        from src.infra.database.config import ScopedSession
+        
         # Setup
-        mock_db = Mock()
         mock_profile = UserProfile(
             id="profile_1",
             user_id="test_user",
@@ -308,17 +363,18 @@ class TestUpdateUserMetricsCommandHandler:
             activity_level="moderate",
             fitness_goal="recomp"
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_profile
+        mock_db = setup_mock_db_with_profile(mock_profile)
         
-        handler = UpdateUserMetricsCommandHandler(db=mock_db)
+        handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             fitness_goal="super_shredded"  # Invalid
         )
         
         # Execute & Verify
-        with pytest.raises(ValidationException) as exc_info:
-            await handler.handle(command)
+        with patch('src.app.handlers.command_handlers.update_user_metrics_command_handler.ScopedSession', MagicMock(return_value=mock_db)):
+            with pytest.raises(ValidationException) as exc_info:
+                await handler.handle(command)
         
         assert "Fitness goal must be one of" in str(exc_info.value)
 

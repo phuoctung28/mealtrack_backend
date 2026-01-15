@@ -2,7 +2,7 @@
 Unit tests for SyncUserCommandHandler.
 """
 from datetime import datetime
-from unittest.mock import Mock
+from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 from sqlalchemy.orm import Session
@@ -19,11 +19,9 @@ def mock_db_session():
 
 
 @pytest.fixture
-def handler(mock_db_session):
+def handler():
     """Create a SyncUserCommandHandler instance."""
-    handler = SyncUserCommandHandler()
-    handler.set_dependencies(db=mock_db_session)
-    return handler
+    return SyncUserCommandHandler()
 
 
 class TestSyncUserCommandHandler:
@@ -32,6 +30,8 @@ class TestSyncUserCommandHandler:
     @pytest.mark.asyncio
     async def test_handle_create_new_user(self, handler, mock_db_session):
         """Test creating a new user when no user exists."""
+        from src.infra.database.config import ScopedSession
+        
         command = SyncUserCommand(
             firebase_uid="firebase_123",
             email="newuser@example.com",
@@ -46,42 +46,44 @@ class TestSyncUserCommandHandler:
         
         # Mock query to return None (user doesn't exist)
         mock_query = Mock()
-        mock_query.filter.return_value.first.return_value = None
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = None
         mock_db_session.query.return_value = mock_query
         
-        # Mock the created user
-        mock_user = Mock(spec=User)
-        mock_user.id = "user-123"
-        mock_user.firebase_uid = "firebase_123"
-        mock_user.email = "newuser@example.com"
-        mock_user.username = "newuser"
-        mock_user.first_name = "New"
-        mock_user.last_name = "User"
-        mock_user.phone_number = "+1234567890"
-        mock_user.display_name = "New User"
-        mock_user.photo_url = "https://example.com/photo.jpg"
-        mock_user.provider = "google"
-        mock_user.is_active = True
-        mock_user.onboarding_completed = False
-        mock_user.last_accessed = datetime.utcnow()
-        mock_user.created_at = datetime.utcnow()
-        mock_user.updated_at = datetime.utcnow()
-        mock_user.is_premium.return_value = False
-        mock_user.get_active_subscription.return_value = None
-        
-        # Mock refresh to return the user
-        mock_db_session.refresh.return_value = None
-        mock_db_session.add = Mock()
-        mock_db_session.flush = Mock()
-        mock_db_session.commit = Mock()
-        
-        # Set up the handler to use the mock user
-        handler._create_new_user = Mock(return_value=mock_user)
-        
-        # Mock the notification preference creation to avoid actual database calls
-        handler._create_default_notification_preferences_without_commit = Mock()
-        
-        result = await handler.handle(command)
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=mock_db_session)):
+            # Mock the created user
+            mock_user = Mock(spec=User)
+            mock_user.id = "user-123"
+            mock_user.firebase_uid = "firebase_123"
+            mock_user.email = "newuser@example.com"
+            mock_user.username = "newuser"
+            mock_user.first_name = "New"
+            mock_user.last_name = "User"
+            mock_user.phone_number = "+1234567890"
+            mock_user.display_name = "New User"
+            mock_user.photo_url = "https://example.com/photo.jpg"
+            mock_user.provider = "google"
+            mock_user.is_active = True
+            mock_user.onboarding_completed = False
+            mock_user.last_accessed = datetime.utcnow()
+            mock_user.created_at = datetime.utcnow()
+            mock_user.updated_at = datetime.utcnow()
+            mock_user.is_premium.return_value = False
+            mock_user.get_active_subscription.return_value = None
+            
+            # Mock refresh to return the user
+            mock_db_session.refresh = Mock()
+            mock_db_session.add = Mock()
+            mock_db_session.flush = Mock()
+            mock_db_session.commit = Mock()
+            
+            # Set up the handler to use the mock user
+            handler._create_new_user = Mock(return_value=mock_user)
+            
+            # Mock the notification preference creation to avoid actual database calls
+            handler._create_default_notification_preferences_without_commit = Mock()
+            
+            result = await handler.handle(command)
         
         assert result["created"] is True
         assert result["updated"] is False
@@ -93,11 +95,13 @@ class TestSyncUserCommandHandler:
         # Single atomic commit for both user and notification preferences
         mock_db_session.commit.assert_called_once()
         # Verify notification preferences were added to session for new user
-        handler._create_default_notification_preferences_without_commit.assert_called_once_with(mock_user.id)
+        handler._create_default_notification_preferences_without_commit.assert_called_once_with(mock_user.id, mock_db_session)
 
     @pytest.mark.asyncio
     async def test_handle_update_existing_user(self, handler, mock_db_session):
         """Test updating an existing user."""
+        from src.infra.database.config import ScopedSession
+        
         command = SyncUserCommand(
             firebase_uid="firebase_456",
             email="updated@example.com",
@@ -132,7 +136,8 @@ class TestSyncUserCommandHandler:
         
         # Mock query to return existing user
         mock_query = Mock()
-        mock_query.filter.return_value.first.return_value = mock_user
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = mock_user
         mock_db_session.query.return_value = mock_query
         
         mock_db_session.commit = Mock()
@@ -143,19 +148,22 @@ class TestSyncUserCommandHandler:
         # Mock notification preferences (should NOT be called for existing users)
         handler._create_default_notification_preferences_without_commit = Mock()
         
-        result = await handler.handle(command)
-        
-        assert result["created"] is False
-        assert result["updated"] is True
-        assert result["message"] == "User updated successfully"
-        # For existing users, commit is only called once (no notification preferences creation)
-        mock_db_session.commit.assert_called_once()
-        # Verify notification preferences were NOT created for existing user
-        handler._create_default_notification_preferences_without_commit.assert_not_called()
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=mock_db_session)):
+            result = await handler.handle(command)
+            
+            assert result["created"] is False
+            assert result["updated"] is True
+            assert result["message"] == "User updated successfully"
+            # For existing users, commit is only called once (no notification preferences creation)
+            mock_db_session.commit.assert_called_once()
+            # Verify notification preferences were NOT created for existing user
+            handler._create_default_notification_preferences_without_commit.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_handle_no_changes(self, handler, mock_db_session):
         """Test when user exists but no updates needed."""
+        from src.infra.database.config import ScopedSession
+        
         command = SyncUserCommand(
             firebase_uid="firebase_789",
             email="same@example.com",
@@ -192,14 +200,17 @@ class TestSyncUserCommandHandler:
         # Simulate no changes
         handler._update_existing_user = Mock(return_value=True)  # last_accessed always updates
         
-        result = await handler.handle(command)
-        
-        assert result["created"] is False
-        assert result["message"] in ["User updated successfully", "User data up to date"]
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=mock_db_session)):
+            result = await handler.handle(command)
+            
+            assert result["created"] is False
+            assert result["message"] in ["User updated successfully", "User data up to date"]
 
     @pytest.mark.asyncio
     async def test_handle_with_premium_subscription(self, handler, mock_db_session):
         """Test syncing user with active premium subscription."""
+        from src.infra.database.config import ScopedSession
+        
         command = SyncUserCommand(
             firebase_uid="firebase_premium",
             email="premium@example.com",
@@ -238,16 +249,19 @@ class TestSyncUserCommandHandler:
         
         handler._update_existing_user = Mock(return_value=True)
         
-        result = await handler.handle(command)
-        
-        assert result["user"]["is_premium"] is True
-        assert result["user"]["subscription"] is not None
-        assert result["user"]["subscription"]["product_id"] == "premium_monthly"
-        assert result["user"]["subscription"]["is_monthly"] is True
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=mock_db_session)):
+            result = await handler.handle(command)
+            
+            assert result["user"]["is_premium"] is True
+            assert result["user"]["subscription"] is not None
+            assert result["user"]["subscription"]["product_id"] == "premium_monthly"
+            assert result["user"]["subscription"]["is_monthly"] is True
 
     @pytest.mark.asyncio
     async def test_handle_database_error(self, handler, mock_db_session):
         """Test handling database error during sync."""
+        from src.infra.database.config import ScopedSession
+        
         command = SyncUserCommand(
             firebase_uid="firebase_error",
             email="error@example.com",
@@ -258,10 +272,11 @@ class TestSyncUserCommandHandler:
         mock_db_session.query.side_effect = Exception("Database error")
         mock_db_session.rollback = Mock()
         
-        with pytest.raises(Exception, match="Database error"):
-            await handler.handle(command)
-        
-        mock_db_session.rollback.assert_called_once()
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=mock_db_session)):
+            with pytest.raises(Exception, match="Database error"):
+                await handler.handle(command)
+            
+            mock_db_session.rollback.assert_called_once()
 
     def test_generate_username_from_email(self, handler):
         """Test username generation from email."""
@@ -325,6 +340,8 @@ class TestSyncUserCommandHandler:
     @pytest.mark.asyncio
     async def test_handle_without_db_session(self):
         """Test error when handler has no database session."""
+        from src.infra.database.config import ScopedSession
+        
         handler = SyncUserCommandHandler()
         command = SyncUserCommand(
             firebase_uid="test",
@@ -332,6 +349,9 @@ class TestSyncUserCommandHandler:
             provider="google"
         )
         
-        with pytest.raises(RuntimeError, match="Database session not configured"):
-            await handler.handle(command)
+        # Mock ScopedSession to return None
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.ScopedSession', MagicMock(return_value=None)):
+            # Should raise AttributeError when trying to use None session
+            with pytest.raises((AttributeError, RuntimeError)):
+                await handler.handle(command)
 

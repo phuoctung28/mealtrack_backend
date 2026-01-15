@@ -6,12 +6,11 @@ import logging
 from datetime import date
 from typing import Dict, Any
 
-from sqlalchemy.orm import Session
-
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.daily_meal import GetMealSuggestionsForProfileQuery
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
+from src.infra.database.config import ScopedSession
 from src.infra.database.models.user.profile import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -21,21 +20,15 @@ logger = logging.getLogger(__name__)
 class GetMealSuggestionsForProfileQueryHandler(EventHandler[GetMealSuggestionsForProfileQuery, Dict[str, Any]]):
     """Handler for getting meal suggestions based on user profile."""
 
-    def __init__(self, db: Session = None):
-        self.db = db
+    def __init__(self):
         self.suggestion_service = DailyMealSuggestionService()
-
-    def set_dependencies(self, db: Session):
-        """Set dependencies for dependency injection."""
-        self.db = db
 
     async def handle(self, query: GetMealSuggestionsForProfileQuery) -> Dict[str, Any]:
         """Get meal suggestions for a user profile."""
-        if not self.db:
-            raise RuntimeError("Database session not configured")
+        db = ScopedSession()
 
         # Get user profile
-        profile = self.db.query(UserProfile).filter(
+        profile = db.query(UserProfile).filter(
             UserProfile.id == query.user_profile_id
         ).first()
 
@@ -49,7 +42,7 @@ class GetMealSuggestionsForProfileQueryHandler(EventHandler[GetMealSuggestionsFo
         from src.app.handlers.query_handlers.get_user_tdee_query_handler import GetUserTdeeQueryHandler
         from src.app.queries.tdee import GetUserTdeeQuery
 
-        tdee_handler = GetUserTdeeQueryHandler(self.db)
+        tdee_handler = GetUserTdeeQueryHandler()
         tdee_query = GetUserTdeeQuery(user_id=profile.user_id)
         tdee_result = await tdee_handler.handle(tdee_query)
 

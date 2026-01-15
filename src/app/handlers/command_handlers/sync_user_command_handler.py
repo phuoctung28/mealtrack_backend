@@ -9,10 +9,9 @@ from datetime import datetime
 from src.domain.services.timezone_utils import utc_now
 from typing import Dict, Any
 
-from sqlalchemy.orm import Session
-
 from src.app.commands.user.sync_user_command import SyncUserCommand
 from src.app.events.base import EventHandler, handles
+from src.infra.database.config import ScopedSession
 from src.infra.database.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -22,21 +21,13 @@ logger = logging.getLogger(__name__)
 class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
     """Handler for syncing user data from Firebase authentication."""
 
-    def __init__(self, db: Session = None):
-        self.db = db
-
-    def set_dependencies(self, db: Session):
-        """Set dependencies for dependency injection."""
-        self.db = db
-
     async def handle(self, command: SyncUserCommand) -> Dict[str, Any]:
         """Sync user data from Firebase authentication."""
-        if not self.db:
-            raise RuntimeError("Database session not configured")
+        db = ScopedSession()
 
         try:
             # Check if user exists by firebase_uid
-            existing_user = self.db.query(User).filter(
+            existing_user = db.query(User).filter(
                 User.firebase_uid == command.firebase_uid
             ).first()
 
@@ -45,26 +36,26 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
 
             if existing_user:
                 # Update existing user
-                updated = self._update_existing_user(existing_user, command)
+                updated = self._update_existing_user(existing_user, command, db)
                 user = existing_user
                 logger.info('Updated existing user')
             else:
                 # Create new user
-                user = self._create_new_user(command)
+                user = self._create_new_user(command, db)
                 created = True
                 logger.info('Created new user')
 
             # Flush to get the user ID without committing the transaction
-            self.db.flush()
-            self.db.refresh(user)
+            db.flush()
+            db.refresh(user)
             
             # Create default notification preferences for new user (before commit for atomicity)
             # Both user and preferences will be committed together in a single transaction
             if created:
-                self._create_default_notification_preferences_without_commit(user.id)
+                self._create_default_notification_preferences_without_commit(user.id, db)
             
             # Commit both user and notification preferences atomically
-            self.db.commit()
+            db.commit()
 
             # Get subscription info if user has active premium
             subscription_info = None
@@ -106,17 +97,17 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
             }
 
         except Exception as e:
-            self.db.rollback()
+            db.rollback()
             logger.error(f"Error syncing user data: {str(e)}")
             raise
 
-    def _create_new_user(self, command: SyncUserCommand) -> User:
+    def _create_new_user(self, command: SyncUserCommand, db) -> User:
         """Create a new user from Firebase data."""
         # Generate username if not provided
         username = command.username or self._generate_username(command.email, command.display_name)
 
         # Ensure username is unique
-        username = self._ensure_unique_username(username)
+        username = self._ensure_unique_username(username, db)
 
         # Extract names if not provided
         first_name, last_name = self._extract_names(command.display_name, command.first_name, command.last_name)
@@ -137,10 +128,10 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
             onboarding_completed=False,
         )
 
-        self.db.add(user)
+        db.add(user)
         return user
 
-    def _update_existing_user(self, user: User, command: SyncUserCommand) -> bool:
+    def _update_existing_user(self, user: User, command: SyncUserCommand, db) -> bool:
         """Update existing user with new Firebase data."""
         updated = False
 
@@ -188,12 +179,12 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
         # Limit length
         return username[:20]
 
-    def _ensure_unique_username(self, base_username: str) -> str:
+    def _ensure_unique_username(self, base_username: str, db) -> str:
         """Ensure username is unique by appending numbers if needed."""
         username = base_username
         counter = 1
 
-        while self.db.query(User).filter(User.username == username).first():
+        while db.query(User).filter(User.username == username).first():
             username = f"{base_username}{counter}"
             counter += 1
             # Prevent infinite loop
@@ -217,7 +208,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
 
         return first_name, last_name
     
-    def _create_default_notification_preferences_without_commit(self, user_id: str):
+    def _create_default_notification_preferences_without_commit(self, user_id: str, db):
         """Create default notification preferences for a new user without committing.
         
         This method adds notification preferences to the session but does not commit,
@@ -253,5 +244,5 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
         )
         
         # Add to session (will be committed by caller)
-        self.db.add(db_prefs)
+        db.add(db_prefs)
         logger.info(f"Added default notification preferences for user {user_id} to session")

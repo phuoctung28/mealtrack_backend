@@ -1,14 +1,19 @@
 import logging
 import os
+import uuid
+from contextvars import ContextVar
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker, scoped_session
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+# Context variable to hold request-scoped session identifier
+_request_id: ContextVar[str] = ContextVar("request_id", default=None)
 
 SSL_ENABLED = os.getenv("DB_SSL_ENABLED", "true").lower() == "true"
 SSL_VERIFY_CERT = os.getenv("DB_SSL_VERIFY_CERT", "false").lower() == "true"
@@ -124,6 +129,13 @@ SessionLocal = sessionmaker(
     expire_on_commit=False,
 )
 
+# Scoped session - uses context var for request isolation
+# This ensures each request gets its own session, even when using singleton services
+ScopedSession = scoped_session(
+    SessionLocal,
+    scopefunc=lambda: _request_id.get()  # Scope based on request ID
+)
+
 
 class Base(AsyncAttrs, DeclarativeBase):
     """Base declarative class with async attribute support."""
@@ -132,9 +144,18 @@ class Base(AsyncAttrs, DeclarativeBase):
 def get_db():
     """
     Dependency for FastAPI to get a database session.
+    Uses scoped session for request isolation.
+    
+    This allows singleton services (like event bus) to safely access
+    the current request's database session via ScopedSession().
     """
-    db = SessionLocal()
+    # Set unique request ID for this scope
+    request_id = str(uuid.uuid4())
+    token = _request_id.set(request_id)
+    
     try:
+        db = ScopedSession()
         yield db
     finally:
-        db.close() 
+        ScopedSession.remove()  # Clean up session for this scope
+        _request_id.reset(token) 

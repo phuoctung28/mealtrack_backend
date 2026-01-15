@@ -8,11 +8,10 @@ from datetime import datetime
 from src.domain.services.timezone_utils import utc_now
 from typing import Dict, Any
 
-from sqlalchemy.orm import Session
-
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user import DeleteUserCommand
 from src.app.events.base import EventHandler, handles
+from src.infra.database.config import ScopedSession
 from src.infra.database.models.user import User
 from src.infra.services.firebase_auth_service import FirebaseAuthService
 
@@ -23,13 +22,8 @@ logger = logging.getLogger(__name__)
 class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
     """Handler for deleting user accounts."""
 
-    def __init__(self, db: Session = None):
-        self.db = db
+    def __init__(self):
         self.firebase_auth_service = FirebaseAuthService()
-
-    def set_dependencies(self, db: Session):
-        """Set dependencies for dependency injection."""
-        self.db = db
 
     async def handle(self, command: DeleteUserCommand) -> Dict[str, Any]:
         """
@@ -38,12 +32,11 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
         - Anonymize user data
         - Hard delete in Firebase Authentication
         """
-        if not self.db:
-            raise RuntimeError("Database session not configured")
+        db = ScopedSession()
 
         try:
             # Find user by firebase_uid
-            user = self.db.query(User).filter(
+            user = db.query(User).filter(
                 User.firebase_uid == command.firebase_uid,
                 User.is_active == True  # Only delete active users
             ).first()
@@ -71,7 +64,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
             user.last_accessed = utc_now()
 
             # Commit database changes first
-            self.db.commit()
+            db.commit()
             logger.info(f"Successfully soft deleted user in database")
 
             # Step 3: Revoke refresh tokens to invalidate all active sessions
@@ -107,6 +100,6 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
             # Re-raise not found errors
             raise
         except Exception as e:
-            self.db.rollback()
+            db.rollback()
             logger.error(f"Error deleting user account: {str(e)}")
             raise Exception(f"Failed to delete user account: {str(e)}")

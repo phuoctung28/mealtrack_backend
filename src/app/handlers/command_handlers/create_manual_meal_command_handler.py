@@ -13,18 +13,24 @@ from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal import MealImage
 from src.domain.model.nutrition import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem as DomainFoodItem
+from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.infra.cache.cache_service import CacheService
 from src.domain.services.timezone_utils import utc_now
 
 
 class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any]):
-    def __init__(self, meal_repository, food_data_service, mapping_service, cache_service: Optional[CacheService] = None):
+    def __init__(self, food_data_service, mapping_service, cache_service: Optional[CacheService] = None, meal_repository: Optional[MealRepositoryPort] = None):
         self.meal_repository = meal_repository
         self.food_data_service = food_data_service
         self.mapping_service = mapping_service
         self.cache_service = cache_service
 
     async def handle(self, event: CreateManualMealCommand):
+        # Get meal repository - use ScopedSession if not provided
+        if not self.meal_repository:
+            db = ScopedSession()
+            self.meal_repository = MealRepository(db)
+        
         # Aggregate items with the same fdc_id first
         from collections import defaultdict
         aggregated_items = defaultdict(lambda: {"quantity": 0.0, "unit": "g"})

@@ -2,7 +2,7 @@
 Command for saving a meal suggestion to planned_meals table.
 """
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from src.app.events.base import Command
 
@@ -22,8 +22,8 @@ class SaveMealSuggestionCommand(Command):
     protein: float
     carbs: float
     fat: float
-    description: str | None
-    estimated_cook_time_minutes: int | None
+    description: Optional[str]
+    estimated_cook_time_minutes: Optional[int]
     ingredients_list: List[str]
     instructions: List[str]
     portion_multiplier: int

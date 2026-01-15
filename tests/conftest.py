@@ -98,68 +98,103 @@ def worker_id(request):
 
 
 @pytest.fixture(scope="session")
-def test_engine(worker_id):
-    """Create a test database engine."""
-    if not is_db_available():
-        pytest.skip("Database not available")
-
-    engine = create_test_engine()
+def test_engine(worker_id, request):
+    """Create a test database engine.
     
-    # Create test database if it doesn't exist
-    temp_engine = create_engine(
-        get_test_database_url().rsplit('/', 1)[0],
-        isolation_level='AUTOCOMMIT'
-    )
+    For unit tests: Uses SQLite in-memory database (faster, no external dependencies)
+    For integration tests: Uses MySQL database (when integration tests are explicitly run)
+    """
+    # Try to detect if we're running integration tests
+    # Since pytest.ini has --ignore=tests/integration for unit tests by default,
+    # if we reach here with integration tests, they must be explicitly run
     try:
-        with temp_engine.connect() as conn:
-            db_name = get_test_database_url().rsplit('/', 1)[1].split('?')[0]
-            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
-    finally:
-        temp_engine.dispose()
+        if hasattr(request.session, 'items') and request.session.items:
+            test_paths = [str(item.fspath) for item in request.session.items]
+            has_integration_tests = any('tests/integration' in path for path in test_paths)
+        else:
+            # Default to SQLite for unit tests if we can't determine
+            has_integration_tests = False
+    except (AttributeError, TypeError):
+        # Default to SQLite for unit tests if detection fails
+        has_integration_tests = False
     
-    # Import all models to ensure they're registered with Base.metadata
-    from src.infra.database import models  # noqa: F401
-
-    # Only one worker should create tables to avoid race conditions
-    if worker_id in ("master", "gw0"):
-        # Drop all tables first to ensure clean state
-        with engine.begin() as conn:
-            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
-            Base.metadata.drop_all(bind=engine)
-            conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+    # Use SQLite in-memory for unit tests (default)
+    # Use real MySQL database only when integration tests are explicitly run
+    if not has_integration_tests:
+        # Use SQLite in-memory database for unit tests
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            echo=False
+        )
+        
+        # Import all models to ensure they're registered with Base.metadata
+        from src.infra.database import models  # noqa: F401
         
         # Create all tables
         Base.metadata.create_all(bind=engine)
         
-    # Other workers wait for tables to be created
-    elif worker_id != "master":
-        import time
-        from sqlalchemy import inspect
+        yield engine
+        engine.dispose()
+    else:
+        # Use real database for integration tests
+        engine = create_test_engine()
         
-        # Wait up to 30 seconds for tables to be created
-        max_wait = 30
-        wait_interval = 0.5
-        waited = 0
+        # Create test database if it doesn't exist
+        temp_engine = create_engine(
+            get_test_database_url().rsplit('/', 1)[0],
+            isolation_level='AUTOCOMMIT'
+        )
+        try:
+            with temp_engine.connect() as conn:
+                db_name = get_test_database_url().rsplit('/', 1)[1].split('?')[0]
+                conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
+        finally:
+            temp_engine.dispose()
         
-        while waited < max_wait:
-            try:
-                inspector = inspect(engine)
-                tables = inspector.get_table_names()
-                # Check if key tables exist
-                if 'nutrition' in tables and 'meal' in tables and 'food_item' in tables:
-                    break
-            except Exception:
-                pass
+        # Import all models to ensure they're registered with Base.metadata
+        from src.infra.database import models  # noqa: F401
+
+        # Only one worker should create tables to avoid race conditions
+        if worker_id in ("master", "gw0"):
+            # Drop all tables first to ensure clean state
+            with engine.begin() as conn:
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+                Base.metadata.drop_all(bind=engine)
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
             
-            time.sleep(wait_interval)
-            waited += wait_interval
-        
-        # If tables still don't exist, try creating them ourselves
-        if waited >= max_wait:
+            # Create all tables
             Base.metadata.create_all(bind=engine)
-    
-    yield engine
-    engine.dispose()
+        
+        # Other workers wait for tables to be created
+        elif worker_id != "master":
+            import time
+            from sqlalchemy import inspect
+            
+            # Wait up to 30 seconds for tables to be created
+            max_wait = 30
+            wait_interval = 0.5
+            waited = 0
+            
+            while waited < max_wait:
+                try:
+                    inspector = inspect(engine)
+                    tables = inspector.get_table_names()
+                    # Check if key tables exist
+                    if 'nutrition' in tables and 'meal' in tables and 'food_item' in tables:
+                        break
+                except Exception:
+                    pass
+                
+                time.sleep(wait_interval)
+                waited += wait_interval
+            
+            # If tables still don't exist, try creating them ourselves
+            if waited >= max_wait:
+                Base.metadata.create_all(bind=engine)
+        
+        yield engine
+        engine.dispose()
 
 
 @pytest.fixture(scope="function")
@@ -191,6 +226,67 @@ def test_session(test_engine) -> Generator[Session, None, None]:
             connection.close()
         except Exception:
             pass  # Connection might already be closed
+
+
+@pytest.fixture(autouse=True)
+def mock_scoped_session(test_session, request):
+    """
+    Automatically patch ScopedSession to return test_session for integration tests only.
+    
+    Unit tests can use their own mocks by patching ScopedSession within their test methods.
+    Integration tests get the real database session (MySQL).
+    """
+    from src.infra.database.config import ScopedSession
+    
+    # Only patch for integration tests
+    test_path = str(request.node.fspath)
+    is_integration_test = 'tests/integration' in test_path
+    
+    if not is_integration_test:
+        # For unit tests, don't patch - let them use their own mocks
+        yield
+        return
+    
+    # For integration tests, patch ScopedSession to return test_session
+    # Store original __call__ method
+    original_call = getattr(ScopedSession, '__call__', None)
+    
+    # Create a function that always returns test_session
+    def mock_call(*args, **kwargs):
+        return test_session
+    
+    # Patch __call__ method for integration tests
+    ScopedSession.__call__ = mock_call
+    
+    try:
+        yield
+    finally:
+        # Restore original
+        if original_call is not None:
+            ScopedSession.__call__ = original_call
+        # Clean up
+        try:
+            ScopedSession.remove()
+        except:
+            pass
+
+
+@pytest.fixture(autouse=True)
+def reset_event_bus_singleton():
+    """
+    Reset the event bus singleton before each test to prevent state leakage.
+    This ensures that event bus initialization happens fresh for each test.
+    """
+    from src.api.dependencies.event_bus import _configured_event_bus
+    
+    # Reset singleton before test
+    import src.api.dependencies.event_bus as event_bus_module
+    event_bus_module._configured_event_bus = None
+    
+    yield
+    
+    # Reset singleton after test
+    event_bus_module._configured_event_bus = None
 
 
 @pytest.fixture
@@ -323,15 +419,27 @@ def event_bus(
     )
     
     # Register user handlers
-    save_user_handler = SaveUserOnboardingCommandHandler(db=test_session)
+    # Note: Handlers now use ScopedSession internally instead of receiving db in constructor
+    save_user_handler = SaveUserOnboardingCommandHandler(cache_service=None)
     event_bus.register_handler(
         SaveUserOnboardingCommand,
         save_user_handler
     )
     
+    # Note: GetUserProfileQueryHandler might still need test_session - check its signature
+    # Note: GetUserProfileQueryHandler now uses ScopedSession internally
+    # It only takes tdee_service parameter (optional)
     event_bus.register_handler(
         GetUserProfileQuery,
-        GetUserProfileQueryHandler(test_session)
+        GetUserProfileQueryHandler()
+    )
+    
+    # DeleteUserCommandHandler doesn't take any parameters (uses ScopedSession internally)
+    from src.app.commands.user import DeleteUserCommand
+    from src.app.handlers.command_handlers.delete_user_command_handler import DeleteUserCommandHandler
+    event_bus.register_handler(
+        DeleteUserCommand,
+        DeleteUserCommandHandler()
     )
     
     # Register daily meal handlers
@@ -342,14 +450,6 @@ def event_bus(
             suggestion_service=mock_suggestion_service,
             tdee_service=TdeeCalculationService()
         )
-    )
-
-    # Register delete user command handler
-    from src.app.commands.user.delete_user_command import DeleteUserCommand
-    from src.app.handlers.command_handlers.delete_user_command_handler import DeleteUserCommandHandler
-    event_bus.register_handler(
-        DeleteUserCommand,
-        DeleteUserCommandHandler(db=test_session)
     )
 
     return event_bus

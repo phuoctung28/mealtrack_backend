@@ -91,6 +91,7 @@ run_tests() {
         --cov-report=xml \
         --cov-report=term-missing \
         --cov-report=html \
+        --ignore=tests/integration \
         -m "not integration" \
         -n auto \
         --maxfail=5 \

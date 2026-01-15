@@ -109,8 +109,8 @@ def is_valid_timezone(timezone_str: str) -> bool:
 
 def is_in_quiet_hours(
     local_minutes: int,
-    quiet_start: int | None,
-    quiet_end: int | None
+    quiet_start: Optional[int],
+    quiet_end: Optional[int]
 ) -> bool:
     """
     Check if local_minutes falls within quiet hours window.

@@ -23,19 +23,10 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
     def __init__(
         self,
         meal_repository: MealRepositoryPort = None,
-        db=None,
         cache_service: Optional[CacheService] = None,
     ):
         self.meal_repository = meal_repository
-        self.db = db
         self.cache_service = cache_service
-
-    def set_dependencies(self, meal_repository: MealRepositoryPort, db=None, **kwargs):
-        """Set dependencies for dependency injection."""
-        self.meal_repository = meal_repository
-        if db:
-            self.db = db
-        self.cache_service = kwargs.get("cache_service", self.cache_service)
 
     async def handle(self, query: GetDailyMacrosQuery) -> Dict[str, Any]:
         """Calculate daily macros for a given date with user targets."""
@@ -80,7 +71,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             from src.app.handlers.query_handlers.get_user_tdee_query_handler import GetUserTdeeQueryHandler
             from src.app.queries.tdee import GetUserTdeeQuery
 
-            tdee_handler = GetUserTdeeQueryHandler(self.db)
+            tdee_handler = GetUserTdeeQueryHandler()
             tdee_query = GetUserTdeeQuery(user_id=query.user_id)
             tdee_result = await tdee_handler.handle(tdee_query)
 
