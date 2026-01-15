@@ -797,6 +797,124 @@ class TranslationService:
             recipe_steps=translated_steps,
         )
 
+    async def translate_meal_suggestions_batch(
+        self, suggestions: List["MealSuggestion"], target_language: str
+    ) -> List["MealSuggestion"]:
+        """
+        Translate multiple MealSuggestions in a single batch API call.
+
+        More efficient than translating individually - collects all strings
+        from all suggestions and translates in one API call.
+
+        Args:
+            suggestions: List of MealSuggestion dataclasses to translate
+            target_language: ISO 639-1 language code (e.g., 'vi', 'es')
+
+        Returns:
+            List of new MealSuggestions with translated content
+        """
+        from dataclasses import replace
+        from src.domain.model.meal_suggestion.meal_suggestion import (
+            Ingredient,
+            RecipeStep,
+        )
+
+        if target_language == "en":
+            return suggestions  # No translation needed
+
+        if not suggestions:
+            return []
+
+        # Collect all strings from all suggestions with their paths
+        all_strings = []
+        all_paths = []  # (suggestion_index, field_path)
+
+        for sug_idx, suggestion in enumerate(suggestions):
+            # meal_name
+            if suggestion.meal_name:
+                all_strings.append(suggestion.meal_name)
+                all_paths.append((sug_idx, "meal_name"))
+
+            # description
+            if suggestion.description:
+                all_strings.append(suggestion.description)
+                all_paths.append((sug_idx, "description"))
+
+            # ingredients
+            for i, ing in enumerate(suggestion.ingredients):
+                if ing.name:
+                    all_strings.append(ing.name)
+                    all_paths.append((sug_idx, f"ingredients[{i}].name"))
+
+            # recipe_steps
+            for i, step in enumerate(suggestion.recipe_steps):
+                if step.instruction:
+                    all_strings.append(step.instruction)
+                    all_paths.append((sug_idx, f"recipe_steps[{i}].instruction"))
+
+        if not all_strings:
+            logger.warning("No translatable strings found in meal suggestions batch")
+            return suggestions
+
+        logger.info(
+            f"Batch translating {len(all_strings)} strings from "
+            f"{len(suggestions)} suggestions to {target_language}"
+        )
+
+        # Single batch translate for all strings
+        translated_strings = await self._batch_translate(all_strings, target_language)
+
+        # Build translation map: {(sug_idx, path): translated_string}
+        translation_map = {
+            path_tuple: translated_strings[i]
+            for i, path_tuple in enumerate(all_paths)
+        }
+
+        # Reconstruct translated suggestions
+        translated_suggestions = []
+        for sug_idx, suggestion in enumerate(suggestions):
+            # Get translated values
+            translated_meal_name = translation_map.get(
+                (sug_idx, "meal_name"), suggestion.meal_name
+            )
+            translated_description = translation_map.get(
+                (sug_idx, "description"), suggestion.description
+            )
+
+            # Translate ingredients
+            translated_ingredients = []
+            for i, ing in enumerate(suggestion.ingredients):
+                path = (sug_idx, f"ingredients[{i}].name")
+                translated_name = translation_map.get(path, ing.name)
+                translated_ingredients.append(
+                    Ingredient(name=translated_name, amount=ing.amount, unit=ing.unit)
+                )
+
+            # Translate recipe steps
+            translated_steps = []
+            for i, step in enumerate(suggestion.recipe_steps):
+                path = (sug_idx, f"recipe_steps[{i}].instruction")
+                translated_instruction = translation_map.get(path, step.instruction)
+                translated_steps.append(
+                    RecipeStep(
+                        step=step.step,
+                        instruction=translated_instruction,
+                        duration_minutes=step.duration_minutes,
+                    )
+                )
+
+            translated_suggestions.append(
+                replace(
+                    suggestion,
+                    meal_name=translated_meal_name,
+                    description=translated_description,
+                    ingredients=translated_ingredients,
+                    recipe_steps=translated_steps,
+                )
+            )
+
+        return translated_suggestions
+
     def _extract_translatable_strings(
         self, obj: Any, path: str = ""
     ) -> List[Tuple[str, str]]:

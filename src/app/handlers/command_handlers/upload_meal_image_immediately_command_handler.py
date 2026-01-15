@@ -2,6 +2,7 @@
 Handler for immediate meal image upload and analysis.
 """
 import logging
+import time
 from datetime import datetime
 from typing import Optional
 from uuid import uuid4
@@ -97,43 +98,73 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             # Save initial meal record
             saved_meal = self.meal_repository.save(meal)
             logger.info(f"Created meal record {saved_meal.meal_id} with ANALYZING status")
-            
-            # Perform AI analysis (generates content in English)
-            # Use UserContextAwareAnalysisStrategy if user provided description
+
+            # PHASE 1: AI Vision Analysis (generates content in English)
+            phase1_start = time.time()
             if command.user_description:
                 from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
-                logger.info(f"Performing AI vision analysis with user context for meal {saved_meal.meal_id}")
+                logger.info(
+                    f"[PHASE-1-START] meal={saved_meal.meal_id} | "
+                    f"vision analysis with user context"
+                )
                 strategy = AnalysisStrategyFactory.create_user_context_strategy(command.user_description)
                 vision_result = self.vision_service.analyze_with_strategy(command.file_contents, strategy)
             else:
-                logger.info(f"Performing AI vision analysis for meal {saved_meal.meal_id}")
+                logger.info(
+                    f"[PHASE-1-START] meal={saved_meal.meal_id} | "
+                    f"vision analysis"
+                )
                 vision_result = self.vision_service.analyze(command.file_contents)
+            phase1_elapsed = time.time() - phase1_start
+            logger.info(
+                f"[PHASE-1-COMPLETE] meal={saved_meal.meal_id} | "
+                f"elapsed={phase1_elapsed:.2f}s"
+            )
 
-            # Translate if needed (post-generation translation approach)
-            if command.language != "en" and self.translation_service:
-                logger.info(f"Translating meal analysis to {command.language}")
+            # PHASE 2: Translation (if non-English)
+            phase2_elapsed = 0.0
+            if command.language and command.language != "en" and self.translation_service:
+                phase2_start = time.time()
+                logger.info(
+                    f"[PHASE-2-START] meal={saved_meal.meal_id} | "
+                    f"translating to {command.language}"
+                )
                 vision_result = await self.translation_service.translate_meal_analysis(
                     vision_result, command.language
+                )
+                phase2_elapsed = time.time() - phase2_start
+                logger.info(
+                    f"[PHASE-2-COMPLETE] meal={saved_meal.meal_id} | "
+                    f"elapsed={phase2_elapsed:.2f}s | "
+                    f"language={command.language}"
                 )
 
             # Parse the response
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
             dish_name = self.gpt_parser.parse_dish_name(vision_result)
-            
+
             # Update meal with analysis results
             meal.dish_name = dish_name or "Unknown dish"
             meal.status = MealStatus.READY
             meal.ready_at = utc_now()
             meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)
-            
+
             # Use the parsed nutrition directly
             meal.nutrition = nutrition
-            
+
             # Save the fully analyzed meal
             final_meal = self.meal_repository.save(meal)
-            logger.info(f"Meal {final_meal.meal_id} analysis completed successfully with status {final_meal.status}")
+            total_elapsed = phase1_elapsed + phase2_elapsed
+            logger.info(
+                f"[ANALYSIS-COMPLETE] meal={final_meal.meal_id} | "
+                f"total_elapsed={total_elapsed:.2f}s | "
+                f"phase1={phase1_elapsed:.2f}s | "
+                f"phase2={phase2_elapsed:.2f}s | "
+                f"language={command.language} | "
+                f"status={final_meal.status}"
+            )
             await self._invalidate_daily_macros(command.user_id, meal_date)
-            
+
             return final_meal
             
         except Exception as e:

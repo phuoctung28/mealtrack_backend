@@ -30,6 +30,7 @@ from src.domain.services.prompts.prompt_constants import get_fallback_meal_name
 
 from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
 from src.domain.services.meal_suggestion.translation_service import TranslationService
+from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,7 @@ class SuggestionOrchestrationService:
         user_repo: UserRepositoryPort,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
+        translation_service: TranslationService = None,
         redis_client=None,
     ):
         self._generation = generation_service
@@ -64,6 +66,7 @@ class SuggestionOrchestrationService:
         self._user_repo = user_repo
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
+        self._translation_service = translation_service or TranslationService(generation_service)
         self._redis_client = redis_client
         self._translation_service = TranslationService(generation_service)
 
@@ -280,11 +283,12 @@ class SuggestionOrchestrationService:
         exclude_meal_names: List[str],
     ) -> List[MealSuggestion]:
         """
-        Two-phase generation with over-generation for reliability.
+        Three-phase generation with over-generation for reliability.
         Phase 1: Generate 4 diverse meal names (1 call, ~1-2s)
         Phase 2: Generate 4 recipes in parallel, take first 3 successes (~6-8s)
-        Target latency: 7-10s (faster + more reliable with reduced API pressure)
-        
+        Phase 3: Translate to target language if non-English (~2-3s)
+        Target latency: 9-13s (7-10s for English, 9-13s for non-English)
+
         Args:
             session: The suggestion session with user preferences
             exclude_meal_names: List of meal names to avoid (from previous generations)
@@ -521,6 +525,35 @@ class SuggestionOrchestrationService:
 
         suggestions = successful_results
 
+        # PHASE 3: Translate if non-English language
+        phase3_elapsed = 0.0
+        if session.language and session.language != "en":
+            phase3_start = time.time()
+            lang_name = LANGUAGE_NAMES.get(session.language, session.language)
+            logger.info(
+                f"[PHASE-3-START] session={session.id} | "
+                f"translating {len(suggestions)} meals to {lang_name}"
+            )
+
+            try:
+                suggestions = await self._translation_service.translate_meal_suggestions_batch(
+                    suggestions, session.language
+                )
+                phase3_elapsed = time.time() - phase3_start
+                logger.info(
+                    f"[PHASE-3-COMPLETE] session={session.id} | "
+                    f"elapsed={phase3_elapsed:.2f}s | "
+                    f"translated={len(suggestions)} meals to {lang_name}"
+                )
+            except Exception as e:
+                phase3_elapsed = time.time() - phase3_start
+                logger.error(
+                    f"[PHASE-3-FAILED] session={session.id} | "
+                    f"elapsed={phase3_elapsed:.2f}s | "
+                    f"error={type(e).__name__}: {e} | "
+                    f"returning English suggestions as fallback"
+                )
+
         total_elapsed = time.time() - start_time
         
         logger.info(
@@ -528,6 +561,8 @@ class SuggestionOrchestrationService:
             f"total_elapsed={total_elapsed:.2f}s | "
             f"phase1={phase1_elapsed:.2f}s | "
             f"phase2={phase2_elapsed:.2f}s | "
+            f"phase3={phase3_elapsed:.2f}s | "
+            f"language={session.language} | "
             f"returned={len(suggestions)} meals (target 3) | "
             f"meals={[s.meal_name for s in suggestions]}"
         )
