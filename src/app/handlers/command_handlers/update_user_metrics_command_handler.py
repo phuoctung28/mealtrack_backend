@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 from sqlalchemy.orm import Session
 

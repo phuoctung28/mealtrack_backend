@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from src.domain.model.meal_planning.meal_suggestion import MealType, MealSize
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 
 @dataclass

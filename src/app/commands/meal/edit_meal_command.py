@@ -5,27 +5,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List
 
 from src.app.events.base import Command
-
-
-@dataclass
-class FoodItemChange:
-    """Represents a change to a food item in meal editing."""
-    action: str  # "add", "update", "remove"
-    id: Optional[str] = None
-    fdc_id: Optional[int] = None
-    name: Optional[str] = None
-    quantity: Optional[float] = None
-    unit: Optional[str] = None
-    custom_nutrition: Optional['CustomNutritionData'] = None
-
-
-@dataclass
-class CustomNutritionData:
-    """Custom nutrition data for non-USDA ingredients."""
-    calories_per_100g: float
-    protein_per_100g: float
-    carbs_per_100g: float
-    fat_per_100g: float
+from src.domain.model.meal.food_item_change import FoodItemChange, CustomNutritionData
 
 
 @dataclass

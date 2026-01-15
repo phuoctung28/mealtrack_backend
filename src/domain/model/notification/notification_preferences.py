@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from src.domain.services.timezone_utils import utc_now, format_iso_utc
+from src.domain.utils.timezone_utils import utc_now, format_iso_utc
 from typing import Optional
 
 from .enums import NotificationType

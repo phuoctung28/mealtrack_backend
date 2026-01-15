@@ -8,7 +8,7 @@ import os
 import uuid
 from datetime import datetime
 
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Header

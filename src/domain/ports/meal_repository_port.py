@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
+from datetime import date
 
 from src.domain.model.meal import Meal, MealStatus
 
@@ -72,16 +73,21 @@ class MealRepositoryPort(ABC):
         pass
     
     @abstractmethod
-    def find_by_date(self, date, user_id: str = None, limit: int = 50) -> List[Meal]:
+    def find_by_date(self, date_obj: date, user_id: str = None, limit: int = 50) -> List[Meal]:
         """
         Finds meals created on a specific date, optionally filtered by user.
         
         Args:
-            date: The date to filter by (date object)
+            date_obj: The date to filter by (date object)
             user_id: Optional user ID to filter meals by specific user
             limit: Maximum number of results
             
         Returns:
             List of meals created on the specified date
         """
-        pass 
+        pass
+    
+    @abstractmethod
+    def delete(self, meal_id: str) -> bool:
+        """Delete a meal by ID."""
+        pass

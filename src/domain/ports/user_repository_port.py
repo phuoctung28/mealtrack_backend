@@ -1,59 +1,56 @@
 """
-UserRepositoryPort - Interface for user repository operations.
+This module defines the abstract port for the user repository, ensuring a clean
+separation between the domain and infrastructure layers.
 """
 from abc import ABC, abstractmethod
-from datetime import datetime
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, List
+from uuid import UUID
 
-if TYPE_CHECKING:
-    # Only import for type checking, not at runtime
-    from src.infra.database.models.user import User, UserProfile
+from src.domain.model.user import UserDomainModel, UserProfileDomainModel
 
 
 class UserRepositoryPort(ABC):
-    """Interface for user repository operations."""
-    
+    """
+    Interface for user repository operations.
+    This port works exclusively with domain models.
+    """
+
     @abstractmethod
-    def save(self, user: "User") -> "User":
+    def save(self, user: UserDomainModel) -> UserDomainModel:
         """Save or update a user."""
         pass
-    
+
     @abstractmethod
-    def find_by_id(self, user_id: str) -> Optional["User"]:
+    def find_by_id(self, user_id: UUID) -> Optional[UserDomainModel]:
         """Find a user by ID."""
         pass
-    
+
     @abstractmethod
-    def find_by_firebase_uid(self, firebase_uid: str) -> Optional["User"]:
+    def find_by_firebase_uid(self, firebase_uid: str) -> Optional[UserDomainModel]:
         """Find a user by Firebase UID."""
         pass
-    
+
     @abstractmethod
-    def find_by_email(self, email: str) -> Optional["User"]:
+    def find_by_email(self, email: str) -> Optional[UserDomainModel]:
         """Find a user by email."""
         pass
-    
+
     @abstractmethod
-    def find_all(self, limit: int = 100, offset: int = 0) -> List["User"]:
+    def find_all(self, limit: int = 100, offset: int = 0) -> List[UserDomainModel]:
         """Find all users with pagination."""
         pass
-    
+
     @abstractmethod
-    def delete(self, user_id: str) -> bool:
+    def delete(self, user_id: UUID) -> bool:
         """Delete a user by ID."""
         pass
-    
+
     @abstractmethod
-    def update_last_accessed(self, user_id: str, timestamp: datetime) -> bool:
-        """Update user's last accessed timestamp."""
-        pass
-    
-    @abstractmethod
-    def get_profile(self, user_id: str) -> Optional["UserProfile"]:
+    def get_profile(self, user_id: UUID) -> Optional[UserProfileDomainModel]:
         """Get user profile by user ID."""
         pass
-    
+
     @abstractmethod
-    def update_profile(self, user_id: str, profile: "UserProfile") -> "UserProfile":
+    def update_profile(self, profile: UserProfileDomainModel) -> UserProfileDomainModel:
         """Update user profile."""
         pass

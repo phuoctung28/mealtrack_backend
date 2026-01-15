@@ -14,7 +14,7 @@ from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.repositories.meal_repository import MealRepository
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ import logging
 import uuid
 from datetime import datetime
 
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 from typing import Dict, Any, Optional
 
 from src.api.exceptions import ValidationException, ResourceNotFoundException

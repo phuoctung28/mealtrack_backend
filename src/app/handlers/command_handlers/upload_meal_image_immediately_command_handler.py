@@ -16,7 +16,7 @@ from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.infra.cache.cache_service import CacheService
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 

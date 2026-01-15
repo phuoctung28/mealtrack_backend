@@ -5,7 +5,7 @@ import asyncio
 import logging
 from datetime import datetime
 
-from src.domain.services.timezone_utils import utc_now, timezone
+from src.domain.utils.timezone_utils import utc_now, timezone
 from typing import Dict, List
 
 from src.domain.model.notification import NotificationType

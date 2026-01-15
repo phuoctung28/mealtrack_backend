@@ -4,7 +4,7 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
-from src.domain.services.timezone_utils import (
+from src.domain.utils.timezone_utils import (
     utc_to_local_minutes,
     is_in_quiet_hours,
     DEFAULT_TIMEZONE

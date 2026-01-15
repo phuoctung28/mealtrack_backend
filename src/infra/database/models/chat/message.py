@@ -4,7 +4,7 @@ Database model for chat messages.
 from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Index
 from sqlalchemy.orm import relationship
 
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.config import Base
 from src.infra.database.models.base import BaseMixin
 

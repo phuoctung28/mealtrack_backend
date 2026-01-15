@@ -7,7 +7,7 @@ from sqlalchemy.orm import relationship
 from src.infra.database.config import Base
 from src.infra.database.models.base import TimestampMixin
 from src.infra.database.models.enums import MealStatusEnum
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 
 class Meal(Base, TimestampMixin):

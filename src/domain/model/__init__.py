@@ -1,161 +1,55 @@
-"""
-Domain models organized by bounded context.
-
-This module re-exports all domain models from their bounded contexts for convenience.
-"""
-# AI context
-from .ai import (
-    GPTMacros,
-    GPTFoodItem,
-    GPTAnalysisResponse,
-    GPTResponseError,
-    GPTResponseFormatError,
-    GPTResponseValidationError,
-    GPTResponseParsingError,
-    GPTResponseIncompleteError,
+"""Domain model package."""
+# flake8: noqa
+from .base import BaseDomainModel
+from .meal import (
+    Meal,
+    MealStatus,
+    MealImage,
+    Ingredient,
 )
-# Chat context
+from .nutrition import (
+    Macros,
+    Nutrition,
+    FoodItem,
+    Food,
+)
+from .notification import (
+    NotificationType,
+)
 from .chat import (
-    Thread,
-    MessageRole as ChatMessageRole,
-    ThreadStatus,
-)
-# Conversation context
-from .conversation import (
-    Conversation,
     Message,
-    MessageRole,
-    ConversationContext,
-    ConversationState,
-    PromptContext,
-    MealsForDateResponse,
 )
-# Meal context
-from .meal import Meal, MealStatus, MealImage, Ingredient
-# Meal Planning context
+from .user import (
+    UserDomainModel,
+    UserProfileDomainModel,
+    UserActivity,
+    ActivityLevel,
+    OnboardingSection,
+    OnboardingResponse,
+    TDEE,
+    TdeeRequest,
+    TdeeResponse,
+    Sex,
+    Goal,
+    UnitSystem,
+    UserMacros,
+    MacroTargets,
+)
 from .meal_planning import (
+    SimpleMacroTargets,
     MealPlan,
     PlannedMeal,
     DayPlan,
+    MealType,
     UserPreferences,
     DietaryPreference,
     FitnessGoal,
-    MealType,
     PlanDuration,
-    SimpleMacroTargets,
+    MealGenerationContext,
     MealGenerationRequest,
     MealGenerationType,
-    MealGenerationContext,
-    UserDietaryProfile,
-    UserNutritionTargets,
-    IngredientConstraints,
-    CalorieDistribution,
-    DailyMealPlan,
-    GeneratedMeal,
-    NutritionSummary,
+    UserDietaryProfile, # Added
+    UserNutritionTargets, # Added
+    IngredientConstraints, # Added
+    CalorieDistribution, # Added
 )
-# Notification context
-from .notification import (
-    UserFcmToken,
-    NotificationPreferences,
-    PushNotification,
-    DeviceType,
-    NotificationType,
-)
-# Nutrition context
-from .nutrition import Nutrition, FoodItem, Macros, Micros, Food
-# User context
-from .user import (
-    Activity,
-    ActivityType,
-    UserMacros,
-    OnboardingSection,
-    OnboardingField,
-    OnboardingResponse,
-    OnboardingSectionType,
-    FieldType,
-    TdeeRequest,
-    TdeeResponse,
-    MacroTargets,
-    Sex,
-    ActivityLevel,
-    Goal,
-    UnitSystem,
-)
-
-__all__ = [
-    # Meal
-    'Meal',
-    'MealStatus',
-    'MealImage',
-    'Ingredient',
-    # Nutrition
-    'Nutrition',
-    'FoodItem',
-    'Macros',
-    'Micros',
-    'Food',
-    # User
-    'Activity',
-    'ActivityType',
-    'UserMacros',
-    'OnboardingSection',
-    'OnboardingField',
-    'OnboardingResponse',
-    'OnboardingSectionType',
-    'FieldType',
-    'TdeeRequest',
-    'TdeeResponse',
-    'MacroTargets',
-    'Sex',
-    'ActivityLevel',
-    'Goal',
-    'UnitSystem',
-    # Meal Planning
-    'MealPlan',
-    'PlannedMeal',
-    'DayPlan',
-    'UserPreferences',
-    'DietaryPreference',
-    'FitnessGoal',
-    'MealType',
-    'PlanDuration',
-    'SimpleMacroTargets',
-    'MealGenerationRequest',
-    'MealGenerationType',
-    'MealGenerationContext',
-    'UserDietaryProfile',
-    'UserNutritionTargets',
-    'IngredientConstraints',
-    'CalorieDistribution',
-    'DailyMealPlan',
-    'GeneratedMeal',
-    'NutritionSummary',
-    # Conversation
-    'Conversation',
-    'Message',
-    'MessageRole',
-    'ConversationContext',
-    'ConversationState',
-    'PromptContext',
-    'MealsForDateResponse',
-    # AI
-    'GPTMacros',
-    'GPTFoodItem',
-    'GPTAnalysisResponse',
-    'GPTResponseError',
-    'GPTResponseFormatError',
-    'GPTResponseValidationError',
-    'GPTResponseParsingError',
-    'GPTResponseIncompleteError',
-    # Notification
-    'UserFcmToken',
-    'NotificationPreferences',
-    'PushNotification',
-    'DeviceType',
-    'NotificationType',
-    # Chat
-    'Thread',
-    'ChatMessageRole',
-    'ThreadStatus',
-]

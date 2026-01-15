@@ -9,7 +9,7 @@ from src.app.commands.notification import RegisterFcmTokenCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.notification import UserFcmToken, DeviceType
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
-from src.domain.services.timezone_utils import is_valid_timezone
+from src.domain.utils.timezone_utils import is_valid_timezone
 from src.infra.database.config import ScopedSession
 from src.infra.repositories.user_repository import UserRepository
 

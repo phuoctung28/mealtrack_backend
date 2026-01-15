@@ -10,7 +10,7 @@ from src.domain.model.meal_planning import (
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.fallback_meal_service import FallbackMealService
 from src.domain.services.prompt_generation_service import PromptGenerationService
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 

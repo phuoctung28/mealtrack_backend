@@ -8,7 +8,7 @@ from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
 from src.infra.database.models.base import BaseMixin
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 
 class Subscription(Base, BaseMixin):

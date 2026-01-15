@@ -5,7 +5,7 @@ Auto-extracted for better maintainability.
 import logging
 from datetime import datetime
 
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 from typing import Dict, Any
 
 from src.api.exceptions import ResourceNotFoundException

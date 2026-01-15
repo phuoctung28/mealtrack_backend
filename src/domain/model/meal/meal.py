@@ -6,7 +6,7 @@ from typing import Optional
 
 from .meal_image import MealImage
 from ..nutrition import Nutrition
-from src.domain.services.timezone_utils import utc_now, format_iso_utc
+from src.domain.utils.timezone_utils import utc_now, format_iso_utc
 
 
 class MealStatus(Enum):

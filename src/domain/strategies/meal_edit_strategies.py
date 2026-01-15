@@ -7,7 +7,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Dict
 
-from src.app.commands.meal import FoodItemChange
+from src.domain.model.meal.food_item_change import FoodItemChange
 from src.domain.model.nutrition import FoodItem
 from src.domain.model.nutrition import Macros
 from src.domain.services import NutritionCalculationService
