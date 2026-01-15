@@ -310,20 +310,13 @@ class SuggestionOrchestrationService:
                     unique_names.append(name)
             meal_names = unique_names
 
-            if len(meal_names) != 4:
+            if len(meal_names) < self.SUGGESTIONS_COUNT:
                 logger.warning(
                     f"[PHASE-1-INCOMPLETE] session={session.id} | "
-                    f"got {len(meal_names)} names, expected 4"
+                    f"got {len(meal_names)} names, expected {self.SUGGESTIONS_COUNT}"
                 )
-                # Pad with English fallback names if needed (will be translated in Phase 3)
-                while len(meal_names) < 4:
-                    meal_names.append(
-                        get_fallback_meal_name(
-                            "en",  # Always use English fallbacks
-                            session.meal_type,
-                            len(meal_names) + 1
-                        )
-                    )
+                raise RuntimeError(f"Could not generate enough unique meal names.")
+
 
             phase1_elapsed = time.time() - start_time
             logger.info(
@@ -339,11 +332,7 @@ class SuggestionOrchestrationService:
                 f"elapsed={phase1_elapsed:.2f}s | "
                 f"error_type={type(e).__name__} | error={e}"
             )
-            # Fallback to English names (will be translated in Phase 3)
-            meal_names = [
-                get_fallback_meal_name("en", session.meal_type, i + 1)
-                for i in range(4)
-            ]
+            raise RuntimeError(f"Failed to generate meal names: {e}") from e
 
         # STEP 2: Generate full recipes for each name in parallel
         logger.info(
