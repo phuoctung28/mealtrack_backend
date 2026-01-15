@@ -13,7 +13,7 @@ MAX_DESCRIPTION_LENGTH = 200
 
 # Patterns that indicate prompt injection attempts
 INJECTION_PATTERNS = [
-    r'(ignore|forget|disregard|override|bypass)\s*(all|previous|above|prior)?\s*(instruction|prompt|rule|system)',
+    r'(ignore|forget|disregard|override|bypass)\s+(all\s+)?(previous|above|prior)?\s*(instruction|prompt|rule|system)s?',
     r'(you\s+are|act\s+as|pretend|roleplay|imagine)\s+(now\s+)?a?\s*(?!nutrition|food)',
     r'(new\s+)?instruction[s]?\s*:',
     r'system\s*(prompt|message)\s*:',
