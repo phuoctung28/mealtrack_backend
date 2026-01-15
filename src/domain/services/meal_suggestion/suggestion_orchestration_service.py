@@ -26,9 +26,10 @@ from src.domain.ports.meal_suggestion_repository_port import (
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.domain.services.prompts.prompt_constants import LANGUAGE_NAMES, get_fallback_meal_name
+from src.domain.services.prompts.prompt_constants import get_fallback_meal_name
 
 from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
+from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,7 @@ class SuggestionOrchestrationService:
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
         self._redis_client = redis_client
+        self._translation_service = TranslationService(generation_service)
 
     async def generate_suggestions(
         self,
@@ -240,6 +242,38 @@ class SuggestionOrchestrationService:
         """
         return await self._generate_parallel_hybrid(session, exclude_meal_names)
 
+    def _get_language_name(self, code: str) -> str:
+        """Map language code to full English name for prompt instructions."""
+        languages = {
+            "en": "English",
+            "vi": "Vietnamese",
+            "fr": "French",
+            "es": "Spanish",
+            "de": "German",
+            "it": "Italian",
+            "ja": "Japanese",
+            "ko": "Korean",
+            "zh": "Chinese",
+            "ru": "Russian",
+            "pt": "Portuguese",
+            "hi": "Hindi",
+            "ar": "Arabic",
+            "tr": "Turkish",
+            "nl": "Dutch",
+            "pl": "Polish",
+            "sv": "Swedish",
+            "da": "Danish",
+            "fi": "Finnish",
+            "no": "Norwegian",
+            "cs": "Czech",
+            "el": "Greek",
+            "he": "Hebrew",
+            "id": "Indonesian",
+            "ms": "Malay",
+            "th": "Thai",
+        }
+        return languages.get(code.lower(), "English")
+
     async def _generate_parallel_hybrid(
         self,
         session: SuggestionSession,
@@ -256,6 +290,7 @@ class SuggestionOrchestrationService:
             exclude_meal_names: List of meal names to avoid (from previous generations)
         """
         start_time = time.time()
+        target_lang = self._get_language_name(session.language)
 
         # STEP 1: Generate 4 diverse meal names in one call
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
@@ -268,30 +303,19 @@ class SuggestionOrchestrationService:
         )
 
         logger.info(
-            
             f"[PHASE-1-START] session={session.id} | "
-            f"generating 4 diverse meal names | "
+            f"generating 4 diverse meal names in {target_lang} | "
             f"excluding {len(exclude_meal_names)} previous meals"
-        
         )
 
         names_prompt = build_meal_names_prompt(session, exclude_meal_names)
 
-        # Get language context
-        language = session.language
-        lang_name = LANGUAGE_NAMES.get(language, "English")
-
-        # Build language-aware system messages
-        if language != "en":
-            names_system = (
-                f"You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
-                f"diverse flavors and cooking styles. Generate all names in {lang_name}."
-            )
-        else:
-            names_system = (
-                "You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
-                "diverse flavors and cooking styles."
-            )
+        # Generate directly in target language
+        names_system = (
+            f"You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
+            f"diverse flavors and cooking styles. Output content in {target_lang}. "
+            "IMPORTANT: Keep all JSON keys (like 'meal_names') in English."
+        )
 
         phase1_elapsed = 0.0  # Initialize to prevent UnboundLocalError
         try:
@@ -318,20 +342,12 @@ class SuggestionOrchestrationService:
                     unique_names.append(name)
             meal_names = unique_names
 
-            if len(meal_names) != 4:
+            if len(meal_names) < self.SUGGESTIONS_COUNT:
                 logger.warning(
                     f"[PHASE-1-INCOMPLETE] session={session.id} | "
-                    f"got {len(meal_names)} names, expected 4"
+                    f"got {len(meal_names)} names, expected {self.SUGGESTIONS_COUNT}"
                 )
-                # Pad with localized fallback names if needed
-                while len(meal_names) < 4:
-                    meal_names.append(
-                        get_fallback_meal_name(
-                            session.language,
-                            session.meal_type,
-                            len(meal_names) + 1
-                        )
-                    )
+                raise RuntimeError(f"Could not generate enough unique meal names.")
 
             phase1_elapsed = time.time() - start_time
             logger.info(
@@ -347,11 +363,7 @@ class SuggestionOrchestrationService:
                 f"elapsed={phase1_elapsed:.2f}s | "
                 f"error_type={type(e).__name__} | error={e}"
             )
-            # Fallback to localized names
-            meal_names = [
-                get_fallback_meal_name(session.language, session.meal_type, i + 1)
-                for i in range(4)
-            ]
+            raise RuntimeError(f"Failed to generate meal names: {e}") from e
 
         # STEP 2: Generate full recipes for each name in parallel
         logger.info(
@@ -362,17 +374,12 @@ class SuggestionOrchestrationService:
             build_recipe_details_prompt(meal_name, session) for meal_name in meal_names
         ]
 
-        # Generate recipes in parallel with language-aware system message
-        if language != "en":
-            recipe_system = (
-                f"You are a professional chef. Generate complete recipe details as "
-                f"valid JSON in {lang_name}. CRITICAL: MUST finish entire JSON - include all fields."
-            )
-        else:
-            recipe_system = (
-                "You are a professional chef. Generate complete recipe details as "
-                "valid JSON. CRITICAL: MUST finish entire JSON - include all fields."
-            )
+        # Generate details directly in target language
+        recipe_system = (
+            f"You are a professional chef. Generate complete recipe details as valid JSON. "
+            f"CRITICAL: MUST finish entire JSON. Output string values in {target_lang}. "
+            "JSON KEYS (e.g., 'ingredients', 'recipe_steps', 'amount', 'unit') MUST BE IN ENGLISH."
+        )
 
         async def generate_recipe(
             prompt: str, meal_name: str, index: int
@@ -444,25 +451,19 @@ class SuggestionOrchestrationService:
                 return None
 
         # Over-generation strategy: Start 4 recipes, take first 3 successes
-        # Staggered starts (500ms) to prevent rate limiting
+        # Removed stagger to maximize speed
         gen_start = time.time()
 
-        # Create tasks with staggered starts
+        # Create tasks simultaneously
         tasks = []
         for i in range(4):
-            if i > 0:
-                # Add 500ms delay to prevent rate limiting (reduced from 6 to 4 parallel)
-                await asyncio.sleep(self.PARALLEL_STAGGER_MS / 1000)
-                logger.debug(
-                    f"[STAGGER] Starting request {i} after {self.PARALLEL_STAGGER_MS}ms delay"
-                )
-
+            # No delay/stagger
             task = asyncio.create_task(
                 generate_recipe(recipe_prompts[i], meal_names[i], i)
             )
             tasks.append(task)
 
-        # Use as_completed to get first 3 successes and cancel remaining (S1 fix: cancel inside loop)
+        # Use as_completed to get first 3 successes and cancel remaining
         successful_results = []
         for coro in asyncio.as_completed(tasks):
             try:
@@ -471,7 +472,7 @@ class SuggestionOrchestrationService:
                     successful_results.append(result)
                     logger.debug(f"[SUCCESS] Got meal {len(successful_results)}/3")
                     if len(successful_results) >= 3:
-                        # Cancel remaining tasks immediately (S1: cleaner pattern)
+                        # Cancel remaining tasks immediately
                         cancelled_count = sum(
                             1
                             for task in tasks
@@ -485,13 +486,14 @@ class SuggestionOrchestrationService:
                 logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
                 continue
 
+        phase2_elapsed = time.time() - gen_start
         logger.info(
             f"[PHASE-2-COMPLETE] session={session.id} | "
             f"success={len(successful_results)}/4 | "
-            f"gen_elapsed={time.time() - gen_start:.2f}s"
+            f"gen_elapsed={phase2_elapsed:.2f}s"
         )
 
-        # W2 fix: Check for minimum acceptable results
+        # Check for minimum acceptable results
         if len(successful_results) < self.MIN_ACCEPTABLE_RESULTS:
             if not successful_results:
                 raise RuntimeError(f"Failed to generate any recipes from 4 attempts")
@@ -514,10 +516,9 @@ class SuggestionOrchestrationService:
         suggestions = successful_results
 
         total_elapsed = time.time() - start_time
-        phase2_elapsed = total_elapsed - phase1_elapsed
-
+        
         logger.info(
-            f"[TWO-PHASE-COMPLETE] session={session.id} | "
+            f"[PIPELINE-COMPLETE] session={session.id} | "
             f"total_elapsed={total_elapsed:.2f}s | "
             f"phase1={phase1_elapsed:.2f}s | "
             f"phase2={phase2_elapsed:.2f}s | "

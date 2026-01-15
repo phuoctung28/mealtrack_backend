@@ -53,19 +53,6 @@ class PromptTemplateManager:
         return SYSTEM_MESSAGES.get(message_type, SYSTEM_MESSAGES["meal_planning"])
 
     @classmethod
-    def get_language_instruction(cls, code: str) -> str:
-        """Generate language instruction for AI prompts."""
-        if code == "en":
-            return ""  # No instruction needed for English
-        """Get full language name from ISO 639-1 code."""
-        lang_name = LANGUAGE_NAMES.get(code, "English")
-        return (
-            f"\n\n⚠️ IMPORTANT: Generate ALL text content "
-            f"(name, description, ingredients, instructions) in {lang_name}. "
-            f"Use natural {lang_name} food terminology and phrasing."
-        )
-
-    @classmethod
     def build_base_requirements(
         cls,
         ingredients: List[str],
@@ -188,7 +175,6 @@ RULES:
         target_calories: int,
         cooking_time_minutes: int,
         ingredients: List[str],
-        language: str = "en",
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
         exclude_meal_names: Optional[List[str]] = None,
@@ -196,6 +182,7 @@ RULES:
         """
         Build prompt for Phase 1 meal name generation.
         Target: ~200 tokens.
+        Always generates in English (translation happens in Phase 3).
         """
         ing_str = ", ".join(ingredients[:4]) if ingredients else "common ingredients"
         
@@ -212,13 +199,11 @@ RULES:
         exclude_str = ""
         if exclude_meal_names:
             exclude_str = f"\nDO NOT suggest: {', '.join(exclude_meal_names[:10])}"  # Limit to 10 to keep prompt short
-
-        language_instruction = PromptTemplateManager.get_language_instruction(language)
         
         return f"""Generate 4 different {meal_type} names, ~{target_calories}cal, ≤{cooking_time_minutes}min.
 Ingredients: {ing_str}{constraints_str}
 Cuisines: 4 distinct (Asian, Mediterranean, Latin, American)
-Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}.{language_instruction}."""
+Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}."""
 
     @classmethod
     def build_recipe_details_prompt(
@@ -228,13 +213,13 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         target_calories: int,
         cooking_time_minutes: int,
         ingredients: List[str],
-        language: str = "en",
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
     ) -> str:
         """
         Build prompt for Phase 2 recipe detail generation.
         Target: ~400 tokens.
+        Always generates in English (translation happens in Phase 3).
         """
         ing_str = ", ".join(ingredients[:6]) if ingredients else "any ingredients"
 
@@ -245,8 +230,6 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
             constraints_parts.append(f"Diet: {', '.join(dietary_preferences)}")
 
         constraints_str = " | ".join(constraints_parts) if constraints_parts else ""
-
-        language_instruction = cls.get_language_instruction(language)
 
         return f"""Generate complete recipe for: "{meal_name}"
 
@@ -262,5 +245,5 @@ REQUIREMENTS:
 - 2-6 clear recipe steps with duration
 - Total prep_time ≤{cooking_time_minutes} min
 
-NO nutrition data in response - backend calculates automatically.{language_instruction}
+NO nutrition data in response - backend calculates automatically.
 """

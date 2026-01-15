@@ -158,45 +158,45 @@ class TestDailyMealSuggestionService:
 
     def test_get_fallback_meal_breakfast(self, service):
         """Test getting fallback breakfast meal."""
-        meal = service.fallback_provider.get_fallback_meal(MealType.BREAKFAST, 400)
+        meal = service.fallback_service.get_fallback_meal(MealType.BREAKFAST, 400)
 
-        assert meal.meal_type == MealType.BREAKFAST
+        assert meal.meal_type == MealType.BREAKFAST.value
         assert meal.name is not None
-        assert meal.calories > 0
+        assert meal.nutrition.calories > 0
         assert len(meal.ingredients) > 0
 
     def test_get_fallback_meal_lunch(self, service):
         """Test getting fallback lunch meal."""
-        meal = service.fallback_provider.get_fallback_meal(MealType.LUNCH, 600)
+        meal = service.fallback_service.get_fallback_meal(MealType.LUNCH, 600)
 
-        assert meal.meal_type == MealType.LUNCH
+        assert meal.meal_type == MealType.LUNCH.value
         assert meal.name is not None
-        assert meal.calories > 0
+        assert meal.nutrition.calories > 0
 
     def test_get_fallback_meal_dinner(self, service):
         """Test getting fallback dinner meal."""
-        meal = service.fallback_provider.get_fallback_meal(MealType.DINNER, 700)
+        meal = service.fallback_service.get_fallback_meal(MealType.DINNER, 700)
 
-        assert meal.meal_type == MealType.DINNER
+        assert meal.meal_type == MealType.DINNER.value
         assert meal.name is not None
-        assert meal.calories > 0
+        assert meal.nutrition.calories > 0
 
     def test_get_fallback_meal_snack(self, service):
         """Test getting fallback snack meal."""
-        meal = service.fallback_provider.get_fallback_meal(MealType.SNACK, 200)
+        meal = service.fallback_service.get_fallback_meal(MealType.SNACK, 200)
 
-        assert meal.meal_type == MealType.SNACK
+        assert meal.meal_type == MealType.SNACK.value
         assert meal.name is not None
-        assert meal.calories > 0
+        assert meal.nutrition.calories > 0
 
     def test_get_fallback_meal_scales_with_calories(self, service):
         """Test that fallback meals scale portions based on calorie target."""
-        meal_400 = service.fallback_provider.get_fallback_meal(MealType.BREAKFAST, 400)
-        meal_800 = service.fallback_provider.get_fallback_meal(MealType.BREAKFAST, 800)
+        meal_400 = service.fallback_service.get_fallback_meal(MealType.BREAKFAST, 400)
+        meal_800 = service.fallback_service.get_fallback_meal(MealType.BREAKFAST, 800)
 
         # Higher calorie meal should have higher nutrient values
-        assert meal_800.calories > meal_400.calories
-        assert meal_800.protein > meal_400.protein
+        assert meal_800.nutrition.calories > meal_400.nutrition.calories
+        assert meal_800.nutrition.protein > meal_400.nutrition.protein
 
     @patch('src.domain.services.daily_meal_suggestion_service.DailyMealSuggestionService._generate_all_meals_unified')
     def test_generate_daily_suggestions_calls_unified(self, mock_unified, service, user_preferences):
