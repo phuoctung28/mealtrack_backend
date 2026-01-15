@@ -1,0 +1,19 @@
+[importlinter]
+root_packages = 
+    src
+
+[importlinter:contract:domain-isolation]
+name = Domain layer must not import from infra
+type = forbidden
+source_modules = 
+    src.domain
+forbidden_modules = 
+    src.infra
+
+[importlinter:contract:domain-app-isolation]
+name = Domain layer must not import from app
+type = forbidden
+source_modules = 
+    src.domain
+forbidden_modules = 
+    src.app
