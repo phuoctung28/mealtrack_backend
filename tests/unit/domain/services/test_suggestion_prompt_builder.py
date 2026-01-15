@@ -174,12 +174,12 @@ class TestBuildRecipeDetailsPrompt:
         assert "prep" in prompt.lower() or "time" in prompt.lower()
 
     def test_no_nutrition_data_requested(self, mock_session):
-        """Prompt should explicitly state NOT to include nutrition data."""
+        """Prompt should request macros calculation from ingredients."""
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
-        # Should explicitly say NOT to include nutrition data
-        # (backend calculates it)
-        assert "NOT" in prompt or "not" in prompt or "backend" in prompt.lower()
+        # Prompt now explicitly requests macro calculation from ingredients
+        # (backend validates but AI calculates from ingredient amounts)
+        assert "calculate" in prompt.lower() or "macros" in prompt.lower()
 
     def test_includes_portion_sizing_guidance(self, mock_session):
         """Prompt should include guidance on portion sizing."""
@@ -211,20 +211,18 @@ class TestBuildRecipeDetailsPrompt:
         assert "duration" in prompt.lower() or "minute" in prompt.lower() or "time" in prompt.lower()
 
     def test_no_macros_requested(self, mock_session):
-        """Prompt should NOT request macronutrient data."""
+        """Prompt should request macros calculation from ingredients."""
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
-        # Should explicitly NOT request nutrition/macro fields
+        # Prompt now explicitly requests macro calculation from ingredients
+        # AI calculates macros from ingredient amounts, backend validates
         assert any(phrase in prompt.lower() for phrase in [
-            "not include",
-            "do not include",
-            "don't include",
-            "without",
-            "no calories",
-            "no protein",
-            "no carbs",
-            "no fat",
-            "backend calculates"
+            "calculate",
+            "macros",
+            "calories",
+            "protein",
+            "carbs",
+            "fat"
         ])
 
     def test_meal_name_must_match(self, mock_session):

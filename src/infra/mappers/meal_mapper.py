@@ -136,6 +136,7 @@ class FoodItemMapper:
             fat=db_item.fat
         )
         return FoodItem(
+            id=str(db_item.id),  # Required parameter
             name=db_item.name,
             quantity=db_item.quantity,
             unit=db_item.unit,
@@ -143,6 +144,8 @@ class FoodItemMapper:
             macros=macros,
             micros=None, # Populate if needed
             confidence=db_item.confidence,
+            fdc_id=db_item.fdc_id,
+            is_custom=bool(db_item.is_custom),
             # Additional fields if present in Domain but not DB or vice versa
         )
 

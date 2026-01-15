@@ -9,7 +9,7 @@ import pytest
 
 from src.api.exceptions import ValidationException
 from src.app.commands.user import SaveUserOnboardingCommand
-from src.infra.database.config import ScopedSession
+from src.infra.database.uow import UnitOfWork
 
 
 @pytest.mark.unit
@@ -20,22 +20,37 @@ class TestSaveUserOnboardingCommandHandler:
     async def test_save_user_onboarding_success(self, event_bus, test_session):
         """Test successful user onboarding save."""
         # Create user first with unique IDs
+        from uuid import UUID
         user_id = str(uuid.uuid4())
         unique_suffix = str(uuid.uuid4())[:8]  # Use only first 8 chars
         firebase_uid = f"test-fb-{unique_suffix}"
         
         from src.infra.database.models.user.user import User
         user = User(
-            id=user_id,
+            id=user_id,  # String ID as per BaseMixin
             firebase_uid=firebase_uid,
             email=f"test-{unique_suffix}@example.com",
             username=f"user-{unique_suffix}",
             password_hash="dummy_hash",
+            is_active=True,  # Required for find_by_id to work
             created_at=datetime.now(),
             updated_at=datetime.now()
         )
+        # Add user to session and commit
         test_session.add(user)
+        test_session.flush()
         test_session.commit()
+        
+        # Verify user is queryable directly (not via repository) to ensure it's in the DB
+        db_user = test_session.query(User).filter(User.id == user_id, User.is_active == True).first()
+        assert db_user is not None, f"User {user_id} must be queryable directly in test_session"
+        
+        # Verify repository can find user with UUID conversion
+        from uuid import UUID
+        from src.infra.repositories.user_repository import UserRepository
+        test_repo = UserRepository(test_session)
+        repo_user = test_repo.find_by_id(UUID(user_id))
+        assert repo_user is not None, f"UserRepository must find user {user_id} with UUID conversion"
         
         # Arrange
         command = SaveUserOnboardingCommand(
@@ -50,9 +65,23 @@ class TestSaveUserOnboardingCommandHandler:
             pain_points=["diabetes"]
         )
         
-        # Act - patch ScopedSession to return test_session
-        with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.ScopedSession', MagicMock(return_value=test_session)):
-            result = await event_bus.send(command)
+        # Act - Get handler from event_bus and set its uow to use test_session
+        # The repository can find the user, so UnitOfWork should too
+        from src.app.commands.user.save_user_onboarding_command import SaveUserOnboardingCommand as CmdType
+        handler = event_bus._async_handlers.get(CmdType)
+        if handler:
+            original_uow = handler.uow
+            # Create UoW with test_session - repository verified it can find user
+            test_uow = UnitOfWork(session=test_session)
+            handler.uow = test_uow
+            try:
+                result = await event_bus.send(command)
+            finally:
+                handler.uow = original_uow
+        else:
+            # Fallback: patch UnitOfWork  
+            with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.UnitOfWork', side_effect=lambda *args, **kwargs: UnitOfWork(session=test_session)):
+                result = await event_bus.send(command)
         
         # Assert - SaveUserOnboardingCommand should return None
         assert result is None
@@ -86,6 +115,7 @@ class TestSaveUserOnboardingCommandHandler:
             email=f"test-{unique_suffix}@example.com",
             username=f"user-{unique_suffix}",
             password_hash="dummy_hash",
+            is_active=True,  # Required for find_by_id to work
             created_at=datetime.now(),
             updated_at=datetime.now()
         )
@@ -124,6 +154,7 @@ class TestSaveUserOnboardingCommandHandler:
             email=f"test-{unique_suffix}@example.com",
             username=f"user-{unique_suffix}",
             password_hash="dummy_hash",
+            is_active=True,  # Required for find_by_id to work
             created_at=datetime.now(),
             updated_at=datetime.now()
         )
@@ -153,8 +184,9 @@ class TestSaveUserOnboardingCommandHandler:
     ):
         """Test updating existing user profile."""
         # Arrange
+        user_id = sample_user_profile.user_id
         command = SaveUserOnboardingCommand(
-            user_id=sample_user_profile.user_id,
+            user_id=user_id,
             age=35,  # Different age
             gender="male",
             height_cm=180,  # Different height
@@ -165,17 +197,33 @@ class TestSaveUserOnboardingCommandHandler:
             pain_points=[]
         )
         
-        # Act - patch ScopedSession to return test_session
-        with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.ScopedSession', MagicMock(return_value=test_session)):
-            result = await event_bus.send(command)
+        # Act - Get handler from event_bus and set its uow to use test_session
+        # The handler uses 'self.uow or UnitOfWork()', so if we set self.uow, it will use that
+        from uuid import UUID
+        from src.app.commands.user.save_user_onboarding_command import SaveUserOnboardingCommand as CmdType
+        handler = event_bus._async_handlers.get(CmdType)
+        if handler:
+            original_uow = handler.uow
+            test_uow = UnitOfWork(session=test_session)
+            handler.uow = test_uow
+            try:
+                result = await event_bus.send(command)
+            finally:
+                handler.uow = original_uow
+        else:
+            # Fallback: patch UnitOfWork
+            with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.UnitOfWork', side_effect=lambda *args, **kwargs: UnitOfWork(session=test_session)):
+                result = await event_bus.send(command)
         
         # Assert - SaveUserOnboardingCommand should return None
         assert result is None
         # Verify profile was updated
+        # Use user_id string directly to avoid DetachedInstanceError
         from src.infra.database.models.user.profile import UserProfile
         updated_profile = test_session.query(UserProfile).filter(
-            UserProfile.user_id == sample_user_profile.user_id
+            UserProfile.user_id == user_id
         ).first()
+        assert updated_profile is not None, f"Profile should exist for user {user_id}"
         assert updated_profile.age == 35
         assert updated_profile.height_cm == 180
         assert updated_profile.weight_kg == 75

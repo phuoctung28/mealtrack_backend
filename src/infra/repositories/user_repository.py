@@ -50,10 +50,13 @@ class UserRepository(UserRepositoryPort):
 
     def find_by_id(self, user_id: UUID) -> Optional[UserDomainModel]:
         """Find user by ID (only active users)."""
+        # Convert UUID to string for comparison since User.id is String(36)
+        # SQLAlchemy should handle this automatically, but SQLite may need explicit conversion
+        user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
         user_entity = (
             self.db.query(User)
             .options(*_USER_RELATIONSHIP_LOADS)
-            .filter(User.id == user_id, User.is_active == True)
+            .filter(User.id == user_id_str, User.is_active == True)
             .first()
         )
         return UserMapper.to_domain(user_entity) if user_entity else None
@@ -92,7 +95,9 @@ class UserRepository(UserRepositoryPort):
 
     def delete(self, user_id: UUID) -> bool:
         """'Delete' a user by marking them as inactive."""
-        user_entity = self.db.query(User).filter(User.id == user_id).first()
+        # Convert UUID to string for SQLite compatibility
+        user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
+        user_entity = self.db.query(User).filter(User.id == user_id_str).first()
         if user_entity:
             user_entity.is_active = False
             self.db.commit()
@@ -101,24 +106,31 @@ class UserRepository(UserRepositoryPort):
 
     def get_profile(self, user_id: UUID) -> Optional[UserProfileDomainModel]:
         """Get the current user profile."""
+        # Convert UUID to string for SQLite compatibility
+        user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
         profile_entity = (
             self.db.query(UserProfile)
-            .filter(UserProfile.user_id == user_id, UserProfile.is_current == True)
+            .filter(UserProfile.user_id == user_id_str, UserProfile.is_current == True)
             .first()
         )
         return UserProfileMapper.to_domain(profile_entity) if profile_entity else None
 
     def update_profile(self, profile_domain: UserProfileDomainModel) -> UserProfileDomainModel:
-        """Update user profile."""
-        profile_entity = self.db.query(UserProfile).get(profile_domain.id)
+        """Update or create user profile (upsert)."""
+        # Convert UUID to string for SQLite compatibility
+        profile_id_str = str(profile_domain.id) if isinstance(profile_domain.id, UUID) else profile_domain.id
+        profile_entity = self.db.query(UserProfile).get(profile_id_str)
+        
         if not profile_entity:
-            raise ValueError("Profile not found")
-
-        # Update fields from domain model
-        profile_data = profile_domain.__dict__
-        for key, value in profile_data.items():
-            if hasattr(profile_entity, key) and key != '_sa_instance_state':
-                setattr(profile_entity, key, value)
+            # Create new profile if it doesn't exist
+            profile_entity = UserProfileMapper.to_persistence(profile_domain)
+            self.db.add(profile_entity)
+        else:
+            # Update existing profile
+            profile_data = profile_domain.__dict__
+            for key, value in profile_data.items():
+                if hasattr(profile_entity, key) and key != '_sa_instance_state':
+                    setattr(profile_entity, key, value)
 
         self.db.commit()
         self.db.refresh(profile_entity)

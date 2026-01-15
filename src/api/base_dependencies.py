@@ -297,6 +297,7 @@ def initialize_scheduled_notification_service() -> ScheduledNotificationService:
     global _scheduled_notification_service
     if _scheduled_notification_service is None:
         # Create instances without using Depends (we're not in request context)
+        # Let NotificationRepository manage its own sessions to avoid ScopedSession here
         notification_repository = NotificationRepository()
         firebase_service = get_firebase_service()
         notification_service = NotificationService(notification_repository, firebase_service)
@@ -321,24 +322,35 @@ def get_meal_suggestion_repository():
     return MealSuggestionRepository(_redis_client)
 
 
-def get_suggestion_orchestration_service(
-    db: Session = Depends(get_db),
-):
-    """Get suggestion orchestration service with Phase 1 & 2 optimizations."""
+def get_suggestion_orchestration_service():
+    """
+    Get suggestion orchestration service (singleton-safe).
+    
+    This service uses ScopedSession internally to access the current request's
+    database session, making it safe to use as a singleton in the event bus.
+    """
     from src.domain.services.meal_suggestion.suggestion_orchestration_service import SuggestionOrchestrationService
     from src.infra.adapters.meal_generation_service import MealGenerationService
+    from src.infra.database.config import SessionLocal
     from src.infra.repositories.user_repository import UserRepository
-
 
     meal_gen_service = MealGenerationService()
     suggestion_repo = get_meal_suggestion_repository()
-    user_repo = UserRepository(db)
+
+    # Profile provider keeps domain decoupled from infra while still using SessionLocal
+    def profile_provider(user_id: str):
+        db = SessionLocal()
+        try:
+            repo = UserRepository(db)
+            return repo.get_profile(user_id)
+        finally:
+            db.close()
 
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
         suggestion_repo=suggestion_repo,
-        user_repo=user_repo,
         redis_client=_redis_client,
+        profile_provider=profile_provider,
     )
 
 

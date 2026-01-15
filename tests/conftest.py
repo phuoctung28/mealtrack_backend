@@ -394,14 +394,13 @@ def event_bus(
     from src.app.commands.meal.delete_meal_command import DeleteMealCommand
     event_bus.register_handler(
         DeleteMealCommand,
-        DeleteMealCommandHandler(meal_repository)
+        DeleteMealCommandHandler(cache_service=None)  # Handler uses UnitOfWork internally
     )
     
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
             image_store=mock_image_store,
-            meal_repository=meal_repository,
             vision_service=mock_vision_service,
             gpt_parser=gpt_parser
         )
@@ -419,7 +418,7 @@ def event_bus(
     )
     
     # Register user handlers
-    # Note: Handlers now use ScopedSession internally instead of receiving db in constructor
+    # Note: Handlers now use UnitOfWork internally instead of receiving db in constructor
     save_user_handler = SaveUserOnboardingCommandHandler(cache_service=None)
     event_bus.register_handler(
         SaveUserOnboardingCommand,
@@ -467,11 +466,13 @@ def sample_user(test_session) -> User:
         email=f"test-{unique_id}@example.com",
         username=f"user-{unique_id}",
         password_hash="dummy_hash_for_test",
+        is_active=True,  # Explicitly set to True for repository queries
         created_at=datetime.now(),
         updated_at=datetime.now()
     )
     test_session.add(user)
     test_session.commit()
+    test_session.refresh(user)  # Refresh to ensure user is loaded
     return user
 
 

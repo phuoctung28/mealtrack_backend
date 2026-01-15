@@ -7,7 +7,7 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Callable, Any
 
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal_suggestion import (
@@ -23,7 +23,6 @@ from src.domain.ports.meal_generation_service_port import MealGenerationServiceP
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
 )
-from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.services.prompts.prompt_constants import get_fallback_meal_name
@@ -39,6 +38,10 @@ class SuggestionOrchestrationService:
     """
     Orchestrates meal suggestion generation with session tracking.
     Implements timeout handling and portion multipliers.
+    
+    This service is designed to be used as a singleton in the event bus.
+    It uses ScopedSession internally to get the current request's database session,
+    ensuring proper isolation while allowing the service to be reused.
     """
 
     GENERATION_TIMEOUT_SECONDS = 35  # Reduced from 45s with optimized prompts
@@ -54,18 +57,20 @@ class SuggestionOrchestrationService:
         self,
         generation_service: MealGenerationServicePort,
         suggestion_repo: MealSuggestionRepositoryPort,
-        user_repo: UserRepositoryPort,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
         redis_client=None,
+        profile_provider: Optional[Callable[[str], Any]] = None,
     ):
         self._generation = generation_service
         self._repo = suggestion_repo
-        self._user_repo = user_repo
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
         self._redis_client = redis_client
         self._translation_service = TranslationService(generation_service)
+        # Profile provider is an application/infra concern injected from outside.
+        # It should be a callable: user_id (str) -> user profile domain object.
+        self._profile_provider = profile_provider
 
     async def generate_suggestions(
         self,
@@ -94,8 +99,11 @@ class SuggestionOrchestrationService:
                 f"excluding {len(exclude_meal_names)} previous meals"
             )
         else:
-            # Get user profile using port-compliant method
-            profile = await asyncio.to_thread(self._user_repo.get_profile, user_id)
+            # Get user profile via injected provider (keeps domain decoupled from infra)
+            if not self._profile_provider:
+                raise RuntimeError("Profile provider is not configured for SuggestionOrchestrationService")
+
+            profile = self._profile_provider(user_id)
             if not profile:
                 raise ValueError(f"User {user_id} profile not found")
 
@@ -328,7 +336,7 @@ class SuggestionOrchestrationService:
                     1000,  # Token limit for name generation
                     MealNamesResponse,  # Structured output schema (guarantees valid format)
                 ),
-                timeout=10,  # Quick timeout for name generation
+                timeout=20,  # Increased timeout to accommodate AI response time
             )
 
             meal_names = names_raw.get("meal_names", [])

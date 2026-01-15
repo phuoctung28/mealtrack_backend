@@ -10,8 +10,7 @@ from src.app.events.base import EventHandler, handles
 from src.domain.model.notification import UserFcmToken, DeviceType
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
 from src.domain.utils.timezone_utils import is_valid_timezone
-from src.infra.database.config import ScopedSession
-from src.infra.repositories.user_repository import UserRepository
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -30,20 +29,17 @@ class RegisterFcmTokenCommandHandler(
 
     async def handle(self, command: RegisterFcmTokenCommand) -> Dict[str, Any]:
         """Handle FCM token registration with old token cleanup."""
-        if not self.notification_repository:
-            raise RuntimeError("Notification repository not configured")
+        with UnitOfWork() as uow:
+            # Use notification repository from UoW if not injected
+            notification_repo = self.notification_repository or uow.notifications
 
-        db = ScopedSession()
-        user_repository = UserRepository(db)
-
-        try:
             device_type = (
                 DeviceType.IOS if command.device_type == "ios" else DeviceType.ANDROID
             )
 
             # 1. Deactivate OLD tokens for this user+device (token refresh scenario)
             existing_tokens = (
-                self.notification_repository.find_active_fcm_tokens_by_user(
+                notification_repo.find_active_fcm_tokens_by_user(
                     command.user_id
                 )
             )
@@ -54,7 +50,7 @@ class RegisterFcmTokenCommandHandler(
                     old_token.device_type == device_type
                     and old_token.fcm_token != command.fcm_token
                 ):
-                    self.notification_repository.deactivate_fcm_token(
+                    notification_repo.deactivate_fcm_token(
                         old_token.fcm_token
                     )
                     deactivated_count += 1
@@ -67,27 +63,26 @@ class RegisterFcmTokenCommandHandler(
                 device_type=device_type,
             )
 
-            saved_token = self.notification_repository.save_fcm_token(fcm_token)
+            saved_token = notification_repo.save_fcm_token(fcm_token)
 
             # 3. Update user timezone if provided and valid
             if command.timezone:
                 if is_valid_timezone(command.timezone):
-                    user_repository.update_user_timezone(command.user_id, command.timezone)
+                    uow.users.update_user_timezone(command.user_id, command.timezone)
                     logger.info(f"Updated timezone for user {command.user_id}: {command.timezone}")
                 else:
                     logger.warning(f"Invalid timezone from user {command.user_id}: {command.timezone}")
 
-            logger.info(
-                f"FCM token registered for user {command.user_id}, "
-                f"deactivated {deactivated_count} old tokens"
-            )
+            # UoW auto-commits on exit
+            
+        logger.info(
+            f"FCM token registered for user {command.user_id}, "
+            f"deactivated {deactivated_count} old tokens"
+        )
 
-            return {
-                "success": True,
-                "message": "Token registered successfully",
-                "token_id": saved_token.token_id,
-                "deactivated_old_tokens": deactivated_count,
-            }
-        except Exception as e:
-            logger.error(f"Error registering FCM token: {e}")
-            raise e
+        return {
+            "success": True,
+            "message": "Token registered successfully",
+            "token_id": saved_token.token_id,
+            "deactivated_old_tokens": deactivated_count,
+        }

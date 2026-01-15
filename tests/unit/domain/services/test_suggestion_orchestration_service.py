@@ -57,12 +57,14 @@ def redis_client():
 @pytest.fixture
 def orchestration_service(mock_generation_service, mock_suggestion_repo, mock_user_repo, redis_client):
     """Create SuggestionOrchestrationService with mocked dependencies."""
-    return SuggestionOrchestrationService(
+    service = SuggestionOrchestrationService(
         generation_service=mock_generation_service,
         suggestion_repo=mock_suggestion_repo,
-        user_repo=mock_user_repo,
         redis_client=redis_client,
     )
+    # Mock the _get_user_repo method to return the mock user repo
+    service._get_user_repo = Mock(return_value=mock_user_repo)
+    return service
 
 # Fixtures for test data
 @pytest.fixture

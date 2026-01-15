@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from src.app.commands.meal_suggestion import SaveMealSuggestionCommand
 from src.app.events.base import EventHandler, handles
-from src.infra.database.config import ScopedSession
+from src.infra.database.uow import UnitOfWork
 from src.infra.database.models.enums import MealTypeEnum
 from src.infra.database.models.meal_planning.meal_plan import MealPlan as DBMealPlan
 from src.infra.database.models.meal_planning.meal_plan_day import MealPlanDay as DBMealPlanDay
@@ -34,9 +34,9 @@ class SaveMealSuggestionCommandHandler(
         Returns:
             planned_meal_id: ID of the created planned meal
         """
-        db = ScopedSession()
-        
-        try:
+        with UnitOfWork() as uow:
+            db = uow.session
+
             # Parse meal_date
             meal_date = datetime.strptime(command.meal_date, "%Y-%m-%d").date()
             
@@ -101,7 +101,6 @@ class SaveMealSuggestionCommandHandler(
                 cuisine_type=None,
             )
             db.add(planned_meal)
-            db.commit()
             db.refresh(planned_meal)
             
             logger.info(
@@ -110,8 +109,5 @@ class SaveMealSuggestionCommandHandler(
             )
             
             return str(planned_meal.id)
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Failed to save meal suggestion: {e}", exc_info=True)
-            raise
+
+        # Any exceptions will cause UnitOfWork.__exit__ to roll back the transaction

@@ -40,10 +40,10 @@ class RecipeSearchService:
         # Use injected search port or get default
         if not self._search_port:
             # Lazy import to avoid circular dependency
-            from src.infra.services.pinecone_recipe_search_adapter import PineconeRecipeSearchAdapter
             try:
+                from src.infra.services.pinecone_recipe_search_adapter import PineconeRecipeSearchAdapter
                 self._search_port = PineconeRecipeSearchAdapter()
-            except Exception as e:
+            except (ImportError, Exception) as e:
                 logger.warning(f"Failed to initialize recipe search adapter: {e}")
                 return []
         
@@ -62,10 +62,10 @@ class RecipeSearchService:
         # Use injected search port or get default
         if not self._search_port:
             # Lazy import to avoid circular dependency
-            from src.infra.services.pinecone_recipe_search_adapter import PineconeRecipeSearchAdapter
             try:
+                from src.infra.services.pinecone_recipe_search_adapter import PineconeRecipeSearchAdapter
                 self._search_port = PineconeRecipeSearchAdapter()
-            except Exception as e:
+            except (ImportError, Exception) as e:
                 logger.warning(f"Failed to initialize recipe search adapter: {e}")
                 return None
         

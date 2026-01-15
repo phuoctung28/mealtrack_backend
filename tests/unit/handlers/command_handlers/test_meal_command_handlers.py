@@ -1,12 +1,14 @@
 """
 Unit tests for meal command handlers.
 """
+from unittest.mock import patch
 import pytest
 
 from src.app.commands.meal import (
     UploadMealImageImmediatelyCommand
 )
 from src.domain.model import MealStatus
+from src.infra.database.uow import UnitOfWork
 
 
 @pytest.mark.unit 
@@ -36,7 +38,7 @@ class TestUploadMealImageImmediatelyHandler:
     
     @pytest.mark.asyncio
     async def test_upload_and_analyze_immediately_stores_in_repository(
-        self, event_bus, meal_repository, sample_image_bytes
+        self, event_bus, meal_repository, sample_image_bytes, test_session
     ):
         """Test that immediately analyzed meal is stored correctly."""
         # Arrange
@@ -46,8 +48,18 @@ class TestUploadMealImageImmediatelyHandler:
             content_type="image/jpeg"
         )
         
-        # Act
-        meal = await event_bus.send(command)
+        # Act - patch UnitOfWork to use test_session so handler and repository share same session
+        import src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler as handler_module
+        original_uow = handler_module.UnitOfWork
+        
+        def make_uow(*args, **kwargs):
+            return UnitOfWork(session=test_session)
+        
+        handler_module.UnitOfWork = make_uow
+        try:
+            meal = await event_bus.send(command)
+        finally:
+            handler_module.UnitOfWork = original_uow
         
         # Assert
         stored_meal = meal_repository.find_by_id(meal.meal_id)

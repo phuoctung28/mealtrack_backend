@@ -54,6 +54,8 @@ class MealRepository(MealRepositoryPort):
                         # Create new nutrition
                         db_nutrition = NutritionMapper.to_persistence(meal.nutrition, meal_id=meal.meal_id)
                         existing_meal.nutrition = db_nutrition
+                        # Flush to get nutrition ID before creating food_items
+                        self.db.flush()
                         # Add food items
                         if meal.nutrition.food_items:
                             for item in meal.nutrition.food_items:
@@ -87,15 +89,13 @@ class MealRepository(MealRepositoryPort):
                 if meal.nutrition:
                     db_nutrition = NutritionMapper.to_persistence(meal.nutrition, meal_id=meal.meal_id)
                     self.db.add(db_nutrition)
+                    # Flush to get nutrition ID before creating food_items
+                    self.db.flush()
                     # Add food items
                     if meal.nutrition.food_items:
-                        # Need to flush to get nutrition ID? 
-                        # Actually nutrition_id is UUID string usually? No, it's integer usually or UUID.
-                        # Let's check DBNutrition model.
-                        # Assuming DBNutrition has a generated ID or shares ID with meal?
-                        # In `from_domain`, I didn't see ID generation.
-                        # Usually Nutrition has a foreign key to Meal.
-                        pass # DBNutrition usually is 1:1 with Meal.
+                        for item in meal.nutrition.food_items:
+                            db_item = FoodItemMapper.to_persistence(item, nutrition_id=db_nutrition.id)
+                            self.db.add(db_item)
                 
                 # Note: The above logic for nutrition creation in `save` (insert case) is simplified.
                 # Since we are using SQLAlchemy ORM, if we set relationships on `db_meal`, 

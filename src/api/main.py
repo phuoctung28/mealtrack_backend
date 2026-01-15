@@ -197,8 +197,8 @@ add_dev_auth_bypass(app)
 
 # Include all routers
 app.include_router(health_router)
-app.include_router(chat_router)
-app.include_router(chat_ws_router)  # WebSocket router
+# app.include_router(chat_router)
+# app.include_router(chat_ws_router)  # WebSocket router
 app.include_router(meals_router)
 app.include_router(activities_router)
 app.include_router(feature_flags_router)

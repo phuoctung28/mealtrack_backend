@@ -60,10 +60,20 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                 # Commit transaction
                 uow.commit()
 
-                # Get subscription info (simplified, assuming subscription domain model has this)
+                # Get subscription info from UoW
                 subscription_info = None
-                # Note: subscription fetching logic needs to be adapted to domain model
-                # Skipping complex subscription mapping for this refactor to focus on UoW
+                active_subscription = uow.subscriptions.find_active_by_user_id(str(user.id))
+                is_premium = active_subscription is not None
+                
+                if active_subscription:
+                    subscription_info = {
+                        "product_id": active_subscription.product_id,
+                        "status": active_subscription.status,
+                        "expires_at": active_subscription.expires_at.isoformat() if active_subscription.expires_at else None,
+                        "platform": active_subscription.platform,
+                        "is_monthly": active_subscription.product_id.endswith("_monthly") if active_subscription.product_id else False,
+                        "is_yearly": active_subscription.product_id.endswith("_yearly") if active_subscription.product_id else False,
+                    }
                 
                 # Prepare response
                 return {
@@ -82,7 +92,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                         "onboarding_completed": user.onboarding_completed,
                         "last_accessed": user.last_accessed,
                         # "created_at": user.created_at, # created_at might be None in pure domain if not set
-                        "is_premium": user.is_premium(),
+                        "is_premium": is_premium,
                         "subscription": subscription_info
                     },
                     "created": created,
