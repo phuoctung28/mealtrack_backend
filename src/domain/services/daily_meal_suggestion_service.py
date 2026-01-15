@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.domain.model.meal_planning import PlannedMeal, MealType
 from src.domain.services.meal_suggestion.json_extractor import JsonExtractor
-from src.domain.services.meal_suggestion.suggestion_fallback_provider import SuggestionFallbackProvider
+from src.domain.services.fallback_meal_service import FallbackMealService
 from src.domain.services.meal_suggestion.suggestion_prompt_builder import SuggestionPromptBuilder
 from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
@@ -22,7 +22,7 @@ class DailyMealSuggestionService:
 
         # Initialize extracted components
         self.json_extractor = JsonExtractor()
-        self.fallback_provider = SuggestionFallbackProvider()
+        self.fallback_service = FallbackMealService()
         self.prompt_builder = SuggestionPromptBuilder()
 
     def generate_daily_suggestions(self, user_preferences: Dict) -> List[PlannedMeal]:
@@ -116,8 +116,28 @@ class DailyMealSuggestionService:
                 suggested_meals.append(meal)
             except Exception as e:
                 logger.error(f"Error generating {meal_type.value} meal: {str(e)}")
-                # Add a fallback meal using fallback provider
-                suggested_meals.append(self.fallback_provider.get_fallback_meal(meal_type, calorie_target))
+                # Add a fallback meal using fallback service
+                fallback_meal = self.fallback_service.get_fallback_meal(meal_type, int(calorie_target))
+                # Convert GeneratedMeal to PlannedMeal
+                planned_meal = PlannedMeal(
+                    meal_type=meal_type,
+                    name=fallback_meal.name,
+                    description=fallback_meal.description,
+                    prep_time=fallback_meal.prep_time,
+                    cook_time=fallback_meal.cook_time,
+                    calories=fallback_meal.nutrition.calories,
+                    protein=fallback_meal.nutrition.protein,
+                    carbs=fallback_meal.nutrition.carbs,
+                    fat=fallback_meal.nutrition.fat,
+                    ingredients=fallback_meal.ingredients,
+                    seasonings=fallback_meal.seasonings,
+                    instructions=fallback_meal.instructions,
+                    is_vegetarian=fallback_meal.is_vegetarian,
+                    is_vegan=fallback_meal.is_vegan,
+                    is_gluten_free=fallback_meal.is_gluten_free,
+                    cuisine_type=fallback_meal.cuisine_type
+                )
+                suggested_meals.append(planned_meal)
 
         return suggested_meals
 
