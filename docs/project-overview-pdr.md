@@ -1,14 +1,14 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Version:** 0.4.7
+**Version:** 0.4.8
 **Last Updated:** January 16, 2026
-**Status:** Production-ready. 408 source files, ~37K LOC across 4 layers. 681+ tests, 70%+ coverage.
+**Status:** Production-ready. 417 source files, ~37K LOC across 4 layers. 681+ tests, 70%+ coverage.
 
 ---
 
 ## Executive Summary
 
-MealTrack Backend is a FastAPI-based service powering intelligent meal tracking and nutritional analysis. It implements Clean Architecture with CQRS pattern across 4 layers (408 files, ~37K LOC), integrating AI vision (Gemini 2.5 Flash with 6 analysis strategies) and chat (streaming responses) for real-time food recognition and personalized nutrition planning. The system handles 80+ REST endpoints, supports 7 languages, and maintains 70%+ test coverage with 681+ tests.
+MealTrack Backend is a FastAPI-based service powering intelligent meal tracking and nutritional analysis. It implements Clean Architecture with CQRS pattern across 4 layers (417 files, ~37K LOC), integrating AI vision (Gemini 2.5 Flash with 6 analysis strategies) and chat (streaming responses via MessageOrchestrationService) for real-time food recognition and personalized nutrition planning. The system handles 50+ REST endpoints across 12 route modules, supports 7 languages, and maintains 70%+ test coverage with 681+ tests.
 
 ---
 
@@ -33,15 +33,19 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 - Gemini 2.5 Flash with strategy pattern for flexible context handling.
 - Returns results in <3 seconds through state machine (PROCESSING → ANALYZING → READY/FAILED).
 
-### 2. RESTful API (80+ Endpoints across 14 Route Modules)
+### 2. RESTful API (50+ Endpoints across 12 Route Modules)
 - **Meals**: image/analyze (POST), manual (POST), /{id} (GET/DELETE), ingredients (PUT), daily/macros (GET).
 - **User Profiles**: POST/GET/PUT profiles, TDEE calculation.
 - **Meal Plans**: Weekly ingredient-based generation, meal retrieval by date.
 - **Meal Suggestions**: Session-based with 4h TTL, portion multipliers (1-4x), rejection feedback.
-- **Chat**: Threads + Messages (REST + WebSocket), streaming AI responses.
-- **Notifications**: FCM token management, preferences with timezone-aware scheduling.
+- **Chat**: Threads + Messages (REST + WebSocket), streaming AI responses via MessageOrchestrationService and AIResponseCoordinator.
+- **Notifications**: FCM token management, preferences with timezone-aware scheduling, ChatNotificationService for broadcasts.
 - **Foods**: USDA FDC search and details.
 - **Webhooks**: RevenueCat subscription sync.
+- **Activities**: Activity tracking and management.
+- **Ingredients**: Ingredient recognition and analysis.
+- **Monitoring**: Health checks and observability endpoints.
+- **Feature Flags**: Feature toggle management.
 
 ### 3. Session-Based Meal Suggestions
 - Generates 3 personalized suggestions per session with Redis 4h TTL.
@@ -92,6 +96,7 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.4.8 | Jan 16, 2026 | Updated documentation with accurate scout-verified statistics (417 files, ~37K LOC). Added WebSocket chat details, application services (MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService), and EventBus singleton pattern. Updated CQRS counts: 29 commands, 23 queries, 10+ events, 40+ handlers. |
 | 0.4.7 | Jan 16, 2026 | Documentation refresh with scout-verified statistics (408 files, ~37K LOC). |
 | 0.4.6 | Jan 9, 2026 | Phase 02: Language prompt integration (LANGUAGE_NAMES, language instructions, updated prompts). Phase 01: Meal suggestions multilingual support (7 languages, ISO 639-1 codes). |
 | 0.4.5 | Jan 7, 2026 | Phase 05 Pinecone Migration (1024-dim). Documentation split for modularity. |

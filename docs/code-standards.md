@@ -1,7 +1,8 @@
 # MealTrack Backend - Code Standards
 
 **Last Updated:** January 16, 2026
-**Applies To:** All code in `src/` (408 files, ~37K LOC)
+**Version:** 0.4.8
+**Applies To:** All code in `src/` (417 files, ~37K LOC)
 
 ---
 
@@ -63,11 +64,12 @@ async def analyze_meal_image(
 
 **Key Files**:
 - `main.py`: FastAPI app initialization (228 LOC)
-- `routes/v1/*`: 14 route modules with 80+ endpoints
+- `routes/v1/*`: 12 route modules with 50+ endpoints
 - `schemas/*`: 34 Pydantic request/response models
 - `mappers/*`: 8 API ↔ Domain mappers
-- `dependencies/*`: Auth and event bus DI
-- `middleware/*`: 3-layer middleware stack
+- `dependencies/*`: Auth (Firebase JWT) and event bus (PyMediator singleton) DI
+- `middleware/*`: 3-layer middleware stack (CORS, logging, dev auth bypass)
+- `exceptions.py`: 7 custom exception types
 
 ### 2. Application Layer (`src/app/`)
 **Purpose**: CQRS implementation
@@ -103,10 +105,11 @@ class CreateMealCommandHandler(EventHandler[CreateMealCommand, Meal]):
 ```
 
 **Key Files**:
-- `commands/*`: 21 command definitions (596 LOC)
-- `queries/*`: 20 query definitions (359 LOC)
-- `events/*`: 11+ domain events (448 LOC)
-- `handlers/*`: 49 handlers (31 command, 18 query, 1 event)
+- `commands/*`: 29 command definitions across 11 domains (Chat, Meal, Daily Meal, Meal Plan, Meal Suggestion, User, Notification, Ingredient, TDEE, Activity, Food)
+- `queries/*`: 23 query definitions
+- `events/*`: 10+ domain events
+- `handlers/*`: 40+ handlers with @handles decorator
+- `services/chat/*`: 3 application services (MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService)
 
 ### 3. Domain Layer (`src/domain/`)
 **Purpose**: Core business logic (zero external dependencies)
@@ -146,10 +149,11 @@ class TdeeCalculationService:
 ```
 
 **Key Files**:
-- `model/*`: 44 domain entities in 8 bounded contexts
-- `services/*`: 50 domain services (7,924 LOC)
-- `ports/*`: 15 port interfaces for dependency inversion
-- `strategies/*`: 6 analysis strategies
+- `model/*`: 30+ domain entities in 8 bounded contexts (Meal aggregate with state machine: PROCESSING → ANALYZING → ENRICHING → READY/FAILED/INACTIVE)
+- `services/*`: 50+ domain services including TDEE calculation (BMR formulas: Mifflin-St Jeor, Katch-McArdle), nutrition aggregation, meal planning
+- `ports/*`: 17 port interfaces for dependency inversion
+- `strategies/*`: 6 meal analysis strategies (Strategy Pattern)
+- `prompts/*`: 4 AI prompt templates
 - `constants/*`: Business constants (TDEE, nutrition, meal distribution)
 
 ### 4. Infrastructure Layer (`src/infra/`)
@@ -188,12 +192,13 @@ class VisionAIService(VisionAIServicePort):
 ```
 
 **Key Files**:
-- `database/models/*`: 11 main database tables
-- `repositories/*`: 10+ repository implementations
-- `adapters/*`: Vision AI, Meal Generation, Cloudinary
-- `services/*`: Firebase, Pinecone integrations
-- `cache/*`: Redis caching with graceful degradation
-- `event_bus/*`: PyMediator implementation
+- `database/models/*`: 11 core database tables with connection pooling (20 connections + 10 overflow)
+- `repositories/*`: 10+ repository implementations with smart sync and eager loading
+- `adapters/*`: Vision AI, Meal Generation (multi-model Gemini), Cloudinary
+- `services/*`: Firebase (FCM), Pinecone (1024-dim vector search)
+- `cache/*`: Redis cache-aside pattern (50 connections, 1h default TTL, graceful degradation)
+- `event_bus/*`: PyMediator with singleton registry and async execution
+- `websocket/*`: ConnectionManager for real-time chat
 
 ---
 
@@ -447,9 +452,11 @@ class MealStatus(str, Enum):
 - TTL based on data volatility (user profile: 1h, suggestions: 4h)
 
 ### Event Bus
-- Singleton event bus with request-scoped sessions
+- Singleton registry pattern to prevent memory leaks from dynamic class generation
+- Request-scoped sessions for handlers
 - Background event processing (non-blocking)
-- Async handlers for I/O-bound operations
+- Async handlers for I/O-bound operations with @handles decorator
+- Two event buses: Food Search Bus (lightweight) and Configured Bus (full CQRS)
 
 ---
 
@@ -541,6 +548,53 @@ MIN_CALORIES_FOR_SNACK = 1800
 4. Rate limiting thresholds for AI endpoints?
 5. CORS production configuration - when to restrict?
 
+## WebSocket Standards
+
+### Connection Management
+```python
+# ConnectionManager for real-time chat
+class ConnectionManager:
+    async def connect(self, websocket: WebSocket, user_id: str):
+        # Accept and store connection
+        pass
+
+    async def disconnect(self, user_id: str):
+        # Remove connection
+        pass
+
+    async def send_message(self, user_id: str, message: dict):
+        # Send to specific user
+        pass
+```
+
+### Chat Flow
+- WebSocket connects via `/v1/chat/ws`
+- MessageOrchestrationService coordinates message flow
+- AIResponseCoordinator handles streaming AI responses
+- ChatNotificationService broadcasts FCM notifications
+
 ---
 
-**Note**: This document consolidates patterns from 408 source files analyzed via scout reports (Jan 16, 2026).
+## Async Patterns
+
+### Handler Pattern
+```python
+@handles(CreateMealCommand)
+class CreateMealCommandHandler:
+    async def handle(self, command: CreateMealCommand) -> Meal:
+        # Async business logic
+        pass
+```
+
+### Event Publishing
+```python
+# Fire-and-forget domain events
+await event_bus.publish(MealCreatedEvent(...))
+
+# Synchronous commands/queries
+result = await event_bus.send(CreateMealCommand(...))
+```
+
+---
+
+**Note**: This document consolidates patterns from 417 source files analyzed via scout reports (Jan 16, 2026).

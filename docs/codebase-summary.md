@@ -1,12 +1,13 @@
 # MealTrack Backend - Codebase Summary
 
 **Generated:** January 16, 2026
-**Codebase Stats**: 408 source files, ~37K LOC (src/), 681+ tests in 92 test files
-**Source Files**: 408 Python files across 4 architecture layers
+**Codebase Stats**: 417 source files, ~37K LOC (src/), 681+ tests in 92 test files
+**Source Files**: 417 Python files across 4 architecture layers
 **Test Files**: 92 files with 681+ test cases, 70%+ coverage
 **Language**: Python 3.11+
 **Framework**: FastAPI 0.115+, SQLAlchemy 2.0
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
+**Event Bus**: PyMediator with singleton registry pattern
 **Status**: Production-ready. Scout-verified metrics from comprehensive codebase analysis.
 
 ---
@@ -32,25 +33,26 @@
 
 ```
 mealtrack_backend/
-├── src/                                 # Application source code (408 files, ~37K LOC)
-│   ├── api/                             # API Layer (74 files, ~8,244 LOC)
-│   │   ├── routes/v1/                   # 14 route modules (80+ endpoints)
+├── src/                                 # Application source code (417 files, ~37K LOC)
+│   ├── api/                             # API Layer (74 files, ~8,241 LOC)
+│   │   ├── routes/v1/                   # 12 route modules (50+ endpoints)
 │   │   ├── schemas/                     # 34 Pydantic models (2,530 LOC)
 │   │   ├── mappers/                     # 8 API ↔ Domain mappers (1,026 LOC)
 │   │   ├── dependencies/                # FastAPI DI (auth, event_bus) (706 LOC)
 │   │   ├── middleware/                  # 3-layer middleware (530 LOC)
 │   │   └── utils/                       # API utilities (120 LOC)
-│   ├── app/                             # Application Layer (136 files, ~5,967 LOC)
-│   │   ├── commands/                    # 21 command definitions (596 LOC)
-│   │   ├── queries/                     # 20 query definitions (359 LOC)
-│   │   ├── events/                      # 11+ domain events (448 LOC)
-│   │   └── handlers/                    # 49 handlers total (4,008 LOC)
-│   │       ├── command_handlers/        # 31 command handlers (~2,500 LOC)
-│   │       ├── query_handlers/          # 18 query handlers (~1,000 LOC)
-│   │       └── event_handlers/          # 1 event handler (126 LOC)
-│   ├── domain/                          # Domain Layer (124 files, ~14,236 LOC)
-│   │   ├── model/                       # 44 domain entities (3,544 LOC)
-│   │   │   ├── meal/                    # Meal bounded context
+│   ├── app/                             # Application Layer (136 files, ~5,968 LOC)
+│   │   ├── commands/                    # 29 command definitions across 11 domains
+│   │   ├── queries/                     # 23 query definitions
+│   │   ├── events/                      # 10+ domain events
+│   │   ├── handlers/                    # 40+ handlers total
+│   │   │   ├── command_handlers/        # Command handlers
+│   │   │   ├── query_handlers/          # Query handlers
+│   │   │   └── event_handlers/          # Event handlers
+│   │   └── services/chat/               # Application services (MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService)
+│   ├── domain/                          # Domain Layer (130 files, ~14,079 LOC)
+│   │   ├── model/                       # 30+ domain entities across 8 bounded contexts
+│   │   │   ├── meal/                    # Meal aggregate with state machine
 │   │   │   ├── nutrition/               # Nutrition bounded context
 │   │   │   ├── user/                    # User bounded context
 │   │   │   ├── meal_planning/           # Meal planning bounded context
@@ -58,20 +60,20 @@ mealtrack_backend/
 │   │   │   ├── notification/            # Notification bounded context
 │   │   │   ├── ai/                      # AI response models
 │   │   │   └── chat/                    # Chat bounded context
-│   │   ├── services/                    # 50 domain services (7,924 LOC)
-│   │   ├── strategies/                  # 6 analysis strategies (725 LOC)
-│   │   ├── ports/                       # 15 port interfaces (997 LOC)
-│   │   ├── prompts/                     # AI prompt templates (488 LOC)
-│   │   ├── parsers/                     # GPT response parsers (184 LOC)
-│   │   └── constants/                   # Business constants (185 LOC)
-│   └── infra/                           # Infrastructure Layer (74 files, ~8,505 LOC)
-│       ├── database/                    # SQLAlchemy + Alembic
-│       │   └── models/                  # 11 main database tables
-│       ├── repositories/                # 10+ data access implementations
-│       ├── services/                    # External service adapters
-│       ├── adapters/                    # Vision AI, Meal Generation, Cloudinary
-│       ├── cache/                       # Redis caching with graceful degradation
-│       ├── event_bus/                   # PyMediator event dispatcher
+│   │   ├── services/                    # 50+ domain services
+│   │   ├── strategies/                  # 6 meal analysis strategies (Strategy Pattern)
+│   │   ├── ports/                       # 17 port interfaces for dependency inversion
+│   │   ├── prompts/                     # 4 AI prompt templates
+│   │   ├── parsers/                     # GPT response parsers
+│   │   └── constants/                   # Business constants
+│   └── infra/                           # Infrastructure Layer (77 files, ~8,671 LOC)
+│       ├── database/                    # SQLAlchemy + Alembic (connection pool: 20 + 10 overflow)
+│       │   └── models/                  # 11 core database tables
+│       ├── repositories/                # 10+ repository implementations with smart sync
+│       ├── services/                    # External service adapters (Firebase, Pinecone)
+│       ├── adapters/                    # Cloudinary, Vision AI, Meal Generation
+│       ├── cache/                       # Redis cache-aside (50 connections, 1h default TTL)
+│       ├── event_bus/                   # PyMediator with singleton registry and async execution
 │       └── config/                      # Settings and configuration
 ├── tests/                               # Test suite (92 files, 681+ tests)
 ├── migrations/                          # Alembic migrations
@@ -85,26 +87,27 @@ mealtrack_backend/
 
 | Metric | Value |
 |--------|-------|
-| Total Source Files | 408 Python files |
-| API Layer | 74 files, ~8,244 LOC |
-| Application Layer | 136 files, ~5,967 LOC |
-| Domain Layer | 124 files, ~14,236 LOC |
-| Infrastructure Layer | 74 files, ~8,505 LOC |
+| Total Source Files | 417 Python files |
+| API Layer | 74 files, ~8,241 LOC |
+| Application Layer | 136 files, ~5,968 LOC |
+| Domain Layer | 130 files, ~14,079 LOC |
+| Infrastructure Layer | 77 files, ~8,671 LOC |
 | Total LOC (src/) | ~37,000 LOC |
 | Test Files | 92 files |
 | Total Test Cases | 681+ tests |
 | Test Coverage | 70%+ maintained |
-| API Endpoints | 80+ REST endpoints across 14 route modules |
-| CQRS Commands | 21 command definitions |
-| CQRS Queries | 20 query definitions |
-| Domain Events | 11+ event definitions |
-| Handlers | 49 total (31 command, 18 query, 1 event) |
-| Domain Services | 50 service files |
+| API Endpoints | 50+ REST endpoints across 12 route modules |
+| CQRS Commands | 29 commands across 11 domains |
+| CQRS Queries | 23 query definitions |
+| Domain Events | 10+ event definitions |
+| Handlers | 40+ handlers with @handles decorator |
+| Application Services | 3 (MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService) |
+| Domain Services | 50+ service files |
 | Bounded Contexts | 8 contexts (Meal, Nutrition, User, Planning, Conversation, Notification, AI, Chat) |
 | Analysis Strategies | 6 strategies (basic, portion, ingredient, weight, user-context, combined) |
-| Database Tables | 11 main tables |
-| Repositories | 10+ data access implementations |
-| Port Interfaces | 15 port interfaces for dependency inversion |
+| Database Tables | 11 core tables |
+| Repositories | 10+ with smart sync and eager loading |
+| Port Interfaces | 17 port interfaces for dependency inversion |
 | External Integrations | 7 (Gemini, Pinecone, Firebase, Cloudinary, RevenueCat, Redis, MySQL) |
 
 ---
@@ -115,11 +118,11 @@ mealtrack_backend/
 
 ```
 src/
-├── api/                                 # Presentation Layer (74 files, ~8,244 LOC)
+├── api/                                 # Presentation Layer (74 files, ~8,241 LOC)
 │   ├── main.py                          # FastAPI app initialization (228 lines)
 │   ├── base_dependencies.py            # Service initialization
-│   ├── exceptions.py                    # Exception handling (124 lines)
-│   ├── routes/v1/                       # 14 route modules (2,388 LOC)
+│   ├── exceptions.py                    # 7 custom exception types
+│   ├── routes/v1/                       # 12 route modules with 50+ endpoints
 │   │   ├── health.py                    # Health checks (3 endpoints)
 │   │   ├── meals.py                     # Meal CRUD + analysis (6 endpoints)
 │   │   ├── user_profiles.py            # Profile + TDEE (4 endpoints)
@@ -136,7 +139,7 @@ src/
 │   │   ├── chat/                       # AI chat (modular)
 │   │   │   ├── thread_routes.py        # Thread management
 │   │   │   └── message_routes.py       # Message operations
-│   │   ├── chat_ws.py                  # WebSocket chat
+│   │   ├── chat_ws.py                  # WebSocket chat with ConnectionManager
 │   │   └── daily_meals.py              # Daily suggestions
 │   ├── schemas/                         # Pydantic DTOs (34 files, 2,530 LOC)
 │   │   ├── request/                     # Request schemas
@@ -275,49 +278,53 @@ src/
 
 ## Layer Responsibilities
 
-### 1. API Layer (`src/api/`) - 74 files, ~8,244 LOC
+### 1. API Layer (`src/api/`) - 74 files, ~8,241 LOC
 **Purpose**: Handle HTTP requests/responses.
 **Responsibilities**: Validate requests via Pydantic, dispatch commands/queries to event bus, serialize domain models to response DTOs, handle authentication/authorization.
 
 **Key Components**:
-- **14 Route Modules**: 80+ REST endpoints (health, meals, users, profiles, chat, notifications, meal plans, suggestions, activities, ingredients, webhooks, monitoring, feature flags, foods).
+- **12 Route Modules**: 50+ REST endpoints (health, meals, users, profiles, chat, notifications, meal plans, suggestions, activities, ingredients, webhooks, monitoring, feature flags, foods).
 - **34 Pydantic Schemas**: Request/response DTOs with validation.
 - **8 Mappers**: API ↔ Domain transformations (meal, TDEE, suggestions, chat).
 - **3-Layer Middleware**: CORS, request logging (ID + timing), dev auth bypass.
 - **Firebase JWT Auth**: Token verification with dev bypass for local development.
+- **WebSocket Support**: ConnectionManager for real-time chat.
 
-### 2. Application Layer (`src/app/`) - 136 files, ~5,967 LOC
+### 2. Application Layer (`src/app/`) - 136 files, ~5,968 LOC
 **Purpose**: Implement CQRS pattern for decoupled operations.
 **Responsibilities**: Execute commands/queries via handlers, publish domain events, coordinate transactions, orchestrate application services.
 
 **Key Components**:
-- **21 Commands**: Write operations (create meal, update profile, generate plan, etc.).
-- **20 Queries**: Read operations (get meal, TDEE calculation, search foods, etc.).
-- **11+ Domain Events**: Historical facts (meal analyzed, plan generated, message sent).
-- **49 Handlers**: 31 command, 18 query, 1 event handler (meal analysis background processing).
-- **Application Services**: Chat orchestration, AI response coordination, notification broadcasting.
+- **29 Commands**: Write operations across 11 domains (Chat, Meal, Daily Meal, Meal Plan, Meal Suggestion, User, Notification, Ingredient, TDEE, Activity, Food).
+- **23 Queries**: Read operations (get meal, TDEE calculation, search foods, etc.).
+- **10+ Domain Events**: Historical facts (meal analyzed, plan generated, message sent).
+- **40+ Handlers**: Command, query, and event handlers with @handles decorator.
+- **3 Application Services**: MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService.
+- **UnitOfWork**: Transaction management pattern.
 
-### 3. Domain Layer (`src/domain/`) - 124 files, ~14,236 LOC
+### 3. Domain Layer (`src/domain/`) - 130 files, ~14,079 LOC
 **Purpose**: Encapsulate core business logic independent of external concerns.
 **Responsibilities**: Domain models with business rules, domain services, port interfaces (dependency inversion), business constants, AI prompt templates.
 
 **Key Components**:
 - **8 Bounded Contexts**: Meal, Nutrition, User, Meal Planning, Conversation, Notification, AI, Chat.
-- **44 Domain Entities**: Rich models with validation and behavior (Meal, Nutrition, TdeeRequest, MealPlan, etc.).
-- **50 Domain Services**: TDEE calculation, nutrition aggregation, meal planning, suggestion generation, conversation management.
-- **6 Analysis Strategies**: Basic, portion-aware, ingredient-aware, weight-aware, user-context-aware, combined.
-- **15 Port Interfaces**: Repository ports + service ports (VisionAI, MealGeneration, FoodData, ImageStore, etc.).
+- **30+ Domain Entities**: Rich models with validation and behavior (Meal aggregate with state machine, Nutrition, TdeeRequest, MealPlan, etc.).
+- **50+ Domain Services**: TDEE calculation (BMR formulas: Mifflin-St Jeor, Katch-McArdle), nutrition aggregation, meal planning, suggestion generation, conversation management.
+- **6 Analysis Strategies**: Basic, portion-aware, ingredient-aware, weight-aware, user-context-aware, combined (Strategy Pattern).
+- **17 Port Interfaces**: Repository ports + service ports (VisionAI, MealGeneration, FoodData, ImageStore, etc.).
+- **4 AI Prompt Templates**: Structured prompts for meal generation.
 
-### 4. Infrastructure Layer (`src/infra/`) - 74 files, ~8,505 LOC
+### 4. Infrastructure Layer (`src/infra/`) - 77 files, ~8,671 LOC
 **Purpose**: Implement technical concerns and external integrations.
 **Responsibilities**: Database persistence, external API adapters, caching, event bus implementation, configuration.
 
 **Key Components**:
 - **11 Database Tables**: User, UserProfile, Subscription, Meal, MealImage, Nutrition, FoodItem, MealPlan, NotificationPreferences, UserFcmToken, Thread, Message.
 - **10+ Repositories**: Smart sync with diff-based updates, eager loading, request-scoped sessions.
-- **External Services**: Firebase (FCM), Cloudinary (images), Gemini (AI), Pinecone (vector search), RevenueCat (subscriptions).
-- **Redis Cache**: Graceful degradation, JSON serialization, cache-aside pattern.
-- **PyMediator Event Bus**: Singleton registry, async event handling, CQRS support.
+- **External Services**: Firebase (FCM), Cloudinary (images), Gemini (AI with multi-model strategy), Pinecone (vector search with 1024-dim), RevenueCat (subscriptions).
+- **Redis Cache**: Cache-aside pattern with graceful degradation, JSON serialization, 50 connections, 1h default TTL.
+- **PyMediator Event Bus**: Singleton registry pattern, async event handling with @handles decorator.
+- **MySQL Connection Pool**: 20 connections with 10 overflow capacity.
 
 ---
 

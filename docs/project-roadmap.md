@@ -1,19 +1,21 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.4.7
+**Version:** 0.4.8
 **Last Updated:** January 16, 2026
-**Status:** Production-ready. 408 source files, ~37K LOC across 4 layers. 681+ tests, 70%+ coverage.
-**Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator.
+**Status:** Production-ready. 417 source files, ~37K LOC across 4 layers. 681+ tests, 70%+ coverage.
+**Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry.
 
 ---
 
 ## Completed Phases
 
-### January 2026: Documentation Refresh
-- [x] Scout-based codebase analysis (4 comprehensive reports covering all layers).
-- [x] Updated all documentation with verified statistics (408 files, ~37K LOC).
-- [x] Accurate metrics: 21 commands, 20 queries, 11+ events, 49 handlers, 50 domain services.
-- [x] Architecture documentation split into modular structure.
+### January 2026: Documentation Refresh v0.4.8
+- [x] Scout-based codebase analysis (4 comprehensive reports: API, App, Domain, Infra layers).
+- [x] Updated all documentation with verified statistics (417 files, ~37K LOC).
+- [x] Accurate metrics: 29 commands, 23 queries, 10+ events, 40+ handlers, 50+ domain services.
+- [x] Added WebSocket chat details (ConnectionManager, 3 application services).
+- [x] Documented EventBus singleton registry pattern.
+- [x] Updated layer statistics (74/136/130/77 files, ~8K/6K/14K/9K LOC).
 
 ### Phase 06: Session-Based Meal Suggestions (Jan 2026)
 - [x] SuggestionOrchestrationService with 4h TTL (Redis).
@@ -44,15 +46,16 @@
 - [x] Consolidated meal planning services.
 
 ### MVP Milestones (2025)
-- [x] Gemini 2.5 Flash Vision integration with 6 analysis strategies.
-- [x] Multi-model Gemini for rate distribution.
-- [x] CQRS architecture with PyMediator event bus (singleton pattern).
-- [x] Chat with streaming AI responses (WebSocket + REST).
+- [x] Gemini 2.5 Flash Vision integration with 6 analysis strategies (Strategy Pattern).
+- [x] Multi-model Gemini for rate distribution (4 model types: meal names, recipe primary/secondary, general).
+- [x] CQRS architecture with PyMediator event bus (singleton registry pattern).
+- [x] Chat with streaming AI responses (WebSocket + REST, MessageOrchestrationService, AIResponseCoordinator).
 - [x] Firebase Auth & FCM with platform-specific configs.
-- [x] SQLAlchemy 2.0 with request-scoped sessions.
+- [x] SQLAlchemy 2.0 with request-scoped sessions (20 connections + 10 overflow).
 - [x] RevenueCat subscription integration.
-- [x] Redis caching with graceful degradation.
-- [x] 11 database tables across multiple migrations.
+- [x] Redis caching with graceful degradation (50 connections, 1h default TTL).
+- [x] 11 database tables with Meal aggregate state machine.
+- [x] 3 application services (MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService).
 
 ---
 

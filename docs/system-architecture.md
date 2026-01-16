@@ -1,9 +1,10 @@
 # MealTrack Backend - System Architecture
 
 **Last Updated:** January 16, 2026
-**Version:** 0.4.7
+**Version:** 0.4.8
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
-**Source**: Scout-verified analysis of 408 files (~37K LOC)
+**Event Bus**: PyMediator with singleton registry pattern
+**Source**: Scout-verified analysis of 417 files (~37K LOC)
 
 ---
 
@@ -50,11 +51,11 @@
 
 | Layer | Files | LOC | Purpose |
 |-------|-------|-----|---------|
-| API | 74 | ~8,244 | HTTP presentation |
-| Application | 136 | ~5,967 | CQRS orchestration |
-| Domain | 124 | ~14,236 | Business logic |
-| Infrastructure | 74 | ~8,505 | Technical implementation |
-| **Total** | **408** | **~37,000** | |
+| API | 74 | ~8,241 | HTTP presentation |
+| Application | 136 | ~5,968 | CQRS orchestration |
+| Domain | 130 | ~14,079 | Business logic |
+| Infrastructure | 77 | ~8,671 | Technical implementation |
+| **Total** | **417** | **~37,000** | |
 
 ---
 
@@ -63,11 +64,12 @@
 ### API Layer (`src/api/`)
 
 **Components**:
-- **14 Route Modules** (2,388 LOC): Health, Meals, Users, Profiles, Chat, Notifications, Meal Plans, Suggestions, Activities, Ingredients, Webhooks, Monitoring, Feature Flags, Foods
+- **12 Route Modules**: Health, Meals, Users, Profiles, Chat (modular: thread_routes, message_routes), Chat WebSocket, Notifications, Meal Plans, Suggestions, Activities, Ingredients, Webhooks, Monitoring, Feature Flags, Foods
 - **34 Pydantic Schemas** (2,530 LOC): Request/response DTOs with validation
 - **8 Mappers** (1,026 LOC): API ↔ Domain transformations
-- **3 Middleware Layers** (530 LOC): CORS, Request Logging, Dev Auth Bypass
-- **2 DI Providers** (706 LOC): Auth (Firebase JWT), Event Bus (PyMediator)
+- **3 Middleware Layers** (530 LOC): CORS, Request Logging (ID + timing), Dev Auth Bypass
+- **2 DI Providers** (706 LOC): Auth (Firebase JWT), Event Bus (PyMediator singleton)
+- **7 Custom Exception Types**: MealTrackException hierarchy
 
 **Responsibilities**:
 1. Receive HTTP requests
@@ -76,7 +78,7 @@
 4. Map domain models to response DTOs
 5. Handle authentication/authorization
 
-**Key Endpoints** (80+ total):
+**Key Endpoints** (50+ total):
 - `POST /v1/meals/image/analyze` - Immediate meal analysis
 - `POST /v1/meals/manual` - Create meal from USDA foods
 - `GET /v1/meals/{id}` - Fetch meal details
@@ -84,7 +86,7 @@
 - `POST /v1/meal-plans/weekly/ingredient-based` - Generate weekly plan
 - `GET /v1/meal-suggestions` - Get personalized suggestions
 - `POST /v1/chat/threads/{id}/messages` - Send chat message
-- `WS /v1/chat/ws` - Real-time chat
+- `WS /v1/chat/ws` - Real-time chat with ConnectionManager
 
 **Middleware Chain**:
 1. **CORSMiddleware** - Allow all origins (TODO: restrict in prod)
@@ -104,11 +106,12 @@ Client → Authorization: Bearer <token>
 ### Application Layer (`src/app/`)
 
 **Components**:
-- **21 Commands** (596 LOC): Write operations
-- **20 Queries** (359 LOC): Read operations
-- **11+ Domain Events** (448 LOC): Historical facts
-- **49 Handlers** (4,008 LOC): 31 command, 18 query, 1 event
-- **3 Application Services** (556 LOC): Chat orchestration, AI response coordination, notification broadcasting
+- **29 Commands**: Write operations across 11 domains (Chat, Meal, Daily Meal, Meal Plan, Meal Suggestion, User, Notification, Ingredient, TDEE, Activity, Food)
+- **23 Queries**: Read operations
+- **10+ Domain Events**: Historical facts
+- **40+ Handlers**: Command, query, and event handlers with @handles decorator
+- **3 Application Services** (556 LOC): MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService
+- **UnitOfWork**: Transaction management with cache invalidation after writes
 
 **CQRS Breakdown**:
 
@@ -153,7 +156,7 @@ Client → Authorization: Bearer <token>
 ### Domain Layer (`src/domain/`)
 
 **8 Bounded Contexts**:
-1. **Meal**: Meal, MealImage, Ingredient, MealStatus
+1. **Meal**: Meal aggregate with state machine (PROCESSING → ANALYZING → ENRICHING → READY/FAILED/INACTIVE), MealImage, Ingredient
 2. **Nutrition**: Nutrition, FoodItem, Macros, Micros, Food
 3. **User**: Activity, TdeeRequest, TdeeResponse, MacroTargets, Sex, ActivityLevel, Goal
 4. **Meal Planning**: MealPlan, PlannedMeal, DayPlan, UserPreferences, DietaryPreference
@@ -162,13 +165,13 @@ Client → Authorization: Bearer <token>
 7. **AI**: GPTAnalysisResponse, GPTFoodItem, GPTResponseError hierarchy
 8. **Chat**: Thread, Message, ThreadStatus, MessageRole
 
-**50 Domain Services**:
-- **MealCoreService**: Meal operations, nutrition calculation, meal type determination (time-based)
-- **TdeeCalculationService**: BMR + TDEE + macro calculations with auto-formula selection
+**50+ Domain Services**:
+- **MealCoreService**: Meal lifecycle via state machine, nutrition calculation, time-based meal type determination
+- **TdeeCalculationService**: BMR (Mifflin-St Jeor, Katch-McArdle) + TDEE + macro calculations with auto-formula selection
 - **NutritionCalculationService**: Nutrition from USDA FDC, Pinecone, or None (priority-based)
 - **PlanOrchestrator**: Generate, save, update, delete meal plans
-- **SuggestionOrchestrationService**: Session-based suggestions with 4h TTL
-- **TranslationService**: Multi-language support (7 languages)
+- **SuggestionOrchestrationService**: Session-based suggestions with Redis 4h TTL, 7-language support
+- **TranslationService**: Multi-language support (en, vi, es, fr, de, ja, zh with ISO 639-1)
 - **NotificationService**: FCM push notifications
 
 **6 Analysis Strategies** (Strategy Pattern):
@@ -179,9 +182,9 @@ Client → Authorization: Bearer <token>
 5. **IngredientIdentificationStrategy**: Identifies single ingredient from photo
 6. **UserContextAwareAnalysisStrategy**: Incorporates user description
 
-**15 Port Interfaces** (Dependency Inversion):
+**17 Port Interfaces** (Dependency Inversion):
 - **Repository Ports** (7): MealRepositoryPort, UserRepositoryPort, MealPlanRepositoryPort, etc.
-- **Service Ports** (8): VisionAIServicePort, MealGenerationServicePort, FoodDataServicePort, ImageStorePort, etc.
+- **Service Ports** (10): VisionAIServicePort, MealGenerationServicePort, FoodDataServicePort, ImageStorePort, etc.
 
 **Business Rules**:
 - **TDEE Calculation**: Auto-select Katch-McArdle (if body_fat%) else Mifflin-St Jeor
@@ -192,16 +195,17 @@ Client → Authorization: Bearer <token>
 ### Infrastructure Layer (`src/infra/`)
 
 **Components**:
-- **11 Database Tables**: User, UserProfile, Subscription, Meal, MealImage, Nutrition, FoodItem, MealPlan, NotificationPreferences, UserFcmToken, Thread, Message
-- **10+ Repositories**: Smart sync with diff-based updates, eager loading
-- **External Services**: Firebase (FCM), Cloudinary (images), Gemini (AI), Pinecone (vector search), RevenueCat (subscriptions)
-- **Redis Cache**: Graceful degradation, JSON serialization, cache-aside pattern
-- **PyMediator Event Bus**: Singleton registry, async event handling
+- **11 Database Tables**: User, UserProfile, Subscription, Meal, MealImage, Nutrition, FoodItem, MealPlan, NotificationPreferences, UserFcmToken, Thread, Message.
+- **10+ Repositories**: Smart sync with diff-based updates, eager loading, request-scoped sessions.
+- **External Services**: Firebase (FCM), Cloudinary (images), Gemini (multi-model AI), Pinecone (1024-dim vector search), RevenueCat (subscriptions).
+- **Redis Cache**: Cache-aside pattern with graceful degradation, JSON serialization, 50 connections, 1h default TTL.
+- **PyMediator Event Bus**: Singleton registry pattern, async event handling with @handles decorator.
+- **WebSocket**: ConnectionManager for real-time chat connections.
 
 **Database Architecture**:
 - **Engine**: MySQL 8.0 + SQLAlchemy 2.0
 - **Session Management**: Request-scoped sessions via ContextVar (singleton-safe)
-- **Connection Pool**: Dynamic sizing (POOL_SIZE=20, MAX_OVERFLOW=30)
+- **Connection Pool**: 20 connections with 10 overflow capacity
 - **Migrations**: Alembic with auto-migration on startup
 
 **Repository Pattern**:
@@ -220,9 +224,11 @@ class MealRepository(MealRepositoryPort):
 ```
 
 **Cache Strategy**:
-- **Pattern**: Cache-aside
+- **Pattern**: Cache-aside (check cache → miss → fetch from DB → populate cache)
 - **Serialization**: JSON with Pydantic support
 - **TTL**: Based on volatility (user profile 1h, suggestions 4h)
+- **Connection Pool**: 50 connections
+- **Default TTL**: 1 hour
 - **Error Handling**: Graceful degradation (continue on cache failure)
 
 ---
@@ -232,17 +238,17 @@ class MealRepository(MealRepositoryPort):
 ### PyMediator Event Bus
 
 **Architecture**:
-- **Singleton Registry**: Prevents memory leaks from dynamic class generation
-- **Request-Scoped Sessions**: Handlers use request-scoped DB sessions
-- **Async Execution**: Direct async handler invocation, background tasks for events
+- **Singleton Registry Pattern**: Prevents memory leaks from dynamic class generation by reusing the same event bus instance
+- **Request-Scoped Sessions**: Handlers receive fresh DB sessions per request
+- **Async Execution**: Direct async handler invocation for commands/queries, background tasks for domain events
 
 **Two Event Buses**:
 1. **Food Search Bus**: Lightweight, food queries only (no heavy services)
-2. **Configured Bus**: Full CQRS with all handlers
+2. **Configured Bus**: Full CQRS with 40+ handlers registered
 
 **Usage**:
 ```python
-# Commands/Queries (synchronous)
+# Commands/Queries (synchronous, returns result)
 result = await event_bus.send(CreateMealCommand(...))
 
 # Domain Events (asynchronous, fire-and-forget)
@@ -254,9 +260,16 @@ await event_bus.publish(MealCreatedEvent(...))
 @handles(CreateMealCommand)
 class CreateMealCommandHandler(EventHandler):
     async def handle(self, command: CreateMealCommand) -> Meal:
-        # Execute business logic
+        # Execute business logic with dependency injection
         pass
 ```
+
+**Handler Pattern**:
+- 29 commands across 11 domains
+- 23 queries
+- 10+ domain events
+- UnitOfWork for transaction management
+- Cache invalidation after writes
 
 ---
 
@@ -473,6 +486,29 @@ PROCESSING → ANALYZING → ENRICHING → READY
 7. **CloudinaryImageStore Instantiation**: Created directly in routes instead of DI
 8. **Dev Meal Seeding**: May clutter DB in long-running dev environments
 
+## WebSocket Architecture
+
+### Real-Time Chat
+
+**ConnectionManager**:
+- Manages WebSocket connections for real-time chat
+- Stores active connections per user_id
+- Handles connect, disconnect, and message broadcasting
+
+**Chat Flow**:
+1. Client connects to `WS /v1/chat/ws`
+2. ConnectionManager accepts and stores connection
+3. User sends message via WebSocket or REST
+4. MessageOrchestrationService coordinates message flow
+5. AIResponseCoordinator handles streaming AI responses
+6. ChatNotificationService broadcasts FCM notifications to offline users
+7. ConnectionManager sends real-time updates to connected clients
+
+**Application Services**:
+- **MessageOrchestrationService**: Message flow coordination
+- **AIResponseCoordinator**: Streaming AI responses with Gemini
+- **ChatNotificationService**: FCM broadcasting for chat messages
+
 ---
 
-**Source**: Scout analysis of 408 files (~37K LOC) conducted January 16, 2026.
+**Source**: Scout analysis of 417 files (~37K LOC) conducted January 16, 2026.
