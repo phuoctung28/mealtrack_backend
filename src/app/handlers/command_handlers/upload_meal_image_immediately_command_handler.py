@@ -16,9 +16,9 @@ from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_suggestion.translation_service import TranslationService
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
-from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 

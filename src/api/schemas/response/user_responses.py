@@ -6,8 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
-from ..common.auth_enums import AuthProviderEnum
 from src.domain.utils.timezone_utils import utc_now
+from ..common.auth_enums import AuthProviderEnum
 
 
 class SubscriptionInfo(BaseModel):

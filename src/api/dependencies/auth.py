@@ -11,9 +11,6 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth as firebase_auth
-from sqlalchemy.orm import Session
-
-from src.infra.database.config import get_db
 
 logger = logging.getLogger(__name__)
 

@@ -10,8 +10,8 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.infra.database.uow import UnitOfWork
 from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 

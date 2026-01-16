@@ -10,8 +10,8 @@ from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.daily_meal import GetMealSuggestionsForProfileQuery
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
-from src.infra.database.uow import UnitOfWork
 from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 

@@ -3,9 +3,6 @@ Handler for editing meal ingredients.
 """
 import logging
 import uuid
-from datetime import datetime
-
-from src.domain.utils.timezone_utils import utc_now
 from typing import Dict, Any, Optional
 
 from src.api.exceptions import ValidationException, ResourceNotFoundException
@@ -16,6 +13,7 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition import FoodItem, Macros
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
 from src.infra.services.pinecone_service import get_pinecone_service
 

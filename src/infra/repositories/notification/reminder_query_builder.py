@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from src.domain.utils.timezone_utils import (
     utc_to_local_minutes,
-    is_in_quiet_hours,
     DEFAULT_TIMEZONE
 )
 from src.infra.database.models.notification import NotificationPreferences as DBNotificationPreferences

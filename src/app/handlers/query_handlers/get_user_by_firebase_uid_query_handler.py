@@ -10,7 +10,6 @@ from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.user.get_user_by_firebase_uid_query import GetUserByFirebaseUidQuery
 from src.infra.database.uow import UnitOfWork
-from src.infra.database.models.user import User
 
 logger = logging.getLogger(__name__)
 

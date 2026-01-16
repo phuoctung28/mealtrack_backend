@@ -3,14 +3,13 @@ Shared meal plan persistence service.
 Handles conversion between domain models and ORM models.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Dict, Any
 
 from sqlalchemy.orm import Session
 
-from src.domain.utils.timezone_utils import utc_now
-
 from src.domain.model.meal_planning import UserPreferences
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.enums import (
     FitnessGoalEnum,
     PlanDurationEnum,

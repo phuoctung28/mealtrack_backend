@@ -9,15 +9,15 @@ from typing import Any, Dict
 from src.app.commands.meal_plan import GenerateWeeklyIngredientBasedMealPlanCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.meal_planning import PlanDuration
-from src.infra.services.meal_plan_persistence_service import MealPlanPersistenceService
+from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.services.user_profile_service import UserProfileService
 from src.domain.services.weekly_ingredient_based_meal_plan_service import (
     WeeklyIngredientBasedMealPlanService,
 )
-from src.domain.services.tdee_service import TdeeCalculationService
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.meal_generation_service import MealGenerationService
 from src.infra.database.uow import UnitOfWork
-from src.domain.utils.timezone_utils import utc_now
+from src.infra.services.meal_plan_persistence_service import MealPlanPersistenceService
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class GenerateWeeklyIngredientBasedMealPlanCommandHandler(
         user_data = await user_profile_service.get_user_profile_or_defaults(command.user_id)
         
         # ── 2. calculate next Monday-Sunday dates ───────────────────────
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         today = utc_now().date()
         days_since_monday = today.weekday()  # Monday = 0
         # Calculate next Monday

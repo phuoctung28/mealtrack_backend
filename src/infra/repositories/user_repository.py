@@ -3,8 +3,8 @@ import logging
 from typing import Optional, List
 from uuid import UUID
 
-from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, selectinload
 
 from src.domain.model.user import UserDomainModel, UserProfileDomainModel
 from src.domain.ports.user_repository_port import UserRepositoryPort

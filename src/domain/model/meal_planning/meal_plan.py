@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, date
+from datetime import date
 from enum import Enum
 from typing import List, Optional, Dict
 

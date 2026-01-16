@@ -14,8 +14,8 @@ from src.domain.model.meal import MealImage
 from src.domain.model.nutrition import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem as DomainFoodItem
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.infra.cache.cache_service import CacheService
 from src.domain.utils.timezone_utils import utc_now
+from src.infra.cache.cache_service import CacheService
 
 
 class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any]):

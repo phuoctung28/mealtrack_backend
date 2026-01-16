@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from .macros import Macros
 from src.domain.utils.timezone_utils import utc_now
+from .macros import Macros
 
 
 @dataclass

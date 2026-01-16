@@ -2,18 +2,17 @@
 Command handler for updating user metrics.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
-
-from src.domain.utils.timezone_utils import utc_now
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException, ConflictException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
-from src.infra.database.uow import UnitOfWork
 from src.infra.database.models.enums import FitnessGoalEnum, ActivityLevelEnum
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 

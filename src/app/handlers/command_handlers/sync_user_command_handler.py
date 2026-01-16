@@ -4,17 +4,16 @@ Auto-extracted for better maintainability.
 """
 import logging
 import re
-from datetime import datetime
 from typing import Dict, Any, Optional
 
-from src.domain.utils.timezone_utils import utc_now
 from src.app.commands.user.sync_user_command import SyncUserCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.infra.database.uow import UnitOfWork
-from src.domain.model.user import UserDomainModel
-from src.domain.model.notification import NotificationPreferences
 from src.domain.model.auth.auth_provider import AuthProvider
+from src.domain.model.notification import NotificationPreferences
+from src.domain.model.user import UserDomainModel
+from src.domain.ports.unit_of_work_port import UnitOfWorkPort
+from src.domain.utils.timezone_utils import utc_now
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 

@@ -1,18 +1,17 @@
 import logging
-from typing import List, Optional
 from datetime import date, datetime, timedelta
+from typing import List, Optional
 
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import Meal as DBMeal
 from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
 from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
-from src.infra.database.models.nutrition.food_item import FoodItem as DBFoodItem
-from src.infra.mappers.meal_mapper import MealMapper, MealImageMapper, NutritionMapper, FoodItemMapper
 from src.infra.mappers import MealStatusMapper
-from src.infra.database.models.enums import MealStatusEnum
+from src.infra.mappers.meal_mapper import MealMapper, MealImageMapper, NutritionMapper, FoodItemMapper
 
 logger = logging.getLogger(__name__)
 

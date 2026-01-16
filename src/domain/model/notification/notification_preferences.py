@@ -4,10 +4,9 @@ Notification preferences domain model.
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-
-from src.domain.utils.timezone_utils import utc_now, format_iso_utc
 from typing import Optional
 
+from src.domain.utils.timezone_utils import utc_now, format_iso_utc
 from .enums import NotificationType
 
 # Map notification types to their corresponding preference fields

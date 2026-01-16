@@ -3,23 +3,6 @@ Event bus dependency for FastAPI with proper type registrations.
 """
 from typing import Optional
 
-from fastapi import Depends
-from sqlalchemy.orm import Session
-
-from src.api.base_dependencies import (
-    get_ai_chat_service,
-    get_db,
-    get_image_store,
-    get_meal_repository,
-    get_notification_repository,
-    get_vision_service,
-    get_gpt_parser,
-    get_food_data_service,
-    get_food_cache_service,
-    get_food_mapping_service,
-    get_cache_service,
-    get_suggestion_orchestration_service,
-)
 from src.app.commands.chat import (
     CreateThreadCommand,
     SendMessageCommand,
@@ -151,12 +134,6 @@ from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import GetUserProfileQuery, GetUserMetricsQuery
 from src.app.queries.user.get_user_by_firebase_uid_query import GetUserByFirebaseUidQuery
 from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboardingStatusQuery
-from src.domain.ports.ai_chat_service_port import AIChatServicePort
-from src.domain.ports.food_cache_service_port import FoodCacheServicePort
-from src.domain.ports.food_data_service_port import FoodDataServicePort
-from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
-from src.domain.services.meal_suggestion.translation_service import TranslationService
-from src.infra.cache.cache_service import CacheService
 from src.infra.event_bus import PyMediatorEventBus, EventBus
 
 # Singleton event buses

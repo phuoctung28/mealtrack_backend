@@ -3,7 +3,7 @@ Shared user profile service for meal plan handlers.
 Follows clean architecture principles.
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from src.domain.model.meal_planning import UserPreferences, DietaryPreference, FitnessGoal, PlanDuration
 from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem

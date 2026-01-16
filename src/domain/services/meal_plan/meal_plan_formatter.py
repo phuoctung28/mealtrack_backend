@@ -1,6 +1,6 @@
 """Meal plan formatting and response building logic."""
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Dict, Any, List
 
 from src.domain.model.meal_planning import MealGenerationRequest

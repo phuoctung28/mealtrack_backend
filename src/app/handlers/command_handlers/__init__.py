@@ -16,8 +16,8 @@ from .edit_meal_command_handler import EditMealCommandHandler
 from .generate_daily_meal_suggestions_command_handler import GenerateDailyMealSuggestionsCommandHandler
 # Meal Suggestion handlers (supports both initial generation and regeneration via session_id)
 from .generate_meal_suggestions_command_handler import GenerateMealSuggestionsCommandHandler
-from .meal_suggestion.save_meal_suggestion_command_handler import SaveMealSuggestionCommandHandler
 from .generate_single_meal_command_handler import GenerateSingleMealCommandHandler
+from .meal_suggestion.save_meal_suggestion_command_handler import SaveMealSuggestionCommandHandler
 # Ingredient handlers
 from .recognize_ingredient_command_handler import RecognizeIngredientCommandHandler
 # Notification handlers

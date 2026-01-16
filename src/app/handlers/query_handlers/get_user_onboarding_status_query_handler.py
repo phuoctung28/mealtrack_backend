@@ -8,8 +8,8 @@ from typing import Dict, Any
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboardingStatusQuery
-from src.infra.database.uow import UnitOfWork
 from src.infra.database.models.user import User
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 

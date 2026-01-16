@@ -3,15 +3,13 @@ CompleteOnboardingCommandHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
 import logging
-from datetime import datetime
-
-from src.domain.utils.timezone_utils import utc_now
 from typing import Dict, Any, Optional
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user import CompleteOnboardingCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
 

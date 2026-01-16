@@ -1,6 +1,6 @@
 """Base class for all domain models."""
-from dataclasses import dataclass, field
 import uuid
+from dataclasses import dataclass, field
 
 
 @dataclass(kw_only=True)

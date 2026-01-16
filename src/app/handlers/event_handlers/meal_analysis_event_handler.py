@@ -2,7 +2,6 @@
 Event handler for meal analysis events.
 """
 import logging
-from datetime import datetime
 from typing import Optional
 
 from src.app.events.base import EventHandler, handles

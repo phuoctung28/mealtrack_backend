@@ -4,10 +4,9 @@ Simple cache metrics collector.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from typing import Dict
 
 from src.domain.utils.timezone_utils import utc_now
-from typing import Dict
 
 
 @dataclass

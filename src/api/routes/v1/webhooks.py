@@ -7,12 +7,11 @@ import logging
 import os
 import uuid
 from datetime import datetime
-
-from src.domain.utils.timezone_utils import utc_now
 from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Header
 
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
 from src.infra.database.uow import UnitOfWork

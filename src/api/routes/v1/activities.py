@@ -3,8 +3,6 @@ Activities API endpoints - Event-driven architecture.
 """
 
 from datetime import datetime
-
-from src.domain.utils.timezone_utils import utc_now
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -13,6 +11,7 @@ from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import ValidationException, handle_exception
 from src.app.queries.activity import GetDailyActivitiesQuery
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.event_bus import EventBus
 
 router = APIRouter(

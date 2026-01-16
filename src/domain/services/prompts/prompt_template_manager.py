@@ -7,7 +7,6 @@ from typing import List, Optional
 from .prompt_constants import (
     INGREDIENT_RULES,
     INGREDIENT_RULES_DETAILED,
-    LANGUAGE_NAMES,
     SEASONING_RULES,
     SEASONING_RULES_DETAILED,
     NUTRITION_RULES,
@@ -15,6 +14,7 @@ from .prompt_constants import (
     GOAL_GUIDANCE,
     SYSTEM_MESSAGES,
 )
+
 
 class PromptTemplateManager:
     """

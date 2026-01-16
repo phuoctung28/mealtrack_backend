@@ -6,8 +6,8 @@ import logging
 from typing import List, Optional
 from uuid import uuid4
 
-from src.domain.model.meal.food_item_change import FoodItemChange, CustomNutritionData
 from src.domain.model.meal import Meal
+from src.domain.model.meal.food_item_change import FoodItemChange, CustomNutritionData
 from src.domain.model.nutrition import FoodItem
 from src.domain.model.nutrition import Nutrition
 from src.domain.ports.meal_repository_port import MealRepositoryPort

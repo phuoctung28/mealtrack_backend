@@ -4,10 +4,10 @@ from typing import List, Dict, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.domain.model.meal_planning import PlannedMeal, MealType
-from src.domain.services.meal_suggestion.json_extractor import JsonExtractor
-from src.domain.services.fallback_meal_service import FallbackMealService
-from src.domain.services.meal_suggestion.suggestion_prompt_builder import SuggestionPromptBuilder
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.domain.services.fallback_meal_service import FallbackMealService
+from src.domain.services.meal_suggestion.json_extractor import JsonExtractor
+from src.domain.services.meal_suggestion.suggestion_prompt_builder import SuggestionPromptBuilder
 
 logger = logging.getLogger(__name__)
 

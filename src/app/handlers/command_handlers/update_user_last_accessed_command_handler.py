@@ -3,14 +3,12 @@ UpdateUserLastAccessedCommandHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
 import logging
-from datetime import datetime
-
-from src.domain.utils.timezone_utils import utc_now
 from typing import Dict, Any
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user.sync_user_command import UpdateUserLastAccessedCommand
 from src.app.events.base import EventHandler, handles
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)

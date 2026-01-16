@@ -1,15 +1,15 @@
 """
 Mappers for converting between Meal domain models and SQLAlchemy persistence models.
 """
-from src.domain.model.meal.meal import Meal as DomainMeal, MealStatus
+from src.domain.model.meal.meal import Meal as DomainMeal
 from src.domain.model.meal.meal_image import MealImage as DomainMealImage
-from src.domain.model.nutrition import Nutrition as DomainNutrition, Macros, Micros, FoodItem
+from src.domain.model.nutrition import Nutrition as DomainNutrition, Macros, FoodItem
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.meal.meal import Meal as DBMeal
 from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
-from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
 from src.infra.database.models.nutrition.food_item import FoodItem as DBFoodItem
+from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
 from src.infra.mappers import MealStatusMapper
-from src.domain.utils.timezone_utils import utc_now
 
 
 class MealMapper:

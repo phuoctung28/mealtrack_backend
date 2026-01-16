@@ -7,11 +7,11 @@ from uuid import uuid4
 
 from src.app.commands.meal_suggestion import SaveMealSuggestionCommand
 from src.app.events.base import EventHandler, handles
-from src.infra.database.uow import UnitOfWork
 from src.infra.database.models.enums import MealTypeEnum
 from src.infra.database.models.meal_planning.meal_plan import MealPlan as DBMealPlan
 from src.infra.database.models.meal_planning.meal_plan_day import MealPlanDay as DBMealPlanDay
 from src.infra.database.models.meal_planning.planned_meal import PlannedMeal as DBPlannedMeal
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 

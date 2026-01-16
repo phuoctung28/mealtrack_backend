@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional
 from datetime import date
+from typing import List, Optional
 
 from src.domain.model.meal import Meal, MealStatus
 

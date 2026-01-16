@@ -3,7 +3,7 @@ Handler for registering FCM tokens.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from src.app.commands.notification import RegisterFcmTokenCommand
 from src.app.events.base import EventHandler, handles

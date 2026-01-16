@@ -7,9 +7,9 @@ from typing import Optional, List
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.subscription import Subscription
 from src.infra.repositories.base import BaseRepository
-from src.domain.utils.timezone_utils import utc_now
 
 
 class SubscriptionRepository(BaseRepository[Subscription]):

@@ -11,8 +11,8 @@ from src.app.queries.user import GetUserProfileQuery
 from src.domain.model.user import ActivityLevel, Sex
 from src.domain.model.user import TdeeRequest, UnitSystem, Goal
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.infra.database.uow import UnitOfWork
 from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 

@@ -8,10 +8,10 @@ from typing import Dict, Any
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal_plan import GetMealPlanQuery
-from src.infra.database.uow import UnitOfWork
 from src.infra.database.models.meal_planning.meal_plan import MealPlan as DBMealPlan
 from src.infra.database.models.meal_planning.meal_plan_day import MealPlanDay as DBMealPlanDay
 from src.infra.database.models.meal_planning.planned_meal import PlannedMeal as DBPlannedMeal
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 

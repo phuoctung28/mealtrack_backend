@@ -1,9 +1,6 @@
-import json
 import logging
 from datetime import date, timedelta
 from typing import List, Dict, Optional
-
-from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.domain.model.meal_planning import (
     MealPlan, PlannedMeal, DayPlan, UserPreferences,

@@ -2,7 +2,6 @@
 Service for searching recipes in Pinecone index.
 Enables fast meal suggestion retrieval via semantic search.
 """
-import json
 import logging
 from typing import List, Optional
 

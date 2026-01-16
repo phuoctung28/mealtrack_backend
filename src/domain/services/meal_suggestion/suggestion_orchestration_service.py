@@ -23,10 +23,9 @@ from src.domain.ports.meal_generation_service_port import MealGenerationServiceP
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
 )
+from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
-
-from src.domain.services.meal_suggestion.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
 

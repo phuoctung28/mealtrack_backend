@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from .enums import DeviceType
 from src.domain.utils.timezone_utils import utc_now
+from .enums import DeviceType
 
 
 @dataclass

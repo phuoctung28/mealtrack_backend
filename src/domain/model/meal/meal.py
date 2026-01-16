@@ -4,9 +4,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
+from src.domain.utils.timezone_utils import utc_now, format_iso_utc
 from .meal_image import MealImage
 from ..nutrition import Nutrition
-from src.domain.utils.timezone_utils import utc_now, format_iso_utc
 
 
 class MealStatus(Enum):

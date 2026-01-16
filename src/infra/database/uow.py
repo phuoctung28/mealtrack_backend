@@ -1,18 +1,18 @@
 """
 Unit of Work pattern implementation for managing database transactions.
 """
-from typing import TypeVar, Optional
+from typing import TypeVar
 
 from sqlalchemy.orm import Session
 
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.infra.repositories.subscription_repository import SubscriptionRepository
-from src.infra.repositories.user_repository import UserRepository
-from src.infra.repositories.notification_repository import NotificationRepository
+from src.infra.repositories.chat_repository import ChatRepository
+from src.infra.repositories.meal_plan_repository import MealPlanRepository
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.meal_suggestion_repository import MealSuggestionRepository
-from src.infra.repositories.meal_plan_repository import MealPlanRepository
-from src.infra.repositories.chat_repository import ChatRepository
+from src.infra.repositories.notification_repository import NotificationRepository
+from src.infra.repositories.subscription_repository import SubscriptionRepository
+from src.infra.repositories.user_repository import UserRepository
 
 T = TypeVar('T')
 

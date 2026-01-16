@@ -4,10 +4,10 @@ Meal model for the main meal entity.
 from sqlalchemy import Column, String, Text, Enum, ForeignKey, DateTime, Integer, Boolean
 from sqlalchemy.orm import relationship
 
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.config import Base
 from src.infra.database.models.base import TimestampMixin
 from src.infra.database.models.enums import MealStatusEnum
-from src.domain.utils.timezone_utils import utc_now
 
 
 class Meal(Base, TimestampMixin):
@@ -59,7 +59,6 @@ class Meal(Base, TimestampMixin):
     @classmethod
     def from_domain(cls, domain_model):
         """Create DB model from domain model."""
-        from datetime import datetime
         from src.infra.mappers import MealStatusMapper
 
         # Convert UUID objects to strings to ensure compatibility with MySQL
