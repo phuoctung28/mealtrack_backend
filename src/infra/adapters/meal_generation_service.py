@@ -2,16 +2,20 @@
 Meal generation service implementation using Google Gemini API.
 Follows clean architecture pattern with single LLM handling different prompts.
 """
+
 import json
 import logging
 import re
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.infra.services.ai.gemini_model_manager import GeminiModelManager
+from src.infra.services.ai.gemini_model_manager import (
+    GeminiModelManager,
+    GeminiModelPurpose,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,22 +30,25 @@ class MealGenerationService(MealGenerationServicePort):
     Unified meal generation service using single LLM with different prompts.
     Follows clean architecture principles.
     """
-    
+
     def __init__(self):
         """Initialize the service with singleton model manager."""
         try:
             self._model_manager = GeminiModelManager.get_instance()
         except ValueError:
-            logger.warning("GOOGLE_API_KEY not found. AI meal generation will not be available.")
+            logger.warning(
+                "GOOGLE_API_KEY not found. AI meal generation will not be available."
+            )
             self._model_manager = None
-    
+
     def generate_meal_plan(
-        self, 
-        prompt: str, 
-        system_message: str, 
-        response_type: str = "json", 
+        self,
+        prompt: str,
+        system_message: str,
+        response_type: str = "json",
         max_tokens: int = None,
-        schema: type = None
+        schema: type = None,
+        model_purpose: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Generate meal plan using provided prompt and system message.
@@ -53,7 +60,9 @@ class MealGenerationService(MealGenerationServicePort):
             response_type: Response format ("json" or "text")
             max_tokens: Optional max tokens override (defaults based on complexity)
             schema: Optional Pydantic model for structured output (recommended for reliability)
-        
+            model_purpose: Optional purpose for rate limit distribution
+                          ("meal_names", "recipe_primary", "recipe_secondary")
+
         Returns:
             Dict or Pydantic model instance (if schema provided)
         """
@@ -62,31 +71,42 @@ class MealGenerationService(MealGenerationServicePort):
 
         start_time = time.time()
 
+        # Resolve model purpose for rate limit distribution
+        purpose = GeminiModelPurpose.GENERAL
+        if model_purpose:
+            try:
+                purpose = GeminiModelPurpose(model_purpose)
+            except ValueError:
+                logger.warning(f"Unknown model_purpose: {model_purpose}, using GENERAL")
+
         try:
             # Determine optimal token limit based on content complexity
             if max_tokens is None:
                 max_tokens = self._determine_optimal_tokens(prompt, system_message)
 
-            # Log request config
-            model_name = self._model_manager.model_name
+            # Get model name for logging
+            model_name = self._model_manager._get_model_name_for_purpose(purpose)
+
+            # Log request config with purpose
             logger.info(
-                f"[AI-REQUEST] model={model_name} | "
+                f"[AI-REQUEST] purpose={purpose.value} | model={model_name} | "
                 f"max_tokens={max_tokens} | "
                 f"prompt_len={len(prompt)} | "
                 f"system_len={len(system_message)} | "
                 f"response_type={response_type}"
             )
 
-            # Get LLM instance from singleton manager
+            # Get LLM instance from singleton manager using purpose-based selection
             # Only set response_mime_type for legacy JSON mode (not structured output)
             response_mime_type = None
             if not schema and response_type == "json":
                 response_mime_type = "application/json"
-            
-            # Use standard temperature=0.7 to share model instance across all services
-            llm = self._model_manager.get_model(
+
+            # Use purpose-aware model getter for rate limit distribution
+            llm = self._model_manager.get_model_for_purpose(
+                purpose=purpose,
                 max_output_tokens=max_tokens,
-                response_mime_type=response_mime_type
+                response_mime_type=response_mime_type,
             )
 
             # Use structured output if schema provided (guarantees valid format)
@@ -94,12 +114,14 @@ class MealGenerationService(MealGenerationServicePort):
                 logger.info(f"[STRUCTURED-OUTPUT] using schema={schema.__name__}")
                 # NOTE: with_structured_output uses function calling, incompatible with response_mime_type
                 # Use include_raw=True to get raw response as fallback when parsing fails
-                llm_with_structure = llm.with_structured_output(schema, include_raw=True)
+                llm_with_structure = llm.with_structured_output(
+                    schema, include_raw=True
+                )
 
                 # Create messages
                 messages = [
                     SystemMessage(content=system_message),
-                    HumanMessage(content=prompt)
+                    HumanMessage(content=prompt),
                 ]
 
                 # Generate structured response (returns dict with 'raw' and 'parsed')
@@ -107,7 +129,9 @@ class MealGenerationService(MealGenerationServicePort):
                 elapsed = time.time() - start_time
 
                 # Extract parsed response (or None if parsing failed)
-                structured_response = result.get("parsed") if isinstance(result, dict) else result
+                structured_response = (
+                    result.get("parsed") if isinstance(result, dict) else result
+                )
                 raw_response = result.get("raw") if isinstance(result, dict) else None
 
                 logger.info(
@@ -119,7 +143,7 @@ class MealGenerationService(MealGenerationServicePort):
 
                 # Handle None response - try to use raw response as fallback
                 if structured_response is None:
-                    if raw_response and hasattr(raw_response, 'content'):
+                    if raw_response and hasattr(raw_response, "content"):
                         raw_content = raw_response.content
                         logger.warning(
                             f"[STRUCTURED-OUTPUT-FALLBACK] schema={schema.__name__} | "
@@ -129,7 +153,9 @@ class MealGenerationService(MealGenerationServicePort):
                         # Try legacy JSON parsing as fallback
                         try:
                             fallback_data = self._extract_json(raw_content)
-                            logger.info(f"[STRUCTURED-OUTPUT-FALLBACK-SUCCESS] Parsed raw JSON successfully")
+                            logger.info(
+                                "[STRUCTURED-OUTPUT-FALLBACK-SUCCESS] Parsed raw JSON successfully"
+                            )
                             return fallback_data
                         except Exception as json_err:
                             logger.error(
@@ -147,7 +173,7 @@ class MealGenerationService(MealGenerationServicePort):
                         # Get legacy LLM with JSON mode from singleton manager
                         legacy_llm = self._model_manager.get_model(
                             max_output_tokens=max_tokens,
-                            response_mime_type="application/json"
+                            response_mime_type="application/json",
                         )
 
                         # Retry with same prompt but legacy mode
@@ -161,7 +187,9 @@ class MealGenerationService(MealGenerationServicePort):
 
                         # Parse legacy JSON response
                         legacy_data = self._extract_json(legacy_response.content)
-                        logger.info(f"[E2-LEGACY-SUCCESS] Successfully parsed legacy JSON response")
+                        logger.info(
+                            "[E2-LEGACY-SUCCESS] Successfully parsed legacy JSON response"
+                        )
                         return legacy_data
 
                     except Exception as legacy_err:
@@ -174,18 +202,18 @@ class MealGenerationService(MealGenerationServicePort):
                         )
 
                 # Convert to dict for consistent interface
-                if hasattr(structured_response, 'model_dump'):
+                if hasattr(structured_response, "model_dump"):
                     return structured_response.model_dump()
-                elif hasattr(structured_response, 'dict'):
+                elif hasattr(structured_response, "dict"):
                     return structured_response.dict()
                 else:
                     return dict(structured_response)
-            
+
             # Legacy JSON parsing (when no schema provided)
             # Create messages
             messages = [
                 SystemMessage(content=system_message),
-                HumanMessage(content=prompt)
+                HumanMessage(content=prompt),
             ]
 
             # Generate response
@@ -219,7 +247,7 @@ class MealGenerationService(MealGenerationServicePort):
                 f"error={str(e)[:200]}"
             )
             raise
-    
+
     def _determine_optimal_tokens(self, prompt: str, system_message: str) -> int:
         """
         Determine optimal token limit based on content complexity.
@@ -230,50 +258,71 @@ class MealGenerationService(MealGenerationServicePort):
         # Analyze prompt content to estimate complexity
         content_indicators = {
             # Weekly plans need more tokens
-            'weekly': ['week', '7 days', 'monday', 'tuesday', 'wednesday'],
+            "weekly": ["week", "7 days", "monday", "tuesday", "wednesday"],
             # Multiple suggestions with full details (ingredients, recipe steps)
-            'suggestions': ['suggestions', 'meal ideas', 'recipe_steps', 'ingredients (array'],
+            "suggestions": [
+                "suggestions",
+                "meal ideas",
+                "recipe_steps",
+                "ingredients (array",
+            ],
             # Multiple meals need moderate tokens
-            'daily_multiple': ['breakfast', 'lunch', 'dinner', 'snack'],
+            "daily_multiple": ["breakfast", "lunch", "dinner", "snack"],
             # Single meals need fewer tokens
-            'single': ['single meal', 'one meal', 'generate a meal']
+            "single": ["single meal", "one meal", "generate a meal"],
         }
 
         combined_text = (prompt + " " + system_message).lower()
 
         # Check for weekly plan indicators
-        if any(indicator in combined_text for indicator in content_indicators['weekly']):
+        if any(
+            indicator in combined_text for indicator in content_indicators["weekly"]
+        ):
             logger.debug("Detected weekly plan generation - using high token limit")
             return 8000  # Increased back to 8000 for complete weekly plans
 
         # Check for multiple suggestions with full recipe details
-        if any(indicator in combined_text for indicator in content_indicators['suggestions']):
+        if any(
+            indicator in combined_text
+            for indicator in content_indicators["suggestions"]
+        ):
             # Extract number of suggestions requested - handle formats like:
             # "3 meal suggestions", "exactly 3 different breakfast meal suggestions"
             suggestion_count_match = re.search(
-                r'(?:exactly\s+)?(\d+)\s+(?:\w+\s+)*(?:meal\s+)?suggestions?',
-                combined_text
+                r"(?:exactly\s+)?(\d+)\s+(?:\w+\s+)*(?:meal\s+)?suggestions?",
+                combined_text,
             )
             if suggestion_count_match:
                 count = int(suggestion_count_match.group(1))
                 # Each full suggestion with ingredients + instructions + seasonings ~1500 tokens
                 tokens = max(4000, count * 1500)
-                logger.debug(f"Detected {count} meal suggestions - using {tokens} token limit")
+                logger.debug(
+                    f"Detected {count} meal suggestions - using {tokens} token limit"
+                )
                 return min(tokens, 8000)  # Cap at 8000
-            logger.debug("Detected meal suggestions generation - using medium-high token limit")
-            return 5000  # Default for suggestions with full details (increased from 3500)
+            logger.debug(
+                "Detected meal suggestions generation - using medium-high token limit"
+            )
+            return (
+                5000  # Default for suggestions with full details (increased from 3500)
+            )
 
         # Check for daily multiple meals
-        meal_types_found = sum(1 for indicator in content_indicators['daily_multiple']
-                              if indicator in combined_text)
+        meal_types_found = sum(
+            1
+            for indicator in content_indicators["daily_multiple"]
+            if indicator in combined_text
+        )
         if meal_types_found >= 3:
-            logger.debug("Detected daily multiple meal generation - using medium token limit")
+            logger.debug(
+                "Detected daily multiple meal generation - using medium token limit"
+            )
             return 3000  # Medium for daily plans with multiple meals
 
         # Single meal or simple requests
         logger.debug("Detected simple meal generation - using low token limit")
         return 1500  # Conservative for single meals
-    
+
     def _extract_json(self, content: str) -> Dict[str, Any]:
         """Extract and validate JSON from AI response with better error handling."""
         logger.debug(
@@ -316,7 +365,7 @@ class MealGenerationService(MealGenerationServicePort):
                     )
 
             # Fallback: try to find JSON in markdown code block
-            json_match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
+            json_match = re.search(r"```json\s*(.*?)\s*```", content, re.DOTALL)
             if json_match:
                 json_content = json_match.group(1).strip()
                 logger.debug(
@@ -333,7 +382,7 @@ class MealGenerationService(MealGenerationServicePort):
                     )
 
             # Last resort: find any JSON-like structure
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
             if json_match:
                 json_content = json_match.group(0)
                 logger.debug(
@@ -358,7 +407,7 @@ class MealGenerationService(MealGenerationServicePort):
                 f"content_preview={content_preview}"
             )
             raise ValueError(f"Could not extract valid JSON from response: {str(e)}")
-    
+
     def _clean_json_content(self, content: str) -> str:
         """
         Clean and recover truncated JSON from token limit cutoffs.
@@ -392,7 +441,7 @@ class MealGenerationService(MealGenerationServicePort):
                 i += 1
                 continue
 
-            if char == '\\' and in_string:
+            if char == "\\" and in_string:
                 escape_next = True
                 i += 1
                 continue
@@ -407,12 +456,12 @@ class MealGenerationService(MealGenerationServicePort):
                 continue
 
             # Track structure depth
-            if char == '{':
+            if char == "{":
                 depth += 1
                 # Track when we enter a suggestion object (depth 2, inside suggestions array)
                 if depth == 2 and bracket_depth == 1:
                     object_start_depth = depth
-            elif char == '}':
+            elif char == "}":
                 # Check if we're closing a suggestion object
                 if depth == 2 and object_start_depth == 2:
                     last_complete_suggestion_end = i + 1
@@ -422,9 +471,9 @@ class MealGenerationService(MealGenerationServicePort):
                 # Track when root object closes (depth returns to 0)
                 if depth == 0 and bracket_depth == 0 and root_object_end == -1:
                     root_object_end = i + 1
-            elif char == '[':
+            elif char == "[":
                 bracket_depth += 1
-            elif char == ']':
+            elif char == "]":
                 bracket_depth = max(0, bracket_depth - 1)
                 # Track when root array closes
                 if depth == 0 and bracket_depth == 0 and root_object_end == -1:
@@ -458,9 +507,11 @@ class MealGenerationService(MealGenerationServicePort):
 
         # Always fix trailing commas before closing braces/brackets (common AI output issue)
         original_content = content
-        content = re.sub(r',(\s*[}\]])', r'\1', content)
+        content = re.sub(r",(\s*[}\]])", r"\1", content)
         if content != original_content:
-            logger.debug("[JSON-CLEAN-TRAILING-COMMA] removed trailing comma before closing brace/bracket")
+            logger.debug(
+                "[JSON-CLEAN-TRAILING-COMMA] removed trailing comma before closing brace/bracket"
+            )
 
         # Fix missing commas between array elements or object properties (common AI output issue)
         # These patterns use }\s+{ or ]\s+" to ensure there's whitespace (newlines) between
@@ -468,10 +519,10 @@ class MealGenerationService(MealGenerationServicePort):
         original_content = content
 
         # Pattern: } followed by whitespace (including newline) then { (missing comma between objects)
-        content = re.sub(r'\}(\s*\n\s*)\{', r'},\1{', content)
+        content = re.sub(r"\}(\s*\n\s*)\{", r"},\1{", content)
 
         # Pattern: ] followed by whitespace (including newline) then [ (missing comma between arrays)
-        content = re.sub(r'\](\s*\n\s*)\[', r'],\1[', content)
+        content = re.sub(r"\](\s*\n\s*)\[", r"],\1[", content)
 
         # Pattern: } followed by whitespace (including newline) then " (object end, then property key)
         content = re.sub(r'\}(\s*\n\s*)"', r'},\1"', content)
@@ -480,18 +531,20 @@ class MealGenerationService(MealGenerationServicePort):
         content = re.sub(r'\](\s*\n\s*)"', r'],\1"', content)
 
         # Also handle single-line JSON with spaces (but be conservative - require at least 2 spaces)
-        content = re.sub(r'\}(  +)\{', r'},\1{', content)
-        content = re.sub(r'\](  +)\[', r'],\1[', content)
+        content = re.sub(r"\}(  +)\{", r"},\1{", content)
+        content = re.sub(r"\](  +)\[", r"],\1[", content)
 
         if content != original_content:
-            logger.debug("[JSON-CLEAN-MISSING-COMMA] added missing commas between JSON structures")
+            logger.debug(
+                "[JSON-CLEAN-MISSING-COMMA] added missing commas between JSON structures"
+            )
 
         if is_incomplete and last_complete_suggestion_end > 0:
             # Truncate to last complete suggestion
             truncated_len = len(content) - last_complete_suggestion_end
             content = content[:last_complete_suggestion_end]
             # Close the suggestions array and root object
-            content += ']}'
+            content += "]}"
             logger.info(
                 f"[JSON-CLEAN-RECOVERY] truncated {truncated_len} chars | "
                 f"kept {last_complete_suggestion_end} chars | "
@@ -501,27 +554,23 @@ class MealGenerationService(MealGenerationServicePort):
         elif is_incomplete:
             # No complete suggestions found, try simpler recovery
             logger.warning(
-                f"[JSON-CLEAN-FALLBACK] no complete objects found | "
-                f"attempting simple recovery"
+                "[JSON-CLEAN-FALLBACK] no complete objects found | "
+                "attempting simple recovery"
             )
             # Find last complete key-value pair
             last_valid = self._find_last_valid_json_position(content)
             if last_valid > 0:
                 content = content[:last_valid]
-                logger.debug(
-                    f"[JSON-CLEAN-TRUNCATE] cut at last_valid={last_valid}"
-                )
+                logger.debug(f"[JSON-CLEAN-TRUNCATE] cut at last_valid={last_valid}")
 
             # Remove trailing incomplete content
-            content = re.sub(r',\s*$', '', content)
-            content = re.sub(r':\s*$', ': null', content)  # Fix hanging colons
-            content = re.sub(r',(\s*[}\]])', r'\1', content)
+            content = re.sub(r",\s*$", "", content)
+            content = re.sub(r":\s*$", ": null", content)  # Fix hanging colons
+            content = re.sub(r",(\s*[}\]])", r"\1", content)
 
             # Close structures
             content = self._close_json_structures(content)
-            logger.debug(
-                f"[JSON-CLEAN-CLOSED] final_len={len(content)}"
-            )
+            logger.debug(f"[JSON-CLEAN-CLOSED] final_len={len(content)}")
 
         return content
 
@@ -535,7 +584,7 @@ class MealGenerationService(MealGenerationServicePort):
             if escape_next:
                 escape_next = False
                 continue
-            if char == '\\' and in_string:
+            if char == "\\" and in_string:
                 escape_next = True
                 continue
             if char == '"':
@@ -545,9 +594,9 @@ class MealGenerationService(MealGenerationServicePort):
                 continue
             if in_string:
                 continue
-            if char in '}]':
+            if char in "}]":
                 last_valid = i + 1
-            elif char == ',':
+            elif char == ",":
                 last_valid = i
 
         return last_valid
@@ -562,7 +611,7 @@ class MealGenerationService(MealGenerationServicePort):
             if escape_next:
                 escape_next = False
                 continue
-            if char == '\\' and in_string:
+            if char == "\\" and in_string:
                 escape_next = True
                 continue
             if char == '"':
@@ -570,15 +619,15 @@ class MealGenerationService(MealGenerationServicePort):
                 continue
             if in_string:
                 continue
-            if char in '{[':
+            if char in "{[":
                 structure_stack.append(char)
-            elif char == '}' and structure_stack and structure_stack[-1] == '{':
+            elif char == "}" and structure_stack and structure_stack[-1] == "{":
                 structure_stack.pop()
-            elif char == ']' and structure_stack and structure_stack[-1] == '[':
+            elif char == "]" and structure_stack and structure_stack[-1] == "[":
                 structure_stack.pop()
 
         # Close in reverse order
         for opener in reversed(structure_stack):
-            content += ']' if opener == '[' else '}'
+            content += "]" if opener == "[" else "}"
 
         return content

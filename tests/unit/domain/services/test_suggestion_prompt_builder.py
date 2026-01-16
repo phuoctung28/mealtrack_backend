@@ -173,13 +173,21 @@ class TestBuildRecipeDetailsPrompt:
         assert "recipe" in prompt.lower() or "step" in prompt.lower()
         assert "prep" in prompt.lower() or "time" in prompt.lower()
 
-    def test_no_nutrition_data_requested(self, mock_session):
-        """Prompt should request macros calculation from ingredients."""
+    def test_requests_macro_calculation(self, mock_session):
+        """Prompt should request macronutrient calculation from ingredients."""
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
+        # Should request macros calculation from ingredients
         # Prompt now explicitly requests macro calculation from ingredients
         # (backend validates but AI calculates from ingredient amounts)
-        assert "calculate" in prompt.lower() or "macros" in prompt.lower()
+        assert any(phrase in prompt.lower() for phrase in [
+            "calculate",
+            "macros",
+            "calories",
+            "protein",
+            "carbs",
+            "fat"
+        ])
 
     def test_includes_portion_sizing_guidance(self, mock_session):
         """Prompt should include guidance on portion sizing."""
@@ -210,20 +218,13 @@ class TestBuildRecipeDetailsPrompt:
         assert "step" in prompt.lower()
         assert "duration" in prompt.lower() or "minute" in prompt.lower() or "time" in prompt.lower()
 
-    def test_no_macros_requested(self, mock_session):
-        """Prompt should request macros calculation from ingredients."""
+    def test_requests_macros_in_prompt(self, mock_session):
+        """Prompt should request macronutrient data calculation."""
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
-        # Prompt now explicitly requests macro calculation from ingredients
-        # AI calculates macros from ingredient amounts, backend validates
-        assert any(phrase in prompt.lower() for phrase in [
-            "calculate",
-            "macros",
-            "calories",
-            "protein",
-            "carbs",
-            "fat"
-        ])
+        # Current implementation requests AI to calculate macros from ingredients
+        assert "protein" in prompt.lower() or "macros" in prompt.lower()
+        assert "carbs" in prompt.lower() or "calories" in prompt.lower()
 
     def test_meal_name_must_match(self, mock_session):
         """Prompt should emphasize that generated meal must match the provided name."""
@@ -355,5 +356,3 @@ class TestPromptContent:
         # Prompts should be under 2000 chars (good for API)
         assert len(names_prompt) < 2000
         assert len(recipe_prompt) < 2000
-
-

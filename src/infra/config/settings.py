@@ -1,6 +1,7 @@
 """
 Application configuration settings loaded from environment variables.
 """
+
 from functools import lru_cache
 
 from pydantic import Field
@@ -33,9 +34,15 @@ class Settings(BaseSettings):
     DB_SSL_VERIFY_IDENTITY: bool = Field(default=False)
 
     # Connection pool tuning (optimized for 512MB instances)
-    UVICORN_WORKERS: int = Field(default=1, description="Number of worker processes (1 for low-memory)")
-    POOL_SIZE_PER_WORKER: int = Field(default=2, description="DB connections per worker (reduced from 5)")
-    POOL_MAX_OVERFLOW: int = Field(default=3, description="Max overflow connections (reduced from 10)")
+    UVICORN_WORKERS: int = Field(
+        default=1, description="Number of worker processes (1 for low-memory)"
+    )
+    POOL_SIZE_PER_WORKER: int = Field(
+        default=2, description="DB connections per worker (reduced from 5)"
+    )
+    POOL_MAX_OVERFLOW: int = Field(
+        default=3, description="Max overflow connections (reduced from 10)"
+    )
     POOL_TIMEOUT: int = Field(default=30)
     POOL_RECYCLE: int = Field(default=300)
     POOL_ECHO: bool = Field(default=False)
@@ -46,7 +53,9 @@ class Settings(BaseSettings):
     REDIS_DB: int = Field(default=0)
     REDIS_PASSWORD: str | None = Field(default=None)
     REDIS_SSL: bool = Field(default=False)
-    REDIS_MAX_CONNECTIONS: int = Field(default=10, description="Max Redis connections (reduced from 50)")
+    REDIS_MAX_CONNECTIONS: int = Field(
+        default=10, description="Max Redis connections (reduced from 50)"
+    )
 
     # Cache configuration
     CACHE_ENABLED: bool = Field(default=True)
@@ -61,15 +70,41 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
     PINECONE_API_KEY: str | None = Field(default=None)
-    
+
     # LLM Provider configuration
-    LLM_PROVIDER: str | None = Field(default=None, description="LLM provider to use: 'openai' or 'gemini'. Auto-detects if not set.")
-    OPENAI_MODEL: str = Field(default="gpt-3.5-turbo", description="OpenAI model to use")
-    GEMINI_MODEL: str = Field(default="gemini-2.5-flash", description="Gemini model to use (same as food scanning)")
-    
+    LLM_PROVIDER: str | None = Field(
+        default=None,
+        description="LLM provider to use: 'openai' or 'gemini'. Auto-detects if not set.",
+    )
+    OPENAI_MODEL: str = Field(
+        default="gpt-3.5-turbo", description="OpenAI model to use"
+    )
+    GEMINI_MODEL: str = Field(
+        default="gemini-2.5-flash",
+        description="Gemini model to use (same as food scanning)",
+    )
+
+    # Multi-model Gemini configuration for rate limit distribution
+    GEMINI_MODEL_NAMES: str = Field(
+        default="gemini-2.5-flash-lite",
+        description="Gemini model for meal name generation (higher RPM: 10/min)",
+    )
+    GEMINI_MODEL_RECIPE_PRIMARY: str = Field(
+        default="gemini-2.5-flash",
+        description="Primary model for recipe generation (5 RPM)",
+    )
+    GEMINI_MODEL_RECIPE_SECONDARY: str = Field(
+        default="gemini-3-flash",
+        description="Secondary model for recipe generation (5 RPM, load distribution)",
+    )
+
     # Chat/AI configuration
-    CHAT_ENABLE_STRUCTURED_RESPONSES: bool = Field(default=True, description="Enable structured JSON responses from chat AI")
-    CHAT_ENABLE_WELCOME_MESSAGE: bool = Field(default=True, description="Auto-generate welcome message on thread creation")
+    CHAT_ENABLE_STRUCTURED_RESPONSES: bool = Field(
+        default=True, description="Enable structured JSON responses from chat AI"
+    )
+    CHAT_ENABLE_WELCOME_MESSAGE: bool = Field(
+        default=True, description="Auto-generate welcome message on thread creation"
+    )
     REVENUECAT_SECRET_API_KEY: str | None = Field(default=None)
     REVENUECAT_WEBHOOK_SECRET: str | None = Field(default=None)
     CLOUDINARY_CLOUD_NAME: str | None = Field(default=None)
@@ -95,7 +130,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore"  # Allow extra fields without validation errors
+        extra="ignore",  # Allow extra fields without validation errors
     )
 
     @property
@@ -113,4 +148,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-

@@ -155,6 +155,7 @@ from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_data_service_port import FoodDataServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
+from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.infra.cache.cache_service import CacheService
 from src.infra.event_bus import PyMediatorEventBus, EventBus
 
