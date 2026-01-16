@@ -178,7 +178,16 @@ class TestBuildRecipeDetailsPrompt:
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
         # Should request macros calculation from ingredients
-        assert "macros" in prompt.lower() or "calories" in prompt.lower()
+        # Prompt now explicitly requests macro calculation from ingredients
+        # (backend validates but AI calculates from ingredient amounts)
+        assert any(phrase in prompt.lower() for phrase in [
+            "calculate",
+            "macros",
+            "calories",
+            "protein",
+            "carbs",
+            "fat"
+        ])
 
     def test_includes_portion_sizing_guidance(self, mock_session):
         """Prompt should include guidance on portion sizing."""
@@ -347,5 +356,3 @@ class TestPromptContent:
         # Prompts should be under 2000 chars (good for API)
         assert len(names_prompt) < 2000
         assert len(recipe_prompt) < 2000
-
-

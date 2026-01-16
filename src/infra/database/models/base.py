@@ -4,7 +4,7 @@ from sqlalchemy import Column, String, DateTime, Integer
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import declarative_mixin
 
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 
 @declarative_mixin

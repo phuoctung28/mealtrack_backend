@@ -5,18 +5,15 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from src.domain.services.timezone_utils import utc_now
-
-from sqlalchemy.orm import Session
+from src.domain.utils.timezone_utils import utc_now
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException, ConflictException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
-from src.infra.database.config import ScopedSession
+from src.infra.database.uow import UnitOfWork
 from src.infra.database.models.enums import FitnessGoalEnum, ActivityLevelEnum
-from src.infra.database.models.user.profile import UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -29,15 +26,14 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
         self.cache_service = cache_service
 
     async def handle(self, command: UpdateUserMetricsCommand) -> None:
-        db = ScopedSession()
-
         # Validate at least one field is provided
         if not any([command.weight_kg, command.activity_level, command.body_fat_percent, command.fitness_goal]):
             raise ValidationException("At least one metric must be provided")
 
-        try:
-            # Find existing profile
-            profile = db.query(UserProfile).filter(
+        with UnitOfWork() as uow:
+            # Find existing profile - using raw SQL query temporarily until we add get_profile_by_user_id to port
+            from src.infra.database.models.user.profile import UserProfile
+            profile = uow.session.query(UserProfile).filter(
                 UserProfile.user_id == command.user_id
             ).first()
 
@@ -74,12 +70,12 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     # Apply 7-day cooldown unless override is requested
                     if not command.override:
                         # Refresh profile to get latest updated_at from database
-                        db.refresh(profile)
+                        uow.refresh(profile)
                         last_changed = profile.updated_at or profile.created_at
                         if last_changed:
                             # Compare naive datetimes (database stores naive UTC)
                             cooldown_until = last_changed + timedelta(days=7)
-                            now = utc_now()
+                            now = utc_now().replace(tzinfo=None)  # Make naive for comparison
                             if now < cooldown_until:
                                 # Format cooldown_until as ISO with Z suffix for UTC
                                 cooldown_iso = cooldown_until.isoformat() + "Z"
@@ -95,15 +91,10 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
             # Ensure this profile is marked as current
             profile.is_current = True
 
-            db.add(profile)
-            db.commit()
-            db.refresh(profile)
-            await self._invalidate_user_profile(command.user_id)
-
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error updating user metrics: {str(e)}")
-            raise
+            uow.session.add(profile)
+            # UoW auto-commits on exit
+            
+        await self._invalidate_user_profile(command.user_id)
 
     async def _invalidate_user_profile(self, user_id: str):
         """Invalidate user profile and TDEE cache."""

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 
-from src.domain.services.timezone_utils import utc_now, format_iso_utc
+from src.domain.utils.timezone_utils import utc_now, format_iso_utc
 from .chat_enums import ThreadStatus
 from .message import Message
 

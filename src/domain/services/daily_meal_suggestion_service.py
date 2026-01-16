@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -7,7 +7,7 @@ from src.domain.model.meal_planning import PlannedMeal, MealType
 from src.domain.services.meal_suggestion.json_extractor import JsonExtractor
 from src.domain.services.fallback_meal_service import FallbackMealService
 from src.domain.services.meal_suggestion.suggestion_prompt_builder import SuggestionPromptBuilder
-from src.infra.services.ai.gemini_model_manager import GeminiModelManager
+from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +15,12 @@ logger = logging.getLogger(__name__)
 class DailyMealSuggestionService:
     """Service for generating daily meal suggestions based on user preferences from onboarding"""
 
-    def __init__(self):
-        self._model_manager = GeminiModelManager.get_instance()
-        # Use standard temperature=0.7 to share model instance across all services
-        self.model = self._model_manager.get_model()
+    def __init__(self, generation_service: Optional[MealGenerationServicePort] = None):
+        """
+        Initialize with optional generation service (dependency injection).
+        If not provided, will use default implementation at runtime.
+        """
+        self._generation_service = generation_service
 
         # Initialize extracted components
         self.json_extractor = JsonExtractor()
@@ -60,16 +62,22 @@ class DailyMealSuggestionService:
         prompt = self.prompt_builder.build_unified_meal_prompt(meal_distribution, user_preferences)
 
         try:
-            messages = [
-                SystemMessage(content="You are a professional nutritionist creating personalized daily meal plans."),
-                HumanMessage(content=prompt)
-            ]
+            # Use injected generation service or get default
+            if not self._generation_service:
+                # Lazy import to avoid circular dependency
+                from src.infra.services.ai.gemini_meal_generation_service import GeminiMealGenerationService
+                self._generation_service = GeminiMealGenerationService()
+            
+            # Call generation service through port
+            system_message = "You are a professional nutritionist creating personalized daily meal plans."
+            response_data = self._generation_service.generate_meal_plan(
+                prompt=prompt,
+                system_message=system_message,
+                response_type="json"
+            )
 
-            response = self.model.invoke(messages)
-            content = response.content
-
-            # Extract JSON using json extractor
-            daily_meals_data = self.json_extractor.extract_unified_meals_json(content)
+            # Extract JSON using json extractor (handles the response format)
+            daily_meals_data = self.json_extractor.extract_unified_meals_json(str(response_data))
 
             # Convert to PlannedMeal objects
             suggested_meals = []

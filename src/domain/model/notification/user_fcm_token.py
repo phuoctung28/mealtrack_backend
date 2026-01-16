@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 from .enums import DeviceType
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 
 @dataclass

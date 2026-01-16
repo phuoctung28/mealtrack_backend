@@ -15,7 +15,7 @@ from src.api.schemas.response.feature_flag_responses import (
     FeatureFlagUpdatedResponse
 )
 from src.domain.cache.cache_keys import CacheKeys
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.feature_flag import FeatureFlag
 

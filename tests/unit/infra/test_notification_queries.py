@@ -5,7 +5,7 @@ import pytest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-from src.domain.services.timezone_utils import utc_to_local_minutes
+from src.domain.utils.timezone_utils import utc_to_local_minutes
 from src.infra.repositories.notification.reminder_query_builder import ReminderQueryBuilder
 
 

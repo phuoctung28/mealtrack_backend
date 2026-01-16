@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from .macros import Macros
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 
 @dataclass

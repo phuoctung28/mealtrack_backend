@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List
 
 from src.domain.model.meal_planning import MealGenerationRequest
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 

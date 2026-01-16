@@ -251,6 +251,11 @@ def get_configured_event_bus() -> EventBus:
     
     event_bus = PyMediatorEventBus()
 
+    # Create meal repository early (needed by multiple handlers)
+    from src.infra.repositories.meal_repository import MealRepository
+    from src.infra.database.config import ScopedSession
+    meal_repository = MealRepository(ScopedSession())
+
     # Register meal command handlers
     # Note: Handlers now use ScopedSession internally instead of receiving db in constructor
     event_bus.register_handler(
@@ -267,6 +272,7 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         EditMealCommand,
         EditMealCommandHandler(
+            meal_repository=meal_repository,
             food_service=food_data_service,
             nutrition_calculator=None,  # TODO: Add nutrition calculator if needed
             cache_service=cache_service,
@@ -312,13 +318,14 @@ def get_configured_event_bus() -> EventBus:
     )
 
     # Register meal query handlers
-    # Handlers use ScopedSession internally
+    # meal_repository already created above
     event_bus.register_handler(
-        GetMealByIdQuery, GetMealByIdQueryHandler()
+        GetMealByIdQuery, GetMealByIdQueryHandler(meal_repository=meal_repository)
     )
     event_bus.register_handler(
         GetDailyMacrosQuery,
         GetDailyMacrosQueryHandler(
+            meal_repository=meal_repository,
             cache_service=cache_service,
         ),
     )

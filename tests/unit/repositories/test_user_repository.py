@@ -4,11 +4,13 @@ Unit tests for UserRepository.
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from uuid import uuid4
 
 from src.infra.database.config import Base
-from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.models.user.user import User
 from src.infra.repositories.user_repository import UserRepository
+from src.domain.model.user import UserDomainModel, UserProfileDomainModel
+from src.api.schemas.common.auth_enums import AuthProviderEnum
+from src.domain.model.auth.auth_provider import AuthProvider
 
 
 @pytest.fixture(scope="function")
@@ -31,347 +33,104 @@ def user_repository(db_session):
 
 
 @pytest.fixture
-def sample_user(db_session):
+def sample_user(user_repository):
     """Create a sample user for testing."""
-    user = User(
+    user_domain = UserDomainModel(
+        id=uuid4(),
         email="test@example.com",
         username="testuser",
         password_hash="hashed_password",
         firebase_uid="firebase_123",
+        provider=AuthProvider.GOOGLE,
         is_active=True
     )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    return user
+    return user_repository.save(user_domain)
 
 
 class TestUserRepository:
     """Test suite for UserRepository."""
 
-    def test_create_user(self, user_repository):
+    def test_save_new_user(self, user_repository):
         """Test creating a new user."""
-        user = user_repository.create_user(
+        user_domain = UserDomainModel(
+            id=uuid4(),
             email="newuser@example.com",
             username="newuser",
             password_hash="hashed_pwd",
-            firebase_uid="firebase_newuser"
+            firebase_uid="firebase_newuser",
+            provider=AuthProvider.GOOGLE
         )
         
-        assert user.id is not None
-        assert user.email == "newuser@example.com"
-        assert user.username == "newuser"
-        assert user.password_hash == "hashed_pwd"
-        assert user.firebase_uid == "firebase_newuser"
-        assert user.is_active is True
+        saved_user = user_repository.save(user_domain)
+        
+        assert saved_user.id is not None
+        assert saved_user.email == "newuser@example.com"
+        assert saved_user.username == "newuser"
 
-    def test_create_user_duplicate_email(self, user_repository, sample_user):
-        """Test creating user with duplicate email raises error."""
-        with pytest.raises(ValueError, match="User with this email or username already exists"):
-            user_repository.create_user(
-                email="test@example.com",
-                username="different",
-                password_hash="pwd",
-                firebase_uid="firebase_different"
-            )
-
-    def test_create_user_duplicate_username(self, user_repository, sample_user):
-        """Test creating user with duplicate username raises error."""
-        with pytest.raises(ValueError, match="User with this email or username already exists"):
-            user_repository.create_user(
-                email="different@example.com",
-                username="testuser",
-                password_hash="pwd",
-                firebase_uid="firebase_different2"
-            )
-
-    def test_get_user_by_id(self, user_repository, sample_user):
+    def test_find_by_id(self, user_repository, sample_user):
         """Test retrieving user by ID."""
-        user = user_repository.get_user_by_id(sample_user.id)
+        user = user_repository.find_by_id(sample_user.id)
         
         assert user is not None
         assert user.id == sample_user.id
         assert user.email == "test@example.com"
 
-    def test_get_user_by_id_not_found(self, user_repository):
+    def test_find_by_id_not_found(self, user_repository):
         """Test getting user with non-existent ID."""
-        user = user_repository.get_user_by_id("non-existent-id")
+        user = user_repository.find_by_id(uuid4())
         assert user is None
 
-    def test_get_alias(self, user_repository, sample_user):
-        """Test get() is alias for get_user_by_id()."""
-        user = user_repository.get(sample_user.id)
-        
-        assert user is not None
-        assert user.id == sample_user.id
-
-    def test_get_user_by_email(self, user_repository, sample_user):
+    def test_find_by_email(self, user_repository, sample_user):
         """Test retrieving user by email."""
-        user = user_repository.get_user_by_email("test@example.com")
+        user = user_repository.find_by_email("test@example.com")
         
         assert user is not None
         assert user.email == "test@example.com"
-        assert user.username == "testuser"
 
-    def test_get_user_by_email_not_found(self, user_repository):
+    def test_find_by_email_not_found(self, user_repository):
         """Test getting user with non-existent email."""
-        user = user_repository.get_user_by_email("nonexistent@example.com")
+        user = user_repository.find_by_email("nonexistent@example.com")
         assert user is None
 
-    def test_get_user_by_username(self, user_repository, sample_user):
-        """Test retrieving user by username."""
-        user = user_repository.get_user_by_username("testuser")
+    def test_update_profile(self, user_repository, sample_user):
+        """Test updating user profile."""
+        # Create initial profile via User entity (simplified for test)
+        # In reality, profile creation logic might be more complex
         
-        assert user is not None
-        assert user.username == "testuser"
-        assert user.email == "test@example.com"
-
-    def test_get_user_by_username_not_found(self, user_repository):
-        """Test getting user with non-existent username."""
-        user = user_repository.get_user_by_username("nonexistent")
-        assert user is None
-
-    def test_get_user_by_firebase_uid(self, user_repository, sample_user):
-        """Test retrieving user by Firebase UID."""
-        user = user_repository.get_user_by_firebase_uid("firebase_123")
-        
-        assert user is not None
-        assert user.firebase_uid == "firebase_123"
-        assert user.email == "test@example.com"
-
-    def test_get_user_by_firebase_uid_not_found(self, user_repository):
-        """Test getting user with non-existent Firebase UID."""
-        user = user_repository.get_user_by_firebase_uid("nonexistent_uid")
-        assert user is None
-
-    def test_create_user_profile(self, user_repository, sample_user):
-        """Test creating a user profile."""
-        profile = user_repository.create_user_profile(
+        # Manually create profile domain object
+        profile_domain = UserProfileDomainModel(
             user_id=sample_user.id,
             age=30,
             gender="male",
-            height_cm=175.0,
-            weight_kg=75.0,
-            body_fat_percentage=15.0,
-            activity_level="moderately_active",
-            fitness_goal="recomp",
-            target_weight_kg=75.0,
+            height_cm=180,
+            weight_kg=75,
+            activity_level="active",
+            fitness_goal="maintenance",
             meals_per_day=3,
-            snacks_per_day=1,
-            dietary_preferences=["vegetarian"],
-            health_conditions=["none"],
-            allergies=["nuts"]
+            is_current=True
         )
         
-        assert profile.id is not None
-        assert profile.user_id == sample_user.id
-        assert profile.age == 30
-        assert profile.gender == "male"
-        assert profile.height_cm == 175.0
-        assert profile.weight_kg == 75.0
-        assert profile.body_fat_percentage == 15.0
-        assert profile.is_current is True
-        assert profile.activity_level == "moderately_active"
-        assert profile.fitness_goal == "recomp"
-        assert profile.meals_per_day == 3
-        assert profile.snacks_per_day == 1
-        assert profile.dietary_preferences == ["vegetarian"]
-        assert profile.health_conditions == ["none"]
-        assert profile.allergies == ["nuts"]
-
-    def test_create_user_profile_marks_previous_as_not_current(self, user_repository, sample_user):
-        """Test that creating new profile marks previous profiles as not current."""
-        # Create first profile
-        profile1 = user_repository.create_user_profile(
-            user_id=sample_user.id,
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=75.0
-        )
+        # Attach to user and save (to simulate profile creation)
+        sample_user.profiles.append(profile_domain)
+        user_repository.save(sample_user)
         
-        assert profile1.is_current is True
-        
-        # Create second profile
-        profile2 = user_repository.create_user_profile(
-            user_id=sample_user.id,
-            age=31,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=73.0
-        )
-        
-        # Query profile1 fresh from database to verify it was updated
-        refreshed_profile1 = user_repository.db.query(UserProfile).filter(
-            UserProfile.id == profile1.id
-        ).first()
-        
-        assert refreshed_profile1.is_current is False
-        assert profile2.is_current is True
-
-    def test_get_current_user_profile(self, user_repository, sample_user):
-        """Test retrieving current user profile."""
-        # Create profile
-        created_profile = user_repository.create_user_profile(
-            user_id=sample_user.id,
-            age=25,
-            gender="female",
-            height_cm=165.0,
-            weight_kg=60.0
-        )
-        
-        # Get current profile
-        profile = user_repository.get_current_user_profile(sample_user.id)
-        
+        # Now update it
+        # Fetch fresh to get the profile ID
+        user = user_repository.find_by_id(sample_user.id)
+        profile = user.current_profile
         assert profile is not None
-        assert profile.id == created_profile.id
-        assert profile.is_current is True
-        assert profile.age == 25
-
-    def test_get_current_user_profile_not_found(self, user_repository, sample_user):
-        """Test getting current profile when none exists."""
-        profile = user_repository.get_current_user_profile(sample_user.id)
-        assert profile is None
-
-    def test_update_user_preferences(self, user_repository, sample_user):
-        """Test updating user preferences."""
-        # Create profile
-        profile = user_repository.create_user_profile(
-            user_id=sample_user.id,
-            age=28,
-            gender="female",
-            height_cm=160.0,
-            weight_kg=55.0,
-            dietary_preferences=["vegan"],
-            health_conditions=[],
-            allergies=[]
-        )
         
-        # Update preferences
-        updated_profile = user_repository.update_user_preferences(
-            user_id=sample_user.id,
-            dietary_preferences=["vegan", "gluten_free"],
-            health_conditions=["diabetes"],
-            allergies=["shellfish"]
-        )
+        profile.weight_kg = 70
+        updated_profile = user_repository.update_profile(profile)
         
-        assert updated_profile is not None
-        assert updated_profile.dietary_preferences == ["vegan", "gluten_free"]
-        assert updated_profile.health_conditions == ["diabetes"]
-        assert updated_profile.allergies == ["shellfish"]
+        assert updated_profile.weight_kg == 70
+        assert updated_profile.id == profile.id
 
-    def test_update_user_preferences_partial(self, user_repository, sample_user):
-        """Test updating only some preferences."""
-        # Create profile
-        user_repository.create_user_profile(
-            user_id=sample_user.id,
-            age=30,
-            gender="male",
-            height_cm=180.0,
-            weight_kg=80.0,
-            dietary_preferences=["vegetarian"],
-            health_conditions=[],
-            allergies=["peanuts"]
-        )
+    def test_delete_user(self, user_repository, sample_user):
+        """Test soft deleting a user."""
+        result = user_repository.delete(sample_user.id)
+        assert result is True
         
-        # Update only dietary preferences
-        updated_profile = user_repository.update_user_preferences(
-            user_id=sample_user.id,
-            dietary_preferences=["vegan"]
-        )
-        
-        assert updated_profile.dietary_preferences == ["vegan"]
-        assert updated_profile.allergies == ["peanuts"]  # Unchanged
-
-    def test_update_user_preferences_no_profile(self, user_repository, sample_user):
-        """Test updating preferences when no profile exists."""
-        result = user_repository.update_user_preferences(
-            user_id=sample_user.id,
-            dietary_preferences=["vegan"]
-        )
-        assert result is None
-
-    def test_update_user_goals(self, user_repository, sample_user):
-        """Test updating user goals."""
-        # Create profile
-        profile = user_repository.create_user_profile(
-            user_id=sample_user.id,
-            age=35,
-            gender="male",
-            height_cm=178.0,
-            weight_kg=85.0,
-            activity_level="sedentary",
-            fitness_goal="recomp",
-            target_weight_kg=85.0,
-            meals_per_day=3,
-            snacks_per_day=1
-        )
-        
-        # Update goals
-        updated_profile = user_repository.update_user_goals(
-            user_id=sample_user.id,
-            activity_level="very_active",
-            fitness_goal="bulk",
-            target_weight_kg=90.0,
-            meals_per_day=4,
-            snacks_per_day=2
-        )
-        
-        assert updated_profile is not None
-        assert updated_profile.activity_level == "very_active"
-        assert updated_profile.fitness_goal == "bulk"
-        assert updated_profile.target_weight_kg == 90.0
-        assert updated_profile.meals_per_day == 4
-        assert updated_profile.snacks_per_day == 2
-
-    def test_update_user_goals_partial(self, user_repository, sample_user):
-        """Test updating only some goals."""
-        # Create profile
-        user_repository.create_user_profile(
-            user_id=sample_user.id,
-            age=27,
-            gender="female",
-            height_cm=168.0,
-            weight_kg=62.0,
-            activity_level="lightly_active",
-            fitness_goal="cut",
-            target_weight_kg=58.0
-        )
-        
-        # Update only fitness goal
-        updated_profile = user_repository.update_user_goals(
-            user_id=sample_user.id,
-            fitness_goal="recomp"
-        )
-
-        assert updated_profile.fitness_goal == "recomp"
-        assert updated_profile.activity_level == "lightly_active"  # Unchanged
-
-    def test_update_user_goals_no_profile(self, user_repository, sample_user):
-        """Test updating goals when no profile exists."""
-        result = user_repository.update_user_goals(
-            user_id=sample_user.id,
-            fitness_goal="bulk"
-        )
-        assert result is None
-
-    def test_create_user_profile_with_defaults(self, user_repository, sample_user):
-        """Test creating profile with default values."""
-        profile = user_repository.create_user_profile(
-            user_id=sample_user.id,
-            age=40,
-            gender="male",
-            height_cm=172.0,
-            weight_kg=78.0
-        )
-        
-        assert profile.activity_level == "sedentary"
-        assert profile.fitness_goal == "maintenance"
-        assert profile.meals_per_day == 3
-        assert profile.snacks_per_day == 1
-        assert profile.dietary_preferences == []
-        assert profile.health_conditions == []
-        assert profile.allergies == []
-        assert profile.body_fat_percentage is None
-        assert profile.target_weight_kg is None
-
+        # Verify user is not found (filtered out by is_active=True)
+        user = user_repository.find_by_id(sample_user.id)
+        assert user is None

@@ -9,7 +9,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.meal_plan import GetMealsFromPlanByDateQuery
 from src.domain.model.conversation import MealsForDateResponse
 from src.domain.model.meal_planning import PlannedMeal, MealType
-from src.infra.database.config import ScopedSession
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -21,40 +21,51 @@ class GetMealsFromPlanByDateQueryHandler(EventHandler[GetMealsFromPlanByDateQuer
     async def handle(self, query: GetMealsFromPlanByDateQuery) -> Dict[str, Any]:
         """Get meals for a specific date."""
         try:
-            db = ScopedSession()
-            # Query database for meals on the specific date
-            from src.infra.database.models.meal_planning.meal_plan import MealPlan as DBMealPlan
-            from src.infra.database.models.meal_planning.meal_plan_day import MealPlanDay
-            from src.infra.database.models.meal_planning.planned_meal import PlannedMeal as DBPlannedMeal
+            with UnitOfWork() as uow:
+                # Query database for meals on the specific date
+                from src.infra.database.models.meal_planning.meal_plan import (
+                    MealPlan as DBMealPlan,
+                )
+                from src.infra.database.models.meal_planning.meal_plan_day import MealPlanDay
+                from src.infra.database.models.meal_planning.planned_meal import (
+                    PlannedMeal as DBPlannedMeal,
+                )
 
-            # Find meal plan days that match the user and date
-            meal_plan_days = db.query(MealPlanDay).join(DBMealPlan).filter(
-                DBMealPlan.user_id == query.user_id,
-                MealPlanDay.date == query.meal_date
-            ).all()
+                # Find meal plan days that match the user and date
+                meal_plan_days = (
+                    uow.session.query(MealPlanDay)
+                    .join(DBMealPlan)
+                    .filter(
+                        DBMealPlan.user_id == query.user_id,
+                        MealPlanDay.date == query.meal_date,
+                    )
+                    .all()
+                )
 
-            # Get all planned meals for those days and convert to domain models
-            domain_meals = []
-            for day in meal_plan_days:
-                db_planned_meals = db.query(DBPlannedMeal).filter(
-                    DBPlannedMeal.day_id == day.id
-                ).all()
+                # Get all planned meals for those days and convert to domain models
+                domain_meals = []
+                for day in meal_plan_days:
+                    db_planned_meals = (
+                        uow.session.query(DBPlannedMeal)
+                        .filter(DBPlannedMeal.day_id == day.id)
+                        .all()
+                    )
 
-                # Convert database models to domain models
-                for db_meal in db_planned_meals:
-                    domain_meal = self._convert_db_meal_to_domain(db_meal)
-                    domain_meals.append(domain_meal)
+                    # Convert database models to domain models
+                    for db_meal in db_planned_meals:
+                        domain_meal = self._convert_db_meal_to_domain(db_meal)
+                        domain_meals.append(domain_meal)
 
-            # Create response using domain model
-            response = MealsForDateResponse(
-                date=query.meal_date,
-                day_formatted=query.meal_date.strftime("%A, %B %d, %Y"),
-                meals=domain_meals,
-                total_meals=len(domain_meals),
-                user_id=query.user_id
-            )
+                # Create response using domain model
+                response = MealsForDateResponse(
+                    date=query.meal_date,
+                    day_formatted=query.meal_date.strftime("%A, %B %d, %Y"),
+                    meals=domain_meals,
+                    total_meals=len(domain_meals),
+                    user_id=query.user_id,
+                )
 
-            return response.to_dict()
+                return response.to_dict()
 
         except Exception as e:
             logger.error(f"Error getting meals for date {query.meal_date}: {str(e)}")

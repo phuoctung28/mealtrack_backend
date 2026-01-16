@@ -8,7 +8,7 @@ from typing import Dict, Any
 
 from sqlalchemy.orm import Session
 
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 from src.domain.model.meal_planning import UserPreferences
 from src.infra.database.models.enums import (

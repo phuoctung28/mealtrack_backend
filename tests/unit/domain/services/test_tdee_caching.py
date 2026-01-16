@@ -26,7 +26,6 @@ def mock_services():
     return {
         "generation_service": Mock(),
         "suggestion_repo": AsyncMock(),
-        "user_repo": Mock(),
         "tdee_service": Mock(),
         "portion_service": Mock(),
     }

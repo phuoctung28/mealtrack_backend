@@ -10,7 +10,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.domain.model.meal import MealStatus
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.domain.services.timezone_utils import format_iso_utc
+from src.domain.utils.timezone_utils import format_iso_utc
 
 logger = logging.getLogger(__name__)
 

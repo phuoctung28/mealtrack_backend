@@ -6,6 +6,7 @@ class Macros:
     """
     Value object representing macronutrient breakdown of a meal.
     All values are in grams.
+    Invariant: Values cannot be negative.
     """
     protein: float
     carbs: float
@@ -17,6 +18,8 @@ class Macros:
             value = getattr(self, field_name)
             if value < 0:
                 raise ValueError(f"{field_name} cannot be negative: {value}")
+            if value > 5000: # Sanity check
+                raise ValueError(f"{field_name} exceeds realistic limit (5000g): {value}")
     
     @property
     def total_calories(self) -> float:
@@ -31,4 +34,4 @@ class Macros:
             "carbs_g": self.carbs,
             "fat_g": self.fat,
         }
-        return result 
+        return result

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from src.domain.model.chat import Thread, Message, ThreadStatus
 from src.domain.ports.chat_repository_port import ChatRepositoryPort
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.chat import ChatThread, ChatMessage
 
 logger = logging.getLogger(__name__)

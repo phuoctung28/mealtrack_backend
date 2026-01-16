@@ -4,7 +4,7 @@ Unit tests for timezone utilities.
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from src.domain.services.timezone_utils import (
+from src.domain.utils.timezone_utils import (
     get_zone_info,
     utc_to_local_minutes,
     is_valid_timezone,

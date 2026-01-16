@@ -14,11 +14,11 @@ from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal import MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
-from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.infra.cache.cache_service import CacheService
-from src.domain.services.timezone_utils import utc_now
+from src.infra.database.uow import UnitOfWork
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -30,28 +30,28 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
     def __init__(
         self,
         image_store: ImageStorePort = None,
-        meal_repository: MealRepositoryPort = None,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         cache_service: Optional[CacheService] = None,
+        translation_service: Optional[TranslationService] = None,
     ):
         self.image_store = image_store
-        self.meal_repository = meal_repository
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
         self.cache_service = cache_service
+        self.translation_service = translation_service
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
         self.image_store = kwargs.get('image_store', self.image_store)
-        self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
         self.vision_service = kwargs.get('vision_service', self.vision_service)
         self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
         self.cache_service = kwargs.get('cache_service', self.cache_service)
+        self.translation_service = kwargs.get('translation_service', self.translation_service)
     
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
-        if not all([self.image_store, self.meal_repository, self.vision_service, self.gpt_parser]):
+        if not all([self.image_store, self.vision_service, self.gpt_parser]):
             raise RuntimeError("Required dependencies not configured")
         
         try:
@@ -92,9 +92,11 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                 )
             )
             
-            # Save initial meal record
-            saved_meal = self.meal_repository.save(meal)
-            logger.info(f"Created meal record {saved_meal.meal_id} with ANALYZING status")
+            # Save initial meal record using UoW
+            with UnitOfWork() as uow:
+                saved_meal = uow.meals.save(meal)
+                uow.commit()
+                logger.info(f"Created meal record {saved_meal.meal_id} with ANALYZING status")
 
             # PHASE 1: AI Vision Analysis (generates content in English)
             phase1_start = time.time()
@@ -126,7 +128,8 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"[PHASE-2-START] meal={saved_meal.meal_id} | "
                     f"translating to {command.language}"
                 )
-                # vision_result = 
+                # Translation logic would go here when implemented
+                # vision_result = self.translation_service.translate(vision_result, command.language)
                 phase2_elapsed = time.time() - phase2_start
                 logger.info(
                     f"[PHASE-2-COMPLETE] meal={saved_meal.meal_id} | "
@@ -147,17 +150,20 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             # Use the parsed nutrition directly
             meal.nutrition = nutrition
 
-            # Save the fully analyzed meal
-            final_meal = self.meal_repository.save(meal)
-            total_elapsed = phase1_elapsed + phase2_elapsed
-            logger.info(
-                f"[ANALYSIS-COMPLETE] meal={final_meal.meal_id} | "
-                f"total_elapsed={total_elapsed:.2f}s | "
-                f"phase1={phase1_elapsed:.2f}s | "
-                f"phase2={phase2_elapsed:.2f}s | "
-                f"language={command.language} | "
-                f"status={final_meal.status}"
-            )
+            # Save the fully analyzed meal using UoW
+            with UnitOfWork() as uow:
+                final_meal = uow.meals.save(meal)
+                uow.commit()
+                total_elapsed = phase1_elapsed + phase2_elapsed
+                logger.info(
+                    f"[ANALYSIS-COMPLETE] meal={final_meal.meal_id} | "
+                    f"total_elapsed={total_elapsed:.2f}s | "
+                    f"phase1={phase1_elapsed:.2f}s | "
+                    f"phase2={phase2_elapsed:.2f}s | "
+                    f"language={command.language} | "
+                    f"status={final_meal.status}"
+                )
+            
             await self._invalidate_daily_macros(command.user_id, meal_date)
 
             return final_meal
@@ -168,7 +174,9 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             if 'meal' in locals() and meal.meal_id:
                 meal.status = MealStatus.FAILED
                 meal.error_message = str(e)
-                self.meal_repository.save(meal)
+                with UnitOfWork() as uow:
+                    uow.meals.save(meal)
+                    uow.commit()
             raise
 
     async def _invalidate_daily_macros(self, user_id, target_date):

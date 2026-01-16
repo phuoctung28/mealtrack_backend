@@ -184,24 +184,27 @@ class TestGetCurrentUserId:
     async def test_get_user_id_success(self):
         """Test successful extraction of user ID from token."""
         # Arrange
-        mock_db = Mock()
-        mock_query = Mock()
-        mock_filter = Mock()
         mock_user = Mock()
         mock_user.id = "user_db_id_123"
         mock_user.firebase_uid = "firebase_uid_123"
-        
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_filter
-        mock_filter.first.return_value = mock_user
-        
+
         mock_token = {
             "uid": "firebase_uid_123",
             "email": "test@example.com",
         }
-        
-        # Act
-        result = await get_current_user_id(mock_token, mock_db)
+
+        # Patch SessionLocal to return a mock session
+        with patch("src.infra.database.config.SessionLocal") as mock_session_local:
+            mock_db = Mock()
+            mock_query = Mock()
+            mock_filter = Mock()
+            mock_db.query.return_value = mock_query
+            mock_query.filter.return_value = mock_filter
+            mock_filter.first.return_value = mock_user
+            mock_session_local.return_value = mock_db
+
+            # Act
+            result = await get_current_user_id(mock_token)
         
         # Assert
         assert result == "user_db_id_123"
@@ -210,7 +213,6 @@ class TestGetCurrentUserId:
     async def test_get_user_id_missing_uid_in_token(self):
         """Test error when token is missing 'uid' field."""
         # Arrange
-        mock_db = Mock()
         mock_token = {
             "email": "test@example.com",
             # Missing 'uid' field
@@ -218,7 +220,7 @@ class TestGetCurrentUserId:
         
         # Act & Assert
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user_id(mock_token, mock_db)
+            await get_current_user_id(mock_token)
         
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert "missing user identifier" in exc_info.value.detail.lower()
@@ -227,7 +229,6 @@ class TestGetCurrentUserId:
     async def test_get_user_id_empty_uid_in_token(self):
         """Test error when token has empty 'uid' field."""
         # Arrange
-        mock_db = Mock()
         mock_token = {
             "uid": "",  # Empty uid
             "email": "test@example.com",
@@ -235,7 +236,7 @@ class TestGetCurrentUserId:
         
         # Act & Assert
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user_id(mock_token, mock_db)
+            await get_current_user_id(mock_token)
         
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -243,22 +244,23 @@ class TestGetCurrentUserId:
     async def test_get_user_id_user_not_found(self):
         """Test error when user with Firebase UID not found in database."""
         # Arrange
-        mock_db = Mock()
-        mock_query = Mock()
-        mock_filter = Mock()
-
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_filter
-        mock_filter.first.return_value = None  # User not found
-
         mock_token = {
             "uid": "nonexistent_firebase_uid",
             "email": "nonexistent@example.com",
         }
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
-            await get_current_user_id(mock_token, mock_db)
+        with patch("src.infra.database.config.SessionLocal") as mock_session_local:
+            mock_db = Mock()
+            mock_query = Mock()
+            mock_filter = Mock()
+            mock_db.query.return_value = mock_query
+            mock_query.filter.return_value = mock_filter
+            mock_filter.first.return_value = None  # User not found
+            mock_session_local.return_value = mock_db
+
+            with pytest.raises(HTTPException) as exc_info:
+                await get_current_user_id(mock_token)
 
         assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
         assert "detail" in dir(exc_info.value)
@@ -273,23 +275,23 @@ class TestGetCurrentUserId:
         """Test that only first user is returned if duplicate Firebase UIDs exist."""
         # This tests the .first() behavior
         # Arrange
-        mock_db = Mock()
-        mock_query = Mock()
-        mock_filter = Mock()
-        
         mock_user1 = Mock()
         mock_user1.id = "user1_id"
         mock_user1.firebase_uid = "duplicate_firebase_uid"
-        
-        # .first() returns only the first user
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_filter
-        mock_filter.first.return_value = mock_user1
-        
+
         mock_token = {"uid": "duplicate_firebase_uid"}
         
         # Act
-        result = await get_current_user_id(mock_token, mock_db)
+        with patch("src.infra.database.config.SessionLocal") as mock_session_local:
+            mock_db = Mock()
+            mock_query = Mock()
+            mock_filter = Mock()
+            mock_db.query.return_value = mock_query
+            mock_query.filter.return_value = mock_filter
+            mock_filter.first.return_value = mock_user1
+            mock_session_local.return_value = mock_db
+
+            result = await get_current_user_id(mock_token)
         
         # Assert
         # Should return the first user's ID
@@ -501,7 +503,9 @@ class TestAuthenticationIntegration:
             assert token["email"] == "test@example.com"
             
             # Act - Step 2: Get user ID
-            user_id = await get_current_user_id(token, mock_db)
+            with patch("src.infra.database.config.SessionLocal") as mock_session_local:
+                mock_session_local.return_value = mock_db
+                user_id = await get_current_user_id(token)
             
             # Assert - User ID extracted
             assert user_id == "user_db_id_123"
@@ -543,7 +547,9 @@ class TestAuthenticationIntegration:
             mock_request = Mock()
             mock_request.state = Mock()
             token = await verify_firebase_token(mock_request, mock_credentials)
-            user_id = await get_current_user_id(token, mock_db)
+            with patch("src.infra.database.config.SessionLocal") as mock_session_local:
+                mock_session_local.return_value = mock_db
+                user_id = await get_current_user_id(token)
             
             # Assert - Should still work
             assert token["email_verified"] is False
@@ -579,7 +585,9 @@ class TestAuthenticationIntegration:
             mock_request = Mock()
             mock_request.state = Mock()
             token = await verify_firebase_token(mock_request, mock_credentials)
-            user_id = await get_current_user_id(token, mock_db)
+            with patch("src.infra.database.config.SessionLocal") as mock_session_local:
+                mock_session_local.return_value = mock_db
+                user_id = await get_current_user_id(token)
             email = await get_current_user_email(token)
             
             # Assert
@@ -610,7 +618,9 @@ class TestAuthenticationEdgeCases:
         mock_token = {"uid": special_firebase_uid}
         
         # Act
-        result = await get_current_user_id(mock_token, mock_db)
+        with patch("src.infra.database.config.SessionLocal") as mock_session_local:
+            mock_session_local.return_value = mock_db
+            result = await get_current_user_id(mock_token)
         
         # Assert
         assert result == "special_user_id"
@@ -635,7 +645,9 @@ class TestAuthenticationEdgeCases:
         mock_token = {"uid": long_firebase_uid}
         
         # Act
-        result = await get_current_user_id(mock_token, mock_db)
+        with patch("src.infra.database.config.SessionLocal") as mock_session_local:
+            mock_session_local.return_value = mock_db
+            result = await get_current_user_id(mock_token)
         
         # Assert
         assert result == "long_user_id"

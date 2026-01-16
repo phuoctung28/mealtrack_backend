@@ -38,19 +38,6 @@ def user_preferences():
 class TestDailyMealSuggestionService:
     """Test suite for DailyMealSuggestionService."""
 
-    @patch.dict('os.environ', {}, clear=True)
-    def test_init_without_api_key(self):
-        """Test initialization without API key raises error."""
-        with pytest.raises(ValueError, match="GOOGLE_API_KEY"):
-            DailyMealSuggestionService()
-
-    @patch.dict('os.environ', {'GOOGLE_API_KEY': 'test_key'})
-    def test_init_with_api_key(self):
-        """Test successful initialization."""
-        service = DailyMealSuggestionService()
-        assert service._model_manager is not None
-        assert service.model is not None
-
     def test_calculate_meal_distribution_without_snack(self, service):
         """Test meal distribution for lower calorie target (no snack)."""
         distribution = service._calculate_meal_distribution(1800)

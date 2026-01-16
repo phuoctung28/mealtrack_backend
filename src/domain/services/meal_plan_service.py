@@ -9,7 +9,7 @@ from src.domain.model.meal_planning import (
     MealPlan, PlannedMeal, DayPlan, UserPreferences,
     FitnessGoal, MealType, PlanDuration
 )
-from src.infra.services.ai.gemini_model_manager import GeminiModelManager
+from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 
 logger = logging.getLogger(__name__)
 
@@ -17,17 +17,12 @@ logger = logging.getLogger(__name__)
 class MealPlanService:
     """Service for generating and managing meal plans using AI"""
     
-    def __init__(self):
-        self._model_manager = GeminiModelManager.get_instance()
-        self._model = None  # Lazy load
-        
-    @property
-    def model(self):
-        """Lazy load the ChatGoogleGenerativeAI model using singleton manager."""
-        if self._model is None:
-            # Use standard temperature=0.7 to share model instance across all services
-            self._model = self._model_manager.get_model()
-        return self._model
+    def __init__(self, generation_service: Optional[MealGenerationServicePort] = None):
+        """
+        Initialize with optional generation service (dependency injection).
+        If not provided, will use default implementation at runtime.
+        """
+        self._generation_service = generation_service
     
     def generate_meal_plan(self, user_id: str, preferences: UserPreferences) -> MealPlan:
         """Generate a complete meal plan based on user preferences"""
@@ -98,38 +93,24 @@ class MealPlanService:
     
     def _generate_single_meal(self, meal_type: MealType, preferences: UserPreferences, 
                              max_cooking_time: int) -> PlannedMeal:
-        """Generate a single meal using Google Gemini AI"""
+        """Generate a single meal using AI generation service"""
         
         prompt = self._build_meal_generation_prompt(meal_type, preferences, max_cooking_time)
+        system_message = "You are a professional meal planning assistant that always returns valid JSON."
         
         try:
-            messages = [
-                SystemMessage(content="You are a professional meal planning assistant that always returns valid JSON."),
-                HumanMessage(content=prompt)
-            ]
+            # Use injected generation service or get default
+            if not self._generation_service:
+                # Lazy import to avoid circular dependency
+                from src.infra.services.ai.gemini_meal_generation_service import GeminiMealGenerationService
+                self._generation_service = GeminiMealGenerationService()
             
-            response = self.model.invoke(messages)
-            content = response.content
-            
-            # Extract JSON from the response
-            try:
-                # Try to parse the entire response as JSON
-                meal_data = json.loads(content)
-            except json.JSONDecodeError:
-                # If that fails, try to find and extract just the JSON part
-                import re
-                json_match = re.search(r'```json(.*?)```', content, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(1).strip()
-                    meal_data = json.loads(json_str)
-                else:
-                    # As a last resort, try to find any JSON-like structure
-                    json_match = re.search(r'\{.*\}', content, re.DOTALL)
-                    if json_match:
-                        json_str = json_match.group(0)
-                        meal_data = json.loads(json_str)
-                    else:
-                        raise ValueError("Could not extract JSON from response")
+            # Call generation service through port
+            meal_data = self._generation_service.generate_meal_plan(
+                prompt=prompt,
+                system_message=system_message,
+                response_type="json"
+            )
             
             return PlannedMeal(
                 meal_type=meal_type,

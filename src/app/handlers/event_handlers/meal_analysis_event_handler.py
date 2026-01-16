@@ -3,18 +3,19 @@ Event handler for meal analysis events.
 """
 import logging
 from datetime import datetime
+from typing import Optional
 
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import MealImageUploadedEvent
 from src.domain.model.meal import MealStatus
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
-from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
-from src.infra.repositories.meal_repository import MealRepository
-from src.domain.services.timezone_utils import utc_now
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -25,19 +26,19 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
     
     def __init__(
         self,
-        meal_repository: MealRepositoryPort = None,
+        uow: Optional[UnitOfWorkPort] = None,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         image_store: ImageStorePort = None
     ):
-        self.meal_repository = meal_repository or MealRepository()
+        self.uow = uow
         self.vision_service = vision_service or VisionAIService()
         self.gpt_parser = gpt_parser or GPTResponseParser()
         self.image_store = image_store or CloudinaryImageStore()
     
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
-        self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
+        self.uow = kwargs.get('uow', self.uow)
         self.vision_service = kwargs.get('vision_service', self.vision_service)
         self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
         self.image_store = kwargs.get('image_store', self.image_store)
@@ -45,34 +46,41 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
     async def handle(self, event: MealImageUploadedEvent) -> None:
         """Handle meal image uploaded event by triggering background analysis."""
         logger.info(f"EVENT HANDLER CALLED: Received MealImageUploadedEvent for meal {event.meal_id}")
-        try:
-            logger.info(f"Starting background analysis for meal {event.meal_id}")
-            
-            # Get the meal from repository
-            meal = self.meal_repository.find_by_id(event.meal_id)
-            if not meal:
-                logger.error(f"Meal {event.meal_id} not found for background analysis")
-                return
-            
-            # Skip if already processed
-            if meal.status != MealStatus.PROCESSING:
-                logger.info(f"Meal {event.meal_id} already processed with status {meal.status}")
-                return
-            
-            # Update status to ANALYZING
-            meal.status = MealStatus.ANALYZING
-            self.meal_repository.save(meal)
-            logger.info(f"Updated meal {event.meal_id} status to ANALYZING")
-            
-            # Try to perform real analysis if we can get image contents
-            # Otherwise fall back to mock analysis
-            await self._perform_analysis(meal)
-            
-        except Exception as e:
-            logger.error(f"Error processing meal image upload event for meal {event.meal_id}: {str(e)}")
-            await self._mark_meal_as_failed(event.meal_id, str(e))
+        
+        # Use provided UoW or create default
+        uow = self.uow or UnitOfWork()
+        
+        with uow:
+            try:
+                logger.info(f"Starting background analysis for meal {event.meal_id}")
+                
+                # Get the meal from repository
+                meal = uow.meals.find_by_id(event.meal_id)
+                if not meal:
+                    logger.error(f"Meal {event.meal_id} not found for background analysis")
+                    return
+                
+                # Skip if already processed
+                if meal.status != MealStatus.PROCESSING:
+                    logger.info(f"Meal {event.meal_id} already processed with status {meal.status}")
+                    return
+                
+                # Update status to ANALYZING
+                meal.status = MealStatus.ANALYZING
+                uow.meals.save(meal)
+                uow.commit()
+                logger.info(f"Updated meal {event.meal_id} status to ANALYZING")
+                
+                # Try to perform real analysis if we can get image contents
+                # Otherwise fall back to mock analysis
+                await self._perform_analysis(meal, uow)
+                
+            except Exception as e:
+                uow.rollback()
+                logger.error(f"Error processing meal image upload event for meal {event.meal_id}: {str(e)}")
+                await self._mark_meal_as_failed(event.meal_id, str(e))
     
-    async def _perform_analysis(self, meal):
+    async def _perform_analysis(self, meal, uow: UnitOfWorkPort):
         """Perform real AI analysis using the same logic as UploadMealImageImmediatelyHandler."""
         try:
             # Add small delay to simulate processing time
@@ -105,7 +113,8 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             meal.nutrition = nutrition
             
             # Save the fully analyzed meal
-            self.meal_repository.save(meal)
+            uow.meals.save(meal)
+            uow.commit()
             logger.info(f"Real analysis completed for meal {meal.meal_id}")
             
         except Exception as e:
@@ -114,13 +123,18 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
     
     async def _mark_meal_as_failed(self, meal_id: str, error_message: str):
         """Mark a meal as failed with error message."""
-        try:
-            meal = self.meal_repository.find_by_id(meal_id)
-            if meal:
-                meal.status = MealStatus.FAILED
-                meal.error_message = error_message
-                self.meal_repository.save(meal)
-                logger.info(f"Marked meal {meal_id} as failed")
-        except Exception as save_error:
-            logger.error(f"Failed to update meal status to failed: {str(save_error)}")
+        uow = self.uow or UnitOfWork()
+        
+        with uow:
+            try:
+                meal = uow.meals.find_by_id(meal_id)
+                if meal:
+                    meal.status = MealStatus.FAILED
+                    meal.error_message = error_message
+                    uow.meals.save(meal)
+                    uow.commit()
+                    logger.info(f"Marked meal {meal_id} as failed")
+            except Exception as save_error:
+                uow.rollback()
+                logger.error(f"Failed to update meal status to failed: {str(save_error)}")
 

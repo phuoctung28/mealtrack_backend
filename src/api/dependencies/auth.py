@@ -123,8 +123,7 @@ async def verify_firebase_token(
 
 
 async def get_current_user_id(
-    token: dict = Depends(verify_firebase_token),
-    db: Session = Depends(get_db)
+    token: dict = Depends(verify_firebase_token)
 ) -> str:
     """
     Extract the authenticated user's database ID from the verified Firebase token.
@@ -135,10 +134,12 @@ async def get_current_user_id(
     3. Returns the database user.id (UUID primary key)
 
     This ensures that the user_id matches what's expected by all database queries.
+    
+    Note: Uses SessionLocal() instead of Depends(get_db) to avoid ContextVar issues
+    with FastAPI's async threading model.
 
     Args:
         token: Verified Firebase token (injected by verify_firebase_token)
-        db: Database session (injected by get_db)
 
     Returns:
         The authenticated user's database ID (UUID)
@@ -161,27 +162,34 @@ async def get_current_user_id(
             detail="Invalid token: missing user identifier",
         )
     
-    # Look up user in database by firebase_uid (only active users)
+    # Create a new database session for this operation
+    from src.infra.database.config import SessionLocal
     from src.infra.database.models.user.user import User
-    user = db.query(User).filter(
-        User.firebase_uid == firebase_uid,
-        User.is_active == True  # CRITICAL: Block deleted/inactive users from authenticating
-    ).first()
-
-    if not user:
-        logger.warning("Active user with Firebase UID not found in database")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "error_code": "USER_NOT_FOUND",
-                "message": "User not found or account has been deleted.",
-                "details": {
-                    "hint": "If your account was deleted, you cannot log in. If you're a new user, call POST /v1/users/sync to create your account."
-                }
-            }
-        )
     
-    return user.id
+    db = SessionLocal()
+    try:
+        # Look up user in database by firebase_uid (only active users)
+        user = db.query(User).filter(
+            User.firebase_uid == firebase_uid,
+            User.is_active == True  # CRITICAL: Block deleted/inactive users from authenticating
+        ).first()
+
+        if not user:
+            logger.warning("Active user with Firebase UID not found in database")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error_code": "USER_NOT_FOUND",
+                    "message": "User not found or account has been deleted.",
+                    "details": {
+                        "hint": "If your account was deleted, you cannot log in. If you're a new user, call POST /v1/users/sync to create your account."
+                    }
+                }
+            )
+        
+        return user.id
+    finally:
+        db.close()
 
 
 async def get_current_user_email(

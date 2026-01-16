@@ -5,7 +5,7 @@ Auto-extracted for better maintainability.
 import logging
 from datetime import datetime
 
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 from typing import Dict, Any, Optional
 
 from src.api.exceptions import ResourceNotFoundException
@@ -13,8 +13,7 @@ from src.app.commands.user import CompleteOnboardingCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
-from src.infra.database.config import ScopedSession
-from src.infra.database.models.user import User
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +27,9 @@ class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, D
 
     async def handle(self, command: CompleteOnboardingCommand) -> Dict[str, Any]:
         """Mark user onboarding as completed if not already completed."""
-        db = ScopedSession()
-
-        try:
+        with UnitOfWork() as uow:
             # Find user by firebase_uid
-            user = db.query(User).filter(
-                User.firebase_uid == command.firebase_uid
-            ).first()
+            user = uow.users.find_by_firebase_uid(command.firebase_uid)
 
             if not user:
                 raise ResourceNotFoundException(f"User with Firebase UID {command.firebase_uid} not found")
@@ -52,20 +47,17 @@ class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, D
             user.onboarding_completed = True
             user.last_accessed = utc_now()
 
-            db.commit()
+            uow.users.save(user)
+            # UoW auto-commits on exit
+            
             await self._invalidate_user_profile(user.id)
 
-            return {
-                "firebase_uid": command.firebase_uid,
-                "onboarding_completed": True,
-                "updated": True,
-                "message": "Onboarding marked as completed"
-            }
-
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error completing onboarding: {str(e)}")
-            raise
+        return {
+            "firebase_uid": command.firebase_uid,
+            "onboarding_completed": True,
+            "updated": True,
+            "message": "Onboarding marked as completed"
+        }
 
     async def _invalidate_user_profile(self, user_id: str):
         if not self.cache_service:

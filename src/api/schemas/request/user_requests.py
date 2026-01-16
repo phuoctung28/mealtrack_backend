@@ -7,7 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 from ..common.auth_enums import AuthProviderEnum
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 
 class UserSyncRequest(BaseModel):

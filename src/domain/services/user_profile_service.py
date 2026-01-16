@@ -3,44 +3,67 @@ Shared user profile service for meal plan handlers.
 Follows clean architecture principles.
 """
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-from sqlalchemy.orm import Session
-
-from src.app.handlers.query_handlers import GetUserTdeeQueryHandler
-from src.app.queries.tdee.get_user_tdee_query import GetUserTdeeQuery
 from src.domain.model.meal_planning import UserPreferences, DietaryPreference, FitnessGoal, PlanDuration
-from src.infra.database.models.user import UserProfile
+from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
+from src.domain.ports.user_repository_port import UserRepositoryPort
+from src.domain.services.tdee_service import TdeeCalculationService
 
 logger = logging.getLogger(__name__)
 
 
 class UserProfileService:
-    """Shared service for user profile operations in meal planning."""
+    """
+    Domain service for user profile operations.
+    Orchestrates profile retrieval and TDEE calculation.
+    """
     
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, user_repo: UserRepositoryPort, tdee_service: TdeeCalculationService):
+        self.user_repo = user_repo
+        self.tdee_service = tdee_service
     
     async def get_user_profile_or_defaults(self, user_id: str) -> Dict[str, Any]:
         """Get user profile data or provide sensible defaults."""
-        profile = self.db.query(UserProfile).filter(
-            UserProfile.user_id == user_id,
-            UserProfile.is_current == True
-        ).first()
+        # get_profile is synchronous, not async
+        profile = self.user_repo.get_profile(user_id)
         
         if profile:
-            # Import here to avoid circular dependency
-            tdee_handler = GetUserTdeeQueryHandler(self.db)
-            tdee_query = GetUserTdeeQuery(user_id=user_id)
-            tdee_result = await tdee_handler.handle(tdee_query)
+            # Calculate TDEE using domain service
+            sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
+            activity_map = {
+                "sedentary": ActivityLevel.SEDENTARY,
+                "light": ActivityLevel.LIGHT,
+                "moderate": ActivityLevel.MODERATE,
+                "active": ActivityLevel.ACTIVE,
+                "extra": ActivityLevel.EXTRA,
+            }
+            goal_map = {
+                "cut": Goal.CUT,
+                "bulk": Goal.BULK,
+                "recomp": Goal.RECOMP,
+            }
+            
+            tdee_request = TdeeRequest(
+                age=profile.age,
+                sex=sex,
+                height=profile.height_cm,
+                weight=profile.weight_kg,
+                activity_level=activity_map.get(profile.activity_level, ActivityLevel.MODERATE),
+                goal=goal_map.get(profile.fitness_goal, Goal.RECOMP),
+                body_fat_pct=profile.body_fat_percentage,
+                unit_system=UnitSystem.METRIC
+            )
+            
+            tdee_result = self.tdee_service.calculate_tdee(tdee_request)
 
             return {
                 'dietary_preferences': profile.dietary_preferences or [],
                 'allergies': profile.allergies or [],
-                'target_calories': tdee_result['target_calories'],
-                'target_protein': tdee_result['macros']['protein'],
-                'target_carbs': tdee_result['macros']['carbs'],
-                'target_fat': tdee_result['macros']['fat'],
+                'target_calories': tdee_result.macros.calories,
+                'target_protein': tdee_result.macros.protein,
+                'target_carbs': tdee_result.macros.carbs,
+                'target_fat': tdee_result.macros.fat,
                 'meals_per_day': profile.meals_per_day,
                 'include_snacks': profile.snacks_per_day > 0,
                 'age': profile.age,

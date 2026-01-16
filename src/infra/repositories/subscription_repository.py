@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from src.infra.database.models.subscription import Subscription
 from src.infra.repositories.base import BaseRepository
-from src.domain.services.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now
 
 
 class SubscriptionRepository(BaseRepository[Subscription]):

@@ -9,6 +9,9 @@ description = "Backend for the MealTrack application"
 readme = "README.md"
 requires-python = ">=3.8,<3.14"
 
+[project.optional-dependencies]
+dev = ["import-linter>=2.0"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 

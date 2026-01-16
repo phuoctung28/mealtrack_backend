@@ -103,6 +103,7 @@ def test_engine(worker_id, request):
     
     For unit tests: Uses SQLite in-memory database (faster, no external dependencies)
     For integration tests: Uses MySQL database (when integration tests are explicitly run)
+    For API integration tests: Uses SQLite in-memory (fast, isolated)
     """
     # Try to detect if we're running integration tests
     # Since pytest.ini has --ignore=tests/integration for unit tests by default,
@@ -111,16 +112,20 @@ def test_engine(worker_id, request):
         if hasattr(request.session, 'items') and request.session.items:
             test_paths = [str(item.fspath) for item in request.session.items]
             has_integration_tests = any('tests/integration' in path for path in test_paths)
+            # API tests should use SQLite, not MySQL
+            has_api_tests = any('tests/integration/api' in path for path in test_paths)
         else:
             # Default to SQLite for unit tests if we can't determine
             has_integration_tests = False
+            has_api_tests = False
     except (AttributeError, TypeError):
         # Default to SQLite for unit tests if detection fails
         has_integration_tests = False
+        has_api_tests = False
     
-    # Use SQLite in-memory for unit tests (default)
-    # Use real MySQL database only when integration tests are explicitly run
-    if not has_integration_tests:
+    # Use SQLite in-memory for unit tests and API tests (default)
+    # Use real MySQL database only when non-API integration tests are explicitly run
+    if not has_integration_tests or has_api_tests:
         # Use SQLite in-memory database for unit tests
         engine = create_engine(
             "sqlite:///:memory:",
@@ -394,14 +399,13 @@ def event_bus(
     from src.app.commands.meal.delete_meal_command import DeleteMealCommand
     event_bus.register_handler(
         DeleteMealCommand,
-        DeleteMealCommandHandler(meal_repository)
+        DeleteMealCommandHandler(cache_service=None)  # Handler uses UnitOfWork internally
     )
     
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
             image_store=mock_image_store,
-            meal_repository=meal_repository,
             vision_service=mock_vision_service,
             gpt_parser=gpt_parser
         )
@@ -419,7 +423,7 @@ def event_bus(
     )
     
     # Register user handlers
-    # Note: Handlers now use ScopedSession internally instead of receiving db in constructor
+    # Note: Handlers now use UnitOfWork internally instead of receiving db in constructor
     save_user_handler = SaveUserOnboardingCommandHandler(cache_service=None)
     event_bus.register_handler(
         SaveUserOnboardingCommand,
@@ -467,11 +471,13 @@ def sample_user(test_session) -> User:
         email=f"test-{unique_id}@example.com",
         username=f"user-{unique_id}",
         password_hash="dummy_hash_for_test",
+        is_active=True,  # Explicitly set to True for repository queries
         created_at=datetime.now(),
         updated_at=datetime.now()
     )
     test_session.add(user)
     test_session.commit()
+    test_session.refresh(user)  # Refresh to ensure user is loaded
     return user
 
 

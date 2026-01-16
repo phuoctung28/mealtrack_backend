@@ -9,13 +9,15 @@ from typing import Any, Dict
 from src.app.commands.meal_plan import GenerateWeeklyIngredientBasedMealPlanCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.meal_planning import PlanDuration
-from src.domain.services.meal_plan_persistence_service import MealPlanPersistenceService
+from src.infra.services.meal_plan_persistence_service import MealPlanPersistenceService
 from src.domain.services.user_profile_service import UserProfileService
 from src.domain.services.weekly_ingredient_based_meal_plan_service import (
     WeeklyIngredientBasedMealPlanService,
 )
+from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.adapters.meal_generation_service import MealGenerationService
-from src.domain.services.timezone_utils import utc_now
+from src.infra.database.uow import UnitOfWork
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +39,13 @@ class GenerateWeeklyIngredientBasedMealPlanCommandHandler(
     async def handle(
         self, command: GenerateWeeklyIngredientBasedMealPlanCommand
     ) -> Dict[str, Any]:
-        db = ScopedSession()
-        user_profile_service = UserProfileService(db)
-        persistence_service = MealPlanPersistenceService(db)
+        with UnitOfWork() as uow:
+            # Instantiate services with dependencies
+            tdee_service = TdeeCalculationService()
+            user_profile_service = UserProfileService(uow.users, tdee_service)
+            
+            from src.infra.database.config import SessionLocal
+            persistence_service = MealPlanPersistenceService(SessionLocal())
 
         logger.info(
             "Generating weekly ingredient-based meal plan for user %s (%d ingredients)",
@@ -89,5 +95,3 @@ class GenerateWeeklyIngredientBasedMealPlanCommandHandler(
         plan_json["plan_id"] = plan_id
 
         return plan_json
-
-

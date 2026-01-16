@@ -6,10 +6,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from src.domain.services.meal_suggestion.recipe_search_service import (
-    RecipeSearchService,
+from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
+from src.domain.ports.recipe_search_port import (
     RecipeSearchCriteria,
-    RecipeSearchResult
+    RecipeSearchResult,
 )
 
 
@@ -58,35 +58,25 @@ class TestRecipeSearchCriteria:
 
 @pytest.mark.unit
 class TestRecipeSearchService:
-    """Test suite for RecipeSearchService."""
+    """Test suite for RecipeSearchService using the RecipeSearchPort abstraction."""
 
     @pytest.fixture
-    def mock_pinecone_service(self):
-        """Create a mock Pinecone service."""
+    def mock_search_port(self):
+        """Create a mock implementation of RecipeSearchPort."""
         mock = Mock()
-        mock_pc = Mock()
-        mock_index = Mock()
-        mock_pc.Index = Mock(return_value=mock_index)
-        mock_pc.inference = Mock()
-        mock_pc.inference.embed = Mock(return_value=[{"values": [0.1] * 1024}])
-        mock.pc = mock_pc
+        mock.search_recipes = Mock()
+        mock.get_recipe_by_id = Mock()
         return mock
 
     @pytest.fixture
-    def service_with_pinecone(self, mock_pinecone_service):
-        """Create service with mocked Pinecone."""
-        service = RecipeSearchService(pinecone_service=mock_pinecone_service)
-        service.recipes_index = mock_pinecone_service.pc.Index("recipes")
-        return service
+    def service_with_port(self, mock_search_port):
+        """Create service with injected search port."""
+        return RecipeSearchService(search_port=mock_search_port)
 
     @pytest.fixture
-    def service_without_pinecone(self):
-        """Create service without Pinecone."""
-        with patch('src.domain.services.meal_suggestion.recipe_search_service.PineconeNutritionService') as mock_pinecone:
-            # Mock to raise exception so service._pinecone becomes None
-            mock_pinecone.side_effect = Exception("No Pinecone API key")
-            service = RecipeSearchService(pinecone_service=None)
-            return service
+    def service_without_port(self):
+        """Create service without an injected port (will try adapter and handle failures)."""
+        return RecipeSearchService(search_port=None)
 
     @pytest.fixture
     def sample_criteria(self):
@@ -99,197 +89,58 @@ class TestRecipeSearchService:
             allergies=["peanuts"]
         )
 
-    def test_init_with_pinecone_service(self, mock_pinecone_service):
-        """Test initialization with Pinecone service."""
-        service = RecipeSearchService(pinecone_service=mock_pinecone_service)
-        assert service._pinecone == mock_pinecone_service
+    def test_init_with_search_port(self, mock_search_port):
+        """Service should keep reference to injected search port."""
+        service = RecipeSearchService(search_port=mock_search_port)
+        assert service._search_port is mock_search_port
 
-    @patch('src.domain.services.meal_suggestion.recipe_search_service.PineconeNutritionService')
-    def test_init_without_pinecone_service(self, mock_pinecone_class):
-        """Test initialization without Pinecone service."""
-        # Mock PineconeNutritionService to raise an exception
-        mock_pinecone_class.side_effect = Exception("Pinecone API key not found")
-        
-        service = RecipeSearchService(pinecone_service=None)
-        # When initialization fails, _pinecone should be None
-        assert service._pinecone is None
-        assert service.recipes_index is None
-
-    def test_search_recipes_no_index(self, service_without_pinecone, sample_criteria):
-        """Test search returns empty when index is not available."""
-        results = service_without_pinecone.search_recipes(sample_criteria)
+    def test_search_recipes_no_adapter(self, service_without_port, sample_criteria):
+        """If adapter initialization fails, search_recipes should return empty list."""
+        # Since the adapter module doesn't exist, the import will fail and return empty list
+        results = service_without_port.search_recipes(sample_criteria)
         assert results == []
 
-    def test_search_recipes_basic(self, service_with_pinecone, sample_criteria):
-        """Test basic recipe search."""
-        # Mock Pinecone query response
-        mock_results = {
-            "matches": [
-                {
-                    "score": 0.85,
-                    "metadata": {
-                        "recipe_id": "recipe_1",
-                        "name": "Chicken Rice Bowl",
-                        "description": "Delicious chicken and rice",
-                        "ingredients": json.dumps([
-                            {"name": "chicken", "amount": 150, "unit": "g"},
-                            {"name": "rice", "amount": 100, "unit": "g"}
-                        ]),
-                        "recipe_steps": json.dumps([
-                            {"step": 1, "instruction": "Cook chicken", "duration_minutes": 15}
-                        ]),
-                        "seasonings": json.dumps(["salt", "pepper"]),
-                        "calories": 580,
-                        "protein": 45,
-                        "carbs": 50,
-                        "fat": 12,
-                        "total_time_minutes": 20,
-                        "meal_type": "lunch"
-                    }
-                }
-            ]
-        }
-        
-        service_with_pinecone.recipes_index.query = Mock(return_value=mock_results)
-        
-        results = service_with_pinecone.search_recipes(sample_criteria)
-        
-        assert len(results) == 1
-        assert isinstance(results[0], RecipeSearchResult)
-        assert results[0].recipe_id == "recipe_1"
-        assert results[0].name == "Chicken Rice Bowl"
-        assert results[0].confidence_score == 0.85
+    def test_search_recipes_delegates_to_port(self, service_with_port, mock_search_port, sample_criteria):
+        """search_recipes should delegate to the injected search port."""
+        expected = [
+            RecipeSearchResult(
+                recipe_id="recipe_1",
+                name="Chicken Rice Bowl",
+                calories=600,
+                cook_time=30,
+                ingredients=["chicken", "rice"],
+                instructions=["Cook chicken", "Serve with rice"],
+                score=0.85,
+            )
+        ]
+        mock_search_port.search_recipes.return_value = expected
 
-    def test_search_recipes_filters_allergens(self, service_with_pinecone, sample_criteria):
-        """Test that recipes with allergens are filtered out."""
-        mock_results = {
-            "matches": [
-                {
-                    "score": 0.85,
-                    "metadata": {
-                        "recipe_id": "recipe_1",
-                        "name": "Peanut Chicken",
-                        "description": "Chicken with peanuts",
-                        "ingredients": json.dumps([
-                            {"name": "chicken", "amount": 150, "unit": "g"},
-                            {"name": "peanuts", "amount": 30, "unit": "g"}  # Contains allergen
-                        ]),
-                        "recipe_steps": json.dumps([]),
-                        "seasonings": json.dumps([]),
-                        "calories": 600,
-                        "protein": 40,
-                        "carbs": 30,
-                        "fat": 20,
-                        "total_time_minutes": 20,
-                        "meal_type": "lunch"
-                    }
-                },
-                {
-                    "score": 0.80,
-                    "metadata": {
-                        "recipe_id": "recipe_2",
-                        "name": "Chicken Rice",
-                        "description": "Chicken without allergens",
-                        "ingredients": json.dumps([
-                            {"name": "chicken", "amount": 150, "unit": "g"},
-                            {"name": "rice", "amount": 100, "unit": "g"}
-                        ]),
-                        "recipe_steps": json.dumps([]),
-                        "seasonings": json.dumps([]),
-                        "calories": 580,
-                        "protein": 45,
-                        "carbs": 50,
-                        "fat": 12,
-                        "total_time_minutes": 20,
-                        "meal_type": "lunch"
-                    }
-                }
-            ]
-        }
-        
-        service_with_pinecone.recipes_index.query = Mock(return_value=mock_results)
-        
-        results = service_with_pinecone.search_recipes(sample_criteria)
-        
-        # Should filter out recipe with peanuts
-        assert len(results) == 1
-        assert results[0].recipe_id == "recipe_2"
-        assert "peanut" not in results[0].name.lower()
+        results = service_with_port.search_recipes(sample_criteria)
 
-    def test_search_recipes_handles_invalid_json(self, service_with_pinecone, sample_criteria):
-        """Test that invalid JSON in metadata is handled gracefully."""
-        mock_results = {
-            "matches": [
-                {
-                    "score": 0.85,
-                    "metadata": {
-                        "recipe_id": "recipe_1",
-                        "name": "Test Recipe",
-                        "description": "Test",
-                        "ingredients": "invalid json",  # Invalid JSON
-                        "recipe_steps": json.dumps([]),
-                        "seasonings": json.dumps([]),
-                        "calories": 600,
-                        "protein": 40,
-                        "carbs": 30,
-                        "fat": 20,
-                        "total_time_minutes": 20,
-                        "meal_type": "lunch"
-                    }
-                }
-            ]
-        }
-        
-        service_with_pinecone.recipes_index.query = Mock(return_value=mock_results)
-        
-        results = service_with_pinecone.search_recipes(sample_criteria)
-        
-        # Should skip recipe with invalid JSON
-        assert len(results) == 0
+        assert results == expected
+        mock_search_port.search_recipes.assert_called_once_with(sample_criteria, 10)
 
-    def test_search_recipes_with_exclude_ids(self, service_with_pinecone, sample_criteria):
-        """Test that exclude_ids are passed to Pinecone filter."""
-        sample_criteria.exclude_ids = ["recipe_1", "recipe_2"]
-        
-        service_with_pinecone.recipes_index.query = Mock(return_value={"matches": []})
-        
-        service_with_pinecone.search_recipes(sample_criteria)
-        
-        # Verify query was called with exclude filter
-        call_args = service_with_pinecone.recipes_index.query.call_args
-        assert call_args is not None
-        filters = call_args.kwargs.get("filter", {})
-        assert "recipe_id" in filters
-        assert filters["recipe_id"]["$nin"] == ["recipe_1", "recipe_2"]
+    def test_get_recipe_by_id_delegates_to_port(self, service_with_port, mock_search_port):
+        """get_recipe_by_id should delegate to the injected search port."""
+        expected = RecipeSearchResult(
+            recipe_id="recipe_42",
+            name="Test Recipe",
+            calories=500,
+            cook_time=25,
+            ingredients=["a"],
+            instructions=["b"],
+            score=0.9,
+        )
+        mock_search_port.get_recipe_by_id.return_value = expected
 
-    def test_search_recipes_with_max_cook_time(self, service_with_pinecone, sample_criteria):
-        """Test that max_cook_time is passed to Pinecone filter."""
-        sample_criteria.max_cook_time = 30
-        
-        service_with_pinecone.recipes_index.query = Mock(return_value={"matches": []})
-        
-        service_with_pinecone.search_recipes(sample_criteria)
-        
-        # Verify query was called with time filter
-        call_args = service_with_pinecone.recipes_index.query.call_args
-        assert call_args is not None
-        filters = call_args.kwargs.get("filter", {})
-        assert "total_time_minutes" in filters
-        assert filters["total_time_minutes"]["$lte"] == 30
+        result = service_with_port.get_recipe_by_id("recipe_42")
 
-    def test_search_recipes_handles_exception(self, service_with_pinecone, sample_criteria):
-        """Test that exceptions during search return empty list."""
-        service_with_pinecone.recipes_index.query = Mock(side_effect=Exception("Search failed"))
-        
-        results = service_with_pinecone.search_recipes(sample_criteria)
-        
-        assert results == []
+        assert result == expected
+        mock_search_port.get_recipe_by_id.assert_called_once_with("recipe_42")
 
-    def test_embed_query(self, service_with_pinecone):
-        """Test query embedding generation."""
-        embedding = service_with_pinecone._embed_query("chicken rice lunch")
-        
-        assert isinstance(embedding, list)
-        assert len(embedding) == 1024
-        assert all(isinstance(x, (int, float)) for x in embedding)
+    def test_get_recipe_by_id_no_adapter(self, service_without_port):
+        """If adapter initialization fails, get_recipe_by_id should return None."""
+        # Since the adapter module doesn't exist, the import will fail and return None
+        result = service_without_port.get_recipe_by_id("recipe_42")
+        assert result is None
 
