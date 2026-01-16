@@ -12,28 +12,32 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 
 ## 🚀 Features
 
-- **AI-Powered Meal Analysis**: Vision-based food recognition via Gemini 2.5 Flash.
-- **Session-Based Suggestions**: Personalized real-time recommendations (Phase 06).
-- **Intelligent Planning**: AI-generated weekly and ingredient-based meal plans.
-- **Vector Search**: Semantic food discovery using 1024-dim vectors (Phase 05).
-- **Real-time Chat**: WebSocket-based nutrition advice via GPT-4.
-- **Notifications**: Timezone-aware FCM push notifications.
+- **AI-Powered Meal Analysis**: Vision-based food recognition with 6 analysis strategies (basic, portion-aware, ingredient-aware, weight-aware, user-context-aware, combined).
+- **14 REST Route Modules**: 80+ endpoints covering meals, users, profiles, chat, notifications, meal plans, suggestions, activities, ingredients, webhooks.
+- **CQRS Architecture**: 21 commands, 20 queries, 11+ domain events with PyMediator event bus.
+- **Intelligent Planning**: AI-generated weekly plans with dietary preferences, cooking time constraints, and ingredient-based generation.
+- **Vector Search**: Pinecone semantic search with 1024-dim embeddings (llama-text-embed-v2).
+- **Real-time Chat**: WebSocket + REST endpoints with streaming AI responses.
+- **Multi-Language Support**: 7 languages (en, vi, es, fr, de, ja, zh) with translation service.
+- **Smart Notifications**: FCM push with timezone-aware scheduling and preferences.
 
 ## 🛠 Technology Stack
 
-- **Core**: FastAPI (Python 3.11+), SQLAlchemy 2.0 (Async).
-- **Data**: MySQL 8.0, Redis 7.0 (Caching/Sessions).
-- **AI**: Google Gemini 2.5 Flash, OpenAI GPT-4, Pinecone (llama-text-embed-v2).
-- **Infra**: Firebase (Auth/FCM), Cloudinary (Images), RevenueCat (Subs).
-- **QA**: pytest (681+ tests), ruff (Lint), mypy (Types).
+- **Core**: FastAPI 0.115+ (Python 3.11+), SQLAlchemy 2.0 with request-scoped sessions.
+- **Database**: MySQL 8.0 (11 core tables), Redis 7.0 (caching with graceful degradation).
+- **AI**: Google Gemini 2.5 Flash (multi-model for rate distribution), Pinecone Inference API (1024-dim).
+- **Infrastructure**: Firebase (JWT Auth + FCM), Cloudinary (image storage), RevenueCat (subscriptions).
+- **Event Bus**: PyMediator with singleton registry for CQRS.
+- **Testing**: pytest (681+ tests, 70%+ coverage), ruff (linting), mypy (type checking).
 
 ## 🏗 Architecture
 
 Follows a **4-Layer Clean Architecture** with **CQRS** and **Event-Driven Design**:
-1. **API Layer**: HTTP Routing & Pydantic Validation.
-2. **Application Layer**: Command/Query Handlers & Event Dispatching.
-3. **Domain Layer**: Core Business Logic & Entities.
-4. **Infrastructure Layer**: Persistence, AI Adapters & External Services.
+
+1. **API Layer** (74 files, ~8,244 LOC): HTTP routing, Pydantic validation, 8 mappers, 3-layer middleware.
+2. **Application Layer** (136 files, ~5,967 LOC): CQRS - 21 commands, 20 queries, 11+ events, 49 handlers.
+3. **Domain Layer** (124 files, ~14,236 LOC): 50 domain services, 8 bounded contexts, 15 port interfaces, 6 analysis strategies.
+4. **Infrastructure Layer** (74 files, ~8,505 LOC): 11 database models, 10+ repositories, external service adapters, Redis cache, PyMediator event bus.
 
 ## 🚦 Getting Started
 

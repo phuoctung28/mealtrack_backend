@@ -1,14 +1,14 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
 **Version:** 0.4.7
-**Last Updated:** January 11, 2026
-**Status:** Phase 02 Language Prompt Integration Complete. Phase 06 Session-Based Meal Suggestions Active. Full codebase analyzed (408 source files, 35.7K LOC, 681+ tests).
+**Last Updated:** January 16, 2026
+**Status:** Production-ready. 408 source files, ~37K LOC across 4 layers. 681+ tests, 70%+ coverage.
 
 ---
 
 ## Executive Summary
 
-MealTrack Backend is a FastAPI-based service powering intelligent meal tracking and nutritional analysis. It integrates AI vision (Gemini 2.5 Flash) and conversational AI (GPT-4) to provide real-time food recognition and personalized nutrition planning.
+MealTrack Backend is a FastAPI-based service powering intelligent meal tracking and nutritional analysis. It implements Clean Architecture with CQRS pattern across 4 layers (408 files, ~37K LOC), integrating AI vision (Gemini 2.5 Flash with 6 analysis strategies) and chat (streaming responses) for real-time food recognition and personalized nutrition planning. The system handles 80+ REST endpoints, supports 7 languages, and maintains 70%+ test coverage with 681+ tests.
 
 ---
 
@@ -28,43 +28,63 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 ## 2. Core Features
 
 ### 1. AI-Powered Meal Analysis
-- Detects multiple foods in a single image.
-- Estimates portion sizes and macro-nutritional content.
-- Returns results in < 3 seconds (READY state machine).
+- 6 analysis strategies: basic, portion-aware, ingredient-aware, weight-aware, user-context-aware, combined.
+- Multi-food detection in single image with confidence scoring.
+- Gemini 2.5 Flash with strategy pattern for flexible context handling.
+- Returns results in <3 seconds through state machine (PROCESSING → ANALYZING → READY/FAILED).
 
-### 2. Session-Based Meal Suggestions (Phase 06)
-- Generates 3 personalized suggestions per session.
-- Tracks session state in Redis with a 4-hour TTL.
-- Supports portion multipliers (1-4x) and rejection feedback.
-- **Phase 01 Multilingual**: 7 languages (en, vi, es, fr, de, ja, zh) with fallback to English.
-- **Phase 02 Prompt Integration**: Language-aware prompt generation with injected instructions (LANGUAGE_NAMES mapping, helper functions, system message customization).
+### 2. RESTful API (80+ Endpoints across 14 Route Modules)
+- **Meals**: image/analyze (POST), manual (POST), /{id} (GET/DELETE), ingredients (PUT), daily/macros (GET).
+- **User Profiles**: POST/GET/PUT profiles, TDEE calculation.
+- **Meal Plans**: Weekly ingredient-based generation, meal retrieval by date.
+- **Meal Suggestions**: Session-based with 4h TTL, portion multipliers (1-4x), rejection feedback.
+- **Chat**: Threads + Messages (REST + WebSocket), streaming AI responses.
+- **Notifications**: FCM token management, preferences with timezone-aware scheduling.
+- **Foods**: USDA FDC search and details.
+- **Webhooks**: RevenueCat subscription sync.
 
-### 3. Intelligent Meal Planning
-- AI-generated 7-day meal plans.
-- Respects dietary restrictions (vegan, keto, etc.).
-- Ingredient-based planning options.
+### 3. Session-Based Meal Suggestions
+- Generates 3 personalized suggestions per session with Redis 4h TTL.
+- Portion multipliers (1-4x) and rejection feedback loop.
+- Multi-language support (7 languages: en, vi, es, fr, de, ja, zh) with fallback.
+- Language-aware prompt generation with injected instructions.
 
-### 4. Vector Search & Food Discovery (Phase 05)
-- Uses Pinecone Inference API with 1024-dimension embeddings.
-- Semantic search across proprietary and USDA datasets.
+### 4. Intelligent Meal Planning
+- AI-generated 7-day plans using available ingredients only.
+- Dietary restrictions (9 preferences: vegan, vegetarian, keto, paleo, etc.).
+- Cooking time constraints (weekday 30min, weekend 60min).
+- Min 3 days before meal repetition, max 2 same-cuisine per week.
+
+### 5. Vector Search & Food Discovery
+- Pinecone Inference API with llama-text-embed-v2 (1024-dim embeddings).
+- Semantic ingredient search with 0.35 similarity threshold.
+- Nutrition scaling by portion with unit conversion (g, kg, oz, lb, ml, cup, etc.).
+- Aggregated nutrition calculation across multiple ingredients.
 
 ---
 
 ## 3. Technical Stack
-- **Framework**: FastAPI (Python 3.11+)
-- **Database**: MySQL 8.0, Redis 7.0
-- **Vector DB**: Pinecone (1024-dim, llama-text-embed-v2)
-- **AI Services**: Google Gemini 2.5 Flash, OpenAI GPT-4
-- **Storage**: Cloudinary (Images)
-- **Auth**: Firebase JWT
+- **Framework**: FastAPI 0.115+ (Python 3.11+)
+- **Database**: MySQL 8.0 with SQLAlchemy 2.0 (request-scoped sessions), 11 core tables
+- **Cache**: Redis 7.0 with graceful degradation, JSON serialization
+- **Vector DB**: Pinecone Inference API (1024-dim, llama-text-embed-v2)
+- **AI Services**: Google Gemini 2.5 Flash (multi-model for rate distribution)
+- **Storage**: Cloudinary (image storage with folder organization)
+- **Auth**: Firebase JWT with development bypass middleware
+- **Event Bus**: PyMediator with singleton registry pattern
+- **Notifications**: Firebase Cloud Messaging (FCM) with platform-specific configs
+- **Subscriptions**: RevenueCat webhook integration
 
 ---
 
 ## 4. Non-Functional Requirements
-- **Reliability**: 99.9% uptime.
-- **Test Coverage**: >70% overall, 100% critical paths.
-- **Maintainability**: Strict 400-line limit per file; 4-Layer Clean Architecture.
-- **Security**: AES-256 at rest; TLS in transit; Firebase RBAC.
+- **Reliability**: 99.9% uptime with graceful degradation for external services.
+- **Test Coverage**: 70%+ overall (681+ tests), 100% critical paths.
+- **Maintainability**: <200 LOC per file, 4-Layer Clean Architecture with strict separation.
+- **Security**: Firebase JWT verification, RevenueCat webhook auth, soft deletes, input sanitization.
+- **Performance**: Request-scoped DB sessions, Redis caching with TTL, eager loading for queries.
+- **Scalability**: Dynamic connection pool sizing, multi-model Gemini for rate distribution.
+- **Observability**: Request ID tracking, slow request detection (>1s), structured error responses.
 
 ---
 
@@ -72,8 +92,8 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 0.4.6 | Jan 9, 2026 | Phase 02: Language prompt integration (LANGUAGE_NAMES, language instructions, updated prompts). |
-| 0.4.6 | Jan 9, 2026 | Phase 01: Meal suggestions multilingual support (7 languages, ISO 639-1 codes). |
+| 0.4.7 | Jan 16, 2026 | Documentation refresh with scout-verified statistics (408 files, ~37K LOC). |
+| 0.4.6 | Jan 9, 2026 | Phase 02: Language prompt integration (LANGUAGE_NAMES, language instructions, updated prompts). Phase 01: Meal suggestions multilingual support (7 languages, ISO 639-1 codes). |
 | 0.4.5 | Jan 7, 2026 | Phase 05 Pinecone Migration (1024-dim). Documentation split for modularity. |
 | 0.4.4 | Jan 4, 2026 | Phase 03 Cleanup: Unified fitness goal enums to 3 canonical values. |
 | 0.4.0 | Jan 3, 2026 | Phase 06: Session-based suggestions with 4h TTL. |
