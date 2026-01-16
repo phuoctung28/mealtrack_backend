@@ -321,9 +321,10 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
     
     def override_get_food_cache_service():
         mock_food_cache = Mock()
-        mock_food_cache.get = Mock(return_value=None)
-        mock_food_cache.set = Mock(return_value=True)
-        mock_food_cache.search_foods = Mock(return_value=[])
+        mock_food_cache.get_cached_search = AsyncMock(return_value=None)
+        mock_food_cache.cache_search = AsyncMock(return_value=None)
+        mock_food_cache.get_cached_food = AsyncMock(return_value=None)
+        mock_food_cache.cache_food = AsyncMock(return_value=None)
         return mock_food_cache
     
     # === Mock Food Data Service (USDA API - 3rd party) ===

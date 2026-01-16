@@ -29,11 +29,14 @@ def client(test_session):
     event_bus_module._configured_event_bus = None
     
     # Create mocks for services
+    from unittest.mock import AsyncMock
     mock_suggestion_service = Mock()
     mock_cache_service = None  # Disable cache
     mock_food_cache = Mock()
-    mock_food_cache.get = Mock(return_value=None)
-    mock_food_cache.set = Mock(return_value=True)
+    mock_food_cache.get_cached_search = AsyncMock(return_value=None)
+    mock_food_cache.cache_search = AsyncMock(return_value=None)
+    mock_food_cache.get_cached_food = AsyncMock(return_value=None)
+    mock_food_cache.cache_food = AsyncMock(return_value=None)
     
 #     def override_get_db():
 #         try:
