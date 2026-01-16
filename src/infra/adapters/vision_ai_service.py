@@ -152,56 +152,62 @@ class VisionAIService(VisionAIServicePort):
     def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
         """
         Analyze a food image to extract nutritional information.
-        
+
         Args:
             image_bytes: The raw bytes of the image to analyze
-            
+
         Returns:
             JSON-compatible dictionary with the raw AI response
-            
+
         Raises:
             RuntimeError: If analysis fails
         """
         strategy = AnalysisStrategyFactory.create_basic_strategy()
         return self.analyze_with_strategy(image_bytes, strategy)
-    
-    def analyze_with_portion_context(self, image_bytes: bytes, portion_size: float, unit: str) -> Dict[str, Any]:
+
+    def analyze_with_portion_context(
+        self, image_bytes: bytes, portion_size: float, unit: str
+    ) -> Dict[str, Any]:
         """
         Analyze a food image with specific portion size context.
-        
+
         Args:
             image_bytes: The raw bytes of the image to analyze
             portion_size: The target portion size
             unit: The unit of the portion size
-            
+
         Returns:
             JSON-compatible dictionary with the raw AI response
         """
         strategy = AnalysisStrategyFactory.create_portion_strategy(portion_size, unit)
         return self.analyze_with_strategy(image_bytes, strategy)
-    
-    def analyze_with_ingredients_context(self, image_bytes: bytes, ingredients: List[Dict[str, Any]]) -> Dict[str, Any]:
+
+    def analyze_with_ingredients_context(
+        self, image_bytes: bytes, ingredients: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Analyze a food image with known ingredients context.
-        
+
         Args:
             image_bytes: The raw bytes of the image to analyze
             ingredients: List of ingredient dictionaries with name, quantity, unit
-            
+
         Returns:
             JSON-compatible dictionary with the raw AI response
         """
         strategy = AnalysisStrategyFactory.create_ingredient_strategy(ingredients)
         return self.analyze_with_strategy(image_bytes, strategy)
-    
-    def analyze_with_weight_context(self, image_bytes: bytes, weight_grams: float) -> Dict[str, Any]:
+
+    def analyze_with_weight_context(
+        self, image_bytes: bytes, weight_grams: float
+    ) -> Dict[str, Any]:
         """
         Analyze a food image with specific weight context for accurate nutrition.
-        
+
         Args:
             image_bytes: The raw bytes of the image to analyze
             weight_grams: The target weight in grams
-            
+
         Returns:
             JSON-compatible dictionary with the raw AI response
         """
