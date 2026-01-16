@@ -101,6 +101,9 @@ class SaveMealSuggestionCommandHandler(
                 cuisine_type=None,
             )
             db.add(planned_meal)
+            db.flush()  # Flush to get the ID
+            uow.commit()  # Commit the transaction
+            # Refresh after commit to ensure we have the latest state
             db.refresh(planned_meal)
             
             logger.info(

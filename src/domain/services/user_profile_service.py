@@ -25,7 +25,8 @@ class UserProfileService:
     
     async def get_user_profile_or_defaults(self, user_id: str) -> Dict[str, Any]:
         """Get user profile data or provide sensible defaults."""
-        profile = await self.user_repo.get_profile(user_id)
+        # get_profile is synchronous, not async
+        profile = self.user_repo.get_profile(user_id)
         
         if profile:
             # Calculate TDEE using domain service

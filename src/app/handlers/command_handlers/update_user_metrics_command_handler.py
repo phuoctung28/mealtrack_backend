@@ -75,7 +75,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                         if last_changed:
                             # Compare naive datetimes (database stores naive UTC)
                             cooldown_until = last_changed + timedelta(days=7)
-                            now = utc_now()
+                            now = utc_now().replace(tzinfo=None)  # Make naive for comparison
                             if now < cooldown_until:
                                 # Format cooldown_until as ISO with Z suffix for UTC
                                 cooldown_iso = cooldown_until.isoformat() + "Z"

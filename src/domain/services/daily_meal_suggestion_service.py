@@ -75,7 +75,7 @@ class DailyMealSuggestionService:
                 system_message=system_message,
                 response_type="json"
             )
-            
+
             # Extract JSON using json extractor (handles the response format)
             daily_meals_data = self.json_extractor.extract_unified_meals_json(str(response_data))
 

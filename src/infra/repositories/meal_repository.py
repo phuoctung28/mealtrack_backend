@@ -72,16 +72,19 @@ class MealRepository(MealRepositoryPort):
                 # Create new meal
                 db_meal = MealMapper.to_persistence(meal)
                 
-                # Handle Image
-                existing_image = self.db.query(DBMealImage).filter(
-                    DBMealImage.image_id == meal.image.image_id
-                ).first()
-                
-                if not existing_image:
-                    db_image = MealImageMapper.to_persistence(meal.image)
-                    self.db.add(db_image)
-                else:
-                    db_meal.image_id = existing_image.image_id # Link to existing image
+                # Handle Image - must be done before adding meal
+                if meal.image:
+                    existing_image = self.db.query(DBMealImage).filter(
+                        DBMealImage.image_id == meal.image.image_id
+                    ).first()
+                    
+                    if not existing_image:
+                        db_image = MealImageMapper.to_persistence(meal.image)
+                        self.db.add(db_image)
+                        self.db.flush()  # Flush to ensure image exists before linking
+                    
+                    # Set image_id on meal before adding to session
+                    db_meal.image_id = str(meal.image.image_id)
                 
                 self.db.add(db_meal)
                 
@@ -96,17 +99,6 @@ class MealRepository(MealRepositoryPort):
                         for item in meal.nutrition.food_items:
                             db_item = FoodItemMapper.to_persistence(item, nutrition_id=db_nutrition.id)
                             self.db.add(db_item)
-                
-                # Note: The above logic for nutrition creation in `save` (insert case) is simplified.
-                # Since we are using SQLAlchemy ORM, if we set relationships on `db_meal`, 
-                # SQLAlchemy should handle it IF we construct the object graph correctly.
-                # But `MealMapper.to_persistence` doesn't set relationships.
-                # So we must set them manually here or update Mapper.
-                
-                # Let's retry:
-                # `db_meal` is created.
-                if meal.image:
-                     db_meal.image_id = str(meal.image.image_id)
 
                 if meal.nutrition:
                      # This logic is tricky without flushing.
