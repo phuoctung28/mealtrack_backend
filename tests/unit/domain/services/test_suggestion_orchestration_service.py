@@ -104,22 +104,28 @@ class TestSuggestionGenerationPipeline:
         3. At least 3 recipes are successfully generated.
         4. The service returns the 3 successful suggestions.
 
-        Note: With retry logic, a failed recipe attempt (None) triggers a retry
-        with an alternate model, so we expect 6 calls total (1 names + 4 recipes + 1 retry).
+        Note: All 4 recipe tasks start in parallel. When a recipe fails (returns None),
+        it triggers a retry with an alternate model. However, when we get 3 successes,
+        we break early and cancel remaining tasks. The exact number of calls depends on
+        timing - if the 4th task fails and retries before we get 3 successes, we get 6 calls.
+        If we get 3 successes quickly and cancel before the retry, we get 5 calls.
+        We check that we get at least 5 calls (1 names + 4 recipes) and at most 6 calls
+        (if retry happens before early stop).
         """
         # --- Mocking Phase 1: Name Generation ---
         mock_names = {"meal_names": ["Spinach Omelette", "Tofu Scramble", "Green Smoothie", "Avocado Toast"]}
 
         # --- Mocking Phase 2: Recipe Generation ---
-        # Simulate 3 successful recipe generations, 1 failure, and 1 retry that also fails
-        # (total 6 calls: 1 names + 4 recipes + 1 retry for the failed one)
+        # Simulate 3 successful recipe generations, 1 failure, and 1 retry
+        # All 4 recipes start in parallel. The 4th one fails and retries.
+        # Depending on timing, we might get 5 or 6 calls total.
         orchestration_service._generation.generate_meal_plan.side_effect = [
-            mock_names,
-            mock_recipe_response,
-            mock_recipe_response,
-            mock_recipe_response,
-            None,  # The 4th call fails
-            None,  # Retry also fails (or returns None)
+            mock_names,  # Call 1: names
+            mock_recipe_response,  # Call 2: Recipe 1 (success)
+            mock_recipe_response,  # Call 3: Recipe 2 (success)
+            mock_recipe_response,  # Call 4: Recipe 3 (success)
+            None,  # Call 5: Recipe 4 (fails)
+            None,  # Call 6: Recipe 4 retry (may or may not happen depending on timing)
         ]
 
         # --- Execute ---
@@ -132,8 +138,10 @@ class TestSuggestionGenerationPipeline:
         assert len(suggestions) == 3
         assert all(isinstance(s, MealSuggestion) for s in suggestions)
 
-        # Check that 1 call for names + 4 calls for recipes + 1 retry = 6 calls total
-        assert orchestration_service._generation.generate_meal_plan.call_count == 6
+        # Check that we get at least 5 calls (1 names + 4 recipes)
+        # and at most 6 calls (if retry happens before early stop)
+        call_count = orchestration_service._generation.generate_meal_plan.call_count
+        assert 5 <= call_count <= 6, f"Expected 5-6 calls, got {call_count}"
 
     async def test_failure_if_not_enough_names_generated(self, orchestration_service, mock_session):
         """
