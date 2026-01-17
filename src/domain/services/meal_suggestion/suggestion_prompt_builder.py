@@ -131,13 +131,13 @@ def build_single_meal_prompt(
 
 
 def build_meal_names_prompt(
-    session: "SuggestionSession", 
+    session: "SuggestionSession",
     exclude_meal_names: Optional[List[str]] = None
 ) -> str:
     """
     Phase 1: Generate 4 diverse meal names (uses PromptTemplateManager).
     Target: ~200 tokens.
-    
+
     Args:
         session: The suggestion session with user preferences
         exclude_meal_names: List of meal names to avoid (for regeneration)
@@ -150,6 +150,7 @@ def build_meal_names_prompt(
         allergies=getattr(session, "allergies", None),
         dietary_preferences=getattr(session, "dietary_preferences", None),
         exclude_meal_names=exclude_meal_names,
+        servings=getattr(session, "servings", 1),
     )
 
 
@@ -166,6 +167,7 @@ def build_recipe_details_prompt(meal_name: str, session: "SuggestionSession") ->
         ingredients=session.ingredients[:6] if session.ingredients else [],
         allergies=getattr(session, "allergies", None),
         dietary_preferences=getattr(session, "dietary_preferences", None),
+        servings=getattr(session, "servings", 1),
     )
 
 

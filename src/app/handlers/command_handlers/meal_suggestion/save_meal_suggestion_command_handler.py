@@ -79,8 +79,9 @@ class SaveMealSuggestionCommandHandler(
                 db.add(meal_plan_day)
                 db.flush()
                 logger.info(f"Created new MealPlanDay for date {meal_date} in plan {meal_plan.id}")
-            
-            # Create PlannedMeal
+
+            # Save values directly from command - AI already generates scaled amounts
+            # No multiplication needed since servings are passed to AI during generation
             planned_meal = DBPlannedMeal(
                 day_id=meal_plan_day.id,
                 meal_type=MealTypeEnum(command.meal_type),
@@ -88,10 +89,10 @@ class SaveMealSuggestionCommandHandler(
                 description=command.description,
                 prep_time=None,  # Not provided in suggestion
                 cook_time=command.estimated_cook_time_minutes,
-                calories=command.calories,
-                protein=command.protein,
-                carbs=command.carbs,
-                fat=command.fat,
+                calories=command.calories,   # Already scaled by AI
+                protein=command.protein,     # Already scaled by AI
+                carbs=command.carbs,         # Already scaled by AI
+                fat=command.fat,             # Already scaled by AI
                 ingredients=command.ingredients_list,
                 seasonings=[],  # Not provided in suggestion
                 instructions=command.instructions,
@@ -108,7 +109,8 @@ class SaveMealSuggestionCommandHandler(
             
             logger.info(
                 f"Saved meal suggestion {command.suggestion_id} as planned_meal {planned_meal.id} "
-                f"for user {command.user_id} on {meal_date}"
+                f"for user {command.user_id} on {meal_date} "
+                f"({command.portion_multiplier}x servings, {command.calories} cal)"
             )
             
             return str(planned_meal.id)

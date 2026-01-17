@@ -178,6 +178,7 @@ RULES:
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
         exclude_meal_names: Optional[List[str]] = None,
+        servings: int = 1,
     ) -> str:
         """
         Build prompt for Phase 1 meal name generation.
@@ -185,22 +186,25 @@ RULES:
         Always generates in English (translation happens in Phase 3).
         """
         ing_str = ", ".join(ingredients[:4]) if ingredients else "common ingredients"
-        
+
         constraints = []
         if allergies:
             constraints.append(f"Avoid: {', '.join(allergies)}")
         if dietary_preferences:
             veg_check = "vegetarian" in " ".join(dietary_preferences).lower()
             constraints.append("Vegetarian" if veg_check else "Diet: OK")
-        
+
         constraints_str = " | " + " | ".join(constraints) if constraints else ""
-        
+
         # Add exclusion list for regeneration
         exclude_str = ""
         if exclude_meal_names:
             exclude_str = f"\nDO NOT suggest: {', '.join(exclude_meal_names[:10])}"  # Limit to 10 to keep prompt short
-        
-        return f"""Generate 4 different {meal_type} names, ~{target_calories}cal, ≤{cooking_time_minutes}min.
+
+        # Add servings instruction when > 1
+        servings_str = f" for {servings} servings" if servings > 1 else ""
+
+        return f"""Generate 4 different {meal_type} names, ~{target_calories}cal{servings_str}, ≤{cooking_time_minutes}min.
 Ingredients: {ing_str}{constraints_str}
 Cuisines: 4 distinct (Asian, Mediterranean, Latin, American)
 Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}."""
@@ -215,6 +219,7 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         ingredients: List[str],
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
+        servings: int = 1,
     ) -> str:
         """
         Build prompt for Phase 2 recipe detail generation.
@@ -231,17 +236,20 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
 
         constraints_str = " | ".join(constraints_parts) if constraints_parts else ""
 
+        # Add servings instruction when > 1
+        servings_str = f" for {servings} servings" if servings > 1 else ""
+
         return f"""Generate complete recipe for: "{meal_name}"
 
 Ingredients: {ing_str}{' | ' + constraints_str if constraints_str else ''}
-Target: ~{target_calories} cal | ≤{cooking_time_minutes} min
+Target: ~{target_calories} cal{servings_str} | ≤{cooking_time_minutes} min
 
 PORTION SIZING for {target_calories} cal:
 - {'Small portions: 150g protein, 100g carbs' if target_calories < 600 else 'Standard: 200g protein, 150g carbs' if target_calories < 1000 else 'Large: 300g protein, 200g carbs'}
 
 REQUIREMENTS:
 - Match name "{meal_name}" exactly
-- 3-8 ingredients with amounts (g/ml/tbsp)
+- 3-8 ingredients with amounts (g/ml/tbsp) scaled for {servings} serving{'s' if servings > 1 else ''}
 - 2-6 clear recipe steps with duration
 - Total prep_time ≤{cooking_time_minutes} min
 - Calculate total macros from ingredients:

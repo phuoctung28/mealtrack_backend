@@ -29,6 +29,7 @@ class GenerateMealSuggestionsCommand(Command):
     time_available_minutes: Optional[int]  # Time constraint
     session_id: Optional[str] = None  # Session ID for regeneration (auto-excludes previous meals)
     language: str = "en"  # ISO 639-1 language code (en, vi, es, fr, de, ja, zh)
+    servings: int = 1  # Number of servings (1-4), scales ingredient amounts and calories
     
     def __post_init__(self):
         """Validate command data."""
@@ -48,5 +49,8 @@ class GenerateMealSuggestionsCommand(Command):
         
         if self.time_available_minutes is not None and self.time_available_minutes <= 0:
             raise ValueError("time_available_minutes must be greater than 0")
+
+        if self.servings < 1 or self.servings > 4:
+            raise ValueError("servings must be between 1 and 4")
 
 

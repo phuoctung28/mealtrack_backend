@@ -94,6 +94,12 @@ class MealSuggestionRequest(BaseModel):
         None,
         description="Optional session ID for regeneration (automatically excludes previously shown meals)",
     )
+    servings: int = Field(
+        default=1,
+        ge=1,
+        le=4,
+        description="Number of servings (1-4). Ingredient amounts and calories scale accordingly.",
+    )
     exclude_ids: List[str] = Field(
         default_factory=list,
         description="DEPRECATED: Use session_id instead for automatic exclusion",
@@ -170,10 +176,10 @@ class SaveMealSuggestionRequest(BaseModel):
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
         ..., description="Type of meal"
     )
-    calories: int = Field(..., gt=0, description="Total calories (after portion multiplier)")
-    protein: float = Field(..., ge=0, description="Protein in grams")
-    carbs: float = Field(..., ge=0, description="Carbohydrates in grams")
-    fat: float = Field(..., ge=0, description="Fat in grams")
+    calories: int = Field(..., gt=0, description="Total calories (already scaled by AI for selected servings)")
+    protein: float = Field(..., ge=0, description="Protein in grams (already scaled)")
+    carbs: float = Field(..., ge=0, description="Carbohydrates in grams (already scaled)")
+    fat: float = Field(..., ge=0, description="Fat in grams (already scaled)")
     description: Optional[str] = Field(None, description="Meal description")
     estimated_cook_time_minutes: Optional[int] = Field(
         None, ge=0, description="Estimated cooking time in minutes"
@@ -185,7 +191,7 @@ class SaveMealSuggestionRequest(BaseModel):
         default_factory=list, description="List of cooking instructions"
     )
     portion_multiplier: int = Field(
-        default=1, ge=1, description="Portion multiplier (1x, 2x, etc.)"
+        default=1, ge=1, description="Number of servings (informational only, values already scaled by AI)"
     )
     meal_date: str = Field(
         ..., description="Target date for the meal (YYYY-MM-DD format)"

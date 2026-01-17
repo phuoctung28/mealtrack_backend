@@ -43,4 +43,5 @@ class GenerateMealSuggestionsCommandHandler(
             cooking_time_minutes=command.time_available_minutes,
             session_id=command.session_id,
             language=command.language,
+            servings=command.servings,
         )
