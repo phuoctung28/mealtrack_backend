@@ -45,8 +45,8 @@ class SuggestionOrchestrationService:
     MIN_ACCEPTABLE_RESULTS = 2  # Return at least 2 meals for acceptable UX
 
     # Parallel generation constants (OPTIMIZED)
-    PARALLEL_SINGLE_MEAL_TOKENS = 4000  # Reduced from 4000 with compressed prompts
-    PARALLEL_SINGLE_MEAL_TIMEOUT = 20  # Reduced from 25s (faster with smaller prompts)
+    PARALLEL_SINGLE_MEAL_TOKENS = 6000  # Increased for complete recipe JSON
+    PARALLEL_SINGLE_MEAL_TIMEOUT = 25  # Increased to accommodate P95 latency (~22s + buffer)
     PARALLEL_STAGGER_MS = (
         200  # Reduced from 500ms (API handles smaller payloads faster)
     )
@@ -417,7 +417,7 @@ class SuggestionOrchestrationService:
                         RecipeDetailsResponse,
                         model_purpose,
                     ),
-                    timeout=12,  # Reduced from 20s to allow retry budget
+                    timeout=self.PARALLEL_SINGLE_MEAL_TIMEOUT,
                 )
 
                 # Parse recipe response (guaranteed valid by Pydantic schema)

@@ -223,5 +223,5 @@ class TestSuggestionGenerationPipeline:
         """Ensures performance-related constants are set to their expected optimized values."""
         assert orchestration_service.SUGGESTIONS_COUNT == 3
         assert orchestration_service.MIN_ACCEPTABLE_RESULTS == 2
-        assert orchestration_service.PARALLEL_SINGLE_MEAL_TIMEOUT == 20
+        assert orchestration_service.PARALLEL_SINGLE_MEAL_TIMEOUT == 25
         assert orchestration_service.PARALLEL_STAGGER_MS == 200
