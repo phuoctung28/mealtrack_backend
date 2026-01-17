@@ -309,7 +309,7 @@ def get_configured_event_bus() -> EventBus:
 
     # Register activity query handlers
     event_bus.register_handler(
-        GetDailyActivitiesQuery, GetDailyActivitiesQueryHandler()
+        GetDailyActivitiesQuery, GetDailyActivitiesQueryHandler(meal_repository=meal_repository)
     )
 
     # Register daily meal handlers

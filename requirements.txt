@@ -7,7 +7,7 @@ python-multipart>=0.0.19
 
 # AI/LLM dependencies
 langchain-core>=0.1.0
-langchain-google-genai
+langchain-google-genai>=4.2.0
 
 # Vector search and embeddings
 pinecone>=7.0.0
