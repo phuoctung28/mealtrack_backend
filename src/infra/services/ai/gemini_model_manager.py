@@ -340,7 +340,7 @@ class GeminiModelManager:
             GeminiModelPurpose.GENERAL: "gemini-2.5-flash",
             GeminiModelPurpose.MEAL_NAMES: "gemini-2.5-flash-lite",
             GeminiModelPurpose.RECIPE_PRIMARY: "gemini-2.5-flash",
-            GeminiModelPurpose.RECIPE_SECONDARY: "gemini-3-flash",
+            GeminiModelPurpose.RECIPE_SECONDARY: "gemini-2.5-flash",
         }
 
         env_var = purpose_to_env.get(purpose, "GEMINI_MODEL")
