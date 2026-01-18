@@ -26,16 +26,17 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         self.cache_service = cache_service
 
     async def handle(self, event: CreateManualMealCommand):
-        # Use UnitOfWork for meal repository if not provided
+        from collections import defaultdict
         from src.infra.database.uow import UnitOfWork
-        
-        uow = UnitOfWork() if not self.meal_repository else None
-        meal_repo = self.meal_repository or (uow.meals if uow else None)
-        
-        if not meal_repo:
-            raise RuntimeError("Meal repository not available")
-        
-        # Aggregate items with the same fdc_id first
+
+        # Use provided meal_repository or create UnitOfWork with context manager
+        if self.meal_repository:
+            return await self._process_meal(event, self.meal_repository, uow=None)
+        else:
+            with UnitOfWork() as uow:
+                return await self._process_meal(event, uow.meals, uow=None)
+
+    async def _process_meal(self, event: CreateManualMealCommand, meal_repo, uow):
         from collections import defaultdict
         aggregated_items = defaultdict(lambda: {"quantity": 0.0, "unit": "g"})
         
@@ -123,12 +124,6 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         )
 
         saved_meal = meal_repo.save(meal)
-        
-        # Commit if using UoW
-        if uow:
-            uow.commit()
-            uow.session.close()
-            
         await self._invalidate_daily_macros(event.user_id, meal_date)
         return saved_meal
 
