@@ -2,14 +2,12 @@
 Command handler for updating user metrics.
 """
 import logging
-from datetime import timedelta
 from typing import Optional
 
-from src.api.exceptions import ResourceNotFoundException, ValidationException, ConflictException
+from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
-from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.enums import FitnessGoalEnum, ActivityLevelEnum
 from src.infra.database.uow import UnitOfWork
@@ -58,33 +56,20 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     raise ValidationException("Body fat percentage must be between 0 and 70")
                 profile.body_fat_percentage = command.body_fat_percent
 
-            # Handle fitness goal update with cooldown logic
+            # Handle fitness goal update with logging
             if command.fitness_goal is not None:
                 valid_goals = [e.value for e in FitnessGoalEnum]
                 if command.fitness_goal not in valid_goals:
                     raise ValidationException(f"Fitness goal must be one of: {', '.join(valid_goals)}")
-                
-                # Check if goal is actually changing
+
+                # Log goal changes for analytics
                 if profile.fitness_goal != command.fitness_goal:
-                    # Apply 7-day cooldown unless override is requested
-                    if not command.override:
-                        # Refresh profile to get latest updated_at from database
-                        uow.refresh(profile)
-                        last_changed = profile.updated_at or profile.created_at
-                        if last_changed:
-                            # Compare naive datetimes (database stores naive UTC)
-                            cooldown_until = last_changed + timedelta(days=7)
-                            now = utc_now().replace(tzinfo=None)  # Make naive for comparison
-                            if now < cooldown_until:
-                                # Format cooldown_until as ISO with Z suffix for UTC
-                                cooldown_iso = cooldown_until.isoformat() + "Z"
-                                raise ConflictException(
-                                    message="Goal was updated recently. Please wait before changing again.",
-                                    details={
-                                        "cooldown_until": cooldown_iso
-                                    }
-                                )
-                    
+                    logger.info(
+                        "Fitness goal changed for user %s: %s -> %s",
+                        command.user_id,
+                        profile.fitness_goal,
+                        command.fitness_goal
+                    )
                     profile.fitness_goal = command.fitness_goal
 
             # Ensure this profile is marked as current

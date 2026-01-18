@@ -19,6 +19,5 @@ class UpdateMetricsRequest(BaseModel):
     activity_level: str | None = Field(None, description="Activity level")
     body_fat_percent: float | None = Field(None, description="Body fat percentage", ge=0, le=70)
     fitness_goal: GoalEnum | None = Field(None, description="Fitness goal (cut, bulk, recomp)")
-    override: bool = Field(False, description="Override goal cooldown restriction")
 
 

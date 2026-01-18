@@ -137,26 +137,17 @@ class TestUserProfilesAPI:
             "weight_kg": 75.0,
             "activity_level": "active",
             "body_fat_percent": 15.0,
-            "fitness_goal": "cut",
-            "override": False
+            "fitness_goal": "cut"
         }
-        
+
         # Ensure profile is attached to session
         test_session.refresh(profile)
-        
-        # Set profile's last_changed to be old enough to avoid cooldown (8 days ago)
-        from datetime import timedelta
-        from src.domain.utils.timezone_utils import utc_now
-        profile.last_changed = (utc_now() - timedelta(days=8)).replace(tzinfo=None)
-        test_session.commit()
-        
+
         # Act: POST update metrics - uses real handlers
         response = authenticated_client.post("/v1/user-profiles/metrics", json=payload)
-        
+
         # Assert: Returns updated TDEE (real handler calculates it)
-        # May return 409 if cooldown still active, or 200 if successful
-        assert response.status_code in [200, 409]
-        if response.status_code == 200:
-            data = response.json()
-            assert "tdee" in data
-            assert "macros" in data
+        assert response.status_code == 200
+        data = response.json()
+        assert "tdee" in data
+        assert "macros" in data
