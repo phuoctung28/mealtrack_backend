@@ -1,4 +1,4 @@
-from src.domain.constants import TDEEConstants
+from src.domain.constants import TDEEConstants, NutritionConstants
 from src.domain.model.user import TdeeRequest, TdeeResponse, MacroTargets, ActivityLevel, Goal
 from src.domain.services.bmr_calculator import BMRCalculatorFactory
 
@@ -61,12 +61,12 @@ class TdeeCalculationService:
         return bmr * multiplier
     
     def _calculate_all_macro_targets(self, tdee: float, weight_kg: float, goal: Goal) -> MacroTargets:
-        """Calculate macro targets using goal-specific ratios based on nutrition science.
+        """Calculate macro targets using weight-based approach.
 
-        Different goals require different macro distributions:
-        - Bulk: Higher carbs for training energy, moderate protein
-        - Cut: Higher protein to preserve muscle, lower carbs
-        - Recomp: High protein like cutting, moderate carbs for training
+        Weight-based calculation (more accurate than percentage-based):
+        - Protein: g/kg body weight (higher during cut to preserve muscle)
+        - Fat: g/kg body weight (essential for hormone production)
+        - Carbs: Remaining calories after protein and fat
         """
         # Determine target calories based on goal
         if goal == Goal.CUT:
@@ -79,28 +79,49 @@ class TdeeCalculationService:
             calories = tdee + TDEEConstants.RECOMP_ADJUSTMENT
             goal_key = "recomp"
         else:
-            # Fallback to recomp for unknown goals
             calories = tdee
             goal_key = "recomp"
 
-        # Get goal-specific macro ratios
-        macro_ratios = TDEEConstants.MACRO_RATIOS.get(goal_key, TDEEConstants.MACRO_RATIOS["recomp"])
+        # Calculate protein from body weight (g/kg)
+        protein_multiplier = TDEEConstants.PROTEIN_PER_KG.get(goal_key, 1.8)
+        protein_g = weight_kg * protein_multiplier
+        protein_g = max(TDEEConstants.MIN_PROTEIN_G, min(protein_g, TDEEConstants.MAX_PROTEIN_G))
 
-        # Calculate macros using goal-specific ratios
-        # Protein: 4 cal/g, Carbs: 4 cal/g, Fat: 9 cal/g
-        protein_g = (calories * macro_ratios["protein"]) / 4
-        carb_g = (calories * macro_ratios["carbs"]) / 4
-        fat_g = (calories * macro_ratios["fat"]) / 9
+        # Calculate fat from body weight (g/kg)
+        fat_multiplier = TDEEConstants.FAT_PER_KG.get(goal_key, 0.9)
+        fat_g = weight_kg * fat_multiplier
+        fat_g = max(TDEEConstants.MIN_FAT_G, min(fat_g, TDEEConstants.MAX_FAT_G))
 
-        macro_targets = MacroTargets(
+        # Calculate carbs from remaining calories
+        protein_cals = protein_g * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
+        fat_cals = fat_g * NutritionConstants.CALORIES_PER_GRAM_FAT
+        remaining_cals = calories - protein_cals - fat_cals
+        carb_g = max(TDEEConstants.MIN_CARBS_G, remaining_cals / NutritionConstants.CALORIES_PER_GRAM_CARBS)
+
+        return MacroTargets(
             calories=round(calories, 1),
             protein=round(protein_g, 1),
             fat=round(fat_g, 1),
             carbs=round(carb_g, 1)
         )
-
-        return macro_targets
     
     def calculate_macros(self, tdee: float, goal: Goal, weight_kg: float) -> MacroTargets:
-        """Calculate macros based on TDEE, goal, and weight."""
+        """Calculate macros based on TDEE, goal, and weight.
+
+        Args:
+            tdee: Total Daily Energy Expenditure in calories
+            goal: Fitness goal (CUT, BULK, RECOMP)
+            weight_kg: Body weight in kilograms (must be within valid range)
+
+        Returns:
+            MacroTargets with calculated macros
+
+        Raises:
+            ValueError: If weight_kg is outside valid range
+        """
+        if not TDEEConstants.MIN_WEIGHT_KG <= weight_kg <= TDEEConstants.MAX_WEIGHT_KG:
+            raise ValueError(
+                f"weight_kg must be between {TDEEConstants.MIN_WEIGHT_KG} and "
+                f"{TDEEConstants.MAX_WEIGHT_KG}, got {weight_kg}"
+            )
         return self._calculate_all_macro_targets(tdee, weight_kg, goal) 

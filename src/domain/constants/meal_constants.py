@@ -113,26 +113,30 @@ class TDEEConstants:
     # MAINTENANCE_ADJUSTMENT removed - use RECOMP_ADJUSTMENT instead
     RECOMP_ADJUSTMENT = 0      # No calorie adjustment for recomposition
 
-    # Goal-specific macro ratios (protein/carbs/fat)
-    # Based on nutrition science: higher protein during deficit/recomp, higher carbs during bulk
-    MACRO_RATIOS = {
-        "bulk": {
-            "protein": 0.30,
-            "carbs": 0.45,
-            "fat": 0.25
-        },
-        "cut": {
-            "protein": 0.35,
-            "carbs": 0.40,
-            "fat": 0.25
-        },
-        "recomp": {
-            "protein": 0.35,
-            "carbs": 0.40,
-            "fat": 0.25
-        }
+    # Weight-based macro multipliers (g per kg body weight)
+    # Research: 1.6-2.0 g/kg protein optimal for muscle synthesis
+    # Higher protein during cut to preserve muscle in deficit
+    PROTEIN_PER_KG = {
+        "cut": 2.0,    # Higher protein to preserve muscle during deficit
+        "recomp": 1.8, # Moderate protein for body recomposition
+        "bulk": 1.6    # Lower protein as calorie surplus provides anabolic signal
     }
-    
+
+    # Fat intake: 0.7-1.2 g/kg for hormone production
+    # Lower fat during cut to maximize protein and carbs in reduced calories
+    FAT_PER_KG = {
+        "cut": 0.8,    # Lower fat to preserve calories for protein
+        "recomp": 0.9, # Moderate fat for balanced approach
+        "bulk": 1.0    # Higher fat for hormone optimization during surplus
+    }
+
+    # Min/max bounds for safety
+    MIN_PROTEIN_G = 60   # Minimum daily protein
+    MAX_PROTEIN_G = 300  # Maximum daily protein
+    MIN_FAT_G = 40       # Minimum daily fat for hormone function
+    MAX_FAT_G = 150      # Maximum daily fat
+    MIN_CARBS_G = 50     # Minimum daily carbs
+
     # Validation ranges
     MIN_AGE = 13
     MAX_AGE = 120

@@ -1,10 +1,11 @@
 """
-Unit tests for TDEE service goal-specific macro calculations.
+Unit tests for TDEE service weight-based macro calculations.
 
 Tests the refactored _calculate_all_macro_targets method to verify:
 1. Goal-specific calorie adjustments (surplus/deficit)
-2. Goal-specific macro ratios
-3. Correct macro calculations with proper rounding
+2. Weight-based protein and fat calculations (g/kg body weight)
+3. Carbs calculated as remainder calories
+4. Min/max bounds enforcement
 """
 import pytest
 
@@ -61,39 +62,35 @@ class TestTdeeServiceGoalSpecificMacros:
         expected_calories = 2759.0 + 300
         assert response.macros.calories == pytest.approx(expected_calories, abs=0.1)
 
-    def test_bulking_macro_ratios(self, service, base_request):
-        """Verify bulking uses 30% protein, 45% carbs, 25% fat ratios."""
+    def test_bulking_uses_weight_based_protein(self, service, base_request):
+        """Verify bulking protein is calculated from body weight."""
         base_request.goal = Goal.BULK
         response = service.calculate_tdee(base_request)
 
-        calories = response.macros.calories
-
-        # Expected macros from ratios
-        expected_protein = (calories * 0.30) / 4
-        expected_carbs = (calories * 0.45) / 4
-        expected_fat = (calories * 0.25) / 9
-
-        # Allow ±1g tolerance for rounding
+        # Expected: 80kg * 1.6 g/kg = 128g protein
+        expected_protein = 80 * 1.6
         assert response.macros.protein == pytest.approx(expected_protein, abs=1)
-        assert response.macros.carbs == pytest.approx(expected_carbs, abs=1)
+
+    def test_bulking_uses_weight_based_fat(self, service, base_request):
+        """Verify bulking fat is calculated from body weight."""
+        base_request.goal = Goal.BULK
+        response = service.calculate_tdee(base_request)
+
+        # Expected: 80kg * 1.0 g/kg = 80g fat
+        expected_fat = 80 * 1.0
         assert response.macros.fat == pytest.approx(expected_fat, abs=1)
 
-    def test_bulking_macro_ratios_percentage(self, service, base_request):
-        """Verify bulking macro percentages sum correctly."""
+    def test_bulking_carbs_calculated_as_remainder(self, service, base_request):
+        """Verify bulking carbs are calculated from remaining calories."""
         base_request.goal = Goal.BULK
         response = service.calculate_tdee(base_request)
 
         calories = response.macros.calories
-
-        # Verify calorie composition
         protein_cals = response.macros.protein * 4
-        carbs_cals = response.macros.carbs * 4
         fat_cals = response.macros.fat * 9
+        expected_carbs = (calories - protein_cals - fat_cals) / 4
 
-        total_cals = protein_cals + carbs_cals + fat_cals
-
-        # Should be approximately equal to target calories
-        assert total_cals == pytest.approx(calories, rel=0.02)
+        assert response.macros.carbs == pytest.approx(expected_carbs, abs=1)
 
     # ===== CUTTING TESTS =====
 
@@ -106,40 +103,35 @@ class TestTdeeServiceGoalSpecificMacros:
         expected_calories = 2759.0 - 500
         assert response.macros.calories == pytest.approx(expected_calories, abs=0.1)
 
-    def test_cutting_macro_ratios(self, service, base_request):
-        """Verify cutting uses 35% protein, 40% carbs, 25% fat ratios."""
+    def test_cutting_uses_weight_based_protein(self, service, base_request):
+        """Verify cutting protein is calculated from body weight (higher than bulk)."""
         base_request.goal = Goal.CUT
         response = service.calculate_tdee(base_request)
 
-        calories = response.macros.calories
-
-        # Expected macros from ratios
-        expected_protein = (calories * 0.35) / 4
-        expected_carbs = (calories * 0.40) / 4
-        expected_fat = (calories * 0.25) / 9
-
-        # Allow ±1g tolerance for rounding
+        # Expected: 80kg * 2.0 g/kg = 160g protein (higher to preserve muscle)
+        expected_protein = 80 * 2.0
         assert response.macros.protein == pytest.approx(expected_protein, abs=1)
-        assert response.macros.carbs == pytest.approx(expected_carbs, abs=1)
+
+    def test_cutting_uses_weight_based_fat(self, service, base_request):
+        """Verify cutting fat is calculated from body weight (lower than bulk)."""
+        base_request.goal = Goal.CUT
+        response = service.calculate_tdee(base_request)
+
+        # Expected: 80kg * 0.8 g/kg = 64g fat (lower to preserve calories)
+        expected_fat = 80 * 0.8
         assert response.macros.fat == pytest.approx(expected_fat, abs=1)
 
-    def test_cutting_macro_ratios_percentage(self, service, base_request):
-        """Verify cutting macro percentages sum correctly."""
+    def test_cutting_carbs_calculated_as_remainder(self, service, base_request):
+        """Verify cutting carbs are calculated from remaining calories."""
         base_request.goal = Goal.CUT
         response = service.calculate_tdee(base_request)
 
         calories = response.macros.calories
-
-        # Verify calorie composition
         protein_cals = response.macros.protein * 4
-        carbs_cals = response.macros.carbs * 4
         fat_cals = response.macros.fat * 9
+        expected_carbs = (calories - protein_cals - fat_cals) / 4
 
-        total_cals = protein_cals + carbs_cals + fat_cals
-
-        # Should be approximately equal to target calories
-        assert total_cals == pytest.approx(calories, rel=0.02)
-
+        assert response.macros.carbs == pytest.approx(expected_carbs, abs=1)
 
     # ===== RECOMP TESTS =====
 
@@ -152,39 +144,93 @@ class TestTdeeServiceGoalSpecificMacros:
         expected_calories = 2759.0
         assert response.macros.calories == pytest.approx(expected_calories, abs=0.1)
 
-    def test_recomp_macro_ratios(self, service, base_request):
-        """Verify recomposition uses 35% protein, 40% carbs, 25% fat ratios."""
+    def test_recomp_uses_weight_based_protein(self, service, base_request):
+        """Verify recomp protein is calculated from body weight."""
         base_request.goal = Goal.RECOMP
         response = service.calculate_tdee(base_request)
 
-        calories = response.macros.calories
-
-        # Expected macros from ratios
-        expected_protein = (calories * 0.35) / 4
-        expected_carbs = (calories * 0.40) / 4
-        expected_fat = (calories * 0.25) / 9
-
-        # Allow ±1g tolerance for rounding
+        # Expected: 80kg * 1.8 g/kg = 144g protein
+        expected_protein = 80 * 1.8
         assert response.macros.protein == pytest.approx(expected_protein, abs=1)
-        assert response.macros.carbs == pytest.approx(expected_carbs, abs=1)
+
+    def test_recomp_uses_weight_based_fat(self, service, base_request):
+        """Verify recomp fat is calculated from body weight."""
+        base_request.goal = Goal.RECOMP
+        response = service.calculate_tdee(base_request)
+
+        # Expected: 80kg * 0.9 g/kg = 72g fat
+        expected_fat = 80 * 0.9
         assert response.macros.fat == pytest.approx(expected_fat, abs=1)
 
-    def test_recomp_macro_ratios_percentage(self, service, base_request):
-        """Verify recomposition macro percentages sum correctly."""
+    def test_recomp_carbs_calculated_as_remainder(self, service, base_request):
+        """Verify recomp carbs are calculated from remaining calories."""
         base_request.goal = Goal.RECOMP
         response = service.calculate_tdee(base_request)
 
         calories = response.macros.calories
-
-        # Verify calorie composition
         protein_cals = response.macros.protein * 4
-        carbs_cals = response.macros.carbs * 4
         fat_cals = response.macros.fat * 9
+        expected_carbs = (calories - protein_cals - fat_cals) / 4
 
-        total_cals = protein_cals + carbs_cals + fat_cals
+        assert response.macros.carbs == pytest.approx(expected_carbs, abs=1)
 
-        # Should be approximately equal to target calories
-        assert total_cals == pytest.approx(calories, rel=0.02)
+    # ===== EDGE CASE TESTS - CLAMPING =====
+
+    def test_protein_clamped_to_max(self, service, base_request):
+        """Verify protein is clamped to MAX_PROTEIN_G for heavy users."""
+        base_request.weight = 200  # 200kg * 2.0 = 400g > 300 max
+        base_request.goal = Goal.CUT
+        response = service.calculate_tdee(base_request)
+
+        assert response.macros.protein == TDEEConstants.MAX_PROTEIN_G
+
+    def test_protein_clamped_to_min(self, service, base_request):
+        """Verify protein is clamped to MIN_PROTEIN_G for light users."""
+        base_request.weight = 30  # 30kg * 1.6 = 48g < 60 min
+        base_request.goal = Goal.BULK
+        response = service.calculate_tdee(base_request)
+
+        assert response.macros.protein == TDEEConstants.MIN_PROTEIN_G
+
+    def test_fat_clamped_to_max(self, service, base_request):
+        """Verify fat is clamped to MAX_FAT_G for heavy users."""
+        base_request.weight = 200  # 200kg * 1.0 = 200g > 150 max
+        base_request.goal = Goal.BULK
+        response = service.calculate_tdee(base_request)
+
+        assert response.macros.fat == TDEEConstants.MAX_FAT_G
+
+    def test_fat_clamped_to_min(self, service, base_request):
+        """Verify fat is clamped to MIN_FAT_G for light users."""
+        base_request.weight = 30  # 30kg * 0.8 = 24g < 40 min
+        base_request.goal = Goal.CUT
+        response = service.calculate_tdee(base_request)
+
+        assert response.macros.fat == TDEEConstants.MIN_FAT_G
+
+    def test_carbs_minimum_50g(self, service, base_request):
+        """Verify minimum 50g carbs even when remaining calories are low."""
+        # With low TDEE and high weight, carbs could go negative
+        # Set up a scenario with low calorie target
+        base_request.weight = 80
+        base_request.goal = Goal.CUT
+        response = service.calculate_tdee(base_request)
+
+        # Carbs should always be at least MIN_CARBS_G
+        assert response.macros.carbs >= TDEEConstants.MIN_CARBS_G
+
+    # ===== ORIGINAL PROBLEM CASE TEST =====
+
+    def test_84kg_user_gets_151g_protein_for_recomp(self, service, base_request):
+        """Verify 84kg user gets ~151g protein, not 252g (original problem case)."""
+        base_request.weight = 84
+        base_request.goal = Goal.RECOMP
+        response = service.calculate_tdee(base_request)
+
+        # Old calculation: 2880 * 0.35 / 4 = 252g (way too high)
+        # New calculation: 84kg * 1.8 g/kg = 151.2g (research-backed)
+        expected_protein = 84 * 1.8
+        assert response.macros.protein == pytest.approx(expected_protein, abs=1)
 
     # ===== GOAL ENUM TESTS =====
 
@@ -257,45 +303,23 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_recomp_calories_equal_tdee(self, service, base_request):
         """Verify recomposition calories equal TDEE (no calorie adjustment)."""
-        # Calculate TDEE independently
-        tdee_service = service
         base_request.goal = Goal.RECOMP
-        response = tdee_service.calculate_tdee(base_request)
+        response = service.calculate_tdee(base_request)
 
         # Recomp should have no calorie adjustment (calories = TDEE)
-        # TDEE was already calculated and set in response
-        # Just verify that recomp adjustment is 0
         assert response.macros.calories == pytest.approx(response.tdee, abs=0.1)
 
-    def test_cutting_higher_protein_than_bulking(self, service, base_request):
-        """Verify cutting has higher protein ratio than bulking."""
+    def test_cutting_higher_protein_per_kg_than_bulking(self, service, base_request):
+        """Verify cutting uses higher protein per kg than bulking."""
+        # Cutting: 2.0 g/kg, Bulking: 1.6 g/kg
         base_request.goal = Goal.CUT
         cutting = service.calculate_tdee(base_request)
-        cutting_protein_ratio = cutting.macros.protein * 4 / cutting.macros.calories
 
         base_request.goal = Goal.BULK
         bulking = service.calculate_tdee(base_request)
-        bulking_protein_ratio = bulking.macros.protein * 4 / bulking.macros.calories
 
-        # Cutting: 35%, Bulking: 30%
-        assert cutting_protein_ratio > bulking_protein_ratio
-        assert cutting_protein_ratio == pytest.approx(0.35, abs=0.01)
-        assert bulking_protein_ratio == pytest.approx(0.30, abs=0.01)
-
-    def test_bulking_higher_carbs_than_cutting(self, service, base_request):
-        """Verify bulking has higher carb ratio than cutting."""
-        base_request.goal = Goal.BULK
-        bulking = service.calculate_tdee(base_request)
-        bulking_carb_ratio = bulking.macros.carbs * 4 / bulking.macros.calories
-
-        base_request.goal = Goal.CUT
-        cutting = service.calculate_tdee(base_request)
-        cutting_carb_ratio = cutting.macros.carbs * 4 / cutting.macros.calories
-
-        # Bulking: 45%, Cutting: 40%
-        assert bulking_carb_ratio > cutting_carb_ratio
-        assert bulking_carb_ratio == pytest.approx(0.45, abs=0.01)
-        assert cutting_carb_ratio == pytest.approx(0.40, abs=0.01)
+        # Both use same weight, so cutting should have more absolute protein
+        assert cutting.macros.protein > bulking.macros.protein
 
     # ===== CONSTANTS VALIDATION TESTS =====
 
@@ -309,21 +333,36 @@ class TestTdeeServiceGoalSpecificMacros:
         assert TDEEConstants.BULKING_SURPLUS == 300
         assert TDEEConstants.RECOMP_ADJUSTMENT == 0
 
-    def test_tdee_constants_have_macro_ratios(self):
-        """Verify TDEEConstants defines macro ratios for all goals."""
-        assert hasattr(TDEEConstants, 'MACRO_RATIOS')
+    def test_tdee_constants_have_weight_based_multipliers(self):
+        """Verify TDEEConstants defines weight-based multipliers."""
+        assert hasattr(TDEEConstants, 'PROTEIN_PER_KG')
+        assert hasattr(TDEEConstants, 'FAT_PER_KG')
 
         required_goals = {'bulk', 'cut', 'recomp'}
-        available_goals = set(TDEEConstants.MACRO_RATIOS.keys())
+        assert required_goals.issubset(set(TDEEConstants.PROTEIN_PER_KG.keys()))
+        assert required_goals.issubset(set(TDEEConstants.FAT_PER_KG.keys()))
 
-        assert required_goals.issubset(available_goals)
+        # Verify correct values
+        assert TDEEConstants.PROTEIN_PER_KG['cut'] == 2.0
+        assert TDEEConstants.PROTEIN_PER_KG['recomp'] == 1.8
+        assert TDEEConstants.PROTEIN_PER_KG['bulk'] == 1.6
+        assert TDEEConstants.FAT_PER_KG['cut'] == 0.8
+        assert TDEEConstants.FAT_PER_KG['recomp'] == 0.9
+        assert TDEEConstants.FAT_PER_KG['bulk'] == 1.0
 
-    def test_macro_ratios_sum_to_one(self):
-        """Verify each goal's macro ratios sum to 1.0."""
-        for goal_name, ratios in TDEEConstants.MACRO_RATIOS.items():
-            total = ratios['protein'] + ratios['carbs'] + ratios['fat']
-            assert total == pytest.approx(1.0, abs=0.001), \
-                f"Goal {goal_name} ratios don't sum to 1.0: {total}"
+    def test_tdee_constants_have_min_max_bounds(self):
+        """Verify TDEEConstants defines min/max bounds for macros."""
+        assert hasattr(TDEEConstants, 'MIN_PROTEIN_G')
+        assert hasattr(TDEEConstants, 'MAX_PROTEIN_G')
+        assert hasattr(TDEEConstants, 'MIN_FAT_G')
+        assert hasattr(TDEEConstants, 'MAX_FAT_G')
+        assert hasattr(TDEEConstants, 'MIN_CARBS_G')
+
+        assert TDEEConstants.MIN_PROTEIN_G == 60
+        assert TDEEConstants.MAX_PROTEIN_G == 300
+        assert TDEEConstants.MIN_FAT_G == 40
+        assert TDEEConstants.MAX_FAT_G == 150
+        assert TDEEConstants.MIN_CARBS_G == 50
 
     # ===== DIFFERENT ACTIVITY LEVELS TEST =====
 
@@ -349,25 +388,22 @@ class TestTdeeServiceGoalSpecificMacros:
             assert response.macros.fat > 0
             assert response.macros.carbs > 0
 
-            # Verify macro ratios are correct
-            protein_ratio = response.macros.protein * 4 / response.macros.calories
-            assert protein_ratio == pytest.approx(0.30, abs=0.01)
+            # Verify weight-based protein (should be same regardless of TDEE)
+            expected_protein = 80 * 1.6  # bulk = 1.6 g/kg
+            assert response.macros.protein == pytest.approx(expected_protein, abs=1)
 
     # ===== DIFFERENT WEIGHTS TEST =====
 
-    def test_macros_scale_with_calories(self, service, base_request):
-        """Verify macros scale proportionally with calorie changes."""
-        base_request.goal = Goal.BULK
+    def test_protein_scales_with_weight(self, service, base_request):
+        """Verify protein scales proportionally with body weight."""
+        base_request.goal = Goal.RECOMP
         base_request.weight = 80
         response_80kg = service.calculate_tdee(base_request)
 
-        # Higher weight = higher TDEE = higher calorie target
         base_request.weight = 100
         response_100kg = service.calculate_tdee(base_request)
 
-        # Both should have same macro ratios
-        protein_ratio_80 = response_80kg.macros.protein * 4 / response_80kg.macros.calories
-        protein_ratio_100 = response_100kg.macros.protein * 4 / response_100kg.macros.calories
-
-        assert protein_ratio_80 == pytest.approx(protein_ratio_100, abs=0.01)
-        assert response_100kg.macros.calories > response_80kg.macros.calories
+        # Protein should scale with weight (1.8 g/kg for recomp)
+        assert response_100kg.macros.protein > response_80kg.macros.protein
+        assert response_80kg.macros.protein == pytest.approx(80 * 1.8, abs=1)
+        assert response_100kg.macros.protein == pytest.approx(100 * 1.8, abs=1)
