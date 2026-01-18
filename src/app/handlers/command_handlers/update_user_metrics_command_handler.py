@@ -2,6 +2,7 @@
 Command handler for updating user metrics.
 """
 import logging
+from datetime import date
 from typing import Optional
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException
@@ -81,15 +82,19 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
         await self._invalidate_user_profile(command.user_id)
 
     async def _invalidate_user_profile(self, user_id: str):
-        """Invalidate user profile and TDEE cache."""
+        """Invalidate user profile, TDEE, and daily macros cache."""
         if not self.cache_service:
             return
-        
+
         # Invalidate profile cache
         profile_key, _ = CacheKeys.user_profile(user_id)
         await self.cache_service.invalidate(profile_key)
-        
-        # Invalidate TDEE cache (new)
+
+        # Invalidate TDEE cache
         tdee_key, _ = CacheKeys.user_tdee(user_id)
         await self.cache_service.invalidate(tdee_key)
+
+        # Invalidate today's daily macros (contains target goals from TDEE)
+        daily_macros_key, _ = CacheKeys.daily_macros(user_id, date.today())
+        await self.cache_service.invalidate(daily_macros_key)
 
