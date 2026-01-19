@@ -1,7 +1,7 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Version:** 0.4.8
-**Last Updated:** January 16, 2026
+**Version:** 0.4.9
+**Last Updated:** January 19, 2026
 **Status:** Production-ready. 417 source files, ~37K LOC across 4 layers. 681+ tests, 70%+ coverage.
 
 ---
@@ -96,6 +96,7 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.4.9 | Jan 19, 2026 | Documentation refresh with updated dates. Verified CQRS patterns, domain services, and API endpoints against actual codebase. Weight-based macro calculation confirmed in TDEE service. |
 | 0.4.8 | Jan 16, 2026 | Updated documentation with accurate scout-verified statistics (417 files, ~37K LOC). Added WebSocket chat details, application services (MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService), and EventBus singleton pattern. Updated CQRS counts: 29 commands, 23 queries, 10+ events, 40+ handlers. |
 | 0.4.7 | Jan 16, 2026 | Documentation refresh with scout-verified statistics (408 files, ~37K LOC). |
 | 0.4.6 | Jan 9, 2026 | Phase 02: Language prompt integration (LANGUAGE_NAMES, language instructions, updated prompts). Phase 01: Meal suggestions multilingual support (7 languages, ISO 639-1 codes). |
