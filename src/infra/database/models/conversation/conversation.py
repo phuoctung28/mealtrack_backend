@@ -1,7 +1,7 @@
 """
 Conversation model for tracking chat conversations with users.
 """
-from sqlalchemy import Column, String, JSON, Enum
+from sqlalchemy import Boolean, Column, String, JSON, Enum
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -18,6 +18,7 @@ class Conversation(Base, BaseMixin):
     
     # Conversation context stored as JSON
     context = Column(JSON)
-    
+    is_active = Column(Boolean, default=True, nullable=False)
+
     # Relationships
     messages = relationship("ConversationMessage", back_populates="conversation", cascade="all, delete-orphan")

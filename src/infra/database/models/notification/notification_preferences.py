@@ -38,6 +38,9 @@ class NotificationPreferences(Base, BaseMixin):
     # Daily Summary Timing (minutes from midnight)
     daily_summary_time_minutes = Column(Integer, nullable=True, default=1260)
 
+    # Soft delete flag
+    is_deleted = Column(Boolean, default=False, nullable=False)
+
     # Constraints
     __table_args__ = (
         CheckConstraint('breakfast_time_minutes >= 0 AND breakfast_time_minutes < 1440', name='check_breakfast_time'),

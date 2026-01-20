@@ -1,7 +1,7 @@
 """
 Meal plan model for storing user meal planning preferences and settings.
 """
-from sqlalchemy import Column, String, Integer, JSON, Enum
+from sqlalchemy import Boolean, Column, String, Integer, JSON, Enum
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -26,6 +26,7 @@ class MealPlan(Base, BaseMixin):
     favorite_cuisines = Column(JSON)
     disliked_ingredients = Column(JSON)
     plan_duration = Column(Enum(PlanDurationEnum))
-    
+    is_active = Column(Boolean, default=True, nullable=False)
+
     # Relationships
     days = relationship("MealPlanDay", back_populates="meal_plan", cascade="all, delete-orphan")

@@ -35,6 +35,7 @@ class User(Base, BaseMixin):
     is_active = Column(Boolean, default=True, nullable=False)
     onboarding_completed = Column(Boolean, default=False, nullable=False)
     last_accessed = Column(DateTime, default=datetime.now, nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     
     # Timezone (IANA format, e.g., "America/Los_Angeles")
     timezone = Column(String(50), nullable=False, server_default='UTC')

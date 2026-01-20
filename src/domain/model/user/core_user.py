@@ -51,6 +51,7 @@ class UserDomainModel(BaseDomainModel):
     phone_number: Optional[str] = None
     display_name: Optional[str] = None
     photo_url: Optional[str] = None
+    deleted_at: Optional[datetime] = None
     profiles: List[UserProfileDomainModel] = field(default_factory=list)
 
     @property

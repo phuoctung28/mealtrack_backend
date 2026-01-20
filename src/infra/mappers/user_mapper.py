@@ -26,6 +26,7 @@ class UserMapper:
             phone_number=user_entity.phone_number,
             display_name=user_entity.display_name,
             photo_url=user_entity.photo_url,
+            deleted_at=user_entity.deleted_at,
             profiles=[UserProfileMapper.to_domain(p) for p in user_entity.profiles],
         )
 
@@ -48,6 +49,7 @@ class UserMapper:
             phone_number=user_domain.phone_number,
             display_name=user_domain.display_name,
             photo_url=user_domain.photo_url,
+            deleted_at=user_domain.deleted_at,
         )
 
 
