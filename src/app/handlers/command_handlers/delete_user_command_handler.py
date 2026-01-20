@@ -13,6 +13,15 @@ from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.uow import UnitOfWork
 from src.infra.services.firebase_auth_service import FirebaseAuthService
 
+# Models for soft-delete operations
+from src.infra.database.models.meal.meal import Meal
+from src.infra.database.models.enums import MealStatusEnum
+from src.infra.database.models.meal_planning.meal_plan import MealPlan
+from src.infra.database.models.conversation.conversation import Conversation
+from src.infra.database.models.chat.thread import ChatThread
+from src.infra.database.models.notification.user_fcm_token import UserFcmToken
+from src.infra.database.models.notification.notification_preferences import NotificationPreferences
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,7 +56,10 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                 # Store user_id for logging
                 user_id = user.id
 
-                # Step 1: Anonymize user data (GDPR compliance)
+                # Step 1: Soft-delete all related user data
+                self._soft_delete_related_data(uow, str(user_id))
+
+                # Step 2: Anonymize user data (GDPR compliance)
                 user.email = f"deleted_{user.id}@deleted.local"
                 user.username = f"deleted_user_{user.id}"
                 user.first_name = None
@@ -57,8 +69,9 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                 user.photo_url = None
                 user.password_hash = "DELETED"
 
-                # Step 2: Soft delete in database
+                # Step 3: Soft delete user with timestamp
                 user.is_active = False
+                user.deleted_at = utc_now()
                 user.last_accessed = utc_now()
 
                 # Save changes
@@ -66,7 +79,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                 uow.commit()
                 logger.info(f"Successfully soft deleted user in database")
 
-                # Step 3: Revoke refresh tokens to invalidate all active sessions
+                # Step 4: Revoke refresh tokens to invalidate all active sessions
                 # This prevents the user from getting new access tokens
                 try:
                     self.firebase_auth_service.revoke_refresh_tokens(command.firebase_uid)
@@ -75,7 +88,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                     logger.warning(f"Token revocation failed: {str(revoke_error)}")
                     # Continue - deletion is more important
 
-                # Step 4: Hard delete from Firebase Authentication
+                # Step 5: Hard delete from Firebase Authentication
                 try:
                     firebase_deleted = self.firebase_auth_service.delete_firebase_user(
                         command.firebase_uid
@@ -102,3 +115,51 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                 uow.rollback()
                 logger.error(f"Error deleting user account: {str(e)}")
                 raise Exception(f"Failed to delete user account: {str(e)}")
+
+    def _soft_delete_related_data(self, uow: UnitOfWorkPort, user_id: str) -> None:
+        """
+        Soft-delete all data related to the user.
+        Uses bulk updates for performance. All operations are atomic within the transaction.
+        """
+        try:
+            # 1. Soft-delete meals (set status=INACTIVE)
+            meals_count = uow.session.query(Meal).filter(
+                Meal.user_id == user_id
+            ).update({Meal.status: MealStatusEnum.INACTIVE})
+
+            # 2. Soft-delete meal_plans (set is_active=False)
+            meal_plans_count = uow.session.query(MealPlan).filter(
+                MealPlan.user_id == user_id
+            ).update({MealPlan.is_active: False})
+
+            # 3. Soft-delete conversations (set is_active=False)
+            conversations_count = uow.session.query(Conversation).filter(
+                Conversation.user_id == user_id
+            ).update({Conversation.is_active: False})
+
+            # 4. Soft-delete chat_threads (set is_active=False)
+            chat_threads_count = uow.session.query(ChatThread).filter(
+                ChatThread.user_id == user_id
+            ).update({ChatThread.is_active: False})
+
+            # 5. Deactivate FCM tokens (set is_active=False)
+            fcm_tokens_count = uow.session.query(UserFcmToken).filter(
+                UserFcmToken.user_id == user_id
+            ).update({UserFcmToken.is_active: False})
+
+            # 6. Mark notification preferences as deleted (set is_deleted=True)
+            notif_prefs_count = uow.session.query(NotificationPreferences).filter(
+                NotificationPreferences.user_id == user_id
+            ).update({NotificationPreferences.is_deleted: True})
+
+            # Flush to ensure all changes are pending in the transaction
+            uow.session.flush()
+
+            logger.info(
+                f"Soft-deleted related data: meals={meals_count}, meal_plans={meal_plans_count}, "
+                f"conversations={conversations_count}, chat_threads={chat_threads_count}, "
+                f"fcm_tokens={fcm_tokens_count}, notification_prefs={notif_prefs_count}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to soft-delete related data: {str(e)}")
+            raise

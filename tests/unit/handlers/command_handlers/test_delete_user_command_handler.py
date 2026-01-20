@@ -14,6 +14,14 @@ from src.app.handlers.command_handlers.delete_user_command_handler import (
 )
 from src.infra.database.config import Base
 from src.infra.database.models.user import User
+from src.infra.database.models.meal.meal import Meal
+from src.infra.database.models.enums import MealStatusEnum
+from src.infra.database.models.meal_planning.meal_plan import MealPlan
+from src.infra.database.models.notification.notification_preferences import NotificationPreferences
+from src.infra.database.models.notification.user_fcm_token import UserFcmToken
+from src.infra.database.models.chat.thread import ChatThread
+from src.infra.database.models.conversation.conversation import Conversation
+from src.infra.database.models.enums import ConversationStateEnum
 from src.infra.repositories.user_repository import UserRepository
 
 
@@ -398,4 +406,38 @@ class TestDeleteUserCommandHandlerIntegration:
                 db_user = db_session.query(User).filter(User.id == original_id).first()
                 assert db_user.id == original_id
                 assert db_user.created_at == original_created
+                assert db_user.is_active is False
+
+    @pytest.mark.asyncio
+    async def test_delete_sets_deleted_at_timestamp(self, db_session):
+        """Test that deletion sets deleted_at timestamp for audit trail."""
+        # Arrange
+        user = User(
+            email="timestamp_test@example.com",
+            username="timestamp_user",
+            password_hash="hashed_password",
+            firebase_uid="firebase_timestamp_123",
+            is_active=True
+        )
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+
+        assert user.deleted_at is None  # Initially null
+
+        handler = DeleteUserCommandHandler()
+
+        with patch(
+            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            MagicMock(return_value=DummyUnitOfWork(db_session)),
+        ):
+            with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+                mock_firebase.return_value = True
+
+                # Act
+                await handler.handle(DeleteUserCommand(firebase_uid=user.firebase_uid))
+
+                # Assert - deleted_at should be set
+                db_user = db_session.query(User).filter(User.id == user.id).first()
+                assert db_user.deleted_at is not None
                 assert db_user.is_active is False
