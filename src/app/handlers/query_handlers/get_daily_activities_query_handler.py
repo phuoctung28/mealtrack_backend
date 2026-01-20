@@ -9,8 +9,8 @@ from typing import List, Dict, Any
 from src.app.events.base import EventHandler, handles
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.domain.model.meal import MealStatus
-from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.utils.timezone_utils import format_iso_utc
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -19,21 +19,14 @@ logger = logging.getLogger(__name__)
 class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[Dict[str, Any]]]):
     """Handler for getting daily activities (meals and workouts)."""
 
-    def __init__(self, meal_repository: MealRepositoryPort = None):
-        self.meal_repository = meal_repository
-
-    def set_dependencies(self, meal_repository: MealRepositoryPort):
-        """Set dependencies for dependency injection."""
-        self.meal_repository = meal_repository
+    def __init__(self):
+        pass
 
     async def handle(self, query: GetDailyActivitiesQuery) -> List[Dict[str, Any]]:
         """Get all activities for the specified date."""
-        if not self.meal_repository:
-            raise RuntimeError("Meal repository not configured")
-
         activities = []
 
-        # Get meal activities
+        # Get meal activities using fresh UnitOfWork
         meal_activities = self._get_meal_activities(query.target_date, query.user_id)
         logger.info(f"Found {len(meal_activities)} meal activities for user {query.user_id} on date {query.target_date.strftime('%Y-%m-%d')}")
         activities.extend(meal_activities)
@@ -53,21 +46,24 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         """Get meal activities for a specific date and user."""
         try:
             date_obj = target_date.date()
-            meals = self.meal_repository.find_by_date(date_obj, user_id=user_id)
 
-            meal_activities = []
-            for meal in meals:
-                # Only include meals with nutrition data and exclude INACTIVE
-                if not meal.nutrition or meal.status not in [MealStatus.READY, MealStatus.ENRICHING]:
-                    continue
-                if meal.status == MealStatus.INACTIVE:
-                    continue
+            # Use fresh UnitOfWork to get current data
+            with UnitOfWork() as uow:
+                meals = uow.meals.find_by_date(date_obj, user_id=user_id)
 
-                # Build activity from meal
-                activity = self._build_meal_activity(meal, target_date)
-                meal_activities.append(activity)
+                meal_activities = []
+                for meal in meals:
+                    # Only include meals with nutrition data and exclude INACTIVE
+                    if not meal.nutrition or meal.status not in [MealStatus.READY, MealStatus.ENRICHING]:
+                        continue
+                    if meal.status == MealStatus.INACTIVE:
+                        continue
 
-            return meal_activities
+                    # Build activity from meal
+                    activity = self._build_meal_activity(meal, target_date)
+                    meal_activities.append(activity)
+
+                return meal_activities
 
         except Exception as e:
             logger.error(f"Error getting meal activities: {str(e)}", exc_info=True)

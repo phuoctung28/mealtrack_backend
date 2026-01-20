@@ -26,6 +26,33 @@ from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIServ
 from tests.fixtures.mock_image_store import MockImageStore
 
 
+class TestUnitOfWork:
+    """Test-friendly UoW that doesn't close the session on exit."""
+
+    def __init__(self, session: Session):
+        from src.infra.repositories.meal_repository import MealRepository
+        from src.infra.repositories.user_repository import UserRepository
+        self.session = session
+        self.meals = MealRepository(session)
+        self.users = UserRepository(session)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Don't close session - let the test fixture manage it
+        if exc_type:
+            self.session.rollback()
+        # Don't commit here - tests manage their own commits
+
+    def commit(self):
+        # No-op for tests - session already has the data
+        pass
+
+    def rollback(self):
+        self.session.rollback()
+
+
 def _is_db_available() -> bool:
     """Check if the test database is available."""
     try:
@@ -371,8 +398,11 @@ def event_bus(
     from src.infra.repositories.user_repository import UserRepository
     from src.domain.services.tdee_service import TdeeCalculationService
     from tests.fixtures.mock_meal_suggestion_service import MockMealSuggestionService
-    
+
     event_bus = PyMediatorEventBus()
+
+    # Create test UoW using the test session (doesn't close session on exit)
+    test_uow = TestUnitOfWork(session=test_session)
     
     # Create repositories
     user_repository = UserRepository(test_session)
@@ -381,17 +411,17 @@ def event_bus(
     event_bus.register_handler(
         EditMealCommand,
         EditMealCommandHandler(
-            meal_repository=meal_repository,
+            uow=test_uow,  # Use test UoW with test session
             food_service=None,  # Mock if needed
             nutrition_calculator=None,
             pinecone_service=None  # Skip - will use real service if available
         )
     )
-    
+
     event_bus.register_handler(
         AddCustomIngredientCommand,
         AddCustomIngredientCommandHandler(
-            meal_repository=meal_repository
+            uow=test_uow  # Use test UoW with test session
         )
     )
 
@@ -399,7 +429,7 @@ def event_bus(
     from src.app.commands.meal.delete_meal_command import DeleteMealCommand
     event_bus.register_handler(
         DeleteMealCommand,
-        DeleteMealCommandHandler(cache_service=None)  # Handler uses UnitOfWork internally
+        DeleteMealCommandHandler(uow=test_uow, cache_service=None)  # Use test UoW
     )
     
     event_bus.register_handler(
@@ -412,14 +442,15 @@ def event_bus(
     )
     
     # Register query handlers
+    # These handlers now use UnitOfWork internally for fresh sessions
     event_bus.register_handler(
         GetMealByIdQuery,
-        GetMealByIdQueryHandler(meal_repository)
+        GetMealByIdQueryHandler()
     )
 
     event_bus.register_handler(
         GetDailyMacrosQuery,
-        GetDailyMacrosQueryHandler(meal_repository, test_session)
+        GetDailyMacrosQueryHandler(cache_service=None)
     )
     
     # Register user handlers

@@ -12,9 +12,10 @@ from src.app.events.meal import MealEditedEvent
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition import FoodItem, Macros
-from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
+from src.infra.database.uow import UnitOfWork
 from src.infra.services.pinecone_service import get_pinecone_service
 
 logger = logging.getLogger(__name__)
@@ -25,12 +26,12 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
     """Handler for editing meal ingredients."""
 
     def __init__(self,
-                 meal_repository: MealRepositoryPort = None,
+                 uow: Optional[UnitOfWorkPort] = None,
                  food_service=None,
                  nutrition_calculator=None,
                  pinecone_service=None,
                  cache_service: Optional[CacheService] = None):
-        self.meal_repository = meal_repository
+        self.uow = uow
         self.food_service = food_service
         self.nutrition_calculator = nutrition_calculator
         self.pinecone_service = pinecone_service
@@ -38,7 +39,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
-        self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
+        self.uow = kwargs.get('uow', self.uow)
         self.food_service = kwargs.get('food_service', self.food_service)
         self.nutrition_calculator = kwargs.get('nutrition_calculator', self.nutrition_calculator)
         self.pinecone_service = kwargs.get('pinecone_service', self.pinecone_service)
@@ -46,71 +47,79 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
 
     async def handle(self, command: EditMealCommand) -> Dict[str, Any]:
         """Handle meal editing operations."""
-        if not self.meal_repository:
-            raise RuntimeError("Meal repository not configured")
+        # Use provided UoW or create default
+        uow = self.uow or UnitOfWork()
 
-        # 1. Validate meal exists
-        meal = self.meal_repository.find_by_id(command.meal_id)
-        if not meal:
-            raise ResourceNotFoundException("Meal not found")
+        with uow:
+            try:
+                # 1. Validate meal exists
+                meal = uow.meals.find_by_id(command.meal_id)
+                if not meal:
+                    raise ResourceNotFoundException("Meal not found")
 
-        if meal.status != MealStatus.READY:
-            raise ValidationException("Meal must be in READY status to edit")
+                if meal.status != MealStatus.READY:
+                    raise ValidationException("Meal must be in READY status to edit")
 
-        # 2. Apply food item changes
-        updated_food_items = await self._apply_food_item_changes(
-            meal.nutrition.food_items if meal.nutrition else [],
-            command.food_item_changes
-        )
-
-        # 3. Recalculate nutrition
-        updated_nutrition = self._calculate_total_nutrition(updated_food_items)
-
-        # 4. Update meal
-        updated_meal = meal.mark_edited(
-            nutrition=updated_nutrition,
-            dish_name=command.dish_name or meal.dish_name
-        )
-
-        # 5. Persist changes
-        saved_meal = self.meal_repository.save(updated_meal)
-        await self._invalidate_daily_macros(saved_meal)
-
-        # 6. Calculate nutrition delta for event
-        nutrition_delta = self._calculate_nutrition_delta(meal.nutrition, updated_nutrition)
-
-        # 7. Generate changes summary
-        changes_summary = self._generate_changes_summary(command.food_item_changes)
-
-        return {
-            "success": True,
-            "meal_id": saved_meal.meal_id,
-            "message": f"Meal updated successfully. {changes_summary}",
-            "dish_name": saved_meal.dish_name or "Meal",
-            "total_calories": updated_nutrition.calories,
-            "updated_nutrition": {
-                "calories": updated_nutrition.calories,
-                "protein": updated_nutrition.macros.protein,
-                "carbs": updated_nutrition.macros.carbs,
-                "fat": updated_nutrition.macros.fat,
-            },
-            "updated_food_items": [item.to_dict() for item in updated_food_items],
-            "edit_metadata": {
-                "edit_count": saved_meal.edit_count,
-                "changes_summary": changes_summary
-            },
-            "events": [
-                MealEditedEvent(
-                    aggregate_id=saved_meal.meal_id,
-                    meal_id=saved_meal.meal_id,
-                    user_id=saved_meal.user_id,
-                    edit_type="ingredients_updated",
-                    changes_summary=changes_summary,
-                    nutrition_delta=nutrition_delta,
-                    edit_count=saved_meal.edit_count
+                # 2. Apply food item changes
+                updated_food_items = await self._apply_food_item_changes(
+                    meal.nutrition.food_items if meal.nutrition else [],
+                    command.food_item_changes
                 )
-            ]
-        }
+
+                # 3. Recalculate nutrition
+                updated_nutrition = self._calculate_total_nutrition(updated_food_items)
+
+                # 4. Update meal
+                updated_meal = meal.mark_edited(
+                    nutrition=updated_nutrition,
+                    dish_name=command.dish_name or meal.dish_name
+                )
+
+                # 5. Persist changes
+                saved_meal = uow.meals.save(updated_meal)
+                uow.commit()
+
+                await self._invalidate_daily_macros(saved_meal)
+
+                # 6. Calculate nutrition delta for event
+                nutrition_delta = self._calculate_nutrition_delta(meal.nutrition, updated_nutrition)
+
+                # 7. Generate changes summary
+                changes_summary = self._generate_changes_summary(command.food_item_changes)
+
+                return {
+                    "success": True,
+                    "meal_id": saved_meal.meal_id,
+                    "message": f"Meal updated successfully. {changes_summary}",
+                    "dish_name": saved_meal.dish_name or "Meal",
+                    "total_calories": updated_nutrition.calories,
+                    "updated_nutrition": {
+                        "calories": updated_nutrition.calories,
+                        "protein": updated_nutrition.macros.protein,
+                        "carbs": updated_nutrition.macros.carbs,
+                        "fat": updated_nutrition.macros.fat,
+                    },
+                    "updated_food_items": [item.to_dict() for item in updated_food_items],
+                    "edit_metadata": {
+                        "edit_count": saved_meal.edit_count,
+                        "changes_summary": changes_summary
+                    },
+                    "events": [
+                        MealEditedEvent(
+                            aggregate_id=saved_meal.meal_id,
+                            meal_id=saved_meal.meal_id,
+                            user_id=saved_meal.user_id,
+                            edit_type="ingredients_updated",
+                            changes_summary=changes_summary,
+                            nutrition_delta=nutrition_delta,
+                            edit_count=saved_meal.edit_count
+                        )
+                    ]
+                }
+            except Exception as e:
+                uow.rollback()
+                logger.error(f"Error editing meal: {str(e)}")
+                raise
 
     async def _apply_food_item_changes(self, current_food_items, changes):
         """Apply food item changes to current list using strategy pattern."""

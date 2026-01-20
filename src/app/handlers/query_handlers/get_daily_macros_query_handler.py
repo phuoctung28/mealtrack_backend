@@ -10,8 +10,8 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetDailyMacrosQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
-from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.infra.cache.cache_service import CacheService
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -22,45 +22,42 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
 
     def __init__(
         self,
-        meal_repository: MealRepositoryPort = None,
         cache_service: Optional[CacheService] = None,
     ):
-        self.meal_repository = meal_repository
         self.cache_service = cache_service
 
     async def handle(self, query: GetDailyMacrosQuery) -> Dict[str, Any]:
         """Calculate daily macros for a given date with user targets."""
-        if not self.meal_repository:
-            raise RuntimeError("Meal repository not configured")
-
         target_date = query.target_date or date.today()
         cached_result = await self._try_get_cached_result(query.user_id, target_date)
         if cached_result is not None:
             return cached_result
 
-        meals = self.meal_repository.find_by_date(target_date, user_id=query.user_id)
+        # Use fresh UnitOfWork to get current data
+        with UnitOfWork() as uow:
+            meals = uow.meals.find_by_date(target_date, user_id=query.user_id)
 
-        # Initialize totals
-        total_calories = 0.0
-        total_protein = 0.0
-        total_carbs = 0.0
-        total_fat = 0.0
-        meal_count = 0
-        meals_with_nutrition = 0
+            # Initialize totals
+            total_calories = 0.0
+            total_protein = 0.0
+            total_carbs = 0.0
+            total_fat = 0.0
+            meal_count = 0
+            meals_with_nutrition = 0
 
-        # Calculate totals from meals with nutrition data
-        for meal in meals:
-            # Skip INACTIVE meals entirely
-            if meal.status == MealStatus.INACTIVE:
-                continue
-            meal_count += 1
-            if meal.nutrition and meal.status in [MealStatus.READY, MealStatus.ENRICHING]:
-                meals_with_nutrition += 1
-                total_calories += meal.nutrition.calories or 0
-                if meal.nutrition.macros:
-                    total_protein += meal.nutrition.macros.protein or 0
-                    total_carbs += meal.nutrition.macros.carbs or 0
-                    total_fat += meal.nutrition.macros.fat or 0
+            # Calculate totals from meals with nutrition data
+            for meal in meals:
+                # Skip INACTIVE meals entirely
+                if meal.status == MealStatus.INACTIVE:
+                    continue
+                meal_count += 1
+                if meal.nutrition and meal.status in [MealStatus.READY, MealStatus.ENRICHING]:
+                    meals_with_nutrition += 1
+                    total_calories += meal.nutrition.calories or 0
+                    if meal.nutrition.macros:
+                        total_protein += meal.nutrition.macros.protein or 0
+                        total_carbs += meal.nutrition.macros.carbs or 0
+                        total_fat += meal.nutrition.macros.fat or 0
 
         # Get user's TDEE targets
         target_calories = None
@@ -77,7 +74,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
 
             target_calories = tdee_result.get('target_calories')
             target_macros = tdee_result.get('macros', {})
-            
+
             if target_calories is None:
                 logger.warning(f"TDEE data missing for user {query.user_id}. User may not have completed onboarding.")
         except Exception as e:
