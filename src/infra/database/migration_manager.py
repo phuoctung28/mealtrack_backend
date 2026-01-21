@@ -119,8 +119,9 @@ class MigrationManager:
                 
                 if dialect_name == 'mysql':
                     # MySQL: GET_LOCK returns 1 if lock acquired, 0 if timeout
+                    # Increased timeout to 60s to handle longer migrations
                     result = conn.execute(
-                        text("SELECT GET_LOCK('alembic_migration_lock', 10)")
+                        text("SELECT GET_LOCK('alembic_migration_lock', 60)")
                     ).scalar()
                     self._lock_acquired = result == 1
                     return self._lock_acquired

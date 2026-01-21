@@ -18,17 +18,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add daily_summary_time_minutes column to notification_preferences
+    # Add daily_summary_time_minutes column with server default (9PM = 1260 minutes from midnight)
+    # Using server_default handles existing rows automatically without slow UPDATE
     op.add_column('notification_preferences',
-        sa.Column('daily_summary_time_minutes', sa.Integer(), nullable=True, default=1260)
+        sa.Column('daily_summary_time_minutes', sa.Integer(), nullable=False, server_default='1260')
     )
-    # Update existing rows to default 9PM (1260 minutes from midnight)
-    op.execute("UPDATE notification_preferences SET daily_summary_time_minutes = 1260 WHERE daily_summary_time_minutes IS NULL")
     # Add constraint to ensure value is between 0 and 1439 (minutes from midnight)
     op.create_check_constraint(
         'check_daily_summary_time',
-        'daily_summary_time_minutes >= 0 AND daily_summary_time_minutes < 1440',
-        table_name='notification_preferences'
+        'notification_preferences',
+        'daily_summary_time_minutes >= 0 AND daily_summary_time_minutes < 1440'
     )
 
 
