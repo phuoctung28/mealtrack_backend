@@ -46,7 +46,17 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                     user = uow.users.save(existing_user)
                     logger.info('Updated existing user')
                 else:
-                    # Create new user
+                    # Check if this is a previously deleted user re-registering
+                    deleted_user = uow.users.find_deleted_by_firebase_uid(command.firebase_uid)
+                    if deleted_user:
+                        logger.info(
+                            f'Detected re-registration of deleted user (old_id={deleted_user.id}). '
+                            f'Creating fresh account with new ID.'
+                        )
+                        # Note: We do NOT restore the old user; we create a brand new one
+                        # The old record stays anonymized for audit trail
+
+                    # Create new user (works for both new users and re-registrations)
                     user = self._create_new_user(command, uow)
                     # Save user to get ID
                     user = uow.users.save(user)

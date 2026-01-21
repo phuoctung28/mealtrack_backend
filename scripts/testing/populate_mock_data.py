@@ -7,7 +7,7 @@ This script creates:
 - User preferences (dietary, health conditions, allergies)
 - User goals with various fitness objectives
 - TDEE calculations
-- Meal plans and conversations
+- Meal plans
 """
 
 import os
@@ -24,7 +24,8 @@ from src.infra.database.models.user.user import User
 from src.infra.database.models.user.profile import UserProfile
 # Removed models are now part of UserProfile
 from src.infra.database.models.meal_planning.meal_plan import MealPlan
-from src.infra.database.models.conversation.conversation import Conversation
+# TODO: Conversation table never created in database. See delete_user_command_handler.py for details.
+# from src.infra.database.models.conversation.conversation import Conversation
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.model.tdee import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
 
@@ -316,8 +317,8 @@ class MockDataGenerator:
             )
             self.session.add(hist_profile)
     
-    def create_meal_plans_and_conversations(self):
-        """Create some meal plans and conversations for users."""
+    def create_meal_plans(self):
+        """Create some meal plans for users."""
         for user in self.created_users[:5]:  # Create for first 5 users
             # Create a meal plan
             meal_plan = MealPlan(
@@ -330,20 +331,9 @@ class MockDataGenerator:
                 plan_duration="weekly"
             )
             self.session.add(meal_plan)
-            
-            # Create a conversation
-            conversation = Conversation(
-                user_id=user.id,
-                state="completed",
-                context={
-                    "preferences_collected": True,
-                    "plan_generated": True
-                }
-            )
-            self.session.add(conversation)
-        
+
         self.session.commit()
-        print(f"✅ Created meal plans and conversations for 5 users")
+        print(f"✅ Created meal plans for 5 users")
     
     def generate_all_data(self):
         """Generate all mock data."""
@@ -370,8 +360,8 @@ class MockDataGenerator:
             user = self.create_user(template)
             self.created_users.append(user)
         
-        # Create meal plans and conversations
-        self.create_meal_plans_and_conversations()
+        # Create meal plans
+        self.create_meal_plans()
         
         print(f"\n✅ Successfully created {len(self.created_users)} users with complete profiles!")
         

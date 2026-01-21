@@ -18,8 +18,16 @@ class FakeUserRepository(UserRepositoryPort):
         return self.users.get(user_id)
 
     def find_by_firebase_uid(self, firebase_uid: str) -> Optional[UserDomainModel]:
+        """Find active user by Firebase UID."""
         for user in self.users.values():
-            if user.firebase_uid == firebase_uid:
+            if user.firebase_uid == firebase_uid and user.is_active:
+                return user
+        return None
+
+    def find_deleted_by_firebase_uid(self, firebase_uid: str) -> Optional[UserDomainModel]:
+        """Find deleted (inactive) user by Firebase UID."""
+        for user in self.users.values():
+            if user.firebase_uid == firebase_uid and not user.is_active:
                 return user
         return None
 
@@ -33,8 +41,9 @@ class FakeUserRepository(UserRepositoryPort):
         return list(self.users.values())[offset : offset + limit]
 
     def delete(self, user_id: UUID) -> bool:
+        """Soft delete user by marking as inactive (matches real repository behavior)."""
         if user_id in self.users:
-            del self.users[user_id]
+            self.users[user_id].is_active = False
             return True
         return False
 

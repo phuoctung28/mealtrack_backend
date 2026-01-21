@@ -81,6 +81,16 @@ class UserRepository(UserRepositoryPort):
         )
         return UserMapper.to_domain(user_entity) if user_entity else None
 
+    def find_deleted_by_firebase_uid(self, firebase_uid: str) -> Optional[UserDomainModel]:
+        """Find deleted user by Firebase UID (only inactive users)."""
+        user_entity = (
+            self.db.query(User)
+            .options(*_USER_RELATIONSHIP_LOADS)
+            .filter(User.firebase_uid == firebase_uid, User.is_active == False)
+            .first()
+        )
+        return UserMapper.to_domain(user_entity) if user_entity else None
+
     def find_all(self, limit: int = 100, offset: int = 0) -> List[UserDomainModel]:
         """Find all users with pagination."""
         user_entities = (

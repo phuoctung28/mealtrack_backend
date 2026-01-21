@@ -27,7 +27,12 @@ class UserRepositoryPort(ABC):
 
     @abstractmethod
     def find_by_firebase_uid(self, firebase_uid: str) -> Optional[UserDomainModel]:
-        """Find a user by Firebase UID."""
+        """Find a user by Firebase UID (active users only)."""
+        pass
+
+    @abstractmethod
+    def find_deleted_by_firebase_uid(self, firebase_uid: str) -> Optional[UserDomainModel]:
+        """Find a deleted user by Firebase UID (inactive users only)."""
         pass
 
     @abstractmethod

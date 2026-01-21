@@ -284,7 +284,7 @@ class TestSyncUserCommandHandler:
             email="test@example.com",
             provider="google"
         )
-        
+
         # Handler should create UnitOfWork internally, but it will fail without real DB
         # This test verifies the handler doesn't crash when uow is None
         # In real usage, UnitOfWork() will be created
@@ -293,4 +293,187 @@ class TestSyncUserCommandHandler:
             mock_uow_class.return_value = mock_uow
             result = await handler.handle(command)
             assert result is not None
+
+
+class TestSyncUserReRegistration:
+    """Test suite for re-registration after account deletion."""
+
+    @pytest.fixture
+    def handler(self):
+        """Create a SyncUserCommandHandler instance."""
+        return SyncUserCommandHandler()
+
+    @pytest.mark.asyncio
+    async def test_sync_creates_new_user_after_deletion(self, handler):
+        """Re-authentication after deletion creates fresh account with new ID."""
+        from uuid import uuid4
+        from src.domain.model.user import UserDomainModel
+        from src.domain.model.auth.auth_provider import AuthProvider
+
+        fake_uow = FakeUnitOfWork()
+
+        # Create and soft-delete a user (simulate account deletion)
+        old_user_id = uuid4()
+        deleted_user = UserDomainModel(
+            id=old_user_id,
+            firebase_uid="firebase_reregister",
+            email="deleted@example.com",
+            username="deleteduser",
+            password_hash="",
+            provider=AuthProvider.GOOGLE,
+            is_active=False,  # Deleted user
+            onboarding_completed=True,  # Had completed onboarding before
+        )
+        fake_uow.users.save(deleted_user)
+
+        handler.uow = fake_uow
+
+        # Re-authenticate with same Firebase UID
+        command = SyncUserCommand(
+            firebase_uid="firebase_reregister",
+            email="deleted@example.com",
+            phone_number="+1234567890",
+            display_name="Returning User",
+            photo_url="https://example.com/photo.jpg",
+            provider="google",
+        )
+
+        result = await handler.handle(command)
+
+        # Should create a new user
+        assert result["created"] is True
+        assert result["updated"] is False
+        assert result["message"] == "User created successfully"
+
+        # New user should have a different ID
+        new_user_id = result["user"]["id"]
+        assert str(new_user_id) != str(old_user_id), "New user should have different ID from deleted user"
+
+        # New user should have onboarding_completed=False (fresh start)
+        assert result["user"]["onboarding_completed"] is False
+
+        # Firebase UID should match
+        assert result["user"]["firebase_uid"] == "firebase_reregister"
+
+    @pytest.mark.asyncio
+    async def test_deleted_user_record_preserved(self, handler):
+        """Deleted user record is not modified on re-registration."""
+        from uuid import uuid4
+        from src.domain.model.user import UserDomainModel
+        from src.domain.model.auth.auth_provider import AuthProvider
+
+        fake_uow = FakeUnitOfWork()
+
+        # Create and soft-delete a user
+        old_user_id = uuid4()
+        deleted_user = UserDomainModel(
+            id=old_user_id,
+            firebase_uid="firebase_preserve",
+            email="old_anonymized@deleted.local",  # Anonymized email
+            username="deleted_user_123",
+            password_hash="",
+            provider=AuthProvider.GOOGLE,
+            is_active=False,
+            onboarding_completed=True,
+        )
+        fake_uow.users.save(deleted_user)
+
+        handler.uow = fake_uow
+
+        # Re-authenticate with same Firebase UID
+        command = SyncUserCommand(
+            firebase_uid="firebase_preserve",
+            email="returning@example.com",
+            display_name="Returning User",
+            provider="google",
+        )
+
+        result = await handler.handle(command)
+
+        # New user created
+        assert result["created"] is True
+        new_user_id = result["user"]["id"]
+        assert str(new_user_id) != str(old_user_id)
+
+        # Verify the old deleted user record is preserved unchanged
+        old_user = fake_uow.users.users.get(old_user_id)
+        assert old_user is not None, "Deleted user record should still exist"
+        assert old_user.is_active is False, "Deleted user should remain inactive"
+        assert old_user.email == "old_anonymized@deleted.local", "Deleted user email should be preserved"
+        assert old_user.onboarding_completed is True, "Deleted user onboarding should be preserved"
+
+    @pytest.mark.asyncio
+    async def test_new_user_triggers_onboarding(self, handler):
+        """New user created after re-registration has fresh onboarding state."""
+        from uuid import uuid4
+        from src.domain.model.user import UserDomainModel
+        from src.domain.model.auth.auth_provider import AuthProvider
+
+        fake_uow = FakeUnitOfWork()
+
+        # Create a deleted user who had completed onboarding
+        old_user = UserDomainModel(
+            id=uuid4(),
+            firebase_uid="firebase_onboard",
+            email="old@example.com",
+            username="olduser",
+            password_hash="",
+            provider=AuthProvider.GOOGLE,
+            is_active=False,
+            onboarding_completed=True,  # Had completed before
+        )
+        fake_uow.users.save(old_user)
+
+        handler.uow = fake_uow
+
+        command = SyncUserCommand(
+            firebase_uid="firebase_onboard",
+            email="new@example.com",
+            provider="google",
+        )
+
+        result = await handler.handle(command)
+
+        # New user should need to complete onboarding again
+        assert result["created"] is True
+        assert result["user"]["onboarding_completed"] is False
+
+    @pytest.mark.asyncio
+    async def test_reregistration_creates_notification_preferences(self, handler):
+        """Re-registered user gets new default notification preferences."""
+        from uuid import uuid4
+        from src.domain.model.user import UserDomainModel
+        from src.domain.model.auth.auth_provider import AuthProvider
+
+        fake_uow = FakeUnitOfWork()
+
+        # Create a deleted user
+        old_user = UserDomainModel(
+            id=uuid4(),
+            firebase_uid="firebase_notif",
+            email="old@example.com",
+            username="olduser",
+            password_hash="",
+            provider=AuthProvider.GOOGLE,
+            is_active=False,
+        )
+        fake_uow.users.save(old_user)
+
+        handler.uow = fake_uow
+
+        command = SyncUserCommand(
+            firebase_uid="firebase_notif",
+            email="new@example.com",
+            provider="google",
+        )
+
+        result = await handler.handle(command)
+
+        # New user created
+        assert result["created"] is True
+        new_user_id = str(result["user"]["id"])
+
+        # Check notification preferences were created for new user
+        prefs = fake_uow.notifications.find_notification_preferences_by_user(new_user_id)
+        assert prefs is not None, "Notification preferences should be created for new user"
 

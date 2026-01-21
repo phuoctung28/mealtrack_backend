@@ -17,7 +17,9 @@ from src.infra.services.firebase_auth_service import FirebaseAuthService
 from src.infra.database.models.meal.meal import Meal
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal_planning.meal_plan import MealPlan
-from src.infra.database.models.conversation.conversation import Conversation
+# TODO: Conversation table never created in database (no migration exists).
+# Remove this import and related code once confirmed conversations feature is deprecated.
+# from src.infra.database.models.conversation.conversation import Conversation
 from src.infra.database.models.chat.thread import ChatThread
 from src.infra.database.models.notification.user_fcm_token import UserFcmToken
 from src.infra.database.models.notification.notification_preferences import NotificationPreferences
@@ -132,22 +134,26 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                 MealPlan.user_id == user_id
             ).update({MealPlan.is_active: False})
 
-            # 3. Soft-delete conversations (set is_active=False)
-            conversations_count = uow.session.query(Conversation).filter(
-                Conversation.user_id == user_id
-            ).update({Conversation.is_active: False})
+            # TODO: Conversation table never created - ORM model exists but no migration.
+            # Causes error: "Table 'mealtrack.conversations' doesn't exist"
+            # Chat functionality uses chat_threads table instead (created in migration 009).
+            # Uncomment when/if conversations table is created via migration.
+            # # 3. Soft-delete conversations (set is_active=False)
+            # conversations_count = uow.session.query(Conversation).filter(
+            #     Conversation.user_id == user_id
+            # ).update({Conversation.is_active: False})
 
-            # 4. Soft-delete chat_threads (set is_active=False)
+            # 3. Soft-delete chat_threads (set is_active=False)
             chat_threads_count = uow.session.query(ChatThread).filter(
                 ChatThread.user_id == user_id
             ).update({ChatThread.is_active: False})
 
-            # 5. Deactivate FCM tokens (set is_active=False)
+            # 4. Deactivate FCM tokens (set is_active=False)
             fcm_tokens_count = uow.session.query(UserFcmToken).filter(
                 UserFcmToken.user_id == user_id
             ).update({UserFcmToken.is_active: False})
 
-            # 6. Mark notification preferences as deleted (set is_deleted=True)
+            # 5. Mark notification preferences as deleted (set is_deleted=True)
             notif_prefs_count = uow.session.query(NotificationPreferences).filter(
                 NotificationPreferences.user_id == user_id
             ).update({NotificationPreferences.is_deleted: True})
@@ -157,8 +163,8 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
 
             logger.info(
                 f"Soft-deleted related data: meals={meals_count}, meal_plans={meal_plans_count}, "
-                f"conversations={conversations_count}, chat_threads={chat_threads_count}, "
-                f"fcm_tokens={fcm_tokens_count}, notification_prefs={notif_prefs_count}"
+                f"chat_threads={chat_threads_count}, fcm_tokens={fcm_tokens_count}, "
+                f"notification_prefs={notif_prefs_count}"
             )
         except Exception as e:
             logger.error(f"Failed to soft-delete related data: {str(e)}")
