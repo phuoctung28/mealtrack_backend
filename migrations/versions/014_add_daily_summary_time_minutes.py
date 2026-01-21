@@ -9,7 +9,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision: str = '014'
@@ -19,38 +18,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add daily_summary_time_minutes column (9PM = 1260 minutes from midnight)
-    # Step 1: Add as nullable with server default (MySQL handles existing rows automatically)
+    # Add daily_summary_time_minutes column to notification_preferences
+    # Using same pattern as migration 013 (water_reminder_time_minutes)
     op.add_column('notification_preferences',
-        sa.Column('daily_summary_time_minutes', sa.Integer(), nullable=True, server_default='1260')
+        sa.Column('daily_summary_time_minutes', sa.Integer(), nullable=True, default=1260)
     )
-    
-    # Step 2: Update any NULL values (shouldn't be any, but safety first)
-    op.execute(text("UPDATE notification_preferences SET daily_summary_time_minutes = 1260 WHERE daily_summary_time_minutes IS NULL"))
-    
-    # Step 3: Make column NOT NULL now that all rows have values
-    op.alter_column('notification_preferences', 'daily_summary_time_minutes',
-        existing_type=sa.Integer(),
-        nullable=False,
-        server_default='1260'
-    )
-    
-    # Step 4: Add constraint to ensure value is between 0 and 1439 (minutes from midnight)
-    # Using raw SQL for MySQL compatibility (MySQL 8.0+ supports CHECK constraints)
-    op.execute(text("""
-        ALTER TABLE notification_preferences 
-        ADD CONSTRAINT check_daily_summary_time 
-        CHECK (daily_summary_time_minutes >= 0 AND daily_summary_time_minutes < 1440)
-    """))
+    # Update existing rows to default 9PM (1260 minutes from midnight)
+    op.execute("UPDATE notification_preferences SET daily_summary_time_minutes = 1260 WHERE daily_summary_time_minutes IS NULL")
 
 
 def downgrade() -> None:
-    # Drop the CHECK constraint first (MySQL syntax)
-    try:
-        op.execute(text("ALTER TABLE notification_preferences DROP CHECK check_daily_summary_time"))
-    except Exception:
-        # Constraint might not exist, ignore
-        pass
-    
     # Drop the daily_summary_time_minutes column
     op.drop_column('notification_preferences', 'daily_summary_time_minutes')
