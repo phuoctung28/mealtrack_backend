@@ -2,6 +2,21 @@
 """
 Development database setup script.
 This script is for LOCAL DEVELOPMENT ONLY and should never be used in production.
+
+⚠️ DEPRECATED: Use migrations/run.py instead
+
+This script creates tables directly from SQLAlchemy models using Base.metadata.create_all(),
+which bypasses Alembic migrations. This means:
+- ❌ Migration-specific logic (CHECK constraints, data transforms) won't be applied
+- ❌ Database state may differ from production
+- ❌ alembic_version table won't be properly stamped
+
+RECOMMENDED: Use migrations/run.py which properly handles migrations with retry logic.
+
+This script is kept for:
+- Emergency database recreation during development
+- Testing specific scenarios that need a clean slate
+- Understanding the base schema without migrations
 """
 import os
 import sys
