@@ -39,9 +39,9 @@ if ! docker ps | grep -q mealtrack_redis; then
     sleep 5
 fi
 
-# Setup development database if needed
-echo "🔧 Setting up development database..."
-python scripts/development/dev_setup.py
+# Run database migrations
+echo "🔧 Running database migrations..."
+python migrations/run.py
 
 # Start app
 echo "✅ Ready! Starting at http://localhost:8000"

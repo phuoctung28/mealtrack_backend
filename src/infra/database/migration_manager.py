@@ -1,8 +1,30 @@
 """
 Database migration manager for automatic schema and migration management.
 
-This module handles automatic database initialization and migration execution
-during application startup, ensuring the database is always up-to-date.
+⚠️ DEPRECATED FOR PRODUCTION USE ⚠️
+
+This module is NO LONGER USED in production deployments. Migrations are now run
+via docker-entrypoint.sh → migrations/run.py BEFORE app startup to prevent race
+conditions between multiple workers.
+
+CURRENT USAGE:
+- ❌ Production: NOT USED (disabled via AUTO_MIGRATE=false)
+- ✅ Local dev: Can be used for manual migration operations
+- ✅ Testing: Used in test fixtures for database setup
+- ✅ Manual ops: Available for maintenance scripts
+
+For production migrations, see:
+- migrations/run.py (simple runner with retry logic)
+- docker-entrypoint.sh (runs migrations before starting workers)
+
+This module is kept for:
+1. Local development convenience
+2. Test fixtures that need migration control
+3. Manual maintenance operations
+4. Backward compatibility with existing scripts
+
+NOTE: If AUTO_MIGRATE=true is set, this will still work but is NOT recommended
+for multi-worker deployments as it can cause race conditions.
 """
 import logging
 import os

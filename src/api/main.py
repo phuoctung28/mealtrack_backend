@@ -38,7 +38,6 @@ from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.infra.database.config import engine
-from src.infra.database.migration_manager import MigrationManager
 
 load_dotenv()
 
@@ -115,24 +114,9 @@ async def lifespan(app: FastAPI):
         logger.error("Failed to initialize Firebase: %s", e)
         raise
 
-    # Run database migrations
-    try:
-        migration_manager = MigrationManager.from_environment(engine)
-        success = migration_manager.initialize_and_migrate()
-
-        if not success:
-            logger.error("Database migrations failed!")
-            # Optionally, you can decide to exit here or continue in degraded mode
-            # For now, we'll log the error and continue
-            if os.getenv("FAIL_ON_MIGRATION_ERROR", "false").lower() == "true":
-                logger.error(
-                    "Exiting due to migration failure (FAIL_ON_MIGRATION_ERROR=true)"
-                )
-                raise RuntimeError("Database migration failed")
-    except Exception as e:
-        logger.error("Failed to run migrations: %s", e)
-        if os.getenv("FAIL_ON_MIGRATION_ERROR", "false").lower() == "true":
-            raise
+    # NOTE: Database migrations are run via docker-entrypoint.sh BEFORE app startup
+    # This ensures migrations complete before any workers start, preventing race conditions
+    # See: migrations/run.py and docker-entrypoint.sh
 
     # Initialize and start scheduled notification service
     scheduled_service = None
