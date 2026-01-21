@@ -42,6 +42,10 @@ WORKDIR /app
 COPY --chown=appuser:appuser src/ /app/src/
 COPY --chown=appuser:appuser alembic.ini /app/
 COPY --chown=appuser:appuser migrations/ /app/migrations/
+COPY --chown=appuser:appuser docker-entrypoint.sh /app/
+
+# Make entrypoint executable
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Switch to non-root user
 USER appuser
@@ -51,6 +55,10 @@ ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 ENV PYTHONUNBUFFERED=1
 
+# Set worker count and disable auto-migration (migrations run via entrypoint)
+ENV UVICORN_WORKERS=2
+ENV AUTO_MIGRATE=false
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
@@ -58,5 +66,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Expose port
 EXPOSE 8000
 
-# Start the application with optimized workers
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--loop", "uvloop"]
+# Start the application via entrypoint (runs migrations first, then starts workers)
+CMD ["/app/docker-entrypoint.sh"]
