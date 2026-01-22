@@ -113,18 +113,19 @@ class TestHandlerStubs:
         )
 
         # Create all stubs
-        stub_meal_repo = Mock()
-        stub_meal_repo.save.return_value = None
+        stub_uow = Mock()
+        stub_uow.meals = Mock()
+        stub_uow.meals.save.return_value = None
 
         stub_food_service = Mock()
 
         # Create handler with stubs
         handler = EditMealCommandHandler(
-            meal_repository=stub_meal_repo,
+            uow=stub_uow,
             food_service=stub_food_service,
             nutrition_calculator=None
         )
 
         # Verify handler is created with stubs
-        assert handler.meal_repository == stub_meal_repo
+        assert handler.uow == stub_uow
         assert handler.food_service == stub_food_service
