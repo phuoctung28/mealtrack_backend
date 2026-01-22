@@ -100,7 +100,8 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                         "is_active": user.is_active,
                         "onboarding_completed": user.onboarding_completed,
                         "last_accessed": user.last_accessed,
-                        # "created_at": user.created_at, # created_at might be None in pure domain if not set
+                        "created_at": user.created_at,
+                        "updated_at": user.updated_at,
                         "is_premium": is_premium,
                         "subscription": subscription_info
                     },

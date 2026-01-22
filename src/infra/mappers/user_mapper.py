@@ -27,6 +27,8 @@ class UserMapper:
             display_name=user_entity.display_name,
             photo_url=user_entity.photo_url,
             deleted_at=user_entity.deleted_at,
+            created_at=user_entity.created_at,
+            updated_at=user_entity.updated_at,
             profiles=[UserProfileMapper.to_domain(p) for p in user_entity.profiles],
         )
 
@@ -77,6 +79,8 @@ class UserProfileMapper:
             health_conditions=profile_entity.health_conditions,
             allergies=profile_entity.allergies,
             pain_points=profile_entity.pain_points,
+            created_at=profile_entity.created_at,
+            updated_at=profile_entity.updated_at,
         )
 
     @staticmethod
