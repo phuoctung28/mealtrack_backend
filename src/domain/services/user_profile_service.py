@@ -5,8 +5,9 @@ Follows clean architecture principles.
 import logging
 from typing import Dict, Any
 
+from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.model.meal_planning import UserPreferences, DietaryPreference, FitnessGoal, PlanDuration
-from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
+from src.domain.model.user import TdeeRequest, Sex, Goal, UnitSystem
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.services.tdee_service import TdeeCalculationService
 
@@ -29,28 +30,16 @@ class UserProfileService:
         profile = self.user_repo.get_profile(user_id)
         
         if profile:
-            # Calculate TDEE using domain service
+            # Calculate TDEE using domain service with centralized mapper
             sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
-            activity_map = {
-                "sedentary": ActivityLevel.SEDENTARY,
-                "light": ActivityLevel.LIGHT,
-                "moderate": ActivityLevel.MODERATE,
-                "active": ActivityLevel.ACTIVE,
-                "extra": ActivityLevel.EXTRA,
-            }
-            goal_map = {
-                "cut": Goal.CUT,
-                "bulk": Goal.BULK,
-                "recomp": Goal.RECOMP,
-            }
-            
+
             tdee_request = TdeeRequest(
                 age=profile.age,
                 sex=sex,
                 height=profile.height_cm,
                 weight=profile.weight_kg,
-                activity_level=activity_map.get(profile.activity_level, ActivityLevel.MODERATE),
-                goal=goal_map.get(profile.fitness_goal, Goal.RECOMP),
+                activity_level=ActivityGoalMapper.map_activity_level(profile.activity_level),
+                goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
                 body_fat_pct=profile.body_fat_percentage,
                 unit_system=UnitSystem.METRIC
             )

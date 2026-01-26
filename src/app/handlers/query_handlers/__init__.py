@@ -26,12 +26,14 @@ from .get_user_onboarding_status_query_handler import GetUserOnboardingStatusQue
 from .get_user_profile_query_handler import GetUserProfileQueryHandler
 # TDEE handlers
 from .get_user_tdee_query_handler import GetUserTdeeQueryHandler
+from .preview_tdee_query_handler import PreviewTdeeQueryHandler
 # Food handlers
 from .search_foods_query_handler import SearchFoodsQueryHandler
 
 __all__ = [
     # TDEE
     "GetUserTdeeQueryHandler",
+    "PreviewTdeeQueryHandler",
     # Food
     "SearchFoodsQueryHandler",
     "GetFoodDetailsQueryHandler",

@@ -10,6 +10,7 @@ import uuid
 from typing import List, Optional, Tuple, Callable, Any
 
 from src.domain.cache.cache_keys import CacheKeys
+from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.model.meal_suggestion import (
     MealSuggestion,
     SuggestionSession,
@@ -18,7 +19,7 @@ from src.domain.model.meal_suggestion import (
     RecipeStep,
     MealType,
 )
-from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
+from src.domain.model.user import TdeeRequest, Sex, Goal, UnitSystem
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
@@ -167,32 +168,16 @@ class SuggestionOrchestrationService:
         Returns target calories based on user's fitness goal.
         """
         try:
-            # Map profile data to TDEE request
+            # Map profile data to TDEE request using centralized mapper
             sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
-
-            activity_map = {
-                "sedentary": ActivityLevel.SEDENTARY,
-                "light": ActivityLevel.LIGHT,
-                "moderate": ActivityLevel.MODERATE,
-                "active": ActivityLevel.ACTIVE,
-                "extra": ActivityLevel.EXTRA,
-            }
-
-            goal_map = {
-                "cut": Goal.CUT,
-                "bulk": Goal.BULK,
-                "recomp": Goal.RECOMP,
-            }
 
             tdee_request = TdeeRequest(
                 age=profile.age,
                 sex=sex,
                 height=profile.height_cm,
                 weight=profile.weight_kg,
-                activity_level=activity_map.get(
-                    profile.activity_level, ActivityLevel.MODERATE
-                ),
-                goal=goal_map.get(profile.fitness_goal, Goal.RECOMP),
+                activity_level=ActivityGoalMapper.map_activity_level(profile.activity_level),
+                goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
                 body_fat_pct=profile.body_fat_percentage,
                 unit_system=UnitSystem.METRIC,
             )

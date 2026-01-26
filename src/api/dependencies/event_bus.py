@@ -85,6 +85,7 @@ from src.app.handlers.query_handlers import (
 # Import all query handlers from module
 from src.app.handlers.query_handlers import (
     GetUserTdeeQueryHandler,
+    PreviewTdeeQueryHandler,
     SearchFoodsQueryHandler,
     GetFoodDetailsQueryHandler,
     GetMealByIdQueryHandler,
@@ -130,7 +131,7 @@ from src.app.queries.meal_plan import (
     GetMealsByDateQuery,
 )
 from src.app.queries.notification import GetNotificationPreferencesQuery
-from src.app.queries.tdee import GetUserTdeeQuery
+from src.app.queries.tdee import GetUserTdeeQuery, PreviewTdeeQuery
 from src.app.queries.user import GetUserProfileQuery, GetUserMetricsQuery
 from src.app.queries.user.get_user_by_firebase_uid_query import GetUserByFirebaseUidQuery
 from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboardingStatusQuery
@@ -381,6 +382,7 @@ def get_configured_event_bus() -> EventBus:
         GetUserMetricsQuery, GetUserMetricsQueryHandler()
     )
     event_bus.register_handler(GetUserTdeeQuery, GetUserTdeeQueryHandler())
+    event_bus.register_handler(PreviewTdeeQuery, PreviewTdeeQueryHandler())
 
     # Register notification handlers
     event_bus.register_handler(

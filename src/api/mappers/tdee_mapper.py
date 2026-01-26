@@ -7,11 +7,11 @@ from src.api.schemas.response import (
     TdeeCalculationResponse,
     MacroTargetsResponse
 )
+from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.model.user import (
     TdeeRequest,
     TdeeResponse,
     Sex,
-    ActivityLevel,
     Goal,
     UnitSystem
 )
@@ -23,47 +23,25 @@ class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculation
     def to_domain(self, dto: TdeeCalculationRequest) -> TdeeRequest:
         """
         Convert TdeeCalculationRequest DTO to TdeeRequest domain model.
-        
+
         Args:
             dto: TDEE calculation request DTO
-            
+
         Returns:
             TdeeRequest domain model
         """
-        # Map string values to enums
-        sex_map = {
-            'male': Sex.MALE,
-            'female': Sex.FEMALE
-        }
-        
-        activity_map = {
-            'sedentary': ActivityLevel.SEDENTARY,
-            'light': ActivityLevel.LIGHT,
-            'moderate': ActivityLevel.MODERATE,
-            'active': ActivityLevel.ACTIVE,
-            'extra': ActivityLevel.EXTRA
-        }
-        
-        goal_map = {
-            'cut': Goal.CUT,
-            'bulk': Goal.BULK,
-            'recomp': Goal.RECOMP
-        }
-        
-        unit_map = {
-            'metric': UnitSystem.METRIC,
-            'imperial': UnitSystem.IMPERIAL
-        }
-        
+        # Map string values to enums using centralized mapper
+        sex = Sex.MALE if dto.sex.lower() == 'male' else Sex.FEMALE
+
         return TdeeRequest(
             age=dto.age,
-            sex=sex_map[dto.sex],
+            sex=sex,
             height=dto.height,
             weight=dto.weight,
             body_fat_pct=dto.body_fat_percentage,
-            activity_level=activity_map[dto.activity_level],
-            goal=goal_map[dto.goal],
-            unit_system=unit_map[dto.unit_system]
+            activity_level=ActivityGoalMapper.map_activity_level(dto.activity_level.value),
+            goal=ActivityGoalMapper.map_goal(dto.goal.value),
+            unit_system=UnitSystem.METRIC if dto.unit_system.value == 'metric' else UnitSystem.IMPERIAL
         )
     
     def to_response_dto(self, domain: TdeeResponse) -> TdeeCalculationResponse:

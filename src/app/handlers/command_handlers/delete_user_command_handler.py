@@ -2,6 +2,7 @@
 DeleteUserCommandHandler - Handler for deleting user accounts.
 Performs soft delete in database and hard delete in Firebase Auth.
 """
+import asyncio
 import logging
 from typing import Dict, Any, Optional
 
@@ -83,16 +84,22 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
 
                 # Step 4: Revoke refresh tokens to invalidate all active sessions
                 # This prevents the user from getting new access tokens
+                # Run in thread pool to avoid blocking the async event loop
                 try:
-                    self.firebase_auth_service.revoke_refresh_tokens(command.firebase_uid)
+                    await asyncio.to_thread(
+                        self.firebase_auth_service.revoke_refresh_tokens,
+                        command.firebase_uid
+                    )
                     logger.info(f"Successfully revoked Firebase refresh tokens")
                 except Exception as revoke_error:
                     logger.warning(f"Token revocation failed: {str(revoke_error)}")
                     # Continue - deletion is more important
 
                 # Step 5: Hard delete from Firebase Authentication
+                # Run in thread pool to avoid blocking the async event loop
                 try:
-                    firebase_deleted = self.firebase_auth_service.delete_firebase_user(
+                    firebase_deleted = await asyncio.to_thread(
+                        self.firebase_auth_service.delete_firebase_user,
                         command.firebase_uid
                     )
                     if firebase_deleted:

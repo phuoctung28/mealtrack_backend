@@ -8,8 +8,9 @@ from typing import Dict, Any
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.user import GetUserProfileQuery
-from src.domain.model.user import ActivityLevel, Sex
-from src.domain.model.user import TdeeRequest, UnitSystem, Goal
+from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
+from src.domain.model.user import Sex
+from src.domain.model.user import TdeeRequest, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow import UnitOfWork
@@ -37,30 +38,16 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
             if not profile:
                 raise ResourceNotFoundException(f"Profile for user {query.user_id} not found")
 
-            # Map profile data to TDEE request
+            # Map profile data to TDEE request using centralized mapper
             sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
-
-            activity_map = {
-                "sedentary": ActivityLevel.SEDENTARY,
-                "light": ActivityLevel.LIGHT,
-                "moderate": ActivityLevel.MODERATE,
-                "active": ActivityLevel.ACTIVE,
-                "extra": ActivityLevel.EXTRA,
-            }
-
-            goal_map = {
-                "cut": Goal.CUT,
-                "bulk": Goal.BULK,
-                "recomp": Goal.RECOMP,
-            }
 
             tdee_request = TdeeRequest(
                 age=profile.age,
                 sex=sex,
                 height=profile.height_cm,
                 weight=profile.weight_kg,
-                activity_level=activity_map.get(profile.activity_level, ActivityLevel.MODERATE),
-                goal=goal_map.get(profile.fitness_goal, Goal.RECOMP),
+                activity_level=ActivityGoalMapper.map_activity_level(profile.activity_level),
+                goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
                 body_fat_pct=profile.body_fat_percentage,
                 unit_system=UnitSystem.METRIC,
             )

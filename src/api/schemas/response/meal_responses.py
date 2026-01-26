@@ -1,11 +1,18 @@
 """
 Meal-related response DTOs.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, List, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+def _serialize_datetime_utc(v: datetime) -> str:
+    """Serialize datetime to ISO format with UTC timezone suffix."""
+    if v.tzinfo is None:
+        v = v.replace(tzinfo=timezone.utc)
+    return v.isoformat()
 
 
 class MealStatusEnum(str, Enum):
@@ -65,6 +72,10 @@ class SimpleMealResponse(BaseModel):
     error_message: Optional[str] = Field(None, description="Error message if failed")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
+
+    model_config = ConfigDict(
+        json_encoders={datetime: _serialize_datetime_utc}
+    )
 
 
 class DetailedMealResponse(SimpleMealResponse):
@@ -126,3 +137,7 @@ class ManualMealCreationResponse(BaseModel):
     status: str = Field(..., description="Creation status")
     message: str = Field(..., description="Success message")
     created_at: datetime = Field(..., description="Creation timestamp")
+
+    model_config = ConfigDict(
+        json_encoders={datetime: _serialize_datetime_utc}
+    )
