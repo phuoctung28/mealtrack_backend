@@ -42,6 +42,7 @@ class MealMapper:
             meal_id=meal.meal_id,
             status=STATUS_MAPPING.get(meal.status.value, meal.status.value.lower()),
             dish_name=meal.dish_name,
+            meal_type=meal.meal_type,
             ready_at=meal.ready_at,
             error_message=meal.error_message,
             created_at=meal.created_at
@@ -130,6 +131,7 @@ class MealMapper:
             meal_id=meal.meal_id,
             status=STATUS_MAPPING.get(meal.status.value, meal.status.value.lower()),
             dish_name=meal.dish_name,
+            meal_type=meal.meal_type,
             ready_at=meal.ready_at,
             error_message=meal.error_message,
             created_at=meal.created_at,

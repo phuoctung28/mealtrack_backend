@@ -33,7 +33,7 @@ class MealMapper:
             last_edited_at=db_meal.last_edited_at,
             edit_count=db_meal.edit_count,
             is_manually_edited=db_meal.is_manually_edited,
-            meal_type=None # meal_type might be missing in DB model, strictly speaking
+            meal_type=db_meal.meal_type
         )
 
     @staticmethod
@@ -49,6 +49,7 @@ class MealMapper:
             created_at=domain_meal.created_at,
             updated_at=domain_meal.updated_at or utc_now(),
             dish_name=domain_meal.dish_name,
+            meal_type=domain_meal.meal_type,
             ready_at=domain_meal.ready_at,
             error_message=domain_meal.error_message,
             raw_ai_response=domain_meal.raw_gpt_json,

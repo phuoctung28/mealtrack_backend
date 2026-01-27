@@ -20,6 +20,7 @@ class Meal(Base, TimestampMixin):
     user_id = Column(String(36), nullable=False, index=True)  # User who created this meal
     status = Column(Enum(MealStatusEnum), nullable=False)
     dish_name = Column(String(255), nullable=True)  # The name of the dish
+    meal_type = Column(String(20), nullable=True)  # breakfast, lunch, dinner, snack
     ready_at = Column(DateTime, nullable=True)  # When meal analysis was completed
     error_message = Column(Text, nullable=True)
     raw_ai_response = Column(Text, nullable=True)
@@ -46,6 +47,7 @@ class Meal(Base, TimestampMixin):
             created_at=self.created_at,
             image=self.image.to_domain() if self.image else None,
             dish_name=self.dish_name,
+            meal_type=self.meal_type,
             nutrition=self.nutrition.to_domain() if self.nutrition else None,
             ready_at=self.ready_at,
             error_message=self.error_message,
@@ -75,6 +77,7 @@ class Meal(Base, TimestampMixin):
             created_at=domain_model.created_at,
             updated_at=getattr(domain_model, "updated_at", None) or utc_now(),
             dish_name=getattr(domain_model, "dish_name", None),
+            meal_type=getattr(domain_model, "meal_type", None),
             ready_at=getattr(domain_model, "ready_at", None),
             error_message=getattr(domain_model, "error_message", None),
             raw_ai_response=getattr(domain_model, "raw_gpt_json", None),

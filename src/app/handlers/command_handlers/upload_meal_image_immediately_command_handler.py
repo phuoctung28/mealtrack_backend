@@ -16,6 +16,7 @@ from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_suggestion.translation_service import TranslationService
+from src.domain.services.meal_type_determination_service import determine_meal_type_from_timestamp
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
@@ -77,13 +78,17 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             meal_datetime = datetime.combine(meal_date, utc_now().time())
             
             logger.info(f"Creating meal record for date: {meal_date}")
-            
+
+            # Determine meal type from creation timestamp
+            meal_type = determine_meal_type_from_timestamp(meal_datetime)
+
             # Create meal record with ANALYZING status
             meal = Meal(
                 meal_id=str(uuid4()),
                 user_id=command.user_id,
                 status=MealStatus.ANALYZING,
                 created_at=meal_datetime,
+                meal_type=meal_type,
                 image=MealImage(
                     image_id=image_id,
                     format="jpeg" if "jpeg" in command.content_type else "png",

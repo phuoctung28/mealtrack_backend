@@ -68,6 +68,7 @@ class SimpleMealResponse(BaseModel):
     meal_id: str = Field(..., description="Meal ID")
     status: MealStatusEnum = Field(..., description="Processing status")
     dish_name: Optional[str] = Field(None, description="Identified dish name")
+    meal_type: Optional[str] = Field(None, description="Meal type (breakfast, lunch, dinner, snack)")
     ready_at: Optional[datetime] = Field(None, description="When analysis completed")
     error_message: Optional[str] = Field(None, description="Error message if failed")
     created_at: datetime = Field(..., description="Creation timestamp")
