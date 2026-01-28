@@ -59,3 +59,13 @@ class UserRepositoryPort(ABC):
     def update_profile(self, profile: UserProfileDomainModel) -> UserProfileDomainModel:
         """Update user profile."""
         pass
+
+    @abstractmethod
+    def update_user_timezone(self, firebase_uid: str, timezone: str) -> None:
+        """Update user's timezone in the database."""
+        pass
+
+    @abstractmethod
+    def get_user_timezone(self, firebase_uid: str) -> Optional[str]:
+        """Get user's timezone from database."""
+        pass

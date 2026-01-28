@@ -130,7 +130,7 @@ class UserRepository(UserRepositoryPort):
         # Convert UUID to string for SQLite compatibility
         profile_id_str = str(profile_domain.id) if isinstance(profile_domain.id, UUID) else profile_domain.id
         profile_entity = self.db.query(UserProfile).get(profile_id_str)
-        
+
         if not profile_entity:
             # Create new profile if it doesn't exist
             profile_entity = UserProfileMapper.to_persistence(profile_domain)
@@ -145,3 +145,20 @@ class UserRepository(UserRepositoryPort):
         self.db.commit()
         self.db.refresh(profile_entity)
         return UserProfileMapper.to_domain(profile_entity)
+
+    def update_user_timezone(self, firebase_uid: str, timezone: str) -> None:
+        """Update user's timezone in the database."""
+        self.db.query(User).filter(User.firebase_uid == firebase_uid).update(
+            {"timezone": timezone}
+        )
+        self.db.commit()
+        logger.info(f"Updated timezone for user {firebase_uid} to {timezone}")
+
+    def get_user_timezone(self, firebase_uid: str) -> Optional[str]:
+        """Get user's timezone from database."""
+        user_entity = (
+            self.db.query(User)
+            .filter(User.firebase_uid == firebase_uid, User.is_active == True)
+            .first()
+        )
+        return user_entity.timezone if user_entity else None
