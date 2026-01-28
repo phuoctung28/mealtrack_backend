@@ -89,8 +89,20 @@ class SuggestionOrchestrationService:
         # Check if regenerating from existing session
         if session_id:
             session = await self._repo.get_session(session_id)
-            if not session or session.user_id != user_id:
-                raise ValueError(f"Session {session_id} not found or unauthorized")
+            if not session:
+                # Session expired or not found - log warning and create new session
+                logger.warning(
+                    f"Session {session_id} not found or expired (TTL: 4h). "
+                    f"Creating new session for user {user_id}"
+                )
+                session_id = None  # Force new session creation
+            elif session.user_id != user_id:
+                # Security check: session exists but belongs to different user
+                logger.warning(
+                    f"Session {session_id} exists but user_id mismatch: "
+                    f"expected {user_id}, got {session.user_id}"
+                )
+                session_id = None  # Force new session creation for this user
 
             # Use existing session's shown meal names as exclusions
             exclude_meal_names = session.shown_meal_names
