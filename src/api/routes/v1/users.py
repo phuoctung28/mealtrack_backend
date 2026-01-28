@@ -12,6 +12,7 @@ from src.api.schemas.request.user_requests import (
     UserSyncRequest,
     UserUpdateLastAccessedRequest
 )
+from pydantic import BaseModel
 from src.api.schemas.response.user_responses import (
     UserSyncResponse,
     UserProfileResponse,
@@ -20,7 +21,7 @@ from src.api.schemas.response.user_responses import (
     OnboardingCompletionResponse,
     UserDeleteResponse
 )
-from src.app.commands.user import CompleteOnboardingCommand, DeleteUserCommand
+from src.app.commands.user import CompleteOnboardingCommand, DeleteUserCommand, UpdateTimezoneCommand
 from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
     UpdateUserLastAccessedCommand
@@ -28,9 +29,15 @@ from src.app.commands.user.sync_user_command import (
 from src.app.queries.user.get_user_by_firebase_uid_query import GetUserByFirebaseUidQuery
 from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboardingStatusQuery
 from src.infra.event_bus import EventBus
+from src.api.dependencies.auth import get_current_user_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/users", tags=["Users"])
+
+
+class UpdateTimezoneRequest(BaseModel):
+    """Request body for timezone update."""
+    timezone: str
 
 
 @router.post("/sync", response_model=UserSyncResponse)
@@ -219,6 +226,25 @@ async def complete_onboarding(
 
     except Exception as e:
         raise handle_exception(e)
+
+
+@router.put("/timezone")
+async def update_timezone(
+    request: UpdateTimezoneRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Update user's timezone. Called on app open/resume for accurate meal type detection.
+
+    - **timezone**: IANA timezone identifier (e.g., "Asia/Saigon", "America/New_York")
+    """
+    try:
+        command = UpdateTimezoneCommand(user_id=user_id, timezone=request.timezone)
+        result = await event_bus.send(command)
+        return result
+    except Exception as e:
+        raise handle_exception(e) from e
 
 
 @router.delete("/firebase/{firebase_uid}", response_model=UserDeleteResponse)

@@ -2,7 +2,6 @@
 Command to register an FCM token for push notifications.
 """
 from dataclasses import dataclass
-from typing import Optional
 
 from src.app.events.base import Command
 
@@ -13,4 +12,3 @@ class RegisterFcmTokenCommand(Command):
     user_id: str
     fcm_token: str
     device_type: str  # 'ios' or 'android'
-    timezone: Optional[str] = None  # IANA timezone identifier

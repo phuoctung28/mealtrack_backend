@@ -34,6 +34,7 @@ from src.app.commands.user import (
     SaveUserOnboardingCommand,
     CompleteOnboardingCommand,
     DeleteUserCommand,
+    UpdateTimezoneCommand,
 )
 from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
@@ -68,6 +69,7 @@ from src.app.handlers.command_handlers import (
     RegisterFcmTokenCommandHandler,
     DeleteFcmTokenCommandHandler,
     UpdateNotificationPreferencesCommandHandler,
+    UpdateTimezoneCommandHandler,
 )
 # Chat handlers
 from src.app.handlers.command_handlers.chat import (
@@ -367,6 +369,10 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         UpdateUserMetricsCommand,
         UpdateUserMetricsCommandHandler(cache_service=cache_service),
+    )
+    event_bus.register_handler(
+        UpdateTimezoneCommand,
+        UpdateTimezoneCommandHandler(),
     )
     event_bus.register_handler(
         GetUserProfileQuery,

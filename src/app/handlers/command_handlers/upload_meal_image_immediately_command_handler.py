@@ -3,7 +3,7 @@ Handler for immediate meal image upload and analysis.
 """
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
@@ -75,32 +75,19 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             
             # Determine the meal date - use target_date if provided, otherwise use now
             meal_date = command.target_date if command.target_date else utc_now().date()
-            meal_datetime = datetime.combine(meal_date, utc_now().time())
+            # IMPORTANT: Must be timezone-aware UTC for correct astimezone() conversion
+            meal_datetime = datetime.combine(meal_date, utc_now().time(), tzinfo=timezone.utc)
 
             logger.info(f"Creating meal record for date: {meal_date}")
 
-            # Determine user timezone for meal type detection (fallback: request → DB → UTC)
-            user_timezone = None
+            # Get user timezone from DB for meal type detection
+            with UnitOfWork() as uow:
+                user_timezone = uow.users.get_user_timezone(command.user_id)
 
-            # 1. Update user timezone if provided and valid
-            if command.timezone and is_valid_timezone(command.timezone):
-                with UnitOfWork() as uow:
-                    uow.users.update_user_timezone(command.user_id, command.timezone)
-                    uow.commit()
-                user_timezone = command.timezone
-                logger.info(f"Updated user timezone from request: {user_timezone}")
-            elif command.timezone:
-                logger.warning(f"Invalid timezone in request: {command.timezone}, will use fallback")
-
-            # 2. Fallback: get from DB if not provided
-            if not user_timezone:
-                with UnitOfWork() as uow:
-                    user_timezone = uow.users.get_user_timezone(command.user_id)
-
-            # 3. Final fallback to UTC
+            # Fallback to UTC if not set
             if not user_timezone or not is_valid_timezone(user_timezone):
                 user_timezone = "UTC"
-                logger.info("Using UTC as final fallback for meal type detection")
+                logger.info("Using UTC fallback for meal type detection")
 
             # 4. Convert UTC to local time for meal type detection
             zone_info = get_zone_info(user_timezone)

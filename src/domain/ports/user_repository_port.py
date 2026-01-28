@@ -61,11 +61,11 @@ class UserRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def update_user_timezone(self, firebase_uid: str, timezone: str) -> None:
+    def update_user_timezone(self, user_id: UUID, timezone: str) -> None:
         """Update user's timezone in the database."""
         pass
 
     @abstractmethod
-    def get_user_timezone(self, firebase_uid: str) -> Optional[str]:
+    def get_user_timezone(self, user_id: UUID) -> Optional[str]:
         """Get user's timezone from database."""
         pass

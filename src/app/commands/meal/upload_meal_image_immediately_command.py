@@ -22,4 +22,3 @@ class UploadMealImageImmediatelyCommand(Command):
     target_date: Optional[date] = None
     language: str = "en"
     user_description: Optional[str] = None  # User-provided context for better accuracy
-    timezone: Optional[str] = None  # IANA timezone (e.g., "Asia/Saigon") for accurate meal type detection

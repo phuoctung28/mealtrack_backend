@@ -176,7 +176,7 @@ app.add_middleware(
 app.add_middleware(RequestLoggerMiddleware)
 
 # Dev auth bypass: inject a fixed user during development
-add_dev_auth_bypass(app)
+# add_dev_auth_bypass(app)
 
 # Include all routers
 app.include_router(health_router)

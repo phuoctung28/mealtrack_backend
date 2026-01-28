@@ -146,19 +146,18 @@ class UserRepository(UserRepositoryPort):
         self.db.refresh(profile_entity)
         return UserProfileMapper.to_domain(profile_entity)
 
-    def update_user_timezone(self, firebase_uid: str, timezone: str) -> None:
+    def update_user_timezone(self, user_id: UUID, timezone: str) -> None:
         """Update user's timezone in the database."""
-        self.db.query(User).filter(User.firebase_uid == firebase_uid).update(
+        self.db.query(User).filter(User.id == user_id).update(
             {"timezone": timezone}
         )
         self.db.commit()
-        logger.info(f"Updated timezone for user {firebase_uid} to {timezone}")
-
-    def get_user_timezone(self, firebase_uid: str) -> Optional[str]:
+        logger.info(f"Updated timezone for user {user_id} to {timezone}")
+    def get_user_timezone(self, user_id: UUID) -> Optional[str]:
         """Get user's timezone from database."""
         user_entity = (
             self.db.query(User)
-            .filter(User.firebase_uid == firebase_uid, User.is_active == True)
+            .filter(User.id == user_id, User.is_active == True)
             .first()
         )
         return user_entity.timezone if user_entity else None

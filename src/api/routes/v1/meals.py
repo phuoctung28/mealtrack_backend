@@ -67,7 +67,6 @@ async def analyze_meal_image_immediate(
     target_date: Optional[str] = Query(None, description="Target date in YYYY-MM-DD format for meal association"),
     language: str = Query("en", description="ISO 639-1 language code for response (en, vi, es, fr, de, ja, zh)"),
     user_description: Optional[str] = Query(None, description="Optional user context (max 200 chars): 'no sugar', 'grilled', etc."),
-    timezone: Optional[str] = Query(None, description="IANA timezone (e.g., 'Asia/Saigon') for accurate meal type detection"),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -128,8 +127,8 @@ async def analyze_meal_image_immediate(
             sanitized_description = sanitize_user_description(user_description)
 
         # Process the upload and analysis immediately
-        logger.info("Processing meal photo for immediate analysis (target_date: %s, language: %s, has_description: %s, timezone: %s)",
-                    parsed_target_date, validated_language, bool(sanitized_description), timezone)
+        logger.info("Processing meal photo for immediate analysis (target_date: %s, language: %s, has_description: %s)",
+                    parsed_target_date, validated_language, bool(sanitized_description))
 
         command = UploadMealImageImmediatelyCommand(
             user_id=user_id,
@@ -137,8 +136,7 @@ async def analyze_meal_image_immediate(
             content_type=file.content_type,
             target_date=parsed_target_date,
             language=validated_language,
-            user_description=sanitized_description,
-            timezone=timezone
+            user_description=sanitized_description
         )
         
         logger.info("Uploading and analyzing meal immediately")
