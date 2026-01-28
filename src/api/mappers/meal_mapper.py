@@ -49,27 +49,36 @@ class MealMapper:
         )
     
     @staticmethod
-    def to_detailed_response(meal: Meal, image_url: Optional[str] = None) -> DetailedMealResponse:
+    def to_detailed_response(
+        meal: Meal,
+        image_url: Optional[str] = None,
+        target_language: Optional[str] = None
+    ) -> DetailedMealResponse:
         """
         Convert Meal domain model to DetailedMealResponse DTO.
-        
+
         Args:
             meal: Meal domain model
             image_url: Optional image URL
-            
+            target_language: Optional language code for translation display
+
         Returns:
             DetailedMealResponse DTO
         """
-        from src.api.schemas.response.meal_responses import MacrosResponse
-        
+        from src.api.schemas.response.meal_responses import (
+            MacrosResponse,
+            MealTranslationResponse,
+            TranslatedFoodItemResponse
+        )
+
         # Map food items from nutrition if available
         food_items = []
         total_calories = 0
         total_nutrition = None
-        
+
         if meal.nutrition:
             total_calories = meal.nutrition.calories
-            
+
             # Map total nutrition macros
             if hasattr(meal.nutrition, 'macros') and meal.nutrition.macros:
                 total_nutrition = MacrosResponse(
@@ -84,7 +93,7 @@ class MealMapper:
                     carbs=meal.nutrition.carbs,
                     fat=meal.nutrition.fat,
                 )
-            
+
             # Map food items
             if meal.nutrition.food_items:
                 from src.api.schemas.response.meal_responses import CustomNutritionResponse
@@ -100,7 +109,7 @@ class MealMapper:
                             sugar_g=None,
                             sodium_mg=None
                         )
-                    
+
                     # Calculate per-100g custom nutrition if this is a custom ingredient or has no fdc_id
                     custom_nutrition_dto = None
                     if hasattr(item, 'is_custom') and item.is_custom and item.quantity > 0:
@@ -112,7 +121,7 @@ class MealMapper:
                             carbs_per_100g=item.macros.carbs * scale_factor if item.macros else 0.0,
                             fat_per_100g=item.macros.fat * scale_factor if item.macros else 0.0,
                         )
-                    
+
                     food_item_dto = FoodItemResponse(
                         id=str(item.id),  # Use the primary key ID as string
                         name=item.name,
@@ -126,7 +135,28 @@ class MealMapper:
                         is_custom=getattr(item, 'is_custom', False)
                     )
                     food_items.append(food_item_dto)
-        
+
+        # Map translations if available
+        translations = None
+        if meal.translations and target_language and target_language != "en":
+            translation = meal.translations.get(target_language)
+            if translation:
+                translations = {
+                    target_language: MealTranslationResponse(
+                        language=translation.language,
+                        dish_name=translation.dish_name,
+                        food_items=[
+                            TranslatedFoodItemResponse(
+                                id=fi.food_item_id,
+                                name=fi.name,
+                                description=fi.description
+                            )
+                            for fi in translation.food_items
+                        ],
+                        translated_at=translation.translated_at
+                    )
+                }
+
         return DetailedMealResponse(
             meal_id=meal.meal_id,
             status=STATUS_MAPPING.get(meal.status.value, meal.status.value.lower()),
@@ -140,7 +170,8 @@ class MealMapper:
             image_url=image_url,
             total_calories=total_calories,
             total_weight_grams=meal.weight_grams if hasattr(meal, 'weight_grams') else None,
-            total_nutrition=total_nutrition
+            total_nutrition=total_nutrition,
+            translations=translations
         )
     
     @staticmethod

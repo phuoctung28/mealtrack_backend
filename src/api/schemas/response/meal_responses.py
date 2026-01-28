@@ -3,7 +3,7 @@ Meal-related response DTOs.
 """
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,6 +21,28 @@ class MealStatusEnum(str, Enum):
     analyzing = "analyzing"
     ready = "ready"
     failed = "failed"
+
+
+# Translation Response DTOs
+class TranslatedFoodItemResponse(BaseModel):
+    """Response DTO for translated food item."""
+    id: str = Field(..., description="Food item ID")
+    name: str = Field(..., description="Translated food item name")
+    description: Optional[str] = Field(None, description="Translated description")
+
+
+class MealTranslationResponse(BaseModel):
+    """Response DTO for meal translation."""
+    language: str = Field(..., description="ISO 639-1 language code")
+    dish_name: str = Field(..., description="Translated dish name")
+    food_items: List[TranslatedFoodItemResponse] = Field(
+        default_factory=list,
+        description="Translated food items"
+    )
+    translated_at: Optional[datetime] = Field(
+        None,
+        description="When translation was performed"
+    )
 
 
 
@@ -82,13 +104,17 @@ class SimpleMealResponse(BaseModel):
 class DetailedMealResponse(SimpleMealResponse):
     """Response DTO for detailed meal information with nutrition."""
     food_items: List[FoodItemResponse] = Field(
-        default_factory=list, 
+        default_factory=list,
         description="Food items in the meal"
     )
     image_url: Optional[str] = Field(None, description="Meal image URL")
     total_calories: Optional[float] = Field(None, ge=0, description="Total calories")
     total_weight_grams: Optional[float] = Field(None, gt=0, description="Total weight")
     total_nutrition: Optional[MacrosResponse] = Field(None, description="Total macros")
+    translations: Optional[Dict[str, MealTranslationResponse]] = Field(
+        None,
+        description="Translations keyed by language code"
+    )
 
 
 class MealListResponse(BaseModel):

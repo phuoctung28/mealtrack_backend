@@ -356,3 +356,34 @@ def get_suggestion_orchestration_service():
 
 # Note: Old handler functions removed - using event-driven architecture now
 # The event bus configuration in event_bus.py handles all dependencies
+
+
+# Meal Analysis Translation Service
+def get_meal_translation_service(
+    db: Session = Depends(get_db)
+) -> "MealAnalysisTranslationService":
+    """
+    Get the meal analysis translation service instance.
+
+    Args:
+        db: Database session
+
+    Returns:
+        MealAnalysisTranslationService: The translation service
+    """
+    from src.domain.ports.meal_translation_repository_port import MealTranslationRepositoryPort
+    from src.domain.services.meal_suggestion.translation_service import TranslationService
+    from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
+    from src.infra.repositories.meal_translation_repository import MealTranslationRepository
+
+    translation_repo = MealTranslationRepository(db)
+
+    # Get existing TranslationService (uses singleton model manager)
+    from src.infra.adapters.meal_generation_service import MealGenerationService
+    generation_service = MealGenerationService()
+    translation_service = TranslationService(generation_service)
+
+    return MealAnalysisTranslationService(
+        translation_repo=translation_repo,
+        translation_service=translation_service
+    )

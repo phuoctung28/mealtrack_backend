@@ -1,9 +1,10 @@
 """
 Meal-related request DTOs.
 """
+import warnings
 from typing import Optional, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class MacrosRequest(BaseModel):
@@ -82,7 +83,7 @@ class MealSearchRequest(BaseModel):
 class AnalyzeMealImageRequest(BaseModel):
     """Request DTO for meal image analysis options."""
     immediate_analysis: bool = Field(
-        False, 
+        False,
         description="Perform immediate analysis (synchronous)"
     )
     portion_size_grams: Optional[float] = Field(
@@ -96,6 +97,25 @@ class AnalyzeMealImageRequest(BaseModel):
         max_length=500,
         description="Additional context for analysis"
     )
+    language: str = Field(
+        default="en",
+        description="ISO 639-1 language code for translated results (en, vi, es, fr, de, ja, zh)"
+    )
+
+    @field_validator("language")
+    @classmethod
+    def validate_language_code(cls, v: str) -> str:
+        """Validate language code and fallback to 'en' if invalid."""
+        valid_languages = {"en", "vi", "es", "fr", "de", "ja", "zh"}
+        normalized = v.lower().strip()
+        if normalized not in valid_languages:
+            warnings.warn(
+                f"Unsupported language code '{v}', falling back to 'en'",
+                UserWarning,
+                stacklevel=2,
+            )
+            return "en"
+        return normalized
 
 
 # Food database manual meal creation requests

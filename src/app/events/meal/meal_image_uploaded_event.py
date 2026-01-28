@@ -15,6 +15,7 @@ class MealImageUploadedEvent(DomainEvent):
     meal_id: str
     image_url: str
     upload_timestamp: datetime
+    language: str = "en"  # Target language for translation
     # Metadata fields with defaults
     event_id: str = field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = field(default_factory=datetime.now)
