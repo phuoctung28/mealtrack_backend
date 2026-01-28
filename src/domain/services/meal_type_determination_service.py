@@ -13,8 +13,8 @@ def determine_meal_type_from_timestamp(created_at: datetime) -> str:
     Hour ranges:
     - Breakfast: 5:00 - 10:59
     - Lunch: 11:00 - 15:59
-    - Dinner: 16:00 - 21:59
-    - Snack: All other times
+    - Dinner: 16:00 - 00:59
+    - Snack: 1:00 - 4:59
     """
     hour = created_at.hour
 
@@ -22,7 +22,7 @@ def determine_meal_type_from_timestamp(created_at: datetime) -> str:
         return "breakfast"
     elif 11 <= hour < 16:
         return "lunch"
-    elif 16 <= hour < 22:
+    elif hour >= 16 or hour < 1:
         return "dinner"
     else:
         return "snack"

@@ -148,7 +148,7 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
             return "breakfast"
         elif 11 <= hour < 16:
             return "lunch"
-        elif 16 <= hour < 22:
+        elif hour >= 16 or hour < 1:
             return "dinner"
         else:
             return "snack"
