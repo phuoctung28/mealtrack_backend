@@ -217,6 +217,7 @@ def get_configured_event_bus() -> EventBus:
         get_cache_service,
         get_ai_chat_service,
         get_suggestion_orchestration_service,
+        get_meal_translation_service,
     )
     
     image_store = get_image_store()
@@ -233,6 +234,7 @@ def get_configured_event_bus() -> EventBus:
 
     # Register meal command handlers
     # Note: Handlers now use UnitOfWork internally for fresh sessions per request
+    meal_translation_service = get_meal_translation_service()
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
@@ -240,6 +242,7 @@ def get_configured_event_bus() -> EventBus:
             vision_service=vision_service,
             gpt_parser=gpt_parser,
             cache_service=cache_service,
+            meal_translation_service=meal_translation_service,
         ),
     )
 
@@ -446,6 +449,7 @@ def get_configured_event_bus() -> EventBus:
         vision_service=vision_service,
         gpt_parser=gpt_parser,
         image_store=image_store,
+        meal_translation_service=meal_translation_service,
     )
     event_bus.subscribe(
         MealImageUploadedEvent, meal_analysis_handler

@@ -2,11 +2,12 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Dict, Optional
 
 from src.domain.utils.timezone_utils import utc_now, format_iso_utc
 from .meal_image import MealImage
 from ..nutrition import Nutrition
+from .meal_translation_domain_models import MealTranslation
 
 
 class MealStatus(Enum):
@@ -43,6 +44,7 @@ class Meal:
     edit_count: int = 0
     is_manually_edited: bool = False
     meal_type: Optional[str] = None
+    translations: Optional[Dict[str, MealTranslation]] = None
     
     def __post_init__(self):
         """Validate invariants."""
@@ -96,7 +98,8 @@ class Meal:
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
             is_manually_edited=self.is_manually_edited,
-            meal_type=self.meal_type
+            meal_type=self.meal_type,
+            translations=self.translations
         )
     
     def mark_enriching(self, raw_gpt_json: str) -> 'Meal':
@@ -116,7 +119,8 @@ class Meal:
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
             is_manually_edited=self.is_manually_edited,
-            meal_type=self.meal_type
+            meal_type=self.meal_type,
+            translations=self.translations
         )
     
     def mark_ready(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
@@ -136,7 +140,8 @@ class Meal:
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
             is_manually_edited=self.is_manually_edited,
-            meal_type=self.meal_type
+            meal_type=self.meal_type,
+            translations=self.translations
         )
     
     def mark_failed(self, error_message: str) -> 'Meal':
@@ -156,7 +161,8 @@ class Meal:
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
             is_manually_edited=self.is_manually_edited,
-            meal_type=self.meal_type
+            meal_type=self.meal_type,
+            translations=self.translations
         )
     
     def mark_edited(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
@@ -176,7 +182,8 @@ class Meal:
             last_edited_at=utc_now(),
             edit_count=self.edit_count + 1,
             is_manually_edited=True,
-            meal_type=self.meal_type
+            meal_type=self.meal_type,
+            translations=self.translations
         )
 
     def mark_inactive(self) -> 'Meal':
@@ -196,7 +203,8 @@ class Meal:
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
             is_manually_edited=self.is_manually_edited,
-            meal_type=self.meal_type
+            meal_type=self.meal_type,
+            translations=self.translations
         )
     
     def to_dict(self) -> dict:
@@ -221,4 +229,10 @@ class Meal:
         if self.error_message is not None:
             result["error_message"] = self.error_message
 
-        return result 
+        if self.translations is not None:
+            result["translations"] = {
+                lang: trans.to_dict()
+                for lang, trans in self.translations.items()
+            }
+
+        return result

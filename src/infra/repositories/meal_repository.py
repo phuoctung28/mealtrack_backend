@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 _MEAL_LOAD_OPTIONS = (
     joinedload(DBMeal.image),
     selectinload(DBMeal.nutrition).selectinload(DBNutrition.food_items),
+    selectinload(DBMeal.translations),
 )
 
 

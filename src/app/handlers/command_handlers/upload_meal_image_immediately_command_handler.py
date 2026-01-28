@@ -15,7 +15,7 @@ from src.domain.model.meal import MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_suggestion.translation_service import TranslationService
+from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.domain.services.meal_type_determination_service import determine_meal_type_from_timestamp
 from src.domain.utils.timezone_utils import utc_now, get_zone_info, is_valid_timezone
 from src.infra.cache.cache_service import CacheService
@@ -34,13 +34,13 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         cache_service: Optional[CacheService] = None,
-        translation_service: Optional[TranslationService] = None,
+        meal_translation_service: Optional[MealAnalysisTranslationService] = None,
     ):
         self.image_store = image_store
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
         self.cache_service = cache_service
-        self.translation_service = translation_service
+        self.meal_translation_service = meal_translation_service
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
@@ -48,7 +48,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         self.vision_service = kwargs.get('vision_service', self.vision_service)
         self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
         self.cache_service = kwargs.get('cache_service', self.cache_service)
-        self.translation_service = kwargs.get('translation_service', self.translation_service)
+        self.meal_translation_service = kwargs.get('meal_translation_service', self.meal_translation_service)
     
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
@@ -141,21 +141,8 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             )
 
             # PHASE 2: Translation (if non-English)
-            phase2_elapsed = 0.0
-            if command.language and command.language != "en" and self.translation_service:
-                phase2_start = time.time()
-                logger.info(
-                    f"[PHASE-2-START] meal={saved_meal.meal_id} | "
-                    f"translating to {command.language}"
-                )
-                # Translation logic would go here when implemented
-                # vision_result = self.translation_service.translate(vision_result, command.language)
-                phase2_elapsed = time.time() - phase2_start
-                logger.info(
-                    f"[PHASE-2-COMPLETE] meal={saved_meal.meal_id} | "
-                    f"elapsed={phase2_elapsed:.2f}s | "
-                    f"language={command.language}"
-                )
+            # Note: Translation placeholder - original code removed, translation now
+            # integrated after parsing below
 
             # Parse the response
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
@@ -166,9 +153,40 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             meal.status = MealStatus.READY
             meal.ready_at = utc_now()
             meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)
-
-            # Use the parsed nutrition directly
             meal.nutrition = nutrition
+
+            # PHASE 2: Translation (after parsing, before final save)
+            phase2_elapsed = 0.0
+            if command.language and command.language != "en" and self.meal_translation_service:
+                phase2_start = time.time()
+                logger.info(
+                    f"[PHASE-2-START] meal={saved_meal.meal_id} | "
+                    f"translating to {command.language}"
+                )
+                if nutrition and nutrition.food_items:
+                    try:
+                        translation = await self.meal_translation_service.translate_meal(
+                            meal=saved_meal,
+                            dish_name=meal.dish_name,
+                            food_items=nutrition.food_items,
+                            target_language=command.language
+                        )
+                        if translation:
+                            logger.info(
+                                f"[PHASE-2] translation saved for meal={saved_meal.meal_id}, "
+                                f"language={command.language}"
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            f"[PHASE-2] translation failed for meal={saved_meal.meal_id}: {e}"
+                        )
+                        # Don't fail the whole analysis if translation fails
+                phase2_elapsed = time.time() - phase2_start
+                logger.info(
+                    f"[PHASE-2-COMPLETE] meal={saved_meal.meal_id} | "
+                    f"elapsed={phase2_elapsed:.2f}s | "
+                    f"language={command.language}"
+                )
 
             # Save the fully analyzed meal using UoW
             with UnitOfWork() as uow:
@@ -183,7 +201,11 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"language={command.language} | "
                     f"status={final_meal.status}"
                 )
-            
+
+            # Reload meal with translations for response
+            with UnitOfWork() as uow:
+                final_meal = uow.meals.find_by_id(meal.meal_id)
+
             await self._invalidate_daily_macros(command.user_id, meal_date)
 
             return final_meal

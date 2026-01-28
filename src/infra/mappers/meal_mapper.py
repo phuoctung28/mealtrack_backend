@@ -18,6 +18,13 @@ class MealMapper:
     @staticmethod
     def to_domain(db_meal: DBMeal) -> DomainMeal:
         """Convert DB model to domain model."""
+        # Build translations dict keyed by language code
+        translations_dict = None
+        if hasattr(db_meal, 'translations') and db_meal.translations:
+            translations_dict = {}
+            for t in db_meal.translations:
+                translations_dict[t.language] = t.to_domain()
+
         return DomainMeal(
             meal_id=db_meal.meal_id,
             user_id=db_meal.user_id,
@@ -33,7 +40,8 @@ class MealMapper:
             last_edited_at=db_meal.last_edited_at,
             edit_count=db_meal.edit_count,
             is_manually_edited=db_meal.is_manually_edited,
-            meal_type=db_meal.meal_type
+            meal_type=db_meal.meal_type,
+            translations=translations_dict
         )
 
     @staticmethod

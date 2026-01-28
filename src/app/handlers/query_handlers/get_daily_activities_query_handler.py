@@ -27,7 +27,9 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         activities = []
 
         # Get meal activities using fresh UnitOfWork
-        meal_activities = self._get_meal_activities(query.target_date, query.user_id)
+        meal_activities = self._get_meal_activities(
+            query.target_date, query.user_id, query.language
+        )
         logger.info(f"Found {len(meal_activities)} meal activities for user {query.user_id} on date {query.target_date.strftime('%Y-%m-%d')}")
         activities.extend(meal_activities)
 
@@ -42,7 +44,9 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         logger.info(f"Retrieved {len(activities)} total activities")
         return activities
 
-    def _get_meal_activities(self, target_date: datetime, user_id: str) -> List[Dict[str, Any]]:
+    def _get_meal_activities(
+        self, target_date: datetime, user_id: str, language: str = "en"
+    ) -> List[Dict[str, Any]]:
         """Get meal activities for a specific date and user."""
         try:
             date_obj = target_date.date()
@@ -59,8 +63,8 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
                     if meal.status == MealStatus.INACTIVE:
                         continue
 
-                    # Build activity from meal
-                    activity = self._build_meal_activity(meal, target_date)
+                    # Build activity from meal with language support
+                    activity = self._build_meal_activity(meal, target_date, language)
                     meal_activities.append(activity)
 
                 return meal_activities
@@ -69,11 +73,13 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
             logger.error(f"Error getting meal activities: {str(e)}", exc_info=True)
             return []
 
-    def _build_meal_activity(self, meal, target_date: datetime) -> Dict[str, Any]:
+    def _build_meal_activity(
+        self, meal, target_date: datetime, language: str = "en"
+    ) -> Dict[str, Any]:
         """Build activity dictionary from meal."""
         # Use stored meal type if available, otherwise determine from time
         meal_type = meal.meal_type if hasattr(meal, 'meal_type') and meal.meal_type else self._determine_meal_type(meal.created_at)
-        
+
         # Estimate weight
         estimated_weight = self._estimate_meal_weight(meal)
 
@@ -82,12 +88,19 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         if hasattr(meal, 'image') and meal.image:
             image_url = meal.image.url
 
+        # Get translated dish name if available
+        title = meal.dish_name or "Unknown Meal"
+        if language and language != "en" and meal.translations:
+            translation = meal.translations.get(language)
+            if translation and translation.dish_name:
+                title = translation.dish_name
+
         # Build activity
         return {
             "id": meal.meal_id,
             "type": "meal",
             "timestamp": format_iso_utc(meal.created_at) if meal.created_at else format_iso_utc(target_date),
-            "title": meal.dish_name or "Unknown Meal",
+            "title": title,
             "meal_type": meal_type,
             "calories": round(meal.nutrition.calories, 1) if meal.nutrition else 0,
             "macros": {
