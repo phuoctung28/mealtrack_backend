@@ -53,3 +53,11 @@ class FakeUserRepository(UserRepositoryPort):
     def update_profile(self, profile: UserProfileDomainModel) -> UserProfileDomainModel:
         self.profiles[profile.user_id] = profile
         return profile
+
+    def update_user_timezone(self, firebase_uid: str, timezone: str) -> None:
+        """Update user's timezone (no-op for fake repository)."""
+        pass
+
+    def get_user_timezone(self, firebase_uid: str) -> Optional[str]:
+        """Get user's timezone from database (returns None for fake repository)."""
+        return None
