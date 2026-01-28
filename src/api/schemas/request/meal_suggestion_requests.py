@@ -53,8 +53,10 @@ class MealSuggestionRequest(BaseModel):
     Request schema for generating meal suggestions.
 
     Generates exactly 3 meal suggestions based on:
-    - meal_type, meal_portion_type (or legacy meal_size), ingredients, cooking_time, language
-    
+    - meal_type, meal_portion_type (or legacy meal_size), ingredients, cooking_time
+
+    Language preference is read from Accept-Language header (not from request body).
+
     If session_id is provided, generates NEW suggestions excluding previously shown meals.
     """
 
@@ -104,10 +106,6 @@ class MealSuggestionRequest(BaseModel):
         default_factory=list,
         description="DEPRECATED: Use session_id instead for automatic exclusion",
     )
-    language: str = Field(
-        default="en",
-        description="ISO 639-1 language code for meal suggestions (en, vi, es, fr, de, ja, zh)",
-    )
 
     @field_validator("meal_size", mode="before")
     @classmethod
@@ -119,21 +117,6 @@ class MealSuggestionRequest(BaseModel):
                 stacklevel=2,
             )
         return v
-
-    @field_validator("language")
-    @classmethod
-    def validate_language_code(cls, v: str) -> str:
-        """Validate language code and fallback to 'en' if invalid."""
-        valid_languages = {"en", "vi", "es", "fr", "de", "ja", "zh"}
-        normalized = v.lower().strip()
-        if normalized not in valid_languages:
-            warnings.warn(
-                f"Unsupported language code '{v}', falling back to 'en'",
-                UserWarning,
-                stacklevel=2,
-            )
-            return "en"
-        return normalized
 
     def get_effective_portion_type(self) -> MealPortionTypeEnum:
         """Get effective portion type, preferring new field over legacy."""
@@ -159,7 +142,7 @@ class MealSuggestionRequest(BaseModel):
 
 # DEPRECATED: RegenerateSuggestionsRequest is no longer needed.
 # Use MealSuggestionRequest with session_id parameter to regenerate with automatic exclusion.
-# 
+#
 # class RegenerateSuggestionsRequest(BaseModel):
 #     """DEPRECATED: Use MealSuggestionRequest with session_id instead."""
 #     session_id: str
@@ -171,14 +154,21 @@ class SaveMealSuggestionRequest(BaseModel):
     Request schema for saving a meal suggestion to planned_meals table.
     This adds the meal to the user's daily meal plan (suggested meals).
     """
+
     suggestion_id: str = Field(..., description="ID of the suggestion being saved")
     name: str = Field(..., description="Name of the meal")
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
         ..., description="Type of meal"
     )
-    calories: int = Field(..., gt=0, description="Total calories (already scaled by AI for selected servings)")
+    calories: int = Field(
+        ...,
+        gt=0,
+        description="Total calories (already scaled by AI for selected servings)",
+    )
     protein: float = Field(..., ge=0, description="Protein in grams (already scaled)")
-    carbs: float = Field(..., ge=0, description="Carbohydrates in grams (already scaled)")
+    carbs: float = Field(
+        ..., ge=0, description="Carbohydrates in grams (already scaled)"
+    )
     fat: float = Field(..., ge=0, description="Fat in grams (already scaled)")
     description: Optional[str] = Field(None, description="Meal description")
     estimated_cook_time_minutes: Optional[int] = Field(
@@ -191,7 +181,9 @@ class SaveMealSuggestionRequest(BaseModel):
         default_factory=list, description="List of cooking instructions"
     )
     portion_multiplier: int = Field(
-        default=1, ge=1, description="Number of servings (informational only, values already scaled by AI)"
+        default=1,
+        ge=1,
+        description="Number of servings (informational only, values already scaled by AI)",
     )
     meal_date: str = Field(
         ..., description="Target date for the meal (YYYY-MM-DD format)"
@@ -202,6 +194,7 @@ class SaveMealSuggestionRequest(BaseModel):
     def validate_date_format(cls, v: str) -> str:
         """Validate date format is YYYY-MM-DD."""
         from datetime import datetime
+
         try:
             datetime.strptime(v, "%Y-%m-%d")
             return v
@@ -223,7 +216,6 @@ class SaveMealSuggestionRequest(BaseModel):
                 "ingredients_list": ["chicken breast", "lettuce", "tomatoes"],
                 "instructions": ["Grill chicken", "Chop vegetables", "Mix together"],
                 "portion_multiplier": 1,
-                "meal_date": "2024-01-15"
+                "meal_date": "2024-01-15",
             }
         }
-

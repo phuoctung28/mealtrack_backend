@@ -6,7 +6,7 @@ multiple languages.
 """
 from datetime import datetime
 
-from sqlalchemy import Column, String, DateTime, Integer
+from sqlalchemy import Column, String, DateTime, Integer, ForeignKey
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -22,7 +22,7 @@ class MealTranslation(Base):
     __tablename__ = 'meal_translation'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    meal_id = Column(String(36), nullable=False, index=True)
+    meal_id = Column(String(36), ForeignKey("meal.meal_id", ondelete="CASCADE"), nullable=False, index=True)
     language = Column(String(7), nullable=False)  # ISO 639-1: en, vi, es, fr, de, ja, zh
     dish_name = Column(String(255), nullable=False)
     translated_at = Column(DateTime, nullable=False)
@@ -35,6 +35,9 @@ class MealTranslation(Base):
         cascade="all, delete-orphan",
         lazy="selectin"
     )
+
+    # Relationship back to meal
+    meal = relationship("Meal", back_populates="translations")
 
     def to_domain(self):
         """Convert DB model to domain model."""
@@ -75,7 +78,7 @@ class MealTranslation(Base):
         for fi in domain_model.food_items:
             translation.food_items.append(
                 FoodItemTranslation(
-                    food_item_id=fi.food_item_id,
+                    food_item_id=str(fi.food_item_id),
                     name=fi.name,
                     description=fi.description
                 )

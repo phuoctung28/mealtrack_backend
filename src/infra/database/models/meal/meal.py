@@ -34,11 +34,24 @@ class Meal(Base, TimestampMixin):
     image_id = Column(String(36), ForeignKey("mealimage.image_id"), nullable=False)
     image = relationship("MealImage", uselist=False, lazy="joined")
     nutrition = relationship("Nutrition", uselist=False, back_populates="meal", cascade="all, delete-orphan")
+    translations = relationship(
+        "MealTranslation",
+        back_populates="meal",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
     
     def to_domain(self):
         """Convert DB model to domain model."""
         from src.domain.model.meal import Meal as DomainMeal
         from src.infra.mappers import MealStatusMapper
+
+        # Build translations dict keyed by language code
+        translations_dict = None
+        if self.translations:
+            translations_dict = {}
+            for t in self.translations:
+                translations_dict[t.language] = t.to_domain()
 
         return DomainMeal(
             meal_id=self.meal_id,
@@ -55,7 +68,8 @@ class Meal(Base, TimestampMixin):
             updated_at=self.updated_at,
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
-            is_manually_edited=self.is_manually_edited
+            is_manually_edited=self.is_manually_edited,
+            translations=translations_dict
         )
     
     @classmethod

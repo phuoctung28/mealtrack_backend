@@ -201,7 +201,11 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"language={command.language} | "
                     f"status={final_meal.status}"
                 )
-            
+
+            # Reload meal with translations for response
+            with UnitOfWork() as uow:
+                final_meal = uow.meals.find_by_id(meal.meal_id)
+
             await self._invalidate_daily_macros(command.user_id, meal_date)
 
             return final_meal

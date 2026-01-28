@@ -22,6 +22,7 @@ from src.api.base_dependencies import (
     initialize_scheduled_notification_service,
     shutdown_cache_layer,
 )
+from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.v1.activities import router as activities_router
@@ -71,13 +72,16 @@ def initialize_firebase():
 
     try:
         environment = os.getenv("ENVIRONMENT", "development")
-        
+
         # Option 1: Check for service account file path
         credentials_path = os.getenv("FIREBASE_CREDENTIALS")
         if credentials_path and os.path.exists(credentials_path):
             cred = credentials.Certificate(credentials_path)
             firebase_admin.initialize_app(cred)
-            logger.info("Firebase initialized with service account file (environment: %s)", environment)
+            logger.info(
+                "Firebase initialized with service account file (environment: %s)",
+                environment,
+            )
             return
 
         # Option 2: Check for service account JSON string
@@ -87,15 +91,23 @@ def initialize_firebase():
                 service_account_dict = json.loads(service_account_json)
                 cred = credentials.Certificate(service_account_dict)
                 firebase_admin.initialize_app(cred)
-                logger.info("Firebase initialized with service account JSON string (environment: %s)", environment)
+                logger.info(
+                    "Firebase initialized with service account JSON string (environment: %s)",
+                    environment,
+                )
                 return
             except json.JSONDecodeError as e:
                 logger.error("Invalid JSON in FIREBASE_SERVICE_ACCOUNT_JSON: %s", e)
-                raise ValueError("FIREBASE_SERVICE_ACCOUNT_JSON contains invalid JSON") from e
+                raise ValueError(
+                    "FIREBASE_SERVICE_ACCOUNT_JSON contains invalid JSON"
+                ) from e
 
         # Option 3: Fall back to default credentials
         firebase_admin.initialize_app()
-        logger.info("Firebase initialized with default credentials (environment: %s)", environment)
+        logger.info(
+            "Firebase initialized with default credentials (environment: %s)",
+            environment,
+        )
 
     except Exception as e:
         logger.error("Failed to initialize Firebase: %s", e)
@@ -143,7 +155,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down MealTrack API...")
-    
+
     # Stop scheduled notification service
     if scheduled_service:
         try:
@@ -174,6 +186,9 @@ app.add_middleware(
 
 # Request/Response logging
 app.add_middleware(RequestLoggerMiddleware)
+
+# Accept-Language header parsing
+app.add_middleware(AcceptLanguageMiddleware)
 
 # Dev auth bypass: inject a fixed user during development
 # add_dev_auth_bypass(app)

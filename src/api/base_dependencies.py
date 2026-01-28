@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
@@ -360,30 +361,45 @@ def get_suggestion_orchestration_service():
 
 # Meal Analysis Translation Service
 def get_meal_translation_service(
-    db: Session = Depends(get_db)
-) -> "MealAnalysisTranslationService":
+    db: Optional[Session] = None
+) -> MealAnalysisTranslationService:
     """
     Get the meal analysis translation service instance.
 
+    This function works both as:
+    - FastAPI dependency (db injected via Depends)
+    - Regular function call (creates its own session)
+
     Args:
-        db: Database session
+        db: Optional database session. If not provided, creates one internally.
 
     Returns:
         MealAnalysisTranslationService: The translation service
     """
-    from src.domain.ports.meal_translation_repository_port import MealTranslationRepositoryPort
     from src.domain.services.meal_suggestion.translation_service import TranslationService
     from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
     from src.infra.repositories.meal_translation_repository import MealTranslationRepository
+    from src.infra.database.config import SessionLocal
 
-    translation_repo = MealTranslationRepository(db)
+    # Create session if not provided (for non-request context)
+    own_session = db is None
+    if own_session:
+        db = SessionLocal()
 
-    # Get existing TranslationService (uses singleton model manager)
-    from src.infra.adapters.meal_generation_service import MealGenerationService
-    generation_service = MealGenerationService()
-    translation_service = TranslationService(generation_service)
+    try:
+        translation_repo = MealTranslationRepository(db)
 
-    return MealAnalysisTranslationService(
-        translation_repo=translation_repo,
-        translation_service=translation_service
-    )
+        # Get existing TranslationService (uses singleton model manager)
+        from src.infra.adapters.meal_generation_service import MealGenerationService
+        generation_service = MealGenerationService()
+        translation_service = TranslationService(generation_service)
+
+        return MealAnalysisTranslationService(
+            translation_repo=translation_repo,
+            translation_service=translation_service
+        )
+    except Exception:
+        # Clean up session on error if we created it
+        if own_session:
+            db.close()
+        raise
