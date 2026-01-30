@@ -21,7 +21,9 @@ from src.infra.database.models.meal_planning.meal_plan import MealPlan
 # TODO: Conversation table never created in database (no migration exists).
 # Remove this import and related code once confirmed conversations feature is deprecated.
 # from src.infra.database.models.conversation.conversation import Conversation
-from src.infra.database.models.chat.thread import ChatThread
+# TODO: Chat feature not yet implemented, chat_threads table doesn't exist.
+# Uncomment this when migration 009 is applied and chat feature is implemented.
+# from src.infra.database.models.chat.thread import ChatThread
 from src.infra.database.models.notification.user_fcm_token import UserFcmToken
 from src.infra.database.models.notification.notification_preferences import NotificationPreferences
 
@@ -150,10 +152,12 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
             #     Conversation.user_id == user_id
             # ).update({Conversation.is_active: False})
 
-            # 3. Soft-delete chat_threads (set is_active=False)
-            chat_threads_count = uow.session.query(ChatThread).filter(
-                ChatThread.user_id == user_id
-            ).update({ChatThread.is_active: False})
+            # TODO: Chat feature not yet implemented - chat_threads table doesn't exist.
+            # Uncomment below when migration 009 is applied:
+            # chat_threads_count = uow.session.query(ChatThread).filter(
+            #     ChatThread.user_id == user_id
+            # ).update({ChatThread.is_active: False})
+            chat_threads_count = 0  # Placeholder until chat feature is implemented
 
             # 4. Deactivate FCM tokens (set is_active=False)
             fcm_tokens_count = uow.session.query(UserFcmToken).filter(
@@ -170,7 +174,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
 
             logger.info(
                 f"Soft-deleted related data: meals={meals_count}, meal_plans={meal_plans_count}, "
-                f"chat_threads={chat_threads_count}, fcm_tokens={fcm_tokens_count}, "
+                f"chat_threads={chat_threads_count} (skipped - not implemented), fcm_tokens={fcm_tokens_count}, "
                 f"notification_prefs={notif_prefs_count}"
             )
         except Exception as e:
