@@ -72,8 +72,8 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                 # Get subscription info from UoW
                 subscription_info = None
                 active_subscription = uow.subscriptions.find_active_by_user_id(str(user.id))
-                is_premium = active_subscription is not None
-                
+                has_subscription = active_subscription is not None
+
                 if active_subscription:
                     subscription_info = {
                         "product_id": active_subscription.product_id,
@@ -83,7 +83,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                         "is_monthly": active_subscription.product_id.endswith("_monthly") if active_subscription.product_id else False,
                         "is_yearly": active_subscription.product_id.endswith("_yearly") if active_subscription.product_id else False,
                     }
-                
+
                 # Prepare response
                 return {
                     "user": {
@@ -102,7 +102,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                         "last_accessed": user.last_accessed,
                         "created_at": user.created_at,
                         "updated_at": user.updated_at,
-                        "is_premium": is_premium,
+                        "has_subscription": has_subscription,
                         "subscription": subscription_info
                     },
                     "created": created,

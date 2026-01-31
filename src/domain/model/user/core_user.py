@@ -59,9 +59,9 @@ class UserDomainModel(BaseDomainModel):
         """Get the current active profile."""
         return next((p for p in self.profiles if p.is_current), None)
 
-    def is_premium(self) -> bool:
+    def has_active_subscription(self) -> bool:
         """
-        Check if user has active premium subscription.
+        Check if user has active subscription.
         Note: This is a placeholder as subscription is not yet a domain model.
         """
         return False

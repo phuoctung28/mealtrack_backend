@@ -37,9 +37,9 @@ class UserProfileResponse(BaseModel):
     last_accessed: Optional[datetime] = Field(None, description="Last accessed timestamp")
     created_at: datetime = Field(..., description="Account creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
-    
-    # Premium subscription fields
-    is_premium: bool = Field(..., description="Whether user has active premium subscription")
+
+    # Subscription fields
+    has_subscription: bool = Field(..., description="Whether user has active subscription")
     subscription: Optional[SubscriptionInfo] = Field(None, description="Active subscription details if any")
 
 

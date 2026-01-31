@@ -25,14 +25,14 @@ class TestRevenueCatService:
         return {
             "subscriber": {
                 "entitlements": {
-                    "premium": {
+                    "standard": {
                         "expires_date": (datetime.now() + timedelta(days=30)).isoformat() + "Z",
-                        "product_identifier": "premium_monthly",
+                        "product_identifier": "standard_monthly",
                         "purchase_date": datetime.now().isoformat() + "Z"
                     }
                 },
                 "subscriptions": {
-                    "premium_monthly": {
+                    "standard_monthly": {
                         "expires_date": (datetime.now() + timedelta(days=30)).isoformat() + "Z",
                         "store": "APP_STORE"
                     }
@@ -78,93 +78,93 @@ class TestRevenueCatService:
             
             assert result is None
     
-    async def test_is_premium_active_with_active_subscription(self, service, mock_subscriber_response):
-        """Test premium is active when subscription is active."""
+    async def test_has_active_subscription_with_active_subscription(self, service, mock_subscriber_response):
+        """Test subscription is active when subscription is active."""
         with patch.object(service, 'get_subscriber_info', return_value=mock_subscriber_response):
-            result = await service.is_premium_active("user_123")
+            result = await service.has_active_subscription("user_123")
             assert result is True
-    
-    async def test_is_premium_active_with_expired_subscription(self, service):
-        """Test premium is not active when subscription is expired."""
+
+    async def test_has_active_subscription_with_expired_subscription(self, service):
+        """Test subscription is not active when subscription is expired."""
         expired_response = {
             "subscriber": {
                 "entitlements": {
-                    "premium": {
+                    "standard": {
                         "expires_date": (datetime.now() - timedelta(days=1)).isoformat() + "Z",
-                        "product_identifier": "premium_monthly",
+                        "product_identifier": "standard_monthly",
                         "purchase_date": (datetime.now() - timedelta(days=31)).isoformat() + "Z"
                     }
                 },
                 "subscriptions": {}
             }
         }
-        
+
         with patch.object(service, 'get_subscriber_info', return_value=expired_response):
-            result = await service.is_premium_active("user_123")
+            result = await service.has_active_subscription("user_123")
             assert result is False
-    
-    async def test_is_premium_active_with_lifetime_subscription(self, service):
-        """Test premium is active with lifetime subscription (no expiry)."""
+
+    async def test_has_active_subscription_with_lifetime_subscription(self, service):
+        """Test subscription is active with lifetime subscription (no expiry)."""
         lifetime_response = {
             "subscriber": {
                 "entitlements": {
-                    "premium": {
+                    "standard": {
                         "expires_date": None,  # Lifetime access
-                        "product_identifier": "premium_lifetime",
+                        "product_identifier": "standard_lifetime",
                         "purchase_date": datetime.now().isoformat() + "Z"
                     }
                 },
                 "subscriptions": {}
             }
         }
-        
+
         with patch.object(service, 'get_subscriber_info', return_value=lifetime_response):
-            result = await service.is_premium_active("user_123")
+            result = await service.has_active_subscription("user_123")
             assert result is True
-    
-    async def test_is_premium_active_no_entitlement(self, service):
-        """Test premium is not active when no premium entitlement exists."""
+
+    async def test_has_active_subscription_no_entitlement(self, service):
+        """Test subscription is not active when no standard entitlement exists."""
         no_entitlement_response = {
             "subscriber": {
                 "entitlements": {},
                 "subscriptions": {}
             }
         }
-        
+
         with patch.object(service, 'get_subscriber_info', return_value=no_entitlement_response):
-            result = await service.is_premium_active("user_123")
+            result = await service.has_active_subscription("user_123")
             assert result is False
-    
-    async def test_is_premium_active_no_subscriber(self, service):
-        """Test premium is not active when subscriber not found."""
+
+    async def test_has_active_subscription_no_subscriber(self, service):
+        """Test subscription is not active when subscriber not found."""
         with patch.object(service, 'get_subscriber_info', return_value=None):
-            result = await service.is_premium_active("user_123")
+            result = await service.has_active_subscription("user_123")
             assert result is False
     
     async def test_get_subscription_info_with_active_subscription(self, service, mock_subscriber_response):
         """Test getting active subscription info."""
         with patch.object(service, 'get_subscriber_info', return_value=mock_subscriber_response):
             result = await service.get_subscription_info("user_123")
-            
+
             assert result is not None
-            assert result["product_id"] == "premium_monthly"
+            assert result["product_id"] == "standard_monthly"
             assert result["store"] == "APP_STORE"
             assert result["is_active"] is True
-    
+
     async def test_get_subscription_info_no_active_subscription(self, service):
         """Test getting subscription info when no active subscription."""
         expired_response = {
             "subscriber": {
                 "entitlements": {},
                 "subscriptions": {
-                    "premium_monthly": {
+                    "standard_monthly": {
                         "expires_date": (datetime.now() - timedelta(days=1)).isoformat() + "Z",
                         "store": "APP_STORE"
                     }
                 }
             }
         }
-        
+
         with patch.object(service, 'get_subscriber_info', return_value=expired_response):
             result = await service.get_subscription_info("user_123")
             assert result is None

@@ -64,10 +64,10 @@ class User(Base, BaseMixin):
                 return subscription
         return None
     
-    def is_premium(self) -> bool:
+    def has_active_subscription(self) -> bool:
         """
-        Check if user has active premium subscription.
-        
+        Check if user has active subscription.
+
         Note: This checks local cache. For real-time validation,
         use RevenueCat API via the RevenueCatService.
         """

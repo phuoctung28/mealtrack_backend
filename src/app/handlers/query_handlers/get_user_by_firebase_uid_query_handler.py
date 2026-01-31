@@ -29,13 +29,13 @@ class GetUserByFirebaseUidQueryHandler(EventHandler[GetUserByFirebaseUidQuery, D
 
             # In development, avoid touching subscriptions table (may not exist yet)
             if os.getenv("ENVIRONMENT") == "development":
-                is_premium_value = True
+                has_subscription_value = True
             else:
                 try:
-                    is_premium_value = bool(user.is_premium())
+                    has_subscription_value = bool(user.has_active_subscription())
                 except Exception:
                     # Safe fallback if subscription lookup fails
-                    is_premium_value = False
+                    has_subscription_value = False
 
             return {
                 "id": user.id,
@@ -54,5 +54,5 @@ class GetUserByFirebaseUidQueryHandler(EventHandler[GetUserByFirebaseUidQuery, D
                 "created_at": user.created_at,
                 "updated_at": user.updated_at,
                 # Required by UserProfileResponse
-                "is_premium": is_premium_value
+                "has_subscription": has_subscription_value
             }

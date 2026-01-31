@@ -190,11 +190,11 @@ class TestSyncUserCommandHandler:
         # Verify subscription can still be found after handler runs
         found_after = fake_uow.subscriptions.find_active_by_user_id(str(result_user_id))
         assert found_after is not None, f"Subscription should still be findable for user {result_user_id} after handler runs"
-        
-        # The handler should have found the subscription and set is_premium
-        assert result["user"]["is_premium"] is True, f"User should be premium. Found subscription: {found_after is not None}"
+
+        # The handler should have found the subscription and set has_subscription
+        assert result["user"]["has_subscription"] is True, f"User should have subscription. Found subscription: {found_after is not None}"
         assert result["user"]["subscription"] is not None, "Subscription info should be present"
-        assert result["user"]["subscription"]["product_id"] == "premium_monthly"
+        assert result["user"]["subscription"]["product_id"] == "standard_monthly"
         assert result["user"]["subscription"]["is_monthly"] is True
 
     @pytest.mark.asyncio

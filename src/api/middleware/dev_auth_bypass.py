@@ -88,8 +88,8 @@ def _ensure_dev_user() -> Optional[User]:
 def add_dev_auth_bypass(app: FastAPI) -> None:
     """Install a dev-only middleware that sets request.state.user.
 
-    The injected user has an `id` attribute and an `is_premium()` method that returns True
-    so premium-only endpoints work in development.
+    The injected user has an `id` attribute and a `has_active_subscription()` method that returns True
+    so subscription-only endpoints work in development.
     """
     if os.getenv("ENVIRONMENT") != "development":
         logger.info("Dev auth bypass not enabled (ENVIRONMENT != development)")
@@ -121,7 +121,7 @@ def add_dev_auth_bypass(app: FastAPI) -> None:
                 firebase_uid=user.firebase_uid,
                 email=user.email,
                 username=user.username,
-                is_premium=lambda: True,
+                has_active_subscription=lambda: True,
             )
         finally:
             session.close()
