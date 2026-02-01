@@ -19,10 +19,12 @@ else
     exit 1
 fi
 
+# Railway (and others) inject PORT; default 8000 for local/Docker
+PORT="${PORT:-8000}"
 # Start the application
-log "🚀 Starting FastAPI application with 2 workers..."
+log "🚀 Starting FastAPI application on port ${PORT}..."
 exec uvicorn src.api.main:app \
     --host 0.0.0.0 \
-    --port 8000 \
+    --port "$PORT" \
     --workers 2 \
     --loop uvloop

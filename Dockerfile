@@ -44,6 +44,8 @@ COPY --chown=appuser:appuser alembic.ini /app/
 COPY --chown=appuser:appuser migrations/ /app/migrations/
 COPY --chown=appuser:appuser docker-entrypoint.sh /app/
 
+# Fix CRLF line endings (Windows-edited scripts) so script runs on Linux
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh
 # Make entrypoint executable
 RUN chmod +x /app/docker-entrypoint.sh
 
@@ -59,11 +61,11 @@ ENV PYTHONUNBUFFERED=1
 ENV UVICORN_WORKERS=2
 ENV AUTO_MIGRATE=false
 
-# Health check
+# Health check (uses PORT at runtime; default 8000 in build)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+    CMD python -c "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT', '8000')}/health\")" || exit 1
 
-# Expose port
+# Expose port (Railway sets PORT at runtime)
 EXPOSE 8000
 
 # Start the application via entrypoint (runs migrations first, then starts workers)
