@@ -1,0 +1,15 @@
+# Railway config: deploy using Dockerfile
+# https://docs.railway.com/guides/config-as-code
+
+[build]
+# Always build from Dockerfile (not Railpack/Nixpacks)
+builder = "DOCKERFILE"
+# Optional: use if Dockerfile is not at repo root
+# dockerfilePath = "Dockerfile"
+
+[deploy]
+# Health check for zero-downtime deploys
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+# Restart on failure
+restartPolicyType = "ON_FAILURE"
