@@ -92,9 +92,6 @@ class ScheduledNotificationService:
             # Check meal reminders (pass full datetime)
             await self._check_meal_reminders(current_time)
 
-            # Check sleep reminders (pass full datetime)
-            await self._check_sleep_reminders(current_time)
-
             # Check water reminders (based on user intervals)
             await self._check_water_reminders(current_time)
 
@@ -129,28 +126,6 @@ class ScheduledNotificationService:
 
         except Exception as e:
             logger.error(f"Error checking lunch reminders: {e}")
-    
-    async def _check_sleep_reminders(self, current_utc: datetime):
-        """Check if any users need sleep reminders at the current UTC time."""
-        try:
-            user_ids = self.notification_repository.find_users_for_sleep_reminder(
-                current_utc  # Pass datetime, not minutes
-            )
-            
-            for user_id in user_ids:
-                try:
-                    result = await self.notification_service.send_sleep_reminder(user_id)
-                    
-                    if result.get("success"):
-                        logger.info(f"Sleep reminder sent to user {user_id}")
-                    else:
-                        logger.warning(f"Failed to send sleep reminder to user {user_id}: {result}")
-                        
-                except Exception as e:
-                    logger.error(f"Error sending sleep reminder to user {user_id}: {e}")
-                    
-        except Exception as e:
-            logger.error(f"Error checking sleep reminders: {e}")
     
     async def _check_water_reminders(self, current_utc: datetime):
         """Check if any users need water reminders at their fixed time (default 4:00 PM)."""
@@ -230,7 +205,7 @@ class ScheduledNotificationService:
             # Get user profile to calculate calorie goal
             from src.infra.repositories.user_repository import UserRepository
             user_repo = UserRepository(db)
-            profile = user_repo.get_current_user_profile(user_id)
+            profile = user_repo.get_profile(user_id)
 
             # Calculate TDEE based on profile (Harris-Benedict formula)
             calorie_goal = 2000  # Default
