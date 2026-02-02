@@ -120,33 +120,33 @@ class TestSyncUserCommandHandler:
         assert fake_uow.committed is True
 
     @pytest.mark.asyncio
-    async def test_handle_with_premium_subscription(self, handler):
-        """Test syncing user with active premium subscription."""
+    async def test_handle_with_standard_subscription(self, handler):
+        """Test syncing user with active standard subscription."""
         fake_uow = FakeUnitOfWork()
         from src.domain.model.user import UserDomainModel
         from src.domain.model.auth.auth_provider import AuthProvider
         
-        # Pre-populate user with premium subscription
+        # Pre-populate user with standard subscription
         from uuid import uuid4
         user_id = uuid4()
         existing_user = UserDomainModel(
             id=user_id,  # Set ID explicitly
-            firebase_uid="firebase_premium",
-            email="premium@example.com",
-            username="premiumuser",
+            firebase_uid="firebase_standard",
+            email="standard@example.com",
+            username="standarduser",
             password_hash="",
             provider=AuthProvider.GOOGLE
         )
         fake_uow.users.save(existing_user)
         
-        # Add premium subscription
+        # Add standard subscription
         from src.domain.model.subscription import Subscription
         # Use future datetime that's definitely in the future
         from datetime import timedelta
         expires_at = datetime.now() + timedelta(days=365)  # 1 year in the future
         subscription = Subscription(
             user_id=str(user_id),  # Use the same user_id
-            product_id="premium_monthly",
+            product_id="standard_monthly",
             status="active",
             expires_at=expires_at,
             platform="ios"
@@ -176,8 +176,8 @@ class TestSyncUserCommandHandler:
         handler.uow = fake_uow
         
         command = SyncUserCommand(
-            firebase_uid="firebase_premium",
-            email="premium@example.com",
+            firebase_uid="firebase_standard",
+            email="standard@example.com",
             provider="google"
         )
         
