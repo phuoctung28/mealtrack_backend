@@ -1,10 +1,10 @@
 # MealTrack Backend - System Architecture
 
-**Last Updated:** January 19, 2026
-**Version:** 0.4.9
+**Last Updated:** February 3, 2026
+**Version:** 0.5.0
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
 **Event Bus**: PyMediator with singleton registry pattern
-**Source**: Scout-verified analysis of 417 files (~37K LOC)
+**Source**: Scout-verified analysis of 430 files (~38K LOC)
 
 ---
 
@@ -27,22 +27,22 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      API Layer (74 files)                    │
+│                      API Layer (76 files)                    │
 │  HTTP Routing │ Pydantic Validation │ Auth │ Middleware      │
 └────────────────────────┬────────────────────────────────────┘
                          │ Commands/Queries
 ┌────────────────────────▼────────────────────────────────────┐
-│              Application Layer (136 files)                   │
+│              Application Layer (140 files)                   │
 │  CQRS Handlers │ Event Publishing │ App Services             │
 └────────────────────────┬────────────────────────────────────┘
                          │ Domain Services
 ┌────────────────────────▼────────────────────────────────────┐
-│                Domain Layer (124 files)                      │
+│                Domain Layer (133 files)                      │
 │  Business Logic │ Domain Models │ Port Interfaces            │
 └────────────────────────┬────────────────────────────────────┘
                          │ Port Implementations
 ┌────────────────────────▼────────────────────────────────────┐
-│            Infrastructure Layer (74 files)                   │
+│            Infrastructure Layer (80 files)                   │
 │  DB │ Cache │ External APIs │ Event Bus │ Config             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -51,20 +51,20 @@
 
 | Layer | Files | LOC | Purpose |
 |-------|-------|-----|---------|
-| API | 74 | ~8,241 | HTTP presentation |
-| Application | 136 | ~5,968 | CQRS orchestration |
-| Domain | 130 | ~14,079 | Business logic |
-| Infrastructure | 77 | ~8,671 | Technical implementation |
-| **Total** | **417** | **~37,000** | |
+| API | 76 | ~8,605 | HTTP presentation |
+| Application | 140 | ~6,229 | CQRS orchestration |
+| Domain | 133 | ~14,556 | Business logic |
+| Infrastructure | 80 | ~8,895 | Technical implementation |
+| **Total** | **430** | **~38,300** | |
 
 ---
 
 ## Layer Details
 
-### API Layer (`src/api/`)
+### API Layer (`src/api/`) - 76 files, ~8,605 LOC
 
 **Components**:
-- **12 Route Modules**: Health, Meals, Users, Profiles, Chat (modular: thread_routes, message_routes), Chat WebSocket, Notifications, Meal Plans, Suggestions, Activities, Ingredients, Webhooks, Monitoring, Feature Flags, Foods
+- **12 Route Modules** (50+ endpoints): Health, Meals, Users, Profiles, Chat (modular: thread_routes, message_routes), Chat WebSocket, Notifications, Meal Plans, Suggestions, Activities, Ingredients, Webhooks, Monitoring, Feature Flags, Foods
 - **34 Pydantic Schemas** (2,530 LOC): Request/response DTOs with validation
 - **8 Mappers** (1,026 LOC): API ↔ Domain transformations
 - **3 Middleware Layers** (530 LOC): CORS, Request Logging (ID + timing), Dev Auth Bypass
@@ -103,13 +103,13 @@ Client → Authorization: Bearer <token>
        → UUID user_id
 ```
 
-### Application Layer (`src/app/`)
+### Application Layer (`src/app/`) - 140 files, ~6,229 LOC
 
 **Components**:
-- **29 Commands**: Write operations across 11 domains (Chat, Meal, Daily Meal, Meal Plan, Meal Suggestion, User, Notification, Ingredient, TDEE, Activity, Food)
-- **23 Queries**: Read operations
-- **10+ Domain Events**: Historical facts
-- **40+ Handlers**: Command, query, and event handlers with @handles decorator
+- **30 Commands**: Write operations across 11 domains (Chat, Meal, Daily Meal, Meal Plan, Meal Suggestion, User, Notification, Ingredient, TDEE, Activity, Food)
+- **31 Queries**: Read operations
+- **19 Domain Events**: Historical facts
+- **54 Handlers**: Command (28), query (24), and event (1) handlers with @handles decorator
 - **3 Application Services** (556 LOC): MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService
 - **UnitOfWork**: Transaction management with cache invalidation after writes
 
@@ -153,7 +153,7 @@ Client → Authorization: Bearer <token>
 7. Returns Meal to API layer immediately (step 4)
 ```
 
-### Domain Layer (`src/domain/`)
+### Domain Layer (`src/domain/`) - 133 files, ~14,556 LOC
 
 **8 Bounded Contexts**:
 1. **Meal**: Meal aggregate with state machine (PROCESSING → ANALYZING → ENRICHING → READY/FAILED/INACTIVE), MealImage, Ingredient
@@ -192,10 +192,10 @@ Client → Authorization: Bearer <token>
 - **Calorie Distribution**: Breakfast 25%, Lunch 35%, Dinner 30%, Snack 10%
 - **Meal Planning**: Use ONLY available ingredients, min 3 days before repeat, max 2 same-cuisine per week
 
-### Infrastructure Layer (`src/infra/`)
+### Infrastructure Layer (`src/infra/`) - 80 files, ~8,895 LOC
 
 **Components**:
-- **11 Database Tables**: User, UserProfile, Subscription, Meal, MealImage, Nutrition, FoodItem, MealPlan, NotificationPreferences, UserFcmToken, Thread, Message.
+- **11+ Database Tables**: User, UserProfile, Subscription, Meal, MealImage, Nutrition, FoodItem, MealPlan, NotificationPreferences, UserFcmToken, Thread, Message, FeatureFlag, Activity.
 - **10+ Repositories**: Smart sync with diff-based updates, eager loading, request-scoped sessions.
 - **External Services**: Firebase (FCM), Cloudinary (images), Gemini (multi-model AI), Pinecone (1024-dim vector search), RevenueCat (subscriptions).
 - **Redis Cache**: Cache-aside pattern with graceful degradation, JSON serialization, 50 connections, 1h default TTL.
@@ -393,7 +393,7 @@ PROCESSING → ANALYZING → ENRICHING → READY
 
 ### Authorization
 - **User Ownership**: All queries/commands verify user_id matching
-- **Premium Features**: `require_premium()` dependency (TODO: apply to routes)
+- **Premium Features**: `require_subscription()` dependency (TODO: apply to routes)
 - **Webhook Auth**: RevenueCat signature verification
 
 ### Input Validation

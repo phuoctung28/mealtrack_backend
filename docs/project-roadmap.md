@@ -1,13 +1,20 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.4.9
-**Last Updated:** January 19, 2026
-**Status:** Production-ready. 417 source files, ~37K LOC across 4 layers. 681+ tests, 70%+ coverage.
+**Version:** 0.5.0
+**Last Updated:** February 3, 2026
+**Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 681+ tests, 70%+ coverage.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry.
 
 ---
 
 ## Completed Phases
+
+### February 2026: Documentation Refresh v0.5.0
+- [x] Updated all documentation with latest scout-verified statistics (430 files, ~38K LOC).
+- [x] Accurate metrics: 30 commands, 31 queries, 19 events, 54 handlers, 50+ domain services.
+- [x] Fixed metric inconsistencies across all doc files.
+- [x] Updated layer statistics (76/140/133/80 files, ~8.6K/6.2K/14.6K/8.9K LOC).
+- [x] Added more detail to codebase modules and dependencies.
 
 ### January 2026: Documentation Refresh v0.4.8
 - [x] Scout-based codebase analysis (4 comprehensive reports: API, App, Domain, Infra layers).
@@ -15,7 +22,6 @@
 - [x] Accurate metrics: 29 commands, 23 queries, 10+ events, 40+ handlers, 50+ domain services.
 - [x] Added WebSocket chat details (ConnectionManager, 3 application services).
 - [x] Documented EventBus singleton registry pattern.
-- [x] Updated layer statistics (74/136/130/77 files, ~8K/6K/14K/9K LOC).
 
 ### Phase 06: Session-Based Meal Suggestions (Jan 2026)
 - [x] SuggestionOrchestrationService with 4h TTL (Redis).

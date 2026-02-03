@@ -1,8 +1,8 @@
 # MealTrack Backend - Code Standards
 
-**Last Updated:** January 19, 2026
-**Version:** 0.4.9
-**Applies To:** All code in `src/` (417 files, ~37K LOC)
+**Last Updated:** February 3, 2026
+**Version:** 0.5.0
+**Applies To:** All code in `src/` (430 files, ~38K LOC: API 76, App 140, Domain 133, Infra 80)
 
 ---
 
@@ -105,10 +105,10 @@ class CreateMealCommandHandler(EventHandler[CreateMealCommand, Meal]):
 ```
 
 **Key Files**:
-- `commands/*`: 29 command definitions across 11 domains (Chat, Meal, Daily Meal, Meal Plan, Meal Suggestion, User, Notification, Ingredient, TDEE, Activity, Food)
-- `queries/*`: 23 query definitions
-- `events/*`: 10+ domain events
-- `handlers/*`: 40+ handlers with @handles decorator
+- `commands/*`: 30 command definitions across 11 domains (Chat, Meal, Daily Meal, Meal Plan, Meal Suggestion, User, Notification, Ingredient, TDEE, Activity, Food)
+- `queries/*`: 31 query definitions
+- `events/*`: 19 domain events
+- `handlers/*`: 54 handlers with @handles decorator
 - `services/chat/*`: 3 application services (MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService)
 
 ### 3. Domain Layer (`src/domain/`)
@@ -149,8 +149,8 @@ class TdeeCalculationService:
 ```
 
 **Key Files**:
-- `model/*`: 30+ domain entities in 8 bounded contexts (Meal aggregate with state machine: PROCESSING → ANALYZING → ENRICHING → READY/FAILED/INACTIVE)
-- `services/*`: 50+ domain services including TDEE calculation (BMR formulas: Mifflin-St Jeor, Katch-McArdle), nutrition aggregation, meal planning
+- `model/*`: 30+ domain entities in 8 bounded contexts (Meal aggregate with state machine: PROCESSING → ANALYZING → ENRICHING → READY/FAILED/INACTIVE), 44 files, 3,544 LOC
+- `services/*`: 50+ domain services including TDEE calculation (BMR formulas: Mifflin-St Jeor, Katch-McArdle), nutrition aggregation, meal planning, ~7,924 LOC
 - `ports/*`: 17 port interfaces for dependency inversion
 - `strategies/*`: 6 meal analysis strategies (Strategy Pattern)
 - `prompts/*`: 4 AI prompt templates
@@ -192,7 +192,7 @@ class VisionAIService(VisionAIServicePort):
 ```
 
 **Key Files**:
-- `database/models/*`: 11 core database tables with connection pooling (20 connections + 10 overflow)
+- `database/models/*`: 11+ core database tables with connection pooling (20 connections + 10 overflow)
 - `repositories/*`: 10+ repository implementations with smart sync and eager loading
 - `adapters/*`: Vision AI, Meal Generation (multi-model Gemini), Cloudinary
 - `services/*`: Firebase (FCM), Pinecone (1024-dim vector search)

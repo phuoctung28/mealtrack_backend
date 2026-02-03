@@ -1,14 +1,14 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Version:** 0.4.9
-**Last Updated:** January 19, 2026
-**Status:** Production-ready. 417 source files, ~37K LOC across 4 layers. 681+ tests, 70%+ coverage.
+**Version:** 0.5.0
+**Last Updated:** February 3, 2026
+**Status:** Production-ready. 430 Python files, ~38K LOC across 4 layers. 681+ tests, 70%+ coverage. Latest: API (76 files, 8,605 LOC), App (140 files, 6,229 LOC), Domain (133 files, 14,556 LOC), Infra (80 files, 8,895 LOC).
 
 ---
 
 ## Executive Summary
 
-MealTrack Backend is a FastAPI-based service powering intelligent meal tracking and nutritional analysis. It implements Clean Architecture with CQRS pattern across 4 layers (417 files, ~37K LOC), integrating AI vision (Gemini 2.5 Flash with 6 analysis strategies) and chat (streaming responses via MessageOrchestrationService) for real-time food recognition and personalized nutrition planning. The system handles 50+ REST endpoints across 12 route modules, supports 7 languages, and maintains 70%+ test coverage with 681+ tests.
+MealTrack Backend is a FastAPI-based service powering intelligent meal tracking and nutritional analysis. It implements Clean Architecture with CQRS pattern across 4 layers (430 files, ~38K LOC), integrating AI vision (Gemini 2.5 Flash with 6 analysis strategies) and chat (streaming responses via MessageOrchestrationService, AIResponseCoordinator) for real-time food recognition and personalized nutrition planning. The system handles 50+ REST endpoints across 12 route modules, supports 7 languages, and maintains 70%+ test coverage with 681+ tests. Latest stats: API (76 files, 8,605 LOC), App (140 files, 6,229 LOC), Domain (133 files, 14,556 LOC), Infra (80 files, 8,895 LOC).
 
 ---
 
@@ -96,8 +96,8 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.5.0 | Feb 3, 2026 | Updated metrics across all layers: API (76 files, 8,605 LOC), App (140 files, 6,229 LOC), Domain (133 files, 14,556 LOC), Infra (80 files, 8,895 LOC). Total: 430 files, ~38K LOC. Fixed metric inconsistencies from previous documentation. |
 | 0.4.9 | Jan 19, 2026 | Documentation refresh with updated dates. Verified CQRS patterns, domain services, and API endpoints against actual codebase. Weight-based macro calculation confirmed in TDEE service. |
-| 0.4.8 | Jan 16, 2026 | Updated documentation with accurate scout-verified statistics (417 files, ~37K LOC). Added WebSocket chat details, application services (MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService), and EventBus singleton pattern. Updated CQRS counts: 29 commands, 23 queries, 10+ events, 40+ handlers. |
 | 0.4.7 | Jan 16, 2026 | Documentation refresh with scout-verified statistics (408 files, ~37K LOC). |
 | 0.4.6 | Jan 9, 2026 | Phase 02: Language prompt integration (LANGUAGE_NAMES, language instructions, updated prompts). Phase 01: Meal suggestions multilingual support (7 languages, ISO 639-1 codes). |
 | 0.4.5 | Jan 7, 2026 | Phase 05 Pinecone Migration (1024-dim). Documentation split for modularity. |
