@@ -9,8 +9,11 @@ from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.schemas.request import IngredientRecognitionRequest
 from src.api.schemas.response import IngredientRecognitionResponse
+from src.api.schemas.response.task_responses import TaskCreatedResponse
 from src.app.commands.ingredient import RecognizeIngredientCommand
 from src.infra.event_bus import EventBus
+from src.infra.rq.queue import get_queue
+from src.infra.tasks.ingredient_tasks import recognize_ingredient_task
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,30 @@ async def recognize_ingredient(
 
     except Exception as e:
         logger.error(f"Ingredient recognition endpoint error: {e}")
+        raise handle_exception(e)
+
+
+@router.post("/recognize/async", status_code=202, response_model=TaskCreatedResponse)
+async def recognize_ingredient_async(
+    request: IngredientRecognitionRequest,
+):
+    """Enqueue ingredient recognition and return a task id for polling."""
+    try:
+        queue = get_queue("default")
+        job = queue.enqueue(
+            recognize_ingredient_task,
+            image_data=request.image_data,
+            job_timeout=60,
+            result_ttl=3600,
+            failure_ttl=3600,
+        )
+        return TaskCreatedResponse(
+            task_id=job.id,
+            status="queued",
+            poll_url=f"/v1/tasks/{job.id}",
+            message="Ingredient recognition started",
+        )
+    except Exception as e:
         raise handle_exception(e)
 
 

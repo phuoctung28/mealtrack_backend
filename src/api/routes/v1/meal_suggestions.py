@@ -3,6 +3,8 @@ Meal suggestion API endpoints (Phase 06).
 Simplified to only include generation endpoint.
 """
 
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, Request
 
 from src.api.dependencies.auth import get_current_user_id
@@ -23,6 +25,9 @@ from src.app.commands.meal_suggestion import (
     SaveMealSuggestionCommand,
 )
 from src.infra.event_bus import EventBus
+from src.infra.rq.queue import get_queue
+from src.infra.tasks.meal_suggestion_tasks import generate_meal_suggestions_task
+from src.api.schemas.response.task_responses import TaskCreatedResponse
 
 router = APIRouter(prefix="/v1/meal-suggestions", tags=["Meal Suggestions"])
 
@@ -72,6 +77,46 @@ async def generate_suggestions(
 
         session, suggestions = await event_bus.send(command)
         return to_suggestions_list_response(session, suggestions)
+
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+# Async generation (RQ)
+@router.post("/async", status_code=202, response_model=TaskCreatedResponse)
+async def generate_suggestions_async(
+    http_request: Request,
+    request: MealSuggestionRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Enqueue meal suggestion generation and return a task id for polling."""
+    try:
+        language = get_request_language(http_request)
+        portion_type = request.get_effective_portion_type()
+
+        queue = get_queue("default")
+        job = queue.enqueue(
+            generate_meal_suggestions_task,
+            user_id=user_id,
+            meal_type=request.meal_type,
+            meal_portion_type=portion_type.value,
+            ingredients=request.ingredients,
+            cooking_time_minutes=request.cooking_time_minutes.value,
+            session_id=request.session_id,
+            language=language,
+            servings=request.servings,
+            job_timeout=180,  # meal suggestions can be slow depending on model limits
+            result_ttl=3600,
+            failure_ttl=3600,
+            meta={"user_id": user_id},
+        )
+
+        return TaskCreatedResponse(
+            task_id=job.id,
+            status="queued",
+            poll_url=f"/v1/tasks/{job.id}",
+            message="Meal suggestions generation started",
+        )
 
     except Exception as e:
         raise handle_exception(e) from e

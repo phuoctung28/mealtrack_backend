@@ -44,3 +44,6 @@ firebase-admin>=6.0.0
 # Caching
 redis>=5.0.0
 redis[hiredis]>=5.0.0
+
+# Background jobs (Redis Queue)
+rq>=1.15.0

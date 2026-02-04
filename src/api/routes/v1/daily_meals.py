@@ -13,6 +13,7 @@ from src.api.schemas.response import (
     DailyMealSuggestionsResponse,
     SingleMealSuggestionResponse
 )
+from src.api.schemas.response.task_responses import TaskCreatedResponse
 from src.app.commands.daily_meal import (
     GenerateDailyMealSuggestionsCommand,
     GenerateSingleMealCommand
@@ -23,6 +24,11 @@ from src.app.queries.daily_meal import (
     GetMealPlanningSummaryQuery
 )
 from src.infra.event_bus import EventBus
+from src.infra.rq.queue import get_queue
+from src.infra.tasks.daily_meal_tasks import (
+    generate_daily_meal_suggestions_task,
+    generate_single_daily_meal_task,
+)
 
 router = APIRouter(prefix="/v1/daily-meals", tags=["Daily Meal Suggestions"])
 
@@ -79,6 +85,47 @@ async def get_daily_meal_suggestions(
         raise handle_exception(e)
 
 
+@router.post("/suggestions/async", status_code=202, response_model=TaskCreatedResponse)
+async def get_daily_meal_suggestions_async(
+    request: Optional[UserPreferencesRequest] = None,
+    user_profile_id: Optional[str] = None,
+):
+    """Enqueue daily meal suggestions generation and return a task id for polling."""
+    try:
+        request_data = None
+        if request:
+            request_data = {
+                "age": request.age,
+                "gender": request.gender,
+                "height": request.height,
+                "weight": request.weight,
+                "activity_level": request.activity_level,
+                "goal": request.goal,
+                "dietary_preferences": request.dietary_preferences,
+                "health_conditions": request.health_conditions,
+                "target_calories": request.target_calories,
+                "target_macros": request.target_macros.dict() if request.target_macros else None,
+            }
+
+        queue = get_queue("default")
+        job = queue.enqueue(
+            generate_daily_meal_suggestions_task,
+            user_profile_id=user_profile_id,
+            request_data=request_data,
+            job_timeout=180,
+            result_ttl=3600,
+            failure_ttl=3600,
+        )
+        return TaskCreatedResponse(
+            task_id=job.id,
+            status="queued",
+            poll_url=f"/v1/tasks/{job.id}",
+            message="Daily meal suggestions started",
+        )
+    except Exception as e:
+        raise handle_exception(e)
+
+
 @router.post("/suggestions/{meal_type}", response_model=SingleMealSuggestionResponse)
 async def get_single_meal_suggestion(
     meal_type: MealTypeEnum,
@@ -127,6 +174,51 @@ async def get_single_meal_suggestion(
         else:
             raise ValueError("Either user_profile_id or request data must be provided")
         
+    except Exception as e:
+        raise handle_exception(e)
+
+
+@router.post(
+    "/suggestions/{meal_type}/async", status_code=202, response_model=TaskCreatedResponse
+)
+async def get_single_meal_suggestion_async(
+    meal_type: MealTypeEnum,
+    request: Optional[UserPreferencesRequest] = None,
+    user_profile_id: Optional[str] = None,
+):
+    """Enqueue single meal generation and return a task id for polling."""
+    try:
+        request_data = None
+        if request:
+            request_data = {
+                "age": request.age,
+                "gender": request.gender,
+                "height": request.height,
+                "weight": request.weight,
+                "activity_level": request.activity_level,
+                "goal": request.goal,
+                "dietary_preferences": request.dietary_preferences,
+                "health_conditions": request.health_conditions,
+                "target_calories": request.target_calories,
+                "target_macros": request.target_macros.dict() if request.target_macros else None,
+            }
+
+        queue = get_queue("default")
+        job = queue.enqueue(
+            generate_single_daily_meal_task,
+            meal_type=meal_type.value,
+            user_profile_id=user_profile_id,
+            request_data=request_data,
+            job_timeout=180,
+            result_ttl=3600,
+            failure_ttl=3600,
+        )
+        return TaskCreatedResponse(
+            task_id=job.id,
+            status="queued",
+            poll_url=f"/v1/tasks/{job.id}",
+            message="Single meal suggestion started",
+        )
     except Exception as e:
         raise handle_exception(e)
 

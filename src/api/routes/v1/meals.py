@@ -3,6 +3,8 @@ Meals API endpoints using event-driven architecture.
 Clean separation with event bus pattern.
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from typing import Optional
@@ -14,6 +16,7 @@ from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception, ValidationException
 from src.api.middleware.accept_language import get_request_language
 from src.api.mappers.meal_mapper import MealMapper
+from src.api.schemas.response.task_responses import TaskCreatedResponse
 from src.api.schemas.request.meal_requests import (
     EditMealIngredientsRequest,
     CreateManualMealFromFoodsRequest,
@@ -32,6 +35,8 @@ from src.app.commands.meal.upload_meal_image_immediately_command import (
 from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.event_bus import EventBus
+from src.infra.rq.queue import get_queue
+from src.infra.tasks.meal_image_tasks import analyze_meal_image_task
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/meals", tags=["Meals"])
@@ -178,6 +183,90 @@ async def analyze_meal_image_immediate(
 
         # Return the detailed meal response using mapper with translation support
         return MealMapper.to_detailed_response(meal, image_url, target_language=language)
+
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.post(
+    "/image/analyze/async",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=TaskCreatedResponse,
+)
+async def analyze_meal_image_async(
+    request: Request,
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+    target_date: Optional[str] = Query(
+        None, description="Target date in YYYY-MM-DD format for meal association"
+    ),
+    user_description: Optional[str] = Query(
+        None,
+        description="Optional user context (max 200 chars): 'no sugar', 'grilled', etc.",
+    ),
+):
+    """Enqueue meal photo analysis and return a task id for polling."""
+    try:
+        if file.content_type not in ALLOWED_CONTENT_TYPES:
+            raise ValidationException(
+                message=f"Invalid file type. Only {', '.join(ALLOWED_CONTENT_TYPES)} are allowed.",
+                error_code="INVALID_FILE_TYPE",
+                details={
+                    "content_type": file.content_type,
+                    "allowed": ALLOWED_CONTENT_TYPES,
+                },
+            )
+
+        contents = await file.read()
+        if len(contents) > MAX_FILE_SIZE:
+            raise ValidationException(
+                message=f"File size exceeds maximum allowed ({MAX_FILE_SIZE // (1024*1024)} MB)",
+                error_code="FILE_SIZE_EXCEEDS_MAXIMUM",
+                details={"size": len(contents), "max_size": MAX_FILE_SIZE},
+            )
+
+        # Validate target_date format early
+        if target_date:
+            try:
+                datetime.strptime(target_date, "%Y-%m-%d")
+            except ValueError as e:
+                raise ValidationException(
+                    message="Invalid date format. Use YYYY-MM-DD format.",
+                    error_code="INVALID_DATE_FORMAT",
+                    details={"date": target_date},
+                ) from e
+
+        language = get_request_language(request)
+
+        sanitized_description = None
+        if user_description:
+            from src.domain.services.prompts.input_sanitizer import (
+                sanitize_user_description,
+            )
+
+            sanitized_description = sanitize_user_description(user_description)
+
+        queue = get_queue("default")
+        job = queue.enqueue(
+            analyze_meal_image_task,
+            user_id=user_id,
+            file_contents=contents,
+            content_type=file.content_type,
+            target_date=target_date,
+            language=language,
+            user_description=sanitized_description,
+            job_timeout=300,
+            result_ttl=3600,
+            failure_ttl=3600,
+            meta={"user_id": user_id},
+        )
+
+        return TaskCreatedResponse(
+            task_id=job.id,
+            status="queued",
+            poll_url=f"/v1/tasks/{job.id}",
+            message="Meal image analysis started",
+        )
 
     except Exception as e:
         raise handle_exception(e) from e

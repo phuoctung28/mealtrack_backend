@@ -15,6 +15,9 @@ source .venv/bin/activate
 echo "📦 Installing dependencies..."
 pip install -r requirements.txt -q
 
+# Use local Redis by default for dev
+export REDIS_URL="${REDIS_URL:-redis://localhost:6379/0}"
+
 if ! docker ps | grep -q mealtrack_mysql; then
     echo "🐳 Starting MySQL..."
     docker run -d --name mealtrack_mysql \
@@ -42,6 +45,12 @@ fi
 # Run database migrations
 echo "🔧 Running database migrations..."
 python migrations/run.py
+
+# Start RQ worker (background) for async endpoints
+echo "🔧 Starting RQ worker..."
+rq worker default --url "${REDIS_URL}" &
+WORKER_PID=$!
+trap "echo '🛑 Stopping RQ worker...'; kill ${WORKER_PID}; wait ${WORKER_PID} || true" SIGINT SIGTERM
 
 # Start app
 echo "✅ Ready! Starting at http://localhost:8000"

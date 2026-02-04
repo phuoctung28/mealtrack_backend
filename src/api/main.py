@@ -27,6 +27,7 @@ from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.tdee import router as tdee_router
+from src.api.routes.v1.tasks import router as tasks_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
 from src.api.routes.v1.health import router as health_router
@@ -202,6 +203,7 @@ app.include_router(activities_router)
 app.include_router(feature_flags_router)
 app.include_router(meal_plans_router)
 app.include_router(meal_suggestions_router)
+app.include_router(tasks_router)
 # app.include_router(daily_meals_router)
 app.include_router(user_profiles_router)
 app.include_router(users_router)

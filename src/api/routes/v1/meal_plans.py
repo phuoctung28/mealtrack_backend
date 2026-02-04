@@ -15,6 +15,7 @@ from src.api.schemas.response import (
     MealsByDateResponse,
     MealPlanGenerationStatusResponse
 )
+from src.api.schemas.response.task_responses import TaskCreatedResponse
 from src.app.commands.meal_plan import (
     GenerateWeeklyIngredientBasedMealPlanCommand,
 )
@@ -23,6 +24,10 @@ from src.app.queries.meal_plan import (
     GetMealsFromPlanByDateQuery
 )
 from src.infra.event_bus import EventBus
+from src.infra.rq.queue import get_queue
+from src.infra.tasks.meal_plan_tasks import (
+    generate_weekly_ingredient_based_meal_plan_task,
+)
 
 router = APIRouter(prefix="/v1/meal-plans", tags=["Meal Planning"])
 
@@ -62,6 +67,38 @@ async def generate_weekly_ingredient_based_meal_plan(
             user_id=user_id
         )
         
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.post(
+    "/generate/weekly-ingredient-based/async",
+    status_code=202,
+    response_model=TaskCreatedResponse,
+)
+async def generate_weekly_ingredient_based_meal_plan_async(
+    request: IngredientBasedMealPlanRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Enqueue weekly meal plan generation and return a task id for polling."""
+    try:
+        queue = get_queue("default")
+        job = queue.enqueue(
+            generate_weekly_ingredient_based_meal_plan_task,
+            user_id=user_id,
+            available_ingredients=request.available_ingredients,
+            available_seasonings=request.available_seasonings,
+            job_timeout=300,
+            result_ttl=3600,
+            failure_ttl=3600,
+            meta={"user_id": user_id},
+        )
+        return TaskCreatedResponse(
+            task_id=job.id,
+            status="queued",
+            poll_url=f"/v1/tasks/{job.id}",
+            message="Weekly meal plan generation started",
+        )
     except Exception as e:
         raise handle_exception(e) from e
 

@@ -9,9 +9,12 @@ from src.api.exceptions import handle_exception
 from src.api.mappers.chat_response_builder import ChatResponseBuilder
 from src.api.schemas.request.chat_requests import SendMessageRequest
 from src.api.schemas.response.chat_responses import SendMessageResponse
+from src.api.schemas.response.task_responses import TaskCreatedResponse
 from src.app.commands.chat import SendMessageCommand
 from src.app.queries.chat import GetMessagesQuery
 from src.infra.event_bus import EventBus
+from src.infra.rq.queue import get_queue
+from src.infra.tasks.chat_tasks import send_chat_message_task
 
 router = APIRouter()
 
@@ -58,6 +61,40 @@ async def send_message(
             assistant_message=assistant_msg
         )
 
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.post(
+    "/threads/{thread_id}/messages/async",
+    status_code=202,
+    response_model=TaskCreatedResponse,
+)
+async def send_message_async(
+    thread_id: str,
+    request: SendMessageRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Enqueue chat message and return a task id for polling."""
+    try:
+        queue = get_queue("default")
+        job = queue.enqueue(
+            send_chat_message_task,
+            thread_id=thread_id,
+            user_id=user_id,
+            content=request.content,
+            metadata=request.metadata,
+            job_timeout=180,
+            result_ttl=3600,
+            failure_ttl=3600,
+            meta={"user_id": user_id},
+        )
+        return TaskCreatedResponse(
+            task_id=job.id,
+            status="queued",
+            poll_url=f"/v1/tasks/{job.id}",
+            message="Chat message started",
+        )
     except Exception as e:
         raise handle_exception(e) from e
 
