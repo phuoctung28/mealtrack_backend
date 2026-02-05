@@ -26,5 +26,5 @@ log "🚀 Starting FastAPI application on port ${PORT}..."
 exec uvicorn src.api.main:app \
     --host 0.0.0.0 \
     --port "$PORT" \
-    --workers 2 \
+    --workers 1 \
     --loop uvloop
