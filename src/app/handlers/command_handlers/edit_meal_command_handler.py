@@ -28,12 +28,10 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
     def __init__(self,
                  uow: Optional[UnitOfWorkPort] = None,
                  food_service=None,
-                 nutrition_calculator=None,
                  pinecone_service=None,
                  cache_service: Optional[CacheService] = None):
         self.uow = uow
         self.food_service = food_service
-        self.nutrition_calculator = nutrition_calculator
         self.pinecone_service = pinecone_service
         self.cache_service = cache_service
 
@@ -41,7 +39,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         """Set dependencies for dependency injection."""
         self.uow = kwargs.get('uow', self.uow)
         self.food_service = kwargs.get('food_service', self.food_service)
-        self.nutrition_calculator = kwargs.get('nutrition_calculator', self.nutrition_calculator)
         self.pinecone_service = kwargs.get('pinecone_service', self.pinecone_service)
         self.cache_service = kwargs.get('cache_service', self.cache_service)
 

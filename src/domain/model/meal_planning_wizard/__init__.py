@@ -1,10 +1,11 @@
 """
-Conversation bounded context - Domain models for conversational interactions.
+Meal planning wizard bounded context - Domain models for meal planning wizard conversations.
 """
+from src.domain.model.common import MessageRole
+
 from .conversation import (
     Conversation,
-    Message,
-    MessageRole,
+    WizardMessage,
     ConversationContext,
     ConversationState
 )
@@ -13,11 +14,10 @@ from .prompt_context import PromptContext
 
 __all__ = [
     'Conversation',
-    'Message',
+    'WizardMessage',
     'MessageRole',
     'ConversationContext',
     'ConversationState',
     'PromptContext',
     'MealsForDateResponse',
 ]
-

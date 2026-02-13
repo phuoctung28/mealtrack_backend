@@ -7,7 +7,7 @@ from typing import Dict, Any
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal_plan import GetMealsFromPlanByDateQuery
-from src.domain.model.conversation import MealsForDateResponse
+from src.domain.model.meal_planning_wizard import MealsForDateResponse
 from src.domain.model.meal_planning import PlannedMeal, MealType
 from src.infra.database.uow import UnitOfWork
 

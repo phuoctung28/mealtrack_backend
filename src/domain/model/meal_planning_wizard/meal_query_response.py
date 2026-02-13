@@ -11,13 +11,13 @@ from ..meal_planning import PlannedMeal
 @dataclass
 class MealsForDateResponse:
     """Response model for getting meals by date query."""
-    
+
     date: date
     day_formatted: str
     meals: List[PlannedMeal]
     total_meals: int
     user_id: str
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API response."""
         return {
@@ -27,7 +27,7 @@ class MealsForDateResponse:
             "total_meals": self.total_meals,
             "user_id": self.user_id
         }
-    
+
     @classmethod
     def empty_response(cls, user_id: str, query_date: date) -> 'MealsForDateResponse':
         """Create an empty response for when no meals are found."""

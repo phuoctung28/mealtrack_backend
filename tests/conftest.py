@@ -413,7 +413,6 @@ def event_bus(
         EditMealCommandHandler(
             uow=test_uow,  # Use test UoW with test session
             food_service=None,  # Mock if needed
-            nutrition_calculator=None,
             pinecone_service=None  # Skip - will use real service if available
         )
     )
