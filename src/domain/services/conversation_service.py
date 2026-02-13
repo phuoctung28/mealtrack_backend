@@ -2,7 +2,7 @@
 import logging
 from typing import Optional, Tuple
 
-from src.domain.model.conversation import Conversation, ConversationState, MessageRole
+from src.domain.model.meal_planning_wizard import Conversation, ConversationState, MessageRole
 from src.domain.services.conversation.conversation_handler import ConversationHandler
 from src.domain.services.meal_plan_service import MealPlanService
 

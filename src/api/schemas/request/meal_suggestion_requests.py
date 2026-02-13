@@ -140,15 +140,6 @@ class MealSuggestionRequest(BaseModel):
         }
 
 
-# DEPRECATED: RegenerateSuggestionsRequest is no longer needed.
-# Use MealSuggestionRequest with session_id parameter to regenerate with automatic exclusion.
-#
-# class RegenerateSuggestionsRequest(BaseModel):
-#     """DEPRECATED: Use MealSuggestionRequest with session_id instead."""
-#     session_id: str
-#     exclude_ids: List[str] = Field(default_factory=list)
-
-
 class SaveMealSuggestionRequest(BaseModel):
     """
     Request schema for saving a meal suggestion to planned_meals table.

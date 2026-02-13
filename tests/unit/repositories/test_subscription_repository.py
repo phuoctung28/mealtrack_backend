@@ -31,17 +31,6 @@ class TestSubscriptionRepository:
         assert len(result) == 2
         self.mock_session.query.assert_called_once_with(Subscription)
 
-    def test_get_by_user_id_deprecated(self):
-        """Test deprecated get_by_user_id method."""
-        user_id = "user-123"
-        mock_subscriptions = [Mock(spec=Subscription)]
-        
-        self.mock_session.query.return_value.filter.return_value.all.return_value = mock_subscriptions
-        
-        result = self.repository.get_by_user_id(user_id)
-        
-        assert len(result) == 1
-
     def test_find_active_by_user_id(self):
         """Test finding active subscription for a user."""
         user_id = "user-123"
@@ -63,17 +52,6 @@ class TestSubscriptionRepository:
         
         assert result is None
 
-    def test_get_active_by_user_id_deprecated(self):
-        """Test deprecated get_active_by_user_id method."""
-        user_id = "user-123"
-        mock_subscription = Mock(spec=Subscription)
-        
-        self.mock_session.query.return_value.filter.return_value.first.return_value = mock_subscription
-        
-        result = self.repository.get_active_by_user_id(user_id)
-        
-        assert result == mock_subscription
-
     def test_find_by_revenuecat_id(self):
         """Test finding subscription by RevenueCat ID."""
         revenuecat_id = "rc-subscriber-123"
@@ -82,17 +60,6 @@ class TestSubscriptionRepository:
         self.mock_session.query.return_value.filter.return_value.first.return_value = mock_subscription
         
         result = self.repository.find_by_revenuecat_id(revenuecat_id)
-        
-        assert result == mock_subscription
-
-    def test_get_by_revenuecat_id_deprecated(self):
-        """Test deprecated get_by_revenuecat_id method."""
-        revenuecat_id = "rc-subscriber-123"
-        mock_subscription = Mock(spec=Subscription)
-        
-        self.mock_session.query.return_value.filter.return_value.first.return_value = mock_subscription
-        
-        result = self.repository.get_by_revenuecat_id(revenuecat_id)
         
         assert result == mock_subscription
 
@@ -141,28 +108,4 @@ class TestSubscriptionRepository:
         result = self.repository.update_subscription_status(subscription_id, "expired")
         
         assert result is None
-
-    def test_get_by_user_id_async(self):
-        """Test async wrapper for get_by_user_id."""
-        user_id = "user-123"
-        mock_subscriptions = [Mock(spec=Subscription)]
-        
-        self.mock_session.query.return_value.filter.return_value.all.return_value = mock_subscriptions
-        
-        import asyncio
-        result = asyncio.run(self.repository.get_by_user_id_async(user_id))
-        
-        assert len(result) == 1
-
-    def test_get_by_revenuecat_id_async(self):
-        """Test async wrapper for get_by_revenuecat_id."""
-        revenuecat_id = "rc-subscriber-123"
-        mock_subscription = Mock(spec=Subscription)
-        
-        self.mock_session.query.return_value.filter.return_value.first.return_value = mock_subscription
-        
-        import asyncio
-        result = asyncio.run(self.repository.get_by_revenuecat_id_async(revenuecat_id))
-        
-        assert result == mock_subscription
 

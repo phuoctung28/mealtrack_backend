@@ -7,7 +7,6 @@ from src.domain.services.prompts.prompt_constants import LANGUAGE_NAMES
 
 if TYPE_CHECKING:
     from src.domain.model.meal_suggestion import SuggestionSession
-    from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchResult
 
 
 class SuggestionPromptBuilder:
@@ -104,7 +103,6 @@ Requirements: Practical, reasonable times, respect restrictions, complementary f
 def build_single_meal_prompt(
     session: "SuggestionSession",
     meal_index: int,
-    inspiration_recipe: Optional["RecipeSearchResult"] = None,
 ) -> str:
     """
     Build compact prompt for single meal (uses PromptTemplateManager).

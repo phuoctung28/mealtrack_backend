@@ -5,11 +5,11 @@ from enum import Enum
 
 
 class MessageRole(str, Enum):
-    """Role of message sender in a conversation."""
+    """Role of message sender in a conversation. Shared between chat and meal planning wizard."""
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"  # For system prompts/instructions
-    
+
     def __str__(self):
         return self.value
 
@@ -19,7 +19,7 @@ class ThreadStatus(str, Enum):
     ACTIVE = "active"
     ARCHIVED = "archived"
     DELETED = "deleted"
-    
+
     def __str__(self):
         return self.value
 

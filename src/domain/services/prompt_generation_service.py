@@ -1,7 +1,7 @@
 """
 Domain service for generating prompts for meal generation.
 """
-from src.domain.model.conversation import PromptContext
+from src.domain.model.meal_planning_wizard import PromptContext
 from src.domain.model.meal_planning import MealGenerationContext, MealGenerationType
 from src.domain.model.meal_planning import MealType
 
