@@ -2,7 +2,7 @@
 import logging
 from typing import Optional, Tuple
 
-from src.domain.model.conversation import Conversation, ConversationContext, ConversationState
+from src.domain.model.meal_planning_wizard import Conversation, ConversationContext, ConversationState
 from src.domain.model.meal_planning import (
     UserPreferences, DietaryPreference, FitnessGoal, PlanDuration
 )

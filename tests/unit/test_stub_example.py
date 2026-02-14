@@ -122,8 +122,7 @@ class TestHandlerStubs:
         # Create handler with stubs
         handler = EditMealCommandHandler(
             uow=stub_uow,
-            food_service=stub_food_service,
-            nutrition_calculator=None
+            food_service=stub_food_service
         )
 
         # Verify handler is created with stubs

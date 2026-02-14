@@ -1,7 +1,7 @@
 """Conversation response formatting logic."""
 from typing import List
 
-from src.domain.model.conversation import ConversationContext
+from src.domain.model.meal_planning_wizard import ConversationContext
 from src.domain.model.meal_planning import MealPlan, MealType, PlanDuration
 
 

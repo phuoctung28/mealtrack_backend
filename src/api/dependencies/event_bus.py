@@ -251,7 +251,6 @@ def get_configured_event_bus() -> EventBus:
         EditMealCommand,
         EditMealCommandHandler(
             food_service=food_data_service,
-            nutrition_calculator=None,  # TODO: Add nutrition calculator if needed
             cache_service=cache_service,
         ),
     )

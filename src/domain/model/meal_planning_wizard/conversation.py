@@ -5,6 +5,7 @@ from enum import Enum
 from typing import List, Optional, Dict
 
 from src.domain.utils.timezone_utils import utc_now
+from src.domain.model.common import MessageRole
 
 
 class ConversationState(str, Enum):
@@ -23,28 +24,22 @@ class ConversationState(str, Enum):
     COMPLETED = "completed"
 
 
-class MessageRole(str, Enum):
-    USER = "user"
-    ASSISTANT = "assistant"
-    SYSTEM = "system"
-
-
 @dataclass
-class Message:
-    """Represents a single message in the conversation"""
+class WizardMessage:
+    """Represents a single message in the meal planning wizard conversation"""
     message_id: str
     role: MessageRole
     content: str
     timestamp: datetime
     metadata: Optional[Dict] = None
-    
+
     def __init__(self, role: MessageRole, content: str, metadata: Optional[Dict] = None):
         self.message_id = str(uuid.uuid4())
         self.role = role
         self.content = content
         self.timestamp = utc_now()
         self.metadata = metadata or {}
-    
+
     def to_dict(self) -> Dict:
         return {
             "message_id": self.message_id,
@@ -69,7 +64,7 @@ class ConversationContext:
     favorite_cuisines: Optional[List[str]] = None
     disliked_ingredients: Optional[List[str]] = None
     current_meal_plan: Optional[str] = None  # meal_plan_id
-    
+
     def is_complete(self) -> bool:
         """Check if all required information has been collected"""
         required_fields = [
@@ -84,7 +79,7 @@ class ConversationContext:
             self.disliked_ingredients is not None
         ]
         return all(required_fields)
-    
+
     def to_dict(self) -> Dict:
         return {
             "dietary_preferences": self.dietary_preferences,
@@ -108,10 +103,10 @@ class Conversation:
     user_id: str
     state: ConversationState
     context: ConversationContext
-    messages: List[Message]
+    messages: List[WizardMessage]
     created_at: datetime
     updated_at: datetime
-    
+
     def __init__(self, user_id: str):
         self.conversation_id = str(uuid.uuid4())
         self.user_id = user_id
@@ -121,8 +116,8 @@ class Conversation:
         self.created_at = utc_now()
         self.updated_at = utc_now()
 
-    def add_message(self, role: MessageRole, content: str, metadata: Optional[Dict] = None) -> Message:
-        message = Message(role, content, metadata)
+    def add_message(self, role: MessageRole, content: str, metadata: Optional[Dict] = None) -> WizardMessage:
+        message = WizardMessage(role, content, metadata)
         self.messages.append(message)
         self.updated_at = utc_now()
         return message
@@ -130,16 +125,16 @@ class Conversation:
     def update_state(self, new_state: ConversationState):
         self.state = new_state
         self.updated_at = utc_now()
-    
-    def get_last_assistant_message(self) -> Optional[Message]:
+
+    def get_last_assistant_message(self) -> Optional[WizardMessage]:
         for message in reversed(self.messages):
             if message.role == MessageRole.ASSISTANT:
                 return message
         return None
-    
+
     def get_conversation_history(self) -> List[Dict]:
         return [msg.to_dict() for msg in self.messages]
-    
+
     def to_dict(self) -> Dict:
         return {
             "conversation_id": self.conversation_id,

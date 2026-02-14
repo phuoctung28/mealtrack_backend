@@ -202,7 +202,7 @@ def handle_product_change(uow, user, event):
 
 def get_subscription_by_revenuecat_id(uow, revenuecat_id: str):
     """Get subscription by RevenueCat subscriber ID."""
-    return uow.subscriptions.get_by_revenuecat_id(revenuecat_id)
+    return uow.subscriptions.find_by_revenuecat_id(revenuecat_id)
 
 
 def parse_platform(store: str) -> str:
