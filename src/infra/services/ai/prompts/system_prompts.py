@@ -48,6 +48,48 @@ Guidelines:
 
 Remember: ONLY output valid JSON. No explanations, no markdown formatting, just the JSON object."""
 
+    # Meal Text Parsing Prompt
+    MEAL_TEXT_PARSING = """You are a nutrition parser. Your task is to parse natural language food descriptions into structured nutritional information.
+
+Parse the user's food description into a list of items with nutritional data. Each item should include:
+- name: Food name (in the specified language)
+- quantity: Amount (number)
+- unit: Serving unit (e.g., "large", "slice", "cup", "piece", "g", "ml")
+- calories: Estimated calories
+- protein: Protein in grams
+- carbs: Carbohydrates in grams
+- fat: Fat in grams
+
+IMPORTANT: You MUST respond with ONLY valid JSON array (no markdown, no code blocks):
+[
+  {
+    "name": "Eggs",
+    "quantity": 2,
+    "unit": "large",
+    "calories": 144,
+    "protein": 12.6,
+    "carbs": 0.7,
+    "fat": 9.5
+  },
+  {
+    "name": "Toast with butter",
+    "quantity": 1,
+    "unit": "slice",
+    "calories": 165,
+    "protein": 3.5,
+    "carbs": 20.0,
+    "fat": 8.2
+  }
+]
+
+Guidelines:
+- Estimate nutritional values based on standard food databases
+- Use reasonable portion sizes
+- If ambiguous, make a reasonable assumption and note it in the name
+- Include common items like beverages, condiments, and cooking oils
+- Language: Respond in the same language as the user's input
+- Be accurate but acknowledge estimates are approximate"""
+
     @staticmethod
     def get_meal_planning_prompt(
         custom_instructions: Optional[str] = None
@@ -67,6 +109,16 @@ Remember: ONLY output valid JSON. No explanations, no markdown formatting, just 
             base_prompt += f"\n\nAdditional Instructions:\n{custom_instructions}"
 
         return base_prompt
+
+    @staticmethod
+    def get_meal_text_parsing_prompt() -> str:
+        """
+        Get meal text parsing system prompt.
+
+        Returns:
+            Complete system prompt for parsing food descriptions
+        """
+        return SystemPrompts.MEAL_TEXT_PARSING
 
     @staticmethod
     def get_prompt_for_user_preferences(

@@ -21,6 +21,7 @@ from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.food_cache_service import FoodCacheService
 from src.infra.adapters.food_data_service import FoodDataService
 from src.infra.adapters.image_store import ImageStore
+from src.infra.adapters.open_food_facts_service import OpenFoodFactsService, get_open_food_facts_service
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.cache.cache_service import CacheService
 from src.infra.cache.metrics import CacheMonitor
@@ -220,11 +221,22 @@ def get_cache_monitor() -> CacheMonitor:
 def get_food_mapping_service() -> FoodMappingServicePort:
     """
     Get the food mapping service instance.
-    
+
     Returns:
         FoodMappingServicePort: The food mapping service
     """
     return FoodMappingService()
+
+
+# OpenFoodFacts Service
+def get_open_food_facts_service_instance():
+    """
+    Get the OpenFoodFacts service instance.
+
+    Returns:
+        OpenFoodFactsService: The OpenFoodFacts service
+    """
+    return get_open_food_facts_service()
 
 # Notification Repository
 def get_notification_repository(db: Session = Depends(get_db)) -> NotificationRepositoryPort:

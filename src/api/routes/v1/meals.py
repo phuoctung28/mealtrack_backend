@@ -17,14 +17,18 @@ from src.api.mappers.meal_mapper import MealMapper
 from src.api.schemas.request.meal_requests import (
     EditMealIngredientsRequest,
     CreateManualMealFromFoodsRequest,
+    ParseMealTextRequest,
 )
 from src.api.schemas.response import DetailedMealResponse, ManualMealCreationResponse
+from src.api.schemas.response.meal_responses import ParseMealTextResponse
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.app.commands.meal import EditMealCommand, FoodItemChange, CustomNutritionData
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
+    CustomNutrition,
     ManualMealItem,
 )
+from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
@@ -195,10 +199,25 @@ async def create_manual_meal(
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
-        items = [
-            ManualMealItem(fdc_id=i.fdc_id, quantity=i.quantity, unit=i.unit)
-            for i in payload.items
-        ]
+        items = []
+        for i in payload.items:
+            custom_nutrition = None
+            if i.custom_nutrition:
+                custom_nutrition = CustomNutrition(
+                    calories_per_100g=i.custom_nutrition.calories_per_100g,
+                    protein_per_100g=i.custom_nutrition.protein_per_100g,
+                    carbs_per_100g=i.custom_nutrition.carbs_per_100g,
+                    fat_per_100g=i.custom_nutrition.fat_per_100g,
+                )
+            items.append(
+                ManualMealItem(
+                    fdc_id=i.fdc_id,
+                    name=i.name,
+                    quantity=i.quantity,
+                    unit=i.unit,
+                    custom_nutrition=custom_nutrition,
+                )
+            )
 
         # Parse target_date if provided
         target_date = None
@@ -227,6 +246,28 @@ async def create_manual_meal(
             message=f"Meal '{payload.dish_name}' created successfully",
             created_at=meal.created_at,
         )
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.post("/parse-text", response_model=ParseMealTextResponse)
+async def parse_meal_text(
+    payload: ParseMealTextRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+) -> ParseMealTextResponse:
+    """
+    Parse natural language meal description into structured food items using AI.
+
+    User types "2 eggs and toast" → Gemini parses → returns structured items with nutrition.
+    """
+    try:
+        command = ParseMealTextCommand(
+            text=payload.text,
+            language=payload.language,
+            user_id=user_id,
+        )
+        return await event_bus.send(command)
     except Exception as e:
         raise handle_exception(e) from e
 

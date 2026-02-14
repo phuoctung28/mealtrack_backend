@@ -9,7 +9,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # Maximum allowed description length
-MAX_DESCRIPTION_LENGTH = 200
+MAX_DESCRIPTION_LENGTH = 500
 
 # Patterns that indicate prompt injection attempts
 INJECTION_PATTERNS = [

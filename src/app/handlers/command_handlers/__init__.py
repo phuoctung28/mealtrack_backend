@@ -7,6 +7,7 @@ from .add_custom_ingredient_command_handler import AddCustomIngredientCommandHan
 from .complete_onboarding_command_handler import CompleteOnboardingCommandHandler
 # Standalone handlers (already individual files)
 from .create_manual_meal_command_handler import CreateManualMealCommandHandler
+from .parse_meal_text_handler import ParseMealTextHandler
 from .delete_fcm_token_command_handler import DeleteFcmTokenCommandHandler
 from .delete_meal_command_handler import DeleteMealCommandHandler
 from .delete_user_command_handler import DeleteUserCommandHandler
@@ -53,6 +54,7 @@ __all__ = [
     "SaveMealSuggestionCommandHandler",
     # Standalone handlers
     "CreateManualMealCommandHandler",
+    "ParseMealTextHandler",
     "GenerateWeeklyIngredientBasedMealPlanCommandHandler",
     "UploadMealImageImmediatelyHandler",
     # Notification handlers

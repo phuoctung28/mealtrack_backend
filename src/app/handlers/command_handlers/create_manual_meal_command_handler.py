@@ -38,14 +38,22 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
 
     async def _process_meal(self, event: CreateManualMealCommand, meal_repo, uow):
         from collections import defaultdict
-        aggregated_items = defaultdict(lambda: {"quantity": 0.0, "unit": "g"})
-        
+
+        # Separate USDA items (by fdc_id) from custom items (by name + nutrition)
+        usda_aggregated = defaultdict(lambda: {"quantity": 0.0, "unit": "g"})
+        custom_items = []
+
         for item in event.items:
-            aggregated_items[item.fdc_id]["quantity"] += item.quantity
-            aggregated_items[item.fdc_id]["unit"] = item.unit
-        
-        # Fetch details for all unique items
-        fdc_ids = list(aggregated_items.keys())
+            if item.fdc_id is not None:
+                # USDA item
+                usda_aggregated[item.fdc_id]["quantity"] += item.quantity
+                usda_aggregated[item.fdc_id]["unit"] = item.unit
+            elif item.name and item.custom_nutrition:
+                # Custom item (barcode product)
+                custom_items.append(item)
+
+        # Fetch details for USDA items
+        fdc_ids = list(usda_aggregated.keys())
         details_list = await self.food_data_service.get_multiple_foods(fdc_ids)
         details_by_id = {d.get("fdcId"): d for d in details_list}
 
@@ -56,7 +64,8 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         total_fat = 0.0
         food_items: List[DomainFoodItem] = []
 
-        for fdc_id, item_data in aggregated_items.items():
+        # Process USDA items
+        for fdc_id, item_data in usda_aggregated.items():
             details = details_by_id.get(fdc_id) or {}
             mapped = self.mapping_service.map_food_details(details)
             base_serving = float(mapped.get("serving_size") or 100.0)
@@ -88,6 +97,41 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                     micros=None,
                     confidence=1.0,
                     fdc_id=fdc_id,
+                )
+            )
+
+        # Process custom items (barcode products)
+        for item in custom_items:
+            nutrition = item.custom_nutrition
+            # Calculate macros based on per-100g values
+            quantity = item.quantity
+            factor = quantity / 100.0
+
+            calories = nutrition.calories_per_100g * factor
+            protein = nutrition.protein_per_100g * factor
+            carbs = nutrition.carbs_per_100g * factor
+            fat = nutrition.fat_per_100g * factor
+
+            total_calories += calories
+            total_protein += protein
+            total_carbs += carbs
+            total_fat += fat
+
+            food_items.append(
+                DomainFoodItem(
+                    id=uuid.uuid4(),
+                    name=item.name,
+                    quantity=quantity,
+                    unit=item.unit,
+                    calories=calories,
+                    macros=Macros(
+                        protein=protein,
+                        carbs=carbs,
+                        fat=fat,
+                    ),
+                    micros=None,
+                    confidence=1.0,
+                    fdc_id=None,  # Custom food has no fdc_id
                 )
             )
 

@@ -21,6 +21,7 @@ from src.app.commands.meal import (
     DeleteMealCommand,
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
+from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal_plan import (
     GenerateWeeklyIngredientBasedMealPlanCommand,
 )
@@ -60,6 +61,7 @@ from src.app.handlers.command_handlers import (
     GenerateWeeklyIngredientBasedMealPlanCommandHandler,
     GenerateMealSuggestionsCommandHandler,
     SaveMealSuggestionCommandHandler,
+    ParseMealTextHandler,
 )
 # Ingredient handlers
 from src.app.handlers.command_handlers import (
@@ -90,6 +92,7 @@ from src.app.handlers.query_handlers import (
     PreviewTdeeQueryHandler,
     SearchFoodsQueryHandler,
     GetFoodDetailsQueryHandler,
+    LookupBarcodeQueryHandler,
     GetMealByIdQueryHandler,
     GetDailyMacrosQueryHandler,
     GetUserProfileQueryHandler,
@@ -121,6 +124,7 @@ from src.app.queries.daily_meal import (
     GetMealPlanningSummaryQuery,
 )
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
+from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
 # Import all queries
 from src.app.queries.meal import (
@@ -162,6 +166,7 @@ def get_food_search_event_bus() -> EventBus:
         get_food_data_service,
         get_food_cache_service,
         get_food_mapping_service,
+        get_open_food_facts_service_instance,
     )
 
     event_bus = PyMediatorEventBus()
@@ -170,6 +175,7 @@ def get_food_search_event_bus() -> EventBus:
     food_data_service = get_food_data_service()
     food_cache_service = get_food_cache_service()
     food_mapping_service = get_food_mapping_service()
+    open_food_facts_service = get_open_food_facts_service_instance()
 
     event_bus.register_handler(
         SearchFoodsQuery,
@@ -181,6 +187,12 @@ def get_food_search_event_bus() -> EventBus:
         GetFoodDetailsQuery,
         GetFoodDetailsQueryHandler(
             food_data_service, food_cache_service, food_mapping_service
+        ),
+    )
+    event_bus.register_handler(
+        LookupBarcodeQuery,
+        LookupBarcodeQueryHandler(
+            open_food_facts_service=open_food_facts_service
         ),
     )
 
@@ -277,6 +289,12 @@ def get_configured_event_bus() -> EventBus:
             mapping_service=food_mapping_service,
             cache_service=cache_service,
         ),
+    )
+
+    # Register meal text parsing command handler
+    event_bus.register_handler(
+        ParseMealTextCommand,
+        ParseMealTextHandler(),
     )
 
     # Register food database query handlers
