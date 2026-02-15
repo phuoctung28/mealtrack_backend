@@ -64,13 +64,34 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         total_fat = 0.0
         food_items: List[DomainFoodItem] = []
 
+        # Unit to grams conversion table for common serving units
+        unit_to_grams = {
+            "large": 50.0,    # ~50g per large egg
+            "medium": 44.0,    # ~44g per medium egg
+            "small": 38.0,     # ~38g per small egg
+            "cup": 240.0,
+            "tbsp": 15.0,
+            "tsp": 5.0,
+            "piece": 100.0,
+            "slice": 30.0,
+        }
+
         # Process USDA items
         for fdc_id, item_data in usda_aggregated.items():
             details = details_by_id.get(fdc_id) or {}
             mapped = self.mapping_service.map_food_details(details)
             base_serving = float(mapped.get("serving_size") or 100.0)
+            unit = item_data["unit"].lower() if item_data["unit"] else "g"
             quantity = item_data["quantity"]
-            factor = (quantity / base_serving) if base_serving > 0 else 0.0
+
+            # Convert quantity to grams if unit is not "g"
+            if unit != "g" and unit in unit_to_grams:
+                grams_per_unit = unit_to_grams[unit]
+                quantity_in_grams = quantity * grams_per_unit
+            else:
+                quantity_in_grams = quantity
+
+            factor = (quantity_in_grams / base_serving) if base_serving > 0 else 0.0
 
             calories = float(mapped.get("calories") or 0.0) * factor
             protein = float(mapped["macros"].get("protein") or 0.0) * factor
