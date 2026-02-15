@@ -4,7 +4,7 @@ Handler for parsing natural language meal text into structured food items.
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -150,8 +150,10 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         """Extract nutrition values from USDA nutrients list."""
         result = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
         for n in nutrients:
-            nutrient_id = n.get("nutrientId") or n.get("number")
-            value = n.get("value", 0)
+            # USDA format: {"nutrient": {"id": 1008}, "amount": 165.0}
+            nutrient_info = n.get("nutrient", {})
+            nutrient_id = nutrient_info.get("id")
+            value = n.get("amount", 0)
             if nutrient_id in (208, 1008):  # Energy
                 result["calories"] = float(value)
             elif nutrient_id in (203, 1003):  # Protein

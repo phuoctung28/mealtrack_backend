@@ -2,7 +2,7 @@
 Meal-related request DTOs.
 """
 import warnings
-from typing import Any, List, Optional, Literal
+from typing import Any, Optional, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
