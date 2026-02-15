@@ -34,6 +34,9 @@ from .user.profile import UserProfile
 # User models
 from .user.user import User
 
+# Barcode product cache
+from .barcode_product_model import BarcodeProductModel
+
 __all__ = [
     # Base
     "BaseMixin",
@@ -74,4 +77,7 @@ __all__ = [
     # Notification models
     "NotificationPreferences",
     "UserFcmToken",
+
+    # Barcode product cache
+    "BarcodeProductModel",
 ]

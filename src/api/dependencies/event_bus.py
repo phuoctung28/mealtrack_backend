@@ -167,6 +167,8 @@ def get_food_search_event_bus() -> EventBus:
         get_food_cache_service,
         get_food_mapping_service,
         get_open_food_facts_service_instance,
+        get_fat_secret_service_instance,
+        get_barcode_product_repository,
     )
 
     event_bus = PyMediatorEventBus()
@@ -176,11 +178,14 @@ def get_food_search_event_bus() -> EventBus:
     food_cache_service = get_food_cache_service()
     food_mapping_service = get_food_mapping_service()
     open_food_facts_service = get_open_food_facts_service_instance()
+    fat_secret_service = get_fat_secret_service_instance()
+    barcode_product_repository = get_barcode_product_repository()
 
     event_bus.register_handler(
         SearchFoodsQuery,
         SearchFoodsQueryHandler(
-            food_data_service, food_cache_service, food_mapping_service
+            food_data_service, food_cache_service, food_mapping_service,
+            fat_secret_service=fat_secret_service
         ),
     )
     event_bus.register_handler(
@@ -192,7 +197,9 @@ def get_food_search_event_bus() -> EventBus:
     event_bus.register_handler(
         LookupBarcodeQuery,
         LookupBarcodeQueryHandler(
-            open_food_facts_service=open_food_facts_service
+            open_food_facts_service=open_food_facts_service,
+            fat_secret_service=fat_secret_service,
+            barcode_product_repository=barcode_product_repository,
         ),
     )
 
@@ -226,18 +233,20 @@ def get_configured_event_bus() -> EventBus:
         get_food_data_service,
         get_food_cache_service,
         get_food_mapping_service,
+        get_fat_secret_service_instance,
         get_cache_service,
         get_ai_chat_service,
         get_suggestion_orchestration_service,
         get_meal_translation_service,
     )
-    
+
     image_store = get_image_store()
     vision_service = get_vision_service()
     gpt_parser = get_gpt_parser()
     food_data_service = get_food_data_service()
     food_cache_service = get_food_cache_service()
     food_mapping_service = get_food_mapping_service()
+    fat_secret_service = get_fat_secret_service_instance()
     cache_service = get_cache_service()
     ai_chat_service = get_ai_chat_service()
     suggestion_service = get_suggestion_orchestration_service()
@@ -301,7 +310,8 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         SearchFoodsQuery,
         SearchFoodsQueryHandler(
-            food_data_service, food_cache_service, food_mapping_service
+            food_data_service, food_cache_service, food_mapping_service,
+            fat_secret_service=fat_secret_service
         ),
     )
     event_bus.register_handler(

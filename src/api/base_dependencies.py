@@ -230,13 +230,29 @@ def get_food_mapping_service() -> FoodMappingServicePort:
 
 # OpenFoodFacts Service
 def get_open_food_facts_service_instance():
-    """
-    Get the OpenFoodFacts service instance.
-
-    Returns:
-        OpenFoodFactsService: The OpenFoodFacts service
-    """
+    """Get the OpenFoodFacts service instance."""
     return get_open_food_facts_service()
+
+
+# FatSecret Service
+def get_fat_secret_service_instance():
+    """Get the FatSecret service instance."""
+    from src.infra.adapters.fat_secret_service import get_fat_secret_service
+    return get_fat_secret_service()
+
+
+# Barcode Product Repository
+_barcode_product_repository = None
+
+
+def get_barcode_product_repository():
+    """Get the barcode product repository singleton."""
+    global _barcode_product_repository
+    if _barcode_product_repository is None:
+        from src.infra.repositories.barcode_product_repository import BarcodeProductRepository
+        _barcode_product_repository = BarcodeProductRepository()
+    return _barcode_product_repository
+
 
 # Notification Repository
 def get_notification_repository(db: Session = Depends(get_db)) -> NotificationRepositoryPort:

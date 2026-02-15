@@ -18,5 +18,6 @@ class BarcodeProductResponse(BaseModel):
     fat_100g: Optional[float] = Field(None, description="Fat per 100g")
     serving_size: Optional[str] = Field(None, description="Serving size description")
     image_url: Optional[str] = Field(None, description="Product image URL")
+    source: Optional[str] = Field(None, description="Data source: cache, fatsecret, openfoodfacts")
 
     model_config = {"from_attributes": True}

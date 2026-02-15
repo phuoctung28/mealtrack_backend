@@ -63,7 +63,7 @@ def _ensure_dev_user() -> Optional[User]:
             body_fat_percentage=18.0,
             is_current=True,
             activity_level="moderate",
-            fitness_goal="maintenance",
+            fitness_goal="recomp",
             target_weight_kg=70.0,
             meals_per_day=3,
             snacks_per_day=1,
