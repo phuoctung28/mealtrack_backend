@@ -266,6 +266,7 @@ async def parse_meal_text(
             text=payload.text,
             language=payload.language,
             user_id=user_id,
+            current_items=payload.current_items,
         )
         return await event_bus.send(command)
     except Exception as e:

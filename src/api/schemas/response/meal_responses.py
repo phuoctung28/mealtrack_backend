@@ -35,6 +35,8 @@ class ParsedFoodItem(BaseModel):
     protein: float = Field(..., ge=0, description="Protein in grams")
     carbs: float = Field(..., ge=0, description="Carbohydrates in grams")
     fat: float = Field(..., ge=0, description="Fat in grams")
+    data_source: Optional[str] = Field(None, description="Data source: usda, fatsecret, or ai_estimate")
+    fdc_id: Optional[int] = Field(None, description="USDA FDC ID when available")
 
 
 class ParseMealTextResponse(BaseModel):
