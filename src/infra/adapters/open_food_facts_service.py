@@ -3,7 +3,9 @@ OpenFoodFacts API HTTP client.
 Provides product lookup by barcode for packaged foods.
 """
 from typing import Dict, Any, Optional
-import requests
+import re
+
+import httpx
 
 
 class OpenFoodFactsService:
@@ -11,10 +13,25 @@ class OpenFoodFactsService:
 
     BASE_URL = "https://world.openfoodfacts.org/api/v2"
 
-    def __init__(self, session: Optional[requests.Session] = None):
-        self.session = session or requests.Session()
+    # Barcode validation pattern (8-14 digits)
+    BARCODE_PATTERN = re.compile(r'^\d{8,14}$')
 
-    def get_product(self, barcode: str) -> Optional[Dict[str, Any]]:
+    def __init__(self, client: Optional[httpx.AsyncClient] = None):
+        self._client = client
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create async HTTP client."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=10.0)
+        return self._client
+
+    async def close(self):
+        """Close the HTTP client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
+    async def get_product(self, barcode: str) -> Optional[Dict[str, Any]]:
         """
         Fetch product by barcode from OpenFoodFacts.
 
@@ -25,14 +42,18 @@ class OpenFoodFactsService:
             Product dict with name, brand, nutrition per 100g, serving size, image URL
             Returns None if product not found or API error.
         """
+        # Validate barcode format
+        if not self.BARCODE_PATTERN.match(barcode):
+            return None
+
         try:
-            resp = self.session.get(
+            client = await self._get_client()
+            response = await client.get(
                 f"{self.BASE_URL}/product/{barcode}.json",
-                timeout=10,
                 headers={"User-Agent": "Nutree/1.0"},
             )
-            resp.raise_for_status()
-            data = resp.json()
+            response.raise_for_status()
+            data = response.json()
 
             if data.get("status") != 1:
                 return None
@@ -42,7 +63,7 @@ class OpenFoodFactsService:
                 return None
 
             return self._map_product(product)
-        except requests.RequestException:
+        except httpx.HTTPError:
             return None
 
     def _map_product(self, product: Dict[str, Any]) -> Dict[str, Any]:

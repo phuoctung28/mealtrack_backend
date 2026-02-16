@@ -37,14 +37,14 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
             return cached
 
         # Step 2: Try FatSecret
-        fat_secret_result = self.fat_secret.get_product(query.barcode)
+        fat_secret_result = await self.fat_secret.get_product(query.barcode)
         if fat_secret_result:
             fat_secret_result["source"] = "fatsecret"
             self._cache_result(fat_secret_result)
             return fat_secret_result
 
         # Step 3: Try OpenFoodFacts
-        off_result = self.off.get_product(query.barcode)
+        off_result = await self.off.get_product(query.barcode)
         if off_result:
             off_result["source"] = "openfoodfacts"
             self._cache_result(off_result)

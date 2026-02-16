@@ -50,7 +50,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
 
         if self.fat_secret_service:
             try:
-                fs_results = self.fat_secret_service.search_foods(event.query, max_results=5)
+                fs_results = await self.fat_secret_service.search_foods(event.query, max_results=5)
                 processed_raw.extend(fs_results)
             except Exception:
                 logger.warning("FatSecret search failed", exc_info=True)

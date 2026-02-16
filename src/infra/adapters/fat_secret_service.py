@@ -6,8 +6,9 @@ from typing import Dict, Any, Optional, List
 import logging
 import time
 import base64
+import re
 
-import requests
+import httpx
 
 from src.infra.config.settings import settings
 
@@ -16,6 +17,9 @@ logger = logging.getLogger(__name__)
 # FatSecret API endpoints
 FATSECRET_TOKEN_URL = "https://oauth.fatsecret.com/connect/token"
 FATSECRET_API_BASE = "https://platform.fatsecret.com/rest/v1"
+
+# Barcode validation pattern (8-14 digits)
+BARCODE_PATTERN = re.compile(r'^\d{8,14}$')
 
 
 class FatSecretService:
@@ -26,8 +30,21 @@ class FatSecretService:
         self.client_secret = client_secret
         self._access_token: Optional[str] = None
         self._token_expires_at: float = 0
+        self._client: Optional[httpx.AsyncClient] = None
 
-    def _get_access_token(self) -> Optional[str]:
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create async HTTP client."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
+
+    async def close(self):
+        """Close the HTTP client."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
+
+    async def _get_access_token(self) -> Optional[str]:
         """Get OAuth 2.0 access token, refreshing if needed."""
         # Check if token is still valid (with 60s buffer)
         if self._access_token and time.time() < self._token_expires_at - 60:
@@ -45,8 +62,9 @@ class FatSecretService:
 
             data = {"grant_type": "client_credentials"}
 
-            response = requests.post(
-                FATSECRET_TOKEN_URL, headers=headers, data=data, timeout=30
+            client = await self._get_client()
+            response = await client.post(
+                FATSECRET_TOKEN_URL, headers=headers, data=data
             )
 
             if response.status_code != 200:
@@ -65,11 +83,11 @@ class FatSecretService:
             logger.warning(f"FatSecret OAuth error: {e}")
             return None
 
-    def _api_request(
+    async def _api_request(
         self, method: str, endpoint: str, params: Optional[Dict] = None
     ) -> Optional[Dict]:
         """Make authenticated API request."""
-        token = self._get_access_token()
+        token = await self._get_access_token()
         if not token:
             return None
 
@@ -80,10 +98,11 @@ class FatSecretService:
         }
 
         try:
+            client = await self._get_client()
             if method.upper() == "GET":
-                response = requests.get(url, headers=headers, params=params, timeout=30)
+                response = await client.get(url, headers=headers, params=params)
             else:
-                response = requests.post(url, headers=headers, json=params, timeout=30)
+                response = await client.post(url, headers=headers, json=params)
 
             if response.status_code != 200:
                 logger.warning(
@@ -92,12 +111,17 @@ class FatSecretService:
                 return None
 
             return response.json()
-        except Exception as e:
+        except httpx.HTTPError as e:
             logger.warning(f"FatSecret request error: {e}")
             return None
 
-    def get_product(self, barcode: str) -> Optional[Dict[str, Any]]:
+    async def get_product(self, barcode: str) -> Optional[Dict[str, Any]]:
         """Fetch product by barcode from FatSecret."""
+        # Validate barcode format
+        if not BARCODE_PATTERN.match(barcode):
+            logger.warning(f"Invalid barcode format: {barcode}")
+            return None
+
         try:
             normalized_barcode = barcode.zfill(13)
             params = {
@@ -105,7 +129,7 @@ class FatSecretService:
                 "barcode": normalized_barcode,
                 "format": "json",
             }
-            result = self._api_request("GET", "", params)
+            result = await self._api_request("GET", "", params)
             if not result:
                 return None
 
@@ -115,7 +139,7 @@ class FatSecretService:
 
             # Get food details
             detail_params = {"method": "food.get", "food_id": food_id, "format": "json"}
-            food_details = self._api_request("GET", "", detail_params)
+            food_details = await self._api_request("GET", "", detail_params)
             if not food_details:
                 return None
 
@@ -124,7 +148,7 @@ class FatSecretService:
             logger.warning(f"FatSecret API error for barcode {barcode}: {e}")
             return None
 
-    def search_foods(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
+    async def search_foods(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
         """Search foods by query string."""
         try:
             params = {
@@ -134,7 +158,7 @@ class FatSecretService:
                 "page_number": 1,
                 "format": "json",
             }
-            result = self._api_request("GET", "", params)
+            result = await self._api_request("GET", "", params)
             if not result:
                 return []
 
@@ -168,18 +192,30 @@ class FatSecretService:
                 "serving_size": None,
                 "image_url": None,
             }
-        serving_quantity = self._safe_float(serving.get("number_of_units")) or 1
+        # Use metric_serving_amount for accurate per-100g calculation
+        metric_amount = self._safe_float(serving.get("metric_serving_amount")) or 100
         return {
             "name": food.get("food_name", ""),
             "brand": food.get("brand_name"),
             "barcode": barcode,
-            "calories_100g": self._safe_float(serving.get("calories")) / serving_quantity * 100 if serving.get("calories") else None,
-            "protein_100g": self._safe_float(serving.get("protein")) / serving_quantity * 100 if serving.get("protein") else None,
-            "carbs_100g": self._safe_float(serving.get("carbohydrate")) / serving_quantity * 100 if serving.get("carbohydrate") else None,
-            "fat_100g": self._safe_float(serving.get("fat")) / serving_quantity * 100 if serving.get("fat") else None,
+            "calories_100g": self._calc_per_100g(serving.get("calories"), metric_amount),
+            "protein_100g": self._calc_per_100g(serving.get("protein"), metric_amount),
+            "carbs_100g": self._calc_per_100g(serving.get("carbohydrate"), metric_amount),
+            "fat_100g": self._calc_per_100g(serving.get("fat"), metric_amount),
             "serving_size": serving.get("serving_description"),
             "image_url": food.get("food_url"),
         }
+
+    def _calc_per_100g(self, value: Any, metric_amount: float) -> Optional[float]:
+        """Calculate nutrition value per 100g using metric_serving_amount."""
+        if value is None:
+            return None
+        raw_value = self._safe_float(value)
+        if raw_value is None:
+            return None
+        if metric_amount <= 0:
+            return None
+        return (raw_value / metric_amount) * 100
 
     def _map_search_result(self, food: Dict[str, Any]) -> Dict[str, Any]:
         """Map FatSecret search result to clean dict."""
