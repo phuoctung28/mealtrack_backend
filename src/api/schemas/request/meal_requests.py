@@ -2,9 +2,19 @@
 Meal-related request DTOs.
 """
 import warnings
-from typing import Optional, Literal
+from typing import Any, Optional, Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+
+class ParseMealTextRequest(BaseModel):
+    """Request DTO for parsing meal text descriptions."""
+    text: str = Field(..., min_length=1, max_length=500, description="Natural language food description")
+    language: str = Field("en", description="Language code for response (en, vi, etc.)")
+    current_items: Optional[list[dict[str, Any]]] = Field(
+        None,
+        description="Current meal items for refinement (when user is editing an existing meal)"
+    )
 
 
 class MacrosRequest(BaseModel):
@@ -120,10 +130,17 @@ class AnalyzeMealImageRequest(BaseModel):
 
 # Food database manual meal creation requests
 class ManualMealItemRequest(BaseModel):
-    """Single selected food item with portion to create a manual meal."""
-    fdc_id: int = Field(..., description="USDA FDC ID")
+    """Single selected food item with portion to create a manual meal.
+
+    Supports both USDA foods (via fdc_id) and custom foods (via name + custom_nutrition).
+    """
+    fdc_id: Optional[int] = Field(None, description="USDA FDC ID (required for USDA foods)")
+    name: Optional[str] = Field(None, min_length=1, max_length=200, description="Food name (required for custom foods)")
     quantity: float = Field(..., gt=0, description="Amount relative to serving unit (e.g., grams)")
     unit: str = Field("g", min_length=1, max_length=20, description="Unit, default grams")
+    custom_nutrition: Optional["CustomNutritionRequest"] = Field(
+        None, description="Custom nutrition data for non-USDA foods (e.g., barcode products)"
+    )
 
 
 class CreateManualMealFromFoodsRequest(BaseModel):

@@ -24,6 +24,30 @@ class MealStatusEnum(str, Enum):
 
 
 # Translation Response DTOs
+
+
+class ParsedFoodItem(BaseModel):
+    """Response DTO for a single parsed food item."""
+    name: str = Field(..., description="Food name")
+    quantity: float = Field(..., ge=0, description="Amount")
+    unit: str = Field(..., description="Serving unit")
+    calories: float = Field(..., ge=0, description="Calories")
+    protein: float = Field(..., ge=0, description="Protein in grams")
+    carbs: float = Field(..., ge=0, description="Carbohydrates in grams")
+    fat: float = Field(..., ge=0, description="Fat in grams")
+    data_source: Optional[str] = Field(None, description="Data source: usda, fatsecret, or ai_estimate")
+    fdc_id: Optional[int] = Field(None, description="USDA FDC ID when available")
+
+
+class ParseMealTextResponse(BaseModel):
+    """Response DTO for parsed meal text."""
+    items: List[ParsedFoodItem] = Field(..., description="Parsed food items")
+    total_calories: float = Field(..., description="Total calories")
+    total_protein: float = Field(..., description="Total protein in grams")
+    total_carbs: float = Field(..., description="Total carbohydrates in grams")
+    total_fat: float = Field(..., description="Total fat in grams")
+
+
 class TranslatedFoodItemResponse(BaseModel):
     """Response DTO for translated food item."""
     id: str = Field(..., description="Food item ID")

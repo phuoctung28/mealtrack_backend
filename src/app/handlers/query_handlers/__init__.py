@@ -28,6 +28,7 @@ from .get_user_profile_query_handler import GetUserProfileQueryHandler
 from .get_user_tdee_query_handler import GetUserTdeeQueryHandler
 from .preview_tdee_query_handler import PreviewTdeeQueryHandler
 # Food handlers
+from .lookup_barcode_query_handler import LookupBarcodeQueryHandler
 from .search_foods_query_handler import SearchFoodsQueryHandler
 
 __all__ = [
@@ -37,6 +38,7 @@ __all__ = [
     # Food
     "SearchFoodsQueryHandler",
     "GetFoodDetailsQueryHandler",
+    "LookupBarcodeQueryHandler",
     # Meal
     "GetMealByIdQueryHandler",
     "GetDailyMacrosQueryHandler",

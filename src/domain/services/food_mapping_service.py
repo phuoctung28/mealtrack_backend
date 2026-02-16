@@ -20,7 +20,7 @@ class FoodMappingService(FoodMappingServicePort):
         # Extract nutrients from search results
         nutrients = self._extract_macros(item.get("foodNutrients") or [])
         
-        return {
+        result = {
             "fdc_id": item.get("fdcId"),
             "name": item.get("description"),
             "brand": item.get("brandOwner"),
@@ -35,6 +35,9 @@ class FoodMappingService(FoodMappingServicePort):
                 "carbs": nutrients.get("carbs"),
             },
         }
+        if "source" in item:
+            result["source"] = item["source"]
+        return result
 
     def _extract_macros(self, nutrients: List[Dict[str, Any]]) -> Dict[str, float]:
         values: Dict[str, float] = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}

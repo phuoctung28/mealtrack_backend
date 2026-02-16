@@ -18,10 +18,10 @@ class TestSanitizeUserDescription:
         assert sanitize_user_description(None) is None
 
     def test_truncates_long_input(self):
-        """Input longer than 200 chars should be truncated."""
-        long_text = "a" * 300
+        """Input longer than 500 chars should be truncated."""
+        long_text = "a" * 600
         result = sanitize_user_description(long_text)
-        assert len(result) == 200
+        assert len(result) == 500
 
     def test_removes_forbidden_chars(self):
         """Forbidden characters should be removed."""

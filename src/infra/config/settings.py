@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
     PINECONE_API_KEY: str | None = Field(default=None)
+    FATSECRET_CLIENT_ID: str | None = Field(default=None, description="FatSecret OAuth 2.0 client ID")
+    FATSECRET_CLIENT_SECRET: str | None = Field(default=None, description="FatSecret OAuth 2.0 client secret")
 
     # LLM Provider configuration
     LLM_PROVIDER: str | None = Field(
