@@ -16,6 +16,7 @@ from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 from src.infra.services.ai.prompts.system_prompts import SystemPrompts
 from src.infra.adapters.food_data_service import FoodDataService
 from src.infra.adapters.fat_secret_service import get_fat_secret_service
+from src.domain.services.nutrition_calculation_service import scale_per_100g_nutrition
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,8 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
             temperature=0.3,  # Lower temperature for more consistent parsing
         )
 
-        # Build messages
-        system_prompt = SystemPrompts.get_meal_text_parsing_prompt()
+        # Build messages with language context
+        system_prompt = SystemPrompts.get_meal_text_parsing_prompt(language=command.language)
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=sanitized_text),
@@ -100,36 +101,50 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
     async def _cascade_lookup(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """
         Cascade lookup: USDA -> FatSecret -> AI estimate.
-
-        Args:
-            item: Parsed food item dict
-
-        Returns:
-            Item dict with data_source and possibly fdc_id added
+        Applies unit-to-grams conversion so nutrition matches what manual-meal stores.
         """
         name = item.get("name", "")
+        quantity = item.get("quantity", 1.0)
+        unit = item.get("unit", "serving")
+
         if not name:
             item["data_source"] = "ai_estimate"
             return item
 
+        # AI estimate values (fallback reference)
+        ai_calories = item.get("calories", 0)
+
+        # Try USDA first
         try:
-            # Try USDA first
             usda_results = await self._food_data_service.search_foods(name, limit=5)
             if usda_results and len(usda_results) > 0:
-                # Get the first match
                 usda_food = usda_results[0]
                 fdc_id = usda_food.get("fdcId")
                 if fdc_id:
-                    # Try to get nutrition details
                     try:
                         details = await self._food_data_service.get_food_details(fdc_id)
                         nutrients = details.get("foodNutrients", [])
-                        item.update(self._extract_nutrition(nutrients))
+                        per_100g = self._extract_nutrition(nutrients)
+                        # Scale per-100g values for the actual quantity+unit
+                        scaled = scale_per_100g_nutrition(per_100g, quantity, unit)
+                        # Sanity check: reject absurdly low USDA results for non-trivial units
+                        non_trivial_units = ("g", "ml", "tsp", "teaspoon")
+                        if scaled["calories"] < 5.0 and unit not in non_trivial_units:
+                            logger.debug(
+                                f"USDA result too low for '{name}' "
+                                f"({scaled['calories']} cal/{quantity} {unit}), skipping"
+                            )
+                            raise ValueError("USDA result unreasonably low")
+                        item.update(scaled)
+                    except ValueError:
+                        raise  # Re-raise sanity check failure to skip USDA
                     except Exception:
-                        pass  # Keep AI estimate but use USDA name
+                        pass  # Keep AI estimate but use USDA source
                     item["data_source"] = "usda"
                     item["fdc_id"] = fdc_id
                     return item
+        except ValueError:
+            logger.debug(f"USDA sanity check failed for {name}, trying FatSecret")
         except Exception as e:
             logger.debug(f"USDA lookup failed for {name}: {e}")
 
@@ -137,14 +152,52 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         try:
             fatsecret_results = self._fat_secret_service.search_foods(name, max_results=5)
             if fatsecret_results and len(fatsecret_results) > 0:
+                fs_food = fatsecret_results[0]
+                per_100g = self._parse_fatsecret_nutrition(fs_food)
+                if per_100g:
+                    scaled = scale_per_100g_nutrition(per_100g, quantity, unit)
+                    item.update(scaled)
                 item["data_source"] = "fatsecret"
                 return item
         except Exception as e:
             logger.debug(f"FatSecret lookup failed for {name}: {e}")
 
-        # Fallback to AI estimate
+        # Fallback to AI estimate (values from Gemini prompt, already per-serving)
         item["data_source"] = "ai_estimate"
         return item
+
+    def _parse_fatsecret_nutrition(self, food: Dict[str, Any]) -> Dict[str, float]:
+        """Parse per-100g nutrition from FatSecret food_description field.
+
+        FatSecret format: 'Per 100g - Calories: 155kcal | Fat: 11g | Carbs: 1.1g | Protein: 13g'
+        """
+        desc = food.get("food_description", "")
+        if not desc:
+            return {}
+        result: Dict[str, float] = {}
+        try:
+            for part in desc.split("|"):
+                part = part.strip().lower()
+                if "calories" in part or "cal" in part:
+                    val = re.search(r'([\d.]+)', part)
+                    if val:
+                        result["calories"] = float(val.group(1))
+                elif "fat" in part:
+                    val = re.search(r'([\d.]+)', part)
+                    if val:
+                        result["fat"] = float(val.group(1))
+                elif "carb" in part:
+                    val = re.search(r'([\d.]+)', part)
+                    if val:
+                        result["carbs"] = float(val.group(1))
+                elif "protein" in part:
+                    val = re.search(r'([\d.]+)', part)
+                    if val:
+                        result["protein"] = float(val.group(1))
+        except Exception as e:
+            logger.debug(f"Could not parse FatSecret nutrition: {e}")
+            return {}
+        return result if result else {}
 
     def _extract_nutrition(self, nutrients: List[Dict[str, Any]]) -> Dict[str, float]:
         """Extract nutrition values from USDA nutrients list."""

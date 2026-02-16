@@ -11,6 +11,64 @@ from src.domain.model.nutrition import Macros
 
 logger = logging.getLogger(__name__)
 
+# Shared unit-to-grams conversion table for common serving units.
+# Used by both parse-text and manual-meal handlers to ensure consistent nutrition.
+UNIT_TO_GRAMS = {
+    "large": 50.0,     # ~50g per large egg
+    "medium": 44.0,    # ~44g per medium egg
+    "small": 38.0,     # ~38g per small egg
+    "cup": 240.0,
+    "tablespoon": 15.0,
+    "tbsp": 15.0,
+    "teaspoon": 5.0,
+    "tsp": 5.0,
+    "piece": 100.0,
+    "slice": 30.0,
+    "serving": 100.0,
+}
+
+
+def _normalize_unit(unit: str) -> str:
+    """Normalize unit string: strip qualifiers, handle plurals, lowercase."""
+    unit = (unit or "g").lower().strip()
+    # Strip common qualifiers (e.g., "cup cooked" → "cup", "medium ripe" → "medium")
+    base = unit.split()[0] if " " in unit else unit
+    # Handle plurals (e.g., "tablespoons" → "tablespoon", "cups" → "cup")
+    if base.endswith("s") and base not in UNIT_TO_GRAMS:
+        singular = base[:-1]
+        if singular in UNIT_TO_GRAMS:
+            return singular
+    return base
+
+
+def convert_quantity_to_grams(quantity: float, unit: str) -> float:
+    """Convert a quantity+unit pair to grams using UNIT_TO_GRAMS mapping."""
+    normalized = _normalize_unit(unit)
+    if normalized == "g":
+        return quantity
+    grams_per_unit = UNIT_TO_GRAMS.get(normalized)
+    if grams_per_unit is None:
+        logger.warning(f"Unknown unit '{unit}' (normalized: '{normalized}') — treating quantity as grams")
+        return quantity
+    return quantity * grams_per_unit
+
+
+def scale_per_100g_nutrition(
+    per_100g: dict, quantity: float, unit: str, base_serving: float = 100.0
+) -> dict:
+    """Scale per-100g nutrition values for a given quantity and unit.
+
+    Returns dict with keys: calories, protein, carbs, fat.
+    """
+    quantity_in_grams = convert_quantity_to_grams(quantity, unit)
+    factor = (quantity_in_grams / base_serving) if base_serving > 0 else 0.0
+    return {
+        "calories": round(per_100g.get("calories", 0.0) * factor, 2),
+        "protein": round(per_100g.get("protein", 0.0) * factor, 2),
+        "carbs": round(per_100g.get("carbs", 0.0) * factor, 2),
+        "fat": round(per_100g.get("fat", 0.0) * factor, 2),
+    }
+
 
 @dataclass
 class ScaledNutritionResult:

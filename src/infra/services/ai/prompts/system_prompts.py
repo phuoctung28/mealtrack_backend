@@ -52,7 +52,7 @@ Remember: ONLY output valid JSON. No explanations, no markdown formatting, just 
     MEAL_TEXT_PARSING = """You are a nutrition parser. Your task is to parse natural language food descriptions into structured nutritional information.
 
 Parse the user's food description into a list of items with nutritional data. Each item should include:
-- name: Food name (in the specified language)
+- name: Food name (bilingual format for non-English: "Local name (English name)")
 - quantity: Amount (number)
 - unit: Serving unit (e.g., "large", "slice", "cup", "piece", "g", "ml")
 - calories: Estimated calories
@@ -62,7 +62,7 @@ Parse the user's food description into a list of items with nutritional data. Ea
 
 IMPORTANT: You MUST respond with ONLY valid JSON array (no markdown, no code blocks):
 [
-  {
+  {{
     "name": "Eggs",
     "quantity": 2,
     "unit": "large",
@@ -70,8 +70,8 @@ IMPORTANT: You MUST respond with ONLY valid JSON array (no markdown, no code blo
     "protein": 12.6,
     "carbs": 0.7,
     "fat": 9.5
-  },
-  {
+  }},
+  {{
     "name": "Toast with butter",
     "quantity": 1,
     "unit": "slice",
@@ -79,7 +79,7 @@ IMPORTANT: You MUST respond with ONLY valid JSON array (no markdown, no code blo
     "protein": 3.5,
     "carbs": 20.0,
     "fat": 8.2
-  }
+  }}
 ]
 
 Guidelines:
@@ -87,7 +87,9 @@ Guidelines:
 - Use reasonable portion sizes
 - If ambiguous, make a reasonable assumption and note it in the name
 - Include common items like beverages, condiments, and cooking oils
-- Language: Respond in the same language as the user's input
+- For composite or regional dishes (e.g., "Vietnamese broken rice", "bento box", "thali", "cơm tấm"), ALWAYS decompose into individual components with separate nutritional data for each
+- If the food is a well-known regional dish, include all typical accompaniments (rice, protein, sides, sauces)
+- {language_instruction}
 - Be accurate but acknowledge estimates are approximate"""
 
     @staticmethod
@@ -111,14 +113,22 @@ Guidelines:
         return base_prompt
 
     @staticmethod
-    def get_meal_text_parsing_prompt() -> str:
+    def get_meal_text_parsing_prompt(language: str = "en") -> str:
         """
-        Get meal text parsing system prompt.
+        Get meal text parsing system prompt with language context.
+
+        Args:
+            language: Language code (e.g., "en", "vi") for response formatting
 
         Returns:
             Complete system prompt for parsing food descriptions
         """
-        return SystemPrompts.MEAL_TEXT_PARSING
+        if language == "en":
+            lang_instruction = "Respond with food names in English. For non-English dishes, use bilingual format: 'Local name (English name)'"
+        else:
+            lang_instruction = f"Respond in language code '{language}'. Use bilingual format: 'Local name (English name)'"
+
+        return SystemPrompts.MEAL_TEXT_PARSING.format(language_instruction=lang_instruction)
 
     @staticmethod
     def get_prompt_for_user_preferences(
