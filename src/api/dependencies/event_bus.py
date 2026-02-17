@@ -22,6 +22,8 @@ from src.app.commands.meal import (
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
+from src.app.commands.meal.tag_cheat_meal_command import TagCheatMealCommand
+from src.app.commands.meal.untag_cheat_meal_command import UntagCheatMealCommand
 from src.app.commands.meal_plan import (
     GenerateWeeklyIngredientBasedMealPlanCommand,
 )
@@ -73,6 +75,12 @@ from src.app.handlers.command_handlers import (
     UpdateNotificationPreferencesCommandHandler,
     UpdateTimezoneCommandHandler,
 )
+# Cheat meal handlers
+from src.app.handlers.command_handlers import (
+    TagCheatMealCommandHandler,
+    UntagCheatMealCommandHandler,
+)
+
 # Chat handlers
 from src.app.handlers.command_handlers.chat import (
     CreateThreadCommandHandler,
@@ -95,6 +103,7 @@ from src.app.handlers.query_handlers import (
     LookupBarcodeQueryHandler,
     GetMealByIdQueryHandler,
     GetDailyMacrosQueryHandler,
+    GetWeeklyBudgetQueryHandler,
     GetUserProfileQueryHandler,
     GetUserByFirebaseUidQueryHandler,
     GetUserOnboardingStatusQueryHandler,
@@ -131,6 +140,7 @@ from src.app.queries.meal import (
     GetMealByIdQuery,
     GetDailyMacrosQuery,
 )
+from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.app.queries.meal_plan import (
     GetMealsFromPlanByDateQuery,
     GetMealPlanQuery,
@@ -306,6 +316,20 @@ def get_configured_event_bus() -> EventBus:
         ParseMealTextHandler(),
     )
 
+    # Register cheat meal command handlers
+    event_bus.register_handler(
+        TagCheatMealCommand,
+        TagCheatMealCommandHandler(
+            cache_service=cache_service,
+        ),
+    )
+    event_bus.register_handler(
+        UntagCheatMealCommand,
+        UntagCheatMealCommandHandler(
+            cache_service=cache_service,
+        ),
+    )
+
     # Register food database query handlers
     event_bus.register_handler(
         SearchFoodsQuery,
@@ -331,6 +355,10 @@ def get_configured_event_bus() -> EventBus:
         GetDailyMacrosQueryHandler(
             cache_service=cache_service,
         ),
+    )
+    event_bus.register_handler(
+        GetWeeklyBudgetQuery,
+        GetWeeklyBudgetQueryHandler(),
     )
 
     # Register activity query handlers

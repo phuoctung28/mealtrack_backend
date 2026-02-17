@@ -30,6 +30,7 @@ from .preview_tdee_query_handler import PreviewTdeeQueryHandler
 # Food handlers
 from .lookup_barcode_query_handler import LookupBarcodeQueryHandler
 from .search_foods_query_handler import SearchFoodsQueryHandler
+from .get_weekly_budget_query_handler import GetWeeklyBudgetQueryHandler
 
 __all__ = [
     # TDEE
@@ -59,4 +60,5 @@ __all__ = [
     "GetMealPlanningSummaryQueryHandler",
     # Notification
     "GetNotificationPreferencesQueryHandler",
+    "GetWeeklyBudgetQueryHandler",
 ]
