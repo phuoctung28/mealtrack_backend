@@ -169,21 +169,49 @@ class MealRepository(MealRepositoryPort):
         """Find meals created on a specific date."""
         start_datetime = datetime.combine(date_obj, datetime.min.time())
         end_datetime = start_datetime + timedelta(days=1)
-        
+
         query = (
             self.db.query(DBMeal)
             .options(*_MEAL_LOAD_OPTIONS)
             .filter(DBMeal.created_at >= start_datetime)
             .filter(DBMeal.created_at < end_datetime)
         )
-        
+
         if user_id:
             query = query.filter(DBMeal.user_id == user_id)
-        
+
         db_meals = (
             query
             .filter(DBMeal.status != MealStatusEnum.INACTIVE)
             .order_by(DBMeal.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [MealMapper.to_domain(m) for m in db_meals]
+
+    def find_by_date_range(
+        self,
+        user_id: str,
+        start_date: date,
+        end_date: date,
+        limit: int = 100
+    ) -> List[Meal]:
+        """Find meals created within a date range (inclusive)."""
+        start_datetime = datetime.combine(start_date, datetime.min.time())
+        end_datetime = datetime.combine(end_date, datetime.min.time()) + timedelta(days=1)
+
+        query = (
+            self.db.query(DBMeal)
+            .options(*_MEAL_LOAD_OPTIONS)
+            .filter(DBMeal.created_at >= start_datetime)
+            .filter(DBMeal.created_at < end_datetime)
+            .filter(DBMeal.user_id == user_id)
+        )
+
+        db_meals = (
+            query
+            .filter(DBMeal.status != MealStatusEnum.INACTIVE)
+            .order_by(DBMeal.created_at.asc())
             .limit(limit)
             .all()
         )

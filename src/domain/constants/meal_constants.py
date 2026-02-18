@@ -150,17 +150,38 @@ class TDEEConstants:
 
 class ConversationConstants:
     """Constants for conversation flow."""
-    
+
     # Message limits
     MAX_MESSAGE_LENGTH = 1000
     MAX_CONVERSATION_MESSAGES = 100
-    
+
     # Timeout settings
     CONVERSATION_TIMEOUT_MINUTES = 30
-    
+
     # Retry limits
     MAX_GENERATION_RETRIES = 3
-    
+
     # Common responses
     ERROR_RESPONSE = "I'm sorry, something went wrong. Let's try again."
     TIMEOUT_RESPONSE = "This conversation has timed out. Please start a new one."
+
+
+class WeeklyBudgetConstants:
+    """Constants for weekly macro budget feature."""
+
+    # Cheat meal slots per fitness goal
+    # MAINTENANCE goal does not exist in the app
+    CHEAT_SLOTS_BY_GOAL = {
+        "cut": 2,
+        "bulk": 3,
+        "recomp": 4,
+    }
+
+    # BMR floor: daily target never drops below this ratio of standard daily
+    BMR_FLOOR_RATIO = 0.80
+
+    # Smart prompt threshold: suggest cheat tag when daily consumed > this × daily target
+    SMART_PROMPT_THRESHOLD = 1.20
+
+    # Week starts on Monday
+    WEEK_START_WEEKDAY = 0  # Monday

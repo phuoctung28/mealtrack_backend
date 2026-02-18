@@ -1,8 +1,11 @@
 """Timezone utilities for notification scheduling and datetime operations."""
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime, date, timezone, timedelta
+from typing import TYPE_CHECKING, Optional, Union
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+if TYPE_CHECKING:
+    from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 
 logger = logging.getLogger(__name__)
 
@@ -135,4 +138,50 @@ def is_in_quiet_hours(
     else:
         # Same day: e.g., 01:00 to 05:00
         return start <= local_minutes < end
+
+
+def get_user_monday(
+    target_date: Union[date, datetime],
+    user_id: str,
+    uow: Optional["UnitOfWorkPort"] = None
+) -> date:
+    """
+    Get the Monday of the week for a given date in user's timezone.
+
+    Args:
+        target_date: The date to get the Monday for
+        user_id: User's Firebase UID
+        uow: Optional UnitOfWork to fetch user's timezone
+
+    Returns:
+        Monday of that week (date object)
+    """
+    # Get user timezone, default to UTC
+    user_timezone = "UTC"
+
+    if uow:
+        try:
+            user = uow.users.find_by_id(user_id)
+            if user and user.timezone:
+                user_timezone = user.timezone
+        except Exception:
+            pass
+
+    tz = get_zone_info(user_timezone)
+
+    # Convert target_date to datetime if it's just a date
+    if isinstance(target_date, date):
+        target_dt = datetime.combine(target_date, datetime.min.time())
+    else:
+        target_dt = target_date
+
+    # Localize to user's timezone
+    local_dt = target_dt.replace(tzinfo=timezone.utc).astimezone(tz)
+    local_date = local_dt.date()
+
+    # Get Monday (weekday() returns 0=Monday, 6=Sunday)
+    monday_offset = local_date.weekday()
+    monday = local_date - timedelta(days=monday_offset)
+
+    return monday
 

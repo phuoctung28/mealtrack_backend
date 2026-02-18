@@ -3,13 +3,16 @@ GetDailyMacrosQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Dict, Any, Optional
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetDailyMacrosQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
+from src.domain.model.weekly import WeeklyMacroBudget
+from src.domain.services.weekly_budget_service import WeeklyBudgetService
+from src.domain.utils.timezone_utils import get_user_monday
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
 
@@ -44,6 +47,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             total_fat = 0.0
             meal_count = 0
             meals_with_nutrition = 0
+            last_untagged_meal = None
 
             # Calculate totals from meals with nutrition data
             for meal in meals:
@@ -58,6 +62,10 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                         total_protein += meal.nutrition.macros.protein or 0
                         total_carbs += meal.nutrition.macros.carbs or 0
                         total_fat += meal.nutrition.macros.fat or 0
+
+                    # Track last non-cheat meal for smart prompt
+                    if not meal.is_cheat_meal:
+                        last_untagged_meal = meal
 
         # Get user's TDEE targets
         target_calories = None
@@ -74,6 +82,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
 
             target_calories = tdee_result.get('target_calories')
             target_macros = tdee_result.get('macros', {})
+            bmr = tdee_result.get('bmr', 1800)
 
             if target_calories is None:
                 logger.warning(f"TDEE data missing for user {query.user_id}. User may not have completed onboarding.")
@@ -104,8 +113,95 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 "calories": target_macros.get('calories', target_calories or 0.0)
             }
 
+        # Add weekly context if target calories available
+        if target_calories:
+            weekly_context = await self._get_weekly_context(
+                query.user_id,
+                target_date,
+                target_calories,
+                target_macros,
+                total_calories,
+                last_untagged_meal,
+                bmr,
+            )
+            if weekly_context:
+                result["weekly_context"] = weekly_context
+
         await self._write_cache(query.user_id, target_date, result)
         return result
+
+    async def _get_weekly_context(
+        self,
+        user_id: str,
+        target_date: date,
+        target_calories: float,
+        target_macros: Dict,
+        daily_consumed: float,
+        last_untagged_meal,
+        bmr: float = 1800,
+    ) -> Optional[Dict[str, Any]]:
+        """Get weekly budget context for the daily macros response."""
+        try:
+            with UnitOfWork() as uow:
+                # Get user's week start
+                week_start = get_user_monday(target_date, user_id, uow)
+
+                # Find or create weekly budget
+                weekly_budget = uow.weekly_budgets.find_by_user_and_week(user_id, week_start)
+
+                if not weekly_budget:
+                    return None
+
+                # Calculate remaining days in week
+                remaining_days = WeeklyBudgetService.calculate_remaining_days(week_start, target_date)
+
+                # Get standard daily targets
+                standard_daily_calories = target_calories
+                standard_daily_protein = target_macros.get('protein', 70) if target_macros else 70
+                standard_daily_carbs = target_macros.get('carbs', 200) if target_macros else 200
+                standard_daily_fat = target_macros.get('fat', 70) if target_macros else 70
+
+                # Calculate adjusted daily targets
+                adjusted = WeeklyBudgetService.calculate_adjusted_daily(
+                    weekly_budget,
+                    standard_daily_calories,
+                    standard_daily_carbs,
+                    standard_daily_fat,
+                    standard_daily_protein,
+                    bmr=bmr,
+                    remaining_days=remaining_days,
+                )
+
+                # Build weekly context
+                weekly_context = {
+                    "adjusted_target_calories": adjusted.calories,
+                    "adjusted_target_carbs": adjusted.carbs,
+                    "adjusted_target_fat": adjusted.fat,
+                    "daily_protein": adjusted.protein,
+                    "bmr_floor_active": adjusted.bmr_floor_active,
+                    "remaining_days": remaining_days,
+                    "cheat_slots_remaining": weekly_budget.remaining_cheat_slots,
+                }
+
+                # Check for smart prompt suggestion
+                if last_untagged_meal:
+                    suggestion = WeeklyBudgetService.should_suggest_cheat_tag(
+                        daily_consumed=daily_consumed,
+                        daily_target=target_calories,
+                        meal_calories=last_untagged_meal.nutrition.calories if last_untagged_meal.nutrition else 0,
+                        meal_is_cheat=last_untagged_meal.is_cheat_meal,
+                    )
+                    if suggestion:
+                        weekly_context["suggest_cheat_tag"] = {
+                            "meal_id": last_untagged_meal.meal_id,
+                            "reason": "This meal pushed you over 120% of your daily target"
+                        }
+
+                return weekly_context
+
+        except Exception as e:
+            logger.warning(f"Could not fetch weekly budget context: {e}")
+            return None
 
     async def _try_get_cached_result(self, user_id: str, target_date: date):
         if not self.cache_service:

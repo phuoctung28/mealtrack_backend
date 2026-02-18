@@ -312,16 +312,20 @@ class MealMapper:
     def to_daily_nutrition_response(daily_macros_data: dict) -> DailyNutritionResponse:
         """
         Convert daily macros query result to DailyNutritionResponse DTO.
-        
+
         Args:
             daily_macros_data: Dictionary with daily macros data from query
-            
+
         Returns:
             DailyNutritionResponse DTO
         """
-        from src.api.schemas.response.daily_nutrition_response import MacrosResponse
+        from src.api.schemas.response.daily_nutrition_response import (
+            MacrosResponse,
+            WeeklyContextResponse,
+            CheatTagSuggestion,
+        )
         from src.api.exceptions import ResourceNotFoundException
-        
+
         # Extract data - require actual user targets, no hardcoded defaults
         target_calories = daily_macros_data.get("target_calories")
         if not target_calories:
@@ -333,13 +337,13 @@ class MealMapper:
                     "reason": "User has not completed onboarding or TDEE calculation is missing"
                 }
             )
-        
+
         target_macros = MacrosResponse(
             protein=daily_macros_data.get("target_macros").get("protein") or 0.0,
-            carbs=daily_macros_data.get("target_macros").get("carbs") or 0.0, 
+            carbs=daily_macros_data.get("target_macros").get("carbs") or 0.0,
             fat=daily_macros_data.get("target_macros").get("fat") or 0.0,
         )
-        
+
         consumed_macros = MacrosResponse(
             protein=daily_macros_data.get("total_protein", 0.0),
             carbs=daily_macros_data.get("total_carbs", 0.0),
@@ -355,7 +359,7 @@ class MealMapper:
             carbs=max(0, target_macros.carbs - consumed_macros.carbs),
             fat=max(0, target_macros.fat - consumed_macros.fat),
         )
-        
+
         # Calculate completion percentages
         completion_percentage = {
             "calories": (consumed_calories / target_calories * 100) if target_calories > 0 else 0,
@@ -363,7 +367,31 @@ class MealMapper:
             "carbs": (consumed_macros.carbs / target_macros.carbs * 100) if target_macros.carbs > 0 else 0,
             "fat": (consumed_macros.fat / target_macros.fat * 100) if target_macros.fat > 0 else 0
         }
-        
+
+        # Parse weekly context if present
+        weekly_context = None
+        suggest_cheat_tag = None
+
+        if daily_macros_data.get("weekly_context"):
+            wc = daily_macros_data["weekly_context"]
+            weekly_context = WeeklyContextResponse(
+                adjusted_target_calories=wc.get("adjusted_target_calories", target_calories),
+                adjusted_target_carbs=wc.get("adjusted_target_carbs", target_macros.carbs),
+                adjusted_target_fat=wc.get("adjusted_target_fat", target_macros.fat),
+                daily_protein=wc.get("daily_protein", target_macros.protein),
+                bmr_floor_active=wc.get("bmr_floor_active", False),
+                remaining_days=wc.get("remaining_days", 7),
+                cheat_slots_remaining=wc.get("cheat_slots_remaining", 0),
+            )
+
+            # Parse cheat tag suggestion
+            if wc.get("suggest_cheat_tag"):
+                st = wc["suggest_cheat_tag"]
+                suggest_cheat_tag = CheatTagSuggestion(
+                    meal_id=st.get("meal_id", ""),
+                    reason=st.get("reason", ""),
+                )
+
         return DailyNutritionResponse(
             date=daily_macros_data.get("date", ""),
             target_calories=target_calories,
@@ -373,4 +401,6 @@ class MealMapper:
             remaining_calories=remaining_calories,
             remaining_macros=remaining_macros,
             completion_percentage=completion_percentage,
+            weekly_context=weekly_context,
+            suggest_cheat_tag=suggest_cheat_tag,
         )
