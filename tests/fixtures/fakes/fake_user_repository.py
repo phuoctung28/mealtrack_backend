@@ -33,7 +33,7 @@ class FakeUserRepository(UserRepositoryPort):
 
     def find_by_email(self, email: str) -> Optional[UserDomainModel]:
         for user in self.users.values():
-            if user.email == email:
+            if user.email == email and user.is_active:
                 return user
         return None
 
