@@ -36,6 +36,16 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                 # Check if user exists by firebase_uid
                 existing_user = uow.users.find_by_firebase_uid(command.firebase_uid)
 
+                # Fallback: check by email if UID not found (handles provider switch / UID change)
+                if not existing_user and command.email:
+                    existing_user = uow.users.find_by_email(command.email)
+                    if existing_user:
+                        logger.warning(
+                            f"Email {command.email} found with different UID. "
+                            f"Updating from {existing_user.firebase_uid} to {command.firebase_uid}"
+                        )
+                        existing_user.firebase_uid = command.firebase_uid
+
                 created = False
                 updated = False
                 user = None

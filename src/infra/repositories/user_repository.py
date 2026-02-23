@@ -44,9 +44,15 @@ class UserRepository(UserRepositoryPort):
             self.db.commit()
             self.db.refresh(user_entity)
             return UserMapper.to_domain(user_entity)
-        except IntegrityError:
+        except IntegrityError as e:
             self.db.rollback()
-            raise ValueError("User with this email or username already exists")
+            error_msg = str(e.orig).lower() if e.orig else str(e).lower()
+            if 'email' in error_msg:
+                raise ValueError("User with this email already exists")
+            elif 'firebase_uid' in error_msg:
+                raise ValueError("Firebase UID already registered")
+            else:
+                raise ValueError("User with this email or username already exists")
 
     def find_by_id(self, user_id: UUID) -> Optional[UserDomainModel]:
         """Find user by ID (only active users)."""
