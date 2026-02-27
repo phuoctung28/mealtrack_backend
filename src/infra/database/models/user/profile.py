@@ -26,6 +26,9 @@ class UserProfile(Base, BaseMixin):
     target_weight_kg = Column(Float, nullable=True)
     meals_per_day = Column(Integer, default=3, nullable=False)
     snacks_per_day = Column(Integer, default=1, nullable=False)
+
+    # Training experience level (beginner, intermediate, advanced)
+    training_level = Column(String(20), nullable=True, default=None)
     
     # Preference fields (from UserPreferences)
     dietary_preferences = Column(JSON, default=[], nullable=False)  # ['vegan', 'vegetarian', 'gluten_free', etc.]

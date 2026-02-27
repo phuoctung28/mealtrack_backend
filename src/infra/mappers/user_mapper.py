@@ -79,6 +79,7 @@ class UserProfileMapper:
             health_conditions=profile_entity.health_conditions,
             allergies=profile_entity.allergies,
             pain_points=profile_entity.pain_points,
+            training_level=profile_entity.training_level,
             created_at=profile_entity.created_at,
             updated_at=profile_entity.updated_at,
         )
@@ -104,4 +105,5 @@ class UserProfileMapper:
             health_conditions=profile_domain.health_conditions,
             allergies=profile_domain.allergies,
             pain_points=profile_domain.pain_points,
+            training_level=profile_domain.training_level,
         )

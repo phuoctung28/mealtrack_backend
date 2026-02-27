@@ -1,5 +1,5 @@
 from src.domain.constants import TDEEConstants, NutritionConstants
-from src.domain.model.user import TdeeRequest, TdeeResponse, MacroTargets, ActivityLevel, Goal
+from src.domain.model.user import TdeeRequest, TdeeResponse, MacroTargets, ActivityLevel, Goal, TrainingLevel
 from src.domain.services.bmr_calculator import BMRCalculatorFactory
 
 
@@ -16,7 +16,9 @@ class TdeeCalculationService:
         """Calculate BMR, TDEE and macros based on the request."""
         bmr, formula_name = self._calculate_bmr(request)
         tdee = self._calculate_tdee_from_bmr(bmr, request.activity_level)
-        macro_targets = self._calculate_all_macro_targets(tdee, request.weight_kg, request.goal)
+        macro_targets = self._calculate_all_macro_targets(
+            tdee, request.weight_kg, request.goal, request.training_level
+        )
         return TdeeResponse(
             bmr=round(bmr, 1),
             tdee=round(tdee, 1),
@@ -60,13 +62,25 @@ class TdeeCalculationService:
         multiplier = TDEEConstants.ACTIVITY_MULTIPLIERS[activity_map[activity_level]]
         return bmr * multiplier
     
-    def _calculate_all_macro_targets(self, tdee: float, weight_kg: float, goal: Goal) -> MacroTargets:
+    def _calculate_all_macro_targets(
+        self,
+        tdee: float,
+        weight_kg: float,
+        goal: Goal,
+        training_level: TrainingLevel = None,
+    ) -> MacroTargets:
         """Calculate macro targets using weight-based approach.
 
         Weight-based calculation (more accurate than percentage-based):
         - Protein: g/kg body weight (higher during cut to preserve muscle)
         - Fat: g/kg body weight (essential for hormone production)
         - Carbs: Remaining calories after protein and fat
+
+        Args:
+            tdee: Total Daily Energy Expenditure in calories
+            weight_kg: Body weight in kilograms
+            goal: Fitness goal (CUT, BULK, RECOMP)
+            training_level: Optional training experience level for protein adjustment
         """
         # Determine target calories based on goal
         if goal == Goal.CUT:
@@ -83,7 +97,16 @@ class TdeeCalculationService:
             goal_key = "recomp"
 
         # Calculate protein from body weight (g/kg)
-        protein_multiplier = TDEEConstants.PROTEIN_PER_KG.get(goal_key, 1.8)
+        # Use training-level-aware protein if provided, otherwise use default
+        if training_level:
+            training_key = training_level.value
+            protein_multiplier = (
+                TDEEConstants.PROTEIN_PER_KG_BY_TRAINING
+                .get(goal_key, {})
+                .get(training_key, TDEEConstants.PROTEIN_PER_KG.get(goal_key, 1.8))
+            )
+        else:
+            protein_multiplier = TDEEConstants.PROTEIN_PER_KG.get(goal_key, 1.8)
         protein_g = weight_kg * protein_multiplier
         protein_g = max(TDEEConstants.MIN_PROTEIN_G, min(protein_g, TDEEConstants.MAX_PROTEIN_G))
 
@@ -110,13 +133,20 @@ class TdeeCalculationService:
             carbs=round(carb_g, 1)
         )
     
-    def calculate_macros(self, tdee: float, goal: Goal, weight_kg: float) -> MacroTargets:
+    def calculate_macros(
+        self,
+        tdee: float,
+        goal: Goal,
+        weight_kg: float,
+        training_level: TrainingLevel = None,
+    ) -> MacroTargets:
         """Calculate macros based on TDEE, goal, and weight.
 
         Args:
             tdee: Total Daily Energy Expenditure in calories
             goal: Fitness goal (CUT, BULK, RECOMP)
             weight_kg: Body weight in kilograms (must be within valid range)
+            training_level: Optional training experience level for protein adjustment
 
         Returns:
             MacroTargets with calculated macros
@@ -129,4 +159,4 @@ class TdeeCalculationService:
                 f"weight_kg must be between {TDEEConstants.MIN_WEIGHT_KG} and "
                 f"{TDEEConstants.MAX_WEIGHT_KG}, got {weight_kg}"
             )
-        return self._calculate_all_macro_targets(tdee, weight_kg, goal) 
+        return self._calculate_all_macro_targets(tdee, weight_kg, goal, training_level) 

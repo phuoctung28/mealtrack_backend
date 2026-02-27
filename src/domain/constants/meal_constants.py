@@ -123,6 +123,17 @@ class TDEEConstants:
         "bulk": 2.0,
     }
 
+    # Training-level-aware protein targets (g per kg body weight)
+    # Adjusts based on training experience (more muscle = higher protein needs)
+    # Beginner: <1 year consistent training
+    # Intermediate: 1-3 years consistent training
+    # Advanced: 3+ years consistent training
+    PROTEIN_PER_KG_BY_TRAINING = {
+        "cut": {"beginner": 2.2, "intermediate": 2.2, "advanced": 2.2},
+        "recomp": {"beginner": 1.8, "intermediate": 2.0, "advanced": 2.2},
+        "bulk": {"beginner": 1.8, "intermediate": 2.0, "advanced": 2.2},
+    }
+
     # Fat intake: 0.5-1.5 g/kg for hormone production
     # Dorgan 1996: below 20% calories reduces testosterone
     # Kerksick 2018 ISSN position: minimum 20% calories

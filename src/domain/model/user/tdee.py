@@ -22,6 +22,19 @@ class Goal(Enum):
     RECOMP = "recomp"
 
 
+class TrainingLevel(Enum):
+    """Training experience level based on consistent resistance training history.
+
+    Used to adjust protein recommendations:
+    - BEGINNER: <1 year consistent training (can tolerate less protein)
+    - INTERMEDIATE: 1-3 years consistent training (moderate protein needs)
+    - ADVANCED: 3+ years consistent training (higher protein for muscle retention)
+    """
+    BEGINNER = "beginner"
+    INTERMEDIATE = "intermediate"
+    ADVANCED = "advanced"
+
+
 class UnitSystem(Enum):
     METRIC = "metric"
     IMPERIAL = "imperial"
@@ -39,6 +52,7 @@ class TdeeRequest:
     activity_level: ActivityLevel
     goal: Goal
     unit_system: UnitSystem = UnitSystem.METRIC
+    training_level: Optional[TrainingLevel] = None
 
     def __post_init__(self):
         """Validate invariants."""

@@ -29,6 +29,13 @@ class GoalEnum(str, Enum):
     recomp = "recomp"
 
 
+class TrainingLevelEnum(str, Enum):
+    """Enum for training experience levels."""
+    beginner = "beginner"
+    intermediate = "intermediate"
+    advanced = "advanced"
+
+
 class UnitSystemEnum(str, Enum):
     """Enum for unit systems."""
     metric = "metric"
@@ -42,16 +49,20 @@ class TdeeCalculationRequest(BaseModel):
     height: float = Field(..., gt=0, description="Height in user's preferred units")
     weight: float = Field(..., gt=0, description="Weight in user's preferred units")
     body_fat_percentage: Optional[float] = Field(
-        None, 
-        ge=5, 
-        le=55, 
+        None,
+        ge=5,
+        le=55,
         description="Body fat percentage (optional)"
     )
     activity_level: ActivityLevelEnum = Field(..., description="Activity level")
     goal: GoalEnum = Field(..., description="Fitness goal")
     unit_system: UnitSystemEnum = Field(
-        UnitSystemEnum.metric, 
+        UnitSystemEnum.metric,
         description="Unit system for height/weight"
+    )
+    training_level: Optional[TrainingLevelEnum] = Field(
+        None,
+        description="Training experience level (beginner, intermediate, advanced)"
     )
 
     @model_validator(mode='after')

@@ -1,6 +1,14 @@
+from enum import Enum
 from typing import Optional, List
 
 from pydantic import BaseModel, Field
+
+
+class TrainingLevelEnum(str, Enum):
+    """Enum for training experience levels."""
+    beginner = "beginner"
+    intermediate = "intermediate"
+    advanced = "advanced"
 
 
 class OnboardingCompleteRequest(BaseModel):
@@ -15,6 +23,9 @@ class OnboardingCompleteRequest(BaseModel):
     # Activity and goals - REQUIRED
     activity_level: str = Field(..., description="sedentary/light/moderate/active/very_active")
     goal: str = Field(..., description="bulk/cut/maintain/recomp")
+
+    # Training level - OPTIONAL (resistance training experience)
+    training_level: Optional[str] = Field(None, description="beginner/intermediate/advanced")
 
     # User experience - REQUIRED (at least one item each)
     pain_points: List[str] = Field(..., min_items=1, description="User pain points")

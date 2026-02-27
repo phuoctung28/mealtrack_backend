@@ -64,7 +64,8 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                         fitness_goal=command.fitness_goal,
                         meals_per_day=command.meals_per_day,
                         pain_points=command.pain_points,
-                        dietary_preferences=command.dietary_preferences
+                        dietary_preferences=command.dietary_preferences,
+                        training_level=command.training_level,
                     )
                 else:
                     # Update existing profile
@@ -78,6 +79,7 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     profile.meals_per_day = command.meals_per_day
                     profile.pain_points = command.pain_points
                     profile.dietary_preferences = command.dietary_preferences
+                    profile.training_level = command.training_level
 
                 # Save profile
                 uow.users.update_profile(profile)

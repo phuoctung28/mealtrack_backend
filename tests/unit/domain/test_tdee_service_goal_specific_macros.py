@@ -15,7 +15,8 @@ from src.domain.model.user import (
     Sex,
     ActivityLevel,
     Goal,
-    UnitSystem
+    UnitSystem,
+    TrainingLevel
 )
 from src.domain.services.tdee_service import TdeeCalculationService
 
@@ -454,4 +455,121 @@ class TestTdeeServiceGoalSpecificMacros:
         # Fat from weight: 100 × 1.0 = 100g
         # Fat from percent: ~3100 × 0.25 / 9 ≈ 86g (weight-based wins)
         assert response.macros.fat == pytest.approx(100.0, abs=1.0)
+
+
+# ===== TRAINING LEVEL TESTS =====
+
+
+class TestTrainingLevelProtein:
+    """Tests for training-level-aware protein multipliers."""
+
+    @pytest.fixture
+    def service(self):
+        """Provide TdeeCalculationService instance."""
+        return TdeeCalculationService()
+
+    def test_beginner_recomp_gets_lower_protein(self, service):
+        """Beginner recomp: 1.8 g/kg (better MPS response)."""
+        request = TdeeRequest(
+            age=25, sex=Sex.MALE, height=180, weight=80,
+            body_fat_pct=None, activity_level=ActivityLevel.MODERATE,
+            goal=Goal.RECOMP, training_level=TrainingLevel.BEGINNER
+        )
+        response = service.calculate_tdee(request)
+        assert response.macros.protein == pytest.approx(80 * 1.8, abs=1)
+
+    def test_intermediate_recomp_gets_default_protein(self, service):
+        """Intermediate recomp: 2.0 g/kg (same as Phase 1 default)."""
+        request = TdeeRequest(
+            age=25, sex=Sex.MALE, height=180, weight=80,
+            body_fat_pct=None, activity_level=ActivityLevel.MODERATE,
+            goal=Goal.RECOMP, training_level=TrainingLevel.INTERMEDIATE
+        )
+        response = service.calculate_tdee(request)
+        assert response.macros.protein == pytest.approx(80 * 2.0, abs=1)
+
+    def test_advanced_recomp_gets_higher_protein(self, service):
+        """Advanced recomp: 2.2 g/kg (maximum MPS requirement)."""
+        request = TdeeRequest(
+            age=25, sex=Sex.MALE, height=180, weight=80,
+            body_fat_pct=None, activity_level=ActivityLevel.MODERATE,
+            goal=Goal.RECOMP, training_level=TrainingLevel.ADVANCED
+        )
+        response = service.calculate_tdee(request)
+        assert response.macros.protein == pytest.approx(80 * 2.2, abs=1)
+
+    def test_cut_ignores_training_level(self, service):
+        """Cut always uses 2.2 g/kg regardless of training level."""
+        for level in TrainingLevel:
+            request = TdeeRequest(
+                age=25, sex=Sex.MALE, height=180, weight=80,
+                body_fat_pct=None, activity_level=ActivityLevel.MODERATE,
+                goal=Goal.CUT, training_level=level
+            )
+            response = service.calculate_tdee(request)
+            assert response.macros.protein == pytest.approx(80 * 2.2, abs=1)
+
+    def test_none_training_level_uses_default(self, service):
+        """None training level falls back to PROTEIN_PER_KG defaults."""
+        request = TdeeRequest(
+            age=25, sex=Sex.MALE, height=180, weight=80,
+            body_fat_pct=None, activity_level=ActivityLevel.MODERATE,
+            goal=Goal.RECOMP, training_level=None
+        )
+        response = service.calculate_tdee(request)
+        # Falls back to PROTEIN_PER_KG["recomp"] = 2.0
+        assert response.macros.protein == pytest.approx(80 * 2.0, abs=1)
+
+    def test_bulk_beginner_gets_1_8_protein(self, service):
+        """Bulk beginner: 1.8 g/kg."""
+        request = TdeeRequest(
+            age=25, sex=Sex.MALE, height=180, weight=80,
+            body_fat_pct=None, activity_level=ActivityLevel.MODERATE,
+            goal=Goal.BULK, training_level=TrainingLevel.BEGINNER
+        )
+        response = service.calculate_tdee(request)
+        assert response.macros.protein == pytest.approx(80 * 1.8, abs=1)
+
+    def test_bulk_intermediate_gets_2_0_protein(self, service):
+        """Bulk intermediate: 2.0 g/kg."""
+        request = TdeeRequest(
+            age=25, sex=Sex.MALE, height=180, weight=80,
+            body_fat_pct=None, activity_level=ActivityLevel.MODERATE,
+            goal=Goal.BULK, training_level=TrainingLevel.INTERMEDIATE
+        )
+        response = service.calculate_tdee(request)
+        assert response.macros.protein == pytest.approx(80 * 2.0, abs=1)
+
+    def test_bulk_advanced_gets_2_2_protein(self, service):
+        """Bulk advanced: 2.2 g/kg."""
+        request = TdeeRequest(
+            age=25, sex=Sex.MALE, height=180, weight=80,
+            body_fat_pct=None, activity_level=ActivityLevel.MODERATE,
+            goal=Goal.BULK, training_level=TrainingLevel.ADVANCED
+        )
+        response = service.calculate_tdee(request)
+        assert response.macros.protein == pytest.approx(80 * 2.2, abs=1)
+
+    def test_training_level_constants_exist(self):
+        """Verify PROTEIN_PER_KG_BY_TRAINING has all combos."""
+        for goal in ["cut", "recomp", "bulk"]:
+            for level in ["beginner", "intermediate", "advanced"]:
+                assert level in TDEEConstants.PROTEIN_PER_KG_BY_TRAINING[goal]
+
+    def test_training_level_constants_cut_all_2_2(self):
+        """Verify cut uses 2.2 for all training levels."""
+        for level in ["beginner", "intermediate", "advanced"]:
+            assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["cut"][level] == 2.2
+
+    def test_training_level_constants_recomp_progressive(self):
+        """Verify recomp uses progressive protein: 1.8 -> 2.0 -> 2.2."""
+        assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["recomp"]["beginner"] == 1.8
+        assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["recomp"]["intermediate"] == 2.0
+        assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["recomp"]["advanced"] == 2.2
+
+    def test_training_level_constants_bulk_progressive(self):
+        """Verify bulk uses progressive protein: 1.8 -> 2.0 -> 2.2."""
+        assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["bulk"]["beginner"] == 1.8
+        assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["bulk"]["intermediate"] == 2.0
+        assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["bulk"]["advanced"] == 2.2
 

@@ -30,3 +30,4 @@ class SaveUserOnboardingCommand(Command):
 
     # Optional fields
     body_fat_percentage: Optional[float] = None
+    training_level: Optional[str] = None

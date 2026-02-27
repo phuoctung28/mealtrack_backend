@@ -32,6 +32,7 @@ class UserProfileDomainModel(BaseDomainModel):
     health_conditions: List[str] = field(default_factory=list)
     allergies: List[str] = field(default_factory=list)
     pain_points: List[str] = field(default_factory=list)
+    training_level: Optional[str] = None
 
 
 @dataclass(kw_only=True)

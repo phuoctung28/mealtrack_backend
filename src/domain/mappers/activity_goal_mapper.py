@@ -5,7 +5,7 @@ Ensures consistent mapping across the entire application.
 
 from typing import Dict
 
-from src.domain.model.user import ActivityLevel, Goal
+from src.domain.model.user import ActivityLevel, Goal, TrainingLevel
 
 
 class ActivityGoalMapper:
@@ -33,6 +33,13 @@ class ActivityGoalMapper:
         "recomp": Goal.RECOMP,
     }
 
+    # Training level mappings
+    TRAINING_LEVEL_MAP: Dict[str, TrainingLevel] = {
+        "beginner": TrainingLevel.BEGINNER,
+        "intermediate": TrainingLevel.INTERMEDIATE,
+        "advanced": TrainingLevel.ADVANCED,
+    }
+
     @classmethod
     def map_activity_level(cls, activity_level: str) -> ActivityLevel:
         """Map activity level string to enum, with fallback to MODERATE."""
@@ -44,3 +51,8 @@ class ActivityGoalMapper:
     def map_goal(cls, goal: str) -> Goal:
         """Map goal string to enum, with fallback to RECOMP."""
         return cls.GOAL_MAP.get(goal.lower(), Goal.RECOMP)
+
+    @classmethod
+    def map_training_level(cls, training_level: str) -> TrainingLevel:
+        """Map training level string to enum, with fallback to BEGINNER."""
+        return cls.TRAINING_LEVEL_MAP.get(training_level.lower(), TrainingLevel.BEGINNER)
