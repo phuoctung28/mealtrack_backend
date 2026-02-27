@@ -113,22 +113,37 @@ class TDEEConstants:
     # MAINTENANCE_ADJUSTMENT removed - use RECOMP_ADJUSTMENT instead
     RECOMP_ADJUSTMENT = 0      # No calorie adjustment for recomposition
 
-    # Weight-based macro multipliers (g per kg body weight)
-    # Research: 1.6-2.0 g/kg protein optimal for muscle synthesis
-    # Higher protein during cut to preserve muscle in deficit
+    # Evidence-based protein targets (g per kg body weight)
+    # Cut: Helms 2014 — higher protein preserves lean mass in deficit
+    # Recomp: Morton 2018 — middle of 1.6-2.2 optimal range
+    # Bulk: Schoenfeld 2018 — 2.0 g/kg optimal with surplus
     PROTEIN_PER_KG = {
-        "cut": 2.0,    # Higher protein to preserve muscle during deficit
-        "recomp": 1.8, # Moderate protein for body recomposition
-        "bulk": 1.6    # Lower protein as calorie surplus provides anabolic signal
+        "cut": 2.2,
+        "recomp": 2.0,
+        "bulk": 2.0,
     }
 
-    # Fat intake: 0.7-1.2 g/kg for hormone production
-    # Lower fat during cut to maximize protein and carbs in reduced calories
+    # Fat intake: 0.5-1.5 g/kg for hormone production
+    # Dorgan 1996: below 20% calories reduces testosterone
+    # Kerksick 2018 ISSN position: minimum 20% calories
     FAT_PER_KG = {
-        "cut": 0.8,    # Lower fat to preserve calories for protein
-        "recomp": 0.9, # Moderate fat for balanced approach
-        "bulk": 1.0    # Higher fat for hormone optimization during surplus
+        "cut": 0.8,
+        "recomp": 0.9,
+        "bulk": 1.0,
     }
+
+    # Minimum fat as percentage of total calories (dual-gate with g/kg)
+    # Uses max(g/kg, % calories) to ensure hormone function
+    # Dorgan 1996: <20% cal reduces testosterone; Kerksick 2018 ISSN position
+    FAT_MIN_PERCENT = {
+        "cut": 0.20,
+        "recomp": 0.25,
+        "bulk": 0.25,
+    }
+
+    # Performance floor for resistance training (Burke 2011, Escobar 2016)
+    # Informational only — used in code comments, not enforced at runtime
+    MIN_CARBS_PER_KG = 2.5
 
     # Min/max bounds for safety
     MIN_PROTEIN_G = 60   # Minimum daily protein

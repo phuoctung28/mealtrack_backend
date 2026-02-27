@@ -87,12 +87,17 @@ class TdeeCalculationService:
         protein_g = weight_kg * protein_multiplier
         protein_g = max(TDEEConstants.MIN_PROTEIN_G, min(protein_g, TDEEConstants.MAX_PROTEIN_G))
 
-        # Calculate fat from body weight (g/kg)
-        fat_multiplier = TDEEConstants.FAT_PER_KG.get(goal_key, 0.9)
-        fat_g = weight_kg * fat_multiplier
+        # Fat dual-gate: max(weight-based, percentage-based) for hormone safety
+        # Dorgan 1996: <20% cal reduces testosterone; Kerksick 2018 ISSN
+        fat_from_weight = weight_kg * TDEEConstants.FAT_PER_KG.get(goal_key, 0.9)
+        fat_min_pct = TDEEConstants.FAT_MIN_PERCENT.get(goal_key, 0.25)
+        fat_from_percent = (calories * fat_min_pct) / NutritionConstants.CALORIES_PER_GRAM_FAT
+        fat_g = max(fat_from_weight, fat_from_percent)
         fat_g = max(TDEEConstants.MIN_FAT_G, min(fat_g, TDEEConstants.MAX_FAT_G))
 
         # Calculate carbs from remaining calories
+        # Note: carbs below 2.5 g/kg may impair resistance training performance
+        # (Burke 2011, Escobar 2016). Expected in aggressive deficits.
         protein_cals = protein_g * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
         fat_cals = fat_g * NutritionConstants.CALORIES_PER_GRAM_FAT
         remaining_cals = calories - protein_cals - fat_cals
