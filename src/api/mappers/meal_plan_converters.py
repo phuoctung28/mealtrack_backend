@@ -57,7 +57,9 @@ class MealPlanConverter:
             dietary_preferences=request.user_profile.dietary_preferences or [],
             health_conditions=request.user_profile.health_conditions or [],
             allergies=request.user_profile.allergies or [],
-            activity_level=request.user_profile.activity_level,
+            job_type=request.user_profile.job_type,
+            training_days_per_week=request.user_profile.training_days_per_week,
+            training_minutes_per_session=request.user_profile.training_minutes_per_session,
             fitness_goal=request.user_profile.fitness_goal,
             meals_per_day=request.user_profile.meals_per_day,
             snacks_per_day=1 if request.user_profile.include_snacks else 0

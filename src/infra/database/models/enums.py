@@ -65,13 +65,11 @@ class ConversationStateEnum(str, enum.Enum):
     completed = "completed"
 
 
-class ActivityLevelEnum(str, enum.Enum):
-    """Activity level for TDEE calculations."""
-    sedentary = "sedentary"
-    lightly_active = "lightly_active"
-    moderately_active = "moderately_active"
-    very_active = "very_active"
-    extra_active = "extra_active"
+class JobTypeEnum(str, enum.Enum):
+    """Job type for TDEE calculations based on daily movement."""
+    desk = "desk"
+    on_feet = "on_feet"
+    physical = "physical"
 
 
 class SexEnum(str, enum.Enum):

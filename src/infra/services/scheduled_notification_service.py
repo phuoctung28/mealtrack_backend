@@ -215,7 +215,9 @@ class ScheduledNotificationService:
                     gender=profile.gender,
                     height_cm=profile.height_cm,
                     weight_kg=profile.weight_kg,
-                    activity_level=profile.activity_level,
+                    job_type=profile.job_type,
+                    training_days_per_week=profile.training_days_per_week,
+                    training_minutes_per_session=profile.training_minutes_per_session,
                     fitness_goal=profile.fitness_goal,
                 )
 
@@ -228,7 +230,7 @@ class ScheduledNotificationService:
             db.close()
 
     def _calculate_tdee(self, age: int, gender: str, height_cm: float, weight_kg: float,
-                        activity_level: str, fitness_goal: str) -> float:
+                        job_type: str, training_days_per_week: int, training_minutes_per_session: int, fitness_goal: str) -> float:
         """Calculate Total Daily Energy Expenditure using Harris-Benedict formula with activity multiplier.
 
         Args:
@@ -236,7 +238,9 @@ class ScheduledNotificationService:
             gender: 'male', 'female', 'other'
             height_cm: Height in centimeters
             weight_kg: Weight in kilograms
-            activity_level: 'sedentary', 'light', 'moderate', 'active', 'extra'
+            job_type: 'desk', 'on_feet', 'physical'
+            training_days_per_week: 0-7
+            training_minutes_per_session: 15-180
             fitness_goal: 'maintenance', 'cutting', 'bulking'
 
         Returns:
@@ -253,15 +257,19 @@ class ScheduledNotificationService:
             female_bmr = 447.593 + (9.247 * weight_kg) + (3.098 * height_cm) - (4.330 * age)
             bmr = (male_bmr + female_bmr) / 2
 
-        # Activity level multipliers
-        activity_multipliers = {
-            "sedentary": 1.2,
-            "light": 1.375,
-            "moderate": 1.55,
-            "active": 1.725,
-            "extra": 1.9,
+        # Job type base multipliers (NEAT component)
+        job_type_multipliers = {
+            "desk": 1.2,
+            "on_feet": 1.4,
+            "physical": 1.6,
         }
-        activity_multiplier = activity_multipliers.get(activity_level, 1.55)
+        # Exercise contribution per weekly hour
+        exercise_multiplier_per_hour = 0.05
+
+        base_multiplier = job_type_multipliers.get(job_type, 1.2)
+        weekly_hours = (training_days_per_week * training_minutes_per_session) / 60.0
+        exercise_add = weekly_hours * exercise_multiplier_per_hour
+        activity_multiplier = base_multiplier + exercise_add
 
         # Calculate TDEE
         tdee = bmr * activity_multiplier

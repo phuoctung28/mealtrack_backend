@@ -1,9 +1,10 @@
 """add_training_level_to_user_profiles
 
-Revision ID: add_training_level
-Revises:
-Create Date: 2026-02-27 16:40:00
+Revision ID: 022
+Revises: 021
+Create Date: 2026-02-27
 
+Add training_level column for training-level-aware protein calculation.
 """
 from typing import Sequence, Union
 
@@ -12,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'add_training_level'
-down_revision: Union[str, None] = '020'
+revision: str = '022'
+down_revision: Union[str, None] = '021'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

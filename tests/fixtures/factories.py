@@ -40,10 +40,9 @@ class UserProfileFactory(SQLAlchemyModelFactory):
     gender = factory.Faker("random_element", elements=["male", "female", "other"])
     height_cm = factory.Faker("random_int", min=150, max=200)
     weight_kg = factory.Faker("random_int", min=45, max=120)
-    activity_level = factory.Faker(
-        "random_element", 
-        elements=["sedentary", "lightly_active", "moderately_active", "very_active", "extra_active"]
-    )
+    job_type = factory.Faker("random_element", elements=["desk", "on_feet", "physical"])
+    training_days_per_week = factory.Faker("random_int", min=0, max=7)
+    training_minutes_per_session = factory.Faker("random_int", min=0, max=120)
     goal = factory.Faker(
         "random_element",
         elements=["lose_weight", "maintain_weight", "gain_weight"]

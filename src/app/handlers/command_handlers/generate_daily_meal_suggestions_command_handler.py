@@ -53,7 +53,9 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
             "gender": command.gender,
             "height": command.height,
             "weight": command.weight,
-            "activity_level": command.activity_level,
+            "job_type": command.job_type,
+            "training_days_per_week": command.training_days_per_week,
+            "training_minutes_per_session": command.training_minutes_per_session,
             "goal": command.goal,
             "dietary_preferences": command.dietary_preferences or [],
             "health_conditions": command.health_conditions or [],
@@ -141,6 +143,8 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
     def _calculate_tdee_and_macros(self, command: GenerateDailyMealSuggestionsCommand) -> Dict[str, Any]:
         """Calculate TDEE and macros from command data."""
         # Map to TDEE enums
+        from src.domain.model.user import JobType
+
         sex = Sex.MALE if command.gender.lower() == "male" else Sex.FEMALE
 
         tdee_request = TdeeRequest(
@@ -148,7 +152,9 @@ class GenerateDailyMealSuggestionsCommandHandler(EventHandler[GenerateDailyMealS
             sex=sex,
             height=command.height,  # height is in cm since unit_system is METRIC
             weight=command.weight,  # weight is in kg since unit_system is METRIC
-            activity_level=ActivityGoalMapper.map_activity_level(command.activity_level),
+            job_type=JobType(command.job_type),
+            training_days_per_week=command.training_days_per_week,
+            training_minutes_per_session=command.training_minutes_per_session,
             goal=ActivityGoalMapper.map_goal(command.goal),
             body_fat_pct=None,
             unit_system=UnitSystem.METRIC

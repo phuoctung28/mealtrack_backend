@@ -39,7 +39,9 @@ class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculation
             height=dto.height,
             weight=dto.weight,
             body_fat_pct=dto.body_fat_percentage,
-            activity_level=ActivityGoalMapper.map_activity_level(dto.activity_level.value),
+            job_type=ActivityGoalMapper.map_job_type(dto.job_type.value),
+            training_days_per_week=dto.training_days_per_week,
+            training_minutes_per_session=dto.training_minutes_per_session,
             goal=ActivityGoalMapper.map_goal(dto.goal.value),
             unit_system=UnitSystem.METRIC if dto.unit_system.value == 'metric' else UnitSystem.IMPERIAL
         )
@@ -73,17 +75,20 @@ class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculation
     def map_to_profile_dict(dto: TdeeCalculationRequest) -> dict:
         """
         Convert TdeeCalculationRequest to profile dictionary for database.
-        
+
         Args:
             dto: TDEE calculation request DTO
-            
+
         Returns:
             Dictionary suitable for UserProfile creation
         """
         return {
             "age": dto.age,
             "gender": dto.sex,
-            "height_cm": dto.height if dto.unit_system == "metric" else dto.height * 2.54,
-            "weight_kg": dto.weight if dto.unit_system == "metric" else dto.weight * 0.453592,
-            "body_fat_percentage": dto.body_fat_percentage
+            "height_cm": dto.height if dto.unit_system.value == "metric" else dto.height * 2.54,
+            "weight_kg": dto.weight if dto.unit_system.value == "metric" else dto.weight * 0.453592,
+            "body_fat_percentage": dto.body_fat_percentage,
+            "job_type": dto.job_type.value,
+            "training_days_per_week": dto.training_days_per_week,
+            "training_minutes_per_session": dto.training_minutes_per_session,
         }

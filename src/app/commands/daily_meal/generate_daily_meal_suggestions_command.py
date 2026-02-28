@@ -14,7 +14,9 @@ class GenerateDailyMealSuggestionsCommand(Command):
     gender: str
     height: float
     weight: float
-    activity_level: str
+    job_type: str
+    training_days_per_week: int
+    training_minutes_per_session: int
     goal: str
     dietary_preferences: Optional[List[str]] = None
     health_conditions: Optional[List[str]] = None

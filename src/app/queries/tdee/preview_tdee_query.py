@@ -14,7 +14,9 @@ class PreviewTdeeQuery(Query):
     sex: str  # 'male' or 'female'
     height: float
     weight: float
-    activity_level: str
+    job_type: str
+    training_days_per_week: int
+    training_minutes_per_session: int
     goal: str
     body_fat_percentage: Optional[float] = None
     unit_system: str = "metric"

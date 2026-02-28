@@ -18,7 +18,9 @@ class SaveUserOnboardingCommand(Command):
     weight_kg: float
 
     # Goals
-    activity_level: str
+    job_type: str
+    training_days_per_week: int
+    training_minutes_per_session: int
     fitness_goal: str
 
     # Preferences - REQUIRED

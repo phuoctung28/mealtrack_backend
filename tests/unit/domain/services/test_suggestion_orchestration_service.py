@@ -36,7 +36,9 @@ def mock_user_repo():
     profile_mock.age = 30
     profile_mock.height_cm = 165
     profile_mock.weight_kg = 60
-    profile_mock.activity_level = "moderate"
+    profile_mock.job_type = "desk"
+    profile_mock.training_days_per_week = 4
+    profile_mock.training_minutes_per_session = 60
     profile_mock.fitness_goal = "cut"
     profile_mock.body_fat_percentage = 25
     profile_mock.dietary_preferences = ["vegetarian"]

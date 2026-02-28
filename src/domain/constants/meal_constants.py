@@ -97,16 +97,17 @@ class MealPlanningConstants:
 
 class TDEEConstants:
     """Constants for TDEE calculations."""
-    
-    # Activity level multipliers
-    ACTIVITY_MULTIPLIERS = {
-        "sedentary": 1.2,
-        "light": 1.375,
-        "moderate": 1.55,
-        "active": 1.725,
-        "extra": 1.9
+
+    # Job type base multipliers (NEAT component)
+    JOB_TYPE_MULTIPLIERS = {
+        "desk": 1.2,       # Sitting most of day
+        "on_feet": 1.4,    # Standing/walking (retail, teaching)
+        "physical": 1.6,   # Manual labor (construction, warehouse)
     }
-    
+
+    # Exercise contribution per weekly hour
+    EXERCISE_MULTIPLIER_PER_HOUR = 0.05
+
     # Goal adjustments (calories)
     CUTTING_DEFICIT = 500      # 500 calorie deficit
     BULKING_SURPLUS = 300      # 300 calorie surplus (lean bulk)

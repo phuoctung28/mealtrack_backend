@@ -33,7 +33,7 @@ async def save_user_onboarding(
     Creates/updates:
     - User profile with physical attributes
     - Pain points and dietary preferences
-    - Fitness goals and activity level
+    - Fitness goals, job_type and training frequency
     - Meal preferences
     - Returns TDEE calculation and macro targets
 
@@ -48,7 +48,9 @@ async def save_user_onboarding(
             height_cm=request.height,
             weight_kg=request.weight,
             body_fat_percentage=request.body_fat_percentage,
-            activity_level=request.activity_level,
+            job_type=request.job_type,
+            training_days_per_week=request.training_days_per_week,
+            training_minutes_per_session=request.training_minutes_per_session,
             fitness_goal=request.goal,
             pain_points=request.pain_points,
             dietary_preferences=request.dietary_preferences,
@@ -100,7 +102,7 @@ async def get_user_tdee(
     
     Retrieves the user's current profile and calculates:
     - BMR using Mifflin-St Jeor or Katch-McArdle formula
-    - TDEE based on activity level
+    - TDEE based on job type and training frequency
     - Macro targets based on fitness goal
     
     Authentication required: User ID is automatically extracted from the Firebase token.
@@ -152,10 +154,10 @@ async def update_user_metrics(
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
-    Update user metrics (weight, activity level, body fat, fitness goal) and return updated TDEE/macros.
-    
+    Update user metrics (weight, job_type, training_days_per_week, training_minutes_per_session, body fat, fitness goal) and return updated TDEE/macros.
+
     Unified endpoint for profile updates.
-    
+
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
@@ -163,7 +165,9 @@ async def update_user_metrics(
         command = UpdateUserMetricsCommand(
             user_id=user_id,
             weight_kg=request.weight_kg,
-            activity_level=request.activity_level,
+            job_type=request.job_type,
+            training_days_per_week=request.training_days_per_week,
+            training_minutes_per_session=request.training_minutes_per_session,
             body_fat_percent=request.body_fat_percent,
             fitness_goal=request.fitness_goal.value if request.fitness_goal else None,
         )

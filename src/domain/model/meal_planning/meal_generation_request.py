@@ -40,7 +40,9 @@ class UserDietaryProfile:
     dietary_preferences: List[str]
     allergies: List[str]
     health_conditions: List[str]
-    activity_level: str
+    job_type: str
+    training_days_per_week: int
+    training_minutes_per_session: int
     fitness_goal: str
     meals_per_day: int
     include_snacks: bool

@@ -39,7 +39,9 @@ class UserPreferencesResponse(BaseModel):
     dietary_preferences: List[str] = Field(..., description="Dietary restrictions and preferences")
     health_conditions: List[str] = Field(..., description="Health conditions")
     allergies: List[str] = Field(..., description="Food allergies")
-    activity_level: str = Field(..., description="Activity level")
+    job_type: str = Field(..., description="Job type: desk, on_feet, physical")
+    training_days_per_week: int = Field(..., description="Training days per week (0-7)")
+    training_minutes_per_session: int = Field(..., description="Training minutes per session (15-180)")
     fitness_goal: str = Field(..., description="Fitness goal")
     meals_per_day: int = Field(..., description="Number of meals per day")
     snacks_per_day: int = Field(..., description="Number of snacks per day")
@@ -111,7 +113,9 @@ class WeeklyMealPlanResponse(BaseModel):
                     "dietary_preferences": ["vegetarian"],
                     "health_conditions": [],
                     "allergies": ["nuts"],
-                    "activity_level": "moderate",
+                    "job_type": "desk",
+                    "training_days_per_week": 4,
+                    "training_minutes_per_session": 60,
                     "fitness_goal": "recomp",
                     "meals_per_day": 3,
                     "snacks_per_day": 1

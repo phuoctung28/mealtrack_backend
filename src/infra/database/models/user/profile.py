@@ -21,7 +21,9 @@ class UserProfile(Base, BaseMixin):
     is_current = Column(Boolean, default=True, nullable=False)
     
     # Goal fields (from UserGoal)
-    activity_level = Column(String(30), nullable=False, default='sedentary')  # sedentary, light, moderate, active, extra
+    job_type = Column(String(30), nullable=False, default='desk')  # desk, on_feet, physical
+    training_days_per_week = Column(Integer, nullable=False, default=0)  # 0-7
+    training_minutes_per_session = Column(Integer, nullable=False, default=0)  # 15-180
     fitness_goal = Column(String(30), nullable=False, default='maintenance')  # maintenance, cutting, bulking
     target_weight_kg = Column(Float, nullable=True)
     meals_per_day = Column(Integer, default=3, nullable=False)

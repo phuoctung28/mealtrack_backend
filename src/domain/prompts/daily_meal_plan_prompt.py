@@ -9,17 +9,21 @@ from src.domain.model.meal_planning import SimpleMacroTargets
 
 def build_single_meal_prompt(meal_type: MealType, calorie_target: float, user_preferences: Dict[str, Any]) -> str:
     """Build prompt for generating a single meal."""
-    
+
     # Extract user data
     goal = user_preferences.get('goal', 'maintain_weight')
     dietary_prefs = user_preferences.get('dietary_preferences', [])
     health_conditions = user_preferences.get('health_conditions', [])
     target_macros = user_preferences.get('target_macros', {})
-    activity_level = user_preferences.get('activity_level', 'moderately_active')
-    
+
+    # Get job_type and training fields
+    job_type = user_preferences.get('job_type', 'desk')
+    training_days = user_preferences.get('training_days_per_week', 0)
+    training_minutes = user_preferences.get('training_minutes_per_session', 60)
+
     # Calculate macro targets for this meal
     meal_percentage = calorie_target / user_preferences.get('target_calories', 2000)
-    
+
     # Handle both MacroTargets object and dict format
     if isinstance(target_macros, SimpleMacroTargets):
         protein_target = target_macros.protein * meal_percentage
@@ -30,11 +34,11 @@ def build_single_meal_prompt(meal_type: MealType, calorie_target: float, user_pr
         protein_target = target_macros.get('protein_grams', 50) * meal_percentage
         carbs_target = target_macros.get('carbs_grams', 250) * meal_percentage
         fat_target = target_macros.get('fat_grams', 65) * meal_percentage
-    
+
     # Build dietary restrictions string
     dietary_str = ", ".join(dietary_prefs) if dietary_prefs else "none"
     health_str = ", ".join(health_conditions) if health_conditions else "none"
-    
+
     # Goal-specific guidance
     goal_guidance = {
         'lose_weight': "Focus on high-volume, low-calorie foods with plenty of fiber and protein for satiety",
@@ -42,12 +46,22 @@ def build_single_meal_prompt(meal_type: MealType, calorie_target: float, user_pr
         'build_muscle': "Emphasize high protein content with complete amino acids",
         'maintain_weight': "Create balanced meals with appropriate portions"
     }
-    
+
+    # Build activity description
+    job_type_labels = {
+        "desk": "Desk job (sitting)",
+        "on_feet": "On feet (standing/walking)",
+        "physical": "Physical work (manual labor)"
+    }
+    job_desc = job_type_labels.get(job_type, job_type)
+    weekly_hours = (training_days * training_minutes) / 60.0
+    activity_desc = f"{job_desc}, training {training_days}d/wk x {training_minutes}min ({weekly_hours:.1f}h/wk)"
+
     return f"""Generate a {meal_type.value} meal suggestion with these requirements:
 
 User Profile:
 - Fitness Goal: {goal} - {goal_guidance.get(goal, 'balanced nutrition')}
-- Activity Level: {activity_level}
+- Activity: {activity_desc}
 - Dietary Restrictions: {dietary_str}
 - Health Conditions: {health_str}
 
@@ -56,9 +70,9 @@ Nutritional Targets for this meal:
 - Protein: {int(protein_target)}g
 - Carbs: {int(carbs_target)}g
 - Fat: {int(fat_target)}g
+1. The)}g
 
-Requirements:
-1. The meal should be practical and use common ingredients
+Requirements meal should be practical and use common ingredients
 2. Cooking time should be reasonable for {meal_type.value}
 3. Must respect all dietary restrictions
 4. Should support the user's fitness goal

@@ -21,7 +21,9 @@ class TestUserProfilesAPI:
             "gender": "male",
             "height": 175,
             "weight": 70,
-            "activity_level": "moderate",
+            "job_type": "desk",
+            "training_days_per_week": 4,
+            "training_minutes_per_session": 60,
             "goal": "recomp",
             "dietary_preferences": ["vegetarian"],
             "pain_points": ["diabetes"],
@@ -101,7 +103,9 @@ class TestUserProfilesAPI:
                     "gender": profile.gender,
                     "height_cm": profile.height_cm,
                     "weight_kg": profile.weight_kg,
-                    "activity_level": profile.activity_level,
+                    "job_type": profile.job_type,
+                    "training_days_per_week": profile.training_days_per_week,
+                    "training_minutes_per_session": profile.training_minutes_per_session,
                     "fitness_goal": profile.fitness_goal
                 },
                 "macros": {
@@ -135,7 +139,9 @@ class TestUserProfilesAPI:
         # Arrange: Update request
         payload = {
             "weight_kg": 75.0,
-            "activity_level": "active",
+            "job_type": "on_feet",
+            "training_days_per_week": 5,
+            "training_minutes_per_session": 60,
             "body_fat_percent": 15.0,
             "fitness_goal": "cut"
         }

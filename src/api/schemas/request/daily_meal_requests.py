@@ -21,10 +21,22 @@ class UserPreferencesRequest(BaseModel):
     gender: str = Field(..., pattern="^(male|female|other)$", description="User gender")
     height: float = Field(..., gt=0, le=300, description="Height in cm")
     weight: float = Field(..., gt=0, le=500, description="Weight in kg")
-    activity_level: str = Field(
-        ..., 
-        pattern="^(sedentary|lightly_active|moderately_active|very_active|extra_active)$",
-        description="Activity level"
+    job_type: str = Field(
+        ...,
+        pattern="^(desk|on_feet|physical)$",
+        description="Job type: desk (sitting), on_feet (standing/walking), physical (manual labor)"
+    )
+    training_days_per_week: int = Field(
+        ...,
+        ge=0,
+        le=7,
+        description="Number of training days per week (0-7)"
+    )
+    training_minutes_per_session: int = Field(
+        ...,
+        ge=15,
+        le=180,
+        description="Training minutes per session (15-180)"
     )
     goal: str = Field(
         ...,
@@ -56,7 +68,9 @@ class UserPreferencesRequest(BaseModel):
                 "gender": "male",
                 "height": 180.0,
                 "weight": 75.0,
-                "activity_level": "moderately_active",
+                "job_type": "desk",
+                "training_days_per_week": 4,
+                "training_minutes_per_session": 60,
                 "goal": "bulk",
                 "dietary_preferences": ["vegetarian"],
                 "health_conditions": [],

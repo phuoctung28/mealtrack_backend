@@ -34,7 +34,9 @@ class DailyMealSuggestionService:
         Args:
             user_preferences: Dictionary containing user data from onboarding
                 - age, gender, height, weight
-                - activity_level: sedentary/lightly_active/moderately_active/very_active/extra_active
+                - job_type: desk/on_feet/physical
+                - training_days_per_week: 0-7
+                - training_minutes_per_session: 15-180
                 - goal: lose_weight/maintain_weight/gain_weight/build_muscle
                 - dietary_preferences: List of dietary restrictions
                 - health_conditions: List of health conditions

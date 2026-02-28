@@ -22,7 +22,9 @@ class TestGenerateDailyMealSuggestionsCommandHandler:
             gender=sample_user_profile.gender,
             height=sample_user_profile.height_cm,
             weight=sample_user_profile.weight_kg,
-            activity_level=sample_user_profile.activity_level,
+            job_type=sample_user_profile.job_type,
+            training_days_per_week=sample_user_profile.training_days_per_week,
+            training_minutes_per_session=sample_user_profile.training_minutes_per_session,
             goal=sample_user_profile.fitness_goal,
             dietary_preferences=sample_user_profile.dietary_preferences,
             health_conditions=sample_user_profile.health_conditions
@@ -54,7 +56,9 @@ class TestGenerateDailyMealSuggestionsCommandHandler:
             gender="female",
             height=165,
             weight=60,
-            activity_level="active",
+            job_type="on_feet",
+            training_days_per_week=5,
+            training_minutes_per_session=60,
             goal="cutting",
             dietary_preferences=["vegetarian", "gluten-free"],
             health_conditions=["lactose_intolerant"]
@@ -80,7 +84,9 @@ class TestGenerateDailyMealSuggestionsCommandHandler:
             gender="male",
             height=175,
             weight=70,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             goal="maintenance"
         )
         
@@ -99,7 +105,9 @@ class TestGenerateDailyMealSuggestionsCommandHandler:
             gender="female",
             height=165,
             weight=60,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             goal="maintenance"
         )
         
@@ -118,7 +126,9 @@ class TestGenerateDailyMealSuggestionsCommandHandler:
             gender=sample_user_profile.gender,
             height=sample_user_profile.height_cm,
             weight=sample_user_profile.weight_kg,
-            activity_level=sample_user_profile.activity_level,
+            job_type=sample_user_profile.job_type,
+            training_days_per_week=sample_user_profile.training_days_per_week,
+            training_minutes_per_session=sample_user_profile.training_minutes_per_session,
             goal=sample_user_profile.fitness_goal,
             dietary_preferences=sample_user_profile.dietary_preferences,
             health_conditions=sample_user_profile.health_conditions

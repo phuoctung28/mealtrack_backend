@@ -60,7 +60,9 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                         height_cm=command.height_cm,
                         weight_kg=command.weight_kg,
                         body_fat_percentage=command.body_fat_percentage,
-                        activity_level=command.activity_level,
+                        job_type=command.job_type,
+                        training_days_per_week=command.training_days_per_week,
+                        training_minutes_per_session=command.training_minutes_per_session,
                         fitness_goal=command.fitness_goal,
                         meals_per_day=command.meals_per_day,
                         pain_points=command.pain_points,
@@ -74,7 +76,9 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     profile.height_cm = command.height_cm
                     profile.weight_kg = command.weight_kg
                     profile.body_fat_percentage = command.body_fat_percentage
-                    profile.activity_level = command.activity_level
+                    profile.job_type = command.job_type
+                    profile.training_days_per_week = command.training_days_per_week
+                    profile.training_minutes_per_session = command.training_minutes_per_session
                     profile.fitness_goal = command.fitness_goal
                     profile.meals_per_day = command.meals_per_day
                     profile.pain_points = command.pain_points

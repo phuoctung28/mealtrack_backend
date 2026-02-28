@@ -46,7 +46,7 @@ async def get_daily_meal_suggestions(
     Profile-based suggestions use stored user data including:
     - User profile (age, gender, height, weight)
     - Preferences (dietary, health conditions, allergies)
-    - Goals (activity level, fitness goal)
+    - Goals (job_type, training_days_per_week, training_minutes_per_session, fitness goal)
     - Calculated TDEE and macros
     """
     try:
@@ -61,7 +61,9 @@ async def get_daily_meal_suggestions(
                 gender=request.gender,
                 height=request.height,
                 weight=request.weight,
-                activity_level=request.activity_level,
+                job_type=request.job_type,
+                training_days_per_week=request.training_days_per_week,
+                training_minutes_per_session=request.training_minutes_per_session,
                 goal=request.goal,
                 dietary_preferences=request.dietary_preferences,
                 health_conditions=request.health_conditions,
@@ -113,7 +115,9 @@ async def get_single_meal_suggestion(
                 gender=request.gender,
                 height=request.height,
                 weight=request.weight,
-                activity_level=request.activity_level,
+                job_type=request.job_type,
+                training_days_per_week=request.training_days_per_week,
+                training_minutes_per_session=request.training_minutes_per_session,
                 goal=request.goal,
                 dietary_preferences=request.dietary_preferences,
                 health_conditions=request.health_conditions,
