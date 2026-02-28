@@ -42,3 +42,6 @@ class OnboardingCompleteRequest(BaseModel):
 
     # Meal preferences - REQUIRED
     meals_per_day: int = Field(..., ge=1, le=10)
+
+    # Attribution - REQUIRED (multi-select, min 1 item)
+    referral_sources: List[str] = Field(..., min_items=1, description="How user heard about us")

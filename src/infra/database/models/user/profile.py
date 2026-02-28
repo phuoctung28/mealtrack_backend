@@ -37,7 +37,10 @@ class UserProfile(Base, BaseMixin):
     health_conditions = Column(JSON, default=[], nullable=False)    # ['diabetes', 'hypertension', etc.]
     allergies = Column(JSON, default=[], nullable=False)           # ['nuts', 'dairy', 'shellfish', etc.]
     pain_points = Column(JSON, default=[], nullable=True)
-    
+
+    # Attribution — JSON array, nullable for existing users
+    referral_sources = Column(JSON, nullable=True, default=None)
+
     # Constraints
     __table_args__ = (
         CheckConstraint('age >= 13 AND age <= 120', name='check_age_range'),

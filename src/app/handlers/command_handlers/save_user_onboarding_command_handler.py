@@ -68,6 +68,7 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                         pain_points=command.pain_points,
                         dietary_preferences=command.dietary_preferences,
                         training_level=command.training_level,
+                        referral_sources=command.referral_sources,
                     )
                 else:
                     # Update existing profile
@@ -84,6 +85,9 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     profile.pain_points = command.pain_points
                     profile.dietary_preferences = command.dietary_preferences
                     profile.training_level = command.training_level
+                    # Write-once — don't overwrite if already set
+                    if command.referral_sources and not profile.referral_sources:
+                        profile.referral_sources = command.referral_sources
 
                 # Save profile
                 uow.users.update_profile(profile)

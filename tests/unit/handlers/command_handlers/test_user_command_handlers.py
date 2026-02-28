@@ -64,7 +64,8 @@ class TestSaveUserOnboardingCommandHandler:
             training_minutes_per_session=60,
             fitness_goal="recomp",
             dietary_preferences=["vegetarian"],
-            pain_points=["diabetes"]
+            pain_points=["diabetes"],
+            referral_sources=["tiktok", "friend_family"]
         )
         
         # Act - Get handler from event_bus and set its uow to use test_session
@@ -138,7 +139,8 @@ class TestSaveUserOnboardingCommandHandler:
             training_minutes_per_session=60,
             fitness_goal="maintenance",
             dietary_preferences=[],
-            pain_points=[]
+            pain_points=[],
+            referral_sources=["google_search"]
         )
         
         # Act & Assert
@@ -179,7 +181,8 @@ class TestSaveUserOnboardingCommandHandler:
             training_minutes_per_session=60,
             fitness_goal="maintenance",
             dietary_preferences=[],
-            pain_points=[]
+            pain_points=[],
+            referral_sources=["instagram"]
         )
         
         # Act & Assert
@@ -204,7 +207,8 @@ class TestSaveUserOnboardingCommandHandler:
             training_minutes_per_session=60,  # Different activity
             fitness_goal="cut",  # Different goal
             dietary_preferences=["vegan"],
-            pain_points=[]
+            pain_points=[],
+            referral_sources=["youtube"]
         )
         
         # Act - Get handler from event_bus and set its uow to use test_session

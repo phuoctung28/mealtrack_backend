@@ -66,6 +66,7 @@ def _ensure_dev_user() -> Optional[User]:
             training_days_per_week=4,
             training_minutes_per_session=60,
             fitness_goal="recomp",
+            referral_sources=["tiktok", "friend_family", "google_search"],
             target_weight_kg=70.0,
             meals_per_day=3,
             snacks_per_day=1,

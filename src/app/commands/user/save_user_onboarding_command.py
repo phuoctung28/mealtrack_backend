@@ -27,6 +27,9 @@ class SaveUserOnboardingCommand(Command):
     pain_points: List[str]
     dietary_preferences: List[str]
 
+    # Attribution
+    referral_sources: List[str]
+
     # Meal preferences
     meals_per_day: int = 3
 
