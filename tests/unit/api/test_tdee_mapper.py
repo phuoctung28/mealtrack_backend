@@ -22,19 +22,23 @@ class TestTdeeMapper:
             height=175,
             weight=70,
             body_fat_percentage=15.0,
-            activity_level="sedentary",
+            job_type="desk",
+            training_days_per_week=0,
+            training_minutes_per_session=15,
             goal="recomp",
             unit_system="metric"
         )
-        
+
         domain = self.mapper.to_domain(dto)
-        
+
         assert domain.age == 30
         assert domain.sex.value == "male"
         assert domain.height == 175
         assert domain.weight == 70
         assert domain.body_fat_pct == 15.0
-        assert domain.activity_level.value == "sedentary"
+        assert domain.job_type.value == "desk"
+        assert domain.training_days_per_week == 0
+        assert domain.training_minutes_per_session == 15
         assert domain.goal.value == "recomp"
         assert domain.unit_system.value == "metric"
 
@@ -46,36 +50,51 @@ class TestTdeeMapper:
             height=65,  # inches
             weight=140,  # pounds
             body_fat_percentage=20.0,
-            activity_level="light",
+            job_type="desk",
+            training_days_per_week=2,
+            training_minutes_per_session=45,
             goal="cut",
             unit_system="imperial"
         )
-        
+
         domain = self.mapper.to_domain(dto)
-        
+
         assert domain.sex.value == "female"
-        assert domain.activity_level.value == "light"
+        assert domain.job_type.value == "desk"
+        assert domain.training_days_per_week == 2
+        assert domain.training_minutes_per_session == 45
         assert domain.goal.value == "cut"
         assert domain.unit_system.value == "imperial"
 
     def test_to_domain_all_activity_levels(self):
-        """Test converting DTO with all activity levels."""
-        activity_levels = ["sedentary", "light", "moderate", "active", "extra"]
-        
-        for activity in activity_levels:
+        """Test converting DTO with all job types and training combinations."""
+        # Map old activity levels to new fields (using min 15 for sedentary to satisfy schema)
+        test_cases = [
+            ("desk", 0, 15),     # sedentary (min 15 minutes required by schema)
+            ("desk", 2, 45),     # light
+            ("desk", 4, 60),     # moderate
+            ("on_feet", 5, 60),  # active
+            ("on_feet", 6, 90),  # extra
+        ]
+
+        for job_type, training_days, training_minutes in test_cases:
             dto = TdeeCalculationRequest(
                 age=30,
                 sex="male",
                 height=175,
                 weight=70,
                 body_fat_percentage=None,
-                activity_level=activity,
+                job_type=job_type,
+                training_days_per_week=training_days,
+                training_minutes_per_session=training_minutes,
                 goal="recomp",
                 unit_system="metric"
             )
-            
+
             domain = self.mapper.to_domain(dto)
-            assert domain.activity_level.value == activity
+            assert domain.job_type.value == job_type
+            assert domain.training_days_per_week == training_days
+            assert domain.training_minutes_per_session == training_minutes
 
     def test_to_domain_all_goals(self):
         """Test converting DTO with all goals."""
@@ -88,7 +107,9 @@ class TestTdeeMapper:
                 height=175,
                 weight=70,
                 body_fat_percentage=None,
-                activity_level="moderate",
+                job_type="desk",
+                training_days_per_week=4,
+                training_minutes_per_session=60,
                 goal=goal,
                 unit_system="metric"
             )
@@ -125,7 +146,9 @@ class TestTdeeMapper:
             height=175,
             weight=70,
             body_fat_percentage=15.0,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             goal="recomp",
             unit_system="metric"
         )
@@ -146,7 +169,9 @@ class TestTdeeMapper:
             height=70,  # inches
             weight=154,  # pounds
             body_fat_percentage=15.0,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             goal="recomp",
             unit_system="imperial"
         )

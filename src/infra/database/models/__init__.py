@@ -13,7 +13,7 @@ from .enums import (
     FitnessGoalEnum,
     MealTypeEnum,
     PlanDurationEnum,
-    ActivityLevelEnum,
+    JobTypeEnum,
     SexEnum,
     GoalEnum,
 )
@@ -50,7 +50,7 @@ __all__ = [
     "FitnessGoalEnum",
     "MealTypeEnum",
     "PlanDurationEnum",
-    "ActivityLevelEnum",
+    "JobTypeEnum",
     "SexEnum",
     "GoalEnum",
     

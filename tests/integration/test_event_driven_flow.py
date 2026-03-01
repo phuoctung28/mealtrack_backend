@@ -44,7 +44,9 @@ class TestCompleteUserFlow:
             gender="male",
             height_cm=175,
             weight_kg=70,
-            activity_level="moderately_active",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="maintain_weight",
             dietary_preferences=["vegetarian"],
             pain_points=[]
@@ -100,7 +102,9 @@ class TestCompleteUserFlow:
             gender="male",
             height=175,
             weight=70,
-            activity_level="moderately_active",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             goal="maintain_weight",
             dietary_preferences=["vegetarian"],
             health_conditions=[]
@@ -214,7 +218,9 @@ class TestCompleteUserFlow:
                     gender="male",
                     height_cm=175,
                     weight_kg=70,
-                    activity_level="moderately_active",
+                    job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
                     fitness_goal="maintain_weight",
                     dietary_preferences=[],
                     pain_points=[]

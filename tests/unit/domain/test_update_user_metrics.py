@@ -53,14 +53,18 @@ class TestUpdateUserMetricsCommand:
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             weight_kg=75.0,
-            activity_level="moderately_active",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             body_fat_percent=15.0,
             fitness_goal="cut",
         )
 
         assert command.user_id == "test_user"
         assert command.weight_kg == 75.0
-        assert command.activity_level == "moderately_active"
+        assert command.job_type == "desk"
+        assert command.training_days_per_week == 4
+        assert command.training_minutes_per_session == 60
         assert command.body_fat_percent == 15.0
         assert command.fitness_goal == "cut"
 
@@ -73,7 +77,9 @@ class TestUpdateUserMetricsCommand:
 
         assert command.user_id == "test_user"
         assert command.weight_kg == 75.0
-        assert command.activity_level is None
+        assert command.job_type is None
+        assert command.training_days_per_week is None
+        assert command.training_minutes_per_session is None
         assert command.body_fat_percent is None
         assert command.fitness_goal is None
 
@@ -92,7 +98,9 @@ class TestUpdateUserMetricsCommandHandler:
             gender="male",
             height_cm=175.0,
             weight_kg=70.0,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="recomp",
             is_current=False
         )
@@ -133,8 +141,8 @@ class TestUpdateUserMetricsCommandHandler:
         mock_db.add.assert_called_once_with(mock_profile)
         mock_db.commit.assert_called_once()
     
-    async def test_update_activity_level_only(self):
-        """Test updating only activity level."""
+    async def test_update_job_type_and_training_only(self):
+        """Test updating only job type and training."""
         # Setup
         mock_profile = UserProfile(
             id="profile_1",
@@ -143,16 +151,20 @@ class TestUpdateUserMetricsCommandHandler:
             gender="male",
             height_cm=175.0,
             weight_kg=75.0,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="recomp",
             is_current=False
         )
         mock_db = setup_mock_db_with_profile(mock_profile)
-        
+
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
-            activity_level="very_active"
+            job_type="on_feet",
+            training_days_per_week=5,
+            training_minutes_per_session=60
         )
         
         class DummyUnitOfWork:
@@ -178,7 +190,9 @@ class TestUpdateUserMetricsCommandHandler:
             await handler.handle(command)
         
         # Verify
-        assert mock_profile.activity_level == "very_active"
+        assert mock_profile.job_type == "on_feet"
+        assert mock_profile.training_days_per_week == 5
+        assert mock_profile.training_minutes_per_session == 60
         assert mock_profile.is_current is True
 
     async def test_update_fitness_goal_unlimited(self):
@@ -191,7 +205,9 @@ class TestUpdateUserMetricsCommandHandler:
             gender="male",
             height_cm=175.0,
             weight_kg=75.0,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="recomp",
             is_current=True,
         )
@@ -241,7 +257,9 @@ class TestUpdateUserMetricsCommandHandler:
             height_cm=175.0,
             weight_kg=70.0,
             body_fat_percentage=20.0,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="recomp",
             is_current=False,
         )
@@ -251,7 +269,9 @@ class TestUpdateUserMetricsCommandHandler:
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             weight_kg=72.5,
-            activity_level="very_active",
+            job_type="on_feet",
+            training_days_per_week=5,
+            training_minutes_per_session=60,
             body_fat_percent=15.0,
             fitness_goal="cut"
         )
@@ -280,7 +300,9 @@ class TestUpdateUserMetricsCommandHandler:
         
         # Verify all fields updated
         assert mock_profile.weight_kg == 72.5
-        assert mock_profile.activity_level == "very_active"
+        assert mock_profile.job_type == "on_feet"
+        assert mock_profile.training_days_per_week == 5
+        assert mock_profile.training_minutes_per_session == 60
         assert mock_profile.body_fat_percentage == 15.0
         assert mock_profile.fitness_goal == "cut"
         assert mock_profile.is_current is True
@@ -346,11 +368,13 @@ class TestUpdateUserMetricsCommandHandler:
             gender="male",
             height_cm=175.0,
             weight_kg=70.0,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="recomp"
         )
         mock_db = setup_mock_db_with_profile(mock_profile)
-        
+
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
@@ -393,11 +417,13 @@ class TestUpdateUserMetricsCommandHandler:
             gender="male",
             height_cm=175.0,
             weight_kg=70.0,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="recomp"
         )
         mock_db = setup_mock_db_with_profile(mock_profile)
-        
+
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
@@ -429,8 +455,8 @@ class TestUpdateUserMetricsCommandHandler:
         
         assert "Body fat percentage must be between 0 and 70" in str(exc_info.value)
     
-    async def test_invalid_activity_level(self):
-        """Test validation for invalid activity level."""
+    async def test_invalid_job_type(self):
+        """Test validation for invalid job type."""
         # Setup
         mock_profile = UserProfile(
             id="profile_1",
@@ -439,15 +465,17 @@ class TestUpdateUserMetricsCommandHandler:
             gender="male",
             height_cm=175.0,
             weight_kg=70.0,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="recomp"
         )
         mock_db = setup_mock_db_with_profile(mock_profile)
-        
+
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",
-            activity_level="super_duper_active"  # Invalid
+            job_type="invalid_job"  # Invalid
         )
         
         class DummyUnitOfWork:
@@ -473,7 +501,7 @@ class TestUpdateUserMetricsCommandHandler:
             with pytest.raises(ValidationException) as exc_info:
                 await handler.handle(command)
         
-        assert "Activity level must be one of" in str(exc_info.value)
+        assert "Job type must be one of" in str(exc_info.value)
     
     async def test_invalid_fitness_goal(self):
         """Test validation for invalid fitness goal."""
@@ -485,11 +513,13 @@ class TestUpdateUserMetricsCommandHandler:
             gender="male",
             height_cm=175.0,
             weight_kg=70.0,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="recomp"
         )
         mock_db = setup_mock_db_with_profile(mock_profile)
-        
+
         handler = UpdateUserMetricsCommandHandler()
         command = UpdateUserMetricsCommand(
             user_id="test_user",

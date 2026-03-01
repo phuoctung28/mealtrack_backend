@@ -25,7 +25,9 @@ def user_profile():
         dietary_preferences=["vegetarian"],
         allergies=[],
         health_conditions=[],
-        activity_level="moderately_active",
+        job_type="desk",
+        training_days_per_week=4,
+        training_minutes_per_session=60,
         fitness_goal="recomp",
         include_snacks=True
     )
@@ -187,7 +189,9 @@ class TestPromptGenerationService:
             health_conditions=[],
             allergies=[],
             fitness_goal="cut",
-            activity_level="very_active"
+            job_type="on_feet",
+            training_days_per_week=5,
+            training_minutes_per_session=60
         )
         
         request = MealGenerationRequest(
@@ -212,7 +216,9 @@ class TestPromptGenerationService:
             health_conditions=[],
             allergies=["shellfish", "tree nuts", "dairy"],
             fitness_goal="bulk",
-            activity_level="extra_active"
+            job_type="on_feet",
+            training_days_per_week=6,
+            training_minutes_per_session=90
         )
         
         ingredients = IngredientConstraints(
@@ -323,7 +329,9 @@ class TestPromptGenerationService:
             health_conditions=["diabetes", "hypertension"],
             allergies=[],
             fitness_goal="recomp",
-            activity_level="lightly_active"
+            job_type="desk",
+            training_days_per_week=2,
+            training_minutes_per_session=45
         )
         
         request = MealGenerationRequest(
@@ -349,7 +357,9 @@ class TestPromptGenerationService:
             health_conditions=[],
             allergies=[],
             fitness_goal="recomp",
-            activity_level="moderately_active",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
         )
         
         ingredients = IngredientConstraints(
@@ -379,7 +389,9 @@ class TestPromptGenerationService:
             health_conditions=[],
             allergies=[],
             fitness_goal="recomp",
-            activity_level="moderately_active",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
         )
         
         ingredients = IngredientConstraints(

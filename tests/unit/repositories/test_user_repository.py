@@ -104,7 +104,9 @@ class TestUserRepository:
             gender="male",
             height_cm=180,
             weight_kg=75,
-            activity_level="active",
+            job_type="on_feet",
+            training_days_per_week=5,
+            training_minutes_per_session=60,
             fitness_goal="maintenance",
             meals_per_day=3,
             is_current=True

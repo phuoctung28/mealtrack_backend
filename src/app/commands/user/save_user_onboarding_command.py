@@ -18,15 +18,21 @@ class SaveUserOnboardingCommand(Command):
     weight_kg: float
 
     # Goals
-    activity_level: str
+    job_type: str
+    training_days_per_week: int
+    training_minutes_per_session: int
     fitness_goal: str
 
     # Preferences - REQUIRED
     pain_points: List[str]
     dietary_preferences: List[str]
 
+    # Attribution
+    referral_sources: List[str]
+
     # Meal preferences
     meals_per_day: int = 3
 
     # Optional fields
     body_fat_percentage: Optional[float] = None
+    training_level: Optional[str] = None

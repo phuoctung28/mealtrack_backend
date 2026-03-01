@@ -7,20 +7,21 @@ from typing import Dict, Any
 from src.app.events.base import EventHandler, handles
 from src.app.queries.tdee.preview_tdee_query import PreviewTdeeQuery
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.user import TdeeRequest, Sex, UnitSystem
+from src.domain.model.user import TdeeRequest, Sex, UnitSystem, JobType
 from src.domain.services.tdee_service import TdeeCalculationService
 
 logger = logging.getLogger(__name__)
 
 
-# Activity multipliers for response
-ACTIVITY_MULTIPLIERS = {
-    "SEDENTARY": 1.2,
-    "LIGHT": 1.375,
-    "MODERATE": 1.55,
-    "ACTIVE": 1.725,
-    "EXTRA": 1.9,
+# Job type base multipliers for response
+JOB_TYPE_MULTIPLIERS = {
+    "desk": 1.2,
+    "on_feet": 1.4,
+    "physical": 1.6,
 }
+
+# Exercise contribution per weekly hour
+EXERCISE_MULTIPLIER_PER_HOUR = 0.05
 
 
 @handles(PreviewTdeeQuery)
@@ -34,17 +35,19 @@ class PreviewTdeeQueryHandler(EventHandler[PreviewTdeeQuery, Dict[str, Any]]):
         """Calculate TDEE preview without persisting."""
         # Map inputs using centralized mapper
         sex = Sex.MALE if query.sex.lower() == "male" else Sex.FEMALE
-        activity_level = ActivityGoalMapper.map_activity_level(query.activity_level)
+        job_type = JobType(query.job_type)
         goal = ActivityGoalMapper.map_goal(query.goal)
         unit_system = UnitSystem.METRIC if query.unit_system == "metric" else UnitSystem.IMPERIAL
 
-        # Create TDEE request
+        # Create TDEE request with new job_type + training fields
         tdee_request = TdeeRequest(
             age=query.age,
             sex=sex,
             height=query.height,
             weight=query.weight,
-            activity_level=activity_level,
+            job_type=job_type,
+            training_days_per_week=query.training_days_per_week,
+            training_minutes_per_session=query.training_minutes_per_session,
             goal=goal,
             body_fat_pct=query.body_fat_percentage,
             unit_system=unit_system,
@@ -53,8 +56,11 @@ class PreviewTdeeQueryHandler(EventHandler[PreviewTdeeQuery, Dict[str, Any]]):
         # Calculate TDEE
         result = self.tdee_service.calculate_tdee(tdee_request)
 
-        # Get activity multiplier for response
-        activity_multiplier = ACTIVITY_MULTIPLIERS.get(activity_level.name, 1.55)
+        # Calculate activity multiplier for response
+        base = JOB_TYPE_MULTIPLIERS.get(job_type.value, 1.2)
+        weekly_hours = (query.training_days_per_week * query.training_minutes_per_session) / 60.0
+        exercise_add = weekly_hours * EXERCISE_MULTIPLIER_PER_HOUR
+        activity_multiplier = base + exercise_add
 
         return {
             "bmr": result.bmr,

@@ -9,7 +9,7 @@ from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.user import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
+from src.domain.model.user import TdeeRequest, Sex, JobType, Goal, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow import UnitOfWork
@@ -48,7 +48,9 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
                 sex=sex,
                 height=profile.height_cm,
                 weight=profile.weight_kg,
-                activity_level=ActivityGoalMapper.map_activity_level(profile.activity_level),
+                job_type=ActivityGoalMapper.map_job_type(profile.job_type),
+                training_days_per_week=profile.training_days_per_week,
+                training_minutes_per_session=profile.training_minutes_per_session,
                 goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
                 body_fat_pct=profile.body_fat_percentage,
                 unit_system=UnitSystem.METRIC,
@@ -57,22 +59,19 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
             # Calculate TDEE
             result = self.tdee_service.calculate_tdee(tdee_request)
 
-            # Determine activity multiplier for response
-            activity_multipliers = {
-                ActivityLevel.SEDENTARY: 1.2,
-                ActivityLevel.LIGHT: 1.375,
-                ActivityLevel.MODERATE: 1.55,
-                ActivityLevel.ACTIVE: 1.725,
-                ActivityLevel.EXTRA: 1.9,
-            }
-            activity_multiplier = activity_multipliers.get(tdee_request.activity_level, 1.55)
+            # Calculate total multiplier for response
+            from src.domain.constants import TDEEConstants
+            base_multiplier = TDEEConstants.JOB_TYPE_MULTIPLIERS.get(profile.job_type, 1.2)
+            weekly_hours = (profile.training_days_per_week * profile.training_minutes_per_session) / 60.0
+            exercise_add = weekly_hours * TDEEConstants.EXERCISE_MULTIPLIER_PER_HOUR
+            total_multiplier = base_multiplier + exercise_add
 
             return {
                 "user_id": query.user_id,
                 "bmr": result.bmr,
                 "tdee": result.tdee,
                 "target_calories": round(result.macros.calories, 0),
-                "activity_multiplier": activity_multiplier,
+                "activity_multiplier": round(total_multiplier, 3),
                 "formula_used": result.formula_used,
                 "macros": {
                     "protein": round(result.macros.protein, 1),
@@ -85,7 +84,9 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
                     "gender": profile.gender,
                     "height_cm": profile.height_cm,
                     "weight_kg": profile.weight_kg,
-                    "activity_level": profile.activity_level,
+                    "job_type": profile.job_type,
+                    "training_days_per_week": profile.training_days_per_week,
+                    "training_minutes_per_session": profile.training_minutes_per_session,
                     "fitness_goal": profile.fitness_goal,
                     "body_fat_percentage": profile.body_fat_percentage,
                 },

@@ -27,7 +27,7 @@ from src.infra.database.models.meal_planning.meal_plan import MealPlan
 # TODO: Conversation table never created in database. See delete_user_command_handler.py for details.
 # from src.infra.database.models.conversation.conversation import Conversation
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.domain.model.tdee import TdeeRequest, Sex, ActivityLevel, Goal, UnitSystem
+from src.domain.model import TdeeRequest, Sex, JobType, Goal, UnitSystem
 
 # Mock data templates
 FIRST_NAMES = ["John", "Jane", "Michael", "Sarah", "David", "Emma", "James", "Lisa", "Robert", "Maria"]
@@ -45,7 +45,9 @@ USER_PROFILES = [
         "height_cm": 180,
         "weight_kg": 75,
         "body_fat_percentage": 12,
-        "activity_level": "active",
+        "job_type": "on_feet",
+        "training_days_per_week": 5,
+        "training_minutes_per_session": 60,
         "fitness_goal": "bulking",
         "dietary_preferences": ["high_protein"],
         "health_conditions": [],
@@ -58,7 +60,9 @@ USER_PROFILES = [
         "height_cm": 165,
         "weight_kg": 70,
         "body_fat_percentage": 28,
-        "activity_level": "sedentary",
+        "job_type": "desk",
+        "training_days_per_week": 0,
+        "training_minutes_per_session": 0,
         "fitness_goal": "cutting",
         "dietary_preferences": ["low_carb", "gluten_free"],
         "health_conditions": ["diabetes"],
@@ -71,7 +75,9 @@ USER_PROFILES = [
         "height_cm": 175,
         "weight_kg": 80,
         "body_fat_percentage": 15,
-        "activity_level": "extra",
+        "job_type": "on_feet",
+        "training_days_per_week": 6,
+        "training_minutes_per_session": 90,
         "fitness_goal": "maintenance",
         "dietary_preferences": ["vegetarian", "high_protein"],
         "health_conditions": [],
@@ -84,7 +90,9 @@ USER_PROFILES = [
         "height_cm": 160,
         "weight_kg": 85,
         "body_fat_percentage": 35,
-        "activity_level": "light",
+        "job_type": "desk",
+        "training_days_per_week": 2,
+        "training_minutes_per_session": 45,
         "fitness_goal": "cutting",
         "dietary_preferences": ["dairy_free", "low_carb"],
         "health_conditions": ["hypertension", "high_cholesterol"],
@@ -97,7 +105,9 @@ USER_PROFILES = [
         "height_cm": 185,
         "weight_kg": 82,
         "body_fat_percentage": 10,
-        "activity_level": "extra",
+        "job_type": "on_feet",
+        "training_days_per_week": 6,
+        "training_minutes_per_session": 90,
         "fitness_goal": "bulking",
         "dietary_preferences": ["vegan", "high_protein", "gluten_free"],
         "health_conditions": [],
@@ -110,7 +120,9 @@ USER_PROFILES = [
         "height_cm": 168,
         "weight_kg": 65,
         "body_fat_percentage": 25,
-        "activity_level": "moderate",
+        "job_type": "desk",
+        "training_days_per_week": 4,
+        "training_minutes_per_session": 60,
         "fitness_goal": "maintenance",
         "dietary_preferences": ["paleo"],
         "health_conditions": ["lactose_intolerance"],
@@ -123,7 +135,9 @@ USER_PROFILES = [
         "height_cm": 172,
         "weight_kg": 78,
         "body_fat_percentage": 22,
-        "activity_level": "light",
+        "job_type": "desk",
+        "training_days_per_week": 2,
+        "training_minutes_per_session": 45,
         "fitness_goal": "maintenance",
         "dietary_preferences": ["low_carb"],
         "health_conditions": ["diabetes", "hypertension"],
@@ -136,7 +150,9 @@ USER_PROFILES = [
         "height_cm": 170,
         "weight_kg": 58,
         "body_fat_percentage": 20,
-        "activity_level": "moderate",
+        "job_type": "desk",
+        "training_days_per_week": 4,
+        "training_minutes_per_session": 60,
         "fitness_goal": "maintenance",
         "dietary_preferences": ["vegetarian", "dairy_free"],
         "health_conditions": [],
@@ -149,7 +165,9 @@ USER_PROFILES = [
         "height_cm": 188,
         "weight_kg": 95,
         "body_fat_percentage": 8,
-        "activity_level": "extra",
+        "job_type": "on_feet",
+        "training_days_per_week": 6,
+        "training_minutes_per_session": 90,
         "fitness_goal": "bulking",
         "dietary_preferences": ["high_protein", "keto"],
         "health_conditions": [],
@@ -162,7 +180,9 @@ USER_PROFILES = [
         "height_cm": 163,
         "weight_kg": 62,
         "body_fat_percentage": 24,
-        "activity_level": "moderate",
+        "job_type": "desk",
+        "training_days_per_week": 4,
+        "training_minutes_per_session": 60,
         "fitness_goal": "cutting",
         "dietary_preferences": ["gluten_free"],
         "health_conditions": ["celiac_disease"],
@@ -224,7 +244,9 @@ class MockDataGenerator:
         meals_per_day = random.choice([3, 4, 5])
         snacks_per_day = random.choice([0, 1, 2])
         
-        profile.activity_level = profile_template["activity_level"]
+        profile.job_type = profile_template["job_type"]
+        profile.training_days_per_week = profile_template["training_days_per_week"]
+        profile.training_minutes_per_session = profile_template["training_minutes_per_session"]
         profile.fitness_goal = profile_template["fitness_goal"]
         profile.target_weight_kg = profile_template["weight_kg"] + random.randint(-5, 5)
         profile.meals_per_day = meals_per_day
@@ -249,21 +271,19 @@ class MockDataGenerator:
         """Calculate TDEE for profile (no longer saved to DB)."""
         # Map to domain enums
         sex = Sex.MALE if profile.gender == "male" else Sex.FEMALE
-        
-        activity_map = {
-            "sedentary": ActivityLevel.SEDENTARY,
-            "light": ActivityLevel.LIGHT,
-            "moderate": ActivityLevel.MODERATE,
-            "active": ActivityLevel.ACTIVE,
-            "extra": ActivityLevel.EXTRA
+
+        job_type_map = {
+            "desk": JobType.DESK,
+            "on_feet": JobType.ON_FEET,
+            "physical": JobType.PHYSICAL,
         }
-        
+
         goal_map = {
             "maintenance": Goal.MAINTENANCE,
             "cutting": Goal.CUTTING,
             "bulking": Goal.BULKING
         }
-        
+
         # Create TDEE request
         tdee_request = TdeeRequest(
             age=profile.age,
@@ -271,7 +291,9 @@ class MockDataGenerator:
             height=profile.height_cm,
             weight=profile.weight_kg,
             body_fat_pct=profile.body_fat_percentage,
-            activity_level=activity_map[profile.activity_level],
+            job_type=job_type_map[profile.job_type],
+            training_days_per_week=profile.training_days_per_week,
+            training_minutes_per_session=profile.training_minutes_per_session,
             goal=goal_map[profile.fitness_goal],
             unit_system=UnitSystem.METRIC
         )
@@ -303,7 +325,9 @@ class MockDataGenerator:
                 height_cm=current_profile.height_cm,
                 weight_kg=historical_weight,
                 body_fat_percentage=current_profile.body_fat_percentage,
-                activity_level=current_profile.activity_level,
+                job_type=current_profile.job_type,
+                training_days_per_week=current_profile.training_days_per_week,
+                training_minutes_per_session=current_profile.training_minutes_per_session,
                 fitness_goal=current_profile.fitness_goal,
                 target_weight_kg=current_profile.target_weight_kg,
                 meals_per_day=current_profile.meals_per_day,
@@ -392,7 +416,7 @@ class MockDataGenerator:
                 print(f"   Profile ID: {profile.id}")
                 print(f"   Age: {profile.age}, Gender: {profile.gender}")
                 print(f"   Height: {profile.height_cm}cm, Weight: {profile.weight_kg}kg")
-                print(f"   Activity: {profile.activity_level}, Goal: {profile.fitness_goal}")
+                print(f"   Job: {profile.job_type}, Training: {profile.training_days_per_week}d x {profile.training_minutes_per_session}min, Goal: {profile.fitness_goal}")
                 if profile.dietary_preferences:
                     print(f"   Dietary Preferences: {', '.join(profile.dietary_preferences)}")
 

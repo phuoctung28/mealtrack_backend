@@ -252,17 +252,27 @@ Return JSON:
         """Build prompt for profile-based plan."""
         profile = request.user_profile
         targets = request.nutrition_targets
-        
+
         goal_guidance = PromptTemplateManager.get_goal_guidance(profile.fitness_goal)
-        
+
+        # Build activity description from job_type + training
+        job_type_labels = {
+            "desk": "Desk job (sitting most of day)",
+            "on_feet": "On feet job (standing/walking)",
+            "physical": "Physical job (manual labor)"
+        }
+        job_desc = job_type_labels.get(profile.job_type, profile.job_type)
+        weekly_hours = (profile.training_days_per_week * profile.training_minutes_per_session) / 60.0
+        training_desc = f"{profile.training_days_per_week} days/week, {profile.training_minutes_per_session} min/session ({weekly_hours:.1f}h/week)"
+
         prompt = f"""Generate daily meal plan for user profile.
 
-PROFILE: {profile.fitness_goal} ({goal_guidance}), {profile.activity_level} activity
+PROFILE: {profile.fitness_goal} ({goal_guidance}), {job_desc}, training: {training_desc}
 DIET: {', '.join(profile.dietary_preferences or ['none'])}
 TARGETS: {targets.calories}cal, {targets.protein}g P, {targets.carbs}g C, {targets.fat}g F
 
 Return JSON:
 {PromptTemplateManager.get_json_schema("daily_meal")}
 """
-        
+
         return prompt, PromptTemplateManager.get_system_message("nutritionist")

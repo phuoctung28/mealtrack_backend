@@ -13,13 +13,11 @@ class SexEnum(str, Enum):
     female = "female"
 
 
-class ActivityLevelEnum(str, Enum):
-    """Enum for activity levels."""
-    sedentary = "sedentary"
-    light = "light"
-    moderate = "moderate"
-    active = "active"
-    extra = "extra"
+class JobTypeEnum(str, Enum):
+    """Enum for job types based on daily movement requirements."""
+    desk = "desk"
+    on_feet = "on_feet"
+    physical = "physical"
 
 
 class GoalEnum(str, Enum):
@@ -27,6 +25,13 @@ class GoalEnum(str, Enum):
     cut = "cut"
     bulk = "bulk"
     recomp = "recomp"
+
+
+class TrainingLevelEnum(str, Enum):
+    """Enum for training experience levels."""
+    beginner = "beginner"
+    intermediate = "intermediate"
+    advanced = "advanced"
 
 
 class UnitSystemEnum(str, Enum):
@@ -42,16 +47,22 @@ class TdeeCalculationRequest(BaseModel):
     height: float = Field(..., gt=0, description="Height in user's preferred units")
     weight: float = Field(..., gt=0, description="Weight in user's preferred units")
     body_fat_percentage: Optional[float] = Field(
-        None, 
-        ge=5, 
-        le=55, 
+        None,
+        ge=5,
+        le=55,
         description="Body fat percentage (optional)"
     )
-    activity_level: ActivityLevelEnum = Field(..., description="Activity level")
+    job_type: JobTypeEnum = Field(..., description="Job type (desk, on_feet, physical)")
+    training_days_per_week: int = Field(..., ge=0, le=7, description="Days of training per week")
+    training_minutes_per_session: int = Field(..., ge=15, le=180, description="Minutes per training session")
     goal: GoalEnum = Field(..., description="Fitness goal")
     unit_system: UnitSystemEnum = Field(
-        UnitSystemEnum.metric, 
+        UnitSystemEnum.metric,
         description="Unit system for height/weight"
+    )
+    training_level: Optional[TrainingLevelEnum] = Field(
+        None,
+        description="Training experience level (beginner, intermediate, advanced)"
     )
 
     @model_validator(mode='after')
@@ -87,7 +98,9 @@ class TdeeCalculationRequest(BaseModel):
                 "height": 180.0,
                 "weight": 75.0,
                 "body_fat_percentage": 15.0,
-                "activity_level": "moderate",
+                "job_type": "desk",
+                "training_days_per_week": 4,
+                "training_minutes_per_session": 60,
                 "goal": "recomp",
                 "unit_system": "metric"
             }

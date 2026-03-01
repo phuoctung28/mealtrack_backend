@@ -27,7 +27,9 @@ class TestGetUserProfileQueryHandler:
         assert profile["gender"] == sample_user_profile.gender
         assert profile["height_cm"] == sample_user_profile.height_cm
         assert profile["weight_kg"] == sample_user_profile.weight_kg
-        assert profile["activity_level"] == sample_user_profile.activity_level
+        assert profile["job_type"] == sample_user_profile.job_type
+        assert profile["training_days_per_week"] == sample_user_profile.training_days_per_week
+        assert profile["training_minutes_per_session"] == sample_user_profile.training_minutes_per_session
         assert profile["fitness_goal"] == sample_user_profile.fitness_goal
         assert profile["dietary_preferences"] == sample_user_profile.dietary_preferences
         assert profile["health_conditions"] == sample_user_profile.health_conditions

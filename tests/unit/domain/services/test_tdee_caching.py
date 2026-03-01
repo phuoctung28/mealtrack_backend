@@ -39,7 +39,9 @@ def mock_profile():
     profile.gender = "male"
     profile.height_cm = 175
     profile.weight_kg = 75
-    profile.activity_level = "moderate"
+    profile.job_type = "desk"
+    profile.training_days_per_week = 4
+    profile.training_minutes_per_session = 60
     profile.fitness_goal = "recomp"
     profile.body_fat_percentage = 18
     return profile

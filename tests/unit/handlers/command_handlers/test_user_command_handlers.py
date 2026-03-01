@@ -59,10 +59,13 @@ class TestSaveUserOnboardingCommandHandler:
             gender="male",
             height_cm=175,
             weight_kg=70,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="recomp",
             dietary_preferences=["vegetarian"],
-            pain_points=["diabetes"]
+            pain_points=["diabetes"],
+            referral_sources=["tiktok", "friend_family"]
         )
         
         # Act - Get handler from event_bus and set its uow to use test_session
@@ -97,7 +100,9 @@ class TestSaveUserOnboardingCommandHandler:
         assert saved_profile.gender == "male"
         assert saved_profile.height_cm == 175
         assert saved_profile.weight_kg == 70
-        assert saved_profile.activity_level == "moderate"
+        assert saved_profile.job_type == "desk"
+        assert saved_profile.training_days_per_week == 4
+        assert saved_profile.training_minutes_per_session == 60
         assert saved_profile.fitness_goal == "recomp"
     
     @pytest.mark.asyncio
@@ -129,10 +134,13 @@ class TestSaveUserOnboardingCommandHandler:
             gender="male",
             height_cm=175,
             weight_kg=70,
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="maintenance",
             dietary_preferences=[],
-            pain_points=[]
+            pain_points=[],
+            referral_sources=["google_search"]
         )
         
         # Act & Assert
@@ -168,10 +176,13 @@ class TestSaveUserOnboardingCommandHandler:
             gender="male",
             height_cm=175,
             weight_kg=0,  # Invalid weight
-            activity_level="moderate",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             fitness_goal="maintenance",
             dietary_preferences=[],
-            pain_points=[]
+            pain_points=[],
+            referral_sources=["instagram"]
         )
         
         # Act & Assert
@@ -191,10 +202,13 @@ class TestSaveUserOnboardingCommandHandler:
             gender="male",
             height_cm=180,  # Different height
             weight_kg=75,  # Different weight
-            activity_level="active",  # Different activity
+            job_type="on_feet",
+            training_days_per_week=5,
+            training_minutes_per_session=60,  # Different activity
             fitness_goal="cut",  # Different goal
             dietary_preferences=["vegan"],
-            pain_points=[]
+            pain_points=[],
+            referral_sources=["youtube"]
         )
         
         # Act - Get handler from event_bus and set its uow to use test_session

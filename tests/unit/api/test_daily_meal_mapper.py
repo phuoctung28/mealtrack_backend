@@ -18,7 +18,9 @@ class TestDailyMealMapper:
             gender="male",
             height=175,
             weight=75,
-            activity_level="moderately_active",
+            job_type="desk",
+            training_days_per_week=4,
+            training_minutes_per_session=60,
             goal="recomp",
             dietary_preferences=["vegan", "gluten_free"],
             health_conditions=["diabetes"],
@@ -27,14 +29,16 @@ class TestDailyMealMapper:
             target_carbs=250,
             target_fat=67
         )
-        
+
         result = DailyMealMapper.map_user_preferences_to_dict(request)
-        
+
         assert result["age"] == 30
         assert result["gender"] == "male"
         assert result["height"] == 175
         assert result["weight"] == 75
-        assert result["activity_level"] == "moderately_active"
+        assert result["job_type"] == "desk"
+        assert result["training_days_per_week"] == 4
+        assert result["training_minutes_per_session"] == 60
         assert result["goal"] == "recomp"
         assert result["dietary_preferences"] == ["vegan", "gluten_free"]
         assert result["health_conditions"] == ["diabetes"]
@@ -50,7 +54,9 @@ class TestDailyMealMapper:
             gender="female",
             height=165,
             weight=60,
-            activity_level="lightly_active",
+            job_type="desk",
+            training_days_per_week=2,
+            training_minutes_per_session=45,
             goal="cut",
             dietary_preferences=None,
             health_conditions=None,

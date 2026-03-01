@@ -12,6 +12,16 @@
 # from src.infra.database.models.user.profile import UserProfile
 
 
+from datetime import datetime, timedelta
+
+from fastapi.testclient import TestClient
+import pytest
+
+from src.infra.database.models.user.user import User
+from src import app
+from src.infra.database.models.user.profile import UserProfile
+
+
 @pytest.fixture
 def client(test_session):
     """Create a test client with database dependency override."""
@@ -38,14 +48,14 @@ def client(test_session):
     mock_food_cache.get_cached_food = AsyncMock(return_value=None)
     mock_food_cache.cache_food = AsyncMock(return_value=None)
     
-#     def override_get_db():
-#         try:
-#             yield test_session
-#         finally:
-#             pass  # Session cleanup handled by test_session fixture
+    def override_get_db():
+        try:
+            yield test_session
+        finally:
+            pass  # Session cleanup handled by test_session fixture
     
-#     def override_get_current_user_id():
-#         return "test_user_metrics"
+    def override_get_current_user_id():
+        return "test_user_metrics"
     
     def override_get_suggestion_orchestration_service(db=None):
         # Accept db parameter but ignore it, return mock
@@ -73,7 +83,7 @@ def client(test_session):
                     from src.api.dependencies.event_bus import get_configured_event_bus as real_get_bus
                     return real_get_bus()
     
-    app.dependency_overrides[get_db] = override_get_db
+    # app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id
     app.dependency_overrides[get_suggestion_orchestration_service] = override_get_suggestion_orchestration_service
     app.dependency_overrides[get_cache_service] = override_get_cache_service
@@ -111,7 +121,9 @@ def setup_test_user(test_session):
         height_cm=175.0,
         weight_kg=70.0,
         body_fat_percentage=20.0,
-        activity_level="moderate",
+        job_type="desk",
+        training_days_per_week=4,
+        training_minutes_per_session=60,
         fitness_goal="recomp",
         meals_per_day=3,
         snacks_per_day=1,

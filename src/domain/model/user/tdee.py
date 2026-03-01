@@ -8,18 +8,30 @@ class Sex(Enum):
     FEMALE = "female"
 
 
-class ActivityLevel(Enum):
-    SEDENTARY = "sedentary"
-    LIGHT = "light"
-    MODERATE = "moderate"
-    ACTIVE = "active"
-    EXTRA = "extra"
+class JobType(Enum):
+    """Job type based on daily movement requirements."""
+    DESK = "desk"
+    ON_FEET = "on_feet"
+    PHYSICAL = "physical"
 
 
 class Goal(Enum):
     CUT = "cut"
     BULK = "bulk"
     RECOMP = "recomp"
+
+
+class TrainingLevel(Enum):
+    """Training experience level based on consistent resistance training history.
+
+    Used to adjust protein recommendations:
+    - BEGINNER: <1 year consistent training (can tolerate less protein)
+    - INTERMEDIATE: 1-3 years consistent training (moderate protein needs)
+    - ADVANCED: 3+ years consistent training (higher protein for muscle retention)
+    """
+    BEGINNER = "beginner"
+    INTERMEDIATE = "intermediate"
+    ADVANCED = "advanced"
 
 
 class UnitSystem(Enum):
@@ -36,9 +48,12 @@ class TdeeRequest:
     height: float
     weight: float
     body_fat_pct: Optional[float]
-    activity_level: ActivityLevel
+    job_type: JobType
+    training_days_per_week: int  # 0-7
+    training_minutes_per_session: int  # 15-180
     goal: Goal
     unit_system: UnitSystem = UnitSystem.METRIC
+    training_level: Optional[TrainingLevel] = None
 
     def __post_init__(self):
         """Validate invariants."""
@@ -64,6 +79,16 @@ class TdeeRequest:
                 raise ValueError(
                     f"Body fat percentage must be between 5-55%: {self.body_fat_pct}"
                 )
+
+        # Validate training parameters
+        if not (0 <= self.training_days_per_week <= 7):
+            raise ValueError(
+                f"Training days per week must be between 0-7: {self.training_days_per_week}"
+            )
+        if not (15 <= self.training_minutes_per_session <= 180):
+            raise ValueError(
+                f"Training minutes per session must be between 15-180: {self.training_minutes_per_session}"
+            )
 
     @property
     def height_cm(self) -> float:

@@ -21,7 +21,9 @@ class UserProfileDomainModel(BaseDomainModel):
     gender: str
     height_cm: float
     weight_kg: float
-    activity_level: str
+    job_type: str
+    training_days_per_week: int
+    training_minutes_per_session: int
     fitness_goal: str
     meals_per_day: int
     is_current: bool = True
@@ -32,6 +34,8 @@ class UserProfileDomainModel(BaseDomainModel):
     health_conditions: List[str] = field(default_factory=list)
     allergies: List[str] = field(default_factory=list)
     pain_points: List[str] = field(default_factory=list)
+    training_level: Optional[str] = None
+    referral_sources: List[str] = field(default_factory=list)
 
 
 @dataclass(kw_only=True)

@@ -22,14 +22,18 @@ class SuggestionPromptBuilder:
         dietary_prefs = user_preferences.get('dietary_preferences', [])
         health_conditions = user_preferences.get('health_conditions', [])
         target_macros = user_preferences.get('target_macros', {})
-        activity_level = user_preferences.get('activity_level', 'moderately_active')
-        
+
+        # Get job_type and training fields
+        job_type = user_preferences.get('job_type', 'desk')
+        training_days = user_preferences.get('training_days_per_week', 0)
+        training_minutes = user_preferences.get('training_minutes_per_session', 60)
+
         total_target_calories = user_preferences.get('target_calories')
         if not total_target_calories:
             raise ValueError("target_calories is required in user_preferences")
-        
+
         meal_percentage = calorie_target / total_target_calories
-        
+
         if isinstance(target_macros, SimpleMacroTargets):
             protein_target = target_macros.protein * meal_percentage
             carbs_target = target_macros.carbs * meal_percentage
@@ -42,11 +46,21 @@ class SuggestionPromptBuilder:
         dietary_str = ", ".join(dietary_prefs) if dietary_prefs else "none"
         health_str = ", ".join(health_conditions) if health_conditions else "none"
         goal_guidance = PromptTemplateManager.get_goal_guidance(goal)
-        
+
+        # Build activity description
+        job_type_labels = {
+            "desk": "Desk job (sitting)",
+            "on_feet": "On feet (standing/walking)",
+            "physical": "Physical work (manual labor)"
+        }
+        job_desc = job_type_labels.get(job_type, job_type)
+        weekly_hours = (training_days * training_minutes) / 60.0
+        activity_desc = f"{job_desc}, training {training_days}d/wk x {training_minutes}min ({weekly_hours:.1f}h/wk)"
+
         # Compressed prompt using template manager
         return f"""Generate {meal_type.value} meal:
 
-Profile: {goal} ({goal_guidance}) | Activity: {activity_level}
+Profile: {goal} ({goal_guidance}) | Activity: {activity_desc}
 Diet: {dietary_str} | Health: {health_str}
 
 Targets: {int(calorie_target)}cal (±50), {int(protein_target)}g P, {int(carbs_target)}g C, {int(fat_target)}g F

@@ -41,7 +41,7 @@ from .user import (
     UserDomainModel,
     UserProfileDomainModel,
     UserActivity,
-    ActivityLevel,
+    JobType,
     OnboardingSection,
     OnboardingResponse,
     TDEE,

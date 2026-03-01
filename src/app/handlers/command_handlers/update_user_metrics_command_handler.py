@@ -10,7 +10,7 @@ from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsC
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.infra.cache.cache_service import CacheService
-from src.infra.database.models.enums import FitnessGoalEnum, ActivityLevelEnum
+from src.infra.database.models.enums import FitnessGoalEnum, JobTypeEnum
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -18,14 +18,15 @@ logger = logging.getLogger(__name__)
 
 @handles(UpdateUserMetricsCommand)
 class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, None]):
-    """Handle updating user metrics (weight, activity level, body fat)."""
+    """Handle updating user metrics (weight, job type, training, body fat)."""
 
     def __init__(self, cache_service: Optional[CacheService] = None):
         self.cache_service = cache_service
 
     async def handle(self, command: UpdateUserMetricsCommand) -> None:
         # Validate at least one field is provided
-        if not any([command.weight_kg, command.activity_level, command.body_fat_percent, command.fitness_goal]):
+        if not any([command.weight_kg, command.job_type, command.training_days_per_week,
+                    command.training_minutes_per_session, command.body_fat_percent, command.fitness_goal]):
             raise ValidationException("At least one metric must be provided")
 
         with UnitOfWork() as uow:
@@ -44,13 +45,21 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     raise ValidationException("Weight must be greater than 0")
                 profile.weight_kg = command.weight_kg
 
-            if command.activity_level is not None:
-                valid_levels = [e.value for e in ActivityLevelEnum]
-                # Also accept legacy aliases
-                legacy_aliases = ['sedentary', 'light', 'moderate', 'active', 'extra']
-                if command.activity_level not in valid_levels and command.activity_level not in legacy_aliases:
-                    raise ValidationException(f"Activity level must be one of: {', '.join(valid_levels)}")
-                profile.activity_level = command.activity_level
+            if command.job_type is not None:
+                valid_types = [e.value for e in JobTypeEnum]
+                if command.job_type not in valid_types:
+                    raise ValidationException(f"Job type must be one of: {', '.join(valid_types)}")
+                profile.job_type = command.job_type
+
+            if command.training_days_per_week is not None:
+                if command.training_days_per_week < 0 or command.training_days_per_week > 7:
+                    raise ValidationException("Training days per week must be between 0 and 7")
+                profile.training_days_per_week = command.training_days_per_week
+
+            if command.training_minutes_per_session is not None:
+                if command.training_minutes_per_session < 15 or command.training_minutes_per_session > 180:
+                    raise ValidationException("Training minutes per session must be between 15 and 180")
+                profile.training_minutes_per_session = command.training_minutes_per_session
 
             if command.body_fat_percent is not None:
                 if command.body_fat_percent < 0 or command.body_fat_percent > 70:
@@ -78,7 +87,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
 
             uow.session.add(profile)
             # UoW auto-commits on exit
-            
+
         await self._invalidate_user_profile(command.user_id)
 
     async def _invalidate_user_profile(self, user_id: str):

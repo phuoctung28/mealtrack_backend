@@ -21,18 +21,26 @@ class UserProfile(Base, BaseMixin):
     is_current = Column(Boolean, default=True, nullable=False)
     
     # Goal fields (from UserGoal)
-    activity_level = Column(String(30), nullable=False, default='sedentary')  # sedentary, light, moderate, active, extra
+    job_type = Column(String(30), nullable=False, default='desk')  # desk, on_feet, physical
+    training_days_per_week = Column(Integer, nullable=False, default=0)  # 0-7
+    training_minutes_per_session = Column(Integer, nullable=False, default=0)  # 15-180
     fitness_goal = Column(String(30), nullable=False, default='maintenance')  # maintenance, cutting, bulking
     target_weight_kg = Column(Float, nullable=True)
     meals_per_day = Column(Integer, default=3, nullable=False)
     snacks_per_day = Column(Integer, default=1, nullable=False)
+
+    # Training experience level (beginner, intermediate, advanced)
+    training_level = Column(String(20), nullable=True, default=None)
     
     # Preference fields (from UserPreferences)
     dietary_preferences = Column(JSON, default=[], nullable=False)  # ['vegan', 'vegetarian', 'gluten_free', etc.]
     health_conditions = Column(JSON, default=[], nullable=False)    # ['diabetes', 'hypertension', etc.]
     allergies = Column(JSON, default=[], nullable=False)           # ['nuts', 'dairy', 'shellfish', etc.]
     pain_points = Column(JSON, default=[], nullable=True)
-    
+
+    # Attribution — JSON array, nullable for existing users
+    referral_sources = Column(JSON, nullable=True, default=None)
+
     # Constraints
     __table_args__ = (
         CheckConstraint('age >= 13 AND age <= 120', name='check_age_range'),

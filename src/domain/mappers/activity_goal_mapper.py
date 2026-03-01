@@ -1,29 +1,26 @@
 """
-Centralized mapper for activity levels and fitness goals.
+Centralized mapper for job types and fitness goals.
 Ensures consistent mapping across the entire application.
 """
 
 from typing import Dict
 
-from src.domain.model.user import ActivityLevel, Goal
+from src.domain.model.user import JobType, Goal, TrainingLevel
 
 
 class ActivityGoalMapper:
-    """Centralized mapper for activity levels and fitness goals."""
+    """Centralized mapper for job types and fitness goals."""
 
-    # Activity level mappings - all variations map to canonical enum values
-    ACTIVITY_LEVEL_MAP: Dict[str, ActivityLevel] = {
+    # Job type mappings - all variations map to canonical enum values
+    JOB_TYPE_MAP: Dict[str, JobType] = {
         # Canonical values
-        "sedentary": ActivityLevel.SEDENTARY,
-        "light": ActivityLevel.LIGHT,
-        "moderate": ActivityLevel.MODERATE,
-        "active": ActivityLevel.ACTIVE,
-        "extra": ActivityLevel.EXTRA,
-        # Alternative names (with underscore)
-        "lightly_active": ActivityLevel.LIGHT,
-        "moderately_active": ActivityLevel.MODERATE,
-        "very_active": ActivityLevel.ACTIVE,
-        "extra_active": ActivityLevel.EXTRA,
+        "desk": JobType.DESK,
+        "on_feet": JobType.ON_FEET,
+        "physical": JobType.PHYSICAL,
+        # Alternative names
+        "sitting": JobType.DESK,
+        "standing": JobType.ON_FEET,
+        "manual_labor": JobType.PHYSICAL,
     }
 
     # Goal mappings - canonical values only (mobile migration complete)
@@ -33,14 +30,24 @@ class ActivityGoalMapper:
         "recomp": Goal.RECOMP,
     }
 
+    # Training level mappings
+    TRAINING_LEVEL_MAP: Dict[str, TrainingLevel] = {
+        "beginner": TrainingLevel.BEGINNER,
+        "intermediate": TrainingLevel.INTERMEDIATE,
+        "advanced": TrainingLevel.ADVANCED,
+    }
+
     @classmethod
-    def map_activity_level(cls, activity_level: str) -> ActivityLevel:
-        """Map activity level string to enum, with fallback to MODERATE."""
-        return cls.ACTIVITY_LEVEL_MAP.get(
-            activity_level.lower(), ActivityLevel.MODERATE
-        )
+    def map_job_type(cls, job_type: str) -> JobType:
+        """Map job type string to enum, with fallback to DESK."""
+        return cls.JOB_TYPE_MAP.get(job_type.lower(), JobType.DESK)
 
     @classmethod
     def map_goal(cls, goal: str) -> Goal:
         """Map goal string to enum, with fallback to RECOMP."""
         return cls.GOAL_MAP.get(goal.lower(), Goal.RECOMP)
+
+    @classmethod
+    def map_training_level(cls, training_level: str) -> TrainingLevel:
+        """Map training level string to enum, with fallback to BEGINNER."""
+        return cls.TRAINING_LEVEL_MAP.get(training_level.lower(), TrainingLevel.BEGINNER)

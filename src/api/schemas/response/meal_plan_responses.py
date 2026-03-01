@@ -63,7 +63,9 @@ class UserPreferenceSummarySchema(BaseModel):
     dietary_preferences: List[str]
     health_conditions: List[str]
     allergies: List[str]
-    activity_level: str
+    job_type: str
+    training_days_per_week: int
+    training_minutes_per_session: int
     fitness_goal: str
     meals_per_day: int
     snacks_per_day: int
@@ -136,7 +138,9 @@ class UserPreferencesStrongResponse(BaseModel):
     dietary_preferences: List[str] = Field(default=[], description="Dietary preferences")
     health_conditions: List[str] = Field(default=[], description="Health conditions")
     allergies: List[str] = Field(default=[], description="Food allergies")
-    activity_level: str = Field(..., description="Activity level")
+    job_type: str = Field(..., description="Job type: desk, on_feet, physical")
+    training_days_per_week: int = Field(..., description="Training days per week (0-7)")
+    training_minutes_per_session: int = Field(..., description="Training minutes per session (15-180)")
     fitness_goal: str = Field(..., description="Fitness goal")
     meals_per_day: int = Field(..., description="Number of meals per day")
     snacks_per_day: int = Field(..., description="Number of snacks per day")

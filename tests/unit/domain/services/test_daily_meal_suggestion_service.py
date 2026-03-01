@@ -26,7 +26,9 @@ def user_preferences():
         'gender': 'male',
         'height': 175,
         'weight': 75,
-        'activity_level': 'moderately_active',
+        'job_type': 'desk',
+        'training_days_per_week': 4,
+        'training_minutes_per_session': 60,
         'goal': 'maintenance',
         'dietary_preferences': ['vegetarian'],
         'health_conditions': [],
@@ -281,7 +283,9 @@ class TestDailyMealSuggestionService:
         """Test unified prompt with dict-format macros."""
         user_preferences = {
             'goal': 'maintenance',
-            'activity_level': 'moderate',
+            'job_type': 'desk',
+            'training_days_per_week': 4,
+            'training_minutes_per_session': 60,
             'dietary_preferences': [],
             'health_conditions': [],
             'target_calories': 2000,

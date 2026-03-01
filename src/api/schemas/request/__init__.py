@@ -42,7 +42,7 @@ from .tdee_requests import (
     TdeeCalculationRequest,
     BatchTdeeCalculationRequest,
     SexEnum,
-    ActivityLevelEnum,
+    JobTypeEnum,
     GoalEnum,
     UnitSystemEnum
 )
@@ -73,7 +73,7 @@ __all__ = [
     'TdeeCalculationRequest',
     'BatchTdeeCalculationRequest',
     'SexEnum',
-    'ActivityLevelEnum',
+    'JobTypeEnum',
     'GoalEnum',
     'UnitSystemEnum',
     

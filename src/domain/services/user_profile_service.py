@@ -38,7 +38,10 @@ class UserProfileService:
                 sex=sex,
                 height=profile.height_cm,
                 weight=profile.weight_kg,
-                activity_level=ActivityGoalMapper.map_activity_level(profile.activity_level),
+                job_type=ActivityGoalMapper.map_job_type(profile.job_type),
+                training_days_per_week=profile.training_days_per_week,
+                training_minutes_per_session=profile.training_minutes_per_session,
+                training_level=ActivityGoalMapper.map_training_level(profile.training_level),
                 goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
                 body_fat_pct=profile.body_fat_percentage,
                 unit_system=UnitSystem.METRIC
@@ -57,7 +60,10 @@ class UserProfileService:
                 'include_snacks': profile.snacks_per_day > 0,
                 'age': profile.age,
                 'gender': profile.gender,
-                'activity_level': profile.activity_level,
+                'job_type': profile.job_type,
+                'training_days_per_week': profile.training_days_per_week,
+                'training_minutes_per_session': profile.training_minutes_per_session,
+                'training_level': profile.training_level,
                 'fitness_goal': profile.fitness_goal,
                 'health_conditions': profile.health_conditions or []
             }
@@ -74,7 +80,10 @@ class UserProfileService:
                 'include_snacks': True,
                 'age': 30,
                 'gender': 'male',
-                'activity_level': 'moderate',
+                'job_type': 'desk',
+                'training_days_per_week': 4,
+                'training_minutes_per_session': 60,
+                'training_level': None,
                 'fitness_goal': 'recomp',
                 'health_conditions': []
             }

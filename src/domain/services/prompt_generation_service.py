@@ -256,12 +256,22 @@ class PromptGenerationService:
         profile = context.generation_context.request.user_profile
         dietary_str = ", ".join(profile.dietary_preferences) if profile.dietary_preferences else "none"
         health_str = ", ".join(profile.health_conditions) if profile.health_conditions else "none"
-        
+
+        # Build activity description
+        job_type_labels = {
+            "desk": "Desk job (sitting)",
+            "on_feet": "On feet (standing/walking)",
+            "physical": "Physical work (manual labor)"
+        }
+        job_desc = job_type_labels.get(profile.job_type, profile.job_type)
+        weekly_hours = (profile.training_days_per_week * profile.training_minutes_per_session) / 60.0
+        activity_desc = f"{job_desc}, training {profile.training_days_per_week}d/wk x {profile.training_minutes_per_session}min ({weekly_hours:.1f}h/wk)"
+
         prompt = f"""Generate a complete daily meal plan with these requirements:
 
 User Profile:
 - Fitness Goal: {profile.fitness_goal} - {context.get_goal_guidance()}
-- Activity Level: {profile.activity_level}
+- Activity: {activity_desc}
 - Dietary Restrictions: {dietary_str}
 - Health Conditions: {health_str}
 - Total Daily Calories: {context.generation_context.request.nutrition_targets.calories}
@@ -361,21 +371,31 @@ Respond with valid JSON only:
     def _generate_single_profile_meal_prompt(self, meal_type: MealType, calorie_target: int, context: PromptContext) -> tuple[str, str]:
         """Generate prompt for a single profile-based meal."""
         profile = context.generation_context.request.user_profile
-        
+
         # Calculate macro targets for this meal
         meal_percentage = calorie_target / context.generation_context.request.nutrition_targets.calories
         protein_target = context.generation_context.request.nutrition_targets.protein * meal_percentage
         carbs_target = context.generation_context.request.nutrition_targets.carbs * meal_percentage
         fat_target = context.generation_context.request.nutrition_targets.fat * meal_percentage
-        
+
         dietary_str = ", ".join(profile.dietary_preferences) if profile.dietary_preferences else "none"
         health_str = ", ".join(profile.health_conditions) if profile.health_conditions else "none"
-        
+
+        # Build activity description
+        job_type_labels = {
+            "desk": "Desk job (sitting)",
+            "on_feet": "On feet (standing/walking)",
+            "physical": "Physical work (manual labor)"
+        }
+        job_desc = job_type_labels.get(profile.job_type, profile.job_type)
+        weekly_hours = (profile.training_days_per_week * profile.training_minutes_per_session) / 60.0
+        activity_desc = f"{job_desc}, training {profile.training_days_per_week}d/wk x {profile.training_minutes_per_session}min ({weekly_hours:.1f}h/wk)"
+
         prompt = f"""Generate a {meal_type.value} meal suggestion with these requirements:
 
 User Profile:
 - Fitness Goal: {profile.fitness_goal} - {context.get_goal_guidance()}
-- Activity Level: {profile.activity_level}
+- Activity: {activity_desc}
 - Dietary Restrictions: {dietary_str}
 - Health Conditions: {health_str}
 
