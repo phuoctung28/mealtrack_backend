@@ -30,7 +30,8 @@ class GenerateMealSuggestionsCommand(Command):
     session_id: Optional[str] = None  # Session ID for regeneration (auto-excludes previous meals)
     language: str = "en"  # ISO 639-1 language code (en, vi, es, fr, de, ja, zh)
     servings: int = 1  # Number of servings (1-4), scales ingredient amounts and calories
-    
+    cooking_equipment: List[str] = None  # Available cooking equipment
+
     def __post_init__(self):
         """Validate command data."""
         valid_meal_types = ["breakfast", "lunch", "dinner", "snack"]

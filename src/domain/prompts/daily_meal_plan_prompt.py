@@ -70,9 +70,8 @@ Nutritional Targets for this meal:
 - Protein: {int(protein_target)}g
 - Carbs: {int(carbs_target)}g
 - Fat: {int(fat_target)}g
-1. The)}g
 
-Requirements meal should be practical and use common ingredients
+1. Requirements meal should be practical and use common ingredients
 2. Cooking time should be reasonable for {meal_type.value}
 3. Must respect all dietary restrictions
 4. Should support the user's fitness goal

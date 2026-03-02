@@ -24,6 +24,7 @@ class SuggestionSession:
     shown_meal_names: List[str] = field(default_factory=list)  # Track meal names for exclusion
     dietary_preferences: List[str] = field(default_factory=list)
     allergies: List[str] = field(default_factory=list)
+    cooking_equipment: List[str] = field(default_factory=list)  # Available cooking equipment
     created_at: datetime = field(default_factory=utc_now)
     expires_at: Optional[datetime] = None
 

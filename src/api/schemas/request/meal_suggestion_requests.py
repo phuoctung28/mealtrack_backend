@@ -102,6 +102,11 @@ class MealSuggestionRequest(BaseModel):
         le=4,
         description="Number of servings (1-4). Ingredient amounts and calories scale accordingly.",
     )
+    cooking_equipment: List[str] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Available cooking equipment (e.g., Air fryer, Microwave, Pan)",
+    )
     exclude_ids: List[str] = Field(
         default_factory=list,
         description="DEPRECATED: Use session_id instead for automatic exclusion",

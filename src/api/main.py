@@ -5,6 +5,15 @@ This file initializes the FastAPI application, sets up middleware,
 includes routes, and handles application lifecycle events.
 """
 
+# Prefer IPv4 to avoid hangs when IPv6 is unreachable (common in local dev)
+import socket
+_original_getaddrinfo = socket.getaddrinfo
+def _ipv4_first_getaddrinfo(*args, **kwargs):
+    results = _original_getaddrinfo(*args, **kwargs)
+    results.sort(key=lambda x: x[0] != socket.AF_INET)
+    return results
+socket.getaddrinfo = _ipv4_first_getaddrinfo
+
 import json
 import logging
 import os
