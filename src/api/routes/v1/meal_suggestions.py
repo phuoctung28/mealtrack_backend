@@ -68,6 +68,7 @@ async def generate_suggestions(
             session_id=request.session_id,  # Pass session_id for regeneration
             language=language,
             servings=request.servings,  # Pass servings for ingredient/calorie scaling
+            cooking_equipment=request.cooking_equipment,  # Pass cooking equipment
         )
 
         session, suggestions = await event_bus.send(command)

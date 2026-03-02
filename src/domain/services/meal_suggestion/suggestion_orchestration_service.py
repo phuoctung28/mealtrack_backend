@@ -81,6 +81,7 @@ class SuggestionOrchestrationService:
         session_id: Optional[str] = None,
         language: str = "en",
         servings: int = 1,
+        cooking_equipment: Optional[List[str]] = None,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """
         Generate 3 suggestions. If session_id provided, generates NEW meals
@@ -151,6 +152,7 @@ class SuggestionOrchestrationService:
                 language=language,
                 dietary_preferences=dietary_preferences,
                 allergies=allergies,
+                cooking_equipment=cooking_equipment or [],
             )
             exclude_meal_names = []
             logger.info(f"Creating new session {session.id}")

@@ -165,6 +165,7 @@ def build_meal_names_prompt(
         dietary_preferences=getattr(session, "dietary_preferences", None),
         exclude_meal_names=exclude_meal_names,
         servings=getattr(session, "servings", 1),
+        cooking_equipment=getattr(session, "cooking_equipment", None),
     )
 
 
@@ -182,6 +183,7 @@ def build_recipe_details_prompt(meal_name: str, session: "SuggestionSession") ->
         allergies=getattr(session, "allergies", None),
         dietary_preferences=getattr(session, "dietary_preferences", None),
         servings=getattr(session, "servings", 1),
+        cooking_equipment=getattr(session, "cooking_equipment", None),
     )
 
 

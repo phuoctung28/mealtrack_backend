@@ -179,6 +179,7 @@ RULES:
         dietary_preferences: Optional[List[str]] = None,
         exclude_meal_names: Optional[List[str]] = None,
         servings: int = 1,
+        cooking_equipment: Optional[List[str]] = None,
     ) -> str:
         """
         Build prompt for Phase 1 meal name generation.
@@ -204,8 +205,13 @@ RULES:
         # Add servings instruction when > 1
         servings_str = f" for {servings} servings" if servings > 1 else ""
 
+        # Add cooking equipment constraint
+        equipment_str = ""
+        if cooking_equipment:
+            equipment_str = f"\nEquipment: {', '.join(cooking_equipment)}"
+
         return f"""Generate 4 different {meal_type} names, ~{target_calories}cal{servings_str}, ≤{cooking_time_minutes}min.
-Ingredients: {ing_str}{constraints_str}
+Ingredients: {ing_str}{constraints_str}{equipment_str}
 Cuisines: 4 distinct (Asian, Mediterranean, Latin, American)
 Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}."""
 
@@ -220,6 +226,7 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
         servings: int = 1,
+        cooking_equipment: Optional[List[str]] = None,
     ) -> str:
         """
         Build prompt for Phase 2 recipe detail generation.
@@ -239,10 +246,15 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         # Add servings instruction when > 1
         servings_str = f" for {servings} servings" if servings > 1 else ""
 
+        # Add cooking equipment constraint
+        equipment_str = ""
+        if cooking_equipment:
+            equipment_str = f"\nEquipment available: {', '.join(cooking_equipment)}"
+
         return f"""Generate complete recipe for: "{meal_name}"
 
 Ingredients: {ing_str}{' | ' + constraints_str if constraints_str else ''}
-Target: ~{target_calories} cal{servings_str} | ≤{cooking_time_minutes} min
+Target: ~{target_calories} cal{servings_str} | ≤{cooking_time_minutes} min{equipment_str}
 
 PORTION SIZING for {target_calories} cal:
 - {'Small portions: 150g protein, 100g carbs' if target_calories < 600 else 'Standard: 200g protein, 150g carbs' if target_calories < 1000 else 'Large: 300g protein, 200g carbs'}
