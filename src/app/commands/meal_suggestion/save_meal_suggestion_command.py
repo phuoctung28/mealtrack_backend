@@ -1,19 +1,34 @@
 """
-Command for saving a meal suggestion to planned_meals table.
+Command for saving a meal suggestion as a regular meal.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 from src.app.events.base import Command
 
 
 @dataclass
+class IngredientItem:
+    """
+    A single ingredient with quantity, unit, and optional per-item macros.
+
+    Macros default to 0.0 when not provided. Populate them whenever available
+    so that ingredient-level edits can recalculate meal totals later.
+    """
+
+    name: str
+    amount: float
+    unit: str
+    calories: float = 0.0
+    protein: float = 0.0
+    carbs: float = 0.0
+    fat: float = 0.0
+
+
+@dataclass
 class SaveMealSuggestionCommand(Command):
-    """
-    Command to save a meal suggestion to planned_meals table (daily meal plan).
-    Creates MealPlan and MealPlanDay if they don't exist.
-    """
-    
+    """Command to save a meal suggestion as a regular Meal entity."""
+
     user_id: str
     suggestion_id: str
     name: str
@@ -24,7 +39,7 @@ class SaveMealSuggestionCommand(Command):
     fat: float
     description: Optional[str]
     estimated_cook_time_minutes: Optional[int]
-    ingredients_list: List[str]
+    ingredients: List[IngredientItem]
     instructions: List[str]
     portion_multiplier: int
     meal_date: str  # YYYY-MM-DD format

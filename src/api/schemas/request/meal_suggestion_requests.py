@@ -145,10 +145,36 @@ class MealSuggestionRequest(BaseModel):
         }
 
 
+class SaveIngredientItem(BaseModel):
+    """
+    A single ingredient with quantity, unit, and optional per-item macros.
+
+    Per-ingredient macros default to 0 when the caller does not have them (e.g.
+    when saving directly from an AI suggestion). They should be populated when
+    available (e.g. from a local nutrition DB lookup) so that later ingredient
+    edits can recalculate meal-level totals correctly.
+    """
+
+    name: str = Field(..., description="Ingredient name")
+    amount: float = Field(..., gt=0, description="Quantity/amount")
+    unit: str = Field(..., description="Unit (g, ml, tbsp, tsp, etc.)")
+    calories: float = Field(
+        default=0.0, ge=0, description="Calories for this ingredient (0 if unknown)"
+    )
+    protein: float = Field(
+        default=0.0, ge=0, description="Protein in grams (0 if unknown)"
+    )
+    carbs: float = Field(
+        default=0.0, ge=0, description="Carbohydrates in grams (0 if unknown)"
+    )
+    fat: float = Field(
+        default=0.0, ge=0, description="Fat in grams (0 if unknown)"
+    )
+
+
 class SaveMealSuggestionRequest(BaseModel):
     """
-    Request schema for saving a meal suggestion to planned_meals table.
-    This adds the meal to the user's daily meal plan (suggested meals).
+    Request schema for saving a meal suggestion as a regular meal.
     """
 
     suggestion_id: str = Field(..., description="ID of the suggestion being saved")
@@ -170,8 +196,9 @@ class SaveMealSuggestionRequest(BaseModel):
     estimated_cook_time_minutes: Optional[int] = Field(
         None, ge=0, description="Estimated cooking time in minutes"
     )
-    ingredients_list: List[str] = Field(
-        default_factory=list, description="List of ingredients as strings"
+    ingredients: List[SaveIngredientItem] = Field(
+        default_factory=list,
+        description="Structured ingredient list with name, amount, and unit",
     )
     instructions: List[str] = Field(
         default_factory=list, description="List of cooking instructions"
