@@ -104,7 +104,8 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
 
     async def _cascade_lookup(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Cascade lookup: USDA -> FatSecret -> AI estimate.
+        Cascade lookup: FatSecret -> USDA -> AI estimate.
+        FatSecret prioritized for precision.
         Applies unit-to-grams conversion so nutrition matches what manual-meal stores.
         """
         name = item.get("name", "")
@@ -115,44 +116,7 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
             item["data_source"] = "ai_estimate"
             return item
 
-        # AI estimate values (fallback reference)
-        ai_calories = item.get("calories", 0)
-
-        # Try USDA first
-        try:
-            usda_results = await self._food_data_service.search_foods(name, limit=5)
-            if usda_results and len(usda_results) > 0:
-                usda_food = usda_results[0]
-                fdc_id = usda_food.get("fdcId")
-                if fdc_id:
-                    try:
-                        details = await self._food_data_service.get_food_details(fdc_id)
-                        nutrients = details.get("foodNutrients", [])
-                        per_100g = extract_usda_nutrition(nutrients)
-                        # Scale per-100g values for the actual quantity+unit
-                        scaled = scale_per_100g_nutrition(per_100g, quantity, unit)
-                        # Sanity check: reject absurdly low USDA results for non-trivial units
-                        non_trivial_units = ("g", "ml", "tsp", "teaspoon")
-                        if scaled["calories"] < 5.0 and unit not in non_trivial_units:
-                            logger.debug(
-                                f"USDA result too low for '{name}' "
-                                f"({scaled['calories']} cal/{quantity} {unit}), skipping"
-                            )
-                            raise ValueError("USDA result unreasonably low")
-                        item.update(scaled)
-                    except ValueError:
-                        raise  # Re-raise sanity check failure to skip USDA
-                    except Exception:
-                        pass  # Keep AI estimate but use USDA source
-                    item["data_source"] = "usda"
-                    item["fdc_id"] = fdc_id
-                    return item
-        except ValueError:
-            logger.debug(f"USDA sanity check failed for {name}, trying FatSecret")
-        except Exception as e:
-            logger.debug(f"USDA lookup failed for {name}: {e}")
-
-        # Try FatSecret (now async)
+        # Try FatSecret first (more precise for common foods)
         try:
             fatsecret_results = await self._fat_secret_service.search_foods(name, max_results=5)
             if fatsecret_results and len(fatsecret_results) > 0:
@@ -165,6 +129,39 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
                 return item
         except Exception as e:
             logger.debug(f"FatSecret lookup failed for {name}: {e}")
+
+        # Try USDA as fallback
+        try:
+            usda_results = await self._food_data_service.search_foods(name, limit=5)
+            if usda_results and len(usda_results) > 0:
+                usda_food = usda_results[0]
+                fdc_id = usda_food.get("fdcId")
+                if fdc_id:
+                    try:
+                        details = await self._food_data_service.get_food_details(fdc_id)
+                        nutrients = details.get("foodNutrients", [])
+                        per_100g = extract_usda_nutrition(nutrients)
+                        scaled = scale_per_100g_nutrition(per_100g, quantity, unit)
+                        # Sanity check: reject absurdly low results for non-trivial units
+                        non_trivial_units = ("g", "ml", "tsp", "teaspoon")
+                        if scaled["calories"] < 5.0 and unit not in non_trivial_units:
+                            logger.debug(
+                                f"USDA result too low for '{name}' "
+                                f"({scaled['calories']} cal/{quantity} {unit}), skipping"
+                            )
+                            raise ValueError("USDA result unreasonably low")
+                        item.update(scaled)
+                    except ValueError:
+                        raise
+                    except Exception:
+                        pass
+                    item["data_source"] = "usda"
+                    item["fdc_id"] = fdc_id
+                    return item
+        except ValueError:
+            logger.debug(f"USDA sanity check failed for {name}, falling back to AI")
+        except Exception as e:
+            logger.debug(f"USDA lookup failed for {name}: {e}")
 
         # Fallback to AI estimate (values from Gemini prompt, already per-serving)
         item["data_source"] = "ai_estimate"

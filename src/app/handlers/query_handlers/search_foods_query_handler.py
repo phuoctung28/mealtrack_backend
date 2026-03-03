@@ -41,19 +41,25 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
             mapped = [self.mapping_service.map_search_item(i) for i in processed_cached]
             return {"results": mapped, "query": event.query, "total": len(mapped)}
 
-        raw = await self.food_data_service.search_foods(event.query, event.limit)
-        processed_raw = self._process_search_results(raw)
-
-        for item in processed_raw:
-            if "source" not in item:
-                item["source"] = "usda"
+        # FatSecret first for precision, USDA as supplement
+        processed_raw = []
 
         if self.fat_secret_service:
             try:
-                fs_results = await self.fat_secret_service.search_foods(event.query, max_results=5)
+                fs_results = await self.fat_secret_service.search_foods(event.query, max_results=event.limit)
                 processed_raw.extend(fs_results)
             except Exception:
                 logger.warning("FatSecret search failed", exc_info=True)
+
+        try:
+            usda_results = await self.food_data_service.search_foods(event.query, event.limit)
+            usda_processed = self._process_search_results(usda_results)
+            for item in usda_processed:
+                if "source" not in item:
+                    item["source"] = "usda"
+            processed_raw.extend(usda_processed)
+        except Exception:
+            logger.warning("USDA search failed", exc_info=True)
 
         await self.cache_service.cache_search(event.query, processed_raw)
         mapped = [self.mapping_service.map_search_item(i) for i in processed_raw]
