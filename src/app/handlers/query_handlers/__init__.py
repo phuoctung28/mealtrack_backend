@@ -10,12 +10,10 @@ from .get_food_details_query_handler import GetFoodDetailsQueryHandler
 # Meal handlers
 from .get_meal_by_id_query_handler import GetMealByIdQueryHandler
 # Meal Plan handlers
-from .get_meal_plan_query_handler import GetMealPlanQueryHandler
 from .get_meal_planning_summary_query_handler import GetMealPlanningSummaryQueryHandler
 # Daily Meal handlers
 from .get_meal_suggestions_for_profile_query_handler import GetMealSuggestionsForProfileQueryHandler
 from .get_meals_by_date_query_handler import GetMealsByDateQueryHandler
-from .get_meals_from_plan_by_date_query_handler import GetMealsFromPlanByDateQueryHandler
 # Notification handlers
 from .get_notification_preferences_query_handler import GetNotificationPreferencesQueryHandler
 from .get_single_meal_for_profile_query_handler import GetSingleMealForProfileQueryHandler
@@ -50,11 +48,9 @@ __all__ = [
     "GetUserMetricsQueryHandler",
     # Activity
     "GetDailyActivitiesQueryHandler",
-    # Meal Plan
-    "GetMealPlanQueryHandler",
-    "GetMealsFromPlanByDateQueryHandler",
+    # Meal Plan / Daily Meal
     "GetMealsByDateQueryHandler",
-    # Daily Meal
+    # Daily Meal specific
     "GetMealSuggestionsForProfileQueryHandler",
     "GetSingleMealForProfileQueryHandler",
     "GetMealPlanningSummaryQueryHandler",

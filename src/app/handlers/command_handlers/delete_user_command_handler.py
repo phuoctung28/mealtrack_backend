@@ -17,7 +17,6 @@ from src.infra.services.firebase_auth_service import FirebaseAuthService
 # Models for soft-delete operations
 from src.infra.database.models.meal.meal import Meal
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.meal_planning.meal_plan import MealPlan
 # TODO: Conversation table never created in database (no migration exists).
 # Remove this import and related code once confirmed conversations feature is deprecated.
 # from src.infra.database.models.conversation.conversation import Conversation
@@ -138,10 +137,8 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                 Meal.user_id == user_id
             ).update({Meal.status: MealStatusEnum.INACTIVE})
 
-            # 2. Soft-delete meal_plans (set is_active=False)
-            meal_plans_count = uow.session.query(MealPlan).filter(
-                MealPlan.user_id == user_id
-            ).update({MealPlan.is_active: False})
+            # 2. Soft-delete meal plans - no longer applicable (feature removed)
+            meal_plans_count = 0
 
             # TODO: Conversation table never created - ORM model exists but no migration.
             # Causes error: "Table 'mealtrack.conversations' doesn't exist"

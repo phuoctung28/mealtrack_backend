@@ -16,13 +16,6 @@ from .meal import (
     MealEditedEvent,
 )
 
-# Meal plan events
-from .meal_plan import (
-    ConversationStartedEvent,
-    MealPlanGeneratedEvent,
-    MealReplacedEvent,
-)
-
 # TDEE events
 from .tdee import (
     TdeeCalculatedEvent,
@@ -47,11 +40,6 @@ __all__ = [
     "MealNutritionUpdatedEvent",
     "MealEditedEvent",
 
-    # Meal plan events
-    "ConversationStartedEvent",
-    "MealPlanGeneratedEvent",
-    "MealReplacedEvent",
-    
     # TDEE events
     "TdeeCalculatedEvent",
     

@@ -40,7 +40,6 @@ from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
 from src.api.routes.v1.health import router as health_router
 from src.api.routes.v1.ingredients import router as ingredients_router
-from src.api.routes.v1.meal_plans import router as meal_plans_router
 from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.monitoring import router as monitoring_router
@@ -209,7 +208,6 @@ app.include_router(health_router)
 app.include_router(meals_router)
 app.include_router(activities_router)
 app.include_router(feature_flags_router)
-app.include_router(meal_plans_router)
 app.include_router(meal_suggestions_router)
 # app.include_router(daily_meals_router)
 app.include_router(user_profiles_router)

@@ -8,8 +8,6 @@ from .meal import MealCoreService, MealFallbackService
 # Backward compatibility aliases (deprecated)
 from .meal import MealCoreService as MealService
 from .meal import MealCoreService as MealTypeDeterminationService
-from .meal_plan import PlanOrchestrator, PlanGenerator
-from .meal_plan_service import MealPlanService
 from .nutrition_calculation_service import NutritionCalculationService, ScaledNutritionResult
 from .portion_calculation_service import PortionCalculationService
 from .suggestion import SuggestionService, SuggestionOrchestrationService
@@ -19,7 +17,6 @@ from .tdee_service import TdeeCalculationService
 __all__ = [
     # Existing services
     "TdeeCalculationService",
-    "MealPlanService",
     "ConversationService",
     "DailyMealSuggestionService",
     "NutritionCalculationService",
@@ -30,8 +27,6 @@ __all__ = [
     "MealFallbackService",
     "SuggestionService",
     "SuggestionOrchestrationService",
-    "PlanOrchestrator",
-    "PlanGenerator",
     # Backward compatibility (deprecated)
     "MealService",
     "MealTypeDeterminationService",

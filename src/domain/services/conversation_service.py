@@ -4,7 +4,6 @@ from typing import Optional, Tuple
 
 from src.domain.model.meal_planning_wizard import Conversation, ConversationState, MessageRole
 from src.domain.services.conversation.conversation_handler import ConversationHandler
-from src.domain.services.meal_plan_service import MealPlanService
 
 logger = logging.getLogger(__name__)
 
@@ -12,8 +11,9 @@ logger = logging.getLogger(__name__)
 class ConversationService:
     """Service for managing meal planning conversations."""
 
-    def __init__(self, meal_plan_service: MealPlanService):
-        self.handler = ConversationHandler(meal_plan_service)
+    def __init__(self):
+        # Meal plan generation is currently disabled; handler operates in preference-capture mode only.
+        self.handler = ConversationHandler()
         self.state_handlers = {
             ConversationState.GREETING: self.handler.handle_greeting,
             ConversationState.ASKING_DIETARY_PREFERENCES: self.handler.handle_dietary_preferences,

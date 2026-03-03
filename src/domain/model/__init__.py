@@ -12,14 +12,10 @@ from .meal import (
 )
 from .meal_planning import (
     SimpleMacroTargets,
-    MealPlan,
     PlannedMeal,
-    DayPlan,
     MealType,
-    UserPreferences,
     DietaryPreference,
     FitnessGoal,
-    PlanDuration,
     MealGenerationContext,
     MealGenerationRequest,
     MealGenerationType,

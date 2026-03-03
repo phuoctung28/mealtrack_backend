@@ -20,10 +20,6 @@ from .enums import (
 # Meal models
 from .meal.meal import Meal
 from .meal.meal_image import MealImage
-# Meal planning models
-from .meal_planning.meal_plan import MealPlan
-from .meal_planning.meal_plan_day import MealPlanDay
-from .meal_planning.planned_meal import PlannedMeal
 # Notification models
 from .notification import NotificationPreferences, UserFcmToken
 from .nutrition.food_item import FoodItem
@@ -66,11 +62,6 @@ __all__ = [
     # Meal models
     "Meal",
     "MealImage",
-    
-    # Meal planning models
-    "MealPlan",
-    "MealPlanDay",
-    "PlannedMeal",
     
     # Test models
     

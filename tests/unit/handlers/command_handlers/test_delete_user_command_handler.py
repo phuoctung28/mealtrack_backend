@@ -16,7 +16,6 @@ from src.infra.database.config import Base
 from src.infra.database.models.user import User
 from src.infra.database.models.meal.meal import Meal
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.meal_planning.meal_plan import MealPlan
 from src.infra.database.models.notification.notification_preferences import NotificationPreferences
 from src.infra.database.models.notification.user_fcm_token import UserFcmToken
 from src.infra.database.models.chat.thread import ChatThread

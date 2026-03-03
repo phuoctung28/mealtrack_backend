@@ -16,10 +16,6 @@ from .meal import (
     GetDailyMacrosQuery,
     GetMealByIdQuery,
 )
-# Import from meal_plan module
-from .meal_plan import (
-    GetMealPlanQuery,
-)
 # Import from tdee module
 # No TDEE queries imported - all removed
 # Import from user module
@@ -37,8 +33,6 @@ __all__ = [
     "GetMealPlanningSummaryQuery",
     # User queries
     "GetUserProfileQuery",
-    # Meal plan queries
-    "GetMealPlanQuery",
     # Activity queries
     "GetDailyActivitiesQuery",
 ]
