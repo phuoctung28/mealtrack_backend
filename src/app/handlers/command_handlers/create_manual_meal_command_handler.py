@@ -154,6 +154,16 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         meal_date = event.target_date if event.target_date else utc_now().date()
         meal_datetime = datetime.combine(meal_date, utc_now().time())
         
+        # Determine source: use explicit source if provided, otherwise infer
+        source = event.source
+        if not source:
+            has_fdc = any(item.fdc_id is not None for item in event.items)
+            has_custom = any(item.custom_nutrition is not None for item in event.items)
+            if has_fdc or has_custom:
+                source = "food_search"
+            else:
+                source = "manual"
+
         meal = Meal(
             meal_id=str(uuid4()),
             user_id=event.user_id,
@@ -169,6 +179,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             nutrition=nutrition,
             ready_at=meal_datetime,
             meal_type=event.meal_type,
+            source=source,
         )
 
         saved_meal = meal_repo.save(meal)

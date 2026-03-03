@@ -241,6 +241,7 @@ async def create_manual_meal(
             dish_name=payload.dish_name,
             meal_type=payload.meal_type,
             target_date=target_date,
+            source=payload.source,
         )
         meal = await event_bus.send(cmd)
 

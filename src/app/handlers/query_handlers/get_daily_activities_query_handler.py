@@ -110,7 +110,8 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
             },
             "quantity": estimated_weight,
             "status": meal.status.value if meal.status else "unknown",
-            "image_url": image_url
+            "image_url": image_url,
+            "source": getattr(meal, "source", None),
         }
 
     def _estimate_meal_weight(self, meal) -> float:
