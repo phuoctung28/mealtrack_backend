@@ -21,7 +21,7 @@ class WeeklyContextResponse(BaseModel):
     daily_protein: float = Field(..., description="Daily protein target (fixed)")
     bmr_floor_active: bool = Field(..., description="True if adjusted target hit BMR floor")
     remaining_days: int = Field(..., description="Days remaining in the week")
-    cheat_slots_remaining: int = Field(..., description="Cheat meal slots remaining this week")
+    cheat_slots_remaining: int = Field(..., description="Cheat meals remaining this week")
 
 
 class CheatTagSuggestion(BaseModel):

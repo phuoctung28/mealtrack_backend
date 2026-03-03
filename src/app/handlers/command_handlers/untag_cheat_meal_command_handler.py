@@ -67,7 +67,7 @@ class UntagCheatMealCommandHandler(EventHandler[UntagCheatMealCommand, Dict[str,
                 meal.cheat_tagged_at = None
                 uow.meals.save(meal)
 
-                # Release cheat slot
+                # Release cheat meal
                 if weekly_budget:
                     weekly_budget.release_cheat_slot()
                     uow.weekly_budgets.update(weekly_budget)

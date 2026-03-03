@@ -60,9 +60,9 @@ class TagCheatMealCommandHandler(EventHandler[TagCheatMealCommand, Dict[str, Any
                 if not weekly_budget:
                     raise ValidationException("Weekly budget not found. Please log a meal first.")
 
-                # Check cheat slots remaining
+                # Check cheat meals remaining
                 if weekly_budget.remaining_cheat_slots <= 0:
-                    raise ValidationException("No cheat meal slots remaining for this week")
+                    raise ValidationException("No cheat meals remaining for this week")
 
                 # Tag the meal
                 now = utc_now()
@@ -70,7 +70,7 @@ class TagCheatMealCommandHandler(EventHandler[TagCheatMealCommand, Dict[str, Any
                 meal.cheat_tagged_at = now
                 uow.meals.save(meal)
 
-                # Use cheat slot
+                # Use cheat meal
                 weekly_budget.use_cheat_slot()
                 uow.weekly_budgets.update(weekly_budget)
 
