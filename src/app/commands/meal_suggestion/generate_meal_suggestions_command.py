@@ -31,6 +31,7 @@ class GenerateMealSuggestionsCommand(Command):
     language: str = "en"  # ISO 639-1 language code (en, vi, es, fr, de, ja, zh)
     servings: int = 1  # Number of servings (1-4), scales ingredient amounts and calories
     cooking_equipment: List[str] = None  # Available cooking equipment
+    cuisine_region: Optional[str] = None  # Preferred cuisine region
 
     def __post_init__(self):
         """Validate command data."""

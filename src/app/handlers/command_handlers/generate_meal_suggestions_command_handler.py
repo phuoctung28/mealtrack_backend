@@ -45,4 +45,5 @@ class GenerateMealSuggestionsCommandHandler(
             language=command.language,
             servings=command.servings,
             cooking_equipment=command.cooking_equipment,
+            cuisine_region=command.cuisine_region,
         )

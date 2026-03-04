@@ -88,5 +88,7 @@ class MealSuggestion:
     recipe_steps: List[RecipeStep]
     prep_time_minutes: int
     confidence_score: float
+    origin_country: Optional[str] = None
+    cuisine_type: Optional[str] = None
     status: SuggestionStatus = SuggestionStatus.PENDING
     generated_at: datetime = field(default_factory=utc_now)

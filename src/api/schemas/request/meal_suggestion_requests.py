@@ -111,6 +111,10 @@ class MealSuggestionRequest(BaseModel):
         default_factory=list,
         description="DEPRECATED: Use session_id instead for automatic exclusion",
     )
+    cuisine_region: Optional[str] = Field(
+        None,
+        description="Preferred cuisine region (Asian, Western, Latin, Mediterranean). If omitted, diverse cuisines used.",
+    )
 
     @field_validator("meal_size", mode="before")
     @classmethod

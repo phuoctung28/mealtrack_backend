@@ -82,6 +82,7 @@ class SuggestionOrchestrationService:
         language: str = "en",
         servings: int = 1,
         cooking_equipment: Optional[List[str]] = None,
+        cuisine_region: Optional[str] = None,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """
         Generate 3 suggestions. If session_id provided, generates NEW meals
@@ -153,6 +154,7 @@ class SuggestionOrchestrationService:
                 dietary_preferences=dietary_preferences,
                 allergies=allergies,
                 cooking_equipment=cooking_equipment or [],
+                cuisine_region=cuisine_region,
             )
             exclude_meal_names = []
             logger.info(f"Creating new session {session.id}")
@@ -446,10 +448,30 @@ class SuggestionOrchestrationService:
                 carbs = recipe_data.get("carbs", 30.0)
                 fat = recipe_data.get("fat", 10.0)
 
+                # Extract origin_country and cuisine_type from AI response
+                origin_country = recipe_data.get("origin_country")
+                cuisine_type = recipe_data.get("cuisine_type", "International")
+
                 logger.info(
                     f"[PHASE-2-SUCCESS]{retry_marker} index={index} | "
                     f"model_purpose={model_purpose} | meal_name={meal_name}"
                 )
+
+                # Validate user's input ingredients are present in recipe
+                if session.ingredients:
+                    recipe_ing_names = " ".join(
+                        ing.get("name", "").lower() for ing in ingredients
+                    )
+                    missing = [
+                        ui for ui in session.ingredients
+                        if ui.lower() not in recipe_ing_names
+                    ]
+                    if missing:
+                        logger.warning(
+                            f"[PHASE-2-INGREDIENT-MISMATCH]{retry_marker} index={index} | "
+                            f"missing={missing} | meal_name={meal_name}"
+                        )
+                        return None  # Reject — will retry with alternate model
 
                 return MealSuggestion(
                     id=f"sug_{uuid.uuid4().hex[:16]}",
@@ -468,6 +490,8 @@ class SuggestionOrchestrationService:
                     recipe_steps=[RecipeStep(**step) for step in recipe_steps],
                     prep_time_minutes=prep_time,
                     confidence_score=0.85,
+                    origin_country=origin_country,
+                    cuisine_type=cuisine_type,
                 )
 
             except asyncio.TimeoutError:

@@ -117,6 +117,8 @@ JSON_SCHEMAS: Dict[str, str] = {
     "suggestion_recipe": '''{
   "name": "Dish Name",
   "description": "Brief description",
+  "cuisine_type": "Asian",
+  "origin_country": "Vietnam",
   "ingredients": [
     {"name": "ingredient1", "amount": 200, "unit": "g"},
     {"name": "ingredient2", "amount": 100, "unit": "g"}
