@@ -21,6 +21,7 @@ from src.api.schemas.response.meal_suggestion_responses import (
 from src.app.commands.meal_suggestion import (
     GenerateMealSuggestionsCommand,
     SaveMealSuggestionCommand,
+    IngredientItem,
 )
 from src.infra.event_bus import EventBus
 
@@ -77,11 +78,6 @@ async def generate_suggestions(
     except Exception as e:
         raise handle_exception(e) from e
 
-
-# REMOVED: /regenerate endpoint is no longer needed.
-# Use POST /generate with session_id parameter to regenerate with automatic exclusion.
-
-
 @router.post("/save", response_model=SaveMealSuggestionResponse)
 async def save_meal_suggestion(
     request: SaveMealSuggestionRequest,
@@ -89,12 +85,10 @@ async def save_meal_suggestion(
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
-    Save a meal suggestion to planned_meals table (daily meal plan).
+    Save a meal suggestion as a regular meal in the meals table.
 
-    This adds the meal to the user's suggested meals for the specified date.
-    Creates MealPlan and MealPlanDay if they don't exist.
-
-    The meal will appear in the user's daily meal plan and can be consumed later.
+    This creates a Meal entity populated with the suggestion's nutrition data
+    for the specified date so that it participates in daily macros and history.
     """
     try:
         command = SaveMealSuggestionCommand(
@@ -108,16 +102,27 @@ async def save_meal_suggestion(
             fat=request.fat,
             description=request.description,
             estimated_cook_time_minutes=request.estimated_cook_time_minutes,
-            ingredients_list=request.ingredients_list,
+            ingredients=[
+                IngredientItem(
+                    name=i.name,
+                    amount=i.amount,
+                    unit=i.unit,
+                    calories=i.calories,
+                    protein=i.protein,
+                    carbs=i.carbs,
+                    fat=i.fat,
+                )
+                for i in request.ingredients
+            ],
             instructions=request.instructions,
             portion_multiplier=request.portion_multiplier,
             meal_date=request.meal_date,
         )
 
-        planned_meal_id = await event_bus.send(command)
+        meal_id = await event_bus.send(command)
 
         return SaveMealSuggestionResponse(
-            planned_meal_id=planned_meal_id,
+            meal_id=meal_id,
             message="Meal suggestion saved successfully",
             meal_date=request.meal_date,
         )

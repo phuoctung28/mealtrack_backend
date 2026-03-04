@@ -63,13 +63,7 @@ class DailyMealSuggestionService:
         # Build unified prompt using prompt builder
         prompt = self.prompt_builder.build_unified_meal_prompt(meal_distribution, user_preferences)
 
-        try:
-            # Use injected generation service or get default
-            if not self._generation_service:
-                # Lazy import to avoid circular dependency
-                from src.infra.services.ai.gemini_meal_generation_service import GeminiMealGenerationService
-                self._generation_service = GeminiMealGenerationService()
-            
+        try:            
             # Call generation service through port
             system_message = "You are a professional nutritionist creating personalized daily meal plans."
             response_data = self._generation_service.generate_meal_plan(

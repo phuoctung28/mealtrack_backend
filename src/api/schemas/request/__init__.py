@@ -8,19 +8,9 @@ from .daily_meal_requests import (
     MealSuggestionFilterRequest,
     MealTypeEnum
 )
-# Ingredient-based meal plan requests
-from .ingredient_based_meal_plan_requests import (
-    IngredientBasedMealPlanRequest
-)
 # Ingredient recognition requests
 from .ingredient_recognition_requests import (
     IngredientRecognitionRequest
-)
-# Meal plan requests
-from .meal_plan_requests import (
-    UserPreferencesSchema,
-    ConversationMessageRequest,
-    ReplaceMealRequest
 )
 # Meal requests
 from .meal_requests import (
@@ -76,14 +66,6 @@ __all__ = [
     'JobTypeEnum',
     'GoalEnum',
     'UnitSystemEnum',
-    
-    # Meal plan
-    'UserPreferencesSchema',
-    'ConversationMessageRequest',
-    'ReplaceMealRequest',
-    
-    # Ingredient-based meal plan
-    'IngredientBasedMealPlanRequest',
     
     # Meal suggestion
     'MealSuggestionRequest',

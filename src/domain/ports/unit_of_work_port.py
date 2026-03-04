@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from typing import TypeVar
 
 from src.domain.ports.chat_repository_port import ChatRepositoryPort
-from src.domain.ports.meal_plan_repository_port import MealPlanRepositoryPort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.meal_suggestion_repository_port import MealSuggestionRepositoryPort
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
@@ -23,7 +22,6 @@ class UnitOfWorkPort(ABC):
     notifications: NotificationRepositoryPort
     meals: MealRepositoryPort
     meal_suggestions: MealSuggestionRepositoryPort
-    meal_plans: MealPlanRepositoryPort
     chats: ChatRepositoryPort
     
     @abstractmethod

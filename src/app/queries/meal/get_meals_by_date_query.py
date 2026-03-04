@@ -12,3 +12,4 @@ class GetMealsByDateQuery(Query):
     """Query for getting meals for a specific date."""
     user_id: str
     meal_date: date
+

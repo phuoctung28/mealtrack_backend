@@ -3,8 +3,6 @@
 import re
 from typing import List, Tuple
 
-from src.domain.model.meal_planning import FitnessGoal, PlanDuration
-
 
 class ConversationParser:
     """Parses user input in conversations."""
@@ -76,20 +74,20 @@ class ConversationParser:
             or "gain" in message_lower
             or "bulk" in message_lower
         ):
-            return FitnessGoal.BULK.value
+            return "bulk"
         elif (
             "loss" in message_lower or "lose" in message_lower or "cut" in message_lower
         ):
-            return FitnessGoal.CUT.value
+            return "cut"
         elif (
             "recomp" in message_lower
             or "recomposition" in message_lower
             or "tone" in message_lower
         ):
-            return FitnessGoal.RECOMP.value
+            return "recomp"
         else:
             # Default to recomp (balanced approach)
-            return FitnessGoal.RECOMP.value
+            return "recomp"
 
     @staticmethod
     def parse_meal_count(message: str) -> Tuple[int, int]:
@@ -120,12 +118,12 @@ class ConversationParser:
         message_lower = message.lower()
 
         if "week" in message_lower or "weekly" in message_lower:
-            return PlanDuration.WEEKLY.value
+            return "weekly"
         elif "day" in message_lower or "daily" in message_lower:
-            return PlanDuration.DAILY.value
+            return "daily"
         else:
             # Default to weekly
-            return PlanDuration.WEEKLY.value
+            return "weekly"
 
     @staticmethod
     def parse_cooking_time(message: str) -> Tuple[int, int]:

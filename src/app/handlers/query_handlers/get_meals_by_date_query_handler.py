@@ -6,7 +6,7 @@ import logging
 from typing import List
 
 from src.app.events.base import EventHandler, handles
-from src.app.queries.meal_plan import GetMealsByDateQuery
+from src.app.queries.meal import GetMealsByDateQuery
 from src.domain.model.meal import Meal
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 

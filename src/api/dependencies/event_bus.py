@@ -24,9 +24,6 @@ from src.app.commands.meal.create_manual_meal_command import CreateManualMealCom
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal.tag_cheat_meal_command import TagCheatMealCommand
 from src.app.commands.meal.untag_cheat_meal_command import UntagCheatMealCommand
-from src.app.commands.meal_plan import (
-    GenerateWeeklyIngredientBasedMealPlanCommand,
-)
 from src.app.commands.meal_suggestion import GenerateMealSuggestionsCommand, SaveMealSuggestionCommand
 from src.app.commands.notification import (
     RegisterFcmTokenCommand,
@@ -60,7 +57,6 @@ from src.app.handlers.command_handlers import (
     CreateManualMealCommandHandler,
     UpdateUserMetricsCommandHandler,
     UploadMealImageImmediatelyHandler,
-    GenerateWeeklyIngredientBasedMealPlanCommandHandler,
     GenerateMealSuggestionsCommandHandler,
     SaveMealSuggestionCommandHandler,
     ParseMealTextHandler,
@@ -108,8 +104,6 @@ from src.app.handlers.query_handlers import (
     GetUserByFirebaseUidQueryHandler,
     GetUserOnboardingStatusQueryHandler,
     GetDailyActivitiesQueryHandler,
-    GetMealPlanQueryHandler,
-    GetMealsFromPlanByDateQueryHandler,
     GetMealsByDateQueryHandler,
     GetMealSuggestionsForProfileQueryHandler,
     GetSingleMealForProfileQueryHandler,
@@ -139,13 +133,9 @@ from src.app.queries.food.search_foods_query import SearchFoodsQuery
 from src.app.queries.meal import (
     GetMealByIdQuery,
     GetDailyMacrosQuery,
-)
-from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
-from src.app.queries.meal_plan import (
-    GetMealsFromPlanByDateQuery,
-    GetMealPlanQuery,
     GetMealsByDateQuery,
 )
+from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.app.queries.tdee import GetUserTdeeQuery, PreviewTdeeQuery
 from src.app.queries.user import GetUserProfileQuery, GetUserMetricsQuery
@@ -385,27 +375,14 @@ def get_configured_event_bus() -> EventBus:
         GetMealPlanningSummaryQuery, GetMealPlanningSummaryQueryHandler()
     )
 
-    # Register meal plan handlers
-    event_bus.register_handler(
-        GenerateWeeklyIngredientBasedMealPlanCommand,
-        GenerateWeeklyIngredientBasedMealPlanCommandHandler(),
-    )
-    event_bus.register_handler(GetMealPlanQuery, GetMealPlanQueryHandler())
-    event_bus.register_handler(
-        GetMealsFromPlanByDateQuery, GetMealsFromPlanByDateQueryHandler()
-    )
-    event_bus.register_handler(
-        GetMealsByDateQuery, GetMealsByDateQueryHandler()
-    )
-    
-    # Register meal suggestion handlers
+    # Register daily meal and meal suggestion handlers
     event_bus.register_handler(
         GenerateMealSuggestionsCommand,
         GenerateMealSuggestionsCommandHandler(suggestion_service),
     )
     event_bus.register_handler(
         SaveMealSuggestionCommand,
-        SaveMealSuggestionCommandHandler(),
+        SaveMealSuggestionCommandHandler(cache_service=cache_service),
     )
 
     # Register user handlers

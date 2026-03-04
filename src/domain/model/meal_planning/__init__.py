@@ -17,14 +17,10 @@ from .meal_generation_response import (
     NutritionSummary
 )
 from .meal_plan import (
-    MealPlan,
     PlannedMeal,
-    DayPlan,
-    UserPreferences,
     DietaryPreference,
     FitnessGoal,
     MealType,
-    PlanDuration
 )
 from .meal_suggestion import (
     MealSuggestion,
@@ -38,14 +34,10 @@ from .meal_suggestion import (
 from .suggestion_session import SuggestionSession
 
 __all__ = [
-    'MealPlan',
     'PlannedMeal',
-    'DayPlan',
-    'UserPreferences',
     'DietaryPreference',
     'FitnessGoal',
     'MealType',
-    'PlanDuration',
     'MealGenerationRequest',
     'MealGenerationType',
     'MealGenerationContext',

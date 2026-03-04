@@ -7,11 +7,6 @@ from .daily_meal import (
     GenerateSingleMealCommand,
 )
 
-# Import from meal_plan module
-from .meal_plan import (
-    GenerateWeeklyIngredientBasedMealPlanCommand,
-)
-
 # Import from meal_suggestion module
 from .meal_suggestion import GenerateMealSuggestionsCommand
 # TDEE commands removed - not used in API
@@ -26,8 +21,6 @@ __all__ = [
     "GenerateSingleMealCommand",
     # User commands
     "SaveUserOnboardingCommand",
-    # Meal plan commands
-    "GenerateWeeklyIngredientBasedMealPlanCommand",
     # Meal suggestion commands
     "GenerateMealSuggestionsCommand",
 ]

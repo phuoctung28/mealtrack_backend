@@ -27,17 +27,6 @@ from .ingredient_recognition_responses import (
 )
 # Ingredient responses
 # Macros responses
-# Meal plan responses
-from .meal_plan_responses import (
-    PlannedMealSchema,
-    DayPlanSchema,
-    MealPlanSummaryResponse,
-    ErrorResponse,
-    NutritionSummarySchema,
-    UserPreferenceSummarySchema,
-    MealsByDateResponse,
-    MealPlanGenerationStatusResponse
-)
 # Meal responses
 from .meal_responses import (
     SimpleMealResponse,
@@ -83,13 +72,6 @@ from .user_responses import (
     UserUpdateResponse,
     UserMetricsResponse
 )
-# Weekly meal plan responses
-from .weekly_meal_plan_responses import (
-    WeeklyMealPlanResponse,
-    WeeklyMealResponse,
-    NutritionInfo,
-    UserPreferencesResponse
-)
 
 __all__ = [
     # Daily meal
@@ -123,26 +105,10 @@ __all__ = [
     'TdeeErrorResponse',
     'MacroTargetsResponse',
     
-    # Meal plan
-    'PlannedMealSchema',
-    'DayPlanSchema',
-    'MealPlanSummaryResponse',
-    'ErrorResponse',
-    'NutritionSummarySchema',
-    'UserPreferenceSummarySchema',
-    'MealsByDateResponse',
-    'MealPlanGenerationStatusResponse',
-    
     # Meal suggestion
     'MealSuggestionItem',
     'MealSuggestionsResponse',
     'MealSuggestionMacrosSchema',
-
-    # Weekly meal plan
-    'WeeklyMealPlanResponse',
-    'WeeklyMealResponse',
-    'NutritionInfo',
-    'UserPreferencesResponse',
 
     # Onboarding
     'OnboardingFieldResponse',

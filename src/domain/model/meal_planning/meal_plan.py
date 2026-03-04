@@ -1,28 +1,7 @@
 import uuid
-from dataclasses import dataclass, field
-from datetime import date
+from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Dict
-
-from src.domain.utils.timezone_utils import utc_now
-
-
-class DietaryPreference(str, Enum):
-    VEGAN = "vegan"
-    VEGETARIAN = "vegetarian"
-    PESCATARIAN = "pescatarian"
-    GLUTEN_FREE = "gluten_free"
-    KETO = "keto"
-    PALEO = "paleo"
-    LOW_CARB = "low_carb"
-    DAIRY_FREE = "dairy_free"
-    NONE = "none"
-
-
-class FitnessGoal(str, Enum):
-    CUT = "cut"
-    BULK = "bulk"
-    RECOMP = "recomp"
 
 
 class MealType(str, Enum):
@@ -30,40 +9,6 @@ class MealType(str, Enum):
     LUNCH = "lunch"
     DINNER = "dinner"
     SNACK = "snack"
-
-
-class PlanDuration(str, Enum):
-    DAILY = "daily"
-    WEEKLY = "weekly"
-
-
-@dataclass
-class UserPreferences:
-    """User preferences for meal planning"""
-    dietary_preferences: List[DietaryPreference]
-    allergies: List[str]
-    fitness_goal: FitnessGoal
-    meals_per_day: int
-    snacks_per_day: int
-    cooking_time_weekday: int  # minutes
-    cooking_time_weekend: int  # minutes
-    favorite_cuisines: List[str]
-    disliked_ingredients: List[str]
-    plan_duration: PlanDuration = PlanDuration.WEEKLY
-    
-    def to_dict(self) -> Dict:
-        return {
-            "dietary_preferences": [pref.value for pref in self.dietary_preferences],
-            "allergies": self.allergies,
-            "fitness_goal": self.fitness_goal.value,
-            "meals_per_day": self.meals_per_day,
-            "snacks_per_day": self.snacks_per_day,
-            "cooking_time_weekday": self.cooking_time_weekday,
-            "cooking_time_weekend": self.cooking_time_weekend,
-            "favorite_cuisines": self.favorite_cuisines,
-            "disliked_ingredients": self.disliked_ingredients,
-            "plan_duration": self.plan_duration.value
-        }
 
 
 @dataclass
@@ -133,64 +78,19 @@ class PlannedMeal:
         }
 
 
-@dataclass
-class DayPlan:
-    """Represents meals for a single day"""
-    date: date
-    meals: List[PlannedMeal] = field(default_factory=list)
-
-    def get_meals_by_type(self, meal_type: MealType) -> List[PlannedMeal]:
-        return [meal for meal in self.meals if meal.meal_type == meal_type]
-    
-    def get_total_nutrition(self) -> Dict[str, float]:
-        return {
-            "calories": sum(meal.calories for meal in self.meals),
-            "protein": sum(meal.protein for meal in self.meals),
-            "carbs": sum(meal.carbs for meal in self.meals),
-            "fat": sum(meal.fat for meal in self.meals)
-        }
-    
-    def to_dict(self) -> Dict:
-        return {
-            "date": self.date.isoformat(),
-            "meals": [meal.to_dict() for meal in self.meals],
-            "total_nutrition": self.get_total_nutrition()
-        }
+class DietaryPreference(str, Enum):
+    VEGAN = "vegan"
+    VEGETARIAN = "vegetarian"
+    PESCATARIAN = "pescatarian"
+    GLUTEN_FREE = "gluten_free"
+    KETO = "keto"
+    PALEO = "paleo"
+    LOW_CARB = "low_carb"
+    DAIRY_FREE = "dairy_free"
+    NONE = "none"
 
 
-class MealPlan:
-    """Represents a complete meal plan (daily or weekly)"""
-    
-    def __init__(self, user_id: str, preferences: UserPreferences, days: List[DayPlan]):
-        self.plan_id = str(uuid.uuid4())
-        self.user_id = user_id
-        self.preferences = preferences
-        self.days = days
-        self.created_at = utc_now()
-        self.updated_at = utc_now()
-
-    def get_day(self, date: date) -> Optional[DayPlan]:
-        for day in self.days:
-            if day.date == date:
-                return day
-        return None
-
-    def replace_meal(self, date: date, meal_id: str, new_meal: PlannedMeal) -> bool:
-        day = self.get_day(date)
-        if day:
-            for i, meal in enumerate(day.meals):
-                if meal.meal_id == meal_id:
-                    day.meals[i] = new_meal
-                    self.updated_at = utc_now()
-                    return True
-        return False
-    
-    def to_dict(self) -> Dict:
-        return {
-            "plan_id": self.plan_id,
-            "user_id": self.user_id,
-            "preferences": self.preferences.to_dict(),
-            "days": [day.to_dict() for day in self.days],
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat()
-        }
+class FitnessGoal(str, Enum):
+    CUT = "cut"
+    BULK = "bulk"
+    RECOMP = "recomp"

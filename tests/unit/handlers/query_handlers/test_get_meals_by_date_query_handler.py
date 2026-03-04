@@ -10,7 +10,7 @@ from unittest.mock import Mock
 import pytest
 
 from src.app.handlers.query_handlers.get_meals_by_date_query_handler import GetMealsByDateQueryHandler
-from src.app.queries.meal_plan import GetMealsByDateQuery
+from src.app.queries.meal import GetMealsByDateQuery
 from src.domain.model import Meal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 
 
