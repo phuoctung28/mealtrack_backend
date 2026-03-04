@@ -109,7 +109,8 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     format="jpeg" if "jpeg" in command.content_type else "png",
                     size_bytes=len(command.file_contents),
                     url=image_url
-                )
+                ),
+                source="scanner",
             )
             
             # Save initial meal record using UoW

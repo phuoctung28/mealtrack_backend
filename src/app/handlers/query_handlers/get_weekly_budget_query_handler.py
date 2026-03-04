@@ -54,7 +54,8 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                 # Calculate remaining days
                 today = target_date
                 week_end = week_start + timedelta(days=6)
-                remaining_days = max(0, (week_end - today).days + 1)
+                # Exclude today (already in progress) — Mon=6, Tue=5, ..., Sun=0
+                remaining_days = max(0, (week_end - today).days)
 
                 # Calculate adjusted daily targets
                 adjusted = weekly_budget.calculate_adjusted_daily(
@@ -138,7 +139,7 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
             target_carbs = 1400  # 200 * 7
             target_fat = 490  # 70 * 7
 
-        # Get cheat slots based on fitness goal
+        # Get cheat meals based on fitness goal
         cheat_slots = WeeklyBudgetConstants.CHEAT_SLOTS_BY_GOAL.get(
             fitness_goal.value if hasattr(fitness_goal, 'value') else fitness_goal,
             2  # Default to CUT = 2

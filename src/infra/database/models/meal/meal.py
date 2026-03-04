@@ -33,6 +33,9 @@ class Meal(Base, TimestampMixin):
     # Cheat meal tracking
     is_cheat_meal = Column(Boolean, default=False, nullable=False)  # Whether this is a cheat meal
     cheat_tagged_at = Column(DateTime, nullable=True)  # When the meal was tagged as cheat
+
+    # Source tracking (scanner, prompt, food_search, manual)
+    source = Column(String(20), nullable=True)
     
     # Relationships
     image_id = Column(String(36), ForeignKey("mealimage.image_id"), nullable=False)
@@ -75,7 +78,8 @@ class Meal(Base, TimestampMixin):
             is_manually_edited=self.is_manually_edited,
             translations=translations_dict,
             is_cheat_meal=self.is_cheat_meal,
-            cheat_tagged_at=self.cheat_tagged_at
+            cheat_tagged_at=self.cheat_tagged_at,
+            source=self.source
         )
     
     @classmethod
@@ -105,7 +109,8 @@ class Meal(Base, TimestampMixin):
             edit_count=getattr(domain_model, "edit_count", 0),
             is_manually_edited=getattr(domain_model, "is_manually_edited", False),
             is_cheat_meal=getattr(domain_model, "is_cheat_meal", False),
-            cheat_tagged_at=getattr(domain_model, "cheat_tagged_at", None)
+            cheat_tagged_at=getattr(domain_model, "cheat_tagged_at", None),
+            source=getattr(domain_model, "source", None)
         )
 
         # Add image reference - convert UUID to string

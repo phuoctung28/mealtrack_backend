@@ -48,6 +48,8 @@ class Meal:
     # Cheat meal tracking
     is_cheat_meal: bool = False
     cheat_tagged_at: Optional[datetime] = None
+    # Source tracking (scanner, prompt, food_search, manual)
+    source: Optional[str] = None
     
     def __post_init__(self):
         """Validate invariants."""
@@ -102,9 +104,10 @@ class Meal:
             edit_count=self.edit_count,
             is_manually_edited=self.is_manually_edited,
             meal_type=self.meal_type,
-            translations=self.translations
+            translations=self.translations,
+            source=self.source
         )
-    
+
     def mark_enriching(self, raw_gpt_json: str) -> 'Meal':
         """Transition to ENRICHING state with GPT response."""
         return Meal(
@@ -123,9 +126,10 @@ class Meal:
             edit_count=self.edit_count,
             is_manually_edited=self.is_manually_edited,
             meal_type=self.meal_type,
-            translations=self.translations
+            translations=self.translations,
+            source=self.source
         )
-    
+
     def mark_ready(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
         """Transition to READY state with final nutrition data."""
         return Meal(
@@ -144,9 +148,10 @@ class Meal:
             edit_count=self.edit_count,
             is_manually_edited=self.is_manually_edited,
             meal_type=self.meal_type,
-            translations=self.translations
+            translations=self.translations,
+            source=self.source
         )
-    
+
     def mark_failed(self, error_message: str) -> 'Meal':
         """Transition to FAILED state with error message."""
         return Meal(
@@ -165,9 +170,10 @@ class Meal:
             edit_count=self.edit_count,
             is_manually_edited=self.is_manually_edited,
             meal_type=self.meal_type,
-            translations=self.translations
+            translations=self.translations,
+            source=self.source
         )
-    
+
     def mark_edited(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
         """Mark meal as edited with updated nutrition."""
         return Meal(
@@ -186,7 +192,8 @@ class Meal:
             edit_count=self.edit_count + 1,
             is_manually_edited=True,
             meal_type=self.meal_type,
-            translations=self.translations
+            translations=self.translations,
+            source=self.source
         )
 
     def mark_inactive(self) -> 'Meal':
@@ -207,7 +214,8 @@ class Meal:
             edit_count=self.edit_count,
             is_manually_edited=self.is_manually_edited,
             meal_type=self.meal_type,
-            translations=self.translations
+            translations=self.translations,
+            source=self.source
         )
     
     def to_dict(self) -> dict:

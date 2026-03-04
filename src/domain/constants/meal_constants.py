@@ -196,7 +196,7 @@ class ConversationConstants:
 class WeeklyBudgetConstants:
     """Constants for weekly macro budget feature."""
 
-    # Cheat meal slots per fitness goal
+    # Cheat meals per fitness goal
     # MAINTENANCE goal does not exist in the app
     CHEAT_SLOTS_BY_GOAL = {
         "cut": 2,
