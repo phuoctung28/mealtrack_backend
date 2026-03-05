@@ -120,9 +120,13 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
             if fatsecret_results and len(fatsecret_results) > 0:
                 fs_food = fatsecret_results[0]
                 per_100g = parse_fatsecret_nutrition(fs_food)
+                allowed_units = fs_food.get("allowed_units")
                 if per_100g:
-                    scaled = scale_per_100g_nutrition(per_100g, quantity, unit)
+                    scaled = scale_per_100g_nutrition(per_100g, quantity, unit, allowed_units=allowed_units)
                     item.update(scaled)
+                # Pass allowed_units for frontend display
+                if allowed_units:
+                    item["allowed_units"] = allowed_units
                 item["data_source"] = "fatsecret"
                 return item
         except Exception as e:

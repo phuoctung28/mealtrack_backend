@@ -245,13 +245,13 @@ class TestUpdateFoodItemStrategy:
         # Act
         await strategy.apply(food_items_dict, change)
         
-        # Assert - Should use scaling fallback
+        # Assert - Should use scaling fallback with unit conversion
         updated_item = food_items_dict["item1"]
         assert updated_item.quantity == 150.0
         assert updated_item.unit == "oz"
-        # Scaled by 1.5x (150/100)
-        assert updated_item.calories == 300.0
-        assert updated_item.macros.protein == 45.0
+        # 150oz = 4252.5g, original 100g → scale = 42.525x
+        assert updated_item.calories == 200.0 * (150.0 * 28.35 / 100.0)
+        assert updated_item.macros.protein == 30.0 * (150.0 * 28.35 / 100.0)
 
     @pytest.mark.asyncio
     async def test_update_quantity_only(self):

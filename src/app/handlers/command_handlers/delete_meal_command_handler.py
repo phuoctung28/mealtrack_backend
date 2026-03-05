@@ -130,5 +130,12 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
         if not self.cache_service or not meal:
             return
         created_at = meal.created_at or utc_now()
-        cache_key, _ = CacheKeys.daily_macros(meal.user_id, created_at.date())
+        meal_date = created_at.date()
+        cache_key, _ = CacheKeys.daily_macros(meal.user_id, meal_date)
         await self.cache_service.invalidate(cache_key)
+
+        # Invalidate weekly budget cache so wallet updates after meal deletion
+        from datetime import timedelta
+        week_start = meal_date - timedelta(days=meal_date.weekday())
+        weekly_key, _ = CacheKeys.weekly_budget(meal.user_id, week_start)
+        await self.cache_service.invalidate(weekly_key)

@@ -11,6 +11,36 @@ USDA_NUTRIENT_MAPPING = {
     1004: "fat",       # Total lipid (fat) (g)
 }
 
+# Fallback unit categories for custom/manual ingredients
+FALLBACK_UNIT_CATEGORIES = {
+    "solid": [
+        {"unit": "g", "gram_weight": 1.0},
+        {"unit": "kg", "gram_weight": 1000.0},
+        {"unit": "oz", "gram_weight": 28.35},
+        {"unit": "lb", "gram_weight": 453.6},
+    ],
+    "liquid": [
+        {"unit": "ml", "gram_weight": 1.0},
+        {"unit": "l", "gram_weight": 1000.0},
+        {"unit": "cup", "gram_weight": 240.0},
+        {"unit": "tbsp", "gram_weight": 15.0},
+        {"unit": "tsp", "gram_weight": 5.0},
+    ],
+    "countable": [
+        {"unit": "piece", "gram_weight": 1.0},
+        {"unit": "g", "gram_weight": 1.0},
+        {"unit": "oz", "gram_weight": 28.35},
+    ],
+    "powder": [
+        {"unit": "g", "gram_weight": 1.0},
+        {"unit": "tbsp", "gram_weight": 8.0},
+        {"unit": "tsp", "gram_weight": 3.0},
+        {"unit": "cup", "gram_weight": 120.0},
+    ],
+}
+
+DEFAULT_ALLOWED_UNITS = [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
+
 
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 
@@ -34,6 +64,7 @@ class FoodMappingService(FoodMappingServicePort):
                     "carbs": item.get("carbs_100g"),
                 },
                 "source": "fatsecret",
+                "allowed_units": item.get("allowed_units") or DEFAULT_ALLOWED_UNITS,
                 # Include custom nutrition for manual meal creation
                 "custom_nutrition": {
                     "calories_per_100g": item.get("calories_100g") or 0,
@@ -60,10 +91,39 @@ class FoodMappingService(FoodMappingServicePort):
                 "fat": nutrients.get("fat"),
                 "carbs": nutrients.get("carbs"),
             },
+            "allowed_units": self._parse_usda_portions(item.get("foodPortions")) if item.get("foodPortions") else DEFAULT_ALLOWED_UNITS,
         }
         if "source" in item:
             result["source"] = item["source"]
         return result
+
+    def _parse_usda_portions(self, portions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Parse USDA foodPortions into allowed_units format."""
+        if not portions:
+            return DEFAULT_ALLOWED_UNITS
+
+        units = []
+        for portion in portions:
+            measure = portion.get("measureUnit", {})
+            unit_name = measure.get("name") or measure.get("abbreviation") or "portion"
+            gram_weight = portion.get("gramWeight")
+            description = portion.get("portionDescription", "")
+
+            if gram_weight and float(gram_weight) > 0:
+                units.append({
+                    "unit": unit_name,
+                    "gram_weight": float(gram_weight),
+                    "description": description,
+                })
+
+        if not units:
+            return DEFAULT_ALLOWED_UNITS
+
+        # Ensure "g" is always present
+        if not any(u["unit"].lower() == "g" for u in units):
+            units.insert(0, {"unit": "g", "gram_weight": 1.0, "description": "1 g"})
+
+        return units
 
     def _extract_macros(self, nutrients: List[Dict[str, Any]]) -> Dict[str, float]:
         values: Dict[str, float] = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
@@ -99,4 +159,5 @@ class FoodMappingService(FoodMappingServicePort):
                 "fat": macros.get("fat"),
             },
             "portions": details.get("foodPortions") or [],
+            "allowed_units": self._parse_usda_portions(details.get("foodPortions")) if details.get("foodPortions") else DEFAULT_ALLOWED_UNITS,
         }
