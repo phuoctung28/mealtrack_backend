@@ -29,7 +29,10 @@ class FoodItem(Base, PrimaryEntityMixin):
     fat = Column(Float, default=0, nullable=False)
     
     # Foreign keys
-    nutrition_id = Column(Integer, ForeignKey("nutrition.id"), nullable=False)
+    nutrition_id = Column(Integer, ForeignKey("nutrition.id"), nullable=True)  # Nullable for orphaned items
+
+    # Soft delete
+    is_deleted = Column(Boolean, default=False, nullable=False, server_default='false')
     
     # Relationships
     nutrition = relationship("Nutrition", back_populates="food_items")

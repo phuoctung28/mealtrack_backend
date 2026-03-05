@@ -149,7 +149,7 @@ class FatSecretService:
             return None
 
     async def search_foods(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
-        """Search foods by query string."""
+        """Search foods by query string with nutrition data."""
         try:
             params = {
                 "method": "foods.search",
@@ -167,10 +167,54 @@ class FatSecretService:
                 return []
             if isinstance(foods, dict):
                 foods = [foods]
-            return [self._map_search_result(food) for food in foods]
+
+            # Process each food with nutrition data
+            processed = []
+            for food in foods:
+                food_id = food.get("food_id")
+                mapped = self._map_search_result(food)
+
+                # Fetch detailed nutrition if we have a food_id
+                if food_id:
+                    try:
+                        detail_params = {"method": "food.get", "food_id": food_id, "format": "json"}
+                        details = await self._api_request("GET", "", detail_params)
+                        if details:
+                            # Merge nutrition data
+                            nutrition = self._extract_nutrition_from_details(details)
+                            mapped.update(nrition)
+                    except Exception:
+                        pass  # Use basic mapped data if details fail
+
+                processed.append(mapped)
+
+            return processed
         except Exception as e:
             logger.warning(f"FatSecret search error for query '{query}': {e}")
             return []
+
+    def _extract_nutrition_from_details(self, food: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract per-100g nutrition from FatSecret food details."""
+        servings = food.get("servings", {}).get("serving", [])
+        serving = None
+        if isinstance(servings, list) and servings:
+            serving = servings[0]
+        elif isinstance(servings, dict):
+            serving = servings
+
+        if not isinstance(serving, dict):
+            return {}
+
+        # Get metric serving amount for per-100g calculation
+        metric_amount = self._safe_float(serving.get("metric_serving_amount")) or 100
+
+        return {
+            "calories_100g": self._calc_per_100g(serving.get("calories"), metric_amount),
+            "protein_100g": self._calc_per_100g(serving.get("protein"), metric_amount),
+            "carbs_100g": self._calc_per_100g(serving.get("carbohydrate"), metric_amount),
+            "fat_100g": self._calc_per_100g(serving.get("fat"), metric_amount),
+            "serving_description": serving.get("serving_description"),
+        }
 
     def _map_product(self, food: Dict[str, Any], barcode: str) -> Dict[str, Any]:
         """Map FatSecret response to clean dict."""
@@ -224,6 +268,7 @@ class FatSecretService:
             "brand": food.get("brand_name"),
             "food_description": food.get("food_description", ""),
             "source": "fatsecret",
+            "food_id": food.get("food_id"),  # FatSecret's internal ID for getting details
         }
 
     def _safe_float(self, value: Any) -> Optional[float]:

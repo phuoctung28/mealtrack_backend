@@ -27,18 +27,15 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
 
     def __init__(self,
                  uow: Optional[UnitOfWorkPort] = None,
-                 food_service=None,
                  pinecone_service=None,
                  cache_service: Optional[CacheService] = None):
         self.uow = uow
-        self.food_service = food_service
         self.pinecone_service = pinecone_service
         self.cache_service = cache_service
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
         self.uow = kwargs.get('uow', self.uow)
-        self.food_service = kwargs.get('food_service', self.food_service)
         self.pinecone_service = kwargs.get('pinecone_service', self.pinecone_service)
         self.cache_service = kwargs.get('cache_service', self.cache_service)
 
@@ -132,11 +129,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         # Initialize nutrition service and create strategies
         nutrition_service = NutritionCalculationService(
             pinecone_service=self.pinecone_service or get_pinecone_service(),
-            usda_service=self.food_service
         )
         strategies = FoodItemChangeStrategyFactory.create_strategies(
             nutrition_service,
-            self.food_service
         )
 
         # Apply each change using the appropriate strategy
@@ -148,50 +143,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 logger.warning(f"Unknown action: {change.action}")
 
         return list(food_items_dict.values())
-
-    async def _get_usda_food_nutrition(self, fdc_id: int, quantity: float):
-        """Get nutrition data from USDA service."""
-        if not self.food_service:
-            raise RuntimeError("Food service not configured")
-
-        # Get food details from USDA
-        food_data = await self.food_service.get_food_details(fdc_id)
-
-        # Extract nutrition data (per 100g basis)
-        nutrients = food_data.get('foodNutrients', [])
-
-        # Map USDA nutrient IDs to our fields
-        nutrient_map = {
-            1008: 'calories',  # Energy (kcal)
-            1003: 'protein',   # Protein
-            1005: 'carbs',     # Carbohydrate, by difference
-            1004: 'fat'        # Total lipid (fat)
-        }
-
-        nutrition_values = {}
-        for nutrient in nutrients:
-            nutrient_id = nutrient.get('nutrient', {}).get('id')
-            if nutrient_id in nutrient_map:
-                nutrition_values[nutrient_map[nutrient_id]] = nutrient.get('amount', 0)
-
-        # Calculate nutrition for the specified quantity
-        scale_factor = quantity / 100.0  # USDA data is per 100g
-
-        return FoodItem(
-            id=str(uuid.uuid4()),  # Generate new ID for USDA food
-            name=food_data.get('description', f"USDA Food {fdc_id}"),
-            quantity=quantity,
-            unit="g",
-            calories=nutrition_values.get('calories', 0) * scale_factor,
-            macros=Macros(
-                protein=nutrition_values.get('protein', 0) * scale_factor,
-                carbs=nutrition_values.get('carbs', 0) * scale_factor,
-                fat=nutrition_values.get('fat', 0) * scale_factor,
-            ),
-            confidence=1.0,
-            fdc_id=fdc_id,
-            is_custom=False
-        )
 
     def _calculate_total_nutrition(self, food_items):
         """Calculate total nutrition from food items using nutrition service."""

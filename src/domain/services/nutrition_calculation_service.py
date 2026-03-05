@@ -87,16 +87,14 @@ class NutritionCalculationService:
     fallback mechanisms for robustness.
     """
 
-    def __init__(self, pinecone_service=None, usda_service=None):
+    def __init__(self, pinecone_service=None):
         """
         Initialize with optional services.
 
         Args:
             pinecone_service: Pinecone vector search service for ingredient lookup
-            usda_service: USDA FoodData Central API service
         """
         self.pinecone_service = pinecone_service
-        self.usda_service = usda_service
 
     def get_nutrition_for_ingredient(
         self,
@@ -109,30 +107,19 @@ class NutritionCalculationService:
         Get nutrition data for an ingredient from any available source.
 
         Priority:
-        1. USDA FoodData Central (if fdc_id provided)
-        2. Pinecone vector search (semantic matching)
-        3. None if no source available
+        1. Pinecone vector search (semantic matching)
+        2. None if no source available
 
         Args:
             name: Ingredient name
             quantity: Amount of ingredient
             unit: Unit of measurement
-            fdc_id: Optional USDA FDC ID for direct lookup
+            fdc_id: Optional food ID (kept for backward compat)
 
         Returns:
             ScaledNutritionResult or None if not found
         """
-        # Priority 1: USDA direct lookup if FDC ID provided
-        if fdc_id and self.usda_service:
-            try:
-                result = self._get_from_usda(fdc_id, quantity, unit)
-                if result:
-                    logger.info(f"Got nutrition for '{name}' from USDA (fdc_id={fdc_id})")
-                    return result
-            except Exception as e:
-                logger.warning(f"USDA lookup failed for fdc_id={fdc_id}: {e}")
-
-        # Priority 2: Pinecone semantic search
+        # Priority 1: Pinecone semantic search
         if self.pinecone_service:
             try:
                 result = self._get_from_pinecone(name, quantity, unit)
@@ -171,20 +158,6 @@ class NutritionCalculationService:
 
         return None
 
-    def _get_from_usda(
-        self,
-        fdc_id: int,
-        quantity: float,
-        unit: str
-    ) -> Optional[ScaledNutritionResult]:
-        """Get nutrition from USDA service."""
-        if not self.usda_service:
-            return None
-
-        # USDA service would need to be implemented
-        # For now, return None as placeholder
-        logger.debug(f"USDA service not yet fully implemented for fdc_id={fdc_id}")
-        return None
 
     def calculate_meal_total(self, food_items: List[FoodItem]) -> Nutrition:
         """

@@ -17,9 +17,35 @@ from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 
 class FoodMappingService(FoodMappingServicePort):
     def map_search_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        # Extract nutrients from search results
+        # Handle FatSecret results with embedded nutrition
+        if item.get("source") == "fatsecret":
+            return {
+                "fdc_id": None,  # FatSecret doesn't use FDC IDs
+                "food_id": item.get("food_id"),
+                "name": item.get("description"),
+                "brand": item.get("brand"),
+                "data_type": "fatsecret",
+                "serving_size": item.get("serving_description"),
+                "serving_unit": "g",
+                "calories": item.get("calories_100g"),
+                "nutrients": {
+                    "protein": item.get("protein_100g"),
+                    "fat": item.get("fat_100g"),
+                    "carbs": item.get("carbs_100g"),
+                },
+                "source": "fatsecret",
+                # Include custom nutrition for manual meal creation
+                "custom_nutrition": {
+                    "calories_per_100g": item.get("calories_100g") or 0,
+                    "protein_per_100g": item.get("protein_100g") or 0,
+                    "carbs_per_100g": item.get("carbs_100g") or 0,
+                    "fat_per_100g": item.get("fat_100g") or 0,
+                } if item.get("calories_100g") else None,
+            }
+
+        # USDA results
         nutrients = self._extract_macros(item.get("foodNutrients") or [])
-        
+
         result = {
             "fdc_id": item.get("fdcId"),
             "name": item.get("description"),

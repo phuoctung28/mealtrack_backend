@@ -163,8 +163,8 @@ def get_food_search_event_bus() -> EventBus:
         return _food_search_event_bus
 
     from src.api.base_dependencies import (
-        get_food_data_service,
         get_food_cache_service,
+        get_food_data_service,
         get_food_mapping_service,
         get_open_food_facts_service_instance,
         get_fat_secret_service_instance,
@@ -174,8 +174,8 @@ def get_food_search_event_bus() -> EventBus:
     event_bus = PyMediatorEventBus()
 
     # Only register food-related handlers (lightweight)
-    food_data_service = get_food_data_service()
     food_cache_service = get_food_cache_service()
+    food_data_service = get_food_data_service()
     food_mapping_service = get_food_mapping_service()
     open_food_facts_service = get_open_food_facts_service_instance()
     fat_secret_service = get_fat_secret_service_instance()
@@ -184,7 +184,7 @@ def get_food_search_event_bus() -> EventBus:
     event_bus.register_handler(
         SearchFoodsQuery,
         SearchFoodsQueryHandler(
-            food_data_service, food_cache_service, food_mapping_service,
+            food_cache_service, food_mapping_service,
             fat_secret_service=fat_secret_service
         ),
     )
@@ -230,8 +230,8 @@ def get_configured_event_bus() -> EventBus:
         get_image_store,
         get_vision_service,
         get_gpt_parser,
-        get_food_data_service,
         get_food_cache_service,
+        get_food_data_service,
         get_food_mapping_service,
         get_fat_secret_service_instance,
         get_cache_service,
@@ -243,8 +243,8 @@ def get_configured_event_bus() -> EventBus:
     image_store = get_image_store()
     vision_service = get_vision_service()
     gpt_parser = get_gpt_parser()
-    food_data_service = get_food_data_service()
     food_cache_service = get_food_cache_service()
+    food_data_service = get_food_data_service()
     food_mapping_service = get_food_mapping_service()
     fat_secret_service = get_fat_secret_service_instance()
     cache_service = get_cache_service()
@@ -271,7 +271,6 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         EditMealCommand,
         EditMealCommandHandler(
-            food_service=food_data_service,
             cache_service=cache_service,
         ),
     )
@@ -290,12 +289,9 @@ def get_configured_event_bus() -> EventBus:
         ),
     )
 
-    # Register manual meal creation command handler
     event_bus.register_handler(
         CreateManualMealCommand,
         CreateManualMealCommandHandler(
-            food_data_service=food_data_service,
-            mapping_service=food_mapping_service,
             cache_service=cache_service,
         ),
     )
@@ -324,7 +320,7 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         SearchFoodsQuery,
         SearchFoodsQueryHandler(
-            food_data_service, food_cache_service, food_mapping_service,
+            food_cache_service, food_mapping_service,
             fat_secret_service=fat_secret_service
         ),
     )
@@ -375,7 +371,11 @@ def get_configured_event_bus() -> EventBus:
         GetMealPlanningSummaryQuery, GetMealPlanningSummaryQueryHandler()
     )
 
-    # Register daily meal and meal suggestion handlers
+    event_bus.register_handler(
+        GetMealsByDateQuery, GetMealsByDateQueryHandler()
+    )
+
+    # Register meal suggestion handlers
     event_bus.register_handler(
         GenerateMealSuggestionsCommand,
         GenerateMealSuggestionsCommandHandler(suggestion_service),

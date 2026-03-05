@@ -313,11 +313,13 @@ async def get_meal(
 
 @router.delete("/{meal_id}")
 async def delete_meal(
-    meal_id: str, event_bus: EventBus = Depends(get_configured_event_bus)
+    meal_id: str,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """Mark a meal as INACTIVE (soft delete)."""
     try:
-        command = DeleteMealCommand(meal_id=meal_id)
+        command = DeleteMealCommand(meal_id=meal_id, user_id=user_id)
         result = await event_bus.send(command)
         return result
     except Exception as e:

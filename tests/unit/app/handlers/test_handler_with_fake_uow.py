@@ -49,9 +49,9 @@ class TestDeleteMealWithFakeUoW:
         
         # Save to fake repository
         fake_uow.meals.save(meal)
-        
+
         # Act
-        command = DeleteMealCommand(meal_id=meal.meal_id)
+        command = DeleteMealCommand(meal_id=meal.meal_id, user_id=user_id)
         result = await handler.handle(command)
         
         # Assert

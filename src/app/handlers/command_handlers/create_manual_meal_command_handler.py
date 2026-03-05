@@ -1,5 +1,6 @@
 """
-Command handler for creating manual meals from selected USDA foods.
+Command handler for creating manual meals from selected foods with nutrition data.
+All items must provide their own nutrition (via custom_nutrition).
 """
 import uuid
 from datetime import datetime
@@ -20,94 +21,34 @@ from src.domain.services.nutrition_calculation_service import convert_quantity_t
 
 
 class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any]):
-    def __init__(self, food_data_service, mapping_service, cache_service: Optional[CacheService] = None, meal_repository: Optional[MealRepositoryPort] = None):
+    def __init__(self, cache_service: Optional[CacheService] = None, meal_repository: Optional[MealRepositoryPort] = None):
         self.meal_repository = meal_repository
-        self.food_data_service = food_data_service
-        self.mapping_service = mapping_service
         self.cache_service = cache_service
 
     async def handle(self, event: CreateManualMealCommand):
-        from collections import defaultdict
         from src.infra.database.uow import UnitOfWork
 
         # Use provided meal_repository or create UnitOfWork with context manager
         if self.meal_repository:
-            return await self._process_meal(event, self.meal_repository, uow=None)
+            return await self._process_meal(event, self.meal_repository)
         else:
             with UnitOfWork() as uow:
-                return await self._process_meal(event, uow.meals, uow=None)
+                return await self._process_meal(event, uow.meals)
 
-    async def _process_meal(self, event: CreateManualMealCommand, meal_repo, uow):
-        from collections import defaultdict
-
-        # Separate USDA items (by fdc_id) from custom items (by name + nutrition)
-        usda_aggregated = defaultdict(lambda: {"quantity": 0.0, "unit": "g"})
-        custom_items = []
-
-        for item in event.items:
-            if item.fdc_id is not None:
-                # USDA item
-                usda_aggregated[item.fdc_id]["quantity"] += item.quantity
-                usda_aggregated[item.fdc_id]["unit"] = item.unit
-            elif item.name and item.custom_nutrition:
-                # Custom item (barcode product)
-                custom_items.append(item)
-
-        # Fetch details for USDA items
-        fdc_ids = list(usda_aggregated.keys())
-        details_list = await self.food_data_service.get_multiple_foods(fdc_ids)
-        details_by_id = {d.get("fdcId"): d for d in details_list}
-
-        # Calculate nutrition
+    async def _process_meal(self, event: CreateManualMealCommand, meal_repo):
+        # All items must carry their own nutrition (custom_nutrition)
         total_calories = 0.0
         total_protein = 0.0
         total_carbs = 0.0
         total_fat = 0.0
         food_items: List[DomainFoodItem] = []
 
-        # Process USDA items
-        for fdc_id, item_data in usda_aggregated.items():
-            details = details_by_id.get(fdc_id) or {}
-            mapped = self.mapping_service.map_food_details(details)
-            unit = item_data["unit"].lower() if item_data["unit"] else "g"
-            quantity = item_data["quantity"]
+        for item in event.items:
+            if not item.custom_nutrition:
+                # Skip items without nutrition data
+                continue
 
-            # USDA foodNutrients are always per 100g, so base is always 100
-            quantity_in_grams = convert_quantity_to_grams(quantity, unit)
-            factor = quantity_in_grams / 100.0
-
-            calories = float(mapped.get("calories") or 0.0) * factor
-            protein = float(mapped["macros"].get("protein") or 0.0) * factor
-            carbs = float(mapped["macros"].get("carbs") or 0.0) * factor
-            fat = float(mapped["macros"].get("fat") or 0.0) * factor
-
-            total_calories += calories
-            total_protein += protein
-            total_carbs += carbs
-            total_fat += fat
-
-            food_items.append(
-                DomainFoodItem(
-                    id=uuid.uuid4(),
-                    name=mapped.get("name"),
-                    quantity=quantity,
-                    unit=item_data["unit"],
-                    calories=calories,
-                    macros=Macros(
-                        protein=protein,
-                        carbs=carbs,
-                        fat=fat,
-                    ),
-                    micros=None,
-                    confidence=1.0,
-                    fdc_id=fdc_id,
-                )
-            )
-
-        # Process custom items (barcode products)
-        for item in custom_items:
             nutrition = item.custom_nutrition
-            # Calculate macros based on per-100g values
             quantity = item.quantity
             factor = quantity / 100.0
 
@@ -124,7 +65,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             food_items.append(
                 DomainFoodItem(
                     id=uuid.uuid4(),
-                    name=item.name,
+                    name=item.name or "Food Item",
                     quantity=quantity,
                     unit=item.unit,
                     calories=calories,
@@ -135,7 +76,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                     ),
                     micros=None,
                     confidence=1.0,
-                    fdc_id=None,  # Custom food has no fdc_id
+                    fdc_id=item.fdc_id,  # Keep for backward compat
                 )
             )
 
@@ -157,9 +98,8 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         # Determine source: use explicit source if provided, otherwise infer
         source = event.source
         if not source:
-            has_fdc = any(item.fdc_id is not None for item in event.items)
             has_custom = any(item.custom_nutrition is not None for item in event.items)
-            if has_fdc or has_custom:
+            if has_custom:
                 source = "food_search"
             else:
                 source = "manual"
