@@ -5,12 +5,19 @@ Uses RevenueCat as source of truth, with local cache for performance.
 """
 import logging
 import os
+from typing import Optional
 
 from fastapi import Request, HTTPException, status
 
-from src.domain.services.revenuecat_service import RevenueCatService
+from src.domain.ports.subscription_service_port import SubscriptionServicePort
+from src.api.base_dependencies import get_subscription_service
 
 logger = logging.getLogger(__name__)
+
+
+def _get_subscription_service() -> SubscriptionServicePort:
+    """Helper to get subscription service - can be overridden in tests."""
+    return get_subscription_service()
 
 
 async def require_subscription(request: Request):
@@ -53,8 +60,8 @@ async def require_subscription(request: Request):
             }
         )
 
-    revenuecat = RevenueCatService(revenuecat_secret_key)
-    has_subscription = await revenuecat.has_active_subscription(app_user_id=user.id)
+    subscription_service = _get_subscription_service()
+    has_subscription = await subscription_service.has_active_subscription(app_user_id=user.id)
 
     if has_subscription:
         # User has subscription in RevenueCat but not in local cache
@@ -112,8 +119,8 @@ async def get_subscription_status(request: Request) -> dict:
     # Check RevenueCat if configured
     revenuecat_secret_key = os.getenv("REVENUECAT_SECRET_API_KEY", "")
     if revenuecat_secret_key:
-        revenuecat = RevenueCatService(revenuecat_secret_key)
-        sub_info = await revenuecat.get_subscription_info(user.id)
+        subscription_service = _get_subscription_service()
+        sub_info = await subscription_service.get_subscription_info(user.id)
 
         if sub_info:
             return {

@@ -4,7 +4,7 @@ Auto-extracted for better maintainability.
 """
 import logging
 
-from src.api.exceptions import ResourceNotFoundException
+from src.api.exceptions import ResourceNotFoundException, AuthorizationException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetMealByIdQuery
 from src.domain.model.meal import Meal
@@ -28,5 +28,9 @@ class GetMealByIdQueryHandler(EventHandler[GetMealByIdQuery, Meal]):
 
             if not meal:
                 raise ResourceNotFoundException(f"Meal with ID {query.meal_id} not found")
+
+            # Check ownership if user_id provided
+            if query.user_id and meal.user_id != query.user_id:
+                raise AuthorizationException("You do not have permission to access this meal")
 
             return meal

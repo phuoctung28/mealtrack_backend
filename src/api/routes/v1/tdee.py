@@ -3,6 +3,7 @@ TDEE calculation API endpoints - Preview and calculation without authentication.
 """
 from fastapi import APIRouter, Depends
 
+from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.schemas.request import TdeeCalculationRequest
 from src.api.schemas.response import TdeeCalculationResponse, MacroTargetsResponse
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/v1/tdee", tags=["TDEE"])
 @router.post("/preview", response_model=TdeeCalculationResponse)
 async def preview_tdee(
     request: TdeeCalculationRequest,
-    event_bus: EventBus = Depends(lambda: __import__('src.api.dependencies.event_bus', fromlist=['get_configured_event_bus']).get_configured_event_bus()),
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Preview TDEE calculation without authentication.

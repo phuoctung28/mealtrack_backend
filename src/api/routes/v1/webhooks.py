@@ -27,16 +27,20 @@ async def revenuecat_webhook(
 ):
     """
     Handle RevenueCat webhook events.
-    
+
     This keeps your local database in sync with RevenueCat.
     """
-    
-    # Verify authorization (if configured)
+
+    # Verify webhook is configured - reject if secret not set
     webhook_secret = os.getenv("REVENUECAT_WEBHOOK_SECRET", "")
-    if webhook_secret:
-        if authorization != webhook_secret:
-            logger.warning("Invalid RevenueCat webhook authorization")
-            raise HTTPException(status_code=401, detail="Unauthorized")
+    if not webhook_secret:
+        logger.error("RevenueCat webhook not configured - rejecting request")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
+
+    # Verify authorization
+    if authorization != webhook_secret:
+        logger.warning("Invalid RevenueCat webhook authorization")
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
     # Parse webhook payload
     try:

@@ -10,6 +10,7 @@ from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
+from src.domain.utils.timezone_utils import utc_now
 
 
 class MealTranslation(Base):
@@ -67,7 +68,7 @@ class MealTranslation(Base):
         """Create DB model from domain model."""
         from src.infra.database.models.meal.food_item_translation_model import FoodItemTranslation
 
-        now = datetime.utcnow()
+        now = utc_now()
 
         translation = cls(
             meal_id=domain_model.meal_id,

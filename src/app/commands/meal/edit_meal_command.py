@@ -12,6 +12,7 @@ from src.domain.model.meal.food_item_change import FoodItemChange, CustomNutriti
 class EditMealCommand(Command):
     """Command to edit a meal's ingredients."""
     meal_id: str
+    user_id: str = ""
     dish_name: Optional[str] = None
     food_item_changes: List[FoodItemChange] = field(default_factory=list)
 
