@@ -50,3 +50,8 @@ exclude_lines = [
 ]
 show_missing = true
 precision = 2 
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]

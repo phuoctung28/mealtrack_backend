@@ -227,3 +227,9 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             return
         cache_key, _ = CacheKeys.daily_macros(user_id, target_date)
         await self.cache_service.invalidate(cache_key)
+
+        # Invalidate weekly budget cache so wallet updates after image meal
+        from datetime import timedelta
+        week_start = target_date - timedelta(days=target_date.weekday())
+        weekly_key, _ = CacheKeys.weekly_budget(user_id, week_start)
+        await self.cache_service.invalidate(weekly_key)

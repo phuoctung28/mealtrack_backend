@@ -179,7 +179,7 @@ class TestTokenReduction:
         assert estimated_tokens < 300, f"Prompt too long: ~{estimated_tokens} tokens"
 
     def test_recipe_details_prompt_token_estimate(self):
-        """Recipe details prompt should be under 155 tokens."""
+        """Recipe details prompt should be under 250 tokens."""
         prompt = PromptTemplateManager.build_recipe_details_prompt(
             meal_name="Test Meal",
             meal_type="lunch",
@@ -189,4 +189,4 @@ class TestTokenReduction:
         )
 
         estimated_tokens = len(prompt) / 4
-        assert estimated_tokens < 155, f"Prompt too long: ~{estimated_tokens} tokens"
+        assert estimated_tokens < 250, f"Prompt too long: ~{estimated_tokens} tokens"

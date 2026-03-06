@@ -1,7 +1,7 @@
 """add_source_to_meals
 
-Revision ID: 025
-Revises: 024
+Revision ID: 026
+Revises: 5180b1a13e5b
 Create Date: 2026-03-03
 
 Add source column to meal table to track meal creation origin
@@ -14,8 +14,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '025'
-down_revision: Union[str, None] = '024'
+revision: str = '026'
+down_revision: Union[str, None] = '5180b1a13e5b'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

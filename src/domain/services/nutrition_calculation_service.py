@@ -4,10 +4,11 @@ Provides a unified interface for calculating nutrition from various sources.
 """
 import logging
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from src.domain.model.nutrition import FoodItem, Nutrition
 from src.domain.model.nutrition import Macros
+from src.domain.model.nutrition.serving_unit import ServingUnit
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,11 @@ UNIT_TO_GRAMS = {
     "piece": 100.0,
     "slice": 30.0,
     "serving": 100.0,
+    "kg": 1000.0,
+    "lb": 453.6,
+    "oz": 28.35,
+    "ml": 1.0,
+    "l": 1000.0,
 }
 
 
@@ -54,13 +60,30 @@ def convert_quantity_to_grams(quantity: float, unit: str) -> float:
 
 
 def scale_per_100g_nutrition(
-    per_100g: dict, quantity: float, unit: str, base_serving: float = 100.0
+    per_100g: dict,
+    quantity: float,
+    unit: str,
+    base_serving: float = 100.0,
+    allowed_units: Optional[List[Dict[str, Any]]] = None,
 ) -> dict:
     """Scale per-100g nutrition values for a given quantity and unit.
 
-    Returns dict with keys: calories, protein, carbs, fat.
+    Args:
+        per_100g: Dict with per-100g nutrition values (calories, protein, carbs, fat)
+        quantity: The quantity amount
+        unit: The unit name (e.g., "cup", "g", "piece")
+        base_serving: The base serving size in grams (default 100g)
+        allowed_units: Optional list of allowed ServingUnits for the food
+
+    Returns:
+        dict with keys: calories, protein, carbs, fat.
     """
-    quantity_in_grams = convert_quantity_to_grams(quantity, unit)
+    # Use food-specific allowed_units if available, otherwise fallback to global mapping
+    if allowed_units:
+        quantity_in_grams = _convert_with_allowed_units(quantity, unit, allowed_units)
+    else:
+        quantity_in_grams = convert_quantity_to_grams(quantity, unit)
+
     factor = (quantity_in_grams / base_serving) if base_serving > 0 else 0.0
     return {
         "calories": round(per_100g.get("calories", 0.0) * factor, 2),
@@ -68,6 +91,25 @@ def scale_per_100g_nutrition(
         "carbs": round(per_100g.get("carbs", 0.0) * factor, 2),
         "fat": round(per_100g.get("fat", 0.0) * factor, 2),
     }
+
+
+def _convert_with_allowed_units(
+    quantity: float, unit: str, allowed_units: List[Dict[str, Any]]
+) -> float:
+    """Convert quantity to grams using food-specific allowed_units."""
+    if unit.lower() == "g":
+        return quantity
+
+    for au in allowed_units:
+        if au.get("unit", "").lower() == unit.lower():
+            gram_weight = au.get("gram_weight", 1.0)
+            return quantity * gram_weight
+
+    # Fallback to global mapping if unit not in allowed_units
+    logger.warning(
+        f"Unit '{unit}' not in allowed_units, falling back to global mapping"
+    )
+    return convert_quantity_to_grams(quantity, unit)
 
 
 @dataclass
@@ -87,16 +129,14 @@ class NutritionCalculationService:
     fallback mechanisms for robustness.
     """
 
-    def __init__(self, pinecone_service=None, usda_service=None):
+    def __init__(self, pinecone_service=None):
         """
         Initialize with optional services.
 
         Args:
             pinecone_service: Pinecone vector search service for ingredient lookup
-            usda_service: USDA FoodData Central API service
         """
         self.pinecone_service = pinecone_service
-        self.usda_service = usda_service
 
     def get_nutrition_for_ingredient(
         self,
@@ -109,30 +149,19 @@ class NutritionCalculationService:
         Get nutrition data for an ingredient from any available source.
 
         Priority:
-        1. USDA FoodData Central (if fdc_id provided)
-        2. Pinecone vector search (semantic matching)
-        3. None if no source available
+        1. Pinecone vector search (semantic matching)
+        2. None if no source available
 
         Args:
             name: Ingredient name
             quantity: Amount of ingredient
             unit: Unit of measurement
-            fdc_id: Optional USDA FDC ID for direct lookup
+            fdc_id: Optional food ID (kept for backward compat)
 
         Returns:
             ScaledNutritionResult or None if not found
         """
-        # Priority 1: USDA direct lookup if FDC ID provided
-        if fdc_id and self.usda_service:
-            try:
-                result = self._get_from_usda(fdc_id, quantity, unit)
-                if result:
-                    logger.info(f"Got nutrition for '{name}' from USDA (fdc_id={fdc_id})")
-                    return result
-            except Exception as e:
-                logger.warning(f"USDA lookup failed for fdc_id={fdc_id}: {e}")
-
-        # Priority 2: Pinecone semantic search
+        # Priority 1: Pinecone semantic search
         if self.pinecone_service:
             try:
                 result = self._get_from_pinecone(name, quantity, unit)
@@ -171,20 +200,6 @@ class NutritionCalculationService:
 
         return None
 
-    def _get_from_usda(
-        self,
-        fdc_id: int,
-        quantity: float,
-        unit: str
-    ) -> Optional[ScaledNutritionResult]:
-        """Get nutrition from USDA service."""
-        if not self.usda_service:
-            return None
-
-        # USDA service would need to be implemented
-        # For now, return None as placeholder
-        logger.debug(f"USDA service not yet fully implemented for fdc_id={fdc_id}")
-        return None
 
     def calculate_meal_total(self, food_items: List[FoodItem]) -> Nutrition:
         """

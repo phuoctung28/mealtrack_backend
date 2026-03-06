@@ -11,6 +11,7 @@ from src.domain.model.meal.food_item_change import FoodItemChange
 from src.domain.model.nutrition import FoodItem
 from src.domain.model.nutrition import Macros
 from src.domain.services import NutritionCalculationService
+from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +118,18 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
         new_quantity: float,
         new_unit: str
     ) -> None:
-        """Apply simple proportional scaling to nutrition."""
-        scale_factor = new_quantity / existing_item.quantity
+        """Apply simple proportional scaling to nutrition with unit conversion."""
+        # Convert new quantity to grams for proper scaling
+        new_quantity_grams = convert_quantity_to_grams(new_quantity, new_unit)
+
+        # Convert existing quantity to grams (existing item's nutrition is already in grams)
+        existing_quantity_grams = convert_quantity_to_grams(existing_item.quantity, existing_item.unit)
+
+        # Scale factor based on gram conversion
+        if existing_quantity_grams > 0:
+            scale_factor = new_quantity_grams / existing_quantity_grams
+        else:
+            scale_factor = 1.0
 
         food_items_dict[change.id] = FoodItem(
             id=existing_item.id,

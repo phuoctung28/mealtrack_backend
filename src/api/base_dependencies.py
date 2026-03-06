@@ -9,7 +9,6 @@ from src.domain.services.meal_analysis.translation_service import MealAnalysisTr
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
-from src.domain.ports.food_data_service_port import FoodDataServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
@@ -187,15 +186,6 @@ def get_gpt_parser() -> GPTResponseParser:
     """
     return GPTResponseParser()
 
-# Food Data Service
-def get_food_data_service() -> FoodDataServicePort:
-    """
-    Get the food data service instance.
-    
-    Returns:
-        FoodDataServicePort: The food data service
-    """
-    return FoodDataService()
 
 # Food Cache Service
 def get_food_cache_service() -> FoodCacheServicePort:
@@ -226,6 +216,17 @@ def get_food_mapping_service() -> FoodMappingServicePort:
         FoodMappingServicePort: The food mapping service
     """
     return FoodMappingService()
+
+
+# Food Data Service (USDA FoodData Central)
+def get_food_data_service() -> FoodDataService:
+    """
+    Get the food data service instance for USDA FoodData Central API.
+
+    Returns:
+        FoodDataService: The food data service
+    """
+    return FoodDataService()
 
 
 # OpenFoodFacts Service

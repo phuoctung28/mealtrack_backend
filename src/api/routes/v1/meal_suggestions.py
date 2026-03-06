@@ -70,6 +70,7 @@ async def generate_suggestions(
             language=language,
             servings=request.servings,  # Pass servings for ingredient/calorie scaling
             cooking_equipment=request.cooking_equipment,  # Pass cooking equipment
+            cuisine_region=request.cuisine_region,  # Pass cuisine region preference
         )
 
         session, suggestions = await event_bus.send(command)

@@ -42,6 +42,8 @@ def to_meal_suggestion_response(suggestion: MealSuggestion) -> MealSuggestionRes
         ],
         prep_time_minutes=suggestion.prep_time_minutes,
         confidence_score=suggestion.confidence_score,
+        origin_country=suggestion.origin_country,
+        cuisine_type=suggestion.cuisine_type,
     )
 
 

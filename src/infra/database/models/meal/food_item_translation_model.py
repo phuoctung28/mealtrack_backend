@@ -3,7 +3,7 @@ Food item translation database model.
 
 See meal-translation-model.py for full implementation.
 """
-from sqlalchemy import Column, String, Text, ForeignKey, Integer
+from sqlalchemy import Column, String, Text, ForeignKey, Integer, Boolean
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -27,6 +27,9 @@ class FoodItemTranslation(Base):
     food_item_id = Column(String(36), nullable=False, index=True)  # Reference only, no FK
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+
+    # Soft delete
+    is_deleted = Column(Boolean, default=False, nullable=False, server_default='false')
 
     # Relationship back to meal translation
     meal_translation = relationship("MealTranslation", back_populates="food_items")

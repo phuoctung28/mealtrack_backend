@@ -149,7 +149,7 @@ class FatSecretService:
             return None
 
     async def search_foods(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
-        """Search foods by query string."""
+        """Search foods by query string with nutrition data."""
         try:
             params = {
                 "method": "foods.search",
@@ -167,10 +167,85 @@ class FatSecretService:
                 return []
             if isinstance(foods, dict):
                 foods = [foods]
-            return [self._map_search_result(food) for food in foods]
+
+            # Process each food with nutrition data
+            processed = []
+            for food in foods:
+                food_id = food.get("food_id")
+                mapped = self._map_search_result(food)
+
+                # Fetch detailed nutrition if we have a food_id
+                if food_id:
+                    try:
+                        detail_params = {"method": "food.get", "food_id": food_id, "format": "json"}
+                        details = await self._api_request("GET", "", detail_params)
+                        if details:
+                            # Merge nutrition data
+                            nutrition = self._extract_nutrition_from_details(details)
+                            mapped.update(nrition)
+                    except Exception:
+                        pass  # Use basic mapped data if details fail
+
+                processed.append(mapped)
+
+            return processed
         except Exception as e:
             logger.warning(f"FatSecret search error for query '{query}': {e}")
             return []
+
+    def _extract_serving_units(self, food: Dict) -> List[Dict]:
+        """Extract all serving units from FatSecret food details."""
+        servings = food.get("servings", {}).get("serving", [])
+        if not servings:
+            return []
+
+        if isinstance(servings, dict):
+            servings = [servings]
+
+        units = []
+        for s in servings:
+            unit = s.get("measurement_description")
+            gram_weight = self._safe_float(s.get("metric_serving_amount"))
+            if unit and gram_weight and gram_weight > 0:
+                units.append({
+                    "unit": unit,
+                    "gram_weight": gram_weight,
+                    "description": s.get("serving_description", ""),
+                })
+
+        # Always include "g" as base unit
+        if not any(u["unit"].lower() == "g" for u in units):
+            units.insert(0, {"unit": "g", "gram_weight": 1.0, "description": "1 g"})
+
+        return units
+
+    def _extract_nutrition_from_details(self, food: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract per-100g nutrition from FatSecret food details."""
+        servings = food.get("servings", {}).get("serving", [])
+        serving = None
+        if isinstance(servings, list) and servings:
+            serving = servings[0]
+        elif isinstance(servings, dict):
+            serving = servings
+
+        if not isinstance(serving, dict):
+            return {"allowed_units": self._default_allowed_units()}
+
+        # Get metric serving amount for per-100g calculation
+        metric_amount = self._safe_float(serving.get("metric_serving_amount")) or 100
+
+        return {
+            "calories_100g": self._calc_per_100g(serving.get("calories"), metric_amount),
+            "protein_100g": self._calc_per_100g(serving.get("protein"), metric_amount),
+            "carbs_100g": self._calc_per_100g(serving.get("carbohydrate"), metric_amount),
+            "fat_100g": self._calc_per_100g(serving.get("fat"), metric_amount),
+            "serving_description": serving.get("serving_description"),
+            "allowed_units": self._extract_serving_units(food),
+        }
+
+    def _default_allowed_units(self) -> List[Dict]:
+        """Return default allowed units when none are provided."""
+        return [{"unit": "g", "gram_weight": 1.0, "description": "1 g"}]
 
     def _map_product(self, food: Dict[str, Any], barcode: str) -> Dict[str, Any]:
         """Map FatSecret response to clean dict."""
@@ -191,6 +266,7 @@ class FatSecretService:
                 "fat_100g": None,
                 "serving_size": None,
                 "image_url": None,
+                "allowed_units": self._default_allowed_units(),
             }
         # Use metric_serving_amount for accurate per-100g calculation
         metric_amount = self._safe_float(serving.get("metric_serving_amount")) or 100
@@ -204,6 +280,7 @@ class FatSecretService:
             "fat_100g": self._calc_per_100g(serving.get("fat"), metric_amount),
             "serving_size": serving.get("serving_description"),
             "image_url": food.get("food_url"),
+            "allowed_units": self._extract_serving_units(food),
         }
 
     def _calc_per_100g(self, value: Any, metric_amount: float) -> Optional[float]:
@@ -224,6 +301,8 @@ class FatSecretService:
             "brand": food.get("brand_name"),
             "food_description": food.get("food_description", ""),
             "source": "fatsecret",
+            "food_id": food.get("food_id"),  # FatSecret's internal ID for getting details
+            "allowed_units": self._default_allowed_units(),  # Will be enriched with details
         }
 
     def _safe_float(self, value: Any) -> Optional[float]:

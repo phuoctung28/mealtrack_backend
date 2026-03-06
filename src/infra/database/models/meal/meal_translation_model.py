@@ -6,7 +6,7 @@ multiple languages.
 """
 from datetime import datetime
 
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey
+from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -22,11 +22,14 @@ class MealTranslation(Base):
     __tablename__ = 'meal_translation'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    meal_id = Column(String(36), ForeignKey("meal.meal_id", ondelete="CASCADE"), nullable=False, index=True)
+    meal_id = Column(String(36), ForeignKey("meal.meal_id"), nullable=True, index=True)  # Nullable to prevent cascade delete
     language = Column(String(7), nullable=False)  # ISO 639-1: en, vi, es, fr, de, ja, zh
     dish_name = Column(String(255), nullable=False)
     translated_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, nullable=False)
+
+    # Soft delete
+    is_deleted = Column(Boolean, default=False, nullable=False, server_default='false')
 
     # Relationship to food item translations
     food_items = relationship(

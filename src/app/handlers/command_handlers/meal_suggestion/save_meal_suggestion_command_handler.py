@@ -87,6 +87,7 @@ class SaveMealSuggestionCommandHandler(
             is_manually_edited=False,
             meal_type=command.meal_type,
             translations=None,
+            source='ai_suggestion',
         )
 
         with UnitOfWork() as uow:

@@ -65,6 +65,8 @@ class MealSuggestionResponse(BaseModel):
     confidence_score: float = Field(
         default=0.9, ge=0.0, le=1.0, description="AI confidence score (0.0-1.0)"
     )
+    origin_country: Optional[str] = Field(None, description="Country of origin (e.g., Vietnam, Italy)")
+    cuisine_type: Optional[str] = Field(None, description="Cuisine type (e.g., Asian, Mediterranean)")
 
 
 # Alias for backward compatibility

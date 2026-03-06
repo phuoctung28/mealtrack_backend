@@ -8,7 +8,7 @@ import pytest
 
 # Stub service and cache for tests
 class StubFoodDataService:
-    async def search_foods(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+    async def search_foods(self, query: str, limit: int = 20, max_results: int = 20) -> List[Dict[str, Any]]:
         return [
             {
                 "fdcId": 12345,
@@ -74,7 +74,7 @@ async def test_search_foods_query_handler_returns_mapped_results(monkeypatch):
     from src.domain.services.food_mapping_service import FoodMappingService
 
     handler = SearchFoodsQueryHandler(
-        food_data_service=StubFoodDataService(),
+        fat_secret_service=StubFoodDataService(),
         cache_service=NoopFoodCacheService(),
         mapping_service=FoodMappingService(),
     )
@@ -119,24 +119,25 @@ async def test_get_food_details_query_handler_maps_nutrients():
 @pytest.mark.asyncio
 async def test_create_manual_meal_command_handler_aggregates_items(monkeypatch):
     # Arrange
-    from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand, ManualMealItem
+    from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand, ManualMealItem, CustomNutrition
     from src.app.handlers.command_handlers.create_manual_meal_command_handler import CreateManualMealCommandHandler
-    from src.domain.services.food_mapping_service import FoodMappingService
     from src.domain.model import MealStatus
-
-    class StubMultiFoodService(StubFoodDataService):
-        async def get_multiple_foods(self, fdc_ids: List[int]) -> List[Dict[str, Any]]:
-            return [await self.get_food_details(fid) for fid in fdc_ids]
 
     handler = CreateManualMealCommandHandler(
         meal_repository=InMemoryMealRepository(),
-        food_data_service=StubMultiFoodService(),
-        mapping_service=FoodMappingService(),
+    )
+
+    # Chicken breast per 100g: 165 cal, 31g protein, 0g carbs, 3.6g fat
+    chicken_nutrition = CustomNutrition(
+        calories_per_100g=165.0,
+        protein_per_100g=31.0,
+        carbs_per_100g=0.0,
+        fat_per_100g=3.6,
     )
 
     items = [
-        ManualMealItem(fdc_id=12345, quantity=150.0, unit="g"),  # 1.5x of 100g base
-        ManualMealItem(fdc_id=12345, quantity=50.0, unit="g"),   # 0.5x of 100g base
+        ManualMealItem(fdc_id=12345, name="Chicken breast", quantity=150.0, unit="g", custom_nutrition=chicken_nutrition),  # 1.5x of 100g base
+        ManualMealItem(fdc_id=12345, name="Chicken breast", quantity=50.0, unit="g", custom_nutrition=chicken_nutrition),   # 0.5x of 100g base
     ]
     command = CreateManualMealCommand(
         user_id="550e8400-e29b-41d4-a716-446655440001",

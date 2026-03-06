@@ -193,6 +193,7 @@ class MealMapper:
             total_calories=total_calories,
             total_weight_grams=meal.weight_grams if hasattr(meal, 'weight_grams') else None,
             total_nutrition=total_nutrition,
+            is_cheat_meal=meal.is_cheat_meal if hasattr(meal, 'is_cheat_meal') else False,
             translations=translations
         )
     

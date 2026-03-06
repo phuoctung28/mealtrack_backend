@@ -180,6 +180,7 @@ RULES:
         exclude_meal_names: Optional[List[str]] = None,
         servings: int = 1,
         cooking_equipment: Optional[List[str]] = None,
+        cuisine_region: Optional[str] = None,
     ) -> str:
         """
         Build prompt for Phase 1 meal name generation.
@@ -210,9 +211,14 @@ RULES:
         if cooking_equipment:
             equipment_str = f"\nEquipment: {', '.join(cooking_equipment)}"
 
+        # Add cuisine region constraint
+        if cuisine_region:
+            cuisine_str = f"\nCuisine: {cuisine_region} (4 different dishes from this region)"
+        else:
+            cuisine_str = "\nCuisines: 4 distinct (Asian, Mediterranean, Latin, American)"
+
         return f"""Generate 4 different {meal_type} names, ~{target_calories}cal{servings_str}, ≤{cooking_time_minutes}min.
-Ingredients: {ing_str}{constraints_str}{equipment_str}
-Cuisines: 4 distinct (Asian, Mediterranean, Latin, American)
+MUST USE these ingredients as main components: {ing_str}{constraints_str}{equipment_str}{cuisine_str}
 Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}."""
 
     @classmethod
@@ -227,6 +233,7 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         dietary_preferences: Optional[List[str]] = None,
         servings: int = 1,
         cooking_equipment: Optional[List[str]] = None,
+        cuisine_region = None,
     ) -> str:
         """
         Build prompt for Phase 2 recipe detail generation.
@@ -251,19 +258,26 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         if cooking_equipment:
             equipment_str = f"\nEquipment available: {', '.join(cooking_equipment)}"
 
+        # Add cuisine region if specified
+        cuisine_str = ""
+        if cuisine_region:
+            cuisine_str = f"\nCuisine region: {cuisine_region}"
+
         return f"""Generate complete recipe for: "{meal_name}"
 
-Ingredients: {ing_str}{' | ' + constraints_str if constraints_str else ''}
-Target: ~{target_calories} cal{servings_str} | ≤{cooking_time_minutes} min{equipment_str}
+MUST USE these ingredients as main components: {ing_str}{' | ' + constraints_str if constraints_str else ''}
+Target: ~{target_calories} cal{servings_str} | ≤{cooking_time_minutes} min{equipment_str}{cuisine_str}
 
 PORTION SIZING for {target_calories} cal:
 - {'Small portions: 150g protein, 100g carbs' if target_calories < 600 else 'Standard: 200g protein, 150g carbs' if target_calories < 1000 else 'Large: 300g protein, 200g carbs'}
 
 REQUIREMENTS:
 - Match name "{meal_name}" exactly
+- MUST include the user's specified ingredients ({ing_str}) — do NOT substitute them
 - 3-8 ingredients with amounts (g/ml/tbsp) scaled for {servings} serving{'s' if servings > 1 else ''}
 - 2-6 clear recipe steps with duration
 - Total prep_time ≤{cooking_time_minutes} min
+- Include origin_country and cuisine_type in JSON
 - Calculate total macros from ingredients:
   * calories (kcal)
   * protein (grams)
