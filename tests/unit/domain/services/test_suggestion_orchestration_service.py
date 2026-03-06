@@ -222,11 +222,11 @@ class TestSuggestionGenerationPipeline:
         # 2. Check the system prompt for recipe generation (second call)
         recipe_gen_system_prompt = all_calls[1].args[1]
         assert f"Output string values in {target_lang_name}" in recipe_gen_system_prompt
-        assert "JSON KEYS (e.g., 'ingredients', 'recipe_steps', 'amount', 'unit') MUST BE IN ENGLISH" in recipe_gen_system_prompt
+        assert "JSON keys MUST be in English" in recipe_gen_system_prompt
 
     def test_constants_are_set_correctly(self, orchestration_service):
         """Ensures performance-related constants are set to their expected optimized values."""
         assert orchestration_service.SUGGESTIONS_COUNT == 3
         assert orchestration_service.MIN_ACCEPTABLE_RESULTS == 2
-        assert orchestration_service.PARALLEL_SINGLE_MEAL_TIMEOUT == 25
+        assert orchestration_service.PARALLEL_SINGLE_MEAL_TIMEOUT == 35
         assert orchestration_service.PARALLEL_STAGGER_MS == 200
