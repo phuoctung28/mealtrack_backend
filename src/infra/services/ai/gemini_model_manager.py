@@ -371,6 +371,11 @@ class GeminiModelManager:
         """
         model_name = self._get_model_name_for_purpose(purpose)
 
+        # Disable thinking for recipe generation — thinking tokens consume the
+        # output budget in Gemini 2.5 Flash, leaving too few tokens for content
+        if purpose in (GeminiModelPurpose.RECIPE_PRIMARY, GeminiModelPurpose.RECIPE_SECONDARY):
+            kwargs.setdefault("thinking_budget", 0)
+
         config_key = self._get_config_key(
             model_name=model_name,
             temperature=temperature,

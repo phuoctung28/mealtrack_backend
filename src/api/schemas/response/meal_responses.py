@@ -140,6 +140,13 @@ class DetailedMealResponse(SimpleMealResponse):
         None,
         description="Translations keyed by language code"
     )
+    # Recipe details (populated for AI suggestions, null for scanned/manual meals)
+    description: Optional[str] = Field(None, description="Meal description")
+    instructions: Optional[List[str]] = Field(None, description="Recipe instruction steps")
+    prep_time_min: Optional[int] = Field(None, description="Prep time in minutes")
+    cook_time_min: Optional[int] = Field(None, description="Cook time in minutes")
+    cuisine_type: Optional[str] = Field(None, description="Cuisine type")
+    origin_country: Optional[str] = Field(None, description="Country of origin")
 
 
 class MealListResponse(BaseModel):

@@ -118,6 +118,8 @@ async def save_meal_suggestion(
             instructions=request.instructions,
             portion_multiplier=request.portion_multiplier,
             meal_date=request.meal_date,
+            cuisine_type=request.cuisine_type,
+            origin_country=request.origin_country,
         )
 
         meal_id = await event_bus.send(command)

@@ -215,6 +215,8 @@ class SaveMealSuggestionRequest(BaseModel):
     meal_date: str = Field(
         ..., description="Target date for the meal (YYYY-MM-DD format)"
     )
+    cuisine_type: Optional[str] = Field(None, description="Cuisine type (e.g., Asian, Vietnamese)")
+    origin_country: Optional[str] = Field(None, description="Country of origin")
 
     @field_validator("meal_date")
     @classmethod

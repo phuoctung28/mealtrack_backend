@@ -194,7 +194,13 @@ class MealMapper:
             total_weight_grams=meal.weight_grams if hasattr(meal, 'weight_grams') else None,
             total_nutrition=total_nutrition,
             is_cheat_meal=meal.is_cheat_meal if hasattr(meal, 'is_cheat_meal') else False,
-            translations=translations
+            translations=translations,
+            description=getattr(meal, 'description', None),
+            instructions=getattr(meal, 'instructions', None),
+            prep_time_min=getattr(meal, 'prep_time_min', None),
+            cook_time_min=getattr(meal, 'cook_time_min', None),
+            cuisine_type=getattr(meal, 'cuisine_type', None),
+            origin_country=getattr(meal, 'origin_country', None),
         )
     
     @staticmethod

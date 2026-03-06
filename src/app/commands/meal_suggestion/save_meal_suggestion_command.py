@@ -43,7 +43,9 @@ class SaveMealSuggestionCommand(Command):
     instructions: List[str]
     portion_multiplier: int
     meal_date: str  # YYYY-MM-DD format
-    
+    cuisine_type: Optional[str] = None
+    origin_country: Optional[str] = None
+
     def __post_init__(self):
         """Validate command data."""
         valid_meal_types = ["breakfast", "lunch", "dinner", "snack"]

@@ -46,8 +46,8 @@ class SuggestionOrchestrationService:
     MIN_ACCEPTABLE_RESULTS = 2  # Return at least 2 meals for acceptable UX
 
     # Parallel generation constants (OPTIMIZED)
-    PARALLEL_SINGLE_MEAL_TOKENS = 6000  # Increased for complete recipe JSON
-    PARALLEL_SINGLE_MEAL_TIMEOUT = 25  # Increased to accommodate P95 latency (~22s + buffer)
+    PARALLEL_SINGLE_MEAL_TOKENS = 4000  # Budget for complete recipe JSON (thinking disabled)
+    PARALLEL_SINGLE_MEAL_TIMEOUT = 35  # Increased to accommodate Gemini 2.5 Flash latency (~27-30s + buffer)
     PARALLEL_STAGGER_MS = (
         200  # Reduced from 500ms (API handles smaller payloads faster)
     )
@@ -105,6 +105,13 @@ class SuggestionOrchestrationService:
                     f"expected {user_id}, got {session.user_id}"
                 )
                 session_id = None  # Force new session creation for this user
+
+            # Update session language from current request (user may have changed language)
+            if session.language != language:
+                logger.info(
+                    f"Updating session language: {session.language} -> {language}"
+                )
+                session.language = language
 
             # Use existing session's shown meal names as exclusions
             exclude_meal_names = session.shown_meal_names
@@ -312,7 +319,6 @@ class SuggestionOrchestrationService:
         )
         from src.domain.schemas.meal_generation_schemas import (
             MealNamesResponse,
-            RecipeDetailsResponse,
         )
 
         logger.info(
@@ -390,9 +396,12 @@ class SuggestionOrchestrationService:
 
         # Generate details directly in target language
         recipe_system = (
-            f"You are a professional chef. Generate complete recipe details as valid JSON. "
-            f"CRITICAL: MUST finish entire JSON. Output string values in {target_lang}. "
-            "JSON KEYS (e.g., 'ingredients', 'recipe_steps', 'amount', 'unit') MUST BE IN ENGLISH."
+            f"You are a professional chef. Return ONLY this exact JSON structure, no extra fields:\n"
+            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"..."}}],'
+            '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
+            '"prep_time_minutes":0,"calories":0,"protein":0.0,"carbs":0.0,"fat":0.0}}\n'
+            f"Output string values in {target_lang}. "
+            "JSON keys MUST be in English. Do NOT add recipe_name, description, equipment, or other fields."
         )
 
         def get_alternate_purpose(purpose: str) -> str:
@@ -414,6 +423,8 @@ class SuggestionOrchestrationService:
             retry_marker = "[RETRY]" if is_retry else ""
 
             try:
+                # Use direct JSON mode with schema in prompt — avoids structured output
+                # function-calling overhead that consumes thinking tokens in Gemini 2.5
                 raw = await asyncio.wait_for(
                     asyncio.to_thread(
                         self._generation.generate_meal_plan,
@@ -421,7 +432,7 @@ class SuggestionOrchestrationService:
                         recipe_system,
                         "json",
                         self.PARALLEL_SINGLE_MEAL_TOKENS,
-                        RecipeDetailsResponse,
+                        None,
                         model_purpose,
                     ),
                     timeout=self.PARALLEL_SINGLE_MEAL_TIMEOUT,
@@ -458,7 +469,8 @@ class SuggestionOrchestrationService:
                 )
 
                 # Validate user's input ingredients are present in recipe
-                if session.ingredients:
+                # Skip for non-English: translated ingredient names won't match English input
+                if session.ingredients and session.language == "en":
                     recipe_ing_names = " ".join(
                         ing.get("name", "").lower() for ing in ingredients
                     )

@@ -88,6 +88,11 @@ class SaveMealSuggestionCommandHandler(
             meal_type=command.meal_type,
             translations=None,
             source='ai_suggestion',
+            description=command.description,
+            instructions=command.instructions if command.instructions else None,
+            cook_time_min=command.estimated_cook_time_minutes,
+            cuisine_type=command.cuisine_type,
+            origin_country=command.origin_country,
         )
 
         with UnitOfWork() as uow:

@@ -2,7 +2,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from src.domain.utils.timezone_utils import utc_now, format_iso_utc
 from .meal_image import MealImage
@@ -50,7 +50,14 @@ class Meal:
     cheat_tagged_at: Optional[datetime] = None
     # Source tracking (scanner, prompt, food_search, manual)
     source: Optional[str] = None
-    
+    # Recipe details (populated for AI suggestions)
+    description: Optional[str] = None
+    instructions: Optional[List[str]] = None
+    prep_time_min: Optional[int] = None
+    cook_time_min: Optional[int] = None
+    cuisine_type: Optional[str] = None
+    origin_country: Optional[str] = None
+
     def __post_init__(self):
         """Validate invariants."""
         # Validate UUID formats
@@ -86,6 +93,17 @@ class Meal:
             image=image
         )
     
+    def _recipe_fields(self) -> dict:
+        """Return recipe fields dict for state transitions."""
+        return dict(
+            description=self.description,
+            instructions=self.instructions,
+            prep_time_min=self.prep_time_min,
+            cook_time_min=self.cook_time_min,
+            cuisine_type=self.cuisine_type,
+            origin_country=self.origin_country,
+        )
+
     def mark_analyzing(self) -> 'Meal':
         """Transition to ANALYZING state."""
         return Meal(
@@ -105,7 +123,8 @@ class Meal:
             is_manually_edited=self.is_manually_edited,
             meal_type=self.meal_type,
             translations=self.translations,
-            source=self.source
+            source=self.source,
+            **self._recipe_fields()
         )
 
     def mark_enriching(self, raw_gpt_json: str) -> 'Meal':
@@ -127,7 +146,8 @@ class Meal:
             is_manually_edited=self.is_manually_edited,
             meal_type=self.meal_type,
             translations=self.translations,
-            source=self.source
+            source=self.source,
+            **self._recipe_fields()
         )
 
     def mark_ready(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
@@ -149,7 +169,8 @@ class Meal:
             is_manually_edited=self.is_manually_edited,
             meal_type=self.meal_type,
             translations=self.translations,
-            source=self.source
+            source=self.source,
+            **self._recipe_fields()
         )
 
     def mark_failed(self, error_message: str) -> 'Meal':
@@ -171,7 +192,8 @@ class Meal:
             is_manually_edited=self.is_manually_edited,
             meal_type=self.meal_type,
             translations=self.translations,
-            source=self.source
+            source=self.source,
+            **self._recipe_fields()
         )
 
     def mark_edited(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
@@ -193,7 +215,8 @@ class Meal:
             is_manually_edited=True,
             meal_type=self.meal_type,
             translations=self.translations,
-            source=self.source
+            source=self.source,
+            **self._recipe_fields()
         )
 
     def mark_inactive(self) -> 'Meal':
@@ -215,7 +238,8 @@ class Meal:
             is_manually_edited=self.is_manually_edited,
             meal_type=self.meal_type,
             translations=self.translations,
-            source=self.source
+            source=self.source,
+            **self._recipe_fields()
         )
     
     def to_dict(self) -> dict:
@@ -245,5 +269,18 @@ class Meal:
                 lang: trans.to_dict()
                 for lang, trans in self.translations.items()
             }
+
+        if self.description is not None:
+            result["description"] = self.description
+        if self.instructions is not None:
+            result["instructions"] = self.instructions
+        if self.prep_time_min is not None:
+            result["prep_time_min"] = self.prep_time_min
+        if self.cook_time_min is not None:
+            result["cook_time_min"] = self.cook_time_min
+        if self.cuisine_type is not None:
+            result["cuisine_type"] = self.cuisine_type
+        if self.origin_country is not None:
+            result["origin_country"] = self.origin_country
 
         return result
