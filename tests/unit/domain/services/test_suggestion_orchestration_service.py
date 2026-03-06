@@ -89,7 +89,10 @@ def mock_session():
 def mock_recipe_response():
     """Create a valid RecipeDetailsResponse mock content."""
     return {
-        "ingredients": [{"name": "Spinach", "amount": 1, "unit": "cup"}],
+        "ingredients": [
+            {"name": "Spinach", "amount": 1, "unit": "cup"},
+            {"name": "Eggs", "amount": 2, "unit": "whole"},
+        ],
         "recipe_steps": [{"step": 1, "instruction": "Wilt spinach", "duration_minutes": 5}],
         "prep_time_minutes": 10,
     }
