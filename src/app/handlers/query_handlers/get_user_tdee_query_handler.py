@@ -9,7 +9,7 @@ from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.user import TdeeRequest, Sex, JobType, Goal, UnitSystem
+from src.domain.model.user import TdeeRequest, Sex, JobType, Goal, UnitSystem, TrainingLevel
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow import UnitOfWork
@@ -43,6 +43,11 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
             # Map profile data to TDEE request using centralized mapper
             sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
 
+            # Map training level if profile has it
+            training_level = None
+            if profile.training_level:
+                training_level = ActivityGoalMapper.map_training_level(profile.training_level)
+
             tdee_request = TdeeRequest(
                 age=profile.age,
                 sex=sex,
@@ -54,6 +59,7 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
                 goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
                 body_fat_pct=profile.body_fat_percentage,
                 unit_system=UnitSystem.METRIC,
+                training_level=training_level,
             )
 
             # Calculate TDEE

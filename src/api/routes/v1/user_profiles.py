@@ -55,7 +55,8 @@ async def save_user_onboarding(
             pain_points=request.pain_points,
             dietary_preferences=request.dietary_preferences,
             meals_per_day=request.meals_per_day,
-            referral_sources=request.referral_sources
+            referral_sources=request.referral_sources,
+            training_level=request.training_level
         )
 
         await event_bus.send(command)

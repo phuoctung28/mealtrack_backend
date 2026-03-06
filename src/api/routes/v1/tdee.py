@@ -41,6 +41,7 @@ async def preview_tdee(
             goal=request.goal.value,
             body_fat_percentage=request.body_fat_percentage,
             unit_system=request.unit_system.value,
+            training_level=request.training_level.value if request.training_level else None,
         )
 
         result = await event_bus.send(query)
