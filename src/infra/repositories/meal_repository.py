@@ -102,11 +102,6 @@ class MealRepository(MealRepositoryPort):
                             db_item = FoodItemMapper.to_persistence(item, nutrition_id=db_nutrition.id)
                             self.db.add(db_item)
 
-                if meal.nutrition:
-                     # This logic is tricky without flushing.
-                     # Let's trust that we can add DBNutrition separately.
-                     pass 
-
                 self.db.commit()
                 self.db.refresh(db_meal)
                 return MealMapper.to_domain(db_meal)
