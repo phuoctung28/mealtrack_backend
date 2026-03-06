@@ -52,7 +52,7 @@ class Meal:
     source: Optional[str] = None
     # Recipe details (populated for AI suggestions)
     description: Optional[str] = None
-    instructions: Optional[List[str]] = None
+    instructions: Optional[list] = None  # List[str] (legacy) or List[dict] with {instruction, duration_minutes}
     prep_time_min: Optional[int] = None
     cook_time_min: Optional[int] = None
     cuisine_type: Optional[str] = None

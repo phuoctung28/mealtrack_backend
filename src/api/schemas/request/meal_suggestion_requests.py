@@ -4,7 +4,7 @@ Request schemas for meal suggestion generation.
 
 import warnings
 from enum import Enum
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -149,6 +149,15 @@ class MealSuggestionRequest(BaseModel):
         }
 
 
+class SaveInstructionItem(BaseModel):
+    """A single cooking instruction step with optional duration."""
+
+    instruction: str = Field(..., description="Instruction text")
+    duration_minutes: Optional[int] = Field(
+        None, ge=0, description="Estimated duration in minutes"
+    )
+
+
 class SaveIngredientItem(BaseModel):
     """
     A single ingredient with quantity, unit, and optional per-item macros.
@@ -204,8 +213,9 @@ class SaveMealSuggestionRequest(BaseModel):
         default_factory=list,
         description="Structured ingredient list with name, amount, and unit",
     )
-    instructions: List[str] = Field(
-        default_factory=list, description="List of cooking instructions"
+    instructions: List[Union[str, SaveInstructionItem]] = Field(
+        default_factory=list,
+        description="Cooking instructions as strings or {instruction, duration_minutes} objects",
     )
     portion_multiplier: int = Field(
         default=1,

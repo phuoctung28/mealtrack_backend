@@ -142,7 +142,7 @@ class DetailedMealResponse(SimpleMealResponse):
     )
     # Recipe details (populated for AI suggestions, null for scanned/manual meals)
     description: Optional[str] = Field(None, description="Meal description")
-    instructions: Optional[List[str]] = Field(None, description="Recipe instruction steps")
+    instructions: Optional[List[dict]] = Field(None, description="Structured recipe steps: [{instruction, duration_minutes}]")
     prep_time_min: Optional[int] = Field(None, description="Prep time in minutes")
     cook_time_min: Optional[int] = Field(None, description="Cook time in minutes")
     cuisine_type: Optional[str] = Field(None, description="Cuisine type")

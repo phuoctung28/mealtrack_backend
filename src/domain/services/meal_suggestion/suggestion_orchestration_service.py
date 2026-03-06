@@ -468,22 +468,36 @@ class SuggestionOrchestrationService:
                     f"model_purpose={model_purpose} | meal_name={meal_name}"
                 )
 
-                # Validate user's input ingredients are present in recipe
-                # Skip for non-English: translated ingredient names won't match English input
+                # Log ingredient coverage (non-blocking).
+                # Generic terms like "meat" map to specific proteins (pork, chicken, beef)
+                # so hard rejection causes unnecessary failures. AI prompt handles intent.
                 if session.ingredients and session.language == "en":
                     recipe_ing_names = " ".join(
                         ing.get("name", "").lower() for ing in ingredients
                     )
+                    meal_name_lower = meal_name.lower()
+
+                    def _ingredient_found(user_ing: str) -> bool:
+                        """Check if user ingredient appears in recipe or meal name."""
+                        ui = user_ing.lower().strip()
+                        # Direct or prefix match in recipe ingredients
+                        if ui in recipe_ing_names:
+                            return True
+                        prefix = ui[:max(4, len(ui) - 2)]
+                        if prefix in recipe_ing_names:
+                            return True
+                        # Also check meal name (e.g. "blueberry" in "Blueberry Parfait")
+                        return ui in meal_name_lower or prefix in meal_name_lower
+
                     missing = [
                         ui for ui in session.ingredients
-                        if ui.lower() not in recipe_ing_names
+                        if not _ingredient_found(ui)
                     ]
                     if missing:
                         logger.warning(
                             f"[PHASE-2-INGREDIENT-MISMATCH]{retry_marker} index={index} | "
                             f"missing={missing} | meal_name={meal_name}"
                         )
-                        return None  # Reject — will retry with alternate model
 
                 return MealSuggestion(
                     id=f"sug_{uuid.uuid4().hex[:16]}",

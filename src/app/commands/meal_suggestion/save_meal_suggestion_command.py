@@ -40,7 +40,7 @@ class SaveMealSuggestionCommand(Command):
     description: Optional[str]
     estimated_cook_time_minutes: Optional[int]
     ingredients: List[IngredientItem]
-    instructions: List[str]
+    instructions: list  # List[str] or List[dict] with {instruction, duration_minutes}
     portion_multiplier: int
     meal_date: str  # YYYY-MM-DD format
     cuisine_type: Optional[str] = None
