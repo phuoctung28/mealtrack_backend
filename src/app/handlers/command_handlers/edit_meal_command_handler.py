@@ -5,7 +5,7 @@ import logging
 import uuid
 from typing import Dict, Any, Optional
 
-from src.api.exceptions import ValidationException, ResourceNotFoundException
+from src.api.exceptions import ValidationException, ResourceNotFoundException, AuthorizationException
 from src.app.commands.meal import EditMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import MealEditedEvent
@@ -50,6 +50,10 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 meal = uow.meals.find_by_id(command.meal_id)
                 if not meal:
                     raise ResourceNotFoundException("Meal not found")
+
+                # 1a. Check ownership if user_id provided
+                if command.user_id and meal.user_id != command.user_id:
+                    raise AuthorizationException("You do not have permission to modify this meal")
 
                 if meal.status != MealStatus.READY:
                     raise ValidationException("Meal must be in READY status to edit")

@@ -15,4 +15,5 @@ class UpdateUserMetricsCommand:
     training_minutes_per_session: Optional[int] = None
     body_fat_percent: Optional[float] = None
     fitness_goal: Optional[str] = None
+    training_level: Optional[str] = None
 

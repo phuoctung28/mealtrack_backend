@@ -41,7 +41,16 @@ class MealMapper:
             edit_count=db_meal.edit_count,
             is_manually_edited=db_meal.is_manually_edited,
             meal_type=db_meal.meal_type,
-            translations=translations_dict
+            translations=translations_dict,
+            is_cheat_meal=db_meal.is_cheat_meal if hasattr(db_meal, 'is_cheat_meal') else False,
+            cheat_tagged_at=db_meal.cheat_tagged_at if hasattr(db_meal, 'cheat_tagged_at') else None,
+            source=db_meal.source if hasattr(db_meal, 'source') else None,
+            description=db_meal.description if hasattr(db_meal, 'description') else None,
+            instructions=db_meal.instructions if hasattr(db_meal, 'instructions') else None,
+            prep_time_min=db_meal.prep_time_min if hasattr(db_meal, 'prep_time_min') else None,
+            cook_time_min=db_meal.cook_time_min if hasattr(db_meal, 'cook_time_min') else None,
+            cuisine_type=db_meal.cuisine_type if hasattr(db_meal, 'cuisine_type') else None,
+            origin_country=db_meal.origin_country if hasattr(db_meal, 'origin_country') else None
         )
 
     @staticmethod
@@ -64,7 +73,15 @@ class MealMapper:
             last_edited_at=domain_meal.last_edited_at,
             edit_count=domain_meal.edit_count,
             is_manually_edited=domain_meal.is_manually_edited,
-            # image_id and nutrition_id are handled by repository logic or ORM
+            is_cheat_meal=domain_meal.is_cheat_meal,
+            cheat_tagged_at=domain_meal.cheat_tagged_at,
+            source=domain_meal.source,
+            description=domain_meal.description,
+            instructions=domain_meal.instructions,
+            prep_time_min=domain_meal.prep_time_min,
+            cook_time_min=domain_meal.cook_time_min,
+            cuisine_type=domain_meal.cuisine_type,
+            origin_country=domain_meal.origin_country,
         )
 
 

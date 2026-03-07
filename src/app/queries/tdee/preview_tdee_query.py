@@ -20,3 +20,4 @@ class PreviewTdeeQuery(Query):
     goal: str
     body_fat_percentage: Optional[float] = None
     unit_system: str = "metric"
+    training_level: Optional[str] = None

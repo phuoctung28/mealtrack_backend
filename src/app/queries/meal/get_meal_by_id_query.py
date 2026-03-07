@@ -10,3 +10,4 @@ from src.app.events.base import Query
 class GetMealByIdQuery(Query):
     """Query to get a meal by ID."""
     meal_id: str
+    user_id: str = ""

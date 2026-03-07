@@ -85,7 +85,11 @@ class TdeeRequest:
             raise ValueError(
                 f"Training days per week must be between 0-7: {self.training_days_per_week}"
             )
-        if not (15 <= self.training_minutes_per_session <= 180):
+        # Allow 0 minutes when no training days (sedentary user)
+        if self.training_days_per_week == 0:
+            if self.training_minutes_per_session != 0:
+                self.training_minutes_per_session = 0  # Normalize
+        elif not (15 <= self.training_minutes_per_session <= 180):
             raise ValueError(
                 f"Training minutes per session must be between 15-180: {self.training_minutes_per_session}"
             )

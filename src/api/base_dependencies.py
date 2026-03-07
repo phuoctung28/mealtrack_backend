@@ -432,3 +432,24 @@ def get_meal_translation_service(
         if own_session:
             db.close()
         raise
+
+
+# Singleton subscription service instance
+_subscription_service: Optional["SubscriptionServicePort"] = None
+
+
+def get_subscription_service() -> "SubscriptionServicePort":
+    """
+    Get the subscription service instance.
+
+    Returns:
+        SubscriptionServicePort: The subscription service
+    """
+    global _subscription_service
+
+    if _subscription_service is None:
+        from src.infra.adapters.revenuecat_adapter import RevenueCatAdapter
+        api_key = os.getenv("REVENUECAT_SECRET_API_KEY", "")
+        _subscription_service = RevenueCatAdapter(api_key=api_key)
+
+    return _subscription_service

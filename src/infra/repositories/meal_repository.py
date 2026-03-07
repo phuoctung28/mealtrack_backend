@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import Meal as DBMeal
 from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
@@ -44,7 +45,7 @@ class MealRepository(MealRepositoryPort):
                 existing_meal.ready_at = meal.ready_at
                 existing_meal.error_message = meal.error_message
                 existing_meal.raw_ai_response = meal.raw_gpt_json
-                existing_meal.updated_at = meal.updated_at or datetime.utcnow()
+                existing_meal.updated_at = meal.updated_at or utc_now()
                 existing_meal.last_edited_at = meal.last_edited_at
                 existing_meal.edit_count = meal.edit_count
                 existing_meal.is_manually_edited = meal.is_manually_edited
@@ -100,11 +101,6 @@ class MealRepository(MealRepositoryPort):
                         for item in meal.nutrition.food_items:
                             db_item = FoodItemMapper.to_persistence(item, nutrition_id=db_nutrition.id)
                             self.db.add(db_item)
-
-                if meal.nutrition:
-                     # This logic is tricky without flushing.
-                     # Let's trust that we can add DBNutrition separately.
-                     pass 
 
                 self.db.commit()
                 self.db.refresh(db_meal)

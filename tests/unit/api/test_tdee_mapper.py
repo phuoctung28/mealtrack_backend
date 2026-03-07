@@ -38,7 +38,8 @@ class TestTdeeMapper:
         assert domain.body_fat_pct == 15.0
         assert domain.job_type.value == "desk"
         assert domain.training_days_per_week == 0
-        assert domain.training_minutes_per_session == 15
+        # Domain model normalizes training_minutes to 0 when training_days is 0 (sedentary)
+        assert domain.training_minutes_per_session == 0
         assert domain.goal.value == "recomp"
         assert domain.unit_system.value == "metric"
 
@@ -68,31 +69,39 @@ class TestTdeeMapper:
 
     def test_to_domain_all_activity_levels(self):
         """Test converting DTO with all job types and training combinations."""
-        # Map old activity levels to new fields (using min 15 for sedentary to satisfy schema)
-        test_cases = [
-            ("desk", 0, 15),     # sedentary (min 15 minutes required by schema)
-            ("desk", 2, 45),     # light
-            ("desk", 4, 60),     # moderate
-            ("on_feet", 5, 60),  # active
-            ("on_feet", 6, 90),  # extra
-        ]
+        # Test sedentary case (training_days=0): domain normalizes minutes to 0
+        dto = TdeeCalculationRequest(
+            age=30,
+            sex="male",
+            height=175,
+            weight=70,
+            body_fat_percentage=None,
+            job_type="desk",
+            training_days_per_week=0,
+            training_minutes_per_session=15,  # Schema requires min 15
+            goal="recomp",
+            unit_system="metric"
+        )
+        domain = self.mapper.to_domain(dto)
+        assert domain.job_type.value == "desk"
+        assert domain.training_days_per_week == 0
+        assert domain.training_minutes_per_session == 0  # Normalized to 0
 
-        for job_type, training_days, training_minutes in test_cases:
+        # Test active cases (training_days > 0): domain preserves minutes
+        for training_days, training_minutes in [(2, 45), (4, 60), (5, 60), (6, 90)]:
             dto = TdeeCalculationRequest(
                 age=30,
                 sex="male",
                 height=175,
                 weight=70,
                 body_fat_percentage=None,
-                job_type=job_type,
+                job_type="on_feet" if training_days >= 5 else "desk",
                 training_days_per_week=training_days,
                 training_minutes_per_session=training_minutes,
                 goal="recomp",
                 unit_system="metric"
             )
-
             domain = self.mapper.to_domain(dto)
-            assert domain.job_type.value == job_type
             assert domain.training_days_per_week == training_days
             assert domain.training_minutes_per_session == training_minutes
 

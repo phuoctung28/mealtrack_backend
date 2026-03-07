@@ -70,12 +70,13 @@ class TestSubscriptionMiddleware:
         """Test require_subscription checks RevenueCat when no local subscription."""
         mock_request.state.user = mock_user_without_subscription
 
-        with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
-            mock_getenv.return_value = "test_key"
+        # Create mock subscription service
+        mock_service = AsyncMock()
+        mock_service.has_active_subscription = AsyncMock(return_value=True)
 
-            with patch('src.api.middleware.premium_check.RevenueCatService') as mock_service_class:
-                mock_service = mock_service_class.return_value
-                mock_service.has_active_subscription = AsyncMock(return_value=True)
+        with patch('src.api.middleware.premium_check._get_subscription_service', return_value=mock_service):
+            with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
+                mock_getenv.return_value = "test_key"
 
                 # Should not raise exception - user has subscription in RevenueCat
                 result = await require_subscription(mock_request)
@@ -88,12 +89,13 @@ class TestSubscriptionMiddleware:
         """Test require_subscription denies access when no subscription anywhere."""
         mock_request.state.user = mock_user_without_subscription
 
-        with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
-            mock_getenv.return_value = "test_key"
+        # Create mock subscription service
+        mock_service = AsyncMock()
+        mock_service.has_active_subscription = AsyncMock(return_value=False)
 
-            with patch('src.api.middleware.premium_check.RevenueCatService') as mock_service_class:
-                mock_service = mock_service_class.return_value
-                mock_service.has_active_subscription = AsyncMock(return_value=False)
+        with patch('src.api.middleware.premium_check._get_subscription_service', return_value=mock_service):
+            with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
+                mock_getenv.return_value = "test_key"
 
                 with pytest.raises(HTTPException) as exc_info:
                     await require_subscription(mock_request)
@@ -144,17 +146,18 @@ class TestSubscriptionMiddleware:
         """Test get_subscription_status checks RevenueCat when no local subscription."""
         mock_request.state.user = mock_user_without_subscription
 
-        with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
-            mock_getenv.return_value = "test_key"
+        # Create mock subscription service
+        mock_service = AsyncMock()
+        mock_service.get_subscription_info = AsyncMock(return_value={
+            "product_id": "standard_yearly",
+            "expires_date": datetime.now() + timedelta(days=365),
+            "store": "APP_STORE",
+            "is_active": True
+        })
 
-            with patch('src.api.middleware.premium_check.RevenueCatService') as mock_service_class:
-                mock_service = mock_service_class.return_value
-                mock_service.get_subscription_info = AsyncMock(return_value={
-                    "product_id": "standard_yearly",
-                    "expires_date": datetime.now() + timedelta(days=365),
-                    "store": "APP_STORE",
-                    "is_active": True
-                })
+        with patch('src.api.middleware.premium_check._get_subscription_service', return_value=mock_service):
+            with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
+                mock_getenv.return_value = "test_key"
 
                 result = await get_subscription_status(mock_request)
 
@@ -168,12 +171,13 @@ class TestSubscriptionMiddleware:
         """Test get_subscription_status when user has no subscription."""
         mock_request.state.user = mock_user_without_subscription
 
-        with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
-            mock_getenv.return_value = "test_key"
+        # Create mock subscription service
+        mock_service = AsyncMock()
+        mock_service.get_subscription_info = AsyncMock(return_value=None)
 
-            with patch('src.api.middleware.premium_check.RevenueCatService') as mock_service_class:
-                mock_service = mock_service_class.return_value
-                mock_service.get_subscription_info = AsyncMock(return_value=None)
+        with patch('src.api.middleware.premium_check._get_subscription_service', return_value=mock_service):
+            with patch('src.api.middleware.premium_check.os.getenv') as mock_getenv:
+                mock_getenv.return_value = "test_key"
 
                 result = await get_subscription_status(mock_request)
 

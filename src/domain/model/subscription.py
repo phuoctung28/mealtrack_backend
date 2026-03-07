@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 from src.domain.model.base import BaseDomainModel
+from src.domain.utils.timezone_utils import utc_now
 
 
 @dataclass
@@ -17,7 +18,7 @@ class Subscription(BaseDomainModel):
     def is_active(self) -> bool:
         if self.status != "active":
             return False
-        if self.expires_at and self.expires_at < datetime.utcnow():
+        if self.expires_at and self.expires_at < utc_now():
             return False
         return True
     

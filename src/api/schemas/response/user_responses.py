@@ -86,6 +86,7 @@ class UserMetricsResponse(BaseModel):
     job_type: str = Field(..., description="Job type: desk, on_feet, physical")
     training_days_per_week: int = Field(..., description="Training days per week (0-7)")
     training_minutes_per_session: int = Field(..., description="Training minutes per session (15-180)")
+    training_level: Optional[str] = Field(None, description="Training level: beginner, intermediate, advanced")
     fitness_goal: str = Field(..., description="Current fitness goal")
     target_weight_kg: Optional[float] = Field(None, description="Target weight in kilograms")
     updated_at: datetime = Field(..., description="Last update timestamp")

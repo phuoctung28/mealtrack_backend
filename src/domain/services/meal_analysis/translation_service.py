@@ -13,6 +13,7 @@ from src.domain.model.meal import Meal, MealTranslation, FoodItemTranslation
 from src.domain.model.nutrition import FoodItem
 from src.domain.ports.meal_translation_repository_port import MealTranslationRepositoryPort
 from src.domain.services.meal_suggestion.translation_service import TranslationService
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -242,5 +243,5 @@ class MealAnalysisTranslationService:
             language=language,
             dish_name=translated_dish_name,
             food_items=food_item_translations,
-            translated_at=datetime.utcnow()
+            translated_at=utc_now()
         )

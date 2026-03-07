@@ -92,8 +92,9 @@ class TestWebhookHandler:
     async def test_webhook_success(self, mock_request, webhook_event):
         """Test successful webhook processing."""
         mock_request.json.return_value = webhook_event
-        
-        with patch('src.api.routes.v1.webhooks.os.getenv', return_value=""):
+
+        # Set a valid webhook secret for the test
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
             with patch('src.api.routes.v1.webhooks.UnitOfWork') as mock_uow_class:
                 mock_uow = MagicMock()
                 mock_uow_class.return_value.__enter__ = MagicMock(return_value=mock_uow)
@@ -107,7 +108,7 @@ class TestWebhookHandler:
                 
                 # Mock no existing subscription
                 with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', return_value=None):
-                    result = await revenuecat_webhook(mock_request, authorization=None)
+                    result = await revenuecat_webhook(mock_request, authorization="test_secret")
                 
                 assert result == {"status": "success"}
                 mock_uow.commit.assert_called_once()
@@ -115,30 +116,32 @@ class TestWebhookHandler:
     async def test_webhook_user_not_found(self, mock_request, webhook_event):
         """Test webhook when user not found."""
         mock_request.json.return_value = webhook_event
-        
-        with patch('src.api.routes.v1.webhooks.os.getenv', return_value=""):
+
+        # Set a valid webhook secret for the test
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
             with patch('src.api.routes.v1.webhooks.UnitOfWork') as mock_uow_class:
                 mock_uow = MagicMock()
                 mock_uow_class.return_value.__enter__ = MagicMock(return_value=mock_uow)
                 mock_uow_class.return_value.__exit__ = MagicMock(return_value=False)
-                
+
                 # Mock user not found
                 mock_query = MagicMock()
                 mock_uow.session.query.return_value = mock_query
                 mock_query.filter_by.return_value.first.return_value = None
-                
-                result = await revenuecat_webhook(mock_request, authorization=None)
-                
+
+                result = await revenuecat_webhook(mock_request, authorization="test_secret")
+
                 assert result == {"status": "user_not_found"}
     
     async def test_webhook_invalid_json(self, mock_request):
         """Test webhook with invalid JSON."""
         mock_request.json.side_effect = Exception("Invalid JSON")
-        
-        with patch('src.api.routes.v1.webhooks.os.getenv', return_value=""):
+
+        # Set a valid webhook secret for the test
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
             with pytest.raises(HTTPException) as exc_info:
-                await revenuecat_webhook(mock_request, authorization=None)
-            
+                await revenuecat_webhook(mock_request, authorization="test_secret")
+
             assert exc_info.value.status_code == 400
             assert exc_info.value.detail == "Invalid JSON"
     

@@ -7,7 +7,7 @@ from typing import Dict, Any
 from src.app.events.base import EventHandler, handles
 from src.app.queries.tdee.preview_tdee_query import PreviewTdeeQuery
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.user import TdeeRequest, Sex, UnitSystem, JobType
+from src.domain.model.user import TdeeRequest, Sex, UnitSystem, JobType, TrainingLevel
 from src.domain.services.tdee_service import TdeeCalculationService
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,11 @@ class PreviewTdeeQueryHandler(EventHandler[PreviewTdeeQuery, Dict[str, Any]]):
         goal = ActivityGoalMapper.map_goal(query.goal)
         unit_system = UnitSystem.METRIC if query.unit_system == "metric" else UnitSystem.IMPERIAL
 
+        # Map training level if provided
+        training_level = None
+        if query.training_level:
+            training_level = ActivityGoalMapper.map_training_level(query.training_level)
+
         # Create TDEE request with new job_type + training fields
         tdee_request = TdeeRequest(
             age=query.age,
@@ -51,6 +56,7 @@ class PreviewTdeeQueryHandler(EventHandler[PreviewTdeeQuery, Dict[str, Any]]):
             goal=goal,
             body_fat_pct=query.body_fat_percentage,
             unit_system=unit_system,
+            training_level=training_level,
         )
 
         # Calculate TDEE

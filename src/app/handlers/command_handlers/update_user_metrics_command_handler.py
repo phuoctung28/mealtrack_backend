@@ -26,7 +26,8 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
     async def handle(self, command: UpdateUserMetricsCommand) -> None:
         # Validate at least one field is provided
         if not any([command.weight_kg, command.job_type, command.training_days_per_week,
-                    command.training_minutes_per_session, command.body_fat_percent, command.fitness_goal]):
+                    command.training_minutes_per_session, command.body_fat_percent, command.fitness_goal,
+                    command.training_level]):
             raise ValidationException("At least one metric must be provided")
 
         with UnitOfWork() as uow:
@@ -81,6 +82,13 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                         command.fitness_goal
                     )
                     profile.fitness_goal = command.fitness_goal
+
+            # Handle training level update
+            if command.training_level is not None:
+                valid_levels = ['beginner', 'intermediate', 'advanced']
+                if command.training_level not in valid_levels:
+                    raise ValidationException(f"Training level must be one of: {valid_levels}")
+                profile.training_level = command.training_level
 
             # Ensure this profile is marked as current
             profile.is_current = True

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # Database configuration
     DATABASE_URL: str | None = Field(default=None)
     DB_USER: str = Field(default="nutree")
-    DB_PASSWORD: str = Field(default="changeme")
+    DB_PASSWORD: str = Field(default="")
     DB_HOST: str = Field(default="localhost")
     DB_PORT: int = Field(default=3306)
     DB_NAME: str = Field(default="nutree")

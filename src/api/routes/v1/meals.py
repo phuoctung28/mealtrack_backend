@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, UploadFile, Query, Request, status
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.base_dependencies import get_image_store
 from src.api.exceptions import handle_exception, ValidationException
 from src.api.middleware.accept_language import get_request_language
 from src.api.mappers.meal_mapper import MealMapper
@@ -38,7 +39,6 @@ from src.app.commands.meal.tag_cheat_meal_command import TagCheatMealCommand
 from src.app.commands.meal.untag_cheat_meal_command import UntagCheatMealCommand
 from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
-from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,7 @@ async def analyze_meal_image_immediate(
         description="Optional user context (max 200 chars): 'no sugar', 'grilled', etc.",
     ),
     event_bus: EventBus = Depends(get_configured_event_bus),
+    image_store = Depends(get_image_store),
 ):
     """
     Send meal photo and return immediate meal analysis with nutritional data.
@@ -180,8 +181,7 @@ async def analyze_meal_image_immediate(
         # Get the image URL if available
         image_url = None
         if meal.image:
-            # Try to get URL from image store
-            image_store = CloudinaryImageStore()
+            # Try to get URL from image store (injected via DI)
             image_url = image_store.get_url(meal.image.image_id)
 
         # Return the detailed meal response using mapper with translation support
@@ -282,21 +282,23 @@ async def parse_meal_text(
 async def get_meal(
     request: Request,
     meal_id: str,
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
+    image_store = Depends(get_image_store),
 ):
     """Get detailed information about a specific meal.
 
     Language preference is read from Accept-Language header.
+    Requires authentication - users can only access their own meals.
     """
     try:
-        # Send query
-        query = GetMealByIdQuery(meal_id=meal_id)
+        # Send query with user_id for ownership check
+        query = GetMealByIdQuery(meal_id=meal_id, user_id=user_id)
         meal = await event_bus.send(query)
 
-        # Get image URL if available
+        # Get image URL if available (injected via DI)
         image_url = None
         if meal.image:
-            image_store = CloudinaryImageStore()
             image_url = image_store.get_url(meal.image.image_id)
 
         # Get language from Accept-Language header via middleware
@@ -358,12 +360,14 @@ async def get_daily_macros(
 async def update_meal_ingredients(
     meal_id: str,
     request: EditMealIngredientsRequest,
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Update meal ingredients and portions.
 
     Supports adding, removing, and modifying ingredients with automatic nutrition recalculation.
+    Requires authentication - users can only modify their own meals.
     """
     try:
 
@@ -396,6 +400,7 @@ async def update_meal_ingredients(
 
         command = EditMealCommand(
             meal_id=meal_id,
+            user_id=user_id,
             dish_name=request.dish_name,
             food_item_changes=food_item_changes,
         )

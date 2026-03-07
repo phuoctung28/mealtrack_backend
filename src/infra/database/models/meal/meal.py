@@ -1,7 +1,7 @@
 """
 Meal model for the main meal entity.
 """
-from sqlalchemy import Column, String, Text, Enum, ForeignKey, DateTime, Integer, Boolean
+from sqlalchemy import Column, String, Text, Enum, ForeignKey, DateTime, Integer, Boolean, JSON
 from sqlalchemy.orm import relationship
 
 from src.domain.utils.timezone_utils import utc_now
@@ -36,7 +36,15 @@ class Meal(Base, TimestampMixin):
 
     # Source tracking (scanner, prompt, food_search, manual)
     source = Column(String(20), nullable=True)
-    
+
+    # Recipe details (populated for AI suggestions)
+    description = Column(Text, nullable=True)
+    instructions = Column(JSON, nullable=True)  # List[str]
+    prep_time_min = Column(Integer, nullable=True)
+    cook_time_min = Column(Integer, nullable=True)
+    cuisine_type = Column(String(50), nullable=True)
+    origin_country = Column(String(50), nullable=True)
+
     # Relationships
     image_id = Column(String(36), ForeignKey("mealimage.image_id"), nullable=False)
     image = relationship("MealImage", uselist=False, lazy="joined")
@@ -79,7 +87,13 @@ class Meal(Base, TimestampMixin):
             translations=translations_dict,
             is_cheat_meal=self.is_cheat_meal,
             cheat_tagged_at=self.cheat_tagged_at,
-            source=self.source
+            source=self.source,
+            description=self.description,
+            instructions=self.instructions,
+            prep_time_min=self.prep_time_min,
+            cook_time_min=self.cook_time_min,
+            cuisine_type=self.cuisine_type,
+            origin_country=self.origin_country
         )
     
     @classmethod
@@ -110,7 +124,13 @@ class Meal(Base, TimestampMixin):
             is_manually_edited=getattr(domain_model, "is_manually_edited", False),
             is_cheat_meal=getattr(domain_model, "is_cheat_meal", False),
             cheat_tagged_at=getattr(domain_model, "cheat_tagged_at", None),
-            source=getattr(domain_model, "source", None)
+            source=getattr(domain_model, "source", None),
+            description=getattr(domain_model, "description", None),
+            instructions=getattr(domain_model, "instructions", None),
+            prep_time_min=getattr(domain_model, "prep_time_min", None),
+            cook_time_min=getattr(domain_model, "cook_time_min", None),
+            cuisine_type=getattr(domain_model, "cuisine_type", None),
+            origin_country=getattr(domain_model, "origin_country", None)
         )
 
         # Add image reference - convert UUID to string

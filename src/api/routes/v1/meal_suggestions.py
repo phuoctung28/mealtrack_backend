@@ -115,9 +115,14 @@ async def save_meal_suggestion(
                 )
                 for i in request.ingredients
             ],
-            instructions=request.instructions,
+            instructions=[
+                i.model_dump() if hasattr(i, 'model_dump') else i
+                for i in request.instructions
+            ],
             portion_multiplier=request.portion_multiplier,
             meal_date=request.meal_date,
+            cuisine_type=request.cuisine_type,
+            origin_country=request.origin_country,
         )
 
         meal_id = await event_bus.send(command)
