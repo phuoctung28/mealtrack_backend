@@ -155,15 +155,34 @@ class FatSecretService:
                 "method": "foods.search",
                 "search_expression": query,
                 "max_results": max_results,
-                "page_number": 1,
+                "page_number": 0,
                 "format": "json",
             }
             result = await self._api_request("GET", "", params)
             if not result:
                 return []
 
+            # Handle both OAuth 1.0 and OAuth 2.0 response formats
             foods = result.get("foods", {}).get("food", [])
             if not foods:
+                # OAuth 2.0 format: {"foods_search": {"results": {"food": [...]}}}
+                foods = (
+                    result.get("foods_search", {})
+                    .get("results", {})
+                    .get("food", [])
+                )
+            if not foods:
+                # Log error details if present
+                error = result.get("error")
+                if error:
+                    logger.error(
+                        f"FatSecret API error for '{query}': {error}"
+                    )
+                else:
+                    logger.warning(
+                        f"FatSecret returned no foods for '{query}'. "
+                        f"Response keys: {list(result.keys())}"
+                    )
                 return []
             if isinstance(foods, dict):
                 foods = [foods]
@@ -180,9 +199,10 @@ class FatSecretService:
                         detail_params = {"method": "food.get", "food_id": food_id, "format": "json"}
                         details = await self._api_request("GET", "", detail_params)
                         if details:
-                            # Merge nutrition data
-                            nutrition = self._extract_nutrition_from_details(details)
-                            mapped.update(nrition)
+                            # Handle both response formats for food.get
+                            food_data = details.get("food", details)
+                            nutrition = self._extract_nutrition_from_details(food_data)
+                            mapped.update(nutrition)
                     except Exception:
                         pass  # Use basic mapped data if details fail
 

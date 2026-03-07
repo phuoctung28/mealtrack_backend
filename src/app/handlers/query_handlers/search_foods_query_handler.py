@@ -49,7 +49,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
             except Exception:
                 logger.warning("FatSecret search failed", exc_info=True)
 
-        await self.cache_service.cache_search(event.query, processed_raw)
+        # Only cache non-empty results to avoid persisting API failures
+        if processed_raw:
+            await self.cache_service.cache_search(event.query, processed_raw)
         mapped = [self.mapping_service.map_search_item(i) for i in processed_raw]
         return {"results": mapped, "query": event.query, "total": len(mapped)}
 
