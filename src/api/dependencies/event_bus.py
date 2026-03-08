@@ -76,6 +76,17 @@ from src.app.handlers.command_handlers import (
     TagCheatMealCommandHandler,
     UntagCheatMealCommandHandler,
 )
+# Saved suggestion handlers
+from src.app.handlers.command_handlers import (
+    SaveSuggestionCommandHandler,
+    DeleteSavedSuggestionCommandHandler,
+)
+from src.app.commands.saved_suggestion import (
+    SaveSuggestionCommand,
+    DeleteSavedSuggestionCommand,
+)
+from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
+from src.app.handlers.query_handlers import GetSavedSuggestionsQueryHandler
 
 # Chat handlers
 from src.app.handlers.command_handlers.chat import (
@@ -474,6 +485,17 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         GetMessagesQuery,
         GetMessagesQueryHandler()
+    )
+
+    # Register saved suggestion handlers
+    event_bus.register_handler(
+        SaveSuggestionCommand, SaveSuggestionCommandHandler()
+    )
+    event_bus.register_handler(
+        DeleteSavedSuggestionCommand, DeleteSavedSuggestionCommandHandler()
+    )
+    event_bus.register_handler(
+        GetSavedSuggestionsQuery, GetSavedSuggestionsQueryHandler()
     )
 
     # Register domain event subscribers
