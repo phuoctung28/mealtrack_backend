@@ -54,7 +54,13 @@ class SaveMealSuggestionCommandHandler(
             carbs=command.carbs,
             fat=command.fat,
         )
-        food_items = self._build_food_items(command.ingredients)
+        food_items = self._build_food_items(
+            command.ingredients,
+            total_calories=command.calories,
+            total_protein=command.protein,
+            total_carbs=command.carbs,
+            total_fat=command.fat,
+        )
         nutrition = Nutrition(
             calories=command.calories,
             macros=macros,
@@ -109,15 +115,20 @@ class SaveMealSuggestionCommandHandler(
 
             return saved_meal.meal_id
 
-    @staticmethod
-    def _build_food_items(ingredients: List[IngredientItem]) -> List[FoodItem]:
+    def _build_food_items(
+        self,
+        ingredients: List[IngredientItem],
+        total_calories: int,
+        total_protein: float,
+        total_carbs: float,
+        total_fat: float,
+    ) -> List[FoodItem]:
         """
         Convert suggestion ingredients into FoodItem domain objects.
 
-        Uses per-ingredient macros when provided by the caller. Falls back to
-        zero values when unavailable (e.g. saving directly from an AI suggestion
-        without a nutrition DB lookup). The meal-level Nutrition object always
-        carries the accurate aggregated totals regardless.
+        Uses per-ingredient macros when provided. If all items have zero
+        calories but meal-level totals exist, distributes totals
+        proportionally by estimated weight.
         """
         items = []
         for ingredient in ingredients:
@@ -142,7 +153,57 @@ class SaveMealSuggestionCommandHandler(
                 logger.warning(
                     "Skipping invalid ingredient %r: %s", ingredient.name, exc
                 )
+
+        # Distribute meal-level totals when all items have 0 calories
+        if items and total_calories > 0 and all(item.calories == 0 for item in items):
+            items = self._distribute_nutrition(
+                items, total_calories, total_protein, total_carbs, total_fat
+            )
+
         return items
+
+    @staticmethod
+    def _estimate_weight_grams(quantity: float, unit: str) -> float:
+        """Estimate weight in grams for proportional distribution."""
+        conversions = {
+            'g': 1.0, 'kg': 1000.0, 'oz': 28.35, 'lb': 453.6,
+            'ml': 1.0, 'l': 1000.0, 'cup': 240.0, 'tbsp': 15.0, 'tsp': 5.0,
+        }
+        return quantity * conversions.get(unit.lower().strip(), 1.0)
+
+    def _distribute_nutrition(
+        self,
+        items: List[FoodItem],
+        total_cal: int,
+        total_protein: float,
+        total_carbs: float,
+        total_fat: float,
+    ) -> List[FoodItem]:
+        """Distribute meal-level totals proportionally by estimated weight."""
+        total_weight = sum(
+            self._estimate_weight_grams(item.quantity, item.unit) for item in items
+        )
+        if total_weight <= 0:
+            return items
+
+        distributed = []
+        for item in items:
+            ratio = self._estimate_weight_grams(item.quantity, item.unit) / total_weight
+            distributed.append(FoodItem(
+                id=item.id,
+                name=item.name,
+                quantity=item.quantity,
+                unit=item.unit,
+                calories=round(total_cal * ratio, 1),
+                macros=Macros(
+                    protein=round(total_protein * ratio, 1),
+                    carbs=round(total_carbs * ratio, 1),
+                    fat=round(total_fat * ratio, 1),
+                ),
+                confidence=0.8,
+                is_custom=True,
+            ))
+        return distributed
 
     async def _invalidate_daily_macros(self, user_id: str, target_date) -> None:
         if not self.cache_service:

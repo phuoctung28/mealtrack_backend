@@ -42,6 +42,7 @@ from src.api.routes.v1.health import router as health_router
 from src.api.routes.v1.ingredients import router as ingredients_router
 from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
 from src.api.routes.v1.meals import router as meals_router
+from src.api.routes.v1.saved_suggestions import router as saved_suggestions_router
 from src.api.routes.v1.monitoring import router as monitoring_router
 from src.api.routes.v1.notifications import router as notifications_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
@@ -218,6 +219,7 @@ app.include_router(webhooks_router)
 app.include_router(notifications_router)
 app.include_router(ingredients_router)
 app.include_router(tdee_router)
+app.include_router(saved_suggestions_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get("ENVIRONMENT") == "development":
