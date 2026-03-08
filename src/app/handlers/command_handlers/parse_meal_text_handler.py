@@ -14,7 +14,10 @@ from src.domain.services.prompts.input_sanitizer import sanitize_user_descriptio
 from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 from src.infra.services.ai.prompts.system_prompts import SystemPrompts
 from src.infra.adapters.fat_secret_service import get_fat_secret_service
-from src.domain.services.nutrition_calculation_service import scale_per_100g_nutrition
+from src.domain.services.nutrition_calculation_service import (
+    scale_per_100g_nutrition,
+    clamp_nutrition_values,
+)
 from src.app.handlers.command_handlers.meal_text_parsing_utils import (
     extract_json_from_response,
     extract_usda_nutrition,
@@ -69,6 +72,11 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         for item in parsed_items:
             enhanced = await self._cascade_lookup(item)
             enhanced_items.append(enhanced)
+
+        # Clamp nutrition to physically plausible ranges
+        for item in enhanced_items:
+            clamped = clamp_nutrition_values(item)
+            item.update(clamped)
 
         # Calculate totals
         total_calories = sum(item.get("calories", 0) for item in enhanced_items)

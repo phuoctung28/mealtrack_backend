@@ -112,6 +112,45 @@ def _convert_with_allowed_units(
     return convert_quantity_to_grams(quantity, unit)
 
 
+def clamp_nutrition_values(item: dict) -> dict:
+    """Clamp nutrition to physically plausible ranges for the given quantity.
+
+    Macronutrients (protein/carbs/fat) cannot exceed the food's total weight.
+    Returns clamped values; logs a warning when clamping occurs.
+    """
+    quantity = item.get("quantity", 1.0)
+    unit = (item.get("unit") or "g").lower()
+
+    # Estimate weight in grams for plausibility check
+    weight_g = convert_quantity_to_grams(quantity, unit)
+    if weight_g <= 0:
+        return item
+
+    calories = item.get("calories", 0.0)
+    protein = item.get("protein", 0.0)
+    carbs = item.get("carbs", 0.0)
+    fat = item.get("fat", 0.0)
+
+    # Each macro can't exceed total weight; calories max ~9 kcal/g (pure fat)
+    max_cal = weight_g * 9.0
+    clamped = {
+        "calories": min(max(calories, 0), max_cal),
+        "protein": min(max(protein, 0), weight_g),
+        "carbs": min(max(carbs, 0), weight_g),
+        "fat": min(max(fat, 0), weight_g),
+    }
+
+    if clamped != {"calories": calories, "protein": protein, "carbs": carbs, "fat": fat}:
+        logger.warning(
+            f"Clamped implausible nutrition for '{item.get('name', '?')}' "
+            f"({quantity} {unit}): {calories:.1f}cal/{protein:.1f}p/{carbs:.1f}c/{fat:.1f}f "
+            f"-> {clamped['calories']:.1f}cal/{clamped['protein']:.1f}p/"
+            f"{clamped['carbs']:.1f}c/{clamped['fat']:.1f}f"
+        )
+
+    return clamped
+
+
 @dataclass
 class ScaledNutritionResult:
     """Result of nutrition calculation for a specific quantity."""
