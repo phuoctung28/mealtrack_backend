@@ -196,14 +196,6 @@ class ConversationConstants:
 class WeeklyBudgetConstants:
     """Constants for weekly macro budget feature."""
 
-    # Cheat meals per fitness goal
-    # MAINTENANCE goal does not exist in the app
-    CHEAT_SLOTS_BY_GOAL = {
-        "cut": 2,
-        "bulk": 3,
-        "recomp": 4,
-    }
-
     # BMR floor: daily target never drops below this ratio of standard daily
     BMR_FLOOR_RATIO = 0.80
 

@@ -34,10 +34,6 @@ class WeeklyMacroBudget(Base, TimestampMixin):
     consumed_carbs = Column(Float, default=0.0, nullable=False)
     consumed_fat = Column(Float, default=0.0, nullable=False)
 
-    # Cheat meal slots
-    cheat_slots_total = Column(Integer, nullable=False)
-    cheat_slots_used = Column(Integer, default=0, nullable=False)
-
     # Unique constraint and indexes
     __table_args__ = (
         UniqueConstraint('user_id', 'week_start_date', name='uq_user_week'),
@@ -60,8 +56,6 @@ class WeeklyMacroBudget(Base, TimestampMixin):
             consumed_protein=self.consumed_protein,
             consumed_carbs=self.consumed_carbs,
             consumed_fat=self.consumed_fat,
-            cheat_slots_total=self.cheat_slots_total,
-            cheat_slots_used=self.cheat_slots_used,
             created_at=self.created_at,
             updated_at=self.updated_at,
         )
@@ -81,8 +75,6 @@ class WeeklyMacroBudget(Base, TimestampMixin):
             consumed_protein=domain_model.consumed_protein,
             consumed_carbs=domain_model.consumed_carbs,
             consumed_fat=domain_model.consumed_fat,
-            cheat_slots_total=domain_model.cheat_slots_total,
-            cheat_slots_used=domain_model.cheat_slots_used,
             created_at=domain_model.created_at,
             updated_at=domain_model.updated_at,
         )

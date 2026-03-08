@@ -21,13 +21,6 @@ class WeeklyContextResponse(BaseModel):
     daily_protein: float = Field(..., description="Daily protein target (fixed)")
     bmr_floor_active: bool = Field(..., description="True if adjusted target hit BMR floor")
     remaining_days: int = Field(..., description="Days remaining in the week")
-    cheat_slots_remaining: int = Field(..., description="Cheat meals remaining this week")
-
-
-class CheatTagSuggestion(BaseModel):
-    """Smart prompt suggestion for cheat tagging."""
-    meal_id: str = Field(..., description="Meal ID to suggest tagging")
-    reason: str = Field(..., description="Reason for suggestion")
 
 
 class DailyNutritionResponse(BaseModel):
@@ -41,4 +34,3 @@ class DailyNutritionResponse(BaseModel):
     remaining_macros: MacrosResponse = Field(..., description="Remaining macros for the day")
     completion_percentage: Dict[str, float] = Field(..., description="Completion percentage for calories and macros")
     weekly_context: Optional[WeeklyContextResponse] = Field(None, description="Weekly budget context")
-    suggest_cheat_tag: Optional[CheatTagSuggestion] = Field(None, description="Smart prompt suggestion")

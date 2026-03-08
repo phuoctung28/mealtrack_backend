@@ -135,7 +135,6 @@ class DetailedMealResponse(SimpleMealResponse):
     total_calories: Optional[float] = Field(None, ge=0, description="Total calories")
     total_weight_grams: Optional[float] = Field(None, gt=0, description="Total weight")
     total_nutrition: Optional[MacrosResponse] = Field(None, description="Total macros")
-    is_cheat_meal: bool = Field(False, description="Whether this meal is tagged as cheat")
     translations: Optional[Dict[str, MealTranslationResponse]] = Field(
         None,
         description="Translations keyed by language code"

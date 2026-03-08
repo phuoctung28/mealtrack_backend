@@ -193,7 +193,6 @@ class MealMapper:
             total_calories=total_calories,
             total_weight_grams=meal.weight_grams if hasattr(meal, 'weight_grams') else None,
             total_nutrition=total_nutrition,
-            is_cheat_meal=meal.is_cheat_meal if hasattr(meal, 'is_cheat_meal') else False,
             translations=translations,
             description=getattr(meal, 'description', None),
             instructions=MealMapper._normalize_instructions(getattr(meal, 'instructions', None)),
@@ -346,7 +345,6 @@ class MealMapper:
         from src.api.schemas.response.daily_nutrition_response import (
             MacrosResponse,
             WeeklyContextResponse,
-            CheatTagSuggestion,
         )
         from src.api.exceptions import ResourceNotFoundException
 
@@ -394,7 +392,6 @@ class MealMapper:
 
         # Parse weekly context if present
         weekly_context = None
-        suggest_cheat_tag = None
 
         if daily_macros_data.get("weekly_context"):
             wc = daily_macros_data["weekly_context"]
@@ -405,16 +402,7 @@ class MealMapper:
                 daily_protein=wc.get("daily_protein", target_macros.protein),
                 bmr_floor_active=wc.get("bmr_floor_active", False),
                 remaining_days=wc.get("remaining_days", 7),
-                cheat_slots_remaining=wc.get("cheat_slots_remaining", 0),
             )
-
-            # Parse cheat tag suggestion
-            if wc.get("suggest_cheat_tag"):
-                st = wc["suggest_cheat_tag"]
-                suggest_cheat_tag = CheatTagSuggestion(
-                    meal_id=st.get("meal_id", ""),
-                    reason=st.get("reason", ""),
-                )
 
         return DailyNutritionResponse(
             date=daily_macros_data.get("date", ""),
@@ -426,5 +414,4 @@ class MealMapper:
             remaining_macros=remaining_macros,
             completion_percentage=completion_percentage,
             weekly_context=weekly_context,
-            suggest_cheat_tag=suggest_cheat_tag,
         )

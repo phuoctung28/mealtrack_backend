@@ -1,8 +1,9 @@
 """
 Weekly budget response schema.
 """
+from typing import List
+
 from pydantic import BaseModel
-from typing import Optional
 
 
 class WeeklyBudgetResponse(BaseModel):
@@ -21,21 +22,10 @@ class WeeklyBudgetResponse(BaseModel):
     remaining_protein: float
     remaining_carbs: float
     remaining_fat: float
-    cheat_slots_total: int
-    cheat_slots_used: int
-    cheat_slots_remaining: int
     adjusted_daily_calories: float
     adjusted_daily_carbs: float
     adjusted_daily_fat: float
     daily_protein: float
     remaining_days: int
     bmr_floor_active: bool
-
-
-class CheatMealTagResponse(BaseModel):
-    """Response schema for cheat meal tagging."""
-
-    meal_id: str
-    is_cheat_meal: bool
-    cheat_slots_remaining: int
-    message: str
+    cheat_days: List[str] = []  # List of "YYYY-MM-DD" date strings (manual marks only)

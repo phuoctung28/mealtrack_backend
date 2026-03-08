@@ -12,6 +12,7 @@ from src.infra.repositories.meal_suggestion_repository import MealSuggestionRepo
 from src.infra.repositories.notification_repository import NotificationRepository
 from src.infra.repositories.subscription_repository import SubscriptionRepository
 from src.infra.repositories.user_repository import UserRepository
+from src.infra.repositories.cheat_day_repository import CheatDayRepository
 from src.infra.repositories.saved_suggestion_db_repository import SavedSuggestionDbRepository
 from src.infra.repositories.weekly_budget_repository import WeeklyBudgetRepository
 
@@ -39,6 +40,7 @@ class UnitOfWork(UnitOfWorkPort):
         self.chats = ChatRepository(session)
         self.weekly_budgets = WeeklyBudgetRepository(session)
         self.saved_suggestions_db = SavedSuggestionDbRepository(session)
+        self.cheat_days = CheatDayRepository(session)
         
     def __enter__(self) -> 'UnitOfWork':
         """Enter context - start transaction."""

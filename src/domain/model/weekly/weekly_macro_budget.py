@@ -28,10 +28,6 @@ class WeeklyMacroBudget:
     consumed_carbs: float = 0.0
     consumed_fat: float = 0.0
 
-    # Cheat meal slots
-    cheat_slots_total: int = 0
-    cheat_slots_used: int = 0
-
     # Metadata
     created_at: Optional[date] = None
     updated_at: Optional[date] = None
@@ -57,11 +53,6 @@ class WeeklyMacroBudget:
         return max(0, self.target_fat - self.consumed_fat)
 
     @property
-    def remaining_cheat_slots(self) -> int:
-        """Calculate remaining cheat slots."""
-        return max(0, self.cheat_slots_total - self.cheat_slots_used)
-
-    @property
     def consumption_percentage(self) -> float:
         """Calculate percentage of weekly budget consumed."""
         if self.target_calories == 0:
@@ -79,20 +70,6 @@ class WeeklyMacroBudget:
         self.consumed_protein += protein
         self.consumed_carbs += carbs
         self.consumed_fat += fat
-
-    def use_cheat_slot(self) -> bool:
-        """Use a cheat slot. Returns True if successful."""
-        if self.remaining_cheat_slots <= 0:
-            return False
-        self.cheat_slots_used += 1
-        return True
-
-    def release_cheat_slot(self) -> bool:
-        """Release a used cheat slot. Returns True if successful."""
-        if self.cheat_slots_used <= 0:
-            return False
-        self.cheat_slots_used -= 1
-        return True
 
     def calculate_adjusted_daily(
         self,

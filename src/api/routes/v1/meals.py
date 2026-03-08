@@ -23,7 +23,7 @@ from src.api.schemas.request.meal_requests import (
 from src.api.schemas.response import DetailedMealResponse, ManualMealCreationResponse
 from src.api.schemas.response.meal_responses import ParseMealTextResponse
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
-from src.api.schemas.response.weekly_budget_response import WeeklyBudgetResponse, CheatMealTagResponse
+from src.api.schemas.response.weekly_budget_response import WeeklyBudgetResponse
 from src.app.commands.meal import EditMealCommand, FoodItemChange, CustomNutritionData
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
@@ -35,8 +35,6 @@ from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
 )
-from src.app.commands.meal.tag_cheat_meal_command import TagCheatMealCommand
-from src.app.commands.meal.untag_cheat_meal_command import UntagCheatMealCommand
 from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.infra.event_bus import EventBus
@@ -409,44 +407,6 @@ async def update_meal_ingredients(
         result = await event_bus.send(command)
         return result
 
-    except Exception as e:
-        raise handle_exception(e) from e
-
-
-@router.post("/{meal_id}/cheat", response_model=CheatMealTagResponse)
-async def tag_cheat_meal(
-    meal_id: str,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus),
-):
-    """
-    Tag a meal as a cheat meal.
-
-    Uses one of the user's weekly cheat meal slots.
-    """
-    try:
-        command = TagCheatMealCommand(user_id=user_id, meal_id=meal_id)
-        result = await event_bus.send(command)
-        return result
-    except Exception as e:
-        raise handle_exception(e) from e
-
-
-@router.delete("/{meal_id}/cheat", response_model=CheatMealTagResponse)
-async def untag_cheat_meal(
-    meal_id: str,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus),
-):
-    """
-    Untag a cheat meal (same day only).
-
-    Can only be done on the same calendar day the meal was tagged.
-    """
-    try:
-        command = UntagCheatMealCommand(user_id=user_id, meal_id=meal_id)
-        result = await event_bus.send(command)
-        return result
     except Exception as e:
         raise handle_exception(e) from e
 
