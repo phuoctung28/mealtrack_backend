@@ -47,8 +47,12 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                         uow, weekly_budget, query.user_id
                     )
 
-                # Calculate consumed from meals this week
+                # Calculate consumed from meals this week and update budget object
                 consumed = await self._calculate_weekly_consumed(uow, query.user_id, week_start)
+                weekly_budget.consumed_calories = consumed["calories"]
+                weekly_budget.consumed_protein = consumed["protein"]
+                weekly_budget.consumed_carbs = consumed["carbs"]
+                weekly_budget.consumed_fat = consumed["fat"]
 
                 # Load cheat days for this week
                 cheat_days = uow.cheat_days.find_by_user_and_date_range(

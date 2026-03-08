@@ -55,8 +55,6 @@ class WeeklyBudgetRepository:
             db_budget.consumed_protein = budget.consumed_protein
             db_budget.consumed_carbs = budget.consumed_carbs
             db_budget.consumed_fat = budget.consumed_fat
-            db_budget.cheat_slots_total = budget.cheat_slots_total
-            db_budget.cheat_slots_used = budget.cheat_slots_used
 
             self.db.commit()
             self.db.refresh(db_budget)
