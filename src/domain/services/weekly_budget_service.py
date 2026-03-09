@@ -81,49 +81,16 @@ class WeeklyBudgetService:
         )
 
     @staticmethod
-    def should_suggest_cheat_tag(
+    def should_suggest_cheat_day(
         daily_consumed: float,
         daily_target: float,
-        meal_calories: float,
-        meal_is_cheat: bool,
-    ) -> Optional[str]:
-        """
-        Check if we should suggest tagging a meal as cheat.
-
-        Args:
-            daily_consumed: Total calories consumed today so far
-            daily_target: Daily calorie target
-            meal_calories: Calories of the latest meal
-            meal_is_cheat: Whether the meal is already tagged as cheat
-
-        Returns:
-            Meal ID to suggest tagging, or None if no suggestion
-        """
-        # Don't suggest for already cheat-tagged meals
-        if meal_is_cheat:
-            return None
-
-        # Check if daily consumption exceeds threshold
+        is_already_cheat_day: bool,
+    ) -> bool:
+        """Suggest marking today as cheat day when consumed > target."""
+        if is_already_cheat_day:
+            return False
         threshold = daily_target * WeeklyBudgetConstants.SMART_PROMPT_THRESHOLD
-
-        if daily_consumed > threshold:
-            # Return suggestion - UI will determine which meal to suggest
-            return "suggest_cheat_tag"
-
-        return None
-
-    @staticmethod
-    def get_cheat_slots_for_goal(fitness_goal: str) -> int:
-        """
-        Get the number of cheat slots for a given fitness goal.
-
-        Args:
-            fitness_goal: The user's fitness goal (cut, bulk, recomp)
-
-        Returns:
-            Number of cheat meal slots per week
-        """
-        return WeeklyBudgetConstants.CHEAT_SLOTS_BY_GOAL.get(fitness_goal, 2)
+        return daily_consumed > threshold
 
     @staticmethod
     def calculate_remaining_days(week_start: date, target_date: date) -> int:

@@ -11,7 +11,6 @@ from src.domain.model.meal import MealStatus
 from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import get_user_monday
-from src.domain.constants import WeeklyBudgetConstants
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -48,8 +47,17 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                         uow, weekly_budget, query.user_id
                     )
 
-                # Calculate consumed from meals this week
+                # Calculate consumed from meals this week and update budget object
                 consumed = await self._calculate_weekly_consumed(uow, query.user_id, week_start)
+                weekly_budget.consumed_calories = consumed["calories"]
+                weekly_budget.consumed_protein = consumed["protein"]
+                weekly_budget.consumed_carbs = consumed["carbs"]
+                weekly_budget.consumed_fat = consumed["fat"]
+
+                # Load cheat days for this week
+                cheat_days = uow.cheat_days.find_by_user_and_date_range(
+                    query.user_id, week_start, week_start + timedelta(days=6)
+                )
 
                 # Calculate remaining days
                 today = target_date
@@ -80,15 +88,13 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     "remaining_protein": weekly_budget.remaining_protein,
                     "remaining_carbs": weekly_budget.remaining_carbs,
                     "remaining_fat": weekly_budget.remaining_fat,
-                    "cheat_slots_total": weekly_budget.cheat_slots_total,
-                    "cheat_slots_used": weekly_budget.cheat_slots_used,
-                    "cheat_slots_remaining": weekly_budget.remaining_cheat_slots,
                     "adjusted_daily_calories": adjusted["adjusted_calories"],
                     "adjusted_daily_carbs": adjusted["adjusted_carbs"],
                     "adjusted_daily_fat": adjusted["adjusted_fat"],
                     "daily_protein": weekly_budget.target_protein / 7,  # Protein stays fixed
                     "remaining_days": remaining_days,
                     "bmr_floor_active": adjusted["bmr_floor_active"],
+                    "cheat_days": [cd.date.isoformat() for cd in cheat_days],
                 }
 
             except Exception as e:
@@ -139,12 +145,6 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
             target_carbs = 1400  # 200 * 7
             target_fat = 490  # 70 * 7
 
-        # Get cheat meals based on fitness goal
-        cheat_slots = WeeklyBudgetConstants.CHEAT_SLOTS_BY_GOAL.get(
-            fitness_goal.value if hasattr(fitness_goal, 'value') else fitness_goal,
-            2  # Default to CUT = 2
-        )
-
         # Create domain object
         budget = WeeklyMacroBudget(
             weekly_budget_id=str(uuid.uuid4()),
@@ -154,7 +154,6 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
             target_protein=target_protein,
             target_carbs=target_carbs,
             target_fat=target_fat,
-            cheat_slots_total=cheat_slots,
         )
 
         # Save to DB
@@ -183,13 +182,10 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
 
         for meal in meals:
             if meal.status == MealStatus.READY and meal.nutrition:
-                # Only count non-cheat meals toward consumed
-                # Cheat meals flex from weekly budget
-                if not meal.is_cheat_meal:
-                    total_calories += meal.nutrition.calories or 0
-                    total_protein += meal.nutrition.macros.protein or 0
-                    total_carbs += meal.nutrition.macros.carbs or 0
-                    total_fat += meal.nutrition.macros.fat or 0
+                total_calories += meal.nutrition.calories or 0
+                total_protein += meal.nutrition.macros.protein or 0
+                total_carbs += meal.nutrition.macros.carbs or 0
+                total_fat += meal.nutrition.macros.fat or 0
 
         # Update weekly budget with consumed values
         budget = uow.weekly_budgets.find_by_user_and_week(user_id, week_start)

@@ -35,6 +35,7 @@ from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.v1.activities import router as activities_router
+from src.api.routes.v1.cheat_days import router as cheat_days_router
 from src.api.routes.v1.tdee import router as tdee_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
@@ -220,6 +221,7 @@ app.include_router(notifications_router)
 app.include_router(ingredients_router)
 app.include_router(tdee_router)
 app.include_router(saved_suggestions_router)
+app.include_router(cheat_days_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get("ENVIRONMENT") == "development":

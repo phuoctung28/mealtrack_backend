@@ -45,9 +45,6 @@ class Meal:
     is_manually_edited: bool = False
     meal_type: Optional[str] = None
     translations: Optional[Dict[str, MealTranslation]] = None
-    # Cheat meal tracking
-    is_cheat_meal: bool = False
-    cheat_tagged_at: Optional[datetime] = None
     # Source tracking (scanner, prompt, food_search, manual)
     source: Optional[str] = None
     # Recipe details (populated for AI suggestions)

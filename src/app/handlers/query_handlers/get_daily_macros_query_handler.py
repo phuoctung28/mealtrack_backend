@@ -10,7 +10,6 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetDailyMacrosQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
-from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import get_user_monday
 from src.infra.cache.cache_service import CacheService
@@ -47,7 +46,6 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             total_fat = 0.0
             meal_count = 0
             meals_with_nutrition = 0
-            last_untagged_meal = None
 
             # Calculate totals from meals with nutrition data
             for meal in meals:
@@ -62,10 +60,6 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                         total_protein += meal.nutrition.macros.protein or 0
                         total_carbs += meal.nutrition.macros.carbs or 0
                         total_fat += meal.nutrition.macros.fat or 0
-
-                    # Track last non-cheat meal for smart prompt
-                    if not meal.is_cheat_meal:
-                        last_untagged_meal = meal
 
         # Get user's TDEE targets
         target_calories = None
@@ -121,7 +115,6 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 target_calories,
                 target_macros,
                 total_calories,
-                last_untagged_meal,
                 bmr,
             )
             if weekly_context:
@@ -137,7 +130,6 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
         target_calories: float,
         target_macros: Dict,
         daily_consumed: float,
-        last_untagged_meal,
         bmr: float = 1800,
     ) -> Optional[Dict[str, Any]]:
         """Get weekly budget context for the daily macros response."""
@@ -180,22 +172,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                     "daily_protein": adjusted.protein,
                     "bmr_floor_active": adjusted.bmr_floor_active,
                     "remaining_days": remaining_days,
-                    "cheat_slots_remaining": weekly_budget.remaining_cheat_slots,
                 }
-
-                # Check for smart prompt suggestion
-                if last_untagged_meal:
-                    suggestion = WeeklyBudgetService.should_suggest_cheat_tag(
-                        daily_consumed=daily_consumed,
-                        daily_target=target_calories,
-                        meal_calories=last_untagged_meal.nutrition.calories if last_untagged_meal.nutrition else 0,
-                        meal_is_cheat=last_untagged_meal.is_cheat_meal,
-                    )
-                    if suggestion:
-                        weekly_context["suggest_cheat_tag"] = {
-                            "meal_id": last_untagged_meal.meal_id,
-                            "reason": "This meal pushed you over 120% of your daily target"
-                        }
 
                 return weekly_context
 

@@ -22,8 +22,6 @@ from src.app.commands.meal import (
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
-from src.app.commands.meal.tag_cheat_meal_command import TagCheatMealCommand
-from src.app.commands.meal.untag_cheat_meal_command import UntagCheatMealCommand
 from src.app.commands.meal_suggestion import GenerateMealSuggestionsCommand, SaveMealSuggestionCommand
 from src.app.commands.notification import (
     RegisterFcmTokenCommand,
@@ -71,11 +69,6 @@ from src.app.handlers.command_handlers import (
     UpdateNotificationPreferencesCommandHandler,
     UpdateTimezoneCommandHandler,
 )
-# Cheat meal handlers
-from src.app.handlers.command_handlers import (
-    TagCheatMealCommandHandler,
-    UntagCheatMealCommandHandler,
-)
 # Saved suggestion handlers
 from src.app.handlers.command_handlers import (
     SaveSuggestionCommandHandler,
@@ -87,6 +80,11 @@ from src.app.commands.saved_suggestion import (
 )
 from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
 from src.app.handlers.query_handlers import GetSavedSuggestionsQueryHandler
+from src.app.commands.cheat_day import MarkCheatDayCommand, UnmarkCheatDayCommand
+from src.app.queries.cheat_day import GetCheatDaysQuery
+from src.app.handlers.command_handlers.mark_cheat_day_command_handler import MarkCheatDayCommandHandler
+from src.app.handlers.command_handlers.unmark_cheat_day_command_handler import UnmarkCheatDayCommandHandler
+from src.app.handlers.query_handlers.get_cheat_days_query_handler import GetCheatDaysQueryHandler
 
 # Chat handlers
 from src.app.handlers.command_handlers.chat import (
@@ -313,20 +311,6 @@ def get_configured_event_bus() -> EventBus:
         ParseMealTextHandler(),
     )
 
-    # Register cheat meal command handlers
-    event_bus.register_handler(
-        TagCheatMealCommand,
-        TagCheatMealCommandHandler(
-            cache_service=cache_service,
-        ),
-    )
-    event_bus.register_handler(
-        UntagCheatMealCommand,
-        UntagCheatMealCommandHandler(
-            cache_service=cache_service,
-        ),
-    )
-
     # Register food database query handlers
     event_bus.register_handler(
         SearchFoodsQuery,
@@ -486,6 +470,11 @@ def get_configured_event_bus() -> EventBus:
         GetMessagesQuery,
         GetMessagesQueryHandler()
     )
+
+    # Register cheat day handlers
+    event_bus.register_handler(MarkCheatDayCommand, MarkCheatDayCommandHandler())
+    event_bus.register_handler(UnmarkCheatDayCommand, UnmarkCheatDayCommandHandler())
+    event_bus.register_handler(GetCheatDaysQuery, GetCheatDaysQueryHandler())
 
     # Register saved suggestion handlers
     event_bus.register_handler(

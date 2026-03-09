@@ -32,8 +32,6 @@ from .update_user_last_accessed_command_handler import UpdateUserLastAccessedCom
 from .update_user_metrics_command_handler import UpdateUserMetricsCommandHandler
 from .upload_meal_image_immediately_command_handler import UploadMealImageImmediatelyHandler
 from .saved_suggestion import SaveSuggestionCommandHandler, DeleteSavedSuggestionCommandHandler
-from .tag_cheat_meal_command_handler import TagCheatMealCommandHandler
-from .untag_cheat_meal_command_handler import UntagCheatMealCommandHandler
 
 __all__ = [
     # Meal handlers
@@ -64,8 +62,6 @@ __all__ = [
     "UpdateNotificationPreferencesCommandHandler",
     # Ingredient handlers
     "RecognizeIngredientCommandHandler",
-    "TagCheatMealCommandHandler",
-    "UntagCheatMealCommandHandler",
     # Saved suggestion handlers
     "SaveSuggestionCommandHandler",
     "DeleteSavedSuggestionCommandHandler",
