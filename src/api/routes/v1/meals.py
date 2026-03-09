@@ -271,7 +271,33 @@ async def parse_meal_text(
             user_id=user_id,
             current_items=payload.current_items,
         )
-        return await event_bus.send(command)
+        app_response = await event_bus.send(command)
+
+        # Map app DTO to API response DTO
+        from src.api.schemas.response.meal_responses import ParsedFoodItem
+        api_items = [
+            ParsedFoodItem(
+                name=item.name,
+                quantity=item.quantity,
+                unit=item.unit,
+                calories=item.protein * 4 + item.carbs * 4 + item.fat * 9,  # P*4 + C*4 + F*9
+                protein=item.protein,
+                carbs=item.carbs,
+                fat=item.fat,
+                data_source=item.data_source,
+                fdc_id=item.fdc_id,
+            )
+            for item in app_response.items
+        ]
+        total_calories = sum(item.protein * 4 + item.carbs * 4 + item.fat * 9 for item in app_response.items)
+
+        return ParseMealTextResponse(
+            items=api_items,
+            total_calories=total_calories,
+            total_protein=app_response.total_protein,
+            total_carbs=app_response.total_carbs,
+            total_fat=app_response.total_fat,
+        )
     except Exception as e:
         raise handle_exception(e) from e
 

@@ -285,7 +285,6 @@ class MealMapper:
             )
         
         return Nutrition(
-            calories=nutrition_dict.get("calories", 0),
             macros=macros,
             micros=micros,
             food_items=[]
@@ -323,7 +322,6 @@ class MealMapper:
             name=item_dict.get("name", ""),
             quantity=item_dict.get("quantity", 0),
             unit=item_dict.get("unit", ""),
-            calories=calories,
             macros=macros,
             micros=micros,
             confidence=item_dict.get("confidence", 1.0),

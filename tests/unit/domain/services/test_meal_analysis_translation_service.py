@@ -11,7 +11,6 @@ from src.domain.model.meal import MealImage
 from src.domain.model.nutrition import FoodItem, Macros
 from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 
-
 class TestMealAnalysisTranslationService:
     """Tests for MealAnalysisTranslationService."""
 
@@ -58,7 +57,7 @@ class TestMealAnalysisTranslationService:
                 name="Chicken breast",
                 quantity=150,
                 unit="g",
-                calories=165,
+
                 macros=Macros(protein=31, carbs=0, fat=3.6)
             ),
             FoodItem(
@@ -66,7 +65,7 @@ class TestMealAnalysisTranslationService:
                 name="Brown rice",
                 quantity=200,
                 unit="g",
-                calories=220,
+
                 macros=Macros(protein=5, carbs=46, fat=1.8)
             ),
         ]
@@ -119,7 +118,7 @@ class TestMealAnalysisTranslationService:
                 name="Chicken breast",
                 quantity=150,
                 unit="g",
-                calories=165,
+
                 macros=Macros(protein=31, carbs=0, fat=3.6)
             ),
         ]

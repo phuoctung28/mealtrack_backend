@@ -43,7 +43,8 @@ class TestUploadMealImageImmediatelyHandler:
         assert meal.status == MealStatus.READY
         assert meal.dish_name == "Grilled Chicken with Rice"
         assert meal.nutrition is not None
-        assert meal.nutrition.calories == 650.0
+        # calories derived from macros: 48*4 + 70*4 + 17*9 = 625.0
+        assert meal.nutrition.calories == pytest.approx(625.0)
         assert len(meal.nutrition.food_items) == 3
     
     @pytest.mark.asyncio

@@ -56,13 +56,11 @@ class SaveMealSuggestionCommandHandler(
         )
         food_items = self._build_food_items(
             command.ingredients,
-            total_calories=command.calories,
             total_protein=command.protein,
             total_carbs=command.carbs,
             total_fat=command.fat,
         )
         nutrition = Nutrition(
-            calories=command.calories,
             macros=macros,
             food_items=food_items if food_items else None,
             confidence_score=1.0,
@@ -118,7 +116,6 @@ class SaveMealSuggestionCommandHandler(
     def _build_food_items(
         self,
         ingredients: List[IngredientItem],
-        total_calories: int,
         total_protein: float,
         total_carbs: float,
         total_fat: float,
@@ -127,7 +124,7 @@ class SaveMealSuggestionCommandHandler(
         Convert suggestion ingredients into FoodItem domain objects.
 
         Uses per-ingredient macros when provided. If all items have zero
-        calories but meal-level totals exist, distributes totals
+        macros but meal-level totals exist, distributes totals
         proportionally by estimated weight.
         """
         items = []
@@ -139,7 +136,6 @@ class SaveMealSuggestionCommandHandler(
                         name=ingredient.name,
                         quantity=ingredient.amount,
                         unit=ingredient.unit,
-                        calories=ingredient.calories,
                         macros=Macros(
                             protein=ingredient.protein,
                             carbs=ingredient.carbs,
@@ -154,10 +150,13 @@ class SaveMealSuggestionCommandHandler(
                     "Skipping invalid ingredient %r: %s", ingredient.name, exc
                 )
 
-        # Distribute meal-level totals when all items have 0 calories
-        if items and total_calories > 0 and all(item.calories == 0 for item in items):
+        # Distribute meal-level totals when all items have 0 calories (derived from macros)
+        if items and total_protein + total_carbs + total_fat > 0 and all(
+            item.macros.protein == 0 and item.macros.carbs == 0 and item.macros.fat == 0
+            for item in items
+        ):
             items = self._distribute_nutrition(
-                items, total_calories, total_protein, total_carbs, total_fat
+                items, total_protein, total_carbs, total_fat
             )
 
         return items
@@ -174,12 +173,11 @@ class SaveMealSuggestionCommandHandler(
     def _distribute_nutrition(
         self,
         items: List[FoodItem],
-        total_cal: int,
         total_protein: float,
         total_carbs: float,
         total_fat: float,
     ) -> List[FoodItem]:
-        """Distribute meal-level totals proportionally by estimated weight."""
+        """Distribute meal-level macro totals proportionally by estimated weight."""
         total_weight = sum(
             self._estimate_weight_grams(item.quantity, item.unit) for item in items
         )
@@ -194,7 +192,6 @@ class SaveMealSuggestionCommandHandler(
                 name=item.name,
                 quantity=item.quantity,
                 unit=item.unit,
-                calories=round(total_cal * ratio, 1),
                 macros=Macros(
                     protein=round(total_protein * ratio, 1),
                     carbs=round(total_carbs * ratio, 1),

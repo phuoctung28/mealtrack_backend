@@ -215,8 +215,7 @@ class MealRepository(MealRepositoryPort):
 
     def _update_nutrition(self, db_nutrition: DBNutrition, domain_nutrition: Meal.nutrition):
         """Helper to sync nutrition data."""
-        # Update scalar fields
-        db_nutrition.calories = domain_nutrition.calories
+        # Update scalar fields (calories derived from macros: P*4 + C*4 + F*9)
         db_nutrition.protein = domain_nutrition.macros.protein
         db_nutrition.carbs = domain_nutrition.macros.carbs
         db_nutrition.fat = domain_nutrition.macros.fat

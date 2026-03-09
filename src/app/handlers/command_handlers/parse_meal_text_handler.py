@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.events.base import EventHandler, handles
-from src.api.schemas.response.meal_responses import ParseMealTextResponse, ParsedFoodItem
+from src.app.schemas.meal_schemas import ParseMealTextResponseDto, ParsedFoodItemDto
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 from src.infra.services.ai.prompts.system_prompts import SystemPrompts
@@ -28,14 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 @handles(ParseMealTextCommand)
-class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextResponse]):
+class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextResponseDto]):
     """Handler for parsing meal text descriptions using Gemini."""
 
     def __init__(self):
         self._model_manager = GeminiModelManager.get_instance()
         self._fat_secret_service = get_fat_secret_service()
 
-    async def handle(self, command: ParseMealTextCommand) -> ParseMealTextResponse:
+    async def handle(self, command: ParseMealTextCommand) -> ParseMealTextResponseDto:
         # Sanitize user input
         sanitized_text = sanitize_user_description(command.text)
 
@@ -79,18 +79,16 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
             item.update(clamped)
 
         # Calculate totals
-        total_calories = sum(item.get("calories", 0) for item in enhanced_items)
         total_protein = sum(item.get("protein", 0) for item in enhanced_items)
         total_carbs = sum(item.get("carbs", 0) for item in enhanced_items)
         total_fat = sum(item.get("fat", 0) for item in enhanced_items)
 
         # Build response items
         items = [
-            ParsedFoodItem(
+            ParsedFoodItemDto(
                 name=item.get("name", "Unknown"),
                 quantity=item.get("quantity", 1),
                 unit=item.get("unit", "serving"),
-                calories=item.get("calories", 0),
                 protein=item.get("protein", 0),
                 carbs=item.get("carbs", 0),
                 fat=item.get("fat", 0),
@@ -100,9 +98,8 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
             for item in enhanced_items
         ]
 
-        return ParseMealTextResponse(
+        return ParseMealTextResponseDto(
             items=items,
-            total_calories=total_calories,
             total_protein=total_protein,
             total_carbs=total_carbs,
             total_fat=total_fat,

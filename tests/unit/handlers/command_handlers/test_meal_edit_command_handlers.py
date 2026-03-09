@@ -122,7 +122,7 @@ class TestEditMealCommandHandler:
         assert custom_item is not None
         assert custom_item["is_custom"] is True
         assert custom_item["quantity"] == 50.0
-        assert custom_item["calories"] == 60.0  # 120 * 0.5
+        assert custom_item["calories"] == pytest.approx(65.0)  # derived: (2*4 + 8*4 + 10*9) * 0.5
     
     @pytest.mark.asyncio
     async def test_edit_meal_remove_ingredient(self, event_bus, sample_meal_with_nutrition):

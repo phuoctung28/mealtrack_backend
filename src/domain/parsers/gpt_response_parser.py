@@ -42,16 +42,12 @@ class GPTResponseParser:
             # Get total macros
             total_macros = self._calculate_total_macros(data, food_items)
             
-            # Get total calories
-            total_calories = self._calculate_total_calories(data, food_items, total_macros)
-            
             # Get confidence score
             confidence_score = float(data.get("confidence", 0.5))
             confidence_score = min(max(0.0, confidence_score), 1.0)
-            
-            # Create Nutrition object
+
+            # Create Nutrition object — calories derived from macros
             nutrition = Nutrition(
-                calories=total_calories,
                 macros=total_macros,
                 micros=None,  # No micros from GPT
                 food_items=food_items if food_items else None,
@@ -69,7 +65,7 @@ class GPTResponseParser:
         if "foods" in data:
             for food_data in data["foods"]:
                 # Validate required fields
-                required_fields = ["name", "quantity", "unit", "calories", "macros"]
+                required_fields = ["name", "quantity", "unit", "macros"]
                 for field in required_fields:
                     if field not in food_data:
                         raise GPTResponseParsingError(f"Missing required field '{field}' in food item")
@@ -92,7 +88,6 @@ class GPTResponseParser:
                     name=food_data["name"],
                     quantity=float(food_data["quantity"]),
                     unit=food_data["unit"],
-                    calories=float(food_data["calories"]),
                     macros=macros,
                     micros=None,  # GPT doesn't provide micros yet
                     confidence=confidence
@@ -127,15 +122,6 @@ class GPTResponseParser:
                 total_macros = Macros(protein=0.0, carbs=0.0, fat=0.0)
         
         return total_macros
-    
-    def _calculate_total_calories(self, data: Dict[str, Any], food_items: List[FoodItem], total_macros: Macros) -> float:
-        """Calculate total calories based on food items and top-level calories if available."""
-        if "total_calories" in data:
-            return float(data["total_calories"])
-        else:
-            # Calculate from food items if available
-            total_calories = sum(item.calories for item in food_items) if food_items else total_macros.total_calories
-            return total_calories
     
     def parse_dish_name(self, gpt_response: Dict[str, Any]) -> Optional[str]:
         """

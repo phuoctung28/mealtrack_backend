@@ -252,13 +252,11 @@ class NutritionCalculationService:
         """
         if not food_items:
             return Nutrition(
-                calories=0,
                 macros=Macros(protein=0, carbs=0, fat=0),
                 food_items=[],
                 confidence_score=1.0
             )
 
-        total_calories = sum(item.calories for item in food_items)
         total_protein = sum(item.macros.protein for item in food_items)
         total_carbs = sum(item.macros.carbs for item in food_items)
         total_fat = sum(item.macros.fat for item in food_items)
@@ -267,7 +265,6 @@ class NutritionCalculationService:
         avg_confidence = sum(item.confidence for item in food_items) / len(food_items)
 
         return Nutrition(
-            calories=total_calories,
             macros=Macros(
                 protein=total_protein,
                 carbs=total_carbs,

@@ -549,7 +549,6 @@ def sample_meal_domain() -> Meal:
         ),
         dish_name="Test Meal",
         nutrition=Nutrition(
-            calories=500.0,
             macros=Macros(
                 protein=30.0,
                 carbs=50.0,
@@ -561,7 +560,6 @@ def sample_meal_domain() -> Meal:
                     name="Rice",
                     quantity=150.0,
                     unit="g",
-                    calories=200.0,
                     macros=Macros(
                         protein=5.0,
                         carbs=40.0,
@@ -573,7 +571,6 @@ def sample_meal_domain() -> Meal:
                     name="Chicken",
                     quantity=100.0,
                     unit="g",
-                    calories=300.0,
                     macros=Macros(
                         protein=25.0,
                         carbs=10.0,
@@ -622,7 +619,6 @@ def sample_meal_with_nutrition(test_session, sample_user) -> Meal:
             name="Grilled Chicken",
             quantity=150.0,
             unit="g",
-            calories=248.0,
             macros=Macros(
                 protein=46.2,
                 carbs=0.0,
@@ -636,7 +632,6 @@ def sample_meal_with_nutrition(test_session, sample_user) -> Meal:
             name="Brown Rice",
             quantity=100.0,
             unit="g",
-            calories=112.0,
             macros=Macros(
                 protein=2.6,
                 carbs=22.0,
@@ -650,7 +645,6 @@ def sample_meal_with_nutrition(test_session, sample_user) -> Meal:
             name="Mixed Vegetables",
             quantity=80.0,
             unit="g",
-            calories=35.0,
             macros=Macros(
                 protein=1.5,
                 carbs=7.0,
@@ -674,7 +668,6 @@ def sample_meal_with_nutrition(test_session, sample_user) -> Meal:
         ),
         dish_name="Grilled Chicken with Rice and Vegetables",
         nutrition=Nutrition(
-            calories=395.0,
             macros=Macros(
                 protein=50.3,
                 carbs=29.0,

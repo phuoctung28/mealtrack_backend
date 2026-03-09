@@ -10,7 +10,6 @@ from src.domain.model import Meal as DomainMeal, MealStatus, MealImage, Nutritio
 from src.infra.database.models.meal.meal import Meal as MealModel
 from src.infra.database.models.nutrition.food_item import FoodItem as FoodItemModel
 
-
 @pytest.mark.unit
 class TestMealDatabaseModelEdit:
     """Test meal database model edit functionality."""
@@ -76,7 +75,7 @@ class TestMealDatabaseModelEdit:
             ),
             dish_name="Test Meal",
             nutrition=Nutrition(
-                calories=500.0,
+
                 macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
                 food_items=[],
                 confidence_score=0.9
@@ -112,7 +111,7 @@ class TestMealDatabaseModelEdit:
                 url="https://example.com/image.jpg"
             ),
             nutrition=Nutrition(
-                calories=500.0,
+
                 macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
                 food_items=[],
                 confidence_score=0.9
@@ -129,7 +128,6 @@ class TestMealDatabaseModelEdit:
         assert meal_model.is_manually_edited is False
         assert meal_model.last_edited_at is None
 
-
 @pytest.mark.unit
 class TestFoodItemDatabaseModelEdit:
     """Test food item database model edit functionality."""
@@ -142,7 +140,6 @@ class TestFoodItemDatabaseModelEdit:
         food_item_model.name = "Grilled Chicken"
         food_item_model.quantity = 150.0
         food_item_model.unit = "g"
-        food_item_model.calories = 248.0
         food_item_model.confidence = 0.95
         food_item_model.protein = 46.2
         food_item_model.carbs = 0.0
@@ -165,7 +162,7 @@ class TestFoodItemDatabaseModelEdit:
             name="Custom Sauce",
             quantity=30.0,
             unit="ml",
-            calories=120.0,
+
             macros=Macros(
                 protein=1.0,
                 carbs=5.0,
@@ -193,7 +190,7 @@ class TestFoodItemDatabaseModelEdit:
             name="Basic Food",
             quantity=100.0,
             unit="g",
-            calories=200.0,
+
             macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
             confidence=0.9
             # Missing edit fields - should use defaults
@@ -214,7 +211,6 @@ class TestFoodItemDatabaseModelEdit:
         food_item_model.name = "Test Food"
         food_item_model.quantity = 100.0
         food_item_model.unit = "g"
-        food_item_model.calories = 200.0
         food_item_model.confidence = 0.9
         food_item_model.protein = 10.0
         food_item_model.carbs = 20.0
@@ -229,7 +225,6 @@ class TestFoodItemDatabaseModelEdit:
         assert domain_food_item.id is not None  # Should have the database ID
         assert domain_food_item.fdc_id is None
         assert domain_food_item.is_custom is False
-
 
 @pytest.mark.unit
 class TestMealEditDatabaseIntegration:
@@ -251,14 +246,14 @@ class TestMealEditDatabaseIntegration:
             ),
             dish_name="Test Meal",
             nutrition=Nutrition(
-                calories=500.0,
+
                 macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
                 food_items=[
                     FoodItem(
                         name="Test Food",
                         quantity=100.0,
                         unit="g",
-                        calories=200.0,
+
                         macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
                         id=str(uuid.uuid4()),
                         fdc_id=12345,
@@ -285,7 +280,6 @@ class TestMealEditDatabaseIntegration:
         # Mock nutrition relationship - use actual Nutrition model
         from src.infra.database.models.nutrition.nutrition import Nutrition as NutritionModel
         nutrition_model = NutritionModel()
-        nutrition_model.calories = original_domain_meal.nutrition.calories
         nutrition_model.protein = original_domain_meal.nutrition.macros.protein
         nutrition_model.carbs = original_domain_meal.nutrition.macros.carbs
         nutrition_model.fat = original_domain_meal.nutrition.macros.fat
@@ -308,7 +302,7 @@ class TestMealEditDatabaseIntegration:
             name="Test Food",
             quantity=150.0,
             unit="g",
-            calories=300.0,
+
             macros=Macros(protein=25.0, carbs=10.0, fat=15.0),
             confidence=0.95,
             id=str(uuid.uuid4()),

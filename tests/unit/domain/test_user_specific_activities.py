@@ -10,7 +10,6 @@ from src.app.handlers.query_handlers import GetDailyActivitiesQueryHandler
 from src.app.queries.activity.get_daily_activities_query import GetDailyActivitiesQuery
 from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition
 
-
 @pytest.mark.asyncio
 class TestUserSpecificActivities:
     """Test user-specific daily activities functionality."""
@@ -31,7 +30,7 @@ class TestUserSpecificActivities:
             ),
             dish_name="User 1 Lunch",
             nutrition=Nutrition(
-                calories=500.0,
+
                 macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
                 food_items=[],
                 confidence_score=0.9
@@ -52,7 +51,7 @@ class TestUserSpecificActivities:
             ),
             dish_name="User 2 Lunch",
             nutrition=Nutrition(
-                calories=600.0,
+
                 macros=Macros(protein=35.0, carbs=60.0, fat=25.0),
                 food_items=[],
                 confidence_score=0.95

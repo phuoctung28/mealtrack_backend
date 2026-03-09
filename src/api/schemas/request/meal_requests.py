@@ -175,16 +175,22 @@ class FoodItemChangeRequest(BaseModel):
 
 
 class CustomNutritionRequest(BaseModel):
-    """Request DTO for custom nutrition data."""
-    calories_per_100g: float = Field(..., ge=0, le=1000, description="Calories per 100g")
+    """Request DTO for custom nutrition data.
+
+    Calories always derived from macros: P*4 + C*4 + F*9.
+    """
     protein_per_100g: float = Field(..., ge=0, le=100, description="Protein per 100g in grams")
     carbs_per_100g: float = Field(..., ge=0, le=100, description="Carbohydrates per 100g in grams")
     fat_per_100g: float = Field(..., ge=0, le=100, description="Fat per 100g in grams")
 
+    @property
+    def calories_per_100g(self) -> float:
+        """Derive calories from macros: P*4 + C*4 + F*9."""
+        return round(self.protein_per_100g * 4 + self.carbs_per_100g * 4 + self.fat_per_100g * 9, 2)
+
     class Config:
         json_schema_extra = {
             "example": {
-                "calories_per_100g": 165.0,
                 "protein_per_100g": 31.0,
                 "carbs_per_100g": 0.0,
                 "fat_per_100g": 3.6,
@@ -234,7 +240,6 @@ class AddCustomIngredientRequest(BaseModel):
                 "quantity": 30.0,
                 "unit": "ml",
                 "nutrition": {
-                    "calories_per_100g": 400.0,
                     "protein_per_100g": 0.5,
                     "carbs_per_100g": 2.0,
                     "fat_per_100g": 44.0
