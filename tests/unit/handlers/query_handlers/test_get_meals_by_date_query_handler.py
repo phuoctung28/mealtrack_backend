@@ -13,7 +13,6 @@ from src.app.handlers.query_handlers.get_meals_by_date_query_handler import GetM
 from src.app.queries.meal import GetMealsByDateQuery
 from src.domain.model import Meal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 
-
 class TestGetMealsByDateQueryHandler:
     """Tests for GetMealsByDateQueryHandler."""
 
@@ -90,7 +89,7 @@ class TestGetMealsByDateQueryHandler:
             ),
             dish_name="Grilled Chicken",
             nutrition=Nutrition(
-                calories=400.0,
+
                 macros=Macros(protein=30.0, carbs=20.0, fat=15.0),
                 food_items=[],
                 confidence_score=0.9
@@ -133,7 +132,7 @@ class TestGetMealsByDateQueryHandler:
             ),
             dish_name="Breakfast",
             nutrition=Nutrition(
-                calories=300.0,
+
                 macros=Macros(protein=20.0, carbs=30.0, fat=10.0),
                 food_items=[],
                 confidence_score=0.9
@@ -154,7 +153,7 @@ class TestGetMealsByDateQueryHandler:
             ),
             dish_name="Lunch",
             nutrition=Nutrition(
-                calories=500.0,
+
                 macros=Macros(protein=35.0, carbs=45.0, fat=20.0),
                 food_items=[],
                 confidence_score=0.9
@@ -275,7 +274,7 @@ class TestGetMealsByDateQueryHandler:
             ),
             dish_name="Ready Meal",
             nutrition=Nutrition(
-                calories=400.0,
+
                 macros=Macros(protein=30.0, carbs=20.0, fat=15.0),
                 food_items=[],
                 confidence_score=0.9
@@ -312,7 +311,7 @@ class TestGetMealsByDateQueryHandler:
                 name="Chicken Breast",
                 quantity=150.0,
                 unit="g",
-                calories=248.0,
+
                 macros=Macros(protein=46.2, carbs=0.0, fat=5.4),
                 fdc_id=171077,
                 is_custom=False
@@ -322,7 +321,7 @@ class TestGetMealsByDateQueryHandler:
                 name="Brown Rice",
                 quantity=100.0,
                 unit="g",
-                calories=112.0,
+
                 macros=Macros(protein=2.6, carbs=22.0, fat=0.9),
                 fdc_id=168880,
                 is_custom=False
@@ -342,7 +341,7 @@ class TestGetMealsByDateQueryHandler:
             ),
             dish_name="Chicken and Rice",
             nutrition=Nutrition(
-                calories=360.0,
+
                 macros=Macros(protein=48.8, carbs=22.0, fat=6.3),
                 food_items=food_items,
                 confidence_score=0.9

@@ -12,7 +12,6 @@ from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.utils.timezone_utils import utc_now
 from tests.fixtures.fakes.fake_uow import FakeUnitOfWork
 
-
 class TestDeleteMealWithFakeUoW:
     """Test DeleteMealCommandHandler using Mock UoW (handler requires session access)."""
 
@@ -34,7 +33,7 @@ class TestDeleteMealWithFakeUoW:
         from src.domain.model.nutrition import Nutrition, Macros
         meal = meal.mark_ready(
             nutrition=Nutrition(
-                calories=500,
+
                 macros=Macros(protein=30, carbs=50, fat=20),
                 food_items=[]
             ),
@@ -60,9 +59,7 @@ class TestDeleteMealWithFakeUoW:
         assert "deleted" in result["message"].lower()
         mock_uow.commit.assert_called_once()
 
-
 # Removed TestSyncUserWithFakeUoW - SyncUserCommand not in scope for this demo
-
 
 class TestFakeUoWTransactionBehavior:
     """Test FakeUnitOfWork transaction behavior."""

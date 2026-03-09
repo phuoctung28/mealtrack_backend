@@ -31,7 +31,6 @@ class MealService:
         if meal.nutrition is None:
             from src.domain.model.nutrition.macros import Macros
             meal.nutrition = Nutrition(
-                calories=0.0,
                 macros=Macros(protein=0.0, carbs=0.0, fat=0.0),
                 food_items=[]
             )
@@ -48,7 +47,6 @@ class MealService:
                 # Calculate calories and macros from custom_nutrition if provided
                 if change.custom_nutrition:
                     scale_factor = change.quantity / 100.0  # Custom nutrition is per 100g
-                    calories = change.custom_nutrition.calories_per_100g * scale_factor
                     macros = Macros(
                         protein=change.custom_nutrition.protein_per_100g * scale_factor,
                         carbs=change.custom_nutrition.carbs_per_100g * scale_factor,
@@ -56,7 +54,6 @@ class MealService:
                     )
                 else:
                     # Default values when no custom nutrition provided
-                    calories = 0.0
                     macros = Macros(protein=0.0, carbs=0.0, fat=0.0)
                 
                 new_food_item = FoodItem(
@@ -64,7 +61,6 @@ class MealService:
                     name=change.name,
                     quantity=change.quantity,
                     unit=change.unit,
-                    calories=calories,
                     macros=macros,
                     is_custom=change.custom_nutrition is not None
                 )
@@ -99,9 +95,8 @@ class MealService:
                         if change.unit is not None:
                             item.unit = change.unit
                         if change.custom_nutrition is not None:
-                            # Recalculate calories and macros from custom nutrition
+                            # Recalculate macros from custom nutrition (calories derived automatically)
                             scale_factor = (change.quantity or item.quantity) / 100.0
-                            item.calories = change.custom_nutrition.calories_per_100g * scale_factor
                             item.macros = Macros(
                                 protein=change.custom_nutrition.protein_per_100g * scale_factor,
                                 carbs=change.custom_nutrition.carbs_per_100g * scale_factor,

@@ -90,7 +90,6 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
                     name=existing_item.name,
                     quantity=new_quantity,
                     unit=new_unit,
-                    calories=scaled_nutrition.calories,
                     macros=Macros(
                         protein=scaled_nutrition.protein,
                         carbs=scaled_nutrition.carbs,
@@ -136,7 +135,6 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
             name=existing_item.name,
             quantity=new_quantity,
             unit=new_unit,
-            calories=existing_item.calories * scale_factor,
             macros=Macros(
                 protein=existing_item.macros.protein * scale_factor,
                 carbs=existing_item.macros.carbs * scale_factor,
@@ -197,7 +195,6 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                     name=change.name,
                     quantity=quantity,
                     unit=unit,
-                    calories=scaled_nutrition.calories,
                     macros=Macros(
                         protein=scaled_nutrition.protein,
                         carbs=scaled_nutrition.carbs,
@@ -228,7 +225,6 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
             name=name,
             quantity=quantity,
             unit=unit,
-            calories=custom_nutrition.calories_per_100g * scale_factor,
             macros=Macros(
                 protein=custom_nutrition.protein_per_100g * scale_factor,
                 carbs=custom_nutrition.carbs_per_100g * scale_factor,

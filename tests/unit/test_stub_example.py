@@ -8,7 +8,6 @@ import pytest
 
 from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition
 
-
 class TestWithStubs:
     """Example of testing with stubs instead of full integration."""
     
@@ -24,7 +23,7 @@ class TestWithStubs:
         
         # Create stub nutrition
         stub_nutrition = Nutrition(
-            calories=500,
+
             macros=Macros(protein=30, carbs=50, fat=20),
             food_items=[],
             confidence_score=0.95
@@ -66,7 +65,7 @@ class TestWithStubs:
             created_at=datetime.now(),
             image=stub_image,
             nutrition=Nutrition(
-                calories=500,
+
                 macros=Macros(protein=30, carbs=50, fat=20),
                 food_items=[],
                 confidence_score=0.95
@@ -100,7 +99,6 @@ class TestWithStubs:
         assert result["structured_data"]["dish_name"] == "Test Meal"
         assert result["structured_data"]["total_calories"] == 500
         stub_vision_service.analyze.assert_called_once()
-
 
 @pytest.mark.unit
 class TestHandlerStubs:

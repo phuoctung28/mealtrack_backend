@@ -25,19 +25,19 @@ class TestFoodItemChangeRequest:
             quantity=100.0,
             unit="g",
             custom_nutrition=CustomNutritionRequest(
-                calories_per_100g=200.0,
                 protein_per_100g=10.0,
                 carbs_per_100g=20.0,
                 fat_per_100g=8.0,
             )
         )
-        
+
         # Assert
         assert request.action == "add"
         assert request.name == "Test Food"
         assert request.quantity == 100.0
         assert request.unit == "g"
-        assert request.custom_nutrition.calories_per_100g == 200.0
+        # Derived: 10*4 + 20*4 + 8*9 = 192
+        assert request.custom_nutrition.calories_per_100g == 192.0
     
     def test_valid_update_request(self):
         """Test valid update request."""
@@ -161,60 +161,35 @@ class TestCustomNutritionRequest:
     """Test CustomNutritionRequest validation."""
     
     def test_valid_nutrition_request(self):
-        """Test valid nutrition request."""
+        """Test valid nutrition request with derived calories."""
         # Arrange & Act
         request = CustomNutritionRequest(
-            calories_per_100g=200.0,
             protein_per_100g=15.0,
             carbs_per_100g=25.0,
             fat_per_100g=8.0,
         )
-        
-        # Assert
-        assert request.calories_per_100g == 200.0
+
+        # Assert — calories derived: 15*4 + 25*4 + 8*9 = 232
+        assert request.calories_per_100g == 232.0
         assert request.protein_per_100g == 15.0
         assert request.carbs_per_100g == 25.0
         assert request.fat_per_100g == 8.0
-    
-    def test_negative_calories(self):
-        """Test negative calories validation."""
-        # Arrange & Act & Assert
-        with pytest.raises(ValidationError):
-            CustomNutritionRequest(
-                calories_per_100g=-100.0,
-                protein_per_100g=15.0,
-                carbs_per_100g=25.0,
-                fat_per_100g=8.0
-            )
-    
-    def test_calories_too_high(self):
-        """Test calories too high validation."""
-        # Arrange & Act & Assert
-        with pytest.raises(ValidationError):
-            CustomNutritionRequest(
-                calories_per_100g=1500.0,  # Over 1000 limit
-                protein_per_100g=15.0,
-                carbs_per_100g=25.0,
-                fat_per_100g=8.0
-            )
-    
+
     def test_negative_protein(self):
         """Test negative protein validation."""
         # Arrange & Act & Assert
         with pytest.raises(ValidationError):
             CustomNutritionRequest(
-                calories_per_100g=200.0,
                 protein_per_100g=-5.0,
                 carbs_per_100g=25.0,
                 fat_per_100g=8.0
             )
-    
+
     def test_protein_too_high(self):
         """Test protein too high validation."""
         # Arrange & Act & Assert
         with pytest.raises(ValidationError):
             CustomNutritionRequest(
-                calories_per_100g=200.0,
                 protein_per_100g=150.0,  # Over 100 limit
                 carbs_per_100g=25.0,
                 fat_per_100g=8.0
@@ -237,7 +212,6 @@ class TestEditMealIngredientsRequest:
                     quantity=100.0,
                     unit="g",
                     custom_nutrition=CustomNutritionRequest(
-                        calories_per_100g=200.0,
                         protein_per_100g=10.0,
                         carbs_per_100g=20.0,
                         fat_per_100g=8.0
@@ -333,7 +307,8 @@ class TestAddCustomIngredientRequest:
         assert request.name == "Homemade Sauce"
         assert request.quantity == 50.0
         assert request.unit == "ml"
-        assert request.nutrition.calories_per_100g == 150.0
+        # Derived: 2*4 + 10*4 + 12*9 = 156
+        assert request.nutrition.calories_per_100g == 156.0
     
     def test_empty_name(self):
         """Test empty name validation."""
@@ -344,7 +319,6 @@ class TestAddCustomIngredientRequest:
                 quantity=50.0,
                 unit="ml",
                 nutrition=CustomNutritionRequest(
-                    calories_per_100g=150.0,
                     protein_per_100g=2.0,
                     carbs_per_100g=10.0,
                     fat_per_100g=12.0
@@ -360,7 +334,6 @@ class TestAddCustomIngredientRequest:
                 quantity=50.0,
                 unit="ml",
                 nutrition=CustomNutritionRequest(
-                    calories_per_100g=150.0,
                     protein_per_100g=2.0,
                     carbs_per_100g=10.0,
                     fat_per_100g=12.0
@@ -376,7 +349,6 @@ class TestAddCustomIngredientRequest:
                 quantity=-25.0,
                 unit="ml",
                 nutrition=CustomNutritionRequest(
-                    calories_per_100g=150.0,
                     protein_per_100g=2.0,
                     carbs_per_100g=10.0,
                     fat_per_100g=12.0
@@ -392,7 +364,6 @@ class TestAddCustomIngredientRequest:
                 quantity=15000.0,  # Over 10000 limit
                 unit="ml",
                 nutrition=CustomNutritionRequest(
-                    calories_per_100g=150.0,
                     protein_per_100g=2.0,
                     carbs_per_100g=10.0,
                     fat_per_100g=12.0
@@ -408,7 +379,6 @@ class TestAddCustomIngredientRequest:
                 quantity=50.0,
                 unit="",
                 nutrition=CustomNutritionRequest(
-                    calories_per_100g=150.0,
                     protein_per_100g=2.0,
                     carbs_per_100g=10.0,
                     fat_per_100g=12.0

@@ -127,7 +127,6 @@ class NutritionMapper:
         micros = None # Populate if DB has micro columns or relationship
 
         return DomainNutrition(
-            calories=db_nutrition.calories,
             macros=macros,
             micros=micros,
             food_items=food_items,
@@ -138,7 +137,6 @@ class NutritionMapper:
     def to_persistence(domain_nutrition: DomainNutrition, meal_id: str) -> DBNutrition:
         return DBNutrition(
             meal_id=meal_id,
-            calories=domain_nutrition.calories,
             protein=domain_nutrition.macros.protein,
             carbs=domain_nutrition.macros.carbs,
             fat=domain_nutrition.macros.fat,
@@ -158,17 +156,15 @@ class FoodItemMapper:
             fat=db_item.fat
         )
         return FoodItem(
-            id=str(db_item.id),  # Required parameter
+            id=str(db_item.id),
             name=db_item.name,
             quantity=db_item.quantity,
             unit=db_item.unit,
-            calories=db_item.calories,
             macros=macros,
-            micros=None, # Populate if needed
+            micros=None,  # Populate if needed
             confidence=db_item.confidence,
             fdc_id=db_item.fdc_id,
             is_custom=bool(db_item.is_custom),
-            # Additional fields if present in Domain but not DB or vice versa
         )
 
     @staticmethod
@@ -178,12 +174,10 @@ class FoodItemMapper:
             name=domain_item.name,
             quantity=domain_item.quantity,
             unit=domain_item.unit,
-            calories=domain_item.calories,
             protein=domain_item.macros.protein,
             carbs=domain_item.macros.carbs,
             fat=domain_item.macros.fat,
             confidence=domain_item.confidence,
-            # Handle FDC ID and custom flags if available
             fdc_id=getattr(domain_item, 'fdc_id', None),
             is_custom=getattr(domain_item, 'is_custom', False)
         )

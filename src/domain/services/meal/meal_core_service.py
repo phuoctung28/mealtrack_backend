@@ -83,27 +83,24 @@ class MealCoreService:
 
     def calculate_nutrition(self, food_items: List[FoodItem]) -> Nutrition:
         """
-        Calculate total nutrition from food items.
-        
+        Calculate total nutrition from food items. Calories derived from macros.
+
         Args:
             food_items: List of food items
-            
+
         Returns:
             Aggregated nutrition data
         """
-        total_calories = 0.0
         total_protein = 0.0
         total_carbs = 0.0
         total_fat = 0.0
-        
+
         for item in food_items:
-            total_calories += item.calories or 0
             total_protein += item.macros.protein or 0
             total_carbs += item.macros.carbs or 0
             total_fat += item.macros.fat or 0
-        
+
         return Nutrition(
-            calories=round(total_calories, 1),
             macros=Macros(
                 protein=round(total_protein, 1),
                 carbs=round(total_carbs, 1),
@@ -179,8 +176,6 @@ class MealCoreService:
             errors.append("Meal must have at least one food item")
         
         if meal.nutrition:
-            if meal.nutrition.calories < 0:
-                errors.append("Calories cannot be negative")
             if meal.nutrition.macros.protein < 0:
                 errors.append("Protein cannot be negative")
         

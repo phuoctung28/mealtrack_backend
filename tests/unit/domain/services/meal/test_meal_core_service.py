@@ -77,13 +77,14 @@ class TestNutritionCalculation:
         from src.domain.model.nutrition import Macros
         
         items = [
-            Mock(calories=200, macros=Macros(protein=15, carbs=20, fat=8)),
-            Mock(calories=300, macros=Macros(protein=25, carbs=30, fat=12)),
+            Mock(macros=Macros(protein=15, carbs=20, fat=8)),
+            Mock(macros=Macros(protein=25, carbs=30, fat=12)),
         ]
-        
+
         result = service.calculate_nutrition(items)
-        
-        assert result.calories == 500
+
+        # calories derived: (15+25)*4 + (20+30)*4 + (8+12)*9 = 160+200+180 = 540
+        assert result.calories == pytest.approx(540.0)
         assert result.macros.protein == 40
         assert result.macros.carbs == 50
         assert result.macros.fat == 20
@@ -93,12 +94,13 @@ class TestNutritionCalculation:
         from src.domain.model.nutrition import Macros
         
         items = [
-            Mock(calories=100, macros=Macros(protein=0, carbs=10, fat=5)),
+            Mock(macros=Macros(protein=0, carbs=10, fat=5)),
         ]
-        
+
         result = service.calculate_nutrition(items)
-        
-        assert result.calories == 100
+
+        # calories derived: 0*4 + 10*4 + 5*9 = 85
+        assert result.calories == pytest.approx(85.0)
         assert result.macros.protein == 0
         assert result.macros.carbs == 10
 

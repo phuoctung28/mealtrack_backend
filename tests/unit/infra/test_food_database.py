@@ -155,7 +155,7 @@ async def test_create_manual_meal_command_handler_aggregates_items(monkeypatch):
     assert meal.nutrition is not None
 
     # Total quantity = 200g => 2x 100g base => calories and macros doubled
-    assert meal.nutrition.calories == pytest.approx(330.0)
+    assert meal.nutrition.calories == pytest.approx(312.8)  # derived: (31*4 + 0*4 + 3.6*9) * 2
     assert meal.nutrition.macros.protein == pytest.approx(62.0)
     assert meal.nutrition.macros.carbs == pytest.approx(0.0)
     assert meal.nutrition.macros.fat == pytest.approx(7.2)

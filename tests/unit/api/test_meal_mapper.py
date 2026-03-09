@@ -9,7 +9,6 @@ import pytest
 from src.api.mappers.meal_mapper import MealMapper, STATUS_MAPPING
 from src.domain.model import Meal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 
-
 class TestMealMapper:
     """Test suite for MealMapper."""
 
@@ -35,7 +34,7 @@ class TestMealMapper:
             ready_at=datetime(2025, 1, 15, 12, 30),
             created_at=datetime(2025, 1, 15, 12, 0),
             nutrition=Nutrition(
-                calories=500,
+
                 macros=Macros(protein=30, carbs=50, fat=15),
                 food_items=[]
             )
@@ -94,7 +93,7 @@ class TestMealMapper:
                 name="Chicken Breast",
                 quantity=200,
                 unit="g",
-                calories=220,
+
                 macros=Macros(protein=40, carbs=0, fat=5),
                 confidence=0.95,
                 fdc_id=123456,
@@ -105,7 +104,7 @@ class TestMealMapper:
                 name="Rice",
                 quantity=150,
                 unit="g",
-                calories=195,
+
                 macros=Macros(protein=4, carbs=43, fat=0.4),
                 confidence=0.90,
                 fdc_id=789012,
@@ -114,7 +113,7 @@ class TestMealMapper:
         ]
         
         nutrition = Nutrition(
-            calories=415,
+
             macros=Macros(protein=44, carbs=43, fat=5.4),
             food_items=food_items
         )
@@ -145,7 +144,7 @@ class TestMealMapper:
         
         assert result.meal_id == meal_id
         assert result.dish_name == "Chicken and Rice"
-        assert result.total_calories == 415
+        assert result.total_calories == pytest.approx(396.6)  # derived: 44*4+43*4+5.4*9
         assert result.total_nutrition.protein == 44
         assert result.total_nutrition.carbs == 43
         assert result.total_nutrition.fat == 5.4
@@ -165,7 +164,7 @@ class TestMealMapper:
                 name="Homemade Sauce",
                 quantity=50,
                 unit="g",
-                calories=60,
+
                 macros=Macros(protein=1, carbs=8, fat=2),
                 confidence=1.0,
                 fdc_id=None,
@@ -174,7 +173,7 @@ class TestMealMapper:
         ]
         
         nutrition = Nutrition(
-            calories=60,
+
             macros=Macros(protein=1, carbs=8, fat=2),
             food_items=food_items
         )
@@ -205,7 +204,7 @@ class TestMealMapper:
         assert result.food_items[0].is_custom is True
         assert result.food_items[0].fdc_id is None
         assert result.food_items[0].custom_nutrition is not None
-        assert result.food_items[0].custom_nutrition.calories_per_100g == 120.0  # 60 * (100/50)
+        assert result.food_items[0].custom_nutrition.calories_per_100g == pytest.approx(108.0)  # derived: (1*4+8*4+2*9) * (100/50)
 
     def test_to_detailed_response_without_nutrition(self):
         """Test detailed response when nutrition is None."""
@@ -263,7 +262,7 @@ class TestMealMapper:
                 ready_at=datetime(2025, 1, 15, 12, 0),
                 created_at=datetime(2025, 1, 15, 11, 30),
                 nutrition=Nutrition(
-                    calories=400,
+
                     macros=Macros(protein=30, carbs=40, fat=10),
                     food_items=[
                         FoodItem(
@@ -271,7 +270,7 @@ class TestMealMapper:
                             name="Item 1",
                             quantity=100,
                             unit="g",
-                            calories=400,
+
                             macros=Macros(protein=30, carbs=40, fat=10),
                             confidence=0.9
                         )
@@ -315,7 +314,8 @@ class TestMealMapper:
         
         result = MealMapper.map_nutrition_from_dict(nutrition_dict)
         
-        assert result.calories == 500
+        # calories is derived: 35*4 + 55*4 + 15*9 = 495.0
+        assert result.calories == pytest.approx(495.0)
         assert result.macros.protein == 35
         assert result.macros.carbs == 55
         assert result.macros.fat == 15
@@ -348,7 +348,8 @@ class TestMealMapper:
         assert result.name == "Salmon"
         assert result.quantity == 180
         assert result.unit == "g"
-        assert result.calories == 350
+        # calories is derived: 40*4 + 0*4 + 20*9 = 340.0
+        assert result.calories == pytest.approx(340.0)
         assert result.macros.protein == 40
         assert result.macros.carbs == 0
         assert result.macros.fat == 20
@@ -418,7 +419,7 @@ class TestMealMapper:
         """Test detailed response with legacy nutrition structure (direct properties)."""
         # Create nutrition with direct protein/carbs/fat properties
         nutrition = Nutrition(
-            calories=400,
+
             macros=Macros(protein=30, carbs=45, fat=12),
             food_items=[]
         )

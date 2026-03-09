@@ -170,7 +170,7 @@ def _seed_dev_meals(user_id: str) -> None:
                 session.commit()
             return
 
-        def create_meal(meal_name: str, calories: float, p: float, c: float, f: float):
+        def create_meal(meal_name: str, p: float, c: float, f: float):
             meal_id = str(uuid.uuid4())
             image_id = str(uuid.uuid4())
             # Minimal image row (FK is required)
@@ -198,7 +198,6 @@ def _seed_dev_meals(user_id: str) -> None:
             session.add(db_meal)
 
             db_nutrition = DBNutrition(
-                calories=calories,
                 protein=p,
                 carbs=c,
                 fat=f,
@@ -207,10 +206,10 @@ def _seed_dev_meals(user_id: str) -> None:
             )
             session.add(db_nutrition)
 
-        # Seed three meals
-        create_meal("Breakfast Oatmeal", 420.0, 20.0, 60.0, 10.0)
-        create_meal("Chicken Salad Lunch", 650.0, 50.0, 30.0, 30.0)
-        create_meal("Salmon Dinner", 700.0, 45.0, 40.0, 35.0)
+        # Seed three meals (calories derived from macros: P*4 + C*4 + F*9)
+        create_meal("Breakfast Oatmeal", 20.0, 60.0, 10.0)
+        create_meal("Chicken Salad Lunch", 50.0, 30.0, 30.0)
+        create_meal("Salmon Dinner", 45.0, 40.0, 35.0)
 
         session.commit()
         logger.info("Seeded dev meals for user %s", user_id)

@@ -37,7 +37,6 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
 
     async def _process_meal(self, event: CreateManualMealCommand, meal_repo):
         # All items must carry their own nutrition (custom_nutrition)
-        total_calories = 0.0
         total_protein = 0.0
         total_carbs = 0.0
         total_fat = 0.0
@@ -52,12 +51,10 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             quantity = item.quantity
             factor = quantity / 100.0
 
-            calories = nutrition.calories_per_100g * factor
             protein = nutrition.protein_per_100g * factor
             carbs = nutrition.carbs_per_100g * factor
             fat = nutrition.fat_per_100g * factor
 
-            total_calories += calories
             total_protein += protein
             total_carbs += carbs
             total_fat += fat
@@ -68,7 +65,6 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                     name=item.name or "Food Item",
                     quantity=quantity,
                     unit=item.unit,
-                    calories=calories,
                     macros=Macros(
                         protein=protein,
                         carbs=carbs,
@@ -81,7 +77,6 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             )
 
         nutrition = Nutrition(
-            calories=round(total_calories, 1),
             macros=Macros(
                 protein=round(total_protein, 1),
                 carbs=round(total_carbs, 1),

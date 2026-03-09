@@ -8,7 +8,6 @@ import pytest
 
 from src.domain.model import Meal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 
-
 @pytest.mark.unit
 class TestMealEditDomain:
     """Test meal edit domain functionality."""
@@ -29,7 +28,7 @@ class TestMealEditDomain:
             ),
             dish_name="Original Meal",
             nutrition=Nutrition(
-                calories=500.0,
+
                 macros=Macros(
                     protein=30.0,
                     carbs=50.0,
@@ -44,7 +43,7 @@ class TestMealEditDomain:
         )
         
         new_nutrition = Nutrition(
-            calories=600.0,
+
             macros=Macros(
                 protein=35.0,
                 carbs=55.0,
@@ -85,7 +84,7 @@ class TestMealEditDomain:
                 url="https://example.com/image.jpg"
             ),
             nutrition=Nutrition(
-                calories=400.0,
+
                 macros=Macros(protein=25.0, carbs=40.0, fat=15.0),
                 food_items=[],
                 confidence_score=0.9
@@ -96,7 +95,7 @@ class TestMealEditDomain:
         )
         
         nutrition = Nutrition(
-            calories=500.0,
+
             macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
             food_items=[],
             confidence_score=0.9
@@ -127,7 +126,7 @@ class TestMealEditDomain:
                 url="https://example.com/image.jpg"
             ),
             nutrition=Nutrition(
-                calories=400.0,
+
                 macros=Macros(protein=25.0, carbs=40.0, fat=15.0),
                 food_items=[],
                 confidence_score=0.9
@@ -138,7 +137,7 @@ class TestMealEditDomain:
         )
         
         nutrition = Nutrition(
-            calories=500.0,
+
             macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
             food_items=[],
             confidence_score=0.9
@@ -156,7 +155,6 @@ class TestMealEditDomain:
         assert edited_meal.raw_gpt_json == '{"test": "data"}'
         assert edited_meal.image.image_id == meal.image.image_id
 
-
 @pytest.mark.unit
 class TestFoodItemEditSupport:
     """Test food item edit support functionality."""
@@ -169,7 +167,7 @@ class TestFoodItemEditSupport:
             name="Grilled Chicken",
             quantity=150.0,
             unit="g",
-            calories=248.0,
+
             macros=Macros(
                 protein=46.2,
                 carbs=0.0,
@@ -192,7 +190,7 @@ class TestFoodItemEditSupport:
             name="Homemade Sauce",
             quantity=30.0,
             unit="ml",
-            calories=120.0,
+
             macros=Macros(
                 protein=1.0,
                 carbs=5.0,
@@ -215,7 +213,7 @@ class TestFoodItemEditSupport:
             name="Test Food",
             quantity=100.0,
             unit="g",
-            calories=200.0,
+
             macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
             fdc_id=12345,
             is_custom=False
@@ -240,7 +238,7 @@ class TestFoodItemEditSupport:
             name="Test Food",
             quantity=100.0,
             unit="g",
-            calories=200.0,
+
             macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
             fdc_id=None,
             is_custom=True
@@ -255,7 +253,6 @@ class TestFoodItemEditSupport:
         assert "id" in result  # Should be included since it's not None
         assert result["is_custom"] is True
         assert result["id"] == "test-id-2"
-
 
 @pytest.mark.unit
 class TestMealEditValidation:
@@ -276,7 +273,7 @@ class TestMealEditValidation:
                 url="https://example.com/image.jpg"
             ),
             nutrition=Nutrition(
-                calories=500.0,
+
                 macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
                 food_items=[],
                 confidence_score=0.9
@@ -300,7 +297,7 @@ class TestMealEditValidation:
             name="Test Food",
             quantity=100.0,
             unit="g",
-            calories=200.0,
+
             macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
             confidence=0.95,
             fdc_id=12345,

@@ -18,7 +18,6 @@ from src.domain.strategies.meal_edit_strategies import (
     FoodItemChangeStrategyFactory,
 )
 
-
 class TestRemoveFoodItemStrategy:
     """Tests for RemoveFoodItemStrategy."""
 
@@ -35,7 +34,7 @@ class TestRemoveFoodItemStrategy:
                 name="Chicken",
                 quantity=100.0,
                 unit="g",
-                calories=200.0,
+
                 macros=Macros(protein=30.0, carbs=0.0, fat=8.0)
             ),
             "item2": FoodItem(
@@ -43,7 +42,7 @@ class TestRemoveFoodItemStrategy:
                 name="Rice",
                 quantity=150.0,
                 unit="g",
-                calories=180.0,
+
                 macros=Macros(protein=4.0, carbs=40.0, fat=1.0)
             )
         }
@@ -71,7 +70,7 @@ class TestRemoveFoodItemStrategy:
                 name="Chicken",
                 quantity=100.0,
                 unit="g",
-                calories=200.0,
+
                 macros=Macros(protein=30.0, carbs=0.0, fat=8.0)
             )
         }
@@ -98,7 +97,7 @@ class TestRemoveFoodItemStrategy:
                 name="Chicken",
                 quantity=100.0,
                 unit="g",
-                calories=200.0,
+
                 macros=Macros(protein=30.0, carbs=0.0, fat=8.0)
             )
         }
@@ -128,7 +127,6 @@ class TestRemoveFoodItemStrategy:
         # Assert
         assert len(food_items_dict) == 0
 
-
 class TestUpdateFoodItemStrategy:
     """Tests for UpdateFoodItemStrategy."""
 
@@ -145,7 +143,7 @@ class TestUpdateFoodItemStrategy:
                 name="Chicken",
                 quantity=100.0,
                 unit="g",
-                calories=200.0,
+
                 macros=Macros(protein=30.0, carbs=0.0, fat=8.0),
                 confidence=0.9,
                 fdc_id=123,
@@ -163,7 +161,8 @@ class TestUpdateFoodItemStrategy:
         updated_item = food_items_dict["item1"]
         assert updated_item.quantity == 200.0
         assert updated_item.unit == "g"
-        assert updated_item.calories == 400.0  # Doubled
+        # calories derived from doubled macros: 60*4 + 0*4 + 16*9 = 384
+        assert updated_item.calories == pytest.approx(384.0)
         assert updated_item.macros.protein == 60.0  # Doubled
         assert updated_item.macros.fat == 16.0  # Doubled
 
@@ -188,7 +187,7 @@ class TestUpdateFoodItemStrategy:
                 name="Chicken",
                 quantity=100.0,
                 unit="g",
-                calories=200.0,
+
                 macros=Macros(protein=30.0, carbs=0.0, fat=8.0),
                 fdc_id=123,
                 is_custom=False
@@ -205,7 +204,8 @@ class TestUpdateFoodItemStrategy:
         updated_item = food_items_dict["item1"]
         assert updated_item.quantity == 150.0
         assert updated_item.unit == "oz"
-        assert updated_item.calories == 250.0
+        # calories derived: 35*4 + 0*4 + 10*9 = 230
+        assert updated_item.calories == pytest.approx(230.0)
         assert updated_item.macros.protein == 35.0
         
         # Verify nutrition service was called
@@ -231,7 +231,7 @@ class TestUpdateFoodItemStrategy:
                 name="Chicken",
                 quantity=100.0,
                 unit="g",
-                calories=200.0,
+
                 macros=Macros(protein=30.0, carbs=0.0, fat=8.0),
                 confidence=0.9,
                 fdc_id=123,
@@ -249,9 +249,12 @@ class TestUpdateFoodItemStrategy:
         updated_item = food_items_dict["item1"]
         assert updated_item.quantity == 150.0
         assert updated_item.unit == "oz"
-        # 150oz = 4252.5g, original 100g → scale = 42.525x
-        assert updated_item.calories == 200.0 * (150.0 * 28.35 / 100.0)
-        assert updated_item.macros.protein == 30.0 * (150.0 * 28.35 / 100.0)
+        # scale = 150oz * 28.35g/oz / 100g = 42.525x
+        scale = 150.0 * 28.35 / 100.0
+        # calories derived from scaled macros: (30*scale)*4 + (0*scale)*4 + (8*scale)*9
+        expected_cal = round(30.0 * scale * 4 + 0 + 8.0 * scale * 9, 1)
+        assert updated_item.calories == pytest.approx(expected_cal, rel=0.01)
+        assert updated_item.macros.protein == pytest.approx(30.0 * scale, rel=0.01)
 
     @pytest.mark.asyncio
     async def test_update_quantity_only(self):
@@ -266,7 +269,7 @@ class TestUpdateFoodItemStrategy:
                 name="Rice",
                 quantity=100.0,
                 unit="g",
-                calories=130.0,
+
                 macros=Macros(protein=2.7, carbs=28.0, fat=0.3),
                 confidence=0.9,
                 fdc_id=456,
@@ -283,8 +286,9 @@ class TestUpdateFoodItemStrategy:
         updated_item = food_items_dict["item1"]
         assert updated_item.quantity == 75.0
         assert updated_item.unit == "g"  # Preserved
-        # Scaled by 0.75x (75/100)
-        assert updated_item.calories == pytest.approx(97.5, rel=0.01)
+        # Scaled by 0.75x (75/100), calories derived from macros
+        # (2.7*0.75)*4 + (28*0.75)*4 + (0.3*0.75)*9 = 8.1+84+2.025 = 94.125
+        assert updated_item.calories == pytest.approx(94.125, rel=0.01)
         assert updated_item.macros.carbs == pytest.approx(21.0, rel=0.01)
 
     @pytest.mark.asyncio
@@ -300,7 +304,7 @@ class TestUpdateFoodItemStrategy:
                 name="Chicken",
                 quantity=100.0,
                 unit="g",
-                calories=200.0,
+
                 macros=Macros(protein=30.0, carbs=0.0, fat=8.0)
             )
         }
@@ -326,7 +330,7 @@ class TestUpdateFoodItemStrategy:
                 name="Chicken",
                 quantity=100.0,
                 unit="g",
-                calories=200.0,
+
                 macros=Macros(protein=30.0, carbs=0.0, fat=8.0)
             )
         }
@@ -353,7 +357,7 @@ class TestUpdateFoodItemStrategy:
                 name="Chicken",
                 quantity=100.0,
                 unit="g",
-                calories=200.0,
+
                 macros=Macros(protein=30.0, carbs=0.0, fat=8.0),
                 fdc_id=123,
                 is_custom=False
@@ -368,7 +372,6 @@ class TestUpdateFoodItemStrategy:
         # Assert
         assert original_id in food_items_dict
         assert food_items_dict[original_id].id == original_id
-
 
 class TestAddFoodItemStrategy:
     """Tests for AddFoodItemStrategy."""
@@ -406,8 +409,8 @@ class TestAddFoodItemStrategy:
         assert added_item.name == "Custom Food"
         assert added_item.quantity == 150.0
         assert added_item.unit == "g"
-        # Scaled by 1.5x (150/100)
-        assert added_item.calories == 375.0
+        # Scaled by 1.5x (150/100), calories derived: 30*4+45*4+15*9 = 435
+        assert added_item.calories == pytest.approx(435.0)
         assert added_item.macros.protein == 30.0
         assert added_item.macros.carbs == 45.0
         assert added_item.macros.fat == 15.0
@@ -447,7 +450,8 @@ class TestAddFoodItemStrategy:
         assert added_item.name == "Chicken Breast"
         assert added_item.quantity == 100.0
         assert added_item.unit == "g"
-        assert added_item.calories == 200.0
+        # calories derived: 25*4 + 0*4 + 8*9 = 172
+        assert added_item.calories == pytest.approx(172.0)
         assert added_item.macros.protein == 25.0
         assert added_item.fdc_id == 171077
         assert added_item.is_custom is False
@@ -594,7 +598,8 @@ class TestAddFoodItemStrategy:
             
             # Assert
             added_item = list(food_items_dict.values())[0]
-            assert added_item.calories == pytest.approx(100.0 * scale, rel=0.01)
+            # calories derived: (10*scale)*4 + (20*scale)*4 + (5*scale)*9 = 165*scale
+            assert added_item.calories == pytest.approx(165.0 * scale, rel=0.01)
             assert added_item.macros.protein == pytest.approx(10.0 * scale, rel=0.01)
             assert added_item.macros.carbs == pytest.approx(20.0 * scale, rel=0.01)
             assert added_item.macros.fat == pytest.approx(5.0 * scale, rel=0.01)
@@ -633,11 +638,11 @@ class TestAddFoodItemStrategy:
         
         # Assert
         added_item = list(food_items_dict.values())[0]
-        assert added_item.calories == 250.0  # From custom, not service
+        # calories derived from custom macros: 20*4+30*4+10*9 = 290 (not stored 250)
+        assert added_item.calories == pytest.approx(290.0)  # From custom macros, not service
         
         # Verify service was NOT called
         mock_nutrition_service.get_nutrition_for_ingredient.assert_not_called()
-
 
 class TestFoodItemChangeStrategyFactory:
     """Tests for FoodItemChangeStrategyFactory."""
@@ -707,7 +712,6 @@ class TestFoodItemChangeStrategyFactory:
         # Assert
         assert strategies["add"].food_service is None
         # Other strategies don't use food_service
-
 
 class TestStrategiesIntegration:
     """Integration tests for strategies working together."""
