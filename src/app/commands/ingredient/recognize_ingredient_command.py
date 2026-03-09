@@ -16,3 +16,4 @@ class RecognizeIngredientCommand(Command):
     """
 
     image_data: str  # Base64 encoded image
+    language: str = "en"  # ISO 639-1 language code for response

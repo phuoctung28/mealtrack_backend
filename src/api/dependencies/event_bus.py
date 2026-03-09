@@ -439,9 +439,14 @@ def get_configured_event_bus() -> EventBus:
     )
 
     # Register ingredient recognition handler
+    from src.api.base_dependencies import get_translation_service
+    translation_service = get_translation_service()
     event_bus.register_handler(
         RecognizeIngredientCommand,
-        RecognizeIngredientCommandHandler(vision_service=vision_service)
+        RecognizeIngredientCommandHandler(
+            vision_service=vision_service,
+            translation_service=translation_service,
+        )
     )
 
     # Register chat handlers

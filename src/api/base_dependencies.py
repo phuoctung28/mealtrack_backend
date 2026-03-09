@@ -434,6 +434,14 @@ def get_meal_translation_service(
         raise
 
 
+def get_translation_service() -> "TranslationService":
+    """Get lightweight TranslationService for translating strings via Gemini."""
+    from src.domain.services.meal_suggestion.translation_service import TranslationService
+    from src.infra.adapters.meal_generation_service import MealGenerationService
+
+    return TranslationService(MealGenerationService())
+
+
 # Singleton subscription service instance
 _subscription_service: Optional["SubscriptionServicePort"] = None
 
