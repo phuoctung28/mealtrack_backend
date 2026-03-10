@@ -2,11 +2,13 @@
 Handler for getting weekly macro budget status.
 """
 import logging
+from dataclasses import replace
 from datetime import date, timedelta
 from typing import Dict, Any, Optional
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
+from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.model.meal import MealStatus
 from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
@@ -59,14 +61,24 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     query.user_id, week_start, week_start + timedelta(days=6)
                 )
 
-                # Calculate remaining days
-                today = target_date
-                week_end = week_start + timedelta(days=6)
-                # Exclude today (already in progress) — Mon=6, Tue=5, ..., Sun=0
-                remaining_days = max(0, (week_end - today).days)
+                # Calculate remaining days (including today)
+                remaining_days = WeeklyBudgetService.calculate_remaining_days(
+                    week_start, target_date
+                )
 
-                # Calculate adjusted daily targets
-                adjusted = weekly_budget.calculate_adjusted_daily(
+                # Calculate adjusted daily targets using only PREVIOUS days' consumption
+                # Today's eating should not change today's target (lock at start of day)
+                consumed_before_today = await self._calculate_weekly_consumed(
+                    uow, query.user_id, week_start, exclude_date=target_date
+                )
+                budget_for_adjustment = replace(
+                    weekly_budget,
+                    consumed_calories=consumed_before_today["calories"],
+                    consumed_protein=consumed_before_today["protein"],
+                    consumed_carbs=consumed_before_today["carbs"],
+                    consumed_fat=consumed_before_today["fat"],
+                )
+                adjusted = budget_for_adjustment.calculate_adjusted_daily(
                     standard_daily_calories=weekly_budget.target_calories / 7,
                     standard_daily_carbs=weekly_budget.target_carbs / 7,
                     standard_daily_fat=weekly_budget.target_fat / 7,
@@ -166,11 +178,14 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
         self,
         uow: UnitOfWork,
         user_id: str,
-        week_start: date
+        week_start: date,
+        exclude_date: Optional[date] = None,
     ) -> Dict[str, float]:
-        """Calculate consumed macros from meals this week."""
-        from sqlalchemy import and_
+        """Calculate consumed macros from meals this week.
 
+        Args:
+            exclude_date: If set, skip meals on this date (used to lock today's target).
+        """
         week_end = week_start + timedelta(days=6)
 
         meals = uow.meals.find_by_date_range(user_id, week_start, week_end)
@@ -182,6 +197,9 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
 
         for meal in meals:
             if meal.status == MealStatus.READY and meal.nutrition:
+                # Skip meals on excluded date (locks today's adjusted target)
+                if exclude_date and meal.created_at.date() == exclude_date:
+                    continue
                 total_calories += meal.nutrition.calories or 0
                 total_protein += meal.nutrition.macros.protein or 0
                 total_carbs += meal.nutrition.macros.carbs or 0
