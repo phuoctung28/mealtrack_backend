@@ -63,7 +63,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
         food_items_dict: Dict[str, FoodItem],
         change: FoodItemChange
     ) -> None:
-        """Update existing food item with new quantity/unit."""
+        """Update existing food item with new quantity/unit or custom nutrition."""
         if not change.id or change.id not in food_items_dict:
             logger.warning(f"Update action requires valid id: {change.id}")
             return
@@ -72,7 +72,29 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
         new_quantity = change.quantity or existing_item.quantity
         new_unit = change.unit or existing_item.unit
 
-        # Check if unit changed - if so, fetch fresh nutrition data
+        # Priority 1: Custom nutrition provided (user-edited macros)
+        if change.custom_nutrition:
+            quantity_grams = convert_quantity_to_grams(new_quantity, new_unit)
+            scale_factor = quantity_grams / 100.0
+            food_items_dict[change.id] = FoodItem(
+                id=existing_item.id,
+                name=existing_item.name,
+                quantity=new_quantity,
+                unit=new_unit,
+                macros=Macros(
+                    protein=change.custom_nutrition.protein_per_100g * scale_factor,
+                    carbs=change.custom_nutrition.carbs_per_100g * scale_factor,
+                    fat=change.custom_nutrition.fat_per_100g * scale_factor,
+                ),
+                micros=existing_item.micros,
+                confidence=0.8,
+                fdc_id=existing_item.fdc_id,
+                is_custom=True,
+            )
+            logger.info(f"Updated food item with custom nutrition: {existing_item.name}")
+            return
+
+        # Priority 2: Check if unit changed - if so, fetch fresh nutrition data
         unit_changed = change.unit and change.unit != existing_item.unit
 
         if unit_changed:
@@ -218,7 +240,8 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
         custom_nutrition
     ) -> FoodItem:
         """Create food item from custom nutrition data."""
-        scale_factor = quantity / 100.0  # Custom nutrition is per 100g
+        quantity_grams = convert_quantity_to_grams(quantity, unit)
+        scale_factor = quantity_grams / 100.0  # Custom nutrition is per 100g
 
         return FoodItem(
             id=item_id,
