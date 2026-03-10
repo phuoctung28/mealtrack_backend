@@ -139,11 +139,21 @@ class TdeeCalculationService:
         remaining_cals = calories - protein_cals - fat_cals
         carb_g = max(TDEEConstants.MIN_CARBS_G, remaining_cals / NutritionConstants.CALORIES_PER_GRAM_CARBS)
 
+        # Round macros first, then derive calories from rounded macros
+        rounded_protein = round(protein_g, 1)
+        rounded_fat = round(fat_g, 1)
+        rounded_carbs = round(carb_g, 1)
+        derived_calories = (
+            rounded_protein * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
+            + rounded_carbs * NutritionConstants.CALORIES_PER_GRAM_CARBS
+            + rounded_fat * NutritionConstants.CALORIES_PER_GRAM_FAT
+        )
+
         return MacroTargets(
-            calories=round(calories, 1),
-            protein=round(protein_g, 1),
-            fat=round(fat_g, 1),
-            carbs=round(carb_g, 1)
+            calories=round(derived_calories, 1),
+            protein=rounded_protein,
+            fat=rounded_fat,
+            carbs=rounded_carbs,
         )
     
     def calculate_macros(

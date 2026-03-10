@@ -62,20 +62,28 @@ class WeeklyBudgetService:
         adjusted_carbs = remaining_carbs / remaining_days
         adjusted_fat = remaining_fat / remaining_days
 
+        # Protein stays fixed regardless of weekly consumption
+        adjusted_protein = standard_daily_protein
+
+        # Round macros to 1 decimal first
+        rounded_protein = round(adjusted_protein, 1)
+        rounded_carbs = round(adjusted_carbs, 1)
+        rounded_fat = round(adjusted_fat, 1)
+
+        # Derive calories from rounded macros — single source of truth
+        adjusted_calories = (rounded_protein * 4) + (rounded_carbs * 4) + (rounded_fat * 9)
+
         # Check if we hit the BMR floor
         bmr_floor_active = False
         if adjusted_calories < bmr_floor:
             adjusted_calories = bmr_floor
             bmr_floor_active = True
 
-        # Protein stays fixed regardless of weekly consumption
-        adjusted_protein = standard_daily_protein
-
         return AdjustedDailyTargets(
-            calories=round(adjusted_calories, 0),
-            carbs=round(adjusted_carbs, 0),
-            fat=round(adjusted_fat, 0),
-            protein=round(adjusted_protein, 0),
+            calories=round(adjusted_calories, 1),
+            carbs=rounded_carbs,
+            fat=rounded_fat,
+            protein=rounded_protein,
             bmr_floor_active=bmr_floor_active,
             remaining_days=remaining_days,
         )
