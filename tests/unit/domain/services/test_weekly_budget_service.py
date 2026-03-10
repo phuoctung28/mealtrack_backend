@@ -15,34 +15,40 @@ class TestWeeklyBudgetService:
     """Test weekly budget calculations."""
 
     def test_calculate_adjusted_daily_normal(self):
-        """Test adjusted daily calculation when under budget."""
+        """Test adjusted daily calculation when under budget.
+
+        Calories derived from macros: P×4 + C×4 + F×9.
+        Daily: 70×4 + 200×4 + 70×9 = 280+800+630 = 1710 kcal/day.
+        Weekly target: 1710×7 = 11970, consumed 3 days: 5130.
+        Remaining: 6840 / 4 = 1710/day.
+        """
         budget = WeeklyMacroBudget(
             weekly_budget_id="test-1",
             user_id="user-1",
             week_start_date=date(2026, 2, 16),
-            target_calories=14000,  # 2000 * 7
-            target_protein=490,
-            target_carbs=1400,
-            target_fat=490,
-            consumed_calories=6000,  # 3 days at 2000
-            consumed_protein=210,
-            consumed_carbs=600,
-            consumed_fat=210,
+            target_calories=11970,  # 1710 * 7 (macro-consistent)
+            target_protein=490,     # 70 * 7
+            target_carbs=1400,      # 200 * 7
+            target_fat=490,         # 70 * 7
+            consumed_calories=5130,  # 3 days at 1710
+            consumed_protein=210,    # 3 * 70
+            consumed_carbs=600,      # 3 * 200
+            consumed_fat=210,        # 3 * 70
         )
 
-        # 4 days remaining (Wed, Thu, Fri, Sat)
+        # 4 days remaining — macros: P=70, C=200, F=70 → 1710 kcal/day
         result = WeeklyBudgetService.calculate_adjusted_daily(
             weekly_budget=budget,
-            standard_daily_calories=2000,
+            standard_daily_calories=1710,
             standard_daily_carbs=200,
             standard_daily_fat=70,
             standard_daily_protein=70,
-            bmr=1600,
+            bmr=1400,
             remaining_days=4,
         )
 
-        # Remaining: 14000 - 6000 = 8000 / 4 = 2000 kcal/day
-        assert result.calories == 2000
+        # Derived: 70×4 + 200×4 + 70×9 = 1710
+        assert result.calories == 1710
         assert result.bmr_floor_active is False
         assert result.remaining_days == 4
 
