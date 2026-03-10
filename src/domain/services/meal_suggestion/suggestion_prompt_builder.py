@@ -186,6 +186,9 @@ def build_recipe_details_prompt(meal_name: str, session: "SuggestionSession") ->
         servings=getattr(session, "servings", 1),
         cooking_equipment=getattr(session, "cooking_equipment", None),
         cuisine_region=getattr(session, "cuisine_region", None),
+        protein_target=getattr(session, "protein_target", None),
+        carbs_target=getattr(session, "carbs_target", None),
+        fat_target=getattr(session, "fat_target", None),
     )
 
 

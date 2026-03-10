@@ -234,6 +234,9 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         servings: int = 1,
         cooking_equipment: Optional[List[str]] = None,
         cuisine_region = None,
+        protein_target: Optional[float] = None,
+        carbs_target: Optional[float] = None,
+        fat_target: Optional[float] = None,
     ) -> str:
         """
         Build prompt for Phase 2 recipe detail generation.
@@ -263,10 +266,15 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         if cuisine_region:
             cuisine_str = f"\nCuisine region: {cuisine_region}"
 
+        # Add explicit macro targets when overrides provided
+        macro_target_str = ""
+        if protein_target is not None and carbs_target is not None and fat_target is not None:
+            macro_target_str = f"\nMacro targets: ~{int(protein_target)}g protein, ~{int(carbs_target)}g carbs, ~{int(fat_target)}g fat"
+
         return f"""Generate complete recipe for: "{meal_name}"
 
 MUST USE these ingredients as main components: {ing_str}{' | ' + constraints_str if constraints_str else ''}
-Target: ~{target_calories} cal{servings_str} | ≤{cooking_time_minutes} min{equipment_str}{cuisine_str}
+Target: ~{target_calories} cal{servings_str} | ≤{cooking_time_minutes} min{equipment_str}{cuisine_str}{macro_target_str}
 
 PORTION SIZING for {target_calories} cal:
 - {'Small portions: 150g protein, 100g carbs' if target_calories < 600 else 'Standard: 200g protein, 150g carbs' if target_calories < 1000 else 'Large: 300g protein, 200g carbs'}

@@ -66,11 +66,15 @@ async def generate_suggestions(
             meal_portion_type=portion_type.value,
             ingredients=request.ingredients,
             time_available_minutes=request.cooking_time_minutes.value,
-            session_id=request.session_id,  # Pass session_id for regeneration
+            session_id=request.session_id,
             language=language,
-            servings=request.servings,  # Pass servings for ingredient/calorie scaling
-            cooking_equipment=request.cooking_equipment,  # Pass cooking equipment
-            cuisine_region=request.cuisine_region,  # Pass cuisine region preference
+            servings=request.servings,
+            cooking_equipment=request.cooking_equipment,
+            cuisine_region=request.cuisine_region,
+            calorie_target=request.calorie_target,
+            protein_target=request.protein_target,
+            carbs_target=request.carbs_target,
+            fat_target=request.fat_target,
         )
 
         session, suggestions = await event_bus.send(command)
@@ -97,7 +101,7 @@ async def save_meal_suggestion(
             suggestion_id=request.suggestion_id,
             name=request.name,
             meal_type=request.meal_type,
-            calories=request.calories,
+            calories=request.calories or round(request.protein * 4 + request.carbs * 4 + request.fat * 9),
             protein=request.protein,
             carbs=request.carbs,
             fat=request.fat,

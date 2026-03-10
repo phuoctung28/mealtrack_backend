@@ -46,4 +46,8 @@ class GenerateMealSuggestionsCommandHandler(
             servings=command.servings,
             cooking_equipment=command.cooking_equipment,
             cuisine_region=command.cuisine_region,
+            calorie_target_override=command.calorie_target,
+            protein_target=command.protein_target,
+            carbs_target=command.carbs_target,
+            fat_target=command.fat_target,
         )
