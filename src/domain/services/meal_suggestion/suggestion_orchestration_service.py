@@ -83,6 +83,10 @@ class SuggestionOrchestrationService:
         servings: int = 1,
         cooking_equipment: Optional[List[str]] = None,
         cuisine_region: Optional[str] = None,
+        calorie_target_override: Optional[int] = None,
+        protein_target: Optional[float] = None,
+        carbs_target: Optional[float] = None,
+        fat_target: Optional[float] = None,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """
         Generate 3 suggestions. If session_id provided, generates NEW meals
@@ -134,14 +138,17 @@ class SuggestionOrchestrationService:
             # Get meals_per_day from profile (default to 3)
             meals_per_day = getattr(profile, "meals_per_day", 3)
 
-            # Calculate target calories using PortionCalculationService
-            portion_target = self._portion_service.get_target_for_meal_type(
-                meal_type=meal_portion_type,
-                daily_target=int(daily_tdee),
-                meals_per_day=meals_per_day,
-            )
-            # Multiply target calories by servings (1-4x)
-            target_calories = portion_target.target_calories * servings
+            # Use calorie override if provided (adjusted daily target from mobile)
+            if calorie_target_override:
+                target_calories = calorie_target_override * servings
+            else:
+                # Calculate target calories using PortionCalculationService
+                portion_target = self._portion_service.get_target_for_meal_type(
+                    meal_type=meal_portion_type,
+                    daily_target=int(daily_tdee),
+                    meals_per_day=meals_per_day,
+                )
+                target_calories = portion_target.target_calories * servings
 
             # Extract dietary preferences and allergies (Phase 1 optimization)
             dietary_preferences = getattr(profile, "dietary_preferences", None) or []
@@ -162,6 +169,9 @@ class SuggestionOrchestrationService:
                 allergies=allergies,
                 cooking_equipment=cooking_equipment or [],
                 cuisine_region=cuisine_region,
+                protein_target=protein_target,
+                carbs_target=carbs_target,
+                fat_target=fat_target,
             )
             exclude_meal_names = []
             logger.info(f"Creating new session {session.id}")

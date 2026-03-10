@@ -115,6 +115,15 @@ class MealSuggestionRequest(BaseModel):
         None,
         description="Preferred cuisine region (Asian, Western, Latin, Mediterranean). If omitted, diverse cuisines used.",
     )
+    protein_target: Optional[float] = Field(
+        None, ge=0, description="Optional protein target override in grams"
+    )
+    carbs_target: Optional[float] = Field(
+        None, ge=0, description="Optional carbs target override in grams"
+    )
+    fat_target: Optional[float] = Field(
+        None, ge=0, description="Optional fat target override in grams"
+    )
 
     @field_validator("meal_size", mode="before")
     @classmethod
@@ -195,10 +204,10 @@ class SaveMealSuggestionRequest(BaseModel):
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
         ..., description="Type of meal"
     )
-    calories: int = Field(
-        ...,
+    calories: Optional[int] = Field(
+        None,
         gt=0,
-        description="Total calories (already scaled by AI for selected servings)",
+        description="Total calories. If omitted, derived from macros (protein*4 + carbs*4 + fat*9).",
     )
     protein: float = Field(..., ge=0, description="Protein in grams (already scaled)")
     carbs: float = Field(

@@ -26,6 +26,9 @@ class SuggestionSession:
     allergies: List[str] = field(default_factory=list)
     cooking_equipment: List[str] = field(default_factory=list)  # Available cooking equipment
     cuisine_region: Optional[str] = None  # User's preferred cuisine region
+    protein_target: Optional[float] = None  # Macro override: protein grams
+    carbs_target: Optional[float] = None  # Macro override: carbs grams
+    fat_target: Optional[float] = None  # Macro override: fat grams
     created_at: datetime = field(default_factory=utc_now)
     expires_at: Optional[datetime] = None
 
