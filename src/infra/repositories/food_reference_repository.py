@@ -1,0 +1,145 @@
+"""
+Food reference repository — CRUD for canonical food catalog.
+Replaces barcode_product_repository with extended functionality.
+"""
+import logging
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import select
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.orm import Session
+
+from src.infra.database.config import SessionLocal
+from src.infra.database.models.food_reference_model import FoodReferenceModel
+
+logger = logging.getLogger(__name__)
+
+
+class FoodReferenceRepository:
+    """Repository for food reference CRUD operations."""
+
+    def get_by_barcode(self, barcode: str) -> Optional[Dict[str, Any]]:
+        """Get food reference entry by barcode."""
+        session: Session = SessionLocal()
+        try:
+            stmt = select(FoodReferenceModel).where(
+                FoodReferenceModel.barcode == barcode
+            )
+            result = session.execute(stmt).scalar_one_or_none()
+            return self._to_dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Error fetching barcode {barcode}: {e}")
+            return None
+        finally:
+            session.close()
+
+    def get_by_id(self, ref_id: int) -> Optional[Dict[str, Any]]:
+        """Get food reference by ID."""
+        session: Session = SessionLocal()
+        try:
+            stmt = select(FoodReferenceModel).where(
+                FoodReferenceModel.id == ref_id
+            )
+            result = session.execute(stmt).scalar_one_or_none()
+            return self._to_dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Error fetching food_reference {ref_id}: {e}")
+            return None
+        finally:
+            session.close()
+
+    def get_by_fdc_id(self, fdc_id: int) -> Optional[Dict[str, Any]]:
+        """Get food reference by USDA FDC ID."""
+        session: Session = SessionLocal()
+        try:
+            stmt = select(FoodReferenceModel).where(
+                FoodReferenceModel.fdc_id == fdc_id
+            )
+            result = session.execute(stmt).scalar_one_or_none()
+            return self._to_dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Error fetching fdc_id {fdc_id}: {e}")
+            return None
+        finally:
+            session.close()
+
+    def search_by_name(
+        self, query: str, region: str = "global", limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Search food references by name."""
+        session: Session = SessionLocal()
+        try:
+            stmt = (
+                select(FoodReferenceModel)
+                .where(FoodReferenceModel.name.ilike(f"%{query}%"))
+                .where(
+                    FoodReferenceModel.region.in_([region, "global"])
+                )
+                .limit(limit)
+            )
+            results = session.execute(stmt).scalars().all()
+            return [self._to_dict(r) for r in results]
+        except Exception as e:
+            logger.error(f"Error searching food_reference '{query}': {e}")
+            return []
+        finally:
+            session.close()
+
+    def upsert(self, data: Dict[str, Any]) -> None:
+        """Insert or update food reference entry (upsert by barcode)."""
+        session: Session = SessionLocal()
+        try:
+            values = {
+                "barcode": data.get("barcode"),
+                "name": data.get("name"),
+                "brand": data.get("brand"),
+                "protein_100g": data.get("protein_100g"),
+                "carbs_100g": data.get("carbs_100g"),
+                "fat_100g": data.get("fat_100g"),
+                "fiber_100g": data.get("fiber_100g", 0),
+                "sugar_100g": data.get("sugar_100g", 0),
+                "serving_size": data.get("serving_size"),
+                "image_url": data.get("image_url"),
+                "source": data.get("source", "fatsecret"),
+                "fdc_id": data.get("fdc_id"),
+                "category": data.get("category"),
+                "region": data.get("region", "global"),
+                "density": data.get("density", 1.0),
+            }
+            stmt = mysql_insert(FoodReferenceModel).values(**values)
+            update_fields = {
+                k: v for k, v in values.items() if k != "barcode"
+            }
+            stmt = stmt.on_duplicate_key_update(**update_fields)
+            session.execute(stmt)
+            session.commit()
+        except Exception as e:
+            logger.error(f"Error upserting food_reference {data.get('barcode')}: {e}")
+            session.rollback()
+        finally:
+            session.close()
+
+    @staticmethod
+    def _to_dict(model: FoodReferenceModel) -> Dict[str, Any]:
+        """Convert model to dict."""
+        return {
+            "id": model.id,
+            "barcode": model.barcode,
+            "name": model.name,
+            "name_vi": model.name_vi,
+            "brand": model.brand,
+            "category": model.category,
+            "region": model.region,
+            "fdc_id": model.fdc_id,
+            "protein_100g": model.protein_100g,
+            "carbs_100g": model.carbs_100g,
+            "fat_100g": model.fat_100g,
+            "fiber_100g": model.fiber_100g,
+            "sugar_100g": model.sugar_100g,
+            "serving_sizes": model.serving_sizes,
+            "density": model.density,
+            "serving_size": model.serving_size,
+            "source": model.source,
+            "is_verified": model.is_verified,
+            "image_url": model.image_url,
+        }

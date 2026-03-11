@@ -11,6 +11,8 @@ class MacrosResponse(BaseModel):
     protein: float = Field(..., description="Protein in grams")
     carbs: float = Field(..., description="Carbohydrates in grams")
     fat: float = Field(..., description="Fat in grams")
+    fiber: float = Field(0, ge=0, description="Fiber in grams")
+    sugar: float = Field(0, ge=0, description="Sugar in grams")
 
 
 class WeeklyContextResponse(BaseModel):

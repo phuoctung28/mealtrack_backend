@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 
+from src.domain.constants.food_density import get_density, DEFAULT_DENSITY
 from src.domain.model.nutrition import FoodItem, Nutrition
 from src.domain.model.nutrition import Macros
 from src.domain.model.nutrition.serving_unit import ServingUnit
@@ -29,8 +30,7 @@ UNIT_TO_GRAMS = {
     "kg": 1000.0,
     "lb": 453.6,
     "oz": 28.35,
-    "ml": 1.0,
-    "l": 1000.0,
+    # ml/l removed — handled by density-aware logic in convert_quantity_to_grams
 }
 
 
@@ -47,16 +47,33 @@ def _normalize_unit(unit: str) -> str:
     return base
 
 
-def convert_quantity_to_grams(quantity: float, unit: str) -> float:
-    """Convert a quantity+unit pair to grams using UNIT_TO_GRAMS mapping."""
+def convert_quantity_to_grams(
+    quantity: float, unit: str, food_name: str = ""
+) -> float:
+    """Convert a quantity+unit pair to grams.
+
+    For volume units (ml, l), applies food-specific density from
+    ``food_density.get_density``.  Weight/count units use the global
+    ``UNIT_TO_GRAMS`` mapping.
+    """
     normalized = _normalize_unit(unit)
     if normalized == "g":
         return quantity
+
+    # Volume units — apply density
+    if normalized in ("ml", "l", "liter", "litre"):
+        base_ml = quantity if normalized == "ml" else quantity * 1000
+        density = get_density(food_name) if food_name else DEFAULT_DENSITY
+        return base_ml * density
+
     grams_per_unit = UNIT_TO_GRAMS.get(normalized)
     if grams_per_unit is None:
-        logger.warning(f"Unknown unit '{unit}' (normalized: '{normalized}') — treating quantity as grams")
+        logger.warning(
+            f"Unknown unit '{unit}' (normalized: '{normalized}') — treating quantity as grams"
+        )
         return quantity
     return quantity * grams_per_unit
+
 
 
 def scale_per_100g_nutrition(
@@ -65,6 +82,7 @@ def scale_per_100g_nutrition(
     unit: str,
     base_serving: float = 100.0,
     allowed_units: Optional[List[Dict[str, Any]]] = None,
+    food_name: str = "",
 ) -> dict:
     """Scale per-100g nutrition values for a given quantity and unit.
 
@@ -74,15 +92,16 @@ def scale_per_100g_nutrition(
         unit: The unit name (e.g., "cup", "g", "piece")
         base_serving: The base serving size in grams (default 100g)
         allowed_units: Optional list of allowed ServingUnits for the food
+        food_name: Food name for density-aware ml→g conversion
 
     Returns:
         dict with keys: calories, protein, carbs, fat.
     """
     # Use food-specific allowed_units if available, otherwise fallback to global mapping
     if allowed_units:
-        quantity_in_grams = _convert_with_allowed_units(quantity, unit, allowed_units)
+        quantity_in_grams = _convert_with_allowed_units(quantity, unit, allowed_units, food_name)
     else:
-        quantity_in_grams = convert_quantity_to_grams(quantity, unit)
+        quantity_in_grams = convert_quantity_to_grams(quantity, unit, food_name)
 
     factor = (quantity_in_grams / base_serving) if base_serving > 0 else 0.0
     return {
@@ -90,11 +109,14 @@ def scale_per_100g_nutrition(
         "protein": round(per_100g.get("protein", 0.0) * factor, 2),
         "carbs": round(per_100g.get("carbs", 0.0) * factor, 2),
         "fat": round(per_100g.get("fat", 0.0) * factor, 2),
+        "fiber": round(per_100g.get("fiber", 0.0) * factor, 2),
+        "sugar": round(per_100g.get("sugar", 0.0) * factor, 2),
     }
 
 
 def _convert_with_allowed_units(
-    quantity: float, unit: str, allowed_units: List[Dict[str, Any]]
+    quantity: float, unit: str, allowed_units: List[Dict[str, Any]],
+    food_name: str = "",
 ) -> float:
     """Convert quantity to grams using food-specific allowed_units."""
     if unit.lower() == "g":
@@ -109,7 +131,7 @@ def _convert_with_allowed_units(
     logger.warning(
         f"Unit '{unit}' not in allowed_units, falling back to global mapping"
     )
-    return convert_quantity_to_grams(quantity, unit)
+    return convert_quantity_to_grams(quantity, unit, food_name)
 
 
 def clamp_nutrition_values(item: dict) -> dict:
@@ -122,7 +144,8 @@ def clamp_nutrition_values(item: dict) -> dict:
     unit = (item.get("unit") or "g").lower()
 
     # Estimate weight in grams for plausibility check
-    weight_g = convert_quantity_to_grams(quantity, unit)
+    food_name = item.get("name", "")
+    weight_g = convert_quantity_to_grams(quantity, unit, food_name)
     if weight_g <= 0:
         return item
 
@@ -260,6 +283,8 @@ class NutritionCalculationService:
         total_protein = sum(item.macros.protein for item in food_items)
         total_carbs = sum(item.macros.carbs for item in food_items)
         total_fat = sum(item.macros.fat for item in food_items)
+        total_fiber = sum(item.macros.fiber for item in food_items)
+        total_sugar = sum(item.macros.sugar for item in food_items)
 
         # Calculate average confidence
         avg_confidence = sum(item.confidence for item in food_items) / len(food_items)
@@ -268,7 +293,9 @@ class NutritionCalculationService:
             macros=Macros(
                 protein=total_protein,
                 carbs=total_carbs,
-                fat=total_fat
+                fat=total_fat,
+                fiber=total_fiber,
+                sugar=total_sugar,
             ),
             food_items=food_items,
             confidence_score=avg_confidence

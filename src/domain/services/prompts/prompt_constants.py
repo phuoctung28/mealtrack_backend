@@ -46,6 +46,40 @@ NUTRITION_RULES = (
     "Match target calories (±50). Balance protein/carbs/fat per meal type."
 )
 
+# =============================================================================
+# MACRO ACCURACY RULES — appended to recipe generation prompts
+# =============================================================================
+MACRO_ACCURACY_RULES = (
+    "UNIT CONVERSION (MANDATORY):\n"
+    "- Convert ALL quantities to grams before calculating macros\n"
+    "- Liquid densities: honey=1.42g/ml, oil/butter=0.92g/ml, milk=1.03g/ml, "
+    "soy sauce=1.2g/ml, yogurt=1.05g/ml, cream=1.01g/ml\n"
+    "- Unknown liquids: assume 1.0g/ml (water density)\n"
+    "- Return all ingredient amounts in GRAMS (not ml, cups, tbsp)\n"
+    "  Example: '75ml honey' → '106g honey' (density 1.42)\n"
+    "\n"
+    "MACRO CALCULATION (MANDATORY):\n"
+    "- Calculate each ingredient's macros from per-100g nutrition data\n"
+    "- Sum all ingredient macros to get total macros\n"
+    "- Verify: calories = protein*4 + carbs*4 + fat*9 (must match within 5%)\n"
+    "- If mismatch: recalculate calories from macros\n"
+)
+
+# =============================================================================
+# DECOMPOSITION RULES — enforce ingredient-level breakdown
+# =============================================================================
+DECOMPOSITION_RULES = (
+    "INGREDIENT DECOMPOSITION (MANDATORY):\n"
+    "- ALWAYS break down compound dishes into individual ingredients\n"
+    "- Never return a single entry for a multi-ingredient dish\n"
+    "- Minimum 3 ingredients per dish (most real dishes have 4+)\n"
+    "- Simple foods (banana, egg, plain rice) may stay as 1 item\n"
+    "- Examples:\n"
+    "  ✅ 'pho bo' → rice noodle (200g), beef (100g), broth (400g), bean sprouts (50g), herbs (20g), oil (5g)\n"
+    "  ✅ 'pasta carbonara' → spaghetti (180g), bacon (60g), egg (50g), parmesan (30g), cream (30g)\n"
+    "  ❌ 'pho bo' → 1 entry with 450 kcal\n"
+)
+
 
 # =============================================================================
 # JSON SCHEMAS (Compressed - No inline comments)

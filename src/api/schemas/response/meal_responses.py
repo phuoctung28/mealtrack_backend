@@ -35,6 +35,8 @@ class ParsedFoodItem(BaseModel):
     protein: float = Field(..., ge=0, description="Protein in grams")
     carbs: float = Field(..., ge=0, description="Carbohydrates in grams")
     fat: float = Field(..., ge=0, description="Fat in grams")
+    fiber: float = Field(0, ge=0, description="Fiber in grams")
+    sugar: float = Field(0, ge=0, description="Sugar in grams")
     data_source: Optional[str] = Field(None, description="Data source: usda, fatsecret, or ai_estimate")
     fdc_id: Optional[int] = Field(None, description="USDA FDC ID when available")
 
@@ -74,8 +76,10 @@ class MealTranslationResponse(BaseModel):
 class MacrosResponse(BaseModel):
     """Response DTO for macronutrient information."""
     protein: float = Field(..., ge=0, description="Protein in grams")
-    carbs: float = Field(..., ge=0, description="Carbohydrates in grams") 
+    carbs: float = Field(..., ge=0, description="Carbohydrates in grams")
     fat: float = Field(..., ge=0, description="Fat in grams")
+    fiber: float = Field(0, ge=0, description="Fiber in grams")
+    sugar: float = Field(0, ge=0, description="Sugar in grams")
 
 
 class NutritionResponse(BaseModel):
@@ -85,6 +89,8 @@ class NutritionResponse(BaseModel):
     protein_g: float = Field(..., ge=0, description="Protein in grams")
     carbs_g: float = Field(..., ge=0, description="Carbohydrates in grams")
     fat_g: float = Field(..., ge=0, description="Fat in grams")
+    fiber_g: float = Field(0, ge=0, description="Fiber in grams")
+    sugar_g: float = Field(0, ge=0, description="Sugar in grams")
 
 
 class CustomNutritionResponse(BaseModel):

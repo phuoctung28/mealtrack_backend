@@ -24,6 +24,7 @@ from src.domain.ports.meal_generation_service_port import MealGenerationServiceP
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
 )
+from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
 from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
@@ -67,6 +68,7 @@ class SuggestionOrchestrationService:
         self._portion_service = portion_service or PortionCalculationService()
         self._redis_client = redis_client
         self._translation_service = TranslationService(generation_service)
+        self._macro_validator = MacroValidationService()
         # Profile provider is an application/infra concern injected from outside.
         # It should be a callable: user_id (str) -> user profile domain object.
         self._profile_provider = profile_provider
@@ -406,10 +408,13 @@ class SuggestionOrchestrationService:
 
         # Generate details directly in target language
         recipe_system = (
-            f"You are a professional chef. Return ONLY this exact JSON structure, no extra fields:\n"
-            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"..."}}],'
+            f"You are a professional chef and nutritionist. Return ONLY this exact JSON structure, no extra fields:\n"
+            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
             '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
             '"prep_time_minutes":0,"calories":0,"protein":0.0,"carbs":0.0,"fat":0.0}}\n'
+            "CRITICAL: All ingredient amounts MUST be in GRAMS. Convert volumes using density "
+            "(honey=1.42g/ml, oil=0.92g/ml, milk=1.03g/ml). "
+            "Verify: calories = protein*4 + carbs*4 + fat*9.\n"
             f"Output string values in {target_lang}. "
             "JSON keys MUST be in English. Do NOT add recipe_name, description, equipment, or other fields."
         )
@@ -464,10 +469,18 @@ class SuggestionOrchestrationService:
                     )
                     return None
 
-                calories = recipe_data.get("calories", session.target_calories)
-                protein = recipe_data.get("protein", 20.0)
-                carbs = recipe_data.get("carbs", 30.0)
-                fat = recipe_data.get("fat", 10.0)
+                # Extract and validate macros
+                raw_macros = {
+                    "calories": recipe_data.get("calories", session.target_calories),
+                    "protein": recipe_data.get("protein", 20.0),
+                    "carbs": recipe_data.get("carbs", 30.0),
+                    "fat": recipe_data.get("fat", 10.0),
+                }
+                validated = self._macro_validator.validate_and_correct(raw_macros)
+                calories = validated["calories"]
+                protein = validated["protein"]
+                carbs = validated["carbs"]
+                fat = validated["fat"]
 
                 # Extract origin_country and cuisine_type from AI response
                 origin_country = recipe_data.get("origin_country")

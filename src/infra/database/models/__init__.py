@@ -30,8 +30,10 @@ from .user.profile import UserProfile
 # User models
 from .user.user import User
 
-# Barcode product cache
-from .barcode_product_model import BarcodeProductModel
+# Food reference (evolved from barcode_products)
+from .food_reference_model import FoodReferenceModel
+# Backward-compatible alias
+BarcodeProductModel = FoodReferenceModel
 
 __all__ = [
     # Base
@@ -69,6 +71,7 @@ __all__ = [
     "NotificationPreferences",
     "UserFcmToken",
 
-    # Barcode product cache
-    "BarcodeProductModel",
+    # Food reference (evolved from barcode_products)
+    "FoodReferenceModel",
+    "BarcodeProductModel",  # backward-compatible alias
 ]

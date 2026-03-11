@@ -8,7 +8,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.infra.adapters.open_food_facts_service import OpenFoodFactsService
 from src.infra.adapters.fat_secret_service import FatSecretService
-from src.infra.repositories.barcode_product_repository import BarcodeProductRepository
+from src.infra.repositories.food_reference_repository import FoodReferenceRepository
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +21,11 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
         self,
         open_food_facts_service: OpenFoodFactsService,
         fat_secret_service: FatSecretService,
-        barcode_product_repository: BarcodeProductRepository,
+        food_reference_repository: FoodReferenceRepository,
     ):
         self.off = open_food_facts_service
         self.fat_secret = fat_secret_service
-        self.repo = barcode_product_repository
+        self.repo = food_reference_repository
 
     async def handle(self, query: LookupBarcodeQuery) -> Optional[Dict[str, Any]]:
         """Look up product by barcode with cascade: DB -> FatSecret -> OpenFoodFacts."""
@@ -54,8 +54,8 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
         return None
 
     def _cache_result(self, result: Dict[str, Any]) -> None:
-        """Cache API result to local database (fail silently on error)."""
+        """Cache API result to food_reference table (fail silently on error)."""
         try:
-            self.repo.save(result)
+            self.repo.upsert(result)
         except Exception as e:
             logger.warning(f"Failed to cache barcode {result.get('barcode')}: {e}")

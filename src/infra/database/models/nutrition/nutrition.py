@@ -14,10 +14,12 @@ class Nutrition(Base, SecondaryEntityMixin):
     confidence_score = Column(Float, nullable=True)
     raw_ai_response = Column(Text, nullable=True)
 
-    # Macro fields — calories are always derived: P*4 + C*4 + F*9
+    # Macro fields — calories are always derived: P*4 + (C-fiber)*4 + fiber*2 + F*9
     protein = Column(Float, default=0, nullable=False)
     carbs = Column(Float, default=0, nullable=False)
     fat = Column(Float, default=0, nullable=False)
+    fiber = Column(Float, default=0, nullable=False)
+    sugar = Column(Float, default=0, nullable=False)
 
     # Relationships
     food_items = relationship("FoodItem",
@@ -37,6 +39,8 @@ class Nutrition(Base, SecondaryEntityMixin):
             protein=self.protein,
             carbs=self.carbs,
             fat=self.fat,
+            fiber=self.fiber or 0.0,
+            sugar=self.sugar or 0.0,
         )
 
         return DomainNutrition(
@@ -60,6 +64,8 @@ class Nutrition(Base, SecondaryEntityMixin):
             nutrition.protein = domain_model.macros.protein
             nutrition.carbs = domain_model.macros.carbs
             nutrition.fat = domain_model.macros.fat
+            nutrition.fiber = domain_model.macros.fiber
+            nutrition.sugar = domain_model.macros.sugar
 
         if domain_model.food_items:
             from .food_item import FoodItem

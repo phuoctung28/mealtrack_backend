@@ -4,6 +4,22 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Shared decomposition instruction appended to all scanning strategies
+SCAN_DECOMPOSITION_RULES = """
+CRITICAL — INGREDIENT DECOMPOSITION:
+- ALWAYS decompose compound dishes into individual ingredients
+- If you see a bowl of soup: list broth, noodles, meat, vegetables separately
+- If you see a sandwich: list bread, meat, cheese, sauce separately
+- Never return compound dish names as single items (e.g. "pho" → list noodle, beef, broth, etc.)
+- Simple single-ingredient items (banana, egg, plain rice) stay as 1 item
+- Each ingredient: name, quantity (grams), unit, calories, macros
+
+MACRO ACCURACY:
+- All quantities in GRAMS (convert volumes using density: honey=1.42g/ml, oil=0.92g/ml)
+- Verify: calories ≈ protein*4 + carbs*4 + fat*9
+"""
+
+
 class MealAnalysisStrategy(ABC):
     """
     Abstract base class for meal analysis strategies.
@@ -79,7 +95,7 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
         - All macros should be in grams
         - Confidence should be between 0 (low) and 1 (high) based on how certain you are of your analysis
         - Always return well-formed JSON
-        """
+        """ + SCAN_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         return "Analyze this food image and provide nutritional information:"
@@ -133,7 +149,7 @@ class PortionAwareAnalysisStrategy(MealAnalysisStrategy):
         - Confidence should be between 0 (low) and 1 (high)
         - Include portion_adjustment field to indicate scaling was applied
         - Always return well-formed JSON
-        """
+        """ + SCAN_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         return f"""Analyze this food image and provide nutritional information.
@@ -192,7 +208,7 @@ class IngredientAwareAnalysisStrategy(MealAnalysisStrategy):
         - Higher confidence scores are appropriate when ingredients are known
         - Include ingredient_based field to indicate enhanced analysis
         - Always return well-formed JSON
-        """
+        """ + SCAN_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         # Format ingredients list
@@ -267,7 +283,7 @@ class WeightAwareAnalysisStrategy(MealAnalysisStrategy):
         - Higher confidence scores are appropriate with weight context
         - Include weight_adjustment and total_weight_grams fields
         - Always return well-formed JSON
-        """
+        """ + SCAN_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         return f"""Analyze this food image and provide nutritional information.
@@ -371,7 +387,7 @@ Return your analysis in the following JSON format:
 - Confidence should be between 0 (low) and 1 (high) based on how certain you are
 - Set user_context_applied: true to indicate user context was used
 - Always return well-formed JSON
-"""
+""" + SCAN_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         return f"""Analyze this food image and provide nutritional information.

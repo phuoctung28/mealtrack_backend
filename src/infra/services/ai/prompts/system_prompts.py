@@ -87,8 +87,10 @@ Guidelines:
 - Use reasonable portion sizes
 - If ambiguous, make a reasonable assumption and note it in the name
 - Include common items like beverages, condiments, and cooking oils
-- For composite or regional dishes (e.g., "Vietnamese broken rice", "bento box", "thali", "cơm tấm"), ALWAYS decompose into individual components with separate nutritional data for each
-- If the food is a well-known regional dish, include all typical accompaniments (rice, protein, sides, sauces)
+- DECOMPOSITION (MANDATORY): For ANY multi-ingredient dish (e.g., "pho", "pasta carbonara", "cơm tấm"), ALWAYS decompose into individual ingredients with separate nutritional data. Never return a single entry for a compound dish. Minimum 3 ingredients per dish.
+- Simple single-ingredient foods (banana, egg, plain rice) stay as 1 item
+- All quantities should be in GRAMS when possible. Convert volumes using density (honey=1.42g/ml, oil=0.92g/ml, milk=1.03g/ml)
+- Verify: calories ≈ protein*4 + carbs*4 + fat*9
 - {language_instruction}
 - Be accurate but acknowledge estimates are approximate"""
 

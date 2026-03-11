@@ -177,7 +177,7 @@ def get_food_search_event_bus() -> EventBus:
         get_food_mapping_service,
         get_open_food_facts_service_instance,
         get_fat_secret_service_instance,
-        get_barcode_product_repository,
+        get_food_reference_repository,
     )
 
     event_bus = PyMediatorEventBus()
@@ -188,7 +188,7 @@ def get_food_search_event_bus() -> EventBus:
     food_mapping_service = get_food_mapping_service()
     open_food_facts_service = get_open_food_facts_service_instance()
     fat_secret_service = get_fat_secret_service_instance()
-    barcode_product_repository = get_barcode_product_repository()
+    food_reference_repository = get_food_reference_repository()
 
     event_bus.register_handler(
         SearchFoodsQuery,
@@ -208,7 +208,7 @@ def get_food_search_event_bus() -> EventBus:
         LookupBarcodeQueryHandler(
             open_food_facts_service=open_food_facts_service,
             fat_secret_service=fat_secret_service,
-            barcode_product_repository=barcode_product_repository,
+            food_reference_repository=food_reference_repository,
         ),
     )
 

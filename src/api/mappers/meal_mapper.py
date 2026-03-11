@@ -103,6 +103,8 @@ class MealMapper:
                     protein=meal.nutrition.macros.protein,
                     carbs=meal.nutrition.macros.carbs,
                     fat=meal.nutrition.macros.fat,
+                    fiber=meal.nutrition.macros.fiber,
+                    sugar=meal.nutrition.macros.sugar,
                 )
             # Handle legacy structure where nutrition has direct properties
             elif hasattr(meal.nutrition, 'protein'):
@@ -123,8 +125,8 @@ class MealMapper:
                             protein_g=item.macros.protein,
                             carbs_g=item.macros.carbs,
                             fat_g=item.macros.fat,
-                            sugar_g=None,
-                            sodium_mg=None
+                            fiber_g=item.macros.fiber,
+                            sugar_g=item.macros.sugar,
                         )
 
                     # Calculate per-100g custom nutrition if custom ingredient
