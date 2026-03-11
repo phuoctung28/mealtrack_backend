@@ -7,6 +7,7 @@ import asyncio
 import logging
 import time
 import uuid
+from datetime import date
 from typing import List, Optional, Tuple, Callable, Any
 
 from src.domain.cache.cache_keys import CacheKeys
@@ -28,6 +29,9 @@ from src.domain.services.meal_suggestion.macro_validation_service import MacroVa
 from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
+from src.domain.services.weekly_budget_service import WeeklyBudgetService
+from src.domain.utils.timezone_utils import get_user_monday
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -134,8 +138,8 @@ class SuggestionOrchestrationService:
             if not profile:
                 raise ValueError(f"User {user_id} profile not found")
 
-            # Use cached TDEE (changed from direct calculation)
-            daily_tdee = await self._get_cached_tdee(user_id, profile)
+            # Use adjusted daily target from weekly budget (falls back to raw TDEE)
+            daily_tdee = await self._get_adjusted_daily_target(user_id, profile)
 
             # Get meals_per_day from profile (default to 3)
             meals_per_day = getattr(profile, "meals_per_day", 3)
@@ -199,35 +203,13 @@ class SuggestionOrchestrationService:
 
     def _calculate_daily_tdee(self, profile) -> float:
         """
-        Calculate daily TDEE (Total Daily Energy Expenditure) from user profile.
-        Returns target calories based on user's fitness goal.
+        Calculate daily TDEE from user profile. Returns target calories.
         """
         try:
-            # Map profile data to TDEE request using centralized mapper
-            sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
-
-            tdee_request = TdeeRequest(
-                age=profile.age,
-                sex=sex,
-                height=profile.height_cm,
-                weight=profile.weight_kg,
-                job_type=ActivityGoalMapper.map_job_type(profile.job_type),
-                training_days_per_week=profile.training_days_per_week,
-                training_minutes_per_session=profile.training_minutes_per_session,
-                training_level=ActivityGoalMapper.map_training_level(profile.training_level),
-                goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
-                body_fat_pct=profile.body_fat_percentage,
-                unit_system=UnitSystem.METRIC,
-            )
-
-            # Calculate TDEE
-            result = self._tdee_service.calculate_tdee(tdee_request)
+            result = self._calculate_tdee_result(profile)
             return result.macros.calories
-
         except Exception as e:
-            logger.warning(
-                f"Failed to calculate TDEE: {e}. Using default 2000 calories."
-            )
+            logger.warning(f"Failed to calculate TDEE: {e}. Using default 2000 calories.")
             return 2000.0
 
     async def _get_cached_tdee(self, user_id: str, profile) -> float:
@@ -259,6 +241,66 @@ class SuggestionOrchestrationService:
             logger.warning(f"TDEE cache SET failed: {e}")
 
         return tdee
+
+    async def _get_adjusted_daily_target(self, user_id: str, profile) -> float:
+        """
+        Get adjusted daily calorie target from weekly budget.
+        Falls back to raw TDEE if no weekly budget exists.
+        """
+        try:
+            # Calculate base TDEE and BMR
+            tdee_result = self._calculate_tdee_result(profile)
+            base_calories = tdee_result.macros.calories
+            bmr = tdee_result.bmr
+
+            with UnitOfWork() as uow:
+                today = date.today()
+                week_start = get_user_monday(today, user_id, uow)
+                weekly_budget = uow.weekly_budgets.find_by_user_and_week(user_id, week_start)
+
+                if not weekly_budget:
+                    logger.info(f"No weekly budget for user {user_id}, using raw TDEE: {base_calories}")
+                    return base_calories
+
+                remaining_days = WeeklyBudgetService.calculate_remaining_days(week_start, today)
+                adjusted = WeeklyBudgetService.calculate_adjusted_daily(
+                    weekly_budget,
+                    base_calories,
+                    tdee_result.macros.carbs,
+                    tdee_result.macros.fat,
+                    tdee_result.macros.protein,
+                    bmr=bmr,
+                    remaining_days=remaining_days,
+                )
+
+                logger.info(
+                    f"Adjusted daily target for user {user_id}: "
+                    f"{adjusted.calories:.0f} kcal (base: {base_calories:.0f}, "
+                    f"bmr_floor: {adjusted.bmr_floor_active})"
+                )
+                return adjusted.calories
+
+        except Exception as e:
+            logger.warning(f"Failed to get adjusted daily target: {e}. Falling back to raw TDEE.")
+            return self._calculate_daily_tdee(profile)
+
+    def _calculate_tdee_result(self, profile):
+        """Calculate full TDEE result (with BMR) from user profile."""
+        sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
+        tdee_request = TdeeRequest(
+            age=profile.age,
+            sex=sex,
+            height=profile.height_cm,
+            weight=profile.weight_kg,
+            job_type=ActivityGoalMapper.map_job_type(profile.job_type),
+            training_days_per_week=profile.training_days_per_week,
+            training_minutes_per_session=profile.training_minutes_per_session,
+            training_level=ActivityGoalMapper.map_training_level(profile.training_level),
+            goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
+            body_fat_pct=profile.body_fat_percentage,
+            unit_system=UnitSystem.METRIC,
+        )
+        return self._tdee_service.calculate_tdee(tdee_request)
 
     async def _generate_with_timeout(
         self,

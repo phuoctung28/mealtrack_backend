@@ -21,67 +21,78 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def upgrade() -> None:
-    # Rename table
-    op.rename_table("barcode_products", "food_reference")
+def _table_exists(name: str) -> bool:
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            "SELECT COUNT(*) FROM information_schema.tables "
+            "WHERE table_schema = DATABASE() AND table_name = :name"
+        ),
+        {"name": name},
+    )
+    return result.scalar() > 0
 
-    # Add new columns
-    op.add_column(
-        "food_reference",
-        sa.Column("name_vi", sa.String(255), nullable=True),
+
+def _has_column(table: str, column: str) -> bool:
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_schema = DATABASE() AND table_name = :table AND column_name = :column"
+        ),
+        {"table": table, "column": column},
     )
-    op.add_column(
-        "food_reference",
-        sa.Column("category", sa.String(100), nullable=True),
-    )
-    op.add_column(
-        "food_reference",
-        sa.Column("region", sa.String(10), nullable=False, server_default="global"),
-    )
-    op.add_column(
-        "food_reference",
-        sa.Column("fdc_id", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "food_reference",
-        sa.Column("fiber_100g", sa.Float(), nullable=False, server_default="0"),
-    )
-    op.add_column(
-        "food_reference",
-        sa.Column("sugar_100g", sa.Float(), nullable=False, server_default="0"),
-    )
-    op.add_column(
-        "food_reference",
-        sa.Column("serving_sizes", sa.JSON(), nullable=True),
-    )
-    op.add_column(
-        "food_reference",
-        sa.Column("density", sa.Float(), nullable=False, server_default="1.0"),
-    )
-    op.add_column(
-        "food_reference",
-        sa.Column("is_verified", sa.Boolean(), nullable=False, server_default="0"),
-    )
+    return result.scalar() > 0
+
+
+def upgrade() -> None:
+    # Rename table (only if old name still exists)
+    if _table_exists("barcode_products") and not _table_exists("food_reference"):
+        op.rename_table("barcode_products", "food_reference")
+
+    # Add new columns (idempotent)
+    new_columns = [
+        ("name_vi", sa.Column("name_vi", sa.String(255), nullable=True)),
+        ("category", sa.Column("category", sa.String(100), nullable=True)),
+        ("region", sa.Column("region", sa.String(10), nullable=False, server_default="global")),
+        ("fdc_id", sa.Column("fdc_id", sa.Integer(), nullable=True)),
+        ("fiber_100g", sa.Column("fiber_100g", sa.Float(), nullable=False, server_default="0")),
+        ("sugar_100g", sa.Column("sugar_100g", sa.Float(), nullable=False, server_default="0")),
+        ("serving_sizes", sa.Column("serving_sizes", sa.JSON(), nullable=True)),
+        ("density", sa.Column("density", sa.Float(), nullable=False, server_default="1.0")),
+        ("is_verified", sa.Column("is_verified", sa.Boolean(), nullable=False, server_default="0")),
+    ]
+    for col_name, col in new_columns:
+        if not _has_column("food_reference", col_name):
+            op.add_column("food_reference", col)
 
     # Drop misleading calories column (derive from macros)
-    op.drop_column("food_reference", "calories_100g")
+    if _has_column("food_reference", "calories_100g"):
+        op.drop_column("food_reference", "calories_100g")
 
-    # Add indexes
-    op.create_index("ix_food_reference_fdc_id", "food_reference", ["fdc_id"])
-    op.create_index("ix_food_reference_category", "food_reference", ["category"])
+    # Add indexes (ignore if already exist)
+    try:
+        op.create_index("ix_food_reference_fdc_id", "food_reference", ["fdc_id"])
+    except Exception:
+        pass
+    try:
+        op.create_index("ix_food_reference_category", "food_reference", ["category"])
+    except Exception:
+        pass
 
     # Add food_reference_id FK to food_item
-    op.add_column(
-        "food_item",
-        sa.Column("food_reference_id", sa.Integer(), nullable=True),
-    )
-    op.create_foreign_key(
-        "fk_food_item_food_reference",
-        "food_item",
-        "food_reference",
-        ["food_reference_id"],
-        ["id"],
-    )
+    if not _has_column("food_item", "food_reference_id"):
+        op.add_column(
+            "food_item",
+            sa.Column("food_reference_id", sa.Integer(), nullable=True),
+        )
+        op.create_foreign_key(
+            "fk_food_item_food_reference",
+            "food_item",
+            "food_reference",
+            ["food_reference_id"],
+            ["id"],
+        )
 
 
 def downgrade() -> None:
