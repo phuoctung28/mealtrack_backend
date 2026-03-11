@@ -13,6 +13,8 @@ from .prompt_constants import (
     JSON_SCHEMAS,
     GOAL_GUIDANCE,
     SYSTEM_MESSAGES,
+    MACRO_ACCURACY_RULES,
+    DECOMPOSITION_RULES,
 )
 
 
@@ -282,16 +284,12 @@ PORTION SIZING for {target_calories} cal:
 REQUIREMENTS:
 - Match name "{meal_name}" exactly
 - MUST include the user's specified ingredients ({ing_str}) — do NOT substitute them
-- 3-8 ingredients with amounts (g/ml/tbsp) scaled for {servings} serving{'s' if servings > 1 else ''}
+- 3-8 ingredients with amounts in GRAMS scaled for {servings} serving{'s' if servings > 1 else ''}
 - 2-6 clear recipe steps with duration
 - Total prep_time ≤{cooking_time_minutes} min
 - Include origin_country and cuisine_type in JSON
-- Calculate total macros from ingredients:
-  * calories (kcal)
-  * protein (grams)
-  * carbs (grams)
-  * fat (grams)
-  * IMPORTANT: Each ingredient has macros - sum them up accurately
 
-CRITICAL: Macros MUST match ingredient amounts. Use standard nutrition data.
+{MACRO_ACCURACY_RULES}
+
+{DECOMPOSITION_RULES}
 """

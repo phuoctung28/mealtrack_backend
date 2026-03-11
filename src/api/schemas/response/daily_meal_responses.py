@@ -152,7 +152,7 @@ class QuickMealIdeaResponse(BaseModel):
     name: str = Field(..., description="Meal name")
     description: str = Field(..., description="Short tagline (10 words max)")
     time_minutes: int = Field(..., ge=0, description="Total cooking time in minutes")
-    calories: int = Field(..., ge=0, description="Estimated calories")
+    calories: float = Field(..., ge=0, description="Estimated calories")
     protein_g: float = Field(..., ge=0, description="Protein in grams")
     carbs_g: float = Field(..., ge=0, description="Carbohydrates in grams")
     fat_g: float = Field(..., ge=0, description="Fat in grams")

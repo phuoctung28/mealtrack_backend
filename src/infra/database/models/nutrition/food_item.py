@@ -19,13 +19,16 @@ class FoodItem(Base, PrimaryEntityMixin):
     confidence = Column(Float, nullable=True)
 
     # Edit support fields
-    fdc_id = Column(Integer, nullable=True)  # USDA FDC ID if available
+    fdc_id = Column(Integer, nullable=True)  # USDA FDC ID (legacy, use food_reference_id)
+    food_reference_id = Column(Integer, ForeignKey("food_reference.id"), nullable=True)
     is_custom = Column(Boolean, default=False, nullable=False)  # Whether this is a custom ingredient
 
     # Macro fields (previously in separate Macros table)
     protein = Column(Float, default=0, nullable=False)
     carbs = Column(Float, default=0, nullable=False)
     fat = Column(Float, default=0, nullable=False)
+    fiber = Column(Float, default=0, nullable=False)
+    sugar = Column(Float, default=0, nullable=False)
 
     # Foreign keys
     nutrition_id = Column(Integer, ForeignKey("nutrition.id"), nullable=True)  # Nullable for orphaned items
@@ -45,6 +48,8 @@ class FoodItem(Base, PrimaryEntityMixin):
             protein=self.protein,
             carbs=self.carbs,
             fat=self.fat,
+            fiber=self.fiber or 0.0,
+            sugar=self.sugar or 0.0,
         )
 
         return DomainFoodItem(
@@ -82,5 +87,7 @@ class FoodItem(Base, PrimaryEntityMixin):
             item.protein = domain_model.macros.protein
             item.carbs = domain_model.macros.carbs
             item.fat = domain_model.macros.fat
+            item.fiber = domain_model.macros.fiber
+            item.sugar = domain_model.macros.sugar
 
         return item

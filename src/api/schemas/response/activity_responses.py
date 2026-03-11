@@ -11,6 +11,8 @@ class MacrosResponse(BaseModel):
     protein: float
     carbs: float
     fat: float
+    fiber: float = 0.0
+    sugar: float = 0.0
 
 
 class MealActivityResponse(BaseModel):

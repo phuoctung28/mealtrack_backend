@@ -242,17 +242,21 @@ def get_fat_secret_service_instance():
     return get_fat_secret_service()
 
 
-# Barcode Product Repository
-_barcode_product_repository = None
+# Food Reference Repository (replaces barcode_product_repository)
+_food_reference_repository = None
 
 
-def get_barcode_product_repository():
-    """Get the barcode product repository singleton."""
-    global _barcode_product_repository
-    if _barcode_product_repository is None:
-        from src.infra.repositories.barcode_product_repository import BarcodeProductRepository
-        _barcode_product_repository = BarcodeProductRepository()
-    return _barcode_product_repository
+def get_food_reference_repository():
+    """Get the food reference repository singleton."""
+    global _food_reference_repository
+    if _food_reference_repository is None:
+        from src.infra.repositories.food_reference_repository import FoodReferenceRepository
+        _food_reference_repository = FoodReferenceRepository()
+    return _food_reference_repository
+
+
+# Backward-compatible alias
+get_barcode_product_repository = get_food_reference_repository
 
 
 # Notification Repository

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 class MacrosSchema(BaseModel):
     """Macronutrient information."""
 
-    calories: int = Field(..., description="Total calories")
+    calories: float = Field(..., description="Total calories")
     protein: float = Field(..., description="Protein in grams")
     carbs: float = Field(..., description="Carbohydrates in grams")
     fat: float = Field(..., description="Fat in grams")
@@ -20,7 +20,7 @@ class MacrosSchema(BaseModel):
 class MacroEstimateResponse(BaseModel):
     """Alias for MacrosSchema for consistency."""
 
-    calories: int = Field(..., description="Total calories")
+    calories: float = Field(..., description="Total calories")
     protein: float = Field(..., description="Protein in grams")
     carbs: float = Field(..., description="Carbohydrates in grams")
     fat: float = Field(..., description="Fat in grams")
@@ -86,7 +86,7 @@ class SuggestionsListResponse(BaseModel):
     meal_portion_type: str = Field(
         ..., description="Portion type: snack, main, or omad"
     )
-    target_calories: int = Field(
+    target_calories: float = Field(
         ..., description="Calculated target calories for this portion type"
     )
     suggestions: List[MealSuggestionResponse] = Field(
