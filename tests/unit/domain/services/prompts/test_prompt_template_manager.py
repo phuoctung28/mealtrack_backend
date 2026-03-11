@@ -189,4 +189,5 @@ class TestTokenReduction:
         )
 
         estimated_tokens = len(prompt) / 4
-        assert estimated_tokens < 250, f"Prompt too long: ~{estimated_tokens} tokens"
+        # Target ~400 tokens per build_recipe_details_prompt docstring
+        assert estimated_tokens < 450, f"Prompt too long: ~{estimated_tokens} tokens"
