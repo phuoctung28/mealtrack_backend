@@ -2,6 +2,8 @@
 User profiles API endpoints - Event-driven architecture.
 Handles user profile management and TDEE calculations.
 """
+from datetime import date
+
 from fastapi import APIRouter, Depends
 
 from src.api.dependencies.auth import get_current_user_id
@@ -40,10 +42,19 @@ async def save_user_onboarding(
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
+        # Compute age from DOB (validate date is real — e.g., reject Feb 31)
+        try:
+            dob = date(request.birth_year, request.birth_month, request.birth_day)
+        except ValueError:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Invalid birth date")
+        today = date.today()
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
         # Create command
         command = SaveUserOnboardingCommand(
             user_id=user_id,
-            age=request.age,
+            age=age,
             gender=request.gender,
             height_cm=request.height,
             weight_kg=request.weight,
@@ -56,7 +67,9 @@ async def save_user_onboarding(
             dietary_preferences=request.dietary_preferences,
             meals_per_day=request.meals_per_day,
             referral_sources=request.referral_sources,
-            training_level=request.training_level
+            training_level=request.training_level,
+            date_of_birth=dob,
+            target_weight_kg=request.target_weight_kg,
         )
 
         await event_bus.send(command)

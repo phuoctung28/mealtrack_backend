@@ -2,6 +2,7 @@
 Save user onboarding command.
 """
 from dataclasses import dataclass
+from datetime import date
 from typing import Optional, List
 
 from src.app.events.base import Command
@@ -36,3 +37,5 @@ class SaveUserOnboardingCommand(Command):
     # Optional fields
     body_fat_percentage: Optional[float] = None
     training_level: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    target_weight_kg: Optional[float] = None
