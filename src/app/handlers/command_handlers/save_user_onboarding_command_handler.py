@@ -93,6 +93,13 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     if command.referral_sources and not profile.referral_sources:
                         profile.referral_sources = command.referral_sources
 
+                # Save custom macro overrides if all three provided
+                custom_values = [command.custom_protein_g, command.custom_carbs_g, command.custom_fat_g]
+                if all(v is not None for v in custom_values):
+                    profile.custom_protein_g = command.custom_protein_g
+                    profile.custom_carbs_g = command.custom_carbs_g
+                    profile.custom_fat_g = command.custom_fat_g
+
                 # Save profile
                 uow.users.update_profile(profile)
                 uow.commit()

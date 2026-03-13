@@ -37,6 +37,9 @@ class UserProfileDomainModel(BaseDomainModel):
     pain_points: List[str] = field(default_factory=list)
     training_level: Optional[str] = None
     referral_sources: List[str] = field(default_factory=list)
+    custom_protein_g: Optional[float] = None
+    custom_carbs_g: Optional[float] = None
+    custom_fat_g: Optional[float] = None
 
 
 @dataclass(kw_only=True)

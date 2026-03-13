@@ -32,6 +32,7 @@ from src.app.commands.user import (
     SaveUserOnboardingCommand,
     CompleteOnboardingCommand,
     DeleteUserCommand,
+    UpdateCustomMacrosCommand,
     UpdateTimezoneCommand,
 )
 from src.app.commands.user.sync_user_command import (
@@ -54,6 +55,7 @@ from src.app.handlers.command_handlers import (
     GenerateSingleMealCommandHandler,
     CreateManualMealCommandHandler,
     UpdateUserMetricsCommandHandler,
+    UpdateCustomMacrosCommandHandler,
     UploadMealImageImmediatelyHandler,
     GenerateMealSuggestionsCommandHandler,
     SaveMealSuggestionCommandHandler,
@@ -403,6 +405,10 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         UpdateTimezoneCommand,
         UpdateTimezoneCommandHandler(),
+    )
+    event_bus.register_handler(
+        UpdateCustomMacrosCommand,
+        UpdateCustomMacrosCommandHandler(),
     )
     event_bus.register_handler(
         GetUserProfileQuery,

@@ -50,3 +50,8 @@ class OnboardingCompleteRequest(BaseModel):
 
     # Attribution - REQUIRED (multi-select, min 1 item)
     referral_sources: List[str] = Field(..., min_items=1, description="How user heard about us")
+
+    # Custom macro overrides (optional, set during onboarding)
+    custom_protein_g: Optional[float] = Field(None, gt=0, description="Custom protein target in grams")
+    custom_carbs_g: Optional[float] = Field(None, gt=0, description="Custom carbs target in grams")
+    custom_fat_g: Optional[float] = Field(None, gt=0, description="Custom fat target in grams")

@@ -11,9 +11,11 @@ from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.mappers.tdee_mapper import TdeeMapper
 from src.api.schemas.request import OnboardingCompleteRequest
+from src.api.schemas.request.custom_macros_request import UpdateCustomMacrosRequest
 from src.api.schemas.request.user_profile_update_requests import UpdateMetricsRequest
 from src.api.schemas.response import TdeeCalculationResponse, UserMetricsResponse
 from src.app.commands.user import SaveUserOnboardingCommand
+from src.app.commands.user.update_custom_macros_command import UpdateCustomMacrosCommand
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import GetUserMetricsQuery
@@ -70,6 +72,9 @@ async def save_user_onboarding(
             training_level=request.training_level,
             date_of_birth=dob,
             target_weight_kg=request.target_weight_kg,
+            custom_protein_g=request.custom_protein_g,
+            custom_carbs_g=request.custom_carbs_g,
+            custom_fat_g=request.custom_fat_g,
         )
 
         await event_bus.send(command)
@@ -152,13 +157,14 @@ async def get_user_tdee(
         # Use mapper to convert to response DTO
         mapper = TdeeMapper()
         response = mapper.to_response_dto(domain_response)
-        
+
         # Add additional metadata
         response.activity_multiplier = result["activity_multiplier"]
         response.formula_used = result["formula_used"]
-        
+        response.is_custom = result.get("is_custom", False)
+
         return response
-        
+
     except Exception as e:
         raise handle_exception(e) from e
 
@@ -216,6 +222,61 @@ async def update_user_metrics(
         response = mapper.to_response_dto(domain_response)
         response.activity_multiplier = result["activity_multiplier"]
         response.formula_used = result["formula_used"]
+        response.is_custom = result.get("is_custom", False)
+        return response
+
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.put("/custom-macros", response_model=TdeeCalculationResponse)
+async def update_custom_macros(
+    request: UpdateCustomMacrosRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    Set or clear custom macro targets.
+
+    Send all three values to set custom macros.
+    Send all null to reset to algorithm-calculated values.
+    """
+    try:
+        command = UpdateCustomMacrosCommand(
+            user_id=user_id,
+            protein_g=request.protein_g,
+            carbs_g=request.carbs_g,
+            fat_g=request.fat_g,
+        )
+        await event_bus.send(command)
+
+        # Return updated TDEE (reflects custom values if set)
+        query = GetUserTdeeQuery(user_id=user_id)
+        result = await event_bus.send(query)
+
+        goal_map = {
+            'cut': Goal.CUT,
+            'bulk': Goal.BULK,
+            'recomp': Goal.RECOMP,
+        }
+
+        domain_response = TdeeResponse(
+            bmr=result["bmr"],
+            tdee=result["tdee"],
+            goal=goal_map[result["profile_data"]["fitness_goal"]],
+            macros=MacroTargets(
+                calories=result["macros"]["calories"],
+                protein=result["macros"]["protein"],
+                carbs=result["macros"]["carbs"],
+                fat=result["macros"]["fat"],
+            ),
+        )
+
+        mapper = TdeeMapper()
+        response = mapper.to_response_dto(domain_response)
+        response.activity_multiplier = result["activity_multiplier"]
+        response.formula_used = result["formula_used"]
+        response.is_custom = result.get("is_custom", False)
         return response
 
     except Exception as e:

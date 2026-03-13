@@ -82,6 +82,9 @@ class UserProfileMapper:
             allergies=profile_entity.allergies,
             pain_points=profile_entity.pain_points,
             training_level=profile_entity.training_level,
+            custom_protein_g=profile_entity.custom_protein_g,
+            custom_carbs_g=profile_entity.custom_carbs_g,
+            custom_fat_g=profile_entity.custom_fat_g,
             created_at=profile_entity.created_at,
             updated_at=profile_entity.updated_at,
         )
@@ -110,4 +113,7 @@ class UserProfileMapper:
             allergies=profile_domain.allergies,
             pain_points=profile_domain.pain_points,
             training_level=profile_domain.training_level,
+            custom_protein_g=profile_domain.custom_protein_g,
+            custom_carbs_g=profile_domain.custom_carbs_g,
+            custom_fat_g=profile_domain.custom_fat_g,
         )

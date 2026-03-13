@@ -27,6 +27,7 @@ from .register_fcm_token_command_handler import RegisterFcmTokenCommandHandler
 from .save_user_onboarding_command_handler import SaveUserOnboardingCommandHandler
 from .sync_user_command_handler import SyncUserCommandHandler
 from .update_notification_preferences_command_handler import UpdateNotificationPreferencesCommandHandler
+from .update_custom_macros_command_handler import UpdateCustomMacrosCommandHandler
 from .update_timezone_command_handler import UpdateTimezoneCommandHandler
 from .update_user_last_accessed_command_handler import UpdateUserLastAccessedCommandHandler
 from .update_user_metrics_command_handler import UpdateUserMetricsCommandHandler
@@ -45,6 +46,7 @@ __all__ = [
     "CompleteOnboardingCommandHandler",
     "DeleteUserCommandHandler",
     "UpdateUserMetricsCommandHandler",
+    "UpdateCustomMacrosCommandHandler",
     "UpdateTimezoneCommandHandler",
     # Daily Meal handlers
     "GenerateDailyMealSuggestionsCommandHandler",

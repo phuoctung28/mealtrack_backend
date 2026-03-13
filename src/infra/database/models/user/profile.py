@@ -32,6 +32,20 @@ class UserProfile(Base, BaseMixin):
 
     # Training experience level (beginner, intermediate, advanced)
     training_level = Column(String(20), nullable=True, default=None)
+
+    # Custom macro overrides — when ALL three non-null, overrides calculated macros
+    custom_protein_g = Column(Float, nullable=True, default=None)
+    custom_carbs_g = Column(Float, nullable=True, default=None)
+    custom_fat_g = Column(Float, nullable=True, default=None)
+
+    @property
+    def has_custom_macros(self) -> bool:
+        """True when user has set custom macro overrides."""
+        return (
+            self.custom_protein_g is not None
+            and self.custom_carbs_g is not None
+            and self.custom_fat_g is not None
+        )
     
     # Preference fields (from UserPreferences)
     dietary_preferences = Column(JSON, default=[], nullable=False)  # ['vegan', 'vegetarian', 'gluten_free', etc.]
