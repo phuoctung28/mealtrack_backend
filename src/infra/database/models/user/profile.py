@@ -1,7 +1,7 @@
 """
 User profile model for physical attributes and personal information.
 """
-from sqlalchemy import Column, String, Boolean, Integer, Float, ForeignKey, Index, CheckConstraint, JSON
+from sqlalchemy import Column, String, Boolean, Integer, Float, ForeignKey, Index, CheckConstraint, JSON, Date
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -18,6 +18,7 @@ class UserProfile(Base, BaseMixin):
     height_cm = Column(Float, nullable=False)
     weight_kg = Column(Float, nullable=False)
     body_fat_percentage = Column(Float, nullable=True)
+    date_of_birth = Column(Date, nullable=True)
     is_current = Column(Boolean, default=True, nullable=False)
     
     # Goal fields (from UserGoal)
