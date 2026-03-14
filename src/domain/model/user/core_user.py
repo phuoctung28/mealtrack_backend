@@ -5,7 +5,7 @@ These models are plain Python objects that represent the core business logic
 and are independent of the database or any other infrastructure.
 """
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, List
 from uuid import UUID
 
@@ -28,6 +28,7 @@ class UserProfileDomainModel(BaseDomainModel):
     meals_per_day: int
     is_current: bool = True
     body_fat_percentage: Optional[float] = None
+    date_of_birth: Optional[date] = None
     target_weight_kg: Optional[float] = None
     snacks_per_day: int = 1
     dietary_preferences: List[str] = field(default_factory=list)
@@ -36,6 +37,9 @@ class UserProfileDomainModel(BaseDomainModel):
     pain_points: List[str] = field(default_factory=list)
     training_level: Optional[str] = None
     referral_sources: List[str] = field(default_factory=list)
+    custom_protein_g: Optional[float] = None
+    custom_carbs_g: Optional[float] = None
+    custom_fat_g: Optional[float] = None
 
 
 @dataclass(kw_only=True)

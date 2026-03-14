@@ -35,12 +35,16 @@ class TdeeCalculationResponse(BaseModel):
     
     # Additional useful information
     activity_multiplier: Optional[float] = Field(
-        None, 
+        None,
         description="Activity level multiplier used"
     )
     formula_used: Optional[str] = Field(
-        None, 
+        None,
         description="Formula used (Mifflin-St Jeor or Katch-McArdle)"
+    )
+    is_custom: bool = Field(
+        False,
+        description="True when macros are user-customized (not algorithm-calculated)"
     )
     
     class Config:

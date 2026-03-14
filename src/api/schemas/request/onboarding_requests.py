@@ -20,8 +20,10 @@ class JobTypeEnum(str, Enum):
 
 class OnboardingCompleteRequest(BaseModel):
     """Complete onboarding data request for saving to database."""
-    # Personal info - REQUIRED
-    age: int = Field(..., ge=13, le=120)
+    # Personal info - REQUIRED (DOB replaces age — age computed server-side)
+    birth_year: int = Field(..., ge=1900, le=2100)
+    birth_month: int = Field(..., ge=1, le=12)
+    birth_day: int = Field(..., ge=1, le=31)
     gender: str = Field(..., description="male/female")
     height: float = Field(..., gt=0, description="Height in cm")
     weight: float = Field(..., gt=0, description="Weight in kg")
@@ -43,5 +45,13 @@ class OnboardingCompleteRequest(BaseModel):
     # Meal preferences - REQUIRED
     meals_per_day: int = Field(..., ge=1, le=10)
 
+    # Target weight - OPTIONAL
+    target_weight_kg: Optional[float] = Field(None, gt=0)
+
     # Attribution - REQUIRED (multi-select, min 1 item)
     referral_sources: List[str] = Field(..., min_items=1, description="How user heard about us")
+
+    # Custom macro overrides (optional, set during onboarding)
+    custom_protein_g: Optional[float] = Field(None, gt=0, description="Custom protein target in grams")
+    custom_carbs_g: Optional[float] = Field(None, gt=0, description="Custom carbs target in grams")
+    custom_fat_g: Optional[float] = Field(None, gt=0, description="Custom fat target in grams")

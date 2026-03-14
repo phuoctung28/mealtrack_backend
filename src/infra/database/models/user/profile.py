@@ -1,7 +1,7 @@
 """
 User profile model for physical attributes and personal information.
 """
-from sqlalchemy import Column, String, Boolean, Integer, Float, ForeignKey, Index, CheckConstraint, JSON
+from sqlalchemy import Column, String, Boolean, Integer, Float, ForeignKey, Index, CheckConstraint, JSON, Date
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -18,6 +18,7 @@ class UserProfile(Base, BaseMixin):
     height_cm = Column(Float, nullable=False)
     weight_kg = Column(Float, nullable=False)
     body_fat_percentage = Column(Float, nullable=True)
+    date_of_birth = Column(Date, nullable=True)
     is_current = Column(Boolean, default=True, nullable=False)
     
     # Goal fields (from UserGoal)
@@ -31,6 +32,20 @@ class UserProfile(Base, BaseMixin):
 
     # Training experience level (beginner, intermediate, advanced)
     training_level = Column(String(20), nullable=True, default=None)
+
+    # Custom macro overrides — when ALL three non-null, overrides calculated macros
+    custom_protein_g = Column(Float, nullable=True, default=None)
+    custom_carbs_g = Column(Float, nullable=True, default=None)
+    custom_fat_g = Column(Float, nullable=True, default=None)
+
+    @property
+    def has_custom_macros(self) -> bool:
+        """True when user has set custom macro overrides."""
+        return (
+            self.custom_protein_g is not None
+            and self.custom_carbs_g is not None
+            and self.custom_fat_g is not None
+        )
     
     # Preference fields (from UserPreferences)
     dietary_preferences = Column(JSON, default=[], nullable=False)  # ['vegan', 'vegetarian', 'gluten_free', etc.]
