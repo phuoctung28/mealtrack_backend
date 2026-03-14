@@ -62,35 +62,50 @@ class RedisJobQueue(JobQueuePort):
     async def dequeue(
         self, job_types: list[str], block_ms: int = 5000
     ) -> Optional[JobPayload]:
-        del job_types  # Router-level filtering will be handled by worker layer.
-
         client = self._require_client()
         await self._ensure_group()
         await self._promote_due_retries()
 
-        response = await client.xreadgroup(
-            groupname=self._consumer_group,
-            consumername=self._consumer_name,
-            streams={self._stream_name: ">"},
-            count=1,
-            block=block_ms,
-        )
-        if not response:
-            return None
+        # Continue reading until we either get a matching job type or hit the block timeout.
+        while True:
+            response = await client.xreadgroup(
+                groupname=self._consumer_group,
+                consumername=self._consumer_name,
+                streams={self._stream_name: ">"},
+                count=1,
+                block=block_ms,
+            )
+            if not response:
+                return None
 
-        stream_entries = response[0][1]
-        stream_id, fields = stream_entries[0]
-        payload = self._deserialize_payload(fields)
-        await self._set_job_state(
-            payload,
-            status=JobStatus.PROCESSING,
-            extra={
-                "stream_id": stream_id,
-                "started_at": self._utc_now_iso(),
-                "consumer_name": self._consumer_name,
-            },
-        )
-        return payload
+            stream_entries = response[0][1]
+            stream_id, fields = stream_entries[0]
+            payload = self._deserialize_payload(fields)
+
+            # If job_types is specified, only return matching jobs.
+            payload_job_type = getattr(payload, "job_type", None)
+            if job_types and payload_job_type not in job_types:
+                # Re-queue the non-matching job back onto the stream and ack the original entry
+                # so it can be picked up by an appropriate worker without getting stuck pending.
+                try:
+                    await client.xadd(self._stream_name, fields)
+                    await client.xack(self._stream_name, self._consumer_group, stream_id)
+                    await self._increment_metric("jobs_requeued_mismatched_type_total")
+                except RedisError:
+                    logger.exception("Failed to re-queue non-matching job %s", getattr(payload, "job_id", None))
+                # Try reading the next job.
+                continue
+
+            await self._set_job_state(
+                payload,
+                status=JobStatus.PROCESSING,
+                extra={
+                    "stream_id": stream_id,
+                    "started_at": self._utc_now_iso(),
+                    "consumer_name": self._consumer_name,
+                },
+            )
+            return payload
 
     async def ack(self, job_id: str) -> None:
         client = self._require_client()
