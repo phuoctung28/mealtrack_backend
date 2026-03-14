@@ -189,14 +189,24 @@ class RedisJobQueue(JobQueuePort):
     async def _promote_due_retries(self) -> None:
         client = self._require_client()
         now = time.time()
-        due_ids = await client.zrangebyscore(self._retry_zset, 0, now)
-        if not due_ids:
-            return
 
-        for job_id in due_ids:
+        while True:
+            # Atomically pop the job with the smallest retry timestamp.
+            items = await client.zpopmin(self._retry_zset, 1)
+            if not items:
+                # No more jobs in the retry set.
+                break
+
+            job_id, score = items[0]
+
+            # If the earliest job is not yet due, put it back and stop.
+            if score > now:
+                await client.zadd(self._retry_zset, {job_id: score})
+                break
+
             state = await client.hgetall(self._job_state_key(job_id))
             if not state:
-                await client.zrem(self._retry_zset, job_id)
+                # Job state no longer exists; nothing to re-enqueue.
                 continue
 
             payload = self._payload_from_state(job_id, state)
@@ -209,7 +219,6 @@ class RedisJobQueue(JobQueuePort):
                     "stream_id": "",
                 },
             )
-            await client.zrem(self._retry_zset, job_id)
 
     async def _set_job_state(
         self,
