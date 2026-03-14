@@ -1,8 +1,8 @@
 # MealTrack Backend - Code Standards
 
-**Last Updated:** February 3, 2026
-**Version:** 0.5.0
-**Applies To:** All code in `src/` (430 files, ~38K LOC: API 76, App 140, Domain 133, Infra 80)
+**Last Updated:** March 14, 2026
+**Version:** 0.6.0
+**Applies To:** All code in `src/` (430 files, ~38.5K LOC: API 76, App 140, Domain 133, Infra 80)
 
 ---
 
@@ -482,6 +482,63 @@ class MealStatus(str, Enum):
 
 ## Business Rules Documentation
 
+### Calorie Derivation (SINGLE SOURCE OF TRUTH - Mar 2026)
+```python
+# **Backend-derived formula (macros are source of truth)**
+# Fiber-aware: P*4 + (C-fiber)*4 + fiber*2 + F*9
+# Mobile receives all calorie values from backend; does not re-derive
+
+net_carbs = carbs - fiber
+calories = protein*4 + net_carbs*4 + fiber*2 + fat*9
+# Result kept to 1 decimal place in backend; mobile rounds for display
+```
+
+### Macro Validation Service (NEW - Mar 2026)
+```python
+# Post-generation validation for AI macros (MacroValidationService)
+# Threshold: 10% divergence between derived and reported calories
+# If >10% divergent: trusts macros over reported calories, logs warning
+
+def validate_and_correct(macros: dict) -> dict:
+    """Corrects calories if >10% off from fiber-aware formula."""
+    net_carbs = max(0, carbs - fiber)
+    derived_cal = protein*4 + net_carbs*4 + fiber*2 + fat*9
+
+    diff_pct = abs(derived_cal - reported_cal) / reported_cal * 100
+    if diff_pct > 10.0:
+        macros["calories"] = derived_cal
+        macros["_validation"] = {"corrected": True, "diff_pct": ...}
+    return macros
+```
+
+### Food Density Conversion (NEW - Mar 2026)
+```python
+# 30+ food density constants (g/ml) for volume→mass conversion
+# Honey 1.42, oil 0.92, milk 1.03, water 1.0, etc.
+# File: src/domain/constants/food_density.py
+# Applied: NutritionCalculationService.convert_quantity_to_grams(quantity, unit, food_name)
+# Default density for unknown liquids: 1.0 (water)
+```
+
+### Custom Macro Targets (NEW - Mar 2026)
+```python
+# Users can override calculated macros per profile
+# Fields: custom_protein_g, custom_carbs_g, custom_fat_g (nullable)
+# When all three non-null: custom values take precedence
+# Migration: 037_add_custom_macro_columns
+# Updated via: UpdateCustomMacrosCommand / UpdateCustomMacrosCommandHandler
+```
+
+### Weekly Budget & Adjusted Daily Target (Mar 2026)
+```python
+# Weekly budget stored per user with remaining_days calculation
+# remaining_days: Mon=7, Tue=6, ..., Sun=1 (includes today)
+# Adjusted daily target = redistributed based on previous days consumption
+# Used by: SuggestionOrchestrationService, meal plans, daily targets
+# BMR floor = 80% of standard daily (prevents dangerously low)
+# Service: WeeklyBudgetService.calculate_adjusted_daily()
+```
+
 ### TDEE Calculation
 ```python
 # Auto-select formula:
@@ -540,6 +597,46 @@ MIN_CALORIES_FOR_SNACK = 1800
 
 ---
 
+## Domain Services (Key Files)
+
+### Nutrition & Macros
+- `nutrition_calculation_service.py` - Aggregates nutrition from food items, applies density conversion
+- `macro_validation_service.py` - Post-generation macro validation (NEW Mar 2026)
+- `tdee_service.py` - TDEE calculation with auto-formula selection
+- `weekly_budget_service.py` - Weekly budget calculation with adjusted daily targets
+- `food_density.py` - 30+ food density constants for ml↔g conversion
+
+### Suggestions & Meal Planning
+- `suggestion_orchestration_service.py` - Session-based suggestions with adjusted daily target (updated Mar 2026)
+- `meal_plan_service.py` - Meal plan generation and validation
+- `portion_calculation_service.py` - Portion multiplier calculations
+
+### Meal Analysis & Processing
+- `meal_service.py` - Meal lifecycle management with state machine
+- `meal_analysis_strategy.py` - 6 strategies: basic, portion-aware, ingredient-aware, weight-aware, user-context, combined
+- `meal_edit_strategies.py` - Post-analysis editing strategies
+
+### AI & External Integration
+- `meal_generation_service.py` - Multi-model Gemini for meal generation
+- `translation_service.py` - Multi-language support (7 languages)
+- `notification_service.py` - FCM push notifications
+- `conversation_service.py` - Conversation state management
+
+---
+
+## Migration History (Recent)
+
+| Version | Changes |
+|---------|---------|
+| 037 | Add custom_protein_g, custom_carbs_g, custom_fat_g to user_profiles |
+| 036 | Add date_of_birth to user_profiles |
+| 035 | Evolve barcode_products → food_reference (food data evolution) |
+| 034 | Add fiber, sugar columns to food_item and nutrition tables |
+| 033 | Drop calories columns (now derived from macros) |
+| 032 | Replace cheat_meal with cheat_day |
+
+---
+
 ## Unresolved Questions
 
 1. Should we enforce stricter file size limits (<200 LOC)?
@@ -547,6 +644,8 @@ MIN_CALORIES_FOR_SNACK = 1800
 3. API versioning strategy needed for v2+?
 4. Rate limiting thresholds for AI endpoints?
 5. CORS production configuration - when to restrict?
+6. Food reference table evolution - timeline for deprecating dual lookup?
+7. Custom macro override persistence - persist across profile updates?
 
 ## WebSocket Standards
 

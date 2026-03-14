@@ -1,14 +1,14 @@
 # MealTrack Backend - Codebase Summary
 
-**Generated:** February 3, 2026
-**Codebase Stats**: 430 Python files, ~38K LOC (src/), 681+ tests in 92 test files
+**Generated:** March 14, 2026
+**Codebase Stats**: 430 Python files, ~38.5K LOC (src/), 681+ tests in 92 test files
 **Source Files**: 430 Python files across 4 architecture layers (API: 76, App: 140, Domain: 133, Infra: 80)
 **Test Files**: 92 files with 681+ test cases, 70%+ coverage
 **Language**: Python 3.11+
 **Framework**: FastAPI 0.115+, SQLAlchemy 2.0
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
 **Event Bus**: PyMediator with singleton registry pattern
-**Status**: Production-ready. Scout-verified metrics from latest comprehensive analysis (Feb 2026).
+**Status**: Production-ready. Repomix-generated metrics from Mar 14, 2026 (591,646 tokens).
 
 ---
 

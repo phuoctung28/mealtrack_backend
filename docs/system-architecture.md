@@ -1,10 +1,10 @@
 # MealTrack Backend - System Architecture
 
-**Last Updated:** February 3, 2026
-**Version:** 0.5.0
+**Last Updated:** March 14, 2026
+**Version:** 0.6.0
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
 **Event Bus**: PyMediator with singleton registry pattern
-**Source**: Scout-verified analysis of 430 files (~38K LOC)
+**Source**: Repomix-generated analysis of 430 files (~38.5K LOC), 591,646 tokens
 
 ---
 
@@ -277,14 +277,14 @@ class CreateMealCommandHandler(EventHandler):
 
 ### Schema Design
 
-**Core Tables**:
+**Core Tables** (11+ active, 3 recent additions via migrations 034-037):
 - **users**: Firebase UID mapping, OAuth provider, timezone, onboarding status
-- **user_profiles**: Physical attributes (age, gender, height, weight, body fat), goals (activity level, fitness goal, target weight), preferences (dietary, allergies, health conditions)
+- **user_profiles**: Physical attributes (age, gender, height, weight, body fat), goals (activity level, fitness goal, target weight), preferences (dietary, allergies, health conditions). NEW (Mar 2026): date_of_birth, custom_protein_g, custom_carbs_g, custom_fat_g
 - **subscriptions**: RevenueCat integration cache (product_id, platform, status, timestamps)
 - **meal**: Primary meal record (status state machine, dish_name, ready_at, error_message, edit tracking)
 - **mealimage**: Cloudinary references (url, format, size, width, height)
-- **nutrition**: Macros + confidence score (calories, protein, carbs, fat, confidence_score)
-- **food_item**: Ingredient details (name, quantity, unit, macros, fdc_id, is_custom)
+- **nutrition**: Macros + confidence score (calories, protein, carbs, fat, confidence_score). NEW (Mar 2026): fiber, sugar (enables fiber-aware calorie derivation)
+- **food_item**: Ingredient details (name, quantity, unit, macros, fdc_id, is_custom). NEW (Mar 2026): fiber, sugar
 - **meal_plans**: User preferences for plan generation (dietary, allergies, cooking time, fitness goal)
 - **notification_preferences**: User notification settings (toggles, timing, intervals)
 - **user_fcm_tokens**: Firebase Cloud Messaging tokens (multi-device support)
@@ -308,6 +308,63 @@ PROCESSING → ANALYZING → ENRICHING → READY
                                   FAILED
                                     ↓
                                  INACTIVE
+```
+
+---
+
+## Nutrition Accuracy Architecture (NEW - Mar 2026)
+
+### Overview
+Five-phase implementation ensures macro integrity and accuracy throughout the system:
+
+### Phase 1: AI Macro Validation
+- **Service**: `MacroValidationService` (post-generation validation)
+- **Threshold**: 10% divergence tolerance between formula-derived and reported calories
+- **Formula**: `P×4 + (C-fiber)×4 + fiber×2 + F×9` (fiber-aware)
+- **Correction**: If >10% off, trusts macros over reported calories, logs warning
+- **Integration**: Applied in `SuggestionOrchestrationService`, meal suggestion pipeline
+
+### Phase 2: Density-Aware Conversion
+- **Service**: `food_density.py` constants + `NutritionCalculationService.convert_quantity_to_grams()`
+- **Data**: 30+ density constants (honey 1.42, oil 0.92, milk 1.03, water 1.0, etc.)
+- **Use Case**: Converts volume (ml) → mass (g) for non-aqueous liquids
+- **Default**: 1.0 (water) for unknown substances
+- **Applied**: Meal analysis strategies, food item processing
+
+### Phase 3: Fiber-Aware Calories
+- **Migration**: 034_add_fiber_sugar_columns
+- **Tables Updated**: `food_item`, `nutrition` (both + fiber, sugar columns)
+- **Formula**: Net carbs = carbs - fiber; Calories = P×4 + net_carbs×4 + fiber×2 + F×9
+- **Backend Precision**: 1 decimal place (preserved)
+- **Mobile Display**: Rounded for presentation (no re-derivation)
+- **Consistency**: All calorie values derived from macros, never reported separately
+
+### Phase 4: Food Reference Evolution
+- **Migration**: 035_evolve_barcode_to_food_reference
+- **Pattern**: Dual lookup during transition (barcode_products + food_reference)
+- **Goal**: Migrate from barcode-only to evolving food reference database
+- **Backward Compat**: Maintains fdc_id fallback for transition period
+- **New Fields**: food_reference_id (nullable during evolution)
+
+### Phase 5: Meal Decomposition
+- **Requirement**: All AI meal parsing must decompose compound dishes into atomic ingredients
+- **Enforcement**: System prompts require ingredient breakdown
+- **Validation**: `meal_analysis_strategy.py` validates decomposition rules
+- **Examples**: "pasta carbonara" → pasta, eggs, guanciale, cheese (not as single dish)
+
+### Single Source of Truth (Macros)
+```
+Input: Macros from AI or user
+↓
+Validation: MacroValidationService checks formula consistency
+↓
+Storage: fiber, carbs, protein, fat stored in DB
+↓
+Derivation: Backend derives calories = P×4 + (C-fiber)×4 + fiber×2 + F×9
+↓
+Output: Mobile receives calories from backend (no re-derivation)
+↓
+Display: Mobile rounds for UI (1 or 0 decimals based on value)
 ```
 
 ---
