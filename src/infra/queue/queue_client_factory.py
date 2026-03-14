@@ -19,13 +19,15 @@ VALID_PROVIDERS = ("upstash", "dedicated")
 
 
 def _add_ssl_cert_reqs_none(url: str) -> str:
-    """Append ssl_cert_reqs=none to URL to avoid CERTIFICATE_VERIFY_FAILED with Upstash."""
-    parsed = urlparse(url)
-    query = parsed.query
-    params = dict(p.split("=", 1) for p in query.split("&") if p) if query else {}
-    params["ssl_cert_reqs"] = "none"
-    new_query = urlencode(params)
-    return urlunparse(parsed._replace(query=new_query))
+    """
+    Legacy helper kept for backwards compatibility.
+
+    TLS certificate verification is no longer disabled here. Upstash should
+    work with the default CA trust store; if you encounter CERTIFICATE_VERIFY_FAILED
+    in local or development environments, prefer fixing your CA configuration
+    or making insecure TLS explicitly opt-in elsewhere.
+    """
+    return url
 
 
 def create_queue_redis_client() -> RedisClient:
