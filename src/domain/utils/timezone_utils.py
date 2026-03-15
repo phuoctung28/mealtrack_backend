@@ -169,15 +169,13 @@ def get_user_monday(
 
     tz = get_zone_info(user_timezone)
 
-    # Convert target_date to datetime if it's just a date
-    if isinstance(target_date, date):
-        target_dt = datetime.combine(target_date, datetime.min.time())
+    # Get the local date in user's timezone
+    if isinstance(target_date, datetime):
+        # datetime: convert to user's timezone then extract date
+        local_date = target_date.astimezone(tz).date()
     else:
-        target_dt = target_date
-
-    # Localize to user's timezone
-    local_dt = target_dt.replace(tzinfo=timezone.utc).astimezone(tz)
-    local_date = local_dt.date()
+        # plain date: already represents a local date, use directly
+        local_date = target_date
 
     # Get Monday (weekday() returns 0=Monday, 6=Sunday)
     monday_offset = local_date.weekday()
