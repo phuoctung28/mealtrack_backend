@@ -83,6 +83,15 @@ class _FakeRedis:
         self.zsets[key].pop(member, None)
         return 1
 
+    async def zpopmin(self, key: str, count: int = 1):
+        z = self.zsets.get(key, {})
+        if not z:
+            return []
+        sorted_items = sorted(z.items(), key=lambda x: x[1])[:count]
+        for member, _ in sorted_items:
+            self.zsets[key].pop(member, None)
+        return sorted_items
+
     async def incr(self, key: str):
         self.counters[key] += 1
         return self.counters[key]
