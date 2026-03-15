@@ -58,7 +58,11 @@ class UnitOfWork(UnitOfWorkPort):
             if exc_type:
                 self.rollback()
             else:
-                self.commit()
+                try:
+                    self.commit()
+                except Exception:
+                    self.rollback()
+                    raise
         finally:
             self.session.close()
     

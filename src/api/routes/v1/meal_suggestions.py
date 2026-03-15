@@ -9,6 +9,7 @@ from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.middleware.accept_language import get_request_language
+from src.api.middleware.rate_limit import limiter
 from src.api.mappers.meal_suggestion_mapper import to_suggestions_list_response
 from src.api.schemas.request.meal_suggestion_requests import (
     MealSuggestionRequest,
@@ -29,6 +30,7 @@ router = APIRouter(prefix="/v1/meal-suggestions", tags=["Meal Suggestions"])
 
 
 @router.post("/generate", response_model=SuggestionsListResponse)
+@limiter.limit("5/minute")
 async def generate_suggestions(
     http_request: Request,
     request: MealSuggestionRequest,

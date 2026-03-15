@@ -113,6 +113,9 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: str | None = Field(default=None)
     CLOUDINARY_API_SECRET: str | None = Field(default=None)
 
+    # CORS
+    ALLOWED_ORIGINS: str = Field(default="", description="Comma-separated list of allowed CORS origins")
+
     # Feature flags / development toggles
     USE_MOCK_STORAGE: int = Field(default=0)
     DEV_USER_FIREBASE_UID: str = Field(default="dev_firebase_uid")

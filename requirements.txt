@@ -48,3 +48,6 @@ redis[hiredis]>=5.0.0
 
 # FatSecret API
 fatsecret
+
+# Rate limiting
+slowapi>=0.1.9

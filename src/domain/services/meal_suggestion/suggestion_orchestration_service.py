@@ -1,37 +1,25 @@
 """
-Orchestration service for Phase 06 meal suggestions with full recipe support.
-Handles session tracking, AI generation with timeout, and portion multipliers.
+Orchestration service for meal suggestions with full recipe support.
+Handles session tracking and portion target calculation.
+Generation logic: parallel_recipe_generator.py
+TDEE helpers: suggestion_tdee_helpers.py
 """
-
-import asyncio
 import logging
-import time
 import uuid
-from datetime import date
 from typing import List, Optional, Tuple, Callable, Any
 
-from src.domain.cache.cache_keys import CacheKeys
-from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.meal_suggestion import (
-    MealSuggestion,
-    SuggestionSession,
-    MacroEstimate,
-    Ingredient,
-    RecipeStep,
-    MealType,
-)
-from src.domain.model.user import TdeeRequest, Sex, Goal, UnitSystem
+from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.domain.ports.meal_suggestion_repository_port import (
-    MealSuggestionRepositoryPort,
-)
+from src.domain.ports.meal_suggestion_repository_port import MealSuggestionRepositoryPort
 from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+from src.domain.services.meal_suggestion.parallel_recipe_generator import ParallelRecipeGenerator
+from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
+    get_adjusted_daily_target,
+    calculate_daily_tdee,
+)
 from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.domain.services.weekly_budget_service import WeeklyBudgetService
-from src.domain.utils.timezone_utils import get_user_monday
-from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -39,23 +27,8 @@ logger = logging.getLogger(__name__)
 class SuggestionOrchestrationService:
     """
     Orchestrates meal suggestion generation with session tracking.
-    Implements timeout handling and portion multipliers.
-    
-    This service is designed to be used as a singleton in the event bus.
-    It uses ScopedSession internally to get the current request's database session,
-    ensuring proper isolation while allowing the service to be reused.
+    Singleton in the event bus; uses ScopedSession for request isolation.
     """
-
-    GENERATION_TIMEOUT_SECONDS = 35  # Reduced from 45s with optimized prompts
-    SUGGESTIONS_COUNT = 3
-    MIN_ACCEPTABLE_RESULTS = 2  # Return at least 2 meals for acceptable UX
-
-    # Parallel generation constants (OPTIMIZED)
-    PARALLEL_SINGLE_MEAL_TOKENS = 4000  # Budget for complete recipe JSON (thinking disabled)
-    PARALLEL_SINGLE_MEAL_TIMEOUT = 35  # Increased to accommodate Gemini 2.5 Flash latency (~27-30s + buffer)
-    PARALLEL_STAGGER_MS = (
-        200  # Reduced from 500ms (API handles smaller payloads faster)
-    )
 
     def __init__(
         self,
@@ -70,12 +43,13 @@ class SuggestionOrchestrationService:
         self._repo = suggestion_repo
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
-        self._redis_client = redis_client
-        self._translation_service = TranslationService(generation_service)
-        self._macro_validator = MacroValidationService()
-        # Profile provider is an application/infra concern injected from outside.
-        # It should be a callable: user_id (str) -> user profile domain object.
         self._profile_provider = profile_provider
+
+        self._recipe_generator = ParallelRecipeGenerator(
+            generation_service=generation_service,
+            translation_service=TranslationService(generation_service),
+            macro_validator=MacroValidationService(),
+        )
 
     async def generate_suggestions(
         self,
@@ -94,644 +68,99 @@ class SuggestionOrchestrationService:
         carbs_target: Optional[float] = None,
         fat_target: Optional[float] = None,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
-        """
-        Generate 3 suggestions. If session_id provided, generates NEW meals
-        excluding previously shown ones. Otherwise creates new session.
-        """
-        # Check if regenerating from existing session
+        """Generate 3 suggestions, excluding meals shown in existing session if provided."""
         if session_id:
-            session = await self._repo.get_session(session_id)
-            if not session:
-                # Session expired or not found - log warning and create new session
-                logger.warning(
-                    f"Session {session_id} not found or expired (TTL: 4h). "
-                    f"Creating new session for user {user_id}"
-                )
-                session_id = None  # Force new session creation
-            elif session.user_id != user_id:
-                # Security check: session exists but belongs to different user
-                logger.warning(
-                    f"Session {session_id} exists but user_id mismatch: "
-                    f"expected {user_id}, got {session.user_id}"
-                )
-                session_id = None  # Force new session creation for this user
-
-            # Update session language from current request (user may have changed language)
-            if session.language != language:
-                logger.info(
-                    f"Updating session language: {session.language} -> {language}"
-                )
-                session.language = language
-
-            # Use existing session's shown meal names as exclusions
-            exclude_meal_names = session.shown_meal_names
-            logger.info(
-                f"Regenerating for session {session_id}, "
-                f"excluding {len(exclude_meal_names)} previous meals"
-            )
+            session, exclude_names = await self._load_existing_session(session_id, user_id, language)
         else:
-            # Get user profile via injected provider (keeps domain decoupled from infra)
-            if not self._profile_provider:
-                raise RuntimeError("Profile provider is not configured for SuggestionOrchestrationService")
-
-            profile = self._profile_provider(user_id)
-            if not profile:
-                raise ValueError(f"User {user_id} profile not found")
-
-            # Use adjusted daily target from weekly budget (falls back to raw TDEE)
-            daily_tdee = await self._get_adjusted_daily_target(user_id, profile)
-
-            # Get meals_per_day from profile (default to 3)
-            meals_per_day = getattr(profile, "meals_per_day", 3)
-
-            # Use calorie override if provided (adjusted daily target from mobile)
-            if calorie_target_override:
-                target_calories = calorie_target_override * servings
-            else:
-                # Calculate target calories using PortionCalculationService
-                portion_target = self._portion_service.get_target_for_meal_type(
-                    meal_type=meal_portion_type,
-                    daily_target=int(daily_tdee),
-                    meals_per_day=meals_per_day,
-                )
-                target_calories = portion_target.target_calories * servings
-
-            # Extract dietary preferences and allergies (Phase 1 optimization)
-            dietary_preferences = getattr(profile, "dietary_preferences", None) or []
-            allergies = getattr(profile, "allergies", None) or []
-
-            # Create new session with dietary info, language, and servings
-            session = SuggestionSession(
-                id=f"session_{uuid.uuid4().hex[:16]}",
-                user_id=user_id,
-                meal_type=meal_type,
-                meal_portion_type=meal_portion_type,
-                target_calories=target_calories,
-                ingredients=ingredients,
-                cooking_time_minutes=cooking_time_minutes,
-                servings=servings,
-                language=language,
-                dietary_preferences=dietary_preferences,
-                allergies=allergies,
-                cooking_equipment=cooking_equipment or [],
-                cuisine_region=cuisine_region,
-                protein_target=protein_target,
-                carbs_target=carbs_target,
-                fat_target=fat_target,
+            session, exclude_names = await self._create_new_session(
+                user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
+                language, servings, cooking_equipment, cuisine_region,
+                calorie_target_override, protein_target, carbs_target, fat_target,
             )
-            exclude_meal_names = []
-            logger.info(f"Creating new session {session.id}")
 
-        # Generate with timeout, excluding previous meal names
-        suggestions = await self._generate_with_timeout(
-            session=session,
-            exclude_meal_names=exclude_meal_names,
-        )
-
-        # Track shown IDs and meal names
+        suggestions = await self._recipe_generator.generate(session=session, exclude_meal_names=exclude_names)
         session.add_shown_ids([s.id for s in suggestions])
         session.add_shown_meals([s.meal_name for s in suggestions])
 
-        # Persist session and suggestions using port-compliant methods
         if session_id:
             await self._repo.update_session(session)
         else:
             await self._repo.save_session(session)
         await self._repo.save_suggestions(suggestions)
-
         return session, suggestions
 
-    def _calculate_daily_tdee(self, profile) -> float:
-        """
-        Calculate daily TDEE from user profile. Returns target calories.
-        """
-        try:
-            result = self._calculate_tdee_result(profile)
-            return result.macros.calories
-        except Exception as e:
-            logger.warning(f"Failed to calculate TDEE: {e}. Using default 2000 calories.")
-            return 2000.0
+    # ------------------------------------------------------------------
+    # Session helpers
+    # ------------------------------------------------------------------
 
-    async def _get_cached_tdee(self, user_id: str, profile) -> float:
-        """
-        Get TDEE from cache or calculate and cache it.
-        Uses 24h TTL since TDEE changes only when profile changes.
-        """
-        if not self._redis_client:
-            # No cache available, calculate directly
-            return self._calculate_daily_tdee(profile)
+    async def _load_existing_session(
+        self, session_id: str, user_id: str, language: str
+    ) -> Tuple[SuggestionSession, List[str]]:
+        session = await self._repo.get_session(session_id)
+        if not session:
+            logger.warning(f"Session {session_id} not found or expired. Creating new for user {user_id}")
+            raise ValueError(f"Session {session_id} not found")
+        if session.user_id != user_id:
+            logger.warning(f"Session {session_id} user mismatch: expected {user_id}, got {session.user_id}")
+            raise ValueError(f"Session {session_id} belongs to a different user")
+        if session.language != language:
+            logger.info(f"Updating session language: {session.language} -> {language}")
+            session.language = language
+        logger.info(f"Regenerating for session {session_id}, excluding {len(session.shown_meal_names)} meals")
+        return session, session.shown_meal_names
 
-        cache_key, ttl = CacheKeys.user_tdee(user_id)
-
-        try:
-            cached = await self._redis_client.get(cache_key)
-            if cached:
-                logger.debug(f"TDEE cache HIT for user {user_id}")
-                return float(cached)
-        except Exception as e:
-            logger.warning(f"TDEE cache GET failed: {e}")
-
-        # Calculate and cache
-        tdee = self._calculate_daily_tdee(profile)
-
-        try:
-            await self._redis_client.set(cache_key, str(tdee), ttl)
-            logger.debug(f"TDEE cached for user {user_id}: {tdee}")
-        except Exception as e:
-            logger.warning(f"TDEE cache SET failed: {e}")
-
-        return tdee
-
-    async def _get_adjusted_daily_target(self, user_id: str, profile) -> float:
-        """
-        Get adjusted daily calorie target from weekly budget.
-        Falls back to raw TDEE if no weekly budget exists.
-        """
-        try:
-            # Calculate base TDEE and BMR
-            tdee_result = self._calculate_tdee_result(profile)
-            base_calories = tdee_result.macros.calories
-            bmr = tdee_result.bmr
-
-            with UnitOfWork() as uow:
-                today = date.today()
-                week_start = get_user_monday(today, user_id, uow)
-                weekly_budget = uow.weekly_budgets.find_by_user_and_week(user_id, week_start)
-
-                if not weekly_budget:
-                    logger.info(f"No weekly budget for user {user_id}, using raw TDEE: {base_calories}")
-                    return base_calories
-
-                remaining_days = WeeklyBudgetService.calculate_remaining_days(week_start, today)
-                adjusted = WeeklyBudgetService.calculate_adjusted_daily(
-                    weekly_budget,
-                    base_calories,
-                    tdee_result.macros.carbs,
-                    tdee_result.macros.fat,
-                    tdee_result.macros.protein,
-                    bmr=bmr,
-                    remaining_days=remaining_days,
-                )
-
-                logger.info(
-                    f"Adjusted daily target for user {user_id}: "
-                    f"{adjusted.calories:.0f} kcal (base: {base_calories:.0f}, "
-                    f"bmr_floor: {adjusted.bmr_floor_active})"
-                )
-                return adjusted.calories
-
-        except Exception as e:
-            logger.warning(f"Failed to get adjusted daily target: {e}. Falling back to raw TDEE.")
-            return self._calculate_daily_tdee(profile)
-
-    def _calculate_tdee_result(self, profile):
-        """Calculate full TDEE result (with BMR) from user profile."""
-        sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
-        tdee_request = TdeeRequest(
-            age=profile.age,
-            sex=sex,
-            height=profile.height_cm,
-            weight=profile.weight_kg,
-            job_type=ActivityGoalMapper.map_job_type(profile.job_type),
-            training_days_per_week=profile.training_days_per_week,
-            training_minutes_per_session=profile.training_minutes_per_session,
-            training_level=ActivityGoalMapper.map_training_level(profile.training_level),
-            goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
-            body_fat_pct=profile.body_fat_percentage,
-            unit_system=UnitSystem.METRIC,
-        )
-        return self._tdee_service.calculate_tdee(tdee_request)
-
-    async def _generate_with_timeout(
+    async def _create_new_session(
         self,
-        session: SuggestionSession,
-        exclude_meal_names: List[str],
-    ) -> List[MealSuggestion]:
-        """
-        Generate suggestions using 2-phase approach.
-        Phase 1: Generate 4 diverse meal names (~1s)
-        Phase 2: Generate 4 recipes in parallel, take first 3 successful (~8-10s)
-        Target latency: 9-12s (9-11s average, 12-14s P95)
-        """
-        return await self._generate_parallel_hybrid(session, exclude_meal_names)
+        user_id: str,
+        meal_type: str,
+        meal_portion_type: str,
+        ingredients: List[str],
+        cooking_time_minutes: int,
+        language: str,
+        servings: int,
+        cooking_equipment: Optional[List[str]],
+        cuisine_region: Optional[str],
+        calorie_target_override: Optional[int],
+        protein_target: Optional[float],
+        carbs_target: Optional[float],
+        fat_target: Optional[float],
+    ) -> Tuple[SuggestionSession, List[str]]:
+        if not self._profile_provider:
+            raise RuntimeError("Profile provider not configured for SuggestionOrchestrationService")
+        profile = self._profile_provider(user_id)
+        if not profile:
+            raise ValueError(f"User {user_id} profile not found")
 
-    def _get_language_name(self, code: str) -> str:
-        """Map language code to full English name for prompt instructions."""
-        languages = {
-            "en": "English",
-            "vi": "Vietnamese",
-            "fr": "French",
-            "es": "Spanish",
-            "de": "German",
-            "it": "Italian",
-            "ja": "Japanese",
-            "ko": "Korean",
-            "zh": "Chinese",
-            "ru": "Russian",
-            "pt": "Portuguese",
-            "hi": "Hindi",
-            "ar": "Arabic",
-            "tr": "Turkish",
-            "nl": "Dutch",
-            "pl": "Polish",
-            "sv": "Swedish",
-            "da": "Danish",
-            "fi": "Finnish",
-            "no": "Norwegian",
-            "cs": "Czech",
-            "el": "Greek",
-            "he": "Hebrew",
-            "id": "Indonesian",
-            "ms": "Malay",
-            "th": "Thai",
-        }
-        return languages.get(code.lower(), "English")
+        daily_tdee = await get_adjusted_daily_target(self._tdee_service, user_id, profile)
+        meals_per_day = getattr(profile, "meals_per_day", 3)
 
-    async def _generate_parallel_hybrid(
-        self,
-        session: SuggestionSession,
-        exclude_meal_names: List[str],
-    ) -> List[MealSuggestion]:
-        """
-        Three-phase generation with over-generation for reliability.
-        Phase 1: Generate 4 diverse meal names (1 call, ~1-2s)
-        Phase 2: Generate 4 recipes in parallel, take first 3 successes (~6-8s)
-        Phase 3: Translate to target language if non-English (~2-3s)
-        Target latency: 9-13s (7-10s for English, 9-13s for non-English)
+        if calorie_target_override:
+            target_calories = calorie_target_override * servings
+        else:
+            portion_target = self._portion_service.get_target_for_meal_type(
+                meal_type=meal_portion_type,
+                daily_target=int(daily_tdee),
+                meals_per_day=meals_per_day,
+            )
+            target_calories = portion_target.target_calories * servings
 
-        Args:
-            session: The suggestion session with user preferences
-            exclude_meal_names: List of meal names to avoid (from previous generations)
-        """
-        start_time = time.time()
-        target_lang = self._get_language_name(session.language)
-
-        # STEP 1: Generate 4 diverse meal names in one call
-        from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
-            build_meal_names_prompt,
-            build_recipe_details_prompt,
+        session = SuggestionSession(
+            id=f"session_{uuid.uuid4().hex[:16]}",
+            user_id=user_id,
+            meal_type=meal_type,
+            meal_portion_type=meal_portion_type,
+            target_calories=target_calories,
+            ingredients=ingredients,
+            cooking_time_minutes=cooking_time_minutes,
+            servings=servings,
+            language=language,
+            dietary_preferences=getattr(profile, "dietary_preferences", None) or [],
+            allergies=getattr(profile, "allergies", None) or [],
+            cooking_equipment=cooking_equipment or [],
+            cuisine_region=cuisine_region,
+            protein_target=protein_target,
+            carbs_target=carbs_target,
+            fat_target=fat_target,
         )
-        from src.domain.schemas.meal_generation_schemas import (
-            MealNamesResponse,
-        )
-
-        logger.info(
-            f"[PHASE-1-START] session={session.id} | "
-            f"generating 4 diverse meal names in {target_lang} | "
-            f"excluding {len(exclude_meal_names)} previous meals"
-        )
-
-        names_prompt = build_meal_names_prompt(session, exclude_meal_names)
-
-        # Generate directly in target language
-        names_system = (
-            f"You are a creative chef. Generate 4 VERY DIFFERENT meal names with "
-            f"diverse flavors and cooking styles. Output content in {target_lang}. "
-            "IMPORTANT: Keep all JSON keys (like 'meal_names') in English."
-        )
-
-        phase1_elapsed = 0.0  # Initialize to prevent UnboundLocalError
-        try:
-            names_raw = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._generation.generate_meal_plan,
-                    names_prompt,
-                    names_system,
-                    "json",
-                    1000,  # Token limit for name generation
-                    MealNamesResponse,  # Structured output schema (guarantees valid format)
-                    "meal_names",  # Use high-RPM model (gemini-2.5-flash-lite, 10 RPM)
-                ),
-                timeout=20,  # Increased timeout to accommodate AI response time
-            )
-
-            meal_names = names_raw.get("meal_names", [])
-
-            # Deduplicate meal names while preserving order
-            seen = set()
-            unique_names = []
-            for name in meal_names:
-                if name.lower() not in seen:
-                    seen.add(name.lower())
-                    unique_names.append(name)
-            meal_names = unique_names
-
-            if len(meal_names) < self.SUGGESTIONS_COUNT:
-                logger.warning(
-                    f"[PHASE-1-INCOMPLETE] session={session.id} | "
-                    f"got {len(meal_names)} names, expected {self.SUGGESTIONS_COUNT}"
-                )
-                raise RuntimeError("Could not generate enough unique meal names.")
-
-            phase1_elapsed = time.time() - start_time
-            logger.info(
-                f"[PHASE-1-COMPLETE] session={session.id} | "
-                f"elapsed={phase1_elapsed:.2f}s | "
-                f"names={meal_names}"
-            )
-
-        except Exception as e:
-            phase1_elapsed = time.time() - start_time
-            logger.error(
-                f"[PHASE-1-FAILED] session={session.id} | "
-                f"elapsed={phase1_elapsed:.2f}s | "
-                f"error_type={type(e).__name__} | error={e}"
-            )
-            raise RuntimeError(f"Failed to generate meal names: {e}") from e
-
-        # STEP 2: Generate full recipes for each name in parallel
-        logger.info(
-            f"[PHASE-2-START] session={session.id} | generating recipes for {meal_names}"
-        )
-
-        recipe_prompts = [
-            build_recipe_details_prompt(meal_name, session) for meal_name in meal_names
-        ]
-
-        # Generate details directly in target language
-        recipe_system = (
-            f"You are a professional chef and nutritionist. Return ONLY this exact JSON structure, no extra fields:\n"
-            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
-            '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
-            '"prep_time_minutes":0,"calories":0,"protein":0.0,"carbs":0.0,"fat":0.0}}\n'
-            "CRITICAL: All ingredient amounts MUST be in GRAMS. Convert volumes using density "
-            "(honey=1.42g/ml, oil=0.92g/ml, milk=1.03g/ml). "
-            "Verify: calories = protein*4 + carbs*4 + fat*9.\n"
-            f"Output string values in {target_lang}. "
-            "JSON keys MUST be in English. Do NOT add recipe_name, description, equipment, or other fields."
-        )
-
-        def get_alternate_purpose(purpose: str) -> str:
-            """Get alternate model purpose for retry on failure."""
-            if purpose == "recipe_primary":
-                return "recipe_secondary"
-            elif purpose == "recipe_secondary":
-                return "recipe_primary"
-            return purpose  # No alternate for meal_names
-
-        async def attempt_generation(
-            prompt: str,
-            meal_name: str,
-            index: int,
-            model_purpose: str,
-            is_retry: bool = False,
-        ) -> Optional[MealSuggestion]:
-            """Single generation attempt with specified model purpose."""
-            retry_marker = "[RETRY]" if is_retry else ""
-
-            try:
-                # Use direct JSON mode with schema in prompt — avoids structured output
-                # function-calling overhead that consumes thinking tokens in Gemini 2.5
-                raw = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        self._generation.generate_meal_plan,
-                        prompt,
-                        recipe_system,
-                        "json",
-                        self.PARALLEL_SINGLE_MEAL_TOKENS,
-                        None,
-                        model_purpose,
-                    ),
-                    timeout=self.PARALLEL_SINGLE_MEAL_TIMEOUT,
-                )
-
-                # Parse recipe response (guaranteed valid by Pydantic schema)
-                recipe_data = raw
-
-                ingredients = recipe_data.get("ingredients", [])
-                recipe_steps = recipe_data.get("recipe_steps", [])
-                prep_time = recipe_data.get(
-                    "prep_time_minutes", session.cooking_time_minutes
-                )
-
-                if not ingredients or not recipe_steps:
-                    logger.warning(
-                        f"[PHASE-2-UNEXPECTED-EMPTY]{retry_marker} index={index} | "
-                        f"ingredients={len(ingredients)} | steps={len(recipe_steps)}"
-                    )
-                    return None
-
-                # Extract and validate macros
-                raw_macros = {
-                    "calories": recipe_data.get("calories", session.target_calories),
-                    "protein": recipe_data.get("protein", 20.0),
-                    "carbs": recipe_data.get("carbs", 30.0),
-                    "fat": recipe_data.get("fat", 10.0),
-                }
-                validated = self._macro_validator.validate_and_correct(raw_macros)
-                calories = validated["calories"]
-                protein = validated["protein"]
-                carbs = validated["carbs"]
-                fat = validated["fat"]
-
-                # Extract origin_country and cuisine_type from AI response
-                origin_country = recipe_data.get("origin_country")
-                cuisine_type = recipe_data.get("cuisine_type", "International")
-
-                logger.info(
-                    f"[PHASE-2-SUCCESS]{retry_marker} index={index} | "
-                    f"model_purpose={model_purpose} | meal_name={meal_name}"
-                )
-
-                # Log ingredient coverage (non-blocking).
-                # Generic terms like "meat" map to specific proteins (pork, chicken, beef)
-                # so hard rejection causes unnecessary failures. AI prompt handles intent.
-                if session.ingredients and session.language == "en":
-                    recipe_ing_names = " ".join(
-                        ing.get("name", "").lower() for ing in ingredients
-                    )
-                    meal_name_lower = meal_name.lower()
-
-                    def _ingredient_found(user_ing: str) -> bool:
-                        """Check if user ingredient appears in recipe or meal name."""
-                        ui = user_ing.lower().strip()
-                        # Direct or prefix match in recipe ingredients
-                        if ui in recipe_ing_names:
-                            return True
-                        prefix = ui[:max(4, len(ui) - 2)]
-                        if prefix in recipe_ing_names:
-                            return True
-                        # Also check meal name (e.g. "blueberry" in "Blueberry Parfait")
-                        return ui in meal_name_lower or prefix in meal_name_lower
-
-                    missing = [
-                        ui for ui in session.ingredients
-                        if not _ingredient_found(ui)
-                    ]
-                    if missing:
-                        logger.warning(
-                            f"[PHASE-2-INGREDIENT-MISMATCH]{retry_marker} index={index} | "
-                            f"missing={missing} | meal_name={meal_name}"
-                        )
-
-                return MealSuggestion(
-                    id=f"sug_{uuid.uuid4().hex[:16]}",
-                    session_id=session.id,
-                    user_id=session.user_id,
-                    meal_name=meal_name,
-                    description="",
-                    meal_type=MealType(session.meal_type),
-                    macros=MacroEstimate(
-                        calories=calories,
-                        protein=protein,
-                        carbs=carbs,
-                        fat=fat,
-                    ),
-                    ingredients=[Ingredient(**ing) for ing in ingredients],
-                    recipe_steps=[RecipeStep(**step) for step in recipe_steps],
-                    prep_time_minutes=prep_time,
-                    confidence_score=0.85,
-                    origin_country=origin_country,
-                    cuisine_type=cuisine_type,
-                )
-
-            except asyncio.TimeoutError:
-                logger.warning(
-                    f"[PHASE-2-TIMEOUT]{retry_marker} index={index} | "
-                    f"model_purpose={model_purpose} | meal_name={meal_name}"
-                )
-                return None
-            except Exception as e:
-                logger.warning(
-                    f"[PHASE-2-FAIL]{retry_marker} index={index} | "
-                    f"model_purpose={model_purpose} | error_type={type(e).__name__} | error={e}"
-                )
-                return None
-
-        async def generate_recipe(
-            prompt: str, meal_name: str, index: int
-        ) -> Optional[MealSuggestion]:
-            """Generate recipe with retry on alternate model if first attempt fails."""
-            # Alternate between primary (even) and secondary (odd) for first attempt
-            model_purpose = "recipe_primary" if index % 2 == 0 else "recipe_secondary"
-
-            # First attempt
-            result = await attempt_generation(
-                prompt, meal_name, index, model_purpose, is_retry=False
-            )
-
-            if result is not None:
-                return result
-
-            # Retry with alternate model (uses different rate limit pool)
-            alternate_purpose = get_alternate_purpose(model_purpose)
-            logger.info(
-                f"[PHASE-2-RETRY] index={index} | "
-                f"original={model_purpose} | fallback={alternate_purpose} | "
-                f"meal_name={meal_name}"
-            )
-
-            return await attempt_generation(
-                prompt, meal_name, index, alternate_purpose, is_retry=True
-            )
-
-        # Over-generation strategy: Start 4 recipes, take first 3 successes
-        # Removed stagger to maximize speed
-        gen_start = time.time()
-
-        # Create tasks simultaneously
-        tasks = []
-        for i in range(4):
-            # No delay/stagger
-            task = asyncio.create_task(
-                generate_recipe(recipe_prompts[i], meal_names[i], i)
-            )
-            tasks.append(task)
-
-        # Use as_completed to get first 3 successes and cancel remaining
-        successful_results = []
-        for coro in asyncio.as_completed(tasks):
-            try:
-                result = await coro
-                if result is not None:
-                    successful_results.append(result)
-                    logger.debug(f"[SUCCESS] Got meal {len(successful_results)}/3")
-                    if len(successful_results) >= 3:
-                        # Cancel remaining tasks immediately
-                        cancelled_count = sum(
-                            1
-                            for task in tasks
-                            if not task.done() and not task.cancel() is False
-                        )
-                        logger.info(
-                            f"[EARLY-STOP] Got 3 meals, cancelled {cancelled_count} remaining tasks"
-                        )
-                        break
-            except Exception as e:
-                logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
-                continue
-
-        phase2_elapsed = time.time() - gen_start
-        logger.info(
-            f"[PHASE-2-COMPLETE] session={session.id} | "
-            f"success={len(successful_results)}/4 | "
-            f"gen_elapsed={phase2_elapsed:.2f}s"
-        )
-
-        # Check for minimum acceptable results
-        if len(successful_results) < self.MIN_ACCEPTABLE_RESULTS:
-            if not successful_results:
-                raise RuntimeError("Failed to generate any recipes from 4 attempts")
-            else:
-                logger.error(
-                    f"[PHASE-2-INSUFFICIENT] session={session.id} | "
-                    f"only {len(successful_results)} meals (minimum {self.MIN_ACCEPTABLE_RESULTS} required)"
-                )
-                raise RuntimeError(
-                    f"Insufficient recipes generated: {len(successful_results)}/{self.MIN_ACCEPTABLE_RESULTS} minimum"
-                )
-
-        # Log if partial success but acceptable
-        if len(successful_results) < 3:
-            logger.warning(
-                f"[PHASE-2-PARTIAL] session={session.id} | "
-                f"returning {len(successful_results)}/3 meals (above minimum threshold)"
-            )
-
-        suggestions = successful_results
-
-        # PHASE 3: Translate if non-English language
-        phase3_elapsed = 0.0
-        if session.language and session.language != "en":
-            phase3_start = time.time()
-            lang_name = target_lang
-            logger.info(
-                f"[PHASE-3-START] session={session.id} | "
-                f"translating {len(suggestions)} meals to {lang_name}"
-            )
-
-            try:
-                suggestions = (
-                    await self._translation_service.translate_meal_suggestions_batch(
-                        suggestions, session.language
-                    )
-                )
-                phase3_elapsed = time.time() - phase3_start
-                logger.info(
-                    f"[PHASE-3-COMPLETE] session={session.id} | "
-                    f"elapsed={phase3_elapsed:.2f}s | "
-                    f"translated={len(suggestions)} meals to {lang_name}"
-                )
-            except Exception as e:
-                phase3_elapsed = time.time() - phase3_start
-                logger.error(
-                    f"[PHASE-3-FAILED] session={session.id} | "
-                    f"elapsed={phase3_elapsed:.2f}s | "
-                    f"error={type(e).__name__}: {e} | "
-                    f"returning English suggestions as fallback"
-                )
-
-        total_elapsed = time.time() - start_time
-
-        logger.info(
-            f"[PIPELINE-COMPLETE] session={session.id} | "
-            f"total_elapsed={total_elapsed:.2f}s | "
-            f"phase1={phase1_elapsed:.2f}s | "
-            f"phase2={phase2_elapsed:.2f}s | "
-            f"phase3={phase3_elapsed:.2f}s | "
-            f"language={session.language} | "
-            f"returned={len(suggestions)} meals (target 3) | "
-            f"meals={[s.meal_name for s in suggestions]}"
-        )
-
-        return suggestions
+        logger.info(f"Creating new session {session.id}")
+        return session, []
