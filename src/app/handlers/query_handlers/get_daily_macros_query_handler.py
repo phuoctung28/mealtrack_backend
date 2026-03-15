@@ -3,7 +3,7 @@ GetDailyMacrosQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Dict, Any, Optional
 
 from src.app.events.base import EventHandler, handles
@@ -12,7 +12,7 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition.macros import Macros
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
-from src.domain.utils.timezone_utils import get_user_monday
+from src.domain.utils.timezone_utils import get_user_monday, get_zone_info
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
 
@@ -31,14 +31,21 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
 
     async def handle(self, query: GetDailyMacrosQuery) -> Dict[str, Any]:
         """Calculate daily macros for a given date with user targets."""
-        target_date = query.target_date or date.today()
+        # Resolve user timezone for correct date boundaries
+        user_tz_str = self._get_user_timezone(query.user_id)
+        user_tz = get_zone_info(user_tz_str)
+
+        # Default to today in user's timezone (not server UTC)
+        target_date = query.target_date or datetime.now(user_tz).date()
         cached_result = await self._try_get_cached_result(query.user_id, target_date)
         if cached_result is not None:
             return cached_result
 
         # Use fresh UnitOfWork to get current data
         with UnitOfWork() as uow:
-            meals = uow.meals.find_by_date(target_date, user_id=query.user_id)
+            meals = uow.meals.find_by_date(
+                target_date, user_id=query.user_id, user_timezone=user_tz_str,
+            )
 
             # Initialize totals
             total_protein = 0.0
@@ -200,3 +207,15 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             return
         cache_key, ttl = CacheKeys.daily_macros(user_id, target_date)
         await self.cache_service.set_json(cache_key, payload, ttl)
+
+    @staticmethod
+    def _get_user_timezone(user_id: str) -> str:
+        """Fetch user's IANA timezone from DB, fallback to UTC."""
+        try:
+            with UnitOfWork() as uow:
+                user = uow.users.find_by_id(user_id)
+                if user and user.timezone:
+                    return user.timezone
+        except Exception:
+            pass
+        return "UTC"
