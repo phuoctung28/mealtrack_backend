@@ -17,6 +17,10 @@ from src.domain.model.meal_suggestion import (
     SuggestionStatus,
 )
 from src.domain.services.meal_suggestion.translation_service import TranslationService
+from src.domain.services.meal_suggestion.translation_string_utils import (
+    extract_translatable_strings,
+    reconstruct_with_translations,
+)
 
 
 @pytest.fixture
@@ -73,13 +77,13 @@ class TestExtractTranslatableStrings:
 
     def test_extracts_meal_name(self, translation_service, sample_meal_suggestion):
         """Test that meal_name is extracted."""
-        items = translation_service._extract_translatable_strings(sample_meal_suggestion)
+        items = extract_translatable_strings(sample_meal_suggestion)
         paths = [item[0] for item in items]
         assert "meal_name" in paths
 
     def test_extracts_ingredient_names(self, translation_service, sample_meal_suggestion):
         """Test that ingredient names are extracted."""
-        items = translation_service._extract_translatable_strings(sample_meal_suggestion)
+        items = extract_translatable_strings(sample_meal_suggestion)
         paths = [item[0] for item in items]
         assert "ingredients[0].name" in paths
         assert "ingredients[1].name" in paths
@@ -87,7 +91,7 @@ class TestExtractTranslatableStrings:
 
     def test_extracts_ingredient_units(self, translation_service, sample_meal_suggestion):
         """Test that ingredient units are extracted."""
-        items = translation_service._extract_translatable_strings(sample_meal_suggestion)
+        items = extract_translatable_strings(sample_meal_suggestion)
         paths = [item[0] for item in items]
         assert "ingredients[0].unit" in paths
         assert "ingredients[1].unit" in paths
@@ -96,14 +100,14 @@ class TestExtractTranslatableStrings:
         self, translation_service, sample_meal_suggestion
     ):
         """Test that recipe step instructions are extracted."""
-        items = translation_service._extract_translatable_strings(sample_meal_suggestion)
+        items = extract_translatable_strings(sample_meal_suggestion)
         paths = [item[0] for item in items]
         assert "recipe_steps[0].instruction" in paths
         assert "recipe_steps[1].instruction" in paths
 
     def test_skips_ids(self, translation_service, sample_meal_suggestion):
         """Test that ID fields are skipped."""
-        items = translation_service._extract_translatable_strings(sample_meal_suggestion)
+        items = extract_translatable_strings(sample_meal_suggestion)
         paths = [item[0] for item in items]
         assert "id" not in paths
         assert "session_id" not in paths
@@ -111,7 +115,7 @@ class TestExtractTranslatableStrings:
 
     def test_skips_numbers(self, translation_service, sample_meal_suggestion):
         """Test that numeric fields are skipped."""
-        items = translation_service._extract_translatable_strings(sample_meal_suggestion)
+        items = extract_translatable_strings(sample_meal_suggestion)
         paths = [item[0] for item in items]
         assert "prep_time_minutes" not in paths
         assert "confidence_score" not in paths
@@ -121,7 +125,7 @@ class TestExtractTranslatableStrings:
 
     def test_skips_enums(self, translation_service, sample_meal_suggestion):
         """Test that enum fields are skipped."""
-        items = translation_service._extract_translatable_strings(sample_meal_suggestion)
+        items = extract_translatable_strings(sample_meal_suggestion)
         paths = [item[0] for item in items]
         assert "meal_type" not in paths
         assert "status" not in paths
@@ -141,7 +145,7 @@ class TestExtractTranslatableStrings:
             prep_time_minutes=10,
             confidence_score=0.8,
         )
-        items = translation_service._extract_translatable_strings(suggestion)
+        items = extract_translatable_strings(suggestion)
         # Should only have meal_name, description should be skipped if empty
         paths = [item[0] for item in items]
         assert "meal_name" in paths
@@ -207,7 +211,7 @@ class TestReconstructWithTranslations:
         """Test that meal_name is translated."""
         translation_map = {"meal_name": "Ức gà nướng"}
 
-        result = translation_service._reconstruct_with_translations(
+        result = reconstruct_with_translations(
             sample_meal_suggestion, translation_map
         )
 
@@ -222,7 +226,7 @@ class TestReconstructWithTranslations:
             "ingredients[2].name": "bông cải xanh",
         }
 
-        result = translation_service._reconstruct_with_translations(
+        result = reconstruct_with_translations(
             sample_meal_suggestion, translation_map
         )
 
@@ -240,7 +244,7 @@ class TestReconstructWithTranslations:
             "recipe_steps[1].instruction": "Nấu gà 8 phút mỗi mặt",
         }
 
-        result = translation_service._reconstruct_with_translations(
+        result = reconstruct_with_translations(
             sample_meal_suggestion, translation_map
         )
 
@@ -256,7 +260,7 @@ class TestReconstructWithTranslations:
         """Test that IDs, numbers, and enums are preserved."""
         translation_map = {"meal_name": "Ức gà nướng"}
 
-        result = translation_service._reconstruct_with_translations(
+        result = reconstruct_with_translations(
             sample_meal_suggestion, translation_map
         )
 
@@ -283,7 +287,7 @@ class TestTranslateMealSuggestion:
     ):
         """Test full translation from English to Vietnamese."""
         # Extract actual strings to get correct order (units like "g", "ml" are skipped)
-        extracted = translation_service._extract_translatable_strings(sample_meal_suggestion)
+        extracted = extract_translatable_strings(sample_meal_suggestion)
         extracted_strings = [item[1] for item in extracted]
         
         # Mock translation response matching extracted order
