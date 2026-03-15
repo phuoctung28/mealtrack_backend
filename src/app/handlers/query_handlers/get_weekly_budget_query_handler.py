@@ -55,6 +55,7 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                 weekly_budget.consumed_protein = consumed["protein"]
                 weekly_budget.consumed_carbs = consumed["carbs"]
                 weekly_budget.consumed_fat = consumed["fat"]
+                uow.weekly_budgets.update(weekly_budget)
 
                 # Load cheat days for this week
                 cheat_days = uow.cheat_days.find_by_user_and_date_range(
@@ -78,13 +79,21 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     consumed_carbs=consumed_before_today["carbs"],
                     consumed_fat=consumed_before_today["fat"],
                 )
-                adjusted = budget_for_adjustment.calculate_adjusted_daily(
+                adjusted = WeeklyBudgetService.calculate_adjusted_daily(
+                    budget_for_adjustment,
                     standard_daily_calories=weekly_budget.target_calories / 7,
                     standard_daily_carbs=weekly_budget.target_carbs / 7,
                     standard_daily_fat=weekly_budget.target_fat / 7,
+                    standard_daily_protein=weekly_budget.target_protein / 7,
                     bmr=bmr,
                     remaining_days=remaining_days,
                 )
+
+                # Derive remaining calories from macros for consistency
+                remaining_p = weekly_budget.remaining_protein
+                remaining_c = weekly_budget.remaining_carbs
+                remaining_f = weekly_budget.remaining_fat
+                derived_remaining_cal = (remaining_p * 4) + (remaining_c * 4) + (remaining_f * 9)
 
                 return {
                     "week_start_date": week_start.isoformat(),
@@ -96,16 +105,16 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     "consumed_protein": weekly_budget.consumed_protein,
                     "consumed_carbs": weekly_budget.consumed_carbs,
                     "consumed_fat": weekly_budget.consumed_fat,
-                    "remaining_calories": weekly_budget.remaining_calories,
+                    "remaining_calories": round(derived_remaining_cal, 1),
                     "remaining_protein": weekly_budget.remaining_protein,
                     "remaining_carbs": weekly_budget.remaining_carbs,
                     "remaining_fat": weekly_budget.remaining_fat,
-                    "adjusted_daily_calories": adjusted["adjusted_calories"],
-                    "adjusted_daily_carbs": adjusted["adjusted_carbs"],
-                    "adjusted_daily_fat": adjusted["adjusted_fat"],
-                    "daily_protein": weekly_budget.target_protein / 7,  # Protein stays fixed
+                    "adjusted_daily_calories": adjusted.calories,
+                    "adjusted_daily_carbs": adjusted.carbs,
+                    "adjusted_daily_fat": adjusted.fat,
+                    "daily_protein": adjusted.protein,
                     "remaining_days": remaining_days,
-                    "bmr_floor_active": adjusted["bmr_floor_active"],
+                    "bmr_floor_active": adjusted.bmr_floor_active,
                     "cheat_days": [cd.date.isoformat() for cd in cheat_days],
                 }
 
@@ -204,15 +213,6 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                 total_protein += meal.nutrition.macros.protein or 0
                 total_carbs += meal.nutrition.macros.carbs or 0
                 total_fat += meal.nutrition.macros.fat or 0
-
-        # Update weekly budget with consumed values
-        budget = uow.weekly_budgets.find_by_user_and_week(user_id, week_start)
-        if budget:
-            budget.consumed_calories = total_calories
-            budget.consumed_protein = total_protein
-            budget.consumed_carbs = total_carbs
-            budget.consumed_fat = total_fat
-            uow.weekly_budgets.update(budget)
 
         return {
             "calories": total_calories,

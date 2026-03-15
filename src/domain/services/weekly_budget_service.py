@@ -62,6 +62,14 @@ class WeeklyBudgetService:
         adjusted_carbs = remaining_carbs / remaining_days
         adjusted_fat = remaining_fat / remaining_days
 
+        # Apply floors and ceilings to macros (prevents 0g fat, absurd carbs)
+        floor = WeeklyBudgetConstants.MACRO_FLOOR_RATIO
+        ceil = WeeklyBudgetConstants.MACRO_CEILING_RATIO
+        adjusted_carbs = max(standard_daily_carbs * floor,
+                            min(adjusted_carbs, standard_daily_carbs * ceil))
+        adjusted_fat = max(standard_daily_fat * floor,
+                          min(adjusted_fat, standard_daily_fat * ceil))
+
         # Protein stays fixed regardless of weekly consumption
         adjusted_protein = standard_daily_protein
 
