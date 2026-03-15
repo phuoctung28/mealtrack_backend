@@ -62,7 +62,11 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
 
                 # Convert target_date to user-local date
                 tz = get_zone_info(user_tz_str)
-                date_obj = target_date.astimezone(tz).date()
+                if target_date.tzinfo is None:
+                    # Naive datetime — treat as user-local already
+                    date_obj = target_date.date()
+                else:
+                    date_obj = target_date.astimezone(tz).date()
 
                 meals = uow.meals.find_by_date(
                     date_obj, user_id=user_id, user_timezone=user_tz_str,

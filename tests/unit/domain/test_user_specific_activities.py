@@ -63,7 +63,7 @@ class TestUserSpecificActivities:
         mock_meals_repo = Mock()
 
         # Configure repository to return different meals for different users
-        def mock_find_by_date(target_date, user_id=None, limit=50):
+        def mock_find_by_date(target_date, user_id=None, limit=50, user_timezone=None):
             if user_id == "123e4567-e89b-12d3-a456-426614174100":
                 return [user1_meal]
             elif user_id == "123e4567-e89b-12d3-a456-426614174200":
@@ -73,9 +73,13 @@ class TestUserSpecificActivities:
 
         mock_meals_repo.find_by_date.side_effect = mock_find_by_date
 
-        # Create mock UnitOfWork
+        # Create mock UnitOfWork with users repo for timezone lookup
+        mock_users_repo = Mock()
+        mock_users_repo.find_by_id.return_value = None  # No timezone stored
+
         mock_uow = Mock()
         mock_uow.meals = mock_meals_repo
+        mock_uow.users = mock_users_repo
         mock_uow.__enter__ = Mock(return_value=mock_uow)
         mock_uow.__exit__ = Mock(return_value=False)
 
@@ -123,9 +127,13 @@ class TestUserSpecificActivities:
         mock_meals_repo = Mock()
         mock_meals_repo.find_by_date.return_value = []
 
-        # Create mock UnitOfWork
+        # Create mock UnitOfWork with users repo for timezone lookup
+        mock_users_repo = Mock()
+        mock_users_repo.find_by_id.return_value = None
+
         mock_uow = Mock()
         mock_uow.meals = mock_meals_repo
+        mock_uow.users = mock_users_repo
         mock_uow.__enter__ = Mock(return_value=mock_uow)
         mock_uow.__exit__ = Mock(return_value=False)
 
@@ -147,5 +155,6 @@ class TestUserSpecificActivities:
             # Verify repository was called with correct user_id
             mock_meals_repo.find_by_date.assert_called_once_with(
                 date(2024, 8, 15),
-                user_id="123e4567-e89b-12d3-a456-426614174300"
+                user_id="123e4567-e89b-12d3-a456-426614174300",
+                user_timezone="UTC",
             )
