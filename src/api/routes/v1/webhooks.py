@@ -3,10 +3,11 @@ Webhook handlers for RevenueCat events.
 
 Syncs subscription data to local database.
 """
+import hmac
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Header
@@ -37,8 +38,8 @@ async def revenuecat_webhook(
         logger.error("RevenueCat webhook not configured - rejecting request")
         raise HTTPException(status_code=503, detail="Webhook not configured")
 
-    # Verify authorization
-    if authorization != webhook_secret:
+    # Verify authorization (constant-time comparison to prevent timing attacks)
+    if not hmac.compare_digest(authorization or "", webhook_secret):
         logger.warning("Invalid RevenueCat webhook authorization")
         raise HTTPException(status_code=401, detail="Unauthorized")
     
@@ -229,7 +230,7 @@ def parse_timestamp(ms: Optional[int]) -> Optional[datetime]:
     if ms is None:
         return None
     try:
-        return datetime.fromtimestamp(ms / 1000)
+        return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
     except Exception as e:
         logger.error(f"Error parsing timestamp {ms}: {e}")
         return None

@@ -33,6 +33,7 @@ from src.api.base_dependencies import (
 )
 from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
+from src.api.middleware.rate_limit import limiter
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
@@ -49,6 +50,7 @@ from src.api.routes.v1.notifications import router as notifications_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
+from src.infra.config.settings import settings
 from src.infra.database.config import engine
 
 load_dotenv()
@@ -186,19 +188,27 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+allowed_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
+if allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Request/Response logging
 app.add_middleware(RequestLoggerMiddleware)
 
 # Accept-Language header parsing
 app.add_middleware(AcceptLanguageMiddleware)
+
+# Rate limiting
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Dev auth bypass: inject a fixed user during development
 add_dev_auth_bypass(app)

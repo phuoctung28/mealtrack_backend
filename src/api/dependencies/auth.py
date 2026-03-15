@@ -119,6 +119,20 @@ async def verify_firebase_token(
         ) from e
 
 
+async def verify_firebase_uid_ownership(
+    firebase_uid: str,
+    token: dict = Depends(verify_firebase_token),
+) -> str:
+    """Verify authenticated user owns the requested firebase_uid."""
+    token_uid = token.get("uid")
+    if token_uid != firebase_uid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: you can only access your own data",
+        )
+    return firebase_uid
+
+
 async def get_current_user_id(
     token: dict = Depends(verify_firebase_token)
 ) -> str:

@@ -14,6 +14,7 @@ from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.base_dependencies import get_image_store
 from src.api.exceptions import handle_exception, ValidationException
 from src.api.middleware.accept_language import get_request_language
+from src.api.middleware.rate_limit import limiter
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.schemas.request.meal_requests import (
     EditMealIngredientsRequest,
@@ -63,6 +64,7 @@ STATUS_MAPPING = {
     status_code=status.HTTP_200_OK,
     response_model=DetailedMealResponse,
 )
+@limiter.limit("10/minute")
 async def analyze_meal_image_immediate(
     request: Request,
     file: UploadFile = File(...),
@@ -254,7 +256,9 @@ async def create_manual_meal(
 
 
 @router.post("/parse-text", response_model=ParseMealTextResponse)
+@limiter.limit("20/minute")
 async def parse_meal_text(
+    request: Request,
     payload: ParseMealTextRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
@@ -275,12 +279,18 @@ async def parse_meal_text(
 
         # Map app DTO to API response DTO
         from src.api.schemas.response.meal_responses import ParsedFoodItem
+        from src.domain.model.nutrition.macros import Macros as MacrosModel
         api_items = [
             ParsedFoodItem(
                 name=item.name,
                 quantity=item.quantity,
                 unit=item.unit,
-                calories=item.protein * 4 + item.carbs * 4 + item.fat * 9,  # P*4 + C*4 + F*9
+                calories=MacrosModel(
+                    protein=item.protein,
+                    carbs=item.carbs,
+                    fat=item.fat,
+                    fiber=item.fiber if hasattr(item, "fiber") and item.fiber else 0.0,
+                ).total_calories,
                 protein=item.protein,
                 carbs=item.carbs,
                 fat=item.fat,
@@ -289,7 +299,7 @@ async def parse_meal_text(
             )
             for item in app_response.items
         ]
-        total_calories = sum(item.protein * 4 + item.carbs * 4 + item.fat * 9 for item in app_response.items)
+        total_calories = sum(i.calories for i in api_items)
 
         return ParseMealTextResponse(
             items=api_items,

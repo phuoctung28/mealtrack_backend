@@ -4,7 +4,7 @@ Handles user authentication sync, profile retrieval, and status management.
 """
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
@@ -29,7 +29,7 @@ from src.app.commands.user.sync_user_command import (
 from src.app.queries.user.get_user_by_firebase_uid_query import GetUserByFirebaseUidQuery
 from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboardingStatusQuery
 from src.infra.event_bus import EventBus
-from src.api.dependencies.auth import get_current_user_id
+from src.api.dependencies.auth import get_current_user_id, verify_firebase_token, verify_firebase_uid_ownership
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/users", tags=["Users"])
@@ -43,6 +43,7 @@ class UpdateTimezoneRequest(BaseModel):
 @router.post("/sync", response_model=UserSyncResponse)
 async def sync_user_from_firebase(
     request: UserSyncRequest,
+    token: dict = Depends(verify_firebase_token),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -58,6 +59,12 @@ async def sync_user_from_firebase(
     - **photo_url**: User profile photo URL (optional)
     - **provider**: Authentication provider (phone, google)
     """
+    if token.get("uid") != request.firebase_uid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: you can only sync your own account",
+        )
+
     logger.info(
         f"Starting user sync for firebase_uid: {request.firebase_uid}",
         extra={
@@ -117,7 +124,7 @@ async def sync_user_from_firebase(
 
 @router.get("/firebase/{firebase_uid}", response_model=UserProfileResponse)
 async def get_user_by_firebase_uid(
-    firebase_uid: str,
+    firebase_uid: str = Depends(verify_firebase_uid_ownership),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -144,7 +151,7 @@ async def get_user_by_firebase_uid(
 
 @router.get("/firebase/{firebase_uid}/status", response_model=UserStatusResponse)
 async def get_user_onboarding_status(
-    firebase_uid: str,
+    firebase_uid: str = Depends(verify_firebase_uid_ownership),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -171,8 +178,8 @@ async def get_user_onboarding_status(
 
 @router.put("/firebase/{firebase_uid}/last-accessed", response_model=UserUpdateResponse)
 async def update_user_last_accessed(
-    firebase_uid: str,
     request: UserUpdateLastAccessedRequest,
+    firebase_uid: str = Depends(verify_firebase_uid_ownership),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -203,7 +210,7 @@ async def update_user_last_accessed(
 
 @router.put("/firebase/{firebase_uid}/onboarding/complete", response_model=OnboardingCompletionResponse)
 async def complete_onboarding(
-    firebase_uid: str,
+    firebase_uid: str = Depends(verify_firebase_uid_ownership),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """
@@ -249,7 +256,7 @@ async def update_timezone(
 
 @router.delete("/firebase/{firebase_uid}", response_model=UserDeleteResponse)
 async def delete_user_account(
-    firebase_uid: str,
+    firebase_uid: str = Depends(verify_firebase_uid_ownership),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
     """

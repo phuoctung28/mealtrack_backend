@@ -10,7 +10,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetDailyMacrosQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
-from src.domain.constants import NutritionConstants
+from src.domain.model.nutrition.macros import Macros
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import get_user_monday
 from src.infra.cache.cache_service import CacheService
@@ -44,6 +44,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             total_protein = 0.0
             total_carbs = 0.0
             total_fat = 0.0
+            total_fiber = 0.0
             meal_count = 0
             meals_with_nutrition = 0
 
@@ -59,13 +60,15 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                         total_protein += meal.nutrition.macros.protein or 0
                         total_carbs += meal.nutrition.macros.carbs or 0
                         total_fat += meal.nutrition.macros.fat or 0
+                        total_fiber += meal.nutrition.macros.fiber or 0
 
-            # Derive total calories from macros — single source of truth
-            total_calories = (
-                total_protein * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
-                + total_carbs * NutritionConstants.CALORIES_PER_GRAM_CARBS
-                + total_fat * NutritionConstants.CALORIES_PER_GRAM_FAT
-            )
+            # Derive total calories using fiber-aware formula — single source of truth
+            total_calories = Macros(
+                protein=total_protein,
+                carbs=total_carbs,
+                fat=total_fat,
+                fiber=total_fiber,
+            ).total_calories
 
         # Get user's TDEE targets
         target_calories = None
