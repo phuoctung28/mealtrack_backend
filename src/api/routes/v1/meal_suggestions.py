@@ -32,8 +32,8 @@ router = APIRouter(prefix="/v1/meal-suggestions", tags=["Meal Suggestions"])
 @router.post("/generate", response_model=SuggestionsListResponse)
 @limiter.limit("5/minute")
 async def generate_suggestions(
-    http_request: Request,
-    request: MealSuggestionRequest,
+    request: Request,
+    body: MealSuggestionRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
@@ -58,25 +58,25 @@ async def generate_suggestions(
     """
     try:
         # Get language from Accept-Language header via middleware
-        language = get_request_language(http_request)
+        language = get_request_language(request)
 
-        portion_type = request.get_effective_portion_type()
+        portion_type = body.get_effective_portion_type()
 
         command = GenerateMealSuggestionsCommand(
             user_id=user_id,
-            meal_type=request.meal_type,
+            meal_type=body.meal_type,
             meal_portion_type=portion_type.value,
-            ingredients=request.ingredients,
-            time_available_minutes=request.cooking_time_minutes.value,
-            session_id=request.session_id,
+            ingredients=body.ingredients,
+            time_available_minutes=body.cooking_time_minutes.value,
+            session_id=body.session_id,
             language=language,
-            servings=request.servings,
-            cooking_equipment=request.cooking_equipment,
-            cuisine_region=request.cuisine_region,
-            calorie_target=request.calorie_target,
-            protein_target=request.protein_target,
-            carbs_target=request.carbs_target,
-            fat_target=request.fat_target,
+            servings=body.servings,
+            cooking_equipment=body.cooking_equipment,
+            cuisine_region=body.cuisine_region,
+            calorie_target=body.calorie_target,
+            protein_target=body.protein_target,
+            carbs_target=body.carbs_target,
+            fat_target=body.fat_target,
         )
 
         session, suggestions = await event_bus.send(command)
