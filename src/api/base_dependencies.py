@@ -383,7 +383,6 @@ def get_suggestion_orchestration_service():
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
         suggestion_repo=suggestion_repo,
-        redis_client=_redis_client,
         profile_provider=profile_provider,
     )
 

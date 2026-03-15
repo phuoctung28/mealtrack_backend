@@ -36,7 +36,6 @@ class SuggestionOrchestrationService:
         suggestion_repo: MealSuggestionRepositoryPort,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
-        redis_client=None,
         profile_provider: Optional[Callable[[str], Any]] = None,
     ):
         self._generation = generation_service

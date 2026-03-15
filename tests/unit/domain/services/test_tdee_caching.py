@@ -1,34 +1,26 @@
 """
-Unit tests for TDEE caching in SuggestionOrchestrationService.
+Unit tests for TDEE helper functions in suggestion_tdee_helpers.py.
 """
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
 from src.domain.cache.cache_keys import CacheKeys
-from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
-    SuggestionOrchestrationService,
+from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
+    calculate_daily_tdee,
+    get_adjusted_daily_target,
 )
 
 
 @pytest.fixture
-def mock_redis_client():
-    """Create mock Redis client."""
-    client = AsyncMock()
-    client.get = AsyncMock(return_value=None)
-    client.set = AsyncMock(return_value=True)
-    return client
-
-
-@pytest.fixture
-def mock_services():
-    """Create mock services."""
-    return {
-        "generation_service": Mock(),
-        "suggestion_repo": AsyncMock(),
-        "tdee_service": Mock(),
-        "portion_service": Mock(),
-    }
+def mock_tdee_service():
+    """Create mock TDEE calculation service."""
+    service = Mock()
+    result = Mock()
+    result.macros.calories = 2200.0
+    result.bmr = 1800.0
+    service.calculate_tdee.return_value = result
+    return service
 
 
 @pytest.fixture
@@ -42,92 +34,86 @@ def mock_profile():
     profile.job_type = "desk"
     profile.training_days_per_week = 4
     profile.training_minutes_per_session = 60
+    profile.training_level = "intermediate"
     profile.fitness_goal = "recomp"
     profile.body_fat_percentage = 18
     return profile
 
 
-class TestTDEECaching:
-    """Test TDEE caching functionality."""
+class TestCalculateDailyTdee:
+    """Test calculate_daily_tdee helper function."""
 
-    @pytest.mark.asyncio
-    async def test_cache_hit_returns_cached_value(self, mock_redis_client, mock_services, mock_profile):
-        """Cache hit should return cached TDEE without recalculating."""
-        # Setup
-        mock_redis_client.get.return_value = "2500.0"
-        
-        service = SuggestionOrchestrationService(
-            **mock_services,
-            redis_client=mock_redis_client,
-        )
-        
-        # Execute
-        result = await service._get_cached_tdee("user123", mock_profile)
-        
-        # Verify
-        assert result == 2500.0
-        mock_redis_client.get.assert_called_once()
-        mock_redis_client.set.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_cache_miss_calculates_and_caches(self, mock_redis_client, mock_services, mock_profile):
-        """Cache miss should calculate TDEE and cache it."""
-        # Setup
-        mock_redis_client.get.return_value = None
-        
-        service = SuggestionOrchestrationService(
-            **mock_services,
-            redis_client=mock_redis_client,
-        )
-        
-        # Mock TDEE calculation
-        mock_result = Mock()
-        mock_result.macros.calories = 2200.0
-        mock_services["tdee_service"].calculate_tdee.return_value = mock_result
-        
-        # Execute
-        with patch.object(service, '_calculate_daily_tdee', return_value=2200.0):
-            result = await service._get_cached_tdee("user123", mock_profile)
-        
-        # Verify
+    def test_returns_calories_from_service(self, mock_tdee_service, mock_profile):
+        """Should return calories from TDEE service calculation."""
+        result = calculate_daily_tdee(mock_tdee_service, mock_profile)
         assert result == 2200.0
-        mock_redis_client.set.assert_called_once()
-        
-        # Verify TTL is 24h
-        call_args = mock_redis_client.set.call_args
-        assert call_args[0][2] == CacheKeys.TTL_1_DAY
+        mock_tdee_service.calculate_tdee.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_no_redis_falls_back_to_calculation(self, mock_services, mock_profile):
-        """Without Redis, should calculate directly."""
-        service = SuggestionOrchestrationService(
-            **mock_services,
-            redis_client=None,
-        )
-        
-        mock_result = Mock()
-        mock_result.macros.calories = 2000.0
-        mock_services["tdee_service"].calculate_tdee.return_value = mock_result
-        
-        with patch.object(service, '_calculate_daily_tdee', return_value=2000.0):
-            result = await service._get_cached_tdee("user123", mock_profile)
-        
+    def test_falls_back_to_2000_on_error(self, mock_profile):
+        """Should return 2000 if TDEE calculation raises an exception."""
+        failing_service = Mock()
+        failing_service.calculate_tdee.side_effect = Exception("TDEE error")
+
+        result = calculate_daily_tdee(failing_service, mock_profile)
         assert result == 2000.0
 
+
+class TestGetAdjustedDailyTarget:
+    """Test get_adjusted_daily_target helper function."""
+
     @pytest.mark.asyncio
-    async def test_cache_error_falls_back_gracefully(self, mock_redis_client, mock_services, mock_profile):
-        """Cache errors should fall back to calculation."""
-        mock_redis_client.get.side_effect = Exception("Redis error")
-        
-        service = SuggestionOrchestrationService(
-            **mock_services,
-            redis_client=mock_redis_client,
-        )
-        
-        with patch.object(service, '_calculate_daily_tdee', return_value=2100.0):
-            result = await service._get_cached_tdee("user123", mock_profile)
-        
+    async def test_returns_adjusted_when_budget_exists(self, mock_tdee_service, mock_profile):
+        """Should return adjusted calories when weekly budget exists."""
+        from datetime import date
+
+        mock_budget = Mock()
+        mock_adjusted = Mock()
+        mock_adjusted.calories = 2100.0
+        mock_adjusted.bmr_floor_active = False
+
+        with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.UnitOfWork") as mock_uow_cls, \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.WeeklyBudgetService") as mock_budget_svc, \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday", return_value=date(2026, 3, 9)):
+
+            mock_uow = Mock()
+            mock_uow.__enter__ = Mock(return_value=mock_uow)
+            mock_uow.__exit__ = Mock(return_value=False)
+            mock_uow.weekly_budgets.find_by_user_and_week.return_value = mock_budget
+            mock_uow_cls.return_value = mock_uow
+
+            mock_budget_svc.calculate_remaining_days.return_value = 5
+            mock_budget_svc.calculate_adjusted_daily.return_value = mock_adjusted
+
+            result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile)
+
         assert result == 2100.0
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_raw_tdee_when_no_budget(self, mock_tdee_service, mock_profile):
+        """Should fall back to raw TDEE when no weekly budget found."""
+        with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.UnitOfWork") as mock_uow_cls:
+            mock_uow = Mock()
+            mock_uow.__enter__ = Mock(return_value=mock_uow)
+            mock_uow.__exit__ = Mock(return_value=False)
+            mock_uow.weekly_budgets.find_by_user_and_week.return_value = None
+            mock_uow_cls.return_value = mock_uow
+
+            result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile)
+
+        assert result == 2200.0
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_calculate_daily_tdee_on_error(self, mock_profile):
+        """Should fall back to calculate_daily_tdee if adjusted target raises."""
+        failing_service = Mock()
+        failing_service.calculate_tdee.side_effect = [Exception("TDEE error")]
+
+        with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.UnitOfWork") as mock_uow_cls:
+            mock_uow_cls.side_effect = Exception("DB error")
+
+            result = await get_adjusted_daily_target(failing_service, "user123", mock_profile)
+
+        assert result == 2000.0
 
 
 class TestCacheKeyGeneration:
@@ -136,7 +122,7 @@ class TestCacheKeyGeneration:
     def test_user_tdee_key_format(self):
         """TDEE cache key should have correct format."""
         key, ttl = CacheKeys.user_tdee("user123")
-        
+
         assert key == "user:tdee:user123"
         assert ttl == CacheKeys.TTL_1_DAY
 
@@ -144,5 +130,5 @@ class TestCacheKeyGeneration:
         """Different users should have different cache keys."""
         key1, _ = CacheKeys.user_tdee("user1")
         key2, _ = CacheKeys.user_tdee("user2")
-        
+
         assert key1 != key2
