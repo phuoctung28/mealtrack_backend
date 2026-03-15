@@ -9,7 +9,7 @@ from typing import List, Dict, Any
 from src.app.events.base import EventHandler, handles
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.domain.model.meal import MealStatus
-from src.domain.utils.timezone_utils import format_iso_utc
+from src.domain.utils.timezone_utils import format_iso_utc, get_zone_info
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -49,11 +49,24 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
     ) -> List[Dict[str, Any]]:
         """Get meal activities for a specific date and user."""
         try:
-            date_obj = target_date.date()
-
             # Use fresh UnitOfWork to get current data
             with UnitOfWork() as uow:
-                meals = uow.meals.find_by_date(date_obj, user_id=user_id)
+                # Resolve user timezone for correct date boundaries
+                user_tz_str = "UTC"
+                try:
+                    user = uow.users.find_by_id(user_id)
+                    if user and user.timezone:
+                        user_tz_str = user.timezone
+                except Exception:
+                    pass
+
+                # Convert target_date to user-local date
+                tz = get_zone_info(user_tz_str)
+                date_obj = target_date.astimezone(tz).date()
+
+                meals = uow.meals.find_by_date(
+                    date_obj, user_id=user_id, user_timezone=user_tz_str,
+                )
 
                 meal_activities = []
                 for meal in meals:

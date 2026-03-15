@@ -1,12 +1,12 @@
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.domain.utils.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import get_zone_info, utc_now
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import Meal as DBMeal
 from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
@@ -161,9 +161,19 @@ class MealRepository(MealRepositoryPort):
         """Counts the total number of meals."""
         return self.db.query(DBMeal).count()
     
-    def find_by_date(self, date_obj: date, user_id: str = None, limit: int = 50) -> List[Meal]:
-        """Find meals created on a specific date."""
-        start_datetime = datetime.combine(date_obj, datetime.min.time())
+    def find_by_date(
+        self, date_obj: date, user_id: str = None, limit: int = 50,
+        user_timezone: Optional[str] = None,
+    ) -> List[Meal]:
+        """Find meals created on a specific date.
+
+        Args:
+            user_timezone: IANA timezone (e.g. 'Asia/Saigon'). When provided,
+                date_obj is treated as a user-local date and boundaries are
+                converted to UTC for correct filtering.
+        """
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
+        start_datetime = datetime.combine(date_obj, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
         end_datetime = start_datetime + timedelta(days=1)
 
         query = (
@@ -190,11 +200,21 @@ class MealRepository(MealRepositoryPort):
         user_id: str,
         start_date: date,
         end_date: date,
-        limit: int = 100
+        limit: int = 100,
+        user_timezone: Optional[str] = None,
     ) -> List[Meal]:
-        """Find meals created within a date range (inclusive)."""
-        start_datetime = datetime.combine(start_date, datetime.min.time())
-        end_datetime = datetime.combine(end_date, datetime.min.time()) + timedelta(days=1)
+        """Find meals created within a date range (inclusive).
+
+        Args:
+            user_timezone: IANA timezone (e.g. 'Asia/Saigon'). When provided,
+                dates are treated as user-local and boundaries are converted to
+                UTC for correct filtering against UTC-stored created_at.
+        """
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
+        start_datetime = datetime.combine(start_date, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        end_datetime = (
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz) + timedelta(days=1)
+        ).astimezone(timezone.utc)
 
         query = (
             self.db.query(DBMeal)

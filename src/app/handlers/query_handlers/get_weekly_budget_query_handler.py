@@ -3,7 +3,7 @@ Handler for getting weekly macro budget status.
 """
 import logging
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Any, Optional
 
 from src.app.events.base import EventHandler, handles
@@ -12,7 +12,7 @@ from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.model.meal import MealStatus
 from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.domain.utils.timezone_utils import get_user_monday
+from src.domain.utils.timezone_utils import ensure_utc, get_user_monday, get_zone_info
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -31,8 +31,21 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
 
         with uow:
             try:
-                # Default to today if no date provided
-                target_date = query.target_date or date.today()
+                # Resolve user timezone for all date operations
+                user_tz_str = "UTC"
+                try:
+                    user = uow.users.find_by_id(query.user_id)
+                    if user and user.timezone:
+                        user_tz_str = user.timezone
+                except Exception:
+                    pass
+                user_tz = get_zone_info(user_tz_str)
+
+                # Default to today in USER's timezone (not server's UTC)
+                if query.target_date:
+                    target_date = query.target_date
+                else:
+                    target_date = datetime.now(user_tz).date()
 
                 # Get Monday for user's timezone
                 week_start = get_user_monday(target_date, query.user_id, uow)
@@ -50,7 +63,9 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     )
 
                 # Calculate consumed from meals this week and update budget object
-                consumed = await self._calculate_weekly_consumed(uow, query.user_id, week_start)
+                consumed = await self._calculate_weekly_consumed(
+                    uow, query.user_id, week_start, user_timezone=user_tz_str
+                )
                 weekly_budget.consumed_calories = consumed["calories"]
                 weekly_budget.consumed_protein = consumed["protein"]
                 weekly_budget.consumed_carbs = consumed["carbs"]
@@ -70,7 +85,8 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                 # Calculate adjusted daily targets using only PREVIOUS days' consumption
                 # Today's eating should not change today's target (lock at start of day)
                 consumed_before_today = await self._calculate_weekly_consumed(
-                    uow, query.user_id, week_start, exclude_date=target_date
+                    uow, query.user_id, week_start,
+                    exclude_date=target_date, user_timezone=user_tz_str,
                 )
                 budget_for_adjustment = replace(
                     weekly_budget,
@@ -189,15 +205,21 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
         user_id: str,
         week_start: date,
         exclude_date: Optional[date] = None,
+        user_timezone: Optional[str] = None,
     ) -> Dict[str, float]:
         """Calculate consumed macros from meals this week.
 
         Args:
-            exclude_date: If set, skip meals on this date (used to lock today's target).
+            exclude_date: If set, skip meals on this user-local date
+                (used to lock today's target).
+            user_timezone: IANA timezone for correct date boundary conversion.
         """
         week_end = week_start + timedelta(days=6)
+        tz = get_zone_info(user_timezone) if user_timezone else None
 
-        meals = uow.meals.find_by_date_range(user_id, week_start, week_end)
+        meals = uow.meals.find_by_date_range(
+            user_id, week_start, week_end, user_timezone=user_timezone,
+        )
 
         total_calories = 0.0
         total_protein = 0.0
@@ -207,8 +229,15 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
         for meal in meals:
             if meal.status == MealStatus.READY and meal.nutrition:
                 # Skip meals on excluded date (locks today's adjusted target)
-                if exclude_date and meal.created_at.date() == exclude_date:
-                    continue
+                # Convert meal UTC timestamp to user-local date for comparison
+                if exclude_date and meal.created_at:
+                    aware_dt = ensure_utc(meal.created_at)
+                    meal_local_date = (
+                        aware_dt.astimezone(tz).date() if tz
+                        else aware_dt.date()
+                    )
+                    if meal_local_date == exclude_date:
+                        continue
                 total_calories += meal.nutrition.calories or 0
                 total_protein += meal.nutrition.macros.protein or 0
                 total_carbs += meal.nutrition.macros.carbs or 0
