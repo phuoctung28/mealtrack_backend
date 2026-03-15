@@ -4,6 +4,7 @@ Follows clean architecture pattern with single LLM handling different prompts.
 """
 
 import logging
+import os
 import re
 import time
 from typing import Dict, Any, Optional
@@ -79,8 +80,10 @@ class MealGenerationService(MealGenerationServicePort):
             if max_tokens is None:
                 max_tokens = self._determine_optimal_tokens(prompt, system_message)
 
-            # Get model name for logging
-            model_name = self._model_manager._get_model_name_for_purpose(purpose)
+            # Get model name for logging (mirrors GeminiModelManager.get_model_for_purpose logic)
+            from src.infra.services.ai.gemini_model_config import PURPOSE_ENV_VARS, PURPOSE_MODEL_DEFAULTS
+            env_var = PURPOSE_ENV_VARS.get(purpose, "GEMINI_MODEL")
+            model_name = os.getenv(env_var, PURPOSE_MODEL_DEFAULTS.get(purpose, self._model_manager.model_name))
 
             # Log request config with purpose
             logger.info(

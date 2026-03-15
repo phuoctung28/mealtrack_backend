@@ -199,6 +199,10 @@ class WeeklyBudgetConstants:
     # BMR floor: daily target never drops below this ratio of standard daily
     BMR_FLOOR_RATIO = 0.80
 
+    # Adjusted daily macro bounds (ratio of standard daily)
+    MACRO_FLOOR_RATIO = 0.5    # Never below 50% of base
+    MACRO_CEILING_RATIO = 1.5  # Never above 150% of base
+
     # Smart prompt threshold: suggest cheat tag when daily consumed > this × daily target
     SMART_PROMPT_THRESHOLD = 1.20
 

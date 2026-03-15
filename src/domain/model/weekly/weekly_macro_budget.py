@@ -3,7 +3,7 @@ Weekly macro budget domain entity.
 
 This entity tracks weekly macro consumption against budget targets.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from typing import Optional
 
@@ -71,51 +71,3 @@ class WeeklyMacroBudget:
         self.consumed_carbs += carbs
         self.consumed_fat += fat
 
-    def calculate_adjusted_daily(
-        self,
-        standard_daily_calories: float,
-        standard_daily_carbs: float,
-        standard_daily_fat: float,
-        bmr: float,
-        remaining_days: int,
-    ) -> dict:
-        """
-        Calculate adjusted daily targets based on remaining weekly budget.
-
-        Args:
-            standard_daily_calories: Normal daily calorie target
-            standard_daily_carbs: Normal daily carb target
-            standard_daily_fat: Normal daily fat target
-            bmr: Basal metabolic rate
-            remaining_days: Number of days remaining in the week (including today)
-
-        Returns:
-            dict with adjusted values and bmr_floor_active flag
-        """
-        if remaining_days <= 0:
-            remaining_days = 1
-
-        # Calculate BMR floor
-        bmr_floor = max(bmr, standard_daily_calories * 0.80)
-
-        # Redistribute remaining weekly budget
-        adjusted_calories = self.remaining_calories / remaining_days
-        adjusted_carbs = self.remaining_carbs / remaining_days
-        adjusted_fat = self.remaining_fat / remaining_days
-
-        # Check if we hit the BMR floor
-        bmr_floor_active = False
-        if adjusted_calories < bmr_floor:
-            adjusted_calories = bmr_floor
-            bmr_floor_active = True
-
-        # Carbs and fat follow proportionally but also capped at reasonable levels
-        # (we don't enforce floor on carbs/fat, only calories)
-
-        return {
-            "adjusted_calories": round(adjusted_calories, 0),
-            "adjusted_carbs": round(adjusted_carbs, 0),
-            "adjusted_fat": round(adjusted_fat, 0),
-            "bmr_floor_active": bmr_floor_active,
-            "remaining_days": remaining_days,
-        }
