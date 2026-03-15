@@ -186,7 +186,7 @@ class TestSuggestionGenerationPipeline:
         # Check recipe generation system prompt
         recipe_gen_system_prompt = all_calls[1].args[1]
         assert f"Output string values in {target_lang_name}" in recipe_gen_system_prompt
-        assert "JSON keys MUST be in English" in recipe_gen_system_prompt
+        assert "JSON keys in English only" in recipe_gen_system_prompt
 
     def test_constants_are_set_correctly(self, recipe_generator):
         """Ensures performance-related constants are set to their expected optimized values."""
