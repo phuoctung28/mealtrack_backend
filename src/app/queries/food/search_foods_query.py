@@ -10,3 +10,4 @@ from src.app.events.base import Query
 class SearchFoodsQuery(Query):
     query: str
     limit: int = 20
+    language: str = "en"

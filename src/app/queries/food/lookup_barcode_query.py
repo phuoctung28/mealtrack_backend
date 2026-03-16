@@ -9,3 +9,4 @@ from src.app.events.base import Query
 @dataclass
 class LookupBarcodeQuery(Query):
     barcode: str
+    language: str = "en"

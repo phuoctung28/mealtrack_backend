@@ -182,6 +182,9 @@ def get_food_search_event_bus() -> EventBus:
         get_food_reference_repository,
     )
 
+    from src.infra.adapters.meal_generation_service import MealGenerationService
+    from src.domain.services.food_search_translation_service import FoodSearchTranslationService
+
     event_bus = PyMediatorEventBus()
 
     # Only register food-related handlers (lightweight)
@@ -192,11 +195,15 @@ def get_food_search_event_bus() -> EventBus:
     fat_secret_service = get_fat_secret_service_instance()
     food_reference_repository = get_food_reference_repository()
 
+    # Translation service for localized food search
+    food_translation_service = FoodSearchTranslationService(MealGenerationService())
+
     event_bus.register_handler(
         SearchFoodsQuery,
         SearchFoodsQueryHandler(
             food_cache_service, food_mapping_service,
-            fat_secret_service=fat_secret_service
+            fat_secret_service=fat_secret_service,
+            translation_service=food_translation_service,
         ),
     )
     event_bus.register_handler(
@@ -211,6 +218,7 @@ def get_food_search_event_bus() -> EventBus:
             open_food_facts_service=open_food_facts_service,
             fat_secret_service=fat_secret_service,
             food_reference_repository=food_reference_repository,
+            translation_service=food_translation_service,
         ),
     )
 
