@@ -120,11 +120,14 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
             total_fat=total_fat,
         )
 
+    # Max ratio between FatSecret and AI estimate before rejecting FatSecret
+    _FATSECRET_DIVERGENCE_THRESHOLD = 3.0
+
     async def _cascade_lookup(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """
         Cascade lookup: FatSecret -> AI estimate.
-        FatSecret prioritized for precision.
-        Applies unit-to-grams conversion so nutrition matches what manual-meal stores.
+        FatSecret prioritized for precision, but rejected if result diverges
+        >3x from AI estimate (indicates wrong product match).
         """
         name = item.get("name", "")
         quantity = item.get("quantity", 1.0)
@@ -133,6 +136,9 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         if not name:
             item["data_source"] = "ai_estimate"
             return item
+
+        # Save AI's original calorie estimate for sanity check
+        ai_calories = item.get("calories", 0)
 
         # Try FatSecret (more precise for common foods)
         try:
@@ -143,6 +149,21 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
                 allowed_units = fs_food.get("allowed_units")
                 if per_100g:
                     scaled = scale_per_100g_nutrition(per_100g, quantity, unit, allowed_units=allowed_units, food_name=name)
+                    fs_calories = scaled.get("calories", 0)
+
+                    # Reject FatSecret if it diverges >3x from AI estimate
+                    # (indicates wrong product match, e.g. concentrate vs liquid)
+                    if ai_calories > 0 and fs_calories > 0:
+                        ratio = fs_calories / ai_calories
+                        if ratio > self._FATSECRET_DIVERGENCE_THRESHOLD:
+                            logger.warning(
+                                f"FatSecret rejected for '{name}': "
+                                f"{fs_calories:.0f} kcal vs AI {ai_calories:.0f} kcal "
+                                f"(ratio {ratio:.1f}x > {self._FATSECRET_DIVERGENCE_THRESHOLD}x)"
+                            )
+                            item["data_source"] = "ai_estimate"
+                            return item
+
                     item.update(scaled)
                 # Pass allowed_units for frontend display
                 if allowed_units:
