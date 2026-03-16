@@ -269,9 +269,11 @@ async def parse_meal_text(
     User types "2 eggs and toast" → Gemini parses → returns structured items with nutrition.
     """
     try:
+        # Use Accept-Language header as single source of truth for locale
+        language = get_request_language(request)
         command = ParseMealTextCommand(
             text=payload.text,
-            language=payload.language,
+            language=language,
             user_id=user_id,
             current_items=payload.current_items,
         )
