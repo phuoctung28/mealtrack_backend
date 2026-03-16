@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from src.domain.model.meal import Meal, MealStatus
 
@@ -91,3 +91,10 @@ class MealRepositoryPort(ABC):
     def delete(self, meal_id: str) -> bool:
         """Delete a meal by ID."""
         pass
+
+    def get_daily_meal_counts(
+        self, user_id: str, start_date: date, end_date: date,
+        user_timezone: Optional[str] = None,
+    ) -> Dict[date, int]:
+        """Return {date: meal_count} for each day in range with at least 1 meal."""
+        return {}

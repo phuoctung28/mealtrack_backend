@@ -1,7 +1,8 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus
@@ -232,6 +233,60 @@ class MealRepository(MealRepositoryPort):
             .all()
         )
         return [MealMapper.to_domain(m) for m in db_meals]
+
+    def get_daily_meal_counts(
+        self, user_id: str, start_date: date, end_date: date,
+        user_timezone: Optional[str] = None,
+    ) -> Dict[date, int]:
+        """Return {date: meal_count} for each day in range with at least 1 meal.
+
+        Uses a single GROUP BY query for efficiency.
+        """
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
+        start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        end_dt = (
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz) + timedelta(days=1)
+        ).astimezone(timezone.utc)
+
+        # For timezone-aware date grouping, we convert created_at to user-local date
+        # MySQL: CONVERT_TZ + DATE; SQLite (tests): just DATE
+        if user_timezone and user_timezone != "UTC":
+            date_expr = func.date(func.convert_tz(DBMeal.created_at, "+00:00", self._tz_offset(tz)))
+        else:
+            date_expr = func.date(DBMeal.created_at)
+
+        rows = (
+            self.db.query(date_expr, func.count())
+            .filter(
+                DBMeal.user_id == user_id,
+                DBMeal.created_at >= start_dt,
+                DBMeal.created_at < end_dt,
+                DBMeal.status != MealStatusEnum.INACTIVE,
+            )
+            .group_by(date_expr)
+            .all()
+        )
+
+        result: Dict[date, int] = {}
+        for day_val, count in rows:
+            if isinstance(day_val, str):
+                day_val = date.fromisoformat(day_val)
+            result[day_val] = count
+        return result
+
+    @staticmethod
+    def _tz_offset(tz) -> str:
+        """Convert a timezone to a UTC offset string like '+07:00'."""
+        from datetime import datetime as dt
+        offset = dt.now(tz).utcoffset()
+        if offset is None:
+            return "+00:00"
+        total_seconds = int(offset.total_seconds())
+        sign = "+" if total_seconds >= 0 else "-"
+        total_seconds = abs(total_seconds)
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes = remainder // 60
+        return f"{sign}{hours:02d}:{minutes:02d}"
 
     def _update_nutrition(self, db_nutrition: DBNutrition, domain_nutrition: Meal.nutrition):
         """Helper to sync nutrition data."""

@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
+from src.domain.constants import WeeklyBudgetConstants
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.model.meal import MealStatus
 from src.domain.model.weekly import WeeklyMacroBudget
@@ -78,28 +79,126 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     week_start, target_date
                 )
 
-                # Calculate adjusted daily targets using only PREVIOUS days' consumption
-                # Today's eating should not change today's target (lock at start of day)
+                # Base daily targets
+                base_daily_cal = weekly_budget.target_calories / 7
+                base_daily_carbs = weekly_budget.target_carbs / 7
+                base_daily_fat = weekly_budget.target_fat / 7
+                base_daily_protein = weekly_budget.target_protein / 7
+
+                # --- Phase 2: Skip & Redistribute ---
+                # Count logged past days (excluding today)
+                past_end = target_date - timedelta(days=1)
+                skipped_days = 0
+                show_logging_prompt = False
+
+                past_days_count = (target_date - week_start).days  # days before today
+                if past_days_count > 0:
+                    daily_counts = uow.meals.get_daily_meal_counts(
+                        query.user_id, week_start, past_end,
+                        user_timezone=user_tz_str,
+                    )
+                    logged_past_days = len(daily_counts)
+                    skipped_days = past_days_count - logged_past_days
+
+                    # Minimum threshold: need ≥3 logged days for redistribution
+                    total_logged = logged_past_days + 1  # +1 for today
+                    if total_logged < WeeklyBudgetConstants.MIN_LOGGED_DAYS_FOR_REDISTRIBUTION and past_days_count >= 3:
+                        show_logging_prompt = True
+                else:
+                    logged_past_days = 0
+
+                # Calculate consumed BEFORE today (for adjustment lock)
                 consumed_before_today = await self._calculate_weekly_consumed(
                     uow, query.user_id, week_start,
                     exclude_date=target_date, user_timezone=user_tz_str,
                 )
-                budget_for_adjustment = replace(
-                    weekly_budget,
-                    consumed_calories=consumed_before_today["calories"],
-                    consumed_protein=consumed_before_today["protein"],
-                    consumed_carbs=consumed_before_today["carbs"],
-                    consumed_fat=consumed_before_today["fat"],
-                )
-                adjusted = WeeklyBudgetService.calculate_adjusted_daily(
-                    budget_for_adjustment,
-                    standard_daily_calories=weekly_budget.target_calories / 7,
-                    standard_daily_carbs=weekly_budget.target_carbs / 7,
-                    standard_daily_fat=weekly_budget.target_fat / 7,
-                    standard_daily_protein=weekly_budget.target_protein / 7,
-                    bmr=bmr,
-                    remaining_days=remaining_days,
-                )
+
+                if show_logging_prompt:
+                    # Return base targets when insufficient logging data
+                    adjusted = WeeklyBudgetService.calculate_adjusted_daily(
+                        replace(weekly_budget, consumed_calories=0, consumed_protein=0,
+                                consumed_carbs=0, consumed_fat=0),
+                        standard_daily_calories=base_daily_cal,
+                        standard_daily_carbs=base_daily_carbs,
+                        standard_daily_fat=base_daily_fat,
+                        standard_daily_protein=base_daily_protein,
+                        bmr=bmr, remaining_days=7,
+                    )
+                else:
+                    # Skip & Redistribute: shrink effective week
+                    effective_week_days = logged_past_days + remaining_days
+                    prorated_target_cal = base_daily_cal * effective_week_days
+                    prorated_target_carbs = base_daily_carbs * effective_week_days
+                    prorated_target_fat = base_daily_fat * effective_week_days
+                    prorated_target_protein = base_daily_protein * effective_week_days
+
+                    budget_for_adjustment = replace(
+                        weekly_budget,
+                        target_calories=prorated_target_cal,
+                        target_protein=prorated_target_protein,
+                        target_carbs=prorated_target_carbs,
+                        target_fat=prorated_target_fat,
+                        consumed_calories=consumed_before_today["calories"],
+                        consumed_protein=consumed_before_today["protein"],
+                        consumed_carbs=consumed_before_today["carbs"],
+                        consumed_fat=consumed_before_today["fat"],
+                    )
+                    adjusted = WeeklyBudgetService.calculate_adjusted_daily(
+                        budget_for_adjustment,
+                        standard_daily_calories=base_daily_cal,
+                        standard_daily_carbs=base_daily_carbs,
+                        standard_daily_fat=base_daily_fat,
+                        standard_daily_protein=base_daily_protein,
+                        bmr=bmr,
+                        remaining_days=remaining_days,
+                    )
+
+                # --- Phase 3: Tomorrow Preview ---
+                preview_data: Dict[str, Any] = {}
+                if remaining_days > 1 and not show_logging_prompt:
+                    # Include today's actual consumption for projection
+                    tomorrow_remaining = remaining_days - 1
+                    consumed_including_today = consumed.copy()
+                    effective_days_tomorrow = logged_past_days + 1 + tomorrow_remaining  # +1 = today
+                    prorated_tomorrow_cal = base_daily_cal * effective_days_tomorrow
+                    prorated_tomorrow_carbs = base_daily_carbs * effective_days_tomorrow
+                    prorated_tomorrow_fat = base_daily_fat * effective_days_tomorrow
+                    prorated_tomorrow_protein = base_daily_protein * effective_days_tomorrow
+
+                    tomorrow_budget = replace(
+                        weekly_budget,
+                        target_calories=prorated_tomorrow_cal,
+                        target_protein=prorated_tomorrow_protein,
+                        target_carbs=prorated_tomorrow_carbs,
+                        target_fat=prorated_tomorrow_fat,
+                        consumed_calories=consumed_including_today["calories"],
+                        consumed_protein=consumed_including_today["protein"],
+                        consumed_carbs=consumed_including_today["carbs"],
+                        consumed_fat=consumed_including_today["fat"],
+                    )
+                    tomorrow_adjusted = WeeklyBudgetService.calculate_adjusted_daily(
+                        tomorrow_budget,
+                        standard_daily_calories=base_daily_cal,
+                        standard_daily_carbs=base_daily_carbs,
+                        standard_daily_fat=base_daily_fat,
+                        standard_daily_protein=base_daily_protein,
+                        bmr=bmr,
+                        remaining_days=tomorrow_remaining,
+                    )
+
+                    deviation = abs(tomorrow_adjusted.calories - base_daily_cal) / max(base_daily_cal, 1)
+                    if deviation > WeeklyBudgetConstants.PREVIEW_DEVIATION_THRESHOLD:
+                        today_consumed_cal = consumed["calories"] - consumed_before_today["calories"]
+                        direction = "over" if today_consumed_cal > base_daily_cal else "under"
+                        preview_data = {
+                            "preview_tomorrow_calories": tomorrow_adjusted.calories,
+                            "preview_tomorrow_protein": tomorrow_adjusted.protein,
+                            "preview_tomorrow_carbs": tomorrow_adjusted.carbs,
+                            "preview_tomorrow_fat": tomorrow_adjusted.fat,
+                            "preview_direction": direction,
+                            "preview_delta": int(abs(tomorrow_adjusted.calories - base_daily_cal)),
+                            "preview_today_delta": int(abs(today_consumed_cal - base_daily_cal)),
+                        }
 
                 # Derive remaining calories from macros for consistency
                 remaining_p = weekly_budget.remaining_protein
@@ -128,6 +227,9 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     "remaining_days": remaining_days,
                     "bmr_floor_active": adjusted.bmr_floor_active,
                     "cheat_days": [cd.date.isoformat() for cd in cheat_days],
+                    "skipped_days": skipped_days,
+                    "show_logging_prompt": show_logging_prompt,
+                    **preview_data,
                 }
 
             except Exception as e:
