@@ -85,6 +85,13 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         total_carbs = sum(item.get("carbs", 0) for item in enhanced_items)
         total_fat = sum(item.get("fat", 0) for item in enhanced_items)
 
+        # Strip bilingual parentheses — show only the user's language
+        if command.language and command.language != "en":
+            for item in enhanced_items:
+                item["name"] = self._extract_display_name(
+                    item.get("name", "Unknown"), command.language
+                )
+
         # Build response items
         items = [
             ParsedFoodItemDto(
@@ -183,3 +190,21 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         if all(ord(c) < 256 for c in inside.replace(' ', '')):
             return inside
         return before
+
+    @staticmethod
+    def _extract_display_name(name: str, language: str) -> str:
+        """Strip parenthesized portion, keep only the user's language.
+
+        'Sliced Beef (Thịt bò)' + vi → 'Thịt bò'
+        'Thịt bò (Sliced Beef)' + vi → 'Thịt bò'
+        'Eggs' (no parens) → 'Eggs'
+        """
+        match = re.search(r'^(.+?)\s*\(([^)]+)\)$', name.strip())
+        if not match:
+            return name
+        before, inside = match.group(1), match.group(2)
+        # Non-ASCII part is the local language name
+        before_ascii = all(ord(c) < 256 for c in before.replace(' ', ''))
+        if before_ascii:
+            return inside  # Local name is inside parens
+        return before  # Local name is before parens
