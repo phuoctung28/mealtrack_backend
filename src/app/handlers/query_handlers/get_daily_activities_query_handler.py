@@ -9,7 +9,7 @@ from typing import List, Dict, Any
 from src.app.events.base import EventHandler, handles
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.domain.model.meal import MealStatus
-from src.domain.utils.timezone_utils import format_iso_utc, get_zone_info
+from src.domain.utils.timezone_utils import format_iso_utc, get_zone_info, resolve_user_timezone
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,8 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
 
         # Get meal activities using fresh UnitOfWork
         meal_activities = self._get_meal_activities(
-            query.target_date, query.user_id, query.language
+            query.target_date, query.user_id, query.language,
+            header_timezone=query.header_timezone,
         )
         logger.info(f"Found {len(meal_activities)} meal activities for user {query.user_id} on date {query.target_date.strftime('%Y-%m-%d')}")
         activities.extend(meal_activities)
@@ -45,20 +46,17 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         return activities
 
     def _get_meal_activities(
-        self, target_date: datetime, user_id: str, language: str = "en"
+        self, target_date: datetime, user_id: str, language: str = "en",
+        header_timezone: str = None,
     ) -> List[Dict[str, Any]]:
         """Get meal activities for a specific date and user."""
         try:
             # Use fresh UnitOfWork to get current data
             with UnitOfWork() as uow:
-                # Resolve user timezone for correct date boundaries
-                user_tz_str = "UTC"
-                try:
-                    user = uow.users.find_by_id(user_id)
-                    if user and user.timezone:
-                        user_tz_str = user.timezone
-                except Exception:
-                    pass
+                # Resolve user timezone (DB → X-Timezone header → UTC)
+                user_tz_str = resolve_user_timezone(
+                    user_id, uow, header_timezone
+                )
 
                 # Convert target_date to user-local date
                 tz = get_zone_info(user_tz_str)

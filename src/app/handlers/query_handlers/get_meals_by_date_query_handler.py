@@ -9,6 +9,8 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetMealsByDateQuery
 from src.domain.model.meal import Meal
 from src.domain.ports.meal_repository_port import MealRepositoryPort
+from src.domain.utils.timezone_utils import resolve_user_timezone
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -28,5 +30,11 @@ class GetMealsByDateQueryHandler(EventHandler[GetMealsByDateQuery, List[Meal]]):
         """Get meals for a specific date and user."""
         if not self.meal_repository:
             raise RuntimeError("Meal repository not configured")
-        
-        return self.meal_repository.find_by_date(event.meal_date, user_id=event.user_id)
+
+        # Resolve timezone for correct date boundaries
+        with UnitOfWork() as uow:
+            user_tz = resolve_user_timezone(event.user_id, uow)
+
+        return self.meal_repository.find_by_date(
+            event.meal_date, user_id=event.user_id, user_timezone=user_tz,
+        )

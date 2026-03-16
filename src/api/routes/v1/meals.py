@@ -364,6 +364,7 @@ async def delete_meal(
 
 @router.get("/daily/macros", response_model=DailyNutritionResponse)
 async def get_daily_macros(
+    request: Request,
     user_id: str = Depends(get_current_user_id),
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
     event_bus: EventBus = Depends(get_configured_event_bus),
@@ -380,7 +381,10 @@ async def get_daily_macros(
             target_date = datetime.strptime(date, "%Y-%m-%d").date()
 
         # Send query with user_id for TDEE targets
-        query = GetDailyMacrosQuery(user_id=user_id, target_date=target_date)
+        header_tz = request.headers.get("X-Timezone")
+        query = GetDailyMacrosQuery(
+            user_id=user_id, target_date=target_date, header_timezone=header_tz,
+        )
         result = await event_bus.send(query)
 
         # Use mapper to convert to response
@@ -449,6 +453,7 @@ async def update_meal_ingredients(
 
 @router.get("/weekly/budget", response_model=WeeklyBudgetResponse)
 async def get_weekly_budget(
+    request: Request,
     user_id: str = Depends(get_current_user_id),
     week_start: Optional[str] = Query(
         None,
@@ -467,7 +472,10 @@ async def get_weekly_budget(
         if week_start:
             target_date = datetime.strptime(week_start, "%Y-%m-%d").date()
 
-        query = GetWeeklyBudgetQuery(user_id=user_id, target_date=target_date)
+        header_tz = request.headers.get("X-Timezone")
+        query = GetWeeklyBudgetQuery(
+            user_id=user_id, target_date=target_date, header_timezone=header_tz,
+        )
         result = await event_bus.send(query)
         return result
     except Exception as e:

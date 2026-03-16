@@ -12,7 +12,7 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition.macros import Macros
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
-from src.domain.utils.timezone_utils import get_user_monday, get_zone_info
+from src.domain.utils.timezone_utils import get_user_monday, get_zone_info, resolve_user_timezone
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
 
@@ -31,8 +31,11 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
 
     async def handle(self, query: GetDailyMacrosQuery) -> Dict[str, Any]:
         """Calculate daily macros for a given date with user targets."""
-        # Resolve user timezone for correct date boundaries
-        user_tz_str = self._get_user_timezone(query.user_id)
+        # Resolve user timezone (DB → X-Timezone header → UTC)
+        with UnitOfWork() as tz_uow:
+            user_tz_str = resolve_user_timezone(
+                query.user_id, tz_uow, query.header_timezone
+            )
         user_tz = get_zone_info(user_tz_str)
 
         # Default to today in user's timezone (not server UTC)
@@ -208,14 +211,3 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
         cache_key, ttl = CacheKeys.daily_macros(user_id, target_date)
         await self.cache_service.set_json(cache_key, payload, ttl)
 
-    @staticmethod
-    def _get_user_timezone(user_id: str) -> str:
-        """Fetch user's IANA timezone from DB, fallback to UTC."""
-        try:
-            with UnitOfWork() as uow:
-                user = uow.users.find_by_id(user_id)
-                if user and user.timezone:
-                    return user.timezone
-        except Exception:
-            pass
-        return "UTC"

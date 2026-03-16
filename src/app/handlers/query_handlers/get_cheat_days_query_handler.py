@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 from src.app.events.base import EventHandler, handles
 from src.app.queries.cheat_day import GetCheatDaysQuery
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.domain.utils.timezone_utils import get_user_monday
+from src.domain.utils.timezone_utils import get_user_monday, resolve_user_timezone, user_today
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,8 @@ class GetCheatDaysQueryHandler(EventHandler[GetCheatDaysQuery, Dict[str, Any]]):
     async def handle(self, query: GetCheatDaysQuery) -> Dict[str, Any]:
         uow = self.uow or UnitOfWork()
         with uow:
-            target_date = query.week_of or date.today()
+            user_tz = resolve_user_timezone(query.user_id, uow)
+            target_date = query.week_of or user_today(user_tz)
             week_start = get_user_monday(target_date, query.user_id, uow)
             week_end = week_start + timedelta(days=6)
 

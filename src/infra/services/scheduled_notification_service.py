@@ -191,7 +191,11 @@ class ScheduledNotificationService:
         db = SessionLocal()
         try:
             meal_repo = MealRepository(db)
-            meals = meal_repo.find_by_date(date, user_id=user_id)
+            # Resolve user timezone for correct date boundaries
+            from src.infra.repositories.user_repository import UserRepository as _UserRepo
+            _user_repo = _UserRepo(db)
+            user_tz = _user_repo.get_user_timezone(user_id) or "UTC"
+            meals = meal_repo.find_by_date(date, user_id=user_id, user_timezone=user_tz)
 
             # Count meals
             meals_logged = len(meals)

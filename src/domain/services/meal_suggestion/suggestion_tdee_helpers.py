@@ -56,7 +56,9 @@ async def get_adjusted_daily_target(
         bmr = tdee_result.bmr
 
         with UnitOfWork() as uow:
-            today = date.today()
+            from src.domain.utils.timezone_utils import resolve_user_timezone, user_today
+            user_tz = resolve_user_timezone(user_id, uow)
+            today = user_today(user_tz)
             week_start = get_user_monday(today, user_id, uow)
             weekly_budget = uow.weekly_budgets.find_by_user_and_week(user_id, week_start)
 
