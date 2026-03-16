@@ -167,6 +167,19 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
 
     @staticmethod
     def _extract_english_name(name: str) -> str:
-        """Extract English name from 'Local Name (English Name)' format."""
-        match = re.search(r'\(([^)]+)\)$', name.strip())
-        return match.group(1) if match else name
+        """Extract English name for FatSecret lookup.
+
+        AI may return either format:
+        - 'English Name (Local Name)' → extract before parens
+        - 'Local Name (English Name)' → extract inside parens
+        Heuristic: if text inside parens is ASCII, it's English; otherwise
+        the text before parens is English.
+        """
+        match = re.search(r'^(.+?)\s*\(([^)]+)\)$', name.strip())
+        if not match:
+            return name
+        before, inside = match.group(1), match.group(2)
+        # If inside parens is mostly ASCII → it's the English name
+        if all(ord(c) < 256 for c in inside.replace(' ', '')):
+            return inside
+        return before
