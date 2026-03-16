@@ -21,6 +21,17 @@ FATSECRET_API_BASE = "https://platform.fatsecret.com/rest/v1"
 # Barcode validation pattern (8-14 digits)
 BARCODE_PATTERN = re.compile(r'^\d{8,14}$')
 
+# Map language code to FatSecret region for localized search
+LANGUAGE_TO_REGION = {
+    "vi": "VN",
+    "en": "US",
+    "es": "ES",
+    "fr": "FR",
+    "de": "DE",
+    "ja": "JP",
+    "zh": "CN",
+}
+
 
 class FatSecretService:
     """HTTP client for FatSecret API with OAuth 2.0."""
@@ -115,7 +126,10 @@ class FatSecretService:
             logger.warning(f"FatSecret request error: {e}")
             return None
 
-    async def get_product(self, barcode: str) -> Optional[Dict[str, Any]]:
+    async def get_product(
+        self, barcode: str,
+        region: str = "US", language: str = "en",
+    ) -> Optional[Dict[str, Any]]:
         """Fetch product by barcode from FatSecret."""
         # Validate barcode format
         if not BARCODE_PATTERN.match(barcode):
@@ -128,6 +142,8 @@ class FatSecretService:
                 "method": "food.find_id_for_barcode",
                 "barcode": normalized_barcode,
                 "format": "json",
+                "region": region,
+                "language": language,
             }
             result = await self._api_request("GET", "", params)
             if not result:
@@ -138,7 +154,10 @@ class FatSecretService:
                 return None
 
             # Get food details
-            detail_params = {"method": "food.get", "food_id": food_id, "format": "json"}
+            detail_params = {
+                "method": "food.get", "food_id": food_id, "format": "json",
+                "region": region, "language": language,
+            }
             food_details = await self._api_request("GET", "", detail_params)
             if not food_details:
                 return None
@@ -148,7 +167,10 @@ class FatSecretService:
             logger.warning(f"FatSecret API error for barcode {barcode}: {e}")
             return None
 
-    async def search_foods(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
+    async def search_foods(
+        self, query: str, max_results: int = 10,
+        region: str = "US", language: str = "en",
+    ) -> List[Dict[str, Any]]:
         """Search foods by query string with nutrition data."""
         try:
             params = {
@@ -157,6 +179,8 @@ class FatSecretService:
                 "max_results": max_results,
                 "page_number": 0,
                 "format": "json",
+                "region": region,
+                "language": language,
             }
             result = await self._api_request("GET", "", params)
             if not result:
@@ -196,7 +220,10 @@ class FatSecretService:
                 # Fetch detailed nutrition if we have a food_id
                 if food_id:
                     try:
-                        detail_params = {"method": "food.get", "food_id": food_id, "format": "json"}
+                        detail_params = {
+                            "method": "food.get", "food_id": food_id, "format": "json",
+                            "region": region, "language": language,
+                        }
                         details = await self._api_request("GET", "", detail_params)
                         if details:
                             # Handle both response formats for food.get

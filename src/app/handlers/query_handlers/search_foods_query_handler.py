@@ -21,16 +21,23 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
         cache_service,
         mapping_service: FoodMappingService,
         fat_secret_service: Optional[Any] = None,
+        translation_service: Optional[Any] = None,
     ):
         self.cache_service = cache_service
         self.mapping_service = mapping_service
         self.fat_secret_service = fat_secret_service
+        self.translation_service = translation_service
 
     async def handle(self, event: SearchFoodsQuery) -> Dict[str, Any]:
         if not event.query or not event.query.strip():
             return {"results": [], "query": event.query, "total": 0}
 
-        cached = await self.cache_service.get_cached_search(event.query)
+        language = event.language
+        is_non_english = language != "en"
+
+        # Language-aware cache key (prefixed to avoid collisions)
+        cache_key = f"{language}:{event.query}" if is_non_english else event.query
+        cached = await self.cache_service.get_cached_search(cache_key)
         if cached is not None:
             processed_cached = self._process_search_results(cached)
             for item in processed_cached:
@@ -39,21 +46,82 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
             mapped = [self.mapping_service.map_search_item(i) for i in processed_cached]
             return {"results": mapped, "query": event.query, "total": len(mapped)}
 
-        # FatSecret only
         processed_raw = []
 
         if self.fat_secret_service:
-            try:
-                fs_results = await self.fat_secret_service.search_foods(event.query, max_results=event.limit)
-                processed_raw.extend(fs_results)
-            except Exception:
-                logger.warning("FatSecret search failed", exc_info=True)
+            if is_non_english:
+                processed_raw = await self._search_localized(
+                    event.query, event.limit, language
+                )
+            else:
+                try:
+                    fs_results = await self.fat_secret_service.search_foods(
+                        event.query, max_results=event.limit
+                    )
+                    processed_raw.extend(fs_results)
+                except Exception:
+                    logger.warning("FatSecret search failed", exc_info=True)
 
         # Only cache non-empty results to avoid persisting API failures
         if processed_raw:
-            await self.cache_service.cache_search(event.query, processed_raw)
+            await self.cache_service.cache_search(cache_key, processed_raw)
         mapped = [self.mapping_service.map_search_item(i) for i in processed_raw]
         return {"results": mapped, "query": event.query, "total": len(mapped)}
+
+    async def _search_localized(
+        self, query: str, limit: int, language: str
+    ) -> List[Dict[str, Any]]:
+        """Search with localization: try native region, fallback to translation."""
+        from src.infra.adapters.fat_secret_service import LANGUAGE_TO_REGION
+
+        region = LANGUAGE_TO_REGION.get(language, "US")
+
+        # Step 1: Try FatSecret with localized region/language
+        try:
+            results = await self.fat_secret_service.search_foods(
+                query, max_results=limit, region=region, language=language,
+            )
+            if results:
+                logger.debug(
+                    f"FatSecret region={region} returned {len(results)} results"
+                )
+                return results
+        except Exception:
+            logger.warning(f"FatSecret region={region} failed", exc_info=True)
+
+        # Step 2: Translation fallback
+        if not self.translation_service:
+            try:
+                return await self.fat_secret_service.search_foods(
+                    query, max_results=limit
+                )
+            except Exception:
+                return []
+
+        translated_query = await self.translation_service.translate_query(
+            query, language
+        )
+        if not translated_query:
+            translated_query = query
+
+        logger.info(f"Translation fallback: '{query}' -> '{translated_query}'")
+
+        try:
+            results = await self.fat_secret_service.search_foods(
+                translated_query, max_results=limit
+            )
+        except Exception:
+            logger.warning("FatSecret EN fallback failed", exc_info=True)
+            return []
+
+        if not results:
+            return []
+
+        # Translate food names back to user's language
+        results = await self.translation_service.translate_food_names(
+            results, language
+        )
+        return results
 
     def _process_search_results(self, raw_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Process search results: deduplicate and capitalize names."""
