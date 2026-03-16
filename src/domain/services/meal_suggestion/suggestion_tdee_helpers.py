@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 def build_tdee_request(profile: Any) -> TdeeRequest:
     """Build a TdeeRequest from a user profile domain object."""
-    sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
+    gender = profile.gender or "male"
+    sex = Sex.MALE if gender.lower() == "male" else Sex.FEMALE
     return TdeeRequest(
         age=profile.age,
         sex=sex,
