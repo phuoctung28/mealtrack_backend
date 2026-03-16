@@ -85,12 +85,15 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         total_carbs = sum(item.get("carbs", 0) for item in enhanced_items)
         total_fat = sum(item.get("fat", 0) for item in enhanced_items)
 
-        # Strip bilingual parentheses — show only the user's language
+        # Localize names for non-English users
         if command.language and command.language != "en":
+            # Step 1: Strip bilingual parentheses
             for item in enhanced_items:
                 item["name"] = self._extract_display_name(
                     item.get("name", "Unknown"), command.language
                 )
+            # Step 2: Translate any remaining English names
+            await self._translate_english_names(enhanced_items, command.language)
 
         # Build response items
         items = [
@@ -171,6 +174,52 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         # Fallback to AI estimate (values from Gemini prompt, already per-serving)
         item["data_source"] = "ai_estimate"
         return item
+
+    @staticmethod
+    def _is_english(name: str) -> bool:
+        """Check if name is likely English (ASCII-only, ignoring digits/punct)."""
+        letters = [c for c in name if c.isalpha()]
+        return bool(letters) and all(ord(c) < 128 for c in letters)
+
+    async def _translate_english_names(
+        self, items: List[Dict[str, Any]], language: str
+    ) -> None:
+        """Detect and batch-translate any remaining English food names."""
+        english_indices = [
+            i for i, item in enumerate(items)
+            if self._is_english(item.get("name", ""))
+        ]
+        if not english_indices:
+            return
+
+        names_to_translate = [items[i]["name"] for i in english_indices]
+        logger.info(
+            f"Translating {len(names_to_translate)} English names to {language}: "
+            f"{names_to_translate}"
+        )
+
+        try:
+            model = self._model_manager.get_model(
+                response_mime_type="application/json",
+                temperature=0.1,
+            )
+            prompt = (
+                f"Translate these food names to {language}. "
+                "Return a JSON array of translated names in the SAME order. "
+                "Keep food-specific terms natural (e.g., 'Rice vermicelli' → 'Bún'). "
+                f"Input: {json.dumps(names_to_translate, ensure_ascii=False)}"
+            )
+            response = await model.ainvoke([HumanMessage(content=prompt)])
+            translated = json.loads(response.content)
+
+            if isinstance(translated, list) and len(translated) == len(english_indices):
+                for idx, name in zip(english_indices, translated):
+                    if isinstance(name, str) and name.strip():
+                        items[idx]["name"] = name.strip()
+            else:
+                logger.warning("Translation response length mismatch, skipping")
+        except Exception as e:
+            logger.warning(f"Name translation failed, keeping English: {e}")
 
     @staticmethod
     def _extract_english_name(name: str) -> str:
