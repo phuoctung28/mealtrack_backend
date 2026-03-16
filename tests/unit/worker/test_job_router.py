@@ -52,6 +52,41 @@ async def test_meal_image_analysis_routed_to_upload_command():
 
 
 @pytest.mark.asyncio
+async def test_meal_image_analysis_preuploaded_payload_routed_to_upload_command():
+    router = JobRouter()
+    bus = _EventBusStub()
+
+    payload = JobPayload(
+        job_type="meal_image_analysis",
+        user_id="user-1",
+        payload={
+            "meal_id": "8d03f5fe-8be0-45ef-946f-7c7e4fd4cf6a",
+            "image_id": "9fb42c60-bc03-4d7e-9630-f06d09e8d22a",
+            "image_url": "mock://images/9fb42c60-bc03-4d7e-9630-f06d09e8d22a",
+            "content_type": "image/jpeg",
+            "target_date": "2026-03-14",
+        },
+    )
+
+    with patch(
+        "src.worker.job_router.get_configured_event_bus",
+        return_value=bus,
+    ):
+        await router.handle(payload)
+
+    assert len(bus.sent) == 1
+    command = bus.sent[0]
+    from src.app.commands.meal import UploadMealImageImmediatelyCommand  # noqa: WPS433
+
+    assert isinstance(command, UploadMealImageImmediatelyCommand)
+    assert command.meal_id == "8d03f5fe-8be0-45ef-946f-7c7e4fd4cf6a"
+    assert command.image_id == "9fb42c60-bc03-4d7e-9630-f06d09e8d22a"
+    assert command.file_contents is None
+    assert command.content_type == "image/jpeg"
+    assert command.target_date is not None
+
+
+@pytest.mark.asyncio
 async def test_meal_suggestions_routed_to_generate_command():
     router = JobRouter()
     bus = _EventBusStub()

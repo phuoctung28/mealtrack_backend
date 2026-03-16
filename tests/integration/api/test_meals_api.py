@@ -77,7 +77,7 @@ class TestMealsAPI:
         assert response.status_code == 400
         data = response.json()
         assert "File size exceeds" in data["detail"]["message"] or "File size exceeds" in str(data["detail"])
-    
+
     # POST /v1/meals/manual
     def test_create_manual_meal_success(self, authenticated_client, test_user, test_session):
         """Test creating manual meal from foods."""

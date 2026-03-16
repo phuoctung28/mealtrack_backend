@@ -5,23 +5,32 @@ Clean separation with event bus pattern.
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, UploadFile, Query, Request, status
+from fastapi import APIRouter, Depends, File, UploadFile, Query, Request, Response, status
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.base_dependencies import get_image_store
+from src.api.base_dependencies import get_image_store, get_job_queue
 from src.api.exceptions import handle_exception, ValidationException
 from src.api.middleware.accept_language import get_request_language
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.schemas.request.meal_requests import (
-    EditMealIngredientsRequest,
+    AnalyzeMealImageFromUploadRequest,
     CreateManualMealFromFoodsRequest,
+    EditMealIngredientsRequest,
     ParseMealTextRequest,
 )
-from src.api.schemas.response import DetailedMealResponse, ManualMealCreationResponse
-from src.api.schemas.response.meal_responses import ParseMealTextResponse
+from src.api.schemas.response import (
+    AsyncMealImageAnalysisAcceptedResponse,
+    DetailedMealResponse,
+    ManualMealCreationResponse,
+)
+from src.api.schemas.response.meal_responses import (
+    CloudinaryUploadSignatureResponse,
+    ParseMealTextResponse,
+)
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.api.schemas.response.weekly_budget_response import WeeklyBudgetResponse
 from src.app.commands.meal import EditMealCommand, FoodItemChange, CustomNutritionData
@@ -35,9 +44,14 @@ from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
 )
+from src.domain.model.job_queue import JobPayload
+from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
+from src.infra.config.settings import settings
+from src.infra.database.uow import UnitOfWork
 from src.infra.event_bus import EventBus
+from src.infra.adapters.cloudinary_signature_service import CloudinarySignatureService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/meals", tags=["Meals"])
@@ -58,13 +72,44 @@ STATUS_MAPPING = {
 }
 
 
+def _extract_image_id(image_url: str) -> str:
+    if image_url.startswith("mock://images/"):
+        return image_url.replace("mock://images/", "")
+    if "cloudinary.com" in image_url:
+        parts = image_url.split("/")
+        if len(parts) > 1:
+            return parts[-1].split(".")[0]
+    return image_url
+
+
+@router.post(
+    "/image/upload-signature",
+    response_model=CloudinaryUploadSignatureResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_meal_image_upload_signature() -> CloudinaryUploadSignatureResponse:
+    """
+    Issue a short-lived Cloudinary upload signature for direct client uploads.
+
+    The mobile client uses this payload with the Cloudinary SDK to upload images
+    directly, keeping raw bytes off the MealTrack API.
+    """
+    try:
+        service = CloudinarySignatureService()
+        payload = service.generate_upload_signature(folder="mealtrack")
+        return CloudinaryUploadSignatureResponse(**payload)
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
 @router.post(
     "/image/analyze",
     status_code=status.HTTP_200_OK,
-    response_model=DetailedMealResponse,
+    response_model=Union[DetailedMealResponse, AsyncMealImageAnalysisAcceptedResponse],
 )
 async def analyze_meal_image_immediate(
     request: Request,
+    response: Response,
     file: UploadFile = File(...),
     user_id: str = Depends(get_current_user_id),
     target_date: Optional[str] = Query(
@@ -74,7 +119,10 @@ async def analyze_meal_image_immediate(
         None,
         description="Optional user context (max 200 chars): 'no sugar', 'grilled', etc.",
     ),
-    event_bus: EventBus = Depends(get_configured_event_bus),
+    sync: bool = Query(
+        False,
+        description="Force synchronous processing for rollout/debugging",
+    ),
     image_store = Depends(get_image_store),
 ):
     """
@@ -140,14 +188,76 @@ async def analyze_meal_image_immediate(
 
             sanitized_description = sanitize_user_description(user_description)
 
-        # Process the upload and analysis immediately
+        use_async_flow = settings.MEAL_IMAGE_ASYNC_ENABLED and not sync
+        queue = get_job_queue() if use_async_flow else None
+
+        if use_async_flow and queue is not None:
+            logger.info(
+                "Processing meal photo asynchronously (target_date: %s, language: %s, has_description: %s)",
+                parsed_target_date,
+                language,
+                bool(sanitized_description),
+            )
+
+            image_url = image_store.save(contents, file.content_type)
+            image_id = _extract_image_id(image_url)
+
+            meal_date = parsed_target_date or datetime.utcnow().date()
+            meal_datetime = datetime.combine(meal_date, datetime.utcnow().time())
+
+            queued_meal = Meal(
+                meal_id=str(uuid4()),
+                user_id=user_id,
+                status=MealStatus.PROCESSING,
+                created_at=meal_datetime,
+                image=MealImage(
+                    image_id=image_id,
+                    format="jpeg" if "jpeg" in file.content_type else "png",
+                    size_bytes=len(contents),
+                    url=image_url,
+                ),
+                source="scanner",
+            )
+            with UnitOfWork() as uow:
+                queued_meal = uow.meals.save(queued_meal)
+                uow.commit()
+
+            payload = JobPayload(
+                job_type="meal_image_analysis",
+                user_id=user_id,
+                payload={
+                    "meal_id": queued_meal.meal_id,
+                    "image_id": image_id,
+                    "image_url": image_url,
+                    "content_type": file.content_type,
+                    "target_date": parsed_target_date.isoformat() if parsed_target_date else None,
+                    "language": language,
+                    "user_description": sanitized_description,
+                },
+            )
+            job_id = await queue.enqueue(payload)
+            response.status_code = status.HTTP_202_ACCEPTED
+            return AsyncMealImageAnalysisAcceptedResponse(
+                job_id=job_id,
+                meal_id=queued_meal.meal_id,
+                status="queued",
+                poll_url=f"/v1/jobs/{job_id}",
+                estimated_wait_seconds=5,
+            )
+
+        if use_async_flow and queue is None:
+            logger.warning(
+                "Async meal analysis enabled but queue unavailable; falling back to sync path"
+            )
+
         logger.info(
-            "Processing meal photo for immediate analysis (target_date: %s, language: %s, has_description: %s)",
+            "Processing meal photo synchronously (target_date: %s, language: %s, has_description: %s)",
             parsed_target_date,
             language,
             bool(sanitized_description),
         )
 
+        event_bus = get_configured_event_bus()
         command = UploadMealImageImmediatelyCommand(
             user_id=user_id,
             file_contents=contents,
@@ -166,7 +276,6 @@ async def analyze_meal_image_immediate(
             meal.status,
         )
 
-        # Check if analysis was successful
         if meal.status.value == "FAILED":
             error_message = meal.error_message or "Analysis failed"
             logger.error("Immediate analysis failed: %s", error_message)
@@ -176,15 +285,111 @@ async def analyze_meal_image_immediate(
                 details={"error_message": error_message},
             )
 
-        # Get the image URL if available
         image_url = None
         if meal.image:
-            # Try to get URL from image store (injected via DI)
             image_url = image_store.get_url(meal.image.image_id)
 
-        # Return the detailed meal response using mapper with translation support
         return MealMapper.to_detailed_response(meal, image_url, target_language=language)
 
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.post(
+    "/image/analyze-from-upload",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=AsyncMealImageAnalysisAcceptedResponse,
+)
+async def analyze_meal_image_from_upload(
+    request: AnalyzeMealImageFromUploadRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> AsyncMealImageAnalysisAcceptedResponse:
+    """
+    Analyze a meal image that has already been uploaded to Cloudinary.
+
+    Client flow:
+    1. Obtain signed upload parameters from /v1/meals/image/upload-signature
+    2. Upload image directly to Cloudinary via SDK
+    3. Call this endpoint with the resulting public_id/secure_url
+    """
+    try:
+        if not settings.MEAL_IMAGE_ASYNC_ENABLED:
+            raise ValidationException(
+                message="Async meal image analysis is not enabled",
+                error_code="ASYNC_ANALYSIS_DISABLED",
+            )
+
+        queue = get_job_queue()
+        if queue is None:
+            raise ValidationException(
+                message="Job queue is not available",
+                error_code="JOB_QUEUE_UNAVAILABLE",
+            )
+
+        parsed_target_date = None
+        if request.target_date:
+            try:
+                parsed_target_date = datetime.strptime(
+                    request.target_date, "%Y-%m-%d"
+                ).date()
+            except ValueError as exc:
+                raise ValidationException(
+                    message="Invalid date format. Use YYYY-MM-DD format.",
+                    error_code="INVALID_DATE_FORMAT",
+                    details={"date": request.target_date},
+                ) from exc
+
+        sanitized_description = request.user_description
+        if sanitized_description:
+            from src.domain.services.prompts.input_sanitizer import (
+                sanitize_user_description,
+            )
+
+            sanitized_description = sanitize_user_description(sanitized_description)
+
+        meal_date = parsed_target_date or datetime.utcnow().date()
+        meal_datetime = datetime.combine(meal_date, datetime.utcnow().time())
+
+        meal = Meal(
+            meal_id=str(uuid4()),
+            user_id=user_id,
+            status=MealStatus.PROCESSING,
+            created_at=meal_datetime,
+            image=MealImage(
+                image_id=request.public_id,
+                format="jpeg" if "jpeg" in request.content_type else "png",
+                size_bytes=0,
+                url=request.secure_url,
+            ),
+            source="scanner",
+        )
+        with UnitOfWork() as uow:
+            meal = uow.meals.save(meal)
+            uow.commit()
+
+        payload = JobPayload(
+            job_type="meal_image_analysis",
+            user_id=user_id,
+            payload={
+                "meal_id": meal.meal_id,
+                "image_id": request.public_id,
+                "image_url": request.secure_url,
+                "content_type": request.content_type,
+                "target_date": parsed_target_date.isoformat()
+                if parsed_target_date
+                else None,
+                "language": "en",
+                "user_description": sanitized_description,
+            },
+        )
+        job_id = await queue.enqueue(payload)
+        return AsyncMealImageAnalysisAcceptedResponse(
+            job_id=job_id,
+            meal_id=meal.meal_id,
+            status="queued",
+            poll_url=f"/v1/jobs/{job_id}",
+            estimated_wait_seconds=5,
+        )
     except Exception as e:
         raise handle_exception(e) from e
 

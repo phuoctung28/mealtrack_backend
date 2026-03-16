@@ -17,6 +17,28 @@ class ParseMealTextRequest(BaseModel):
     )
 
 
+class AnalyzeMealImageFromUploadRequest(BaseModel):
+    """Request DTO for analyzing a meal image that was already uploaded to Cloudinary."""
+
+    public_id: str = Field(..., description="Cloudinary public_id of the uploaded image")
+    secure_url: Optional[str] = Field(
+        None,
+        description="Secure URL of the uploaded image (optional; public_id is primary key)",
+    )
+    content_type: str = Field(
+        ...,
+        description="Original MIME type of the uploaded image (e.g. image/jpeg)",
+    )
+    target_date: Optional[str] = Field(
+        None,
+        description="Target date in YYYY-MM-DD format for meal association",
+    )
+    user_description: Optional[str] = Field(
+        None,
+        description="Optional user context (max 200 chars): 'no sugar', 'grilled', etc.",
+    )
+
+
 class MacrosRequest(BaseModel):
     """Request DTO for macronutrient information."""
     protein: float = Field(..., ge=0, description="Protein in grams")

@@ -56,22 +56,31 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             raise RuntimeError("Required dependencies not configured")
         
         try:
-            # Upload image to storage
-            logger.info("Uploading image to storage")
-            image_url = self.image_store.save(
-                command.file_contents,
-                command.content_type
-            )
+            preuploaded_mode = bool(command.meal_id and command.image_id)
+            image_url = command.image_url
+            image_id = command.image_id
+            image_bytes = command.file_contents
 
-            image_id = image_url
-            if image_url.startswith("mock://images/"):
-                image_id = image_url.replace("mock://images/", "")
-            elif "cloudinary.com" in image_url:
-                # Extract public_id from cloudinary URL
-                parts = image_url.split("/")
-                if len(parts) > 1:
-                    # Get the last part and remove file extension
-                    image_id = parts[-1].split(".")[0]
+            if preuploaded_mode:
+                logger.info("Using pre-uploaded image for meal %s", command.meal_id)
+                image_bytes = self.image_store.load(command.image_id)
+                if not image_bytes:
+                    raise RuntimeError(
+                        f"Could not load pre-uploaded image {command.image_id}"
+                    )
+            else:
+                if command.file_contents is None or command.content_type is None:
+                    raise RuntimeError(
+                        "file_contents and content_type are required when meal_id/image_id are not provided"
+                    )
+                # Upload image to storage
+                logger.info("Uploading image to storage")
+                image_url = self.image_store.save(
+                    command.file_contents,
+                    command.content_type
+                )
+                image_id = self._extract_image_id(image_url)
+                image_bytes = command.file_contents
             
             # Determine the meal date - use target_date if provided, otherwise use now
             meal_date = command.target_date if command.target_date else utc_now().date()
@@ -97,27 +106,50 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             # Determine meal type from local time
             meal_type = determine_meal_type_from_timestamp(local_datetime)
 
-            # Create meal record with ANALYZING status
-            meal = Meal(
-                meal_id=str(uuid4()),
-                user_id=command.user_id,
-                status=MealStatus.ANALYZING,
-                created_at=meal_datetime,
-                meal_type=meal_type,
-                image=MealImage(
-                    image_id=image_id,
-                    format="jpeg" if "jpeg" in command.content_type else "png",
-                    size_bytes=len(command.file_contents),
-                    url=image_url
-                ),
-                source="scanner",
-            )
-            
-            # Save initial meal record using UoW
-            with UnitOfWork() as uow:
-                saved_meal = uow.meals.save(meal)
-                uow.commit()
-                logger.info(f"Created meal record {saved_meal.meal_id} with ANALYZING status")
+            content_type = command.content_type or "image/jpeg"
+            # Load existing queued meal or create new analyzing meal
+            if preuploaded_mode:
+                with UnitOfWork() as uow:
+                    existing_meal = uow.meals.find_by_id(command.meal_id)
+                    if existing_meal is None:
+                        raise RuntimeError(f"Meal {command.meal_id} not found for queued analysis")
+                    meal = existing_meal
+                    meal.status = MealStatus.ANALYZING
+                    meal.error_message = None
+                    meal.meal_type = meal_type or meal.meal_type
+                    if meal.image is None:
+                        meal.image = MealImage(
+                            image_id=image_id,
+                            format="jpeg" if "jpeg" in content_type else "png",
+                            size_bytes=len(image_bytes),
+                            url=image_url,
+                        )
+                    saved_meal = uow.meals.save(meal)
+                    uow.commit()
+                    logger.info(
+                        "Updated existing meal %s to ANALYZING status",
+                        saved_meal.meal_id,
+                    )
+            else:
+                meal = Meal(
+                    meal_id=str(uuid4()),
+                    user_id=command.user_id,
+                    status=MealStatus.ANALYZING,
+                    created_at=meal_datetime,
+                    meal_type=meal_type,
+                    image=MealImage(
+                        image_id=image_id,
+                        format="jpeg" if "jpeg" in content_type else "png",
+                        size_bytes=len(image_bytes),
+                        url=image_url
+                    ),
+                    source="scanner",
+                )
+                # Save initial meal record using UoW
+                with UnitOfWork() as uow:
+                    saved_meal = uow.meals.save(meal)
+                    uow.commit()
+                    logger.info(f"Created meal record {saved_meal.meal_id} with ANALYZING status")
 
             # PHASE 1: AI Vision Analysis (generates content in English)
             phase1_start = time.time()
@@ -128,13 +160,13 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"vision analysis with user context"
                 )
                 strategy = AnalysisStrategyFactory.create_user_context_strategy(command.user_description)
-                vision_result = self.vision_service.analyze_with_strategy(command.file_contents, strategy)
+                vision_result = self.vision_service.analyze_with_strategy(image_bytes, strategy)
             else:
                 logger.info(
                     f"[PHASE-1-START] meal={saved_meal.meal_id} | "
                     f"vision analysis"
                 )
-                vision_result = self.vision_service.analyze(command.file_contents)
+                vision_result = self.vision_service.analyze(image_bytes)
             phase1_elapsed = time.time() - phase1_start
             logger.info(
                 f"[PHASE-1-COMPLETE] meal={saved_meal.meal_id} | "
@@ -221,6 +253,16 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     uow.meals.save(meal)
                     uow.commit()
             raise
+
+    @staticmethod
+    def _extract_image_id(image_url: str) -> str:
+        if image_url.startswith("mock://images/"):
+            return image_url.replace("mock://images/", "")
+        if "cloudinary.com" in image_url:
+            parts = image_url.split("/")
+            if len(parts) > 1:
+                return parts[-1].split(".")[0]
+        return image_url
 
     async def _invalidate_daily_macros(self, user_id, target_date):
         if not self.cache_service:

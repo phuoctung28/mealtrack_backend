@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Any
 
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -39,18 +40,33 @@ class JobRouter:
     @staticmethod
     def _build_meal_image_analysis_command(job: JobPayload) -> UploadMealImageImmediatelyCommand:
         payload = job.payload or {}
+        target_date = payload.get("target_date")
+        if isinstance(target_date, str):
+            target_date = date.fromisoformat(target_date)
+        if "file_contents" in payload and "content_type" in payload:
+            return UploadMealImageImmediatelyCommand(
+                user_id=job.user_id,
+                file_contents=payload["file_contents"],
+                content_type=payload["content_type"],
+                target_date=target_date,
+                language=payload.get("language", "en"),
+                user_description=payload.get("user_description"),
+            )
 
-        try:
-            file_contents = payload["file_contents"]
-            content_type = payload["content_type"]
-        except KeyError as exc:
-            raise ValueError(f"Missing required field for meal_image_analysis: {exc}") from exc
+        required = ("meal_id", "image_id", "content_type")
+        missing = [field for field in required if field not in payload]
+        if missing:
+            raise ValueError(
+                f"Missing required field(s) for meal_image_analysis: {', '.join(missing)}"
+            )
 
         return UploadMealImageImmediatelyCommand(
             user_id=job.user_id,
-            file_contents=file_contents,
-            content_type=content_type,
-            target_date=payload.get("target_date"),
+            meal_id=payload["meal_id"],
+            image_id=payload["image_id"],
+            image_url=payload.get("image_url"),
+            content_type=payload["content_type"],
+            target_date=target_date,
             language=payload.get("language", "en"),
             user_description=payload.get("user_description"),
         )

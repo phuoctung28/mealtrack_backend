@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     QUEUE_CONSUMER_GROUP: str = Field(default="jobs:workers")
     QUEUE_MAX_RETRIES: int = Field(default=3)
     QUEUE_BLOCK_MS: int = Field(default=5000)
+    MEAL_IMAGE_ASYNC_ENABLED: bool = Field(
+        default=False,
+        description="Enable async queue-based meal image analysis endpoint behavior",
+    )
 
     # Firebase
     FIREBASE_CREDENTIALS: str | None = Field(default=None)

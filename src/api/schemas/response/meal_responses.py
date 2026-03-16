@@ -3,7 +3,7 @@ Meal-related response DTOs.
 """
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, List, Union, Dict
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -174,6 +174,37 @@ class MealPhotoAnalysisResponse(BaseModel):
     estimated_completion_seconds: Optional[int] = Field(
         None, 
         description="Estimated seconds until completion"
+    )
+
+
+class AsyncMealImageAnalysisAcceptedResponse(BaseModel):
+    """Response DTO for accepted async meal image analysis jobs."""
+
+    job_id: str = Field(..., description="Distributed job ID for polling job status")
+    meal_id: str = Field(..., description="Meal ID associated with the queued analysis")
+    status: str = Field(..., description="Queued status for the newly submitted job")
+    poll_url: str = Field(..., description="API path to poll job status")
+    estimated_wait_seconds: Optional[int] = Field(
+        default=None,
+        description="Approximate wait time before processing completes",
+    )
+
+
+class CloudinaryUploadSignatureResponse(BaseModel):
+    """Response DTO for Cloudinary direct-upload signatures."""
+
+    cloud_name: str = Field(..., description="Cloudinary cloud name")
+    api_key: str = Field(..., description="Cloudinary API key")
+    timestamp: int = Field(..., description="Unix timestamp used in the signature")
+    folder: str = Field(..., description="Target folder for uploads")
+    signature: str = Field(..., description="HMAC-SHA1 signature for the upload parameters")
+    params: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Parameters included in the signature (e.g. folder, timestamp, transformations)",
+    )
+    expires_in: int = Field(
+        ...,
+        description="Number of seconds for which this signature should be considered valid by the client",
     )
 
 

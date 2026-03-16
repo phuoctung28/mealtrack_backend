@@ -17,8 +17,11 @@ class UploadMealImageImmediatelyCommand(Command):
     returning complete nutritional analysis without background processing.
     """
     user_id: str
-    file_contents: bytes
-    content_type: str
+    file_contents: Optional[bytes] = None
+    content_type: Optional[str] = None
+    meal_id: Optional[str] = None
+    image_id: Optional[str] = None
+    image_url: Optional[str] = None
     target_date: Optional[date] = None
     language: str = "en"
     user_description: Optional[str] = None  # User-provided context for better accuracy
