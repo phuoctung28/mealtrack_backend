@@ -16,12 +16,19 @@ class UpdateTimezoneCommandHandler(EventHandler[UpdateTimezoneCommand, Dict[str,
 
     async def handle(self, command: UpdateTimezoneCommand) -> Dict[str, Any]:
         """Handle timezone update command."""
+        logger.info(
+            f"Timezone update request: user={command.user_id}, "
+            f"timezone={command.timezone!r}"
+        )
         if not is_valid_timezone(command.timezone):
+            logger.warning(
+                f"Invalid timezone rejected: {command.timezone!r} "
+                f"for user {command.user_id}"
+            )
             return {"success": False, "error": "Invalid timezone"}
 
         with UnitOfWork() as uow:
             uow.users.update_user_timezone(command.user_id, command.timezone)
-            uow.commit()
 
         logger.info(f"Updated timezone for user {command.user_id}: {command.timezone}")
         return {"success": True, "timezone": command.timezone}
