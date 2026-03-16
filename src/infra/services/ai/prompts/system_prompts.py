@@ -91,7 +91,7 @@ Guidelines:
 - Simple single-ingredient foods (banana, egg, plain rice) stay as 1 item
 - All quantities should be in GRAMS when possible. Convert volumes using density (honey=1.42g/ml, oil=0.92g/ml, milk=1.03g/ml)
 - Verify: calories ≈ protein*4 + carbs*4 + fat*9
-- {language_instruction}
+- Respond with food names in English only
 - Be accurate but acknowledge estimates are approximate"""
 
     @staticmethod
@@ -115,22 +115,9 @@ Guidelines:
         return base_prompt
 
     @staticmethod
-    def get_meal_text_parsing_prompt(language: str = "en") -> str:
-        """
-        Get meal text parsing system prompt with language context.
-
-        Args:
-            language: Language code (e.g., "en", "vi") for response formatting
-
-        Returns:
-            Complete system prompt for parsing food descriptions
-        """
-        if language == "en":
-            lang_instruction = "Respond with food names in English. For non-English dishes, use bilingual format: 'Local name (English name)'"
-        else:
-            lang_instruction = f"Respond in language code '{language}'. Use bilingual format: 'Local name (English name)'"
-
-        return SystemPrompts.MEAL_TEXT_PARSING.format(language_instruction=lang_instruction)
+    def get_meal_text_parsing_prompt() -> str:
+        """Get meal text parsing system prompt. Always generates English names."""
+        return SystemPrompts.MEAL_TEXT_PARSING
 
     @staticmethod
     def get_prompt_for_user_preferences(
