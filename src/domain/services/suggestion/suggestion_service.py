@@ -72,7 +72,8 @@ class SuggestionService:
             Context dictionary with meal distributions
         """
         if target_date is None:
-            target_date = date.today()
+            from src.domain.utils.timezone_utils import user_today
+            target_date = user_today()  # UTC fallback; caller should pass user-local date
         
         # Determine current meal type based on time
         current_type = self.get_recommended_meal_type()

@@ -14,3 +14,4 @@ class GetDailyActivitiesQuery(Query):
     user_id: str
     target_date: datetime
     language: Optional[str] = field(default="en")
+    header_timezone: Optional[str] = field(default=None)  # X-Timezone header fallback

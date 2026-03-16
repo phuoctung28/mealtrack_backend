@@ -12,7 +12,7 @@ from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.model.meal import MealStatus
 from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.domain.utils.timezone_utils import ensure_utc, get_user_monday, get_zone_info
+from src.domain.utils.timezone_utils import ensure_utc, get_user_monday, get_zone_info, resolve_user_timezone
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -31,14 +31,10 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
 
         with uow:
             try:
-                # Resolve user timezone for all date operations
-                user_tz_str = "UTC"
-                try:
-                    user = uow.users.find_by_id(query.user_id)
-                    if user and user.timezone:
-                        user_tz_str = user.timezone
-                except Exception:
-                    pass
+                # Resolve user timezone (DB → X-Timezone header → UTC)
+                user_tz_str = resolve_user_timezone(
+                    query.user_id, uow, query.header_timezone
+                )
                 user_tz = get_zone_info(user_tz_str)
 
                 # Default to today in USER's timezone (not server's UTC)

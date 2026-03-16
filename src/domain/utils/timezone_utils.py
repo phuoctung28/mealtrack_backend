@@ -183,3 +183,47 @@ def get_user_monday(
 
     return monday
 
+
+def resolve_user_timezone(
+    user_id: str,
+    uow: "UnitOfWorkPort",
+    header_timezone: Optional[str] = None,
+) -> str:
+    """Resolve user timezone: DB → X-Timezone header → UTC.
+
+    Also opportunistically updates DB if header provides
+    a real timezone but DB still has 'UTC'.
+    """
+    # 1. Try DB
+    db_tz = "UTC"
+    try:
+        user = uow.users.find_by_id(user_id)
+        if user and user.timezone and user.timezone != "UTC":
+            return user.timezone
+        if user and user.timezone:
+            db_tz = user.timezone
+    except Exception:
+        pass
+
+    # 2. Try header fallback
+    if header_timezone and header_timezone != "UTC" and is_valid_timezone(header_timezone):
+        # Opportunistic DB update — separate try to avoid breaking caller's UoW
+        if db_tz == "UTC":
+            try:
+                uow.users.update_user_timezone(user_id, header_timezone)
+                logger.info(
+                    f"Opportunistic timezone update for {user_id}: "
+                    f"UTC → {header_timezone}"
+                )
+            except Exception:
+                pass
+        return header_timezone
+
+    # 3. Fallback
+    return db_tz
+
+
+def user_today(user_timezone: str = "UTC") -> date:
+    """Return today's date in user's timezone."""
+    tz = get_zone_info(user_timezone)
+    return datetime.now(tz).date()

@@ -13,3 +13,4 @@ class GetDailyMacrosQuery(Query):
     """Query to get daily macros summary with user targets."""
     user_id: str
     target_date: Optional[date] = None
+    header_timezone: Optional[str] = None  # X-Timezone header fallback

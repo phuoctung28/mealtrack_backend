@@ -9,7 +9,7 @@ from src.app.commands.cheat_day import MarkCheatDayCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.cheat_day import CheatDay
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.domain.utils.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now, resolve_user_timezone, user_today
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,8 @@ class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, Dict[str, Any
         with uow:
             try:
                 target_date = command.date
-                today = date.today()
+                user_tz = resolve_user_timezone(command.user_id, uow)
+                today = user_today(user_tz)
 
                 if target_date < today:
                     raise ValidationException(

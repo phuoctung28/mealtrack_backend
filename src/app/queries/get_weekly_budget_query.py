@@ -10,3 +10,4 @@ from typing import Optional
 class GetWeeklyBudgetQuery:
     user_id: str
     target_date: Optional[date] = None  # Defaults to today
+    header_timezone: Optional[str] = None  # X-Timezone header fallback
