@@ -9,6 +9,24 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Legacy IANA timezone aliases that may not resolve on slim Docker images
+_TIMEZONE_ALIASES: dict[str, str] = {
+    "Asia/Saigon": "Asia/Ho_Chi_Minh",
+    "Asia/Calcutta": "Asia/Kolkata",
+    "Asia/Katmandu": "Asia/Kathmandu",
+    "US/Eastern": "America/New_York",
+    "US/Central": "America/Chicago",
+    "US/Mountain": "America/Denver",
+    "US/Pacific": "America/Los_Angeles",
+    "Europe/Kiev": "Europe/Kyiv",
+    "Pacific/Samoa": "Pacific/Pago_Pago",
+}
+
+
+def normalize_timezone(timezone_str: str) -> str:
+    """Normalize legacy timezone aliases to canonical IANA names."""
+    return _TIMEZONE_ALIASES.get(timezone_str, timezone_str)
+
 
 def utc_now() -> datetime:
     """Return timezone-aware UTC datetime.
@@ -68,7 +86,7 @@ def get_zone_info(timezone_str: str) -> ZoneInfo:
         return ZoneInfo(DEFAULT_TIMEZONE)
 
     try:
-        return ZoneInfo(timezone_str)
+        return ZoneInfo(normalize_timezone(timezone_str))
     except ZoneInfoNotFoundError:
         logger.warning(f"Invalid timezone '{timezone_str}', falling back to UTC")
         return ZoneInfo(DEFAULT_TIMEZONE)
@@ -92,7 +110,7 @@ def utc_to_local_minutes(utc_time: datetime, timezone_str: str) -> int:
 
 def is_valid_timezone(timezone_str: str) -> bool:
     """
-    Check if timezone string is valid IANA identifier.
+    Check if timezone string is valid IANA identifier (including legacy aliases).
 
     Args:
         timezone_str: Timezone string to validate
@@ -104,7 +122,7 @@ def is_valid_timezone(timezone_str: str) -> bool:
         return False
 
     try:
-        ZoneInfo(timezone_str)
+        ZoneInfo(normalize_timezone(timezone_str))
         return True
     except ZoneInfoNotFoundError:
         return False
@@ -207,17 +225,18 @@ def resolve_user_timezone(
 
     # 2. Try header fallback
     if header_timezone and header_timezone != "UTC" and is_valid_timezone(header_timezone):
+        canonical_tz = normalize_timezone(header_timezone)
         # Opportunistic DB update — separate try to avoid breaking caller's UoW
         if db_tz == "UTC":
             try:
-                uow.users.update_user_timezone(user_id, header_timezone)
+                uow.users.update_user_timezone(user_id, canonical_tz)
                 logger.info(
                     f"Opportunistic timezone update for {user_id}: "
-                    f"UTC → {header_timezone}"
+                    f"UTC → {canonical_tz}"
                 )
             except Exception:
                 pass
-        return header_timezone
+        return canonical_tz
 
     # 3. Fallback
     return db_tz
