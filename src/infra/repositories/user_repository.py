@@ -154,11 +154,11 @@ class UserRepository(UserRepositoryPort):
 
     def update_user_timezone(self, user_id: UUID, timezone: str) -> None:
         """Update user's timezone in the database."""
-        self.db.query(User).filter(User.id == user_id).update(
+        rows = self.db.query(User).filter(User.id == user_id).update(
             {"timezone": timezone}
         )
         self.db.commit()
-        logger.info(f"Updated timezone for user {user_id} to {timezone}")
+        logger.info(f"Timezone update: user={user_id} tz={timezone} rows={rows}")
     def get_user_timezone(self, user_id: UUID) -> Optional[str]:
         """Get user's timezone from database."""
         user_entity = (
