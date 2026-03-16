@@ -134,6 +134,10 @@ class Settings(BaseSettings):
     CLOUDINARY_API_SECRET: str | None = Field(default=None)
 
     # Feature flags / development toggles
+    SERVICE_ROLE: str = Field(
+        default="api",
+        description="Process role: 'api' for HTTP server, 'worker' for background job consumer",
+    )
     USE_MOCK_STORAGE: int = Field(default=0)
     DEV_USER_FIREBASE_UID: str = Field(default="dev_firebase_uid")
     DEV_USER_EMAIL: str = Field(default="dev@example.com")
