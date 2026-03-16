@@ -73,7 +73,9 @@ class TestGetAdjustedDailyTarget:
 
         with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.UnitOfWork") as mock_uow_cls, \
              patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.WeeklyBudgetService") as mock_budget_svc, \
-             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday", return_value=date(2026, 3, 9)):
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday", return_value=date(2026, 3, 9)), \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.resolve_user_timezone", return_value="UTC"), \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.user_today", return_value=date(2026, 3, 13)):
 
             mock_uow = Mock()
             mock_uow.__enter__ = Mock(return_value=mock_uow)
