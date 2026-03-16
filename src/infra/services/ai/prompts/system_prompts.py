@@ -61,26 +61,7 @@ Parse the user's food description into a list of items with nutritional data. Ea
 - fat: Fat in grams
 
 IMPORTANT: You MUST respond with ONLY valid JSON array (no markdown, no code blocks):
-[
-  {{
-    "name": "Eggs",
-    "quantity": 2,
-    "unit": "large",
-    "calories": 144,
-    "protein": 12.6,
-    "carbs": 0.7,
-    "fat": 9.5
-  }},
-  {{
-    "name": "Toast with butter",
-    "quantity": 1,
-    "unit": "slice",
-    "calories": 165,
-    "protein": 3.5,
-    "carbs": 20.0,
-    "fat": 8.2
-  }}
-]
+{{json_example}}
 
 Guidelines:
 - Estimate nutritional values based on standard food databases
@@ -91,7 +72,7 @@ Guidelines:
 - Simple single-ingredient foods (banana, egg, plain rice) stay as 1 item
 - All quantities should be in GRAMS when possible. Convert volumes using density (honey=1.42g/ml, oil=0.92g/ml, milk=1.03g/ml)
 - Verify: calories ≈ protein*4 + carbs*4 + fat*9
-- Respond with food names in English only
+- {{language_instruction}}
 - Be accurate but acknowledge estimates are approximate"""
 
     @staticmethod
@@ -114,10 +95,40 @@ Guidelines:
 
         return base_prompt
 
+    # Supported language codes (ISO 639-1)
+    SUPPORTED_LANGUAGES = {"en", "vi", "es", "fr", "de", "ja", "zh"}
+
+    # English-only JSON example for prompt
+    _EXAMPLE_EN = """[
+  {{"name": "Eggs", "quantity": 2, "unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
+  {{"name": "Toast with butter", "quantity": 1, "unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
+]"""
+
+    # Bilingual JSON example — local name with English in parentheses
+    _EXAMPLE_BILINGUAL = """[
+  {{"name": "Trứng gà (Eggs)", "quantity": 2, "unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
+  {{"name": "Bánh mì bơ (Toast with butter)", "quantity": 1, "unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
+]"""
+
     @staticmethod
-    def get_meal_text_parsing_prompt() -> str:
-        """Get meal text parsing system prompt. Always generates English names."""
-        return SystemPrompts.MEAL_TEXT_PARSING
+    def get_meal_text_parsing_prompt(language: str = "en") -> str:
+        """Get meal text parsing prompt with locale-aware food names."""
+        # Validate language to prevent prompt injection
+        lang = language if language in SystemPrompts.SUPPORTED_LANGUAGES else "en"
+        if lang == "en":
+            instruction = "Respond with food names in English"
+            example = SystemPrompts._EXAMPLE_EN
+        else:
+            instruction = (
+                f"Respond with food names in {lang} language. "
+                "For each item, format name as: 'Local Name (English Name)' "
+                "— the English name in parentheses is REQUIRED for database lookup"
+            )
+            example = SystemPrompts._EXAMPLE_BILINGUAL
+        prompt = SystemPrompts.MEAL_TEXT_PARSING.replace(
+            "{{json_example}}", example
+        )
+        return prompt.replace("{{language_instruction}}", instruction)
 
     @staticmethod
     def get_prompt_for_user_preferences(

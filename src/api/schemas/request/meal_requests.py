@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field, field_validator
 class ParseMealTextRequest(BaseModel):
     """Request DTO for parsing meal text descriptions."""
     text: str = Field(..., min_length=1, max_length=500, description="Natural language food description")
-    language: str = Field("en", description="Language code for response (en, vi, etc.)")
     current_items: Optional[list[dict[str, Any]]] = Field(
         None,
         description="Current meal items for refinement (when user is editing an existing meal)"
