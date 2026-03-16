@@ -3,6 +3,7 @@ Handler for parsing natural language meal text into structured food items.
 """
 import json
 import logging
+import re
 from typing import Any, Dict, List
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -23,9 +24,6 @@ from src.app.handlers.command_handlers.meal_text_parsing_utils import (
     extract_usda_nutrition,
     parse_fatsecret_nutrition,
 )
-from src.domain.services.meal_suggestion.translation_service import TranslationService
-from src.infra.adapters.meal_generation_service import MealGenerationService
-
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +34,6 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
     def __init__(self):
         self._model_manager = GeminiModelManager.get_instance()
         self._fat_secret_service = get_fat_secret_service()
-        self._translation_service = TranslationService(MealGenerationService())
 
     async def handle(self, command: ParseMealTextCommand) -> ParseMealTextResponseDto:
         # Sanitize user input
@@ -56,8 +53,10 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
             temperature=0.3,  # Lower temperature for more consistent parsing
         )
 
-        # Build messages — always English for better AI accuracy
-        system_prompt = SystemPrompts.get_meal_text_parsing_prompt()
+        # Build messages with locale-aware food names
+        system_prompt = SystemPrompts.get_meal_text_parsing_prompt(
+            language=command.language
+        )
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=sanitized_text),
@@ -85,18 +84,6 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         total_protein = sum(item.get("protein", 0) for item in enhanced_items)
         total_carbs = sum(item.get("carbs", 0) for item in enhanced_items)
         total_fat = sum(item.get("fat", 0) for item in enhanced_items)
-
-        # Translate food names if non-English
-        if command.language and command.language != "en":
-            names = [item.get("name", "Unknown") for item in enhanced_items]
-            try:
-                translated = await self._translation_service._batch_translate(
-                    names, command.language
-                )
-                for item, name in zip(enhanced_items, translated):
-                    item["name"] = name
-            except Exception as e:
-                logger.warning(f"Name translation failed, using English: {e}")
 
         # Build response items
         items = [
@@ -140,15 +127,16 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         # Save AI's original calorie estimate for sanity check
         ai_calories = item.get("calories", 0)
 
-        # Try FatSecret (more precise for common foods)
+        # Try FatSecret — use English name from parentheses for lookup accuracy
+        lookup_name = self._extract_english_name(name)
         try:
-            fatsecret_results = await self._fat_secret_service.search_foods(name, max_results=5)
+            fatsecret_results = await self._fat_secret_service.search_foods(lookup_name, max_results=5)
             if fatsecret_results and len(fatsecret_results) > 0:
                 fs_food = fatsecret_results[0]
                 per_100g = parse_fatsecret_nutrition(fs_food)
                 allowed_units = fs_food.get("allowed_units")
                 if per_100g:
-                    scaled = scale_per_100g_nutrition(per_100g, quantity, unit, allowed_units=allowed_units, food_name=name)
+                    scaled = scale_per_100g_nutrition(per_100g, quantity, unit, allowed_units=allowed_units, food_name=lookup_name)
                     fs_calories = scaled.get("calories", 0)
 
                     # Reject FatSecret if it diverges >3x from AI estimate
@@ -176,3 +164,9 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         # Fallback to AI estimate (values from Gemini prompt, already per-serving)
         item["data_source"] = "ai_estimate"
         return item
+
+    @staticmethod
+    def _extract_english_name(name: str) -> str:
+        """Extract English name from 'Local Name (English Name)' format."""
+        match = re.search(r'\(([^)]+)\)$', name.strip())
+        return match.group(1) if match else name
