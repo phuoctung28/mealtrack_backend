@@ -211,9 +211,9 @@ class WeeklyBudgetConstants:
     SMART_PROMPT_THRESHOLD = 1.20
 
     # Tomorrow preview: show when deviation from base exceeds this ratio
-    # 5% catches meaningful shifts early in the week (10% was too aggressive —
-    # over-eating on Tue gets diluted across 5 remaining days below 10%)
-    PREVIEW_DEVIATION_THRESHOLD = 0.05
+    # 3% catches under-eating early in the week (5% missed mild under-eating
+    # because deficit is spread across many remaining days)
+    PREVIEW_DEVIATION_THRESHOLD = 0.03
 
     # Minimum logged days required for meaningful redistribution
     MIN_LOGGED_DAYS_FOR_REDISTRIBUTION = 3

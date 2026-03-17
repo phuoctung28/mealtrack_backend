@@ -74,6 +74,11 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     query.user_id, week_start, week_start + timedelta(days=6)
                 )
 
+                # Cheat day context: exclude from redistribution
+                past_cheat_dates = [cd.date for cd in cheat_days if cd.date < target_date]
+                past_cheat_count = len(past_cheat_dates)
+                is_today_cheat = any(cd.date == target_date for cd in cheat_days)
+
                 # Calculate remaining days (including today)
                 remaining_days = WeeklyBudgetService.calculate_remaining_days(
                     week_start, target_date
@@ -107,11 +112,25 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                 else:
                     logged_past_days = 0
 
-                # Calculate consumed BEFORE today (for adjustment lock)
+                # Cheat days don't count as logged for redistribution
+                redistribution_logged_days = max(0, logged_past_days - past_cheat_count)
+
+                # Calculate consumed BEFORE today (for today's consumption calc)
                 consumed_before_today = await self._calculate_weekly_consumed(
                     uow, query.user_id, week_start,
                     exclude_date=target_date, user_timezone=user_tz_str,
                 )
+
+                # For redistribution: exclude cheat day consumption too
+                if past_cheat_dates:
+                    consumed_for_redistribution = await self._calculate_weekly_consumed(
+                        uow, query.user_id, week_start,
+                        exclude_date=target_date,
+                        exclude_dates=past_cheat_dates,
+                        user_timezone=user_tz_str,
+                    )
+                else:
+                    consumed_for_redistribution = consumed_before_today
 
                 if show_logging_prompt:
                     # Return base targets when insufficient logging data
@@ -125,8 +144,8 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                         bmr=bmr, remaining_days=7,
                     )
                 else:
-                    # Skip & Redistribute: shrink effective week
-                    effective_week_days = logged_past_days + remaining_days
+                    # Skip & Redistribute: shrink effective week (excludes cheat days)
+                    effective_week_days = redistribution_logged_days + remaining_days
                     prorated_target_cal = base_daily_cal * effective_week_days
                     prorated_target_carbs = base_daily_carbs * effective_week_days
                     prorated_target_fat = base_daily_fat * effective_week_days
@@ -138,10 +157,10 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                         target_protein=prorated_target_protein,
                         target_carbs=prorated_target_carbs,
                         target_fat=prorated_target_fat,
-                        consumed_calories=consumed_before_today["calories"],
-                        consumed_protein=consumed_before_today["protein"],
-                        consumed_carbs=consumed_before_today["carbs"],
-                        consumed_fat=consumed_before_today["fat"],
+                        consumed_calories=consumed_for_redistribution["calories"],
+                        consumed_protein=consumed_for_redistribution["protein"],
+                        consumed_carbs=consumed_for_redistribution["carbs"],
+                        consumed_fat=consumed_for_redistribution["fat"],
                     )
                     adjusted = WeeklyBudgetService.calculate_adjusted_daily(
                         budget_for_adjustment,
@@ -154,17 +173,22 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     )
 
                 # --- Phase 3: Tomorrow Preview ---
-                # Only show preview when user has actually eaten today
+                # Shows real impact of today's consumption on tomorrow's target.
+                # Uses ORIGINAL consumed data (including cheat days) so user sees actual impact.
                 preview_data: Dict[str, Any] = {}
                 today_consumed_cal = consumed["calories"] - consumed_before_today["calories"]
+                today_consumed_protein = consumed["protein"] - consumed_before_today["protein"]
+                today_consumed_carbs = consumed["carbs"] - consumed_before_today["carbs"]
+                today_consumed_fat = consumed["fat"] - consumed_before_today["fat"]
                 logger.info(
                     f"Preview check: remaining={remaining_days}, prompt={show_logging_prompt}, "
                     f"today_cal={today_consumed_cal:.0f}, base={base_daily_cal:.0f}, "
                     f"consumed_total={consumed['calories']:.0f}, consumed_before={consumed_before_today['calories']:.0f}, "
-                    f"logged_past={logged_past_days}, skipped={skipped_days}"
+                    f"logged_past={logged_past_days}, skipped={skipped_days}, "
+                    f"cheat_today={is_today_cheat}, cheat_past={past_cheat_count}"
                 )
                 if remaining_days > 1 and not show_logging_prompt and today_consumed_cal > 0:
-                    # Include today's actual consumption for projection
+                    # Preview uses original consumed data (cheat days included) for real impact
                     tomorrow_remaining = remaining_days - 1
                     consumed_including_today = consumed.copy()
                     effective_days_tomorrow = logged_past_days + 1 + tomorrow_remaining  # +1 = today
@@ -200,15 +224,16 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                         f"tomorrow_cal={tomorrow_adjusted.calories:.1f}, effective_days={effective_days_tomorrow}"
                     )
                     if deviation >= WeeklyBudgetConstants.PREVIEW_DEVIATION_THRESHOLD:
-                        direction = "over" if today_consumed_cal > base_daily_cal else "under"
+                        # Delta relative to today's adjusted target (what user sees on screen)
+                        direction = "over" if today_consumed_cal > adjusted.calories else "under"
                         preview_data = {
                             "preview_tomorrow_calories": tomorrow_adjusted.calories,
                             "preview_tomorrow_protein": tomorrow_adjusted.protein,
                             "preview_tomorrow_carbs": tomorrow_adjusted.carbs,
                             "preview_tomorrow_fat": tomorrow_adjusted.fat,
                             "preview_direction": direction,
-                            "preview_delta": int(abs(tomorrow_adjusted.calories - base_daily_cal)),
-                            "preview_today_delta": int(abs(today_consumed_cal - base_daily_cal)),
+                            "preview_delta": int(abs(tomorrow_adjusted.calories - adjusted.calories)),
+                            "preview_today_delta": int(abs(today_consumed_cal - adjusted.calories)),
                         }
 
                 # Derive remaining calories from macros for consistency
@@ -314,6 +339,7 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
         user_id: str,
         week_start: date,
         exclude_date: Optional[date] = None,
+        exclude_dates: Optional[list] = None,
         user_timezone: Optional[str] = None,
     ) -> Dict[str, float]:
         """Calculate consumed macros from meals this week.
@@ -321,6 +347,8 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
         Args:
             exclude_date: If set, skip meals on this user-local date
                 (used to lock today's target).
+            exclude_dates: If set, skip meals on these user-local dates
+                (used to exclude cheat days from redistribution).
             user_timezone: IANA timezone for correct date boundary conversion.
         """
         week_end = week_start + timedelta(days=6)
@@ -335,17 +363,19 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
         total_carbs = 0.0
         total_fat = 0.0
 
+        exclude_dates_set = set(exclude_dates) if exclude_dates else set()
         for meal in meals:
             if meal.status == MealStatus.READY and meal.nutrition:
-                # Skip meals on excluded date (locks today's adjusted target)
-                # Convert meal UTC timestamp to user-local date for comparison
-                if exclude_date and meal.created_at:
+                # Skip meals on excluded dates (today lock + cheat days)
+                if (exclude_date or exclude_dates_set) and meal.created_at:
                     aware_dt = ensure_utc(meal.created_at)
                     meal_local_date = (
                         aware_dt.astimezone(tz).date() if tz
                         else aware_dt.date()
                     )
-                    if meal_local_date == exclude_date:
+                    if exclude_date and meal_local_date == exclude_date:
+                        continue
+                    if meal_local_date in exclude_dates_set:
                         continue
                 total_calories += meal.nutrition.calories or 0
                 total_protein += meal.nutrition.macros.protein or 0
