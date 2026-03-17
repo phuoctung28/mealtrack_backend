@@ -81,6 +81,22 @@ class WeeklyBudgetService:
         # Derive calories from rounded macros — single source of truth
         adjusted_calories = (rounded_protein * 4) + (rounded_carbs * 4) + (rounded_fat * 9)
 
+        # Deficit cap: never reduce more than MAX_DAILY_DEFICIT_RATIO below base
+        min_allowed = standard_daily_calories * (1 - WeeklyBudgetConstants.MAX_DAILY_DEFICIT_RATIO)
+        if adjusted_calories < min_allowed:
+            deficit_gap = min_allowed - adjusted_calories
+            # Scale carbs and fat up proportionally to meet minimum
+            carb_cal = rounded_carbs * 4
+            fat_cal = rounded_fat * 9
+            total_non_protein_cal = carb_cal + fat_cal
+            if total_non_protein_cal > 0:
+                carb_ratio = carb_cal / total_non_protein_cal
+                fat_ratio = fat_cal / total_non_protein_cal
+                rounded_carbs = round(rounded_carbs + (deficit_gap * carb_ratio) / 4, 1)
+                rounded_fat = round(rounded_fat + (deficit_gap * fat_ratio) / 9, 1)
+            # Re-derive calories from updated macros
+            adjusted_calories = (rounded_protein * 4) + (rounded_carbs * 4) + (rounded_fat * 9)
+
         # Check if we hit the BMR floor
         bmr_floor_active = False
         if adjusted_calories < bmr_floor:

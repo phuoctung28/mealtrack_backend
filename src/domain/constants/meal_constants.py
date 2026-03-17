@@ -197,7 +197,11 @@ class WeeklyBudgetConstants:
     """Constants for weekly macro budget feature."""
 
     # BMR floor: daily target never drops below this ratio of standard daily
-    BMR_FLOOR_RATIO = 0.80
+    BMR_FLOOR_RATIO = 0.85  # Raised from 0.80 for safer minimum
+
+    # Deficit cap: adjusted daily never drops more than this ratio below base
+    # -10% is within safe 0.5-1% BW/week range (Helms 2014)
+    MAX_DAILY_DEFICIT_RATIO = 0.10
 
     # Adjusted daily macro bounds (ratio of standard daily)
     MACRO_FLOOR_RATIO = 0.5    # Never below 50% of base
@@ -205,6 +209,14 @@ class WeeklyBudgetConstants:
 
     # Smart prompt threshold: suggest cheat tag when daily consumed > this × daily target
     SMART_PROMPT_THRESHOLD = 1.20
+
+    # Tomorrow preview: show when deviation from base exceeds this ratio
+    # 3% catches under-eating early in the week (5% missed mild under-eating
+    # because deficit is spread across many remaining days)
+    PREVIEW_DEVIATION_THRESHOLD = 0.03
+
+    # Minimum logged days required for meaningful redistribution
+    MIN_LOGGED_DAYS_FOR_REDISTRIBUTION = 3
 
     # Week starts on Monday
     WEEK_START_WEEKDAY = 0  # Monday

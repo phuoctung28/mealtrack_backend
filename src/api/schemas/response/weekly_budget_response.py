@@ -1,7 +1,7 @@
 """
 Weekly budget response schema.
 """
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -28,4 +28,17 @@ class WeeklyBudgetResponse(BaseModel):
     daily_protein: float
     remaining_days: int
     bmr_floor_active: bool
-    cheat_days: List[str] = []  # List of "YYYY-MM-DD" date strings (manual marks only)
+    cheat_days: List[str] = []
+
+    # Phase 2: Skip & Redistribute
+    skipped_days: int = 0
+    show_logging_prompt: bool = False
+
+    # Phase 3: Tomorrow preview (null when on-track)
+    preview_tomorrow_calories: Optional[float] = None
+    preview_tomorrow_protein: Optional[float] = None
+    preview_tomorrow_carbs: Optional[float] = None
+    preview_tomorrow_fat: Optional[float] = None
+    preview_direction: Optional[str] = None  # "over" | "under"
+    preview_delta: Optional[int] = None
+    preview_today_delta: Optional[int] = None
