@@ -187,7 +187,7 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     )
 
                     deviation = abs(tomorrow_adjusted.calories - base_daily_cal) / max(base_daily_cal, 1)
-                    if deviation > WeeklyBudgetConstants.PREVIEW_DEVIATION_THRESHOLD:
+                    if deviation >= WeeklyBudgetConstants.PREVIEW_DEVIATION_THRESHOLD:
                         today_consumed_cal = consumed["calories"] - consumed_before_today["calories"]
                         direction = "over" if today_consumed_cal > base_daily_cal else "under"
                         preview_data = {
