@@ -157,6 +157,12 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                 # Only show preview when user has actually eaten today
                 preview_data: Dict[str, Any] = {}
                 today_consumed_cal = consumed["calories"] - consumed_before_today["calories"]
+                logger.info(
+                    f"Preview check: remaining={remaining_days}, prompt={show_logging_prompt}, "
+                    f"today_cal={today_consumed_cal:.0f}, base={base_daily_cal:.0f}, "
+                    f"consumed_total={consumed['calories']:.0f}, consumed_before={consumed_before_today['calories']:.0f}, "
+                    f"logged_past={logged_past_days}, skipped={skipped_days}"
+                )
                 if remaining_days > 1 and not show_logging_prompt and today_consumed_cal > 0:
                     # Include today's actual consumption for projection
                     tomorrow_remaining = remaining_days - 1
@@ -189,6 +195,10 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     )
 
                     deviation = abs(tomorrow_adjusted.calories - base_daily_cal) / max(base_daily_cal, 1)
+                    logger.info(
+                        f"Preview deviation: {deviation:.4f} (threshold={WeeklyBudgetConstants.PREVIEW_DEVIATION_THRESHOLD}), "
+                        f"tomorrow_cal={tomorrow_adjusted.calories:.1f}, effective_days={effective_days_tomorrow}"
+                    )
                     if deviation >= WeeklyBudgetConstants.PREVIEW_DEVIATION_THRESHOLD:
                         direction = "over" if today_consumed_cal > base_daily_cal else "under"
                         preview_data = {
