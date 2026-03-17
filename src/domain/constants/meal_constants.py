@@ -210,8 +210,10 @@ class WeeklyBudgetConstants:
     # Smart prompt threshold: suggest cheat tag when daily consumed > this × daily target
     SMART_PROMPT_THRESHOLD = 1.20
 
-    # Tomorrow preview: only show when deviation from base exceeds this ratio
-    PREVIEW_DEVIATION_THRESHOLD = 0.10
+    # Tomorrow preview: show when deviation from base exceeds this ratio
+    # 5% catches meaningful shifts early in the week (10% was too aggressive —
+    # over-eating on Tue gets diluted across 5 remaining days below 10%)
+    PREVIEW_DEVIATION_THRESHOLD = 0.05
 
     # Minimum logged days required for meaningful redistribution
     MIN_LOGGED_DAYS_FOR_REDISTRIBUTION = 3
