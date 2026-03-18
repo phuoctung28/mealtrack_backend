@@ -17,13 +17,6 @@ from typing import Any
 
 import requests
 
-# Graceful import — common.schema may not exist yet during parallel Phase 1
-try:
-    from common.schema import save_entries  # type: ignore[import]
-    HAS_COMMON_SCHEMA = True
-except ImportError:
-    HAS_COMMON_SCHEMA = False
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 

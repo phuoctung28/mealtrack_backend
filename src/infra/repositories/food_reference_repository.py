@@ -122,6 +122,14 @@ class FoodReferenceRepository:
         finally:
             session.close()
 
+    # Columns safe to set via upsert_seed (excludes SQLAlchemy internals)
+    _SEED_COLUMNS = {
+        "barcode", "name", "name_vi", "brand", "category", "region", "fdc_id",
+        "protein_100g", "carbs_100g", "fat_100g", "fiber_100g", "sugar_100g",
+        "extra_nutrients", "serving_sizes", "density", "serving_size",
+        "source", "is_verified", "image_url",
+    }
+
     def upsert_seed(self, data: Dict[str, Any]) -> str:
         """Upsert a seed food entry. Returns 'inserted', 'updated', or 'skipped'."""
         session: Session = SessionLocal()
@@ -131,7 +139,7 @@ class FoodReferenceRepository:
                     select(FoodReferenceModel).where(
                         FoodReferenceModel.barcode == data["barcode"]
                     )
-                ).scalar_one_or_none()
+                ).scalars().first()
             else:
                 existing = session.execute(
                     select(FoodReferenceModel).where(
@@ -139,18 +147,17 @@ class FoodReferenceRepository:
                         FoodReferenceModel.source == data.get("source"),
                         FoodReferenceModel.region == data.get("region", "VN"),
                     )
-                ).scalar_one_or_none()
+                ).scalars().first()
+
+            safe_data = {k: v for k, v in data.items() if k in self._SEED_COLUMNS}
 
             if existing:
-                for key, val in data.items():
-                    if key != "id" and hasattr(existing, key):
-                        setattr(existing, key, val)
+                for key, val in safe_data.items():
+                    setattr(existing, key, val)
                 session.commit()
                 return "updated"
             else:
-                entry = FoodReferenceModel(
-                    **{k: v for k, v in data.items() if hasattr(FoodReferenceModel, k)}
-                )
+                entry = FoodReferenceModel(**safe_data)
                 session.add(entry)
                 session.commit()
                 return "inserted"
