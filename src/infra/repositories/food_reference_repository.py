@@ -92,6 +92,7 @@ class FoodReferenceRepository:
             values = {
                 "barcode": data.get("barcode"),
                 "name": data.get("name"),
+                "name_vi": data.get("name_vi"),
                 "brand": data.get("brand"),
                 "protein_100g": data.get("protein_100g"),
                 "carbs_100g": data.get("carbs_100g"),
@@ -99,12 +100,14 @@ class FoodReferenceRepository:
                 "fiber_100g": data.get("fiber_100g", 0),
                 "sugar_100g": data.get("sugar_100g", 0),
                 "serving_size": data.get("serving_size"),
+                "serving_sizes": data.get("serving_sizes"),
                 "image_url": data.get("image_url"),
                 "source": data.get("source", "fatsecret"),
                 "fdc_id": data.get("fdc_id"),
                 "category": data.get("category"),
                 "region": data.get("region", "global"),
                 "density": data.get("density", 1.0),
+                "extra_nutrients": data.get("extra_nutrients"),
             }
             stmt = mysql_insert(FoodReferenceModel).values(**values)
             update_fields = {
@@ -116,6 +119,45 @@ class FoodReferenceRepository:
         except Exception as e:
             logger.error(f"Error upserting food_reference {data.get('barcode')}: {e}")
             session.rollback()
+        finally:
+            session.close()
+
+    def upsert_seed(self, data: Dict[str, Any]) -> str:
+        """Upsert a seed food entry. Returns 'inserted', 'updated', or 'skipped'."""
+        session: Session = SessionLocal()
+        try:
+            if data.get("barcode"):
+                existing = session.execute(
+                    select(FoodReferenceModel).where(
+                        FoodReferenceModel.barcode == data["barcode"]
+                    )
+                ).scalar_one_or_none()
+            else:
+                existing = session.execute(
+                    select(FoodReferenceModel).where(
+                        FoodReferenceModel.name_vi == data.get("name_vi"),
+                        FoodReferenceModel.source == data.get("source"),
+                        FoodReferenceModel.region == data.get("region", "VN"),
+                    )
+                ).scalar_one_or_none()
+
+            if existing:
+                for key, val in data.items():
+                    if key != "id" and hasattr(existing, key):
+                        setattr(existing, key, val)
+                session.commit()
+                return "updated"
+            else:
+                entry = FoodReferenceModel(
+                    **{k: v for k, v in data.items() if hasattr(FoodReferenceModel, k)}
+                )
+                session.add(entry)
+                session.commit()
+                return "inserted"
+        except Exception as e:
+            logger.error(f"Error upserting seed '{data.get('name_vi', data.get('name'))}': {e}")
+            session.rollback()
+            return "skipped"
         finally:
             session.close()
 
@@ -139,6 +181,7 @@ class FoodReferenceRepository:
             "serving_sizes": model.serving_sizes,
             "density": model.density,
             "serving_size": model.serving_size,
+            "extra_nutrients": model.extra_nutrients,
             "source": model.source,
             "is_verified": model.is_verified,
             "image_url": model.image_url,

@@ -31,6 +31,9 @@ class FoodReferenceModel(Base):
     fiber_100g = Column(Float, nullable=False, default=0)
     sugar_100g = Column(Float, nullable=False, default=0)
 
+    # Extended nutrients (calcium_mg, iron_mg, vitamin_a_mcg, etc.)
+    extra_nutrients = Column(JSON, nullable=True)
+
     # Conversion data
     serving_sizes = Column(JSON, nullable=True)  # [{name, grams}, ...]
     density = Column(Float, nullable=False, default=1.0)  # g/ml
