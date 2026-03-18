@@ -1,0 +1,3 @@
+# Fetched seed data — regenerate with fetch scripts
+*.json
+\!.gitkeep
