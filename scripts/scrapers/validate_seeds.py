@@ -38,6 +38,40 @@ def _save(entries: list[dict], path: Path) -> None:
         json.dump(entries, f, ensure_ascii=False, indent=2)
 
 
+def _is_junk_name(entry: dict) -> bool:
+    """Detect garbage/non-food names from crowd-sourced data.
+    Official sources (nin_vn) are trusted — short VN names like 'Ổi' are valid."""
+    source = entry.get("source", "")
+    if source.startswith("nin_vn") or source == "vn_fct_pdf":
+        return False  # trust official sources
+
+    name = (entry.get("name_vi") or entry.get("name") or "").strip()
+    name_lower = name.lower()
+    # No letters at all
+    if not any(c.isalpha() for c in name):
+        return True
+    # Too short (≤2 chars) for non-official sources
+    if len(name) <= 2:
+        return True
+    # All same character repeated (e.g. "gg", "aaa")
+    unique_chars = set(name_lower.replace(" ", ""))
+    if len(unique_chars) <= 1:
+        return True
+    # Contains profanity/non-food indicators
+    junk_patterns = ["wtf", "test", "xxx", "asdf", "fake", "delete", "unknown"]
+    if any(p in name_lower for p in junk_patterns):
+        return True
+    # Name has no Vietnamese or common food-related characters (purely non-food)
+    # Allow Latin, Vietnamese diacritics, CJK, digits, common punctuation
+    has_food_chars = any(
+        c.isalpha() and (ord(c) < 0x0250 or ord(c) > 0x2C00)  # Latin/VN or CJK
+        for c in name
+    )
+    if not has_food_chars:
+        return True
+    return False
+
+
 def validate_entry(entry: dict) -> list[str]:
     """Return list of issue descriptions. Empty = clean."""
     issues: list[str] = []
@@ -56,6 +90,9 @@ def validate_entry(entry: dict) -> list[str]:
         issues.append("no_name")
     if p == 0 and c == 0 and f == 0:
         issues.append("no_macros")
+    # Junk name detection (for non-official sources like openfoodfacts)
+    if _is_junk_name(entry):
+        issues.append("junk_name")
     return issues
 
 
@@ -65,8 +102,10 @@ def fix_entry(entry: dict) -> dict | None:
     c = entry.get("carbs_100g", 0) or 0
     f = entry.get("fat_100g", 0) or 0
 
-    # Drop entries with no name at all
+    # Drop entries with no name or junk names
     if not entry.get("name_vi") and not entry.get("name"):
+        return None
+    if _is_junk_name(entry):
         return None
 
     # Drop entries with no macros
