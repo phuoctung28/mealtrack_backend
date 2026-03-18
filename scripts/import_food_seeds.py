@@ -105,9 +105,9 @@ def _fetch_data(data_dir: Path) -> None:
     ]
     for label, cmd in fetchers:
         logger.info("Fetching %s ...", label)
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, text=True)  # streams stdout/stderr live
         if result.returncode != 0:
-            logger.error("Fetch failed for %s:\n%s", label, result.stderr[-500:])
+            logger.error("Fetch failed for %s (exit code %d)", label, result.returncode)
         else:
             logger.info("Fetched %s successfully", label)
 
@@ -138,7 +138,8 @@ def _run_import(data_dir: Path, dry_run: bool, source_filter: str | None) -> Non
         from src.infra.repositories.food_reference_repository import FoodReferenceRepository
         repo = FoodReferenceRepository()
 
-    for entry in deduped:
+    total = len(deduped)
+    for i, entry in enumerate(deduped, 1):
         warnings = _validate_entry(entry)
         if warnings:
             critical = [w for w in warnings if "negative" in w or "exceeds" in w]
@@ -153,33 +154,31 @@ def _run_import(data_dir: Path, dry_run: bool, source_filter: str | None) -> Non
         result = repo.upsert_seed(entry)  # type: ignore[union-attr]
         counts[result] += 1
 
+        # Progress every 100 entries
+        if i % 100 == 0 or i == total:
+            done = sum(counts.values())
+            logger.info("Progress: %d/%d (%d inserted, %d updated, %d skipped)",
+                        done, total, counts["inserted"], counts["updated"], counts["skipped"])
+
     _print_report(counts, dry_run)
 
 
 def _print_report(counts: dict[str, int], dry_run: bool) -> None:
     mode = " (dry-run)" if dry_run else ""
-    total = sum(counts.values())
-    print(f"\nImport report{mode}:")
-    print(f"  Total processed : {total}")
-    print(f"  Inserted        : {counts['inserted']}")
-    print(f"  Updated         : {counts['updated']}")
-    print(f"  Skipped (error) : {counts['skipped']}")
-    print(f"  Invalid (macros): {counts['invalid']}")
+    print(f"\nImport report{mode}: {sum(counts.values())} total — "
+          f"{counts['inserted']} inserted, {counts['updated']} updated, "
+          f"{counts['skipped']} skipped, {counts['invalid']} invalid")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Fetch and import VN food seed data into food_reference table."
     )
-    parser.add_argument("--fetch", action="store_true",
-                        help="Fetch data from NIN VN + OpenFoodFacts APIs before importing")
-    parser.add_argument("--data-dir",
-                        default=str(Path(__file__).resolve().parent / "data"),
-                        help="Directory for JSON files (default: scripts/data/)")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Validate entries only — no DB writes")
-    parser.add_argument("--source", default=None,
-                        help="Import only entries from this source (e.g. 'nin_vn')")
+    parser.add_argument("--fetch", action="store_true", help="Fetch from APIs before importing")
+    parser.add_argument("--data-dir", default=str(Path(__file__).resolve().parent / "data"),
+                        help="JSON files directory (default: scripts/data/)")
+    parser.add_argument("--dry-run", action="store_true", help="Validate only, no DB writes")
+    parser.add_argument("--source", default=None, help="Filter by source (e.g. 'nin_vn')")
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
