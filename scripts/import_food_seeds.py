@@ -171,10 +171,9 @@ def _print_report(counts: dict[str, int], dry_run: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Fetch and import VN food seed data into food_reference table."
-    )
+    parser = argparse.ArgumentParser(description="Fetch and import VN food seeds.")
     parser.add_argument("--fetch", action="store_true", help="Fetch from APIs before importing")
+    parser.add_argument("--no-validate", action="store_true", help="Skip data validation/cleaning")
     parser.add_argument("--data-dir", default=str(Path(__file__).resolve().parent / "data"),
                         help="JSON files directory (default: scripts/data/)")
     parser.add_argument("--dry-run", action="store_true", help="Validate only, no DB writes")
@@ -185,6 +184,11 @@ def main() -> None:
 
     if args.fetch:
         _fetch_data(data_dir)
+
+    if not args.no_validate and data_dir.exists():
+        logger.info("Validating and cleaning seed data...")
+        subprocess.run([sys.executable, str(_SCRAPERS_DIR / "validate_seeds.py"),
+                        "--data-dir", str(data_dir), "--fix"], text=True)
 
     if not data_dir.exists():
         logger.error("data-dir does not exist: %s — use --fetch to download data first", data_dir)
