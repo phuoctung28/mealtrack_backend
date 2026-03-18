@@ -59,4 +59,7 @@ tests/
 knowledge_graph/
 docs/
 *.pyc
-scripts/
+scripts/development/
+scripts/testing/
+scripts/data/*.json
+scripts/scrapers/.venv/
