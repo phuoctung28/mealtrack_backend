@@ -1,11 +1,8 @@
-"""
-Import food seed JSON files into food_reference table.
-Usage: python -m scripts.import_food_seeds [--data-dir PATH] [--dry-run] [--source NAME]
-Deduplicates by name_vi, preferring higher-priority sources.
-"""
+"""Import food seed JSON into food_reference. Use --fetch to download from APIs first."""
 import argparse
 import json
 import logging
+import subprocess
 import sys
 import unicodedata
 from pathlib import Path
@@ -23,6 +20,7 @@ SOURCE_PRIORITY: dict[str, int] = {
     "ttytyenlac": 4,
 }
 _DEFAULT_PRIORITY = 99
+_SCRAPERS_DIR = Path(__file__).resolve().parent / "scrapers"
 
 
 def _normalize_name(text: str) -> str:
@@ -35,7 +33,7 @@ def _load_json_file(path: Path) -> list[dict]:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, list):
-            logger.warning("Skipping %s — expected a JSON array, got %s", path.name, type(data).__name__)
+            logger.warning("Skipping %s — expected JSON array", path.name)
             return []
         return data
     except Exception as e:
@@ -62,17 +60,10 @@ def _validate_entry(entry: dict) -> list[str]:
     return warnings
 
 
-def _dedup_entries(
-    all_entries: list[dict], source_filter: str | None
-) -> list[dict]:
-    """
-    Deduplicate across sources by normalized name_vi.
-    For each unique name_vi, keep the entry from the highest-priority source.
-    Entries with a barcode are always kept separately (no name-based dedup).
-    """
+def _dedup_entries(all_entries: list[dict], source_filter: str | None) -> list[dict]:
+    """Keep highest-priority source per normalized name_vi. Barcoded entries kept as-is."""
     barcoded: list[dict] = []
-    by_name: dict[str, dict] = {}  # normalized_name_vi → best entry
-
+    by_name: dict[str, dict] = {}
     for entry in all_entries:
         source = entry.get("source", "")
         if source_filter and source != source_filter:
@@ -85,33 +76,49 @@ def _dedup_entries(
         name_vi = entry.get("name_vi") or entry.get("name") or ""
         key = _normalize_name(name_vi)
         if not key:
-            barcoded.append(entry)  # can't dedup without a name key
+            barcoded.append(entry)
             continue
 
         existing = by_name.get(key)
         if existing is None:
             by_name[key] = entry
         else:
-            existing_priority = SOURCE_PRIORITY.get(existing.get("source", ""), _DEFAULT_PRIORITY)
-            new_priority = SOURCE_PRIORITY.get(source, _DEFAULT_PRIORITY)
-            if new_priority < existing_priority:
+            existing_pri = SOURCE_PRIORITY.get(existing.get("source", ""), _DEFAULT_PRIORITY)
+            new_pri = SOURCE_PRIORITY.get(source, _DEFAULT_PRIORITY)
+            if new_pri < existing_pri:
                 by_name[key] = entry
 
     return barcoded + list(by_name.values())
 
 
-def _run_import(
-    data_dir: Path,
-    dry_run: bool,
-    source_filter: str | None,
-) -> None:
+def _fetch_data(data_dir: Path) -> None:
+    """Fetch seed data from NIN VN + OpenFoodFacts APIs into data_dir."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    python = sys.executable
+
+    fetchers = [
+        ("NIN VN", [python, str(_SCRAPERS_DIR / "fetch_nin_vn.py"),
+                    "--output-foods", str(data_dir / "nin_vn_foods.json"),
+                    "--output-dishes", str(data_dir / "nin_vn_dishes.json")]),
+        ("OpenFoodFacts VN", [python, str(_SCRAPERS_DIR / "fetch_off_vn.py"),
+                              "--output", str(data_dir / "off_vn_products.json")]),
+    ]
+    for label, cmd in fetchers:
+        logger.info("Fetching %s ...", label)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error("Fetch failed for %s:\n%s", label, result.stderr[-500:])
+        else:
+            logger.info("Fetched %s successfully", label)
+
+
+def _run_import(data_dir: Path, dry_run: bool, source_filter: str | None) -> None:
     json_files = sorted(data_dir.glob("*.json"))
     if not json_files:
         logger.warning("No JSON files found in %s", data_dir)
         return
 
     logger.info("Loading from %d JSON file(s) in %s", len(json_files), data_dir)
-
     all_entries: list[dict] = []
     for path in json_files:
         entries = _load_json_file(path)
@@ -119,12 +126,10 @@ def _run_import(
         all_entries.extend(entries)
 
     logger.info("Total loaded: %d entries", len(all_entries))
-
     deduped = _dedup_entries(all_entries, source_filter)
     logger.info("After dedup: %d entries", len(deduped))
 
     counts: dict[str, int] = {"inserted": 0, "updated": 0, "skipped": 0, "invalid": 0}
-
     if dry_run:
         logger.info("Dry-run mode — validating only, no DB writes")
 
@@ -136,16 +141,13 @@ def _run_import(
     for entry in deduped:
         warnings = _validate_entry(entry)
         if warnings:
-            for w in warnings:
-                logger.warning("  [%s] %s", entry.get("name_vi", entry.get("name", "?")), w)
-            # Skip entries with negative macros; keep entries with just missing name_vi
             critical = [w for w in warnings if "negative" in w or "exceeds" in w]
             if critical:
                 counts["invalid"] += 1
                 continue
 
         if dry_run:
-            counts["inserted"] += 1  # treat as would-be insert in dry-run
+            counts["inserted"] += 1
             continue
 
         result = repo.upsert_seed(entry)  # type: ignore[union-attr]
@@ -166,27 +168,27 @@ def _print_report(counts: dict[str, int], dry_run: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Import VN food seed JSON files into food_reference table.")
-    parser.add_argument(
-        "--data-dir",
-        default=str(Path(__file__).resolve().parent.parent / "scripts" / "data"),
-        help="Directory containing scraped JSON files (default: scripts/data/)",
+    parser = argparse.ArgumentParser(
+        description="Fetch and import VN food seed data into food_reference table."
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Validate entries only — no DB writes",
-    )
-    parser.add_argument(
-        "--source",
-        default=None,
-        help="Import only entries from this source (e.g. 'vn_fct_pdf')",
-    )
+    parser.add_argument("--fetch", action="store_true",
+                        help="Fetch data from NIN VN + OpenFoodFacts APIs before importing")
+    parser.add_argument("--data-dir",
+                        default=str(Path(__file__).resolve().parent / "data"),
+                        help="Directory for JSON files (default: scripts/data/)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Validate entries only — no DB writes")
+    parser.add_argument("--source", default=None,
+                        help="Import only entries from this source (e.g. 'nin_vn')")
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
+
+    if args.fetch:
+        _fetch_data(data_dir)
+
     if not data_dir.exists():
-        logger.error("data-dir does not exist: %s", data_dir)
+        logger.error("data-dir does not exist: %s — use --fetch to download data first", data_dir)
         sys.exit(1)
 
     _run_import(data_dir=data_dir, dry_run=args.dry_run, source_filter=args.source)
