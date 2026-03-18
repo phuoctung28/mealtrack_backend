@@ -150,6 +150,12 @@ class FoodReferenceRepository:
                 ).scalars().first()
 
             safe_data = {k: v for k, v in data.items() if k in self._SEED_COLUMNS}
+            # Exclude None barcode — DB may reject NULL on unique column
+            if safe_data.get("barcode") is None:
+                safe_data.pop("barcode", None)
+            # Truncate category to fit VARCHAR(100)
+            if safe_data.get("category") and len(safe_data["category"]) > 100:
+                safe_data["category"] = safe_data["category"][:100]
 
             if existing:
                 for key, val in safe_data.items():

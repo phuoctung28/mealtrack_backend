@@ -46,6 +46,9 @@ def upgrade() -> None:
             "food_reference",
             sa.Column("extra_nutrients", sa.JSON(), nullable=True),
         )
+    # Fix barcode column: must be nullable for non-barcode seed entries
+    op.alter_column("food_reference", "barcode",
+                    existing_type=sa.String(20), nullable=True)
     # Composite index for seed upsert lookup (name_vi + source + region)
     if not _has_index("food_reference", "ix_food_ref_name_source_region"):
         op.create_index(
