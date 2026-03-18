@@ -27,14 +27,13 @@ except ImportError:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-API_URL = "https://vn.openfoodfacts.org/cgi/search.pl"
+API_URL = "https://world.openfoodfacts.org/api/v2/search"
 USER_AGENT = "NutreeAI/1.0 (contact@nutree.ai)"
 PAGE_SIZE = 100
 RATE_LIMIT_SECONDS = 1.0
 
 BASE_PARAMS: dict[str, Any] = {
-    "countries_tags_contains": "vietnam",
-    "json": 1,
+    "countries_tags_contains": "en:vietnam",
     "page_size": PAGE_SIZE,
     "fields": (
         "code,product_name,product_name_vi,brands,categories,"
@@ -51,7 +50,8 @@ def fetch_page(session: requests.Session, page: int) -> list[dict]:
         response.raise_for_status()
         data = response.json()
         products: list[dict] = data.get("products", [])
-        logger.debug("Page %d: %d raw products", page, len(products))
+        total_count = data.get("count", 0)
+        logger.debug("Page %d: %d raw products (total=%d)", page, len(products), total_count)
         return products
     except requests.RequestException as exc:
         logger.error("Request failed (page=%d): %s", page, exc)
@@ -145,8 +145,8 @@ def fetch_all(max_pages: int | None = None) -> list[dict]:
             page, page_entries, total_on_page, len(entries),
         )
 
-        # Stop if server returned fewer items than page_size
-        if total_on_page < PAGE_SIZE:
+        # Stop if fewer items than expected (last page can be slightly under)
+        if total_on_page < PAGE_SIZE - 5:
             logger.info("Last page reached (got %d < %d)", total_on_page, PAGE_SIZE)
             break
 
@@ -160,11 +160,8 @@ def save(entries: list[dict], output_path: Path) -> None:
     """Write entries to JSON, using common.schema.save_entries if available."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if HAS_COMMON_SCHEMA:
-        save_entries(entries, str(output_path))
-    else:
-        with output_path.open("w", encoding="utf-8") as f:
-            json.dump(entries, f, ensure_ascii=False, indent=2)
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(entries, f, ensure_ascii=False, indent=2)
 
     logger.info("Saved %d entries to %s", len(entries), output_path)
 

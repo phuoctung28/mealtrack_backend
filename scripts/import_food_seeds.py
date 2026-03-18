@@ -13,8 +13,6 @@ from pathlib import Path
 # Allow running from backend/ root: python -m scripts.import_food_seeds
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.infra.repositories.food_reference_repository import FoodReferenceRepository
-
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -130,7 +128,10 @@ def _run_import(
     if dry_run:
         logger.info("Dry-run mode — validating only, no DB writes")
 
-    repo = FoodReferenceRepository() if not dry_run else None
+    repo = None
+    if not dry_run:
+        from src.infra.repositories.food_reference_repository import FoodReferenceRepository
+        repo = FoodReferenceRepository()
 
     for entry in deduped:
         warnings = _validate_entry(entry)
