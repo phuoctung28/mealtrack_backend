@@ -40,6 +40,7 @@ COPY --from=builder --chown=appuser:appuser /opt/venv /opt/venv
 WORKDIR /app
 
 COPY --chown=appuser:appuser src/ /app/src/
+COPY --chown=appuser:appuser scripts/ /app/scripts/
 COPY --chown=appuser:appuser alembic.ini /app/
 COPY --chown=appuser:appuser migrations/ /app/migrations/
 COPY --chown=appuser:appuser docker-entrypoint.sh /app/
