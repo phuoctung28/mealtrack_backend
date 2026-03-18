@@ -153,6 +153,9 @@ def _run_import(data_dir: Path, dry_run: bool, source_filter: str | None) -> Non
 
         result = repo.upsert_seed(entry)  # type: ignore[union-attr]
         counts[result] += 1
+        if result == "skipped":
+            logger.warning("  SKIPPED: %s (source=%s)",
+                           entry.get("name_vi", entry.get("name", "?")), entry.get("source"))
 
         # Progress every 100 entries
         if i % 100 == 0 or i == total:
