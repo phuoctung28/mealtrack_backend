@@ -54,7 +54,8 @@ Remember: ONLY output valid JSON. No explanations, no markdown formatting, just 
 Parse the user's food description into a list of items with nutritional data. Each item should include:
 - name: Food name (bilingual format for non-English: "Local name (English name)")
 - quantity: Amount (number)
-- unit: Serving unit (e.g., "large", "slice", "cup", "piece", "g", "ml")
+- unit: Serving unit in the user's language (e.g., "quả lớn", "miếng", "lát", "g", "ml")
+- english_unit: Same unit in English (e.g., "large", "medium", "small", "slice", "cup", "piece", "g", "ml"). MUST be English.
 - calories: Estimated calories
 - protein: Protein in grams
 - carbs: Carbohydrates in grams
@@ -100,14 +101,14 @@ Guidelines:
 
     # English-only JSON example for prompt
     _EXAMPLE_EN = """[
-  {{"name": "Eggs", "quantity": 2, "unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
-  {{"name": "Toast with butter", "quantity": 1, "unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
+  {{"name": "Eggs", "quantity": 2, "unit": "large", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
+  {{"name": "Toast with butter", "quantity": 1, "unit": "slice", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
 ]"""
 
     # Bilingual JSON example — local name with English in parentheses
     _EXAMPLE_BILINGUAL = """[
-  {{"name": "Trứng gà (Eggs)", "quantity": 2, "unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
-  {{"name": "Bánh mì bơ (Toast with butter)", "quantity": 1, "unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
+  {{"name": "Trứng gà (Eggs)", "quantity": 2, "unit": "quả lớn", "english_unit": "large", "calories": 144, "protein": 12.6, "carbs": 0.7, "fat": 9.5}},
+  {{"name": "Bánh mì bơ (Toast with butter)", "quantity": 1, "unit": "lát", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
 ]"""
 
     @staticmethod
