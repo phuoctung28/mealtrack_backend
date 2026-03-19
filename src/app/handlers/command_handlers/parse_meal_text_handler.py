@@ -125,10 +125,12 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         Cascade lookup: FatSecret -> AI estimate.
         FatSecret prioritized for precision, but rejected if result diverges
         >3x from AI estimate (indicates wrong product match).
+        Uses english_unit (from AI) for calculation; unit stays localized for display.
         """
         name = item.get("name", "")
         quantity = item.get("quantity", 1.0)
-        unit = item.get("unit", "serving")
+        # Prefer english_unit for calculation, fall back to unit
+        unit = item.get("english_unit") or item.get("unit", "serving")
 
         if not name:
             item["data_source"] = "ai_estimate"

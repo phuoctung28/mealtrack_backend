@@ -33,12 +33,85 @@ UNIT_TO_GRAMS = {
     # ml/l removed — handled by density-aware logic in convert_quantity_to_grams
 }
 
+# Safety-net translation for when AI ignores the English-unit prompt instruction.
+# Not exhaustive — primary fix is the dual-unit approach (unit + english_unit).
+# Fuzzy matching + smart fallback in _convert_with_allowed_units handles the rest.
+UNIT_TRANSLATION = {
+    # Vietnamese count/size units
+    "quả lớn": "large",
+    "quả to": "large",
+    "trái lớn": "large",
+    "quả vừa": "medium",
+    "trái vừa": "medium",
+    "quả nhỏ": "small",
+    "trái nhỏ": "small",
+    "quả": "piece",
+    "trái": "piece",
+    "cái": "piece",
+    "miếng": "slice",
+    "lát": "slice",
+    "khúc": "piece",
+    "tô": "cup",
+    "chén": "cup",
+    "bát": "cup",
+    "muỗng canh": "tablespoon",
+    "muỗng súp": "tablespoon",
+    "thìa canh": "tablespoon",
+    "muỗng cà phê": "teaspoon",
+    "thìa cà phê": "teaspoon",
+    "phần": "serving",
+    "suất": "serving",
+    "khẩu phần": "serving",
+    # Spanish
+    "grande": "large",
+    "mediano": "medium",
+    "pequeño": "small",
+    "pieza": "piece",
+    "rebanada": "slice",
+    "taza": "cup",
+    "cucharada": "tablespoon",
+    "cucharadita": "teaspoon",
+    "porción": "serving",
+    # French
+    "gros": "large",
+    "moyen": "medium",
+    "petit": "small",
+    "morceau": "piece",
+    "tranche": "slice",
+    "tasse": "cup",
+    "cuillère à soupe": "tablespoon",
+    "cuillère à café": "teaspoon",
+    "portion": "serving",
+    # Japanese
+    "個": "piece",
+    "枚": "slice",
+    "杯": "cup",
+    "大さじ": "tablespoon",
+    "小さじ": "teaspoon",
+    # Chinese
+    "大": "large",
+    "中": "medium",
+    "小": "small",
+    "块": "piece",
+    "片": "slice",
+    "杯": "cup",
+    "汤匙": "tablespoon",
+    "茶匙": "teaspoon",
+    "份": "serving",
+}
+
 
 def _normalize_unit(unit: str) -> str:
-    """Normalize unit string: strip qualifiers, handle plurals, lowercase."""
+    """Normalize unit string: translate multilingual, strip qualifiers, handle plurals."""
     unit = (unit or "g").lower().strip()
+    # Translate multilingual units to English (check full string first)
+    if unit in UNIT_TRANSLATION:
+        return UNIT_TRANSLATION[unit]
     # Strip common qualifiers (e.g., "cup cooked" → "cup", "medium ripe" → "medium")
     base = unit.split()[0] if " " in unit else unit
+    # Check translation again after stripping qualifier
+    if base in UNIT_TRANSLATION:
+        return UNIT_TRANSLATION[base]
     # Handle plurals (e.g., "tablespoons" → "tablespoon", "cups" → "cup")
     if base.endswith("s") and base not in UNIT_TO_GRAMS:
         singular = base[:-1]
@@ -118,20 +191,60 @@ def _convert_with_allowed_units(
     quantity: float, unit: str, allowed_units: List[Dict[str, Any]],
     food_name: str = "",
 ) -> float:
-    """Convert quantity to grams using food-specific allowed_units."""
-    if unit.lower() == "g":
+    """Convert quantity to grams using food-specific allowed_units.
+
+    Resolution order:
+    1. Exact match against allowed_units
+    2. Translate unit → re-match allowed_units
+    3. Keyword match (translated unit found in allowed_unit description)
+    4. Global UNIT_TO_GRAMS mapping
+    5. Smart fallback: first non-gram allowed_unit (common serving size)
+    """
+    unit_lower = unit.lower().strip()
+    if unit_lower == "g":
         return quantity
 
+    # 1. Exact match against allowed_units
     for au in allowed_units:
-        if au.get("unit", "").lower() == unit.lower():
-            gram_weight = au.get("gram_weight", 1.0)
-            return quantity * gram_weight
+        if au.get("unit", "").lower() == unit_lower:
+            return quantity * au.get("gram_weight", 1.0)
 
-    # Fallback to global mapping if unit not in allowed_units
-    logger.warning(
-        f"Unit '{unit}' not in allowed_units, falling back to global mapping"
-    )
-    return convert_quantity_to_grams(quantity, unit, food_name)
+    # 2. Translate unit (e.g., "quả lớn" → "large") and re-match
+    translated = _normalize_unit(unit)
+    if translated != unit_lower:
+        for au in allowed_units:
+            if au.get("unit", "").lower() == translated:
+                logger.info(f"Unit '{unit}' translated to '{translated}', matched allowed_unit")
+                return quantity * au.get("gram_weight", 1.0)
+
+    # 3. Keyword match: check if translated unit appears in description
+    #    e.g., translated="large" matches description="1 large egg"
+    for au in allowed_units:
+        desc = au.get("description", "").lower()
+        if translated in desc.split():
+            logger.info(f"Unit '{unit}' keyword-matched description '{desc}'")
+            return quantity * au.get("gram_weight", 1.0)
+
+    # 4. Global UNIT_TO_GRAMS mapping
+    grams = UNIT_TO_GRAMS.get(translated)
+    if grams is not None:
+        logger.warning(f"Unit '{unit}' not in allowed_units, using global mapping '{translated}'={grams}g")
+        return quantity * grams
+
+    # 5. Smart fallback: use first non-gram serving (common portion) instead of raw grams
+    for au in allowed_units:
+        au_unit = au.get("unit", "").lower()
+        if au_unit not in ("g", "100 g", "1 g"):
+            logger.warning(
+                f"Unit '{unit}' unknown — using default serving "
+                f"'{au.get('description', au_unit)}' ({au.get('gram_weight')}g) "
+                f"from allowed_units"
+            )
+            return quantity * au.get("gram_weight", 1.0)
+
+    # Last resort: treat as grams (only if no allowed_units have useful servings)
+    logger.warning(f"Unit '{unit}' unresolvable — treating quantity as grams")
+    return quantity
 
 
 def clamp_nutrition_values(item: dict) -> dict:

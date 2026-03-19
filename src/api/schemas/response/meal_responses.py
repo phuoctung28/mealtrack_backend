@@ -30,7 +30,7 @@ class ParsedFoodItem(BaseModel):
     """Response DTO for a single parsed food item."""
     name: str = Field(..., description="Food name")
     quantity: float = Field(..., ge=0, description="Amount")
-    unit: str = Field(..., description="Serving unit")
+    unit: str = Field(..., description="Serving unit (localized)")
     calories: float = Field(..., ge=0, description="Calories")
     protein: float = Field(..., ge=0, description="Protein in grams")
     carbs: float = Field(..., ge=0, description="Carbohydrates in grams")
