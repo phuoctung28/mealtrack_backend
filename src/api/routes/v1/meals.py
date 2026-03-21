@@ -160,7 +160,16 @@ async def analyze_meal_image_immediate(
         )
 
         logger.info("Uploading and analyzing meal immediately")
-        meal = await event_bus.send(command)
+        try:
+            meal = await event_bus.send(command)
+        except (RuntimeError, ValueError) as e:
+            error_msg = str(e)
+            logger.warning("Meal image analysis failed: %s", error_msg)
+            raise ValidationException(
+                message="Could not identify food in the image. Please try again with a food photo.",
+                error_code="NOT_FOOD_IMAGE",
+                details={"error_message": error_msg},
+            ) from e
 
         logger.info(
             "Immediate analysis completed for meal ID: %s, status: %s",
