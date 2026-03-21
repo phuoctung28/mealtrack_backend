@@ -36,6 +36,9 @@ class FoodItem(Base, PrimaryEntityMixin):
     # Soft delete
     is_deleted = Column(Boolean, default=False, nullable=False, server_default='false')
 
+    # Position ordering within meal
+    order_index = Column(Integer, default=0, nullable=False, server_default='0')
+
     # Relationships
     nutrition = relationship("Nutrition", back_populates="food_items")
 

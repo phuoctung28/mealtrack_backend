@@ -229,7 +229,18 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
                 logger.info(f"Added food item from nutrition service: {change.name}")
                 return
 
-        logger.warning(f"Could not find nutrition data for ingredient: {change.name}")
+        # Priority 3: Fallback — add item with zero macros (never silently discard)
+        logger.warning(f"No nutrition data found for ingredient: {change.name}, adding with zero macros")
+        food_items_dict[new_item_id] = FoodItem(
+            id=new_item_id,
+            name=change.name or "Unknown Ingredient",
+            quantity=quantity,
+            unit=unit,
+            macros=Macros(protein=0, carbs=0, fat=0),
+            confidence=0.3,
+            fdc_id=change.fdc_id,
+            is_custom=True
+        )
 
     def _create_from_custom_nutrition(
         self,

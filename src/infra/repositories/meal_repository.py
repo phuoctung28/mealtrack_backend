@@ -59,10 +59,11 @@ class MealRepository(MealRepositoryPort):
                         existing_meal.nutrition = db_nutrition
                         # Flush to get nutrition ID before creating food_items
                         self.db.flush()
-                        # Add food items
+                        # Add food items with order preserved
                         if meal.nutrition.food_items:
-                            for item in meal.nutrition.food_items:
+                            for idx, item in enumerate(meal.nutrition.food_items):
                                 db_item = FoodItemMapper.to_persistence(item, nutrition_id=db_nutrition.id)
+                                db_item.order_index = idx
                                 self.db.add(db_item)
                     else:
                         # Update existing nutrition
@@ -97,10 +98,11 @@ class MealRepository(MealRepositoryPort):
                     self.db.add(db_nutrition)
                     # Flush to get nutrition ID before creating food_items
                     self.db.flush()
-                    # Add food items
+                    # Add food items with order preserved
                     if meal.nutrition.food_items:
-                        for item in meal.nutrition.food_items:
+                        for idx, item in enumerate(meal.nutrition.food_items):
                             db_item = FoodItemMapper.to_persistence(item, nutrition_id=db_nutrition.id)
+                            db_item.order_index = idx
                             self.db.add(db_item)
 
                 self.db.commit()
@@ -315,9 +317,10 @@ class MealRepository(MealRepositoryPort):
         # Delete old items
         for item in db_nutrition.food_items:
             self.db.delete(item)
-            
-        # Add new items
+
+        # Add new items with order preserved
         if domain_nutrition.food_items:
-            for item in domain_nutrition.food_items:
+            for idx, item in enumerate(domain_nutrition.food_items):
                 db_item = FoodItemMapper.to_persistence(item, nutrition_id=db_nutrition.id)
+                db_item.order_index = idx
                 self.db.add(db_item)

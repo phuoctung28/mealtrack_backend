@@ -24,7 +24,8 @@ class Nutrition(Base, SecondaryEntityMixin):
     # Relationships
     food_items = relationship("FoodItem",
                              back_populates="nutrition",
-                             cascade="all, delete-orphan")
+                             cascade="all, delete-orphan",
+                             order_by="FoodItem.order_index")
     meal_id = Column(String(36), ForeignKey("meal.meal_id"), nullable=False)
     meal = relationship("Meal", back_populates="nutrition")
 
@@ -69,9 +70,11 @@ class Nutrition(Base, SecondaryEntityMixin):
 
         if domain_model.food_items:
             from .food_item import FoodItem
-            nutrition.food_items = [
-                FoodItem.from_domain(food_item)
-                for food_item in domain_model.food_items
-            ]
+            food_items = []
+            for idx, food_item in enumerate(domain_model.food_items):
+                db_item = FoodItem.from_domain(food_item)
+                db_item.order_index = idx
+                food_items.append(db_item)
+            nutrition.food_items = food_items
 
         return nutrition

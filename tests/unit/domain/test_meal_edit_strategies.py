@@ -485,8 +485,17 @@ class TestAddFoodItemStrategy:
         # Act
         await strategy.apply(food_items_dict, change)
         
-        # Assert - Item not added
-        assert len(food_items_dict) == 0
+        # Assert - Item added with zero macros as fallback (never silently discard)
+        assert len(food_items_dict) == 1
+        added_item = list(food_items_dict.values())[0]
+        assert added_item.name == "Unknown Food"
+        assert added_item.quantity == 100.0
+        assert added_item.unit == "g"
+        assert added_item.macros.protein == 0
+        assert added_item.macros.carbs == 0
+        assert added_item.macros.fat == 0
+        assert added_item.confidence == 0.3
+        assert added_item.is_custom is True
 
     @pytest.mark.asyncio
     async def test_add_uses_default_quantity_and_unit(self):
