@@ -392,49 +392,24 @@ def get_suggestion_orchestration_service():
 
 
 # Meal Analysis Translation Service
-def get_meal_translation_service(
-    db: Optional[Session] = None
-) -> MealAnalysisTranslationService:
+def get_meal_translation_service() -> MealAnalysisTranslationService:
     """
     Get the meal analysis translation service instance.
-
-    This function works both as:
-    - FastAPI dependency (db injected via Depends)
-    - Regular function call (creates its own session)
-
-    Args:
-        db: Optional database session. If not provided, creates one internally.
-
-    Returns:
-        MealAnalysisTranslationService: The translation service
+    Repository uses session factory internally — safe for singletons.
     """
     from src.domain.services.meal_suggestion.translation_service import TranslationService
     from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
     from src.infra.repositories.meal_translation_repository import MealTranslationRepository
-    from src.infra.database.config import SessionLocal
+    from src.infra.adapters.meal_generation_service import MealGenerationService
 
-    # Create session if not provided (for non-request context)
-    own_session = db is None
-    if own_session:
-        db = SessionLocal()
+    translation_repo = MealTranslationRepository()  # uses SessionLocal factory
+    generation_service = MealGenerationService()
+    translation_service = TranslationService(generation_service)
 
-    try:
-        translation_repo = MealTranslationRepository(db)
-
-        # Get existing TranslationService (uses singleton model manager)
-        from src.infra.adapters.meal_generation_service import MealGenerationService
-        generation_service = MealGenerationService()
-        translation_service = TranslationService(generation_service)
-
-        return MealAnalysisTranslationService(
-            translation_repo=translation_repo,
-            translation_service=translation_service
-        )
-    except Exception:
-        # Clean up session on error if we created it
-        if own_session:
-            db.close()
-        raise
+    return MealAnalysisTranslationService(
+        translation_repo=translation_repo,
+        translation_service=translation_service
+    )
 
 
 def get_translation_service() -> "TranslationService":
