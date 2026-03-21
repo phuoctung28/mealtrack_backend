@@ -149,6 +149,19 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
             dish_name = self.gpt_parser.parse_dish_name(vision_result)
 
+            # Validate: reject if no edible food detected
+            has_food = (
+                nutrition
+                and nutrition.food_items
+                and len(nutrition.food_items) > 0
+                and nutrition.calories > 0
+            )
+            if not has_food:
+                raise ValueError(
+                    "No edible food detected in the image. "
+                    "Please take a photo of food and try again."
+                )
+
             # Update meal with analysis results
             meal.dish_name = dish_name or "Unknown dish"
             meal.status = MealStatus.READY
