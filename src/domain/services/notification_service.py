@@ -164,26 +164,6 @@ class NotificationService:
             data={"meal_type": meal_type},
         )
 
-    async def send_water_reminder(self, user_id: str) -> Dict[str, Any]:
-        """Send water reminder notification."""
-        return await self.send_notification(
-            user_id=user_id,
-            title="💧 Hydration Check",
-            body="Time to drink some water!",
-            notification_type=NotificationType.WATER_REMINDER,
-            data={"type": "water_reminder"},
-        )
-
-    async def send_sleep_reminder(self, user_id: str) -> Dict[str, Any]:
-        """Send sleep reminder notification."""
-        return await self.send_notification(
-            user_id=user_id,
-            title="😴 Sleep Time",
-            body="Get ready for a good night's rest",
-            notification_type=NotificationType.SLEEP_REMINDER,
-            data={"type": "sleep_reminder"},
-        )
-
     async def send_daily_summary(
         self,
         user_id: str,
@@ -232,30 +212,6 @@ class NotificationService:
             excess = int(consumed - goal)
             cfg = DAILY_SUMMARY_CONFIG["way_over"]
             return cfg["title"], cfg["body_template"].format(excess=excess)
-
-    async def send_progress_notification(
-        self, user_id: str, title: str, body: str, data: Optional[Dict[str, str]] = None
-    ) -> Dict[str, Any]:
-        """Send progress notification."""
-        return await self.send_notification(
-            user_id=user_id,
-            title=title,
-            body=body,
-            notification_type=NotificationType.PROGRESS_NOTIFICATION,
-            data=data,
-        )
-
-    async def send_reengagement_notification(
-        self, user_id: str, title: str, body: str, data: Optional[Dict[str, str]] = None
-    ) -> Dict[str, Any]:
-        """Send reengagement notification."""
-        return await self.send_notification(
-            user_id=user_id,
-            title=title,
-            body=body,
-            notification_type=NotificationType.REENGAGEMENT_NOTIFICATION,
-            data=data,
-        )
 
     async def send_bulk_notifications(
         self, notifications: List[PushNotification]
