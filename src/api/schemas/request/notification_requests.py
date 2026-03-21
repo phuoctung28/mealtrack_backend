@@ -15,7 +15,7 @@ class FcmTokenRegistrationRequest(BaseModel):
         max_length=50,
         description="IANA timezone identifier (e.g., 'America/Los_Angeles')"
     )
-    
+
     @field_validator('device_type')
     @classmethod
     def validate_device_type(cls, v):
@@ -32,18 +32,12 @@ class FcmTokenDeletionRequest(BaseModel):
 class NotificationPreferencesUpdateRequest(BaseModel):
     """Request to update notification preferences."""
     meal_reminders_enabled: Optional[bool] = Field(None, description="Enable/disable meal reminders")
-    water_reminders_enabled: Optional[bool] = Field(None, description="Enable/disable water reminders")
-    sleep_reminders_enabled: Optional[bool] = Field(None, description="Enable/disable sleep reminders")
-    progress_notifications_enabled: Optional[bool] = Field(None, description="Enable/disable progress notifications")
-    reengagement_notifications_enabled: Optional[bool] = Field(None, description="Enable/disable reengagement notifications")
-    
-    # Meal timing (minutes from midnight: 0-1439)
-    breakfast_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="[DEPRECATED] Breakfast reminder time (minutes from midnight)", deprecated=True)
-    lunch_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="Lunch reminder time (minutes from midnight)")
-    dinner_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="[DEPRECATED] Dinner reminder time (minutes from midnight)", deprecated=True)
+    daily_summary_enabled: Optional[bool] = Field(None, description="Enable/disable daily summary notifications")
 
-    # Water reminder settings
-    water_reminder_interval_hours: Optional[int] = Field(None, gt=0, description="[DEPRECATED] Water reminder interval in hours", deprecated=True)
-    
-    # Sleep reminder timing
-    sleep_reminder_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="Sleep reminder time (minutes from midnight)")
+    # Meal timing (minutes from midnight: 0-1439)
+    breakfast_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="Breakfast reminder time (minutes from midnight)")
+    lunch_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="Lunch reminder time (minutes from midnight)")
+    dinner_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="Dinner reminder time (minutes from midnight)")
+
+    # Daily summary timing
+    daily_summary_time_minutes: Optional[int] = Field(None, ge=0, le=1439, description="Daily summary time (minutes from midnight)")

@@ -113,22 +113,6 @@ class NotificationRepository(NotificationRepositoryPort):
         finally:
             self._close_db_if_created(db)
 
-    def find_users_for_sleep_reminder(self, current_utc: datetime) -> List[str]:
-        """Find user IDs who should receive sleep reminders at current UTC time."""
-        db = self._get_db()
-        try:
-            return self.query_builder.find_users_for_sleep_reminder(db, current_utc)
-        finally:
-            self._close_db_if_created(db)
-
-    def find_users_for_fixed_water_reminder(self, current_utc: datetime) -> List[str]:
-        """Find user IDs who should receive water reminders at their fixed time."""
-        db = self._get_db()
-        try:
-            return self.query_builder.find_users_for_fixed_water_reminder(db, current_utc)
-        finally:
-            self._close_db_if_created(db)
-
     def find_users_for_daily_summary(self, current_utc: datetime) -> List[str]:
         """Find user IDs who should receive daily summary at 9PM local time."""
         db = self._get_db()
@@ -137,10 +121,3 @@ class NotificationRepository(NotificationRepositoryPort):
         finally:
             self._close_db_if_created(db)
 
-    def update_last_water_reminder(self, user_id: str, sent_at: datetime) -> bool:
-        """Update last water reminder timestamp for user."""
-        db = self._get_db()
-        try:
-            return self.prefs_ops.update_last_water_reminder(db, user_id, sent_at)
-        finally:
-            self._close_db_if_created(db)

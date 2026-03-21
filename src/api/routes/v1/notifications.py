@@ -127,15 +127,11 @@ async def update_notification_preferences(
         command = UpdateNotificationPreferencesCommand(
             user_id=user_id,
             meal_reminders_enabled=request.meal_reminders_enabled,
-            water_reminders_enabled=request.water_reminders_enabled,
-            sleep_reminders_enabled=request.sleep_reminders_enabled,
-            progress_notifications_enabled=request.progress_notifications_enabled,
-            reengagement_notifications_enabled=request.reengagement_notifications_enabled,
+            daily_summary_enabled=request.daily_summary_enabled,
             breakfast_time_minutes=request.breakfast_time_minutes,
             lunch_time_minutes=request.lunch_time_minutes,
             dinner_time_minutes=request.dinner_time_minutes,
-            water_reminder_interval_hours=request.water_reminder_interval_hours,
-            sleep_reminder_time_minutes=request.sleep_reminder_time_minutes,
+            daily_summary_time_minutes=request.daily_summary_time_minutes,
         )
         
         result = await event_bus.send(command)

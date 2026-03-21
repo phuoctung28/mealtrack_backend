@@ -146,34 +146,6 @@ class NotificationRepositoryPort(ABC):
         pass
     
     @abstractmethod
-    def find_users_for_sleep_reminder(self, current_utc: datetime) -> List[str]:
-        """
-        Finds user IDs who should receive sleep reminders at current UTC time.
-        
-        Converts UTC to each user's local time for matching.
-        
-        Args:
-            current_utc: Current UTC datetime
-            
-        Returns:
-            List of user IDs who should receive the reminder
-        """
-        pass
-    
-    @abstractmethod
-    def find_users_for_fixed_water_reminder(self, current_utc: datetime) -> List[str]:
-        """
-        Finds user IDs who should receive water reminders at their fixed time.
-
-        Args:
-            current_utc: Current UTC datetime
-
-        Returns:
-            List of user IDs due for water reminder at configured time
-        """
-        pass
-
-    @abstractmethod
     def find_users_for_daily_summary(self, current_utc: datetime) -> List[str]:
         """
         Finds user IDs who should receive daily summary at 9PM local time.
@@ -186,16 +158,3 @@ class NotificationRepositoryPort(ABC):
         """
         pass
 
-    @abstractmethod
-    def update_last_water_reminder(self, user_id: str, sent_at: datetime) -> bool:
-        """
-        Update last water reminder timestamp for user.
-        
-        Args:
-            user_id: User ID
-            sent_at: Timestamp when reminder was sent
-            
-        Returns:
-            True if updated successfully, False otherwise
-        """
-        pass
