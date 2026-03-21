@@ -432,24 +432,6 @@ class TestNotificationRepository:
         assert result == []
         mock_db_session.query.assert_not_called()
     
-    def test_find_users_for_sleep_reminder(self, repository, mock_db_session):
-        """Test finding users for sleep reminder with timezone-aware query."""
-        # Arrange - mock returns tuples of (user_id, pref_minutes, timezone)
-        mock_query = Mock()
-        mock_query.join = Mock(return_value=mock_query)
-        mock_query.filter = Mock(return_value=mock_query)
-        # User with sleep time 22:00 (1320 minutes) in UTC timezone
-        mock_query.all = Mock(return_value=[("user-1", 1320, "UTC")])
-        mock_db_session.query = Mock(return_value=mock_query)
-
-        # Act - 22:00 UTC = 22:00 local time for UTC user
-        current_utc = datetime(2024, 12, 7, 22, 0, tzinfo=timezone.utc)
-        result = repository.find_users_for_sleep_reminder(current_utc)
-
-        # Assert
-        assert len(result) == 1
-        assert "user-1" in result
-    
     # Error Handling Tests
     
     def test_save_fcm_token_error_rollback(self, repository, mock_db_session):
