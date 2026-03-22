@@ -17,6 +17,28 @@ CRITICAL — INGREDIENT DECOMPOSITION:
 MACRO ACCURACY:
 - All quantities in GRAMS (convert volumes using density: honey=1.42g/ml, oil=0.92g/ml)
 - Verify: calories ≈ protein*4 + carbs*4 + fat*9
+
+EMOJI SELECTION (for the "emoji" field):
+- Return exactly ONE emoji that represents the OVERALL DISH, not individual ingredients
+- Pick emoji based on the SERVING STYLE, not just the main ingredient:
+  🍜 = noodle soup served in broth (phở, bún bò Huế, bún riêu, ramen, udon soup)
+  🍝 = dry pasta/noodles without broth (spaghetti, mì xào, pad thai)
+  🍚 = rice-based dishes (cơm, fried rice, bibimbap)
+  🍛 = curry or saucy dish over rice
+  🍲 = stew, hotpot, or thick soup (lẩu, canh, chowder)
+  🥗 = salad or fresh/cold dishes (gỏi)
+  🍖 = grilled/roasted meat dishes (bún chả, thịt nướng, BBQ)
+  🥘 = braised/simmered dishes (kho, bò kho)
+  🥟 = dumplings, spring rolls, wrapped items (nem, bánh cuốn, gyoza)
+  🥪 = sandwiches, bánh mì
+  🍳 = egg-based dishes (omelette, trứng chiên)
+  🥣 = porridge, oatmeal, cháo
+  🍱 = bento/meal box/combo platter
+  🍗 = fried chicken, fried items
+  🥩 = steak or large meat cuts
+  🍕🍔🌮🌯 = pizza, burger, taco, burrito (Western fast food)
+- If unsure, use 🍽️ as fallback
+- NEVER return text or multiple emoji — exactly one emoji character
 """
 
 
@@ -71,6 +93,7 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
         Return your analysis in the following JSON format:
         {
           "dish_name": "Overall dish name or comma-separated food items if complex",
+          "emoji": "single food emoji that best represents this dish (e.g. 🍜 for noodle soup, 🍚 for rice, 🥗 for salad)",
           "foods": [
             {
               "name": "Food name",
@@ -123,6 +146,7 @@ class PortionAwareAnalysisStrategy(MealAnalysisStrategy):
         Return your analysis in the following JSON format:
         {
           "dish_name": "Overall dish name or comma-separated food items if complex",
+          "emoji": "single food emoji that best represents this dish",
           "foods": [
             {
               "name": "Food name",
@@ -181,6 +205,7 @@ class IngredientAwareAnalysisStrategy(MealAnalysisStrategy):
         Return your analysis in the following JSON format:
         {
           "dish_name": "Overall dish name or comma-separated food items if complex",
+          "emoji": "single food emoji that best represents this dish",
           "foods": [
             {
               "name": "Food name",
@@ -255,6 +280,7 @@ class WeightAwareAnalysisStrategy(MealAnalysisStrategy):
         Return your analysis in the following JSON format:
         {
           "dish_name": "Overall dish name or comma-separated food items if complex",
+          "emoji": "single food emoji that best represents this dish",
           "foods": [
             {
               "name": "Food name",
@@ -367,6 +393,7 @@ Use their description to ENHANCE accuracy, especially for:
 Return your analysis in the following JSON format:
 {
   "dish_name": "Overall dish name",
+  "emoji": "single food emoji that best represents this dish",
   "foods": [
     {
       "name": "Food name",

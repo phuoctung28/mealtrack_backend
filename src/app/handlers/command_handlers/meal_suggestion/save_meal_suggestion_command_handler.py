@@ -97,6 +97,7 @@ class SaveMealSuggestionCommandHandler(
             cook_time_min=command.estimated_cook_time_minutes,
             cuisine_type=command.cuisine_type,
             origin_country=command.origin_country,
+            emoji=command.emoji,
         )
 
         with UnitOfWork() as uow:

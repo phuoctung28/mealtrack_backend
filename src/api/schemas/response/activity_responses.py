@@ -21,6 +21,7 @@ class MealActivityResponse(BaseModel):
     type: str = "meal"
     timestamp: str
     title: str
+    emoji: Optional[str] = None
     meal_type: str
     calories: float
     macros: MacrosResponse

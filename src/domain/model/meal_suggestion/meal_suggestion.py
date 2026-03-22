@@ -90,5 +90,6 @@ class MealSuggestion:
     confidence_score: float
     origin_country: Optional[str] = None
     cuisine_type: Optional[str] = None
+    emoji: Optional[str] = None
     status: SuggestionStatus = SuggestionStatus.PENDING
     generated_at: datetime = field(default_factory=utc_now)

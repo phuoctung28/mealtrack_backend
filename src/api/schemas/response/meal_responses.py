@@ -120,6 +120,7 @@ class SimpleMealResponse(BaseModel):
     meal_id: str = Field(..., description="Meal ID")
     status: MealStatusEnum = Field(..., description="Processing status")
     dish_name: Optional[str] = Field(None, description="Identified dish name")
+    emoji: Optional[str] = Field(None, description="AI-assigned food emoji")
     meal_type: Optional[str] = Field(None, description="Meal type (breakfast, lunch, dinner, snack)")
     ready_at: Optional[datetime] = Field(None, description="When analysis completed")
     error_message: Optional[str] = Field(None, description="Error message if failed")

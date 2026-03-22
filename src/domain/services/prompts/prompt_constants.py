@@ -82,6 +82,20 @@ DECOMPOSITION_RULES = (
 
 
 # =============================================================================
+# EMOJI RULES — guide AI emoji selection for meal suggestions
+# =============================================================================
+EMOJI_RULES = (
+    "EMOJI FIELD (MANDATORY):\n"
+    "- Return exactly ONE emoji based on the dish's SERVING STYLE:\n"
+    "  🍜 noodle soup (phở, bún bò Huế, ramen) | 🍝 dry noodles/pasta\n"
+    "  🍚 rice dishes | 🍛 curry over rice | 🍲 stew/hotpot/thick soup\n"
+    "  🥗 salad/fresh | 🍖 grilled meat | 🥘 braised/simmered\n"
+    "  🥟 dumplings/rolls | 🥪 sandwich/bánh mì | 🍳 egg dishes\n"
+    "  🥣 porridge/cháo | 🍗 fried chicken | 🥩 steak\n"
+    "- NEVER return text or multiple emoji\n"
+)
+
+# =============================================================================
 # JSON SCHEMAS (Compressed - No inline comments)
 # =============================================================================
 JSON_SCHEMAS: Dict[str, str] = {
@@ -91,6 +105,7 @@ JSON_SCHEMAS: Dict[str, str] = {
     "meals": [{
       "meal_type": "breakfast",
       "name": "Meal Name",
+      "emoji": "🍳",
       "description": "Brief description",
       "calories": 400,
       "protein": 25.0,
@@ -113,6 +128,7 @@ JSON_SCHEMAS: Dict[str, str] = {
   "meals": [{
     "meal_type": "breakfast",
     "name": "Name",
+    "emoji": "🍳",
     "description": "Description",
     "calories": 400,
     "protein": 25.0,
@@ -132,6 +148,7 @@ JSON_SCHEMAS: Dict[str, str] = {
 
     "single_meal": '''{
   "name": "Name",
+  "emoji": "🍳",
   "description": "Description",
   "calories": 400,
   "protein": 25.0,
@@ -150,6 +167,7 @@ JSON_SCHEMAS: Dict[str, str] = {
 
     "suggestion_recipe": '''{
   "name": "Dish Name",
+  "emoji": "🍜",
   "description": "Brief description",
   "cuisine_type": "Asian",
   "origin_country": "Vietnam",

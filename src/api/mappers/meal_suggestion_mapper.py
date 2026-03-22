@@ -17,6 +17,7 @@ def to_meal_suggestion_response(suggestion: MealSuggestion) -> MealSuggestionRes
     return MealSuggestionResponse(
         id=suggestion.id,
         meal_name=suggestion.meal_name,
+        emoji=suggestion.emoji,
         description=suggestion.description,
         macros=MacroEstimateResponse(
             calories=suggestion.macros.calories,

@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 from src.domain.model.meal_planning import MealType, SimpleMacroTargets
 from src.domain.services.prompts import PromptTemplateManager
-from src.domain.services.prompts.prompt_constants import LANGUAGE_NAMES
+from src.domain.services.prompts.prompt_constants import EMOJI_RULES, LANGUAGE_NAMES
 
 if TYPE_CHECKING:
     from src.domain.model.meal_suggestion import SuggestionSession
@@ -67,6 +67,7 @@ Targets: {int(calorie_target)}cal (±50), {int(protein_target)}g P, {int(carbs_t
 
 Requirements: Practical ingredients, reasonable cook time, respect restrictions.
 
+{EMOJI_RULES}
 {PromptTemplateManager.get_json_schema("single_meal")}"""
 
     @staticmethod
@@ -112,6 +113,7 @@ Meal Targets:
 
 Requirements: Practical, reasonable times, respect restrictions, complementary flavors.
 
+{EMOJI_RULES}
 {PromptTemplateManager.get_json_schema("daily_meal")}"""
 
 
