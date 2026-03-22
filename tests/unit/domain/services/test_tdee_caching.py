@@ -71,37 +71,39 @@ class TestGetAdjustedDailyTarget:
         mock_adjusted.calories = 2100.0
         mock_adjusted.bmr_floor_active = False
 
-        with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.UnitOfWork") as mock_uow_cls, \
-             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.WeeklyBudgetService") as mock_budget_svc, \
+        mock_uow = Mock()
+        mock_uow.weekly_budgets.find_by_user_and_week.return_value = mock_budget
+
+        with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.WeeklyBudgetService") as mock_budget_svc, \
              patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday", return_value=date(2026, 3, 9)), \
              patch("src.domain.utils.timezone_utils.resolve_user_timezone", return_value="UTC"), \
              patch("src.domain.utils.timezone_utils.user_today", return_value=date(2026, 3, 13)):
 
-            mock_uow = Mock()
-            mock_uow.__enter__ = Mock(return_value=mock_uow)
-            mock_uow.__exit__ = Mock(return_value=False)
-            mock_uow.weekly_budgets.find_by_user_and_week.return_value = mock_budget
-            mock_uow_cls.return_value = mock_uow
-
             mock_budget_svc.calculate_remaining_days.return_value = 5
             mock_budget_svc.calculate_adjusted_daily.return_value = mock_adjusted
 
-            result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile)
+            result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile, uow=mock_uow)
 
         assert result == 2100.0
 
     @pytest.mark.asyncio
     async def test_falls_back_to_raw_tdee_when_no_budget(self, mock_tdee_service, mock_profile):
         """Should fall back to raw TDEE when no weekly budget found."""
-        with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.UnitOfWork") as mock_uow_cls:
-            mock_uow = Mock()
-            mock_uow.__enter__ = Mock(return_value=mock_uow)
-            mock_uow.__exit__ = Mock(return_value=False)
-            mock_uow.weekly_budgets.find_by_user_and_week.return_value = None
-            mock_uow_cls.return_value = mock_uow
+        mock_uow = Mock()
+        mock_uow.weekly_budgets.find_by_user_and_week.return_value = None
 
-            result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile)
+        with patch("src.domain.utils.timezone_utils.resolve_user_timezone", return_value="UTC"), \
+             patch("src.domain.utils.timezone_utils.user_today", return_value=Mock()), \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday", return_value=Mock()):
 
+            result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile, uow=mock_uow)
+
+        assert result == 2200.0
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_raw_tdee_when_no_uow(self, mock_tdee_service, mock_profile):
+        """Should fall back to raw TDEE when no UoW provided."""
+        result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile)
         assert result == 2200.0
 
     @pytest.mark.asyncio
@@ -110,10 +112,7 @@ class TestGetAdjustedDailyTarget:
         failing_service = Mock()
         failing_service.calculate_tdee.side_effect = [Exception("TDEE error")]
 
-        with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.UnitOfWork") as mock_uow_cls:
-            mock_uow_cls.side_effect = Exception("DB error")
-
-            result = await get_adjusted_daily_target(failing_service, "user123", mock_profile)
+        result = await get_adjusted_daily_target(failing_service, "user123", mock_profile)
 
         assert result == 2000.0
 

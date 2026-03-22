@@ -37,12 +37,14 @@ class SuggestionOrchestrationService:
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
         profile_provider: Optional[Callable[[str], Any]] = None,
+        uow_factory: Optional[Callable[[], Any]] = None,
     ):
         self._generation = generation_service
         self._repo = suggestion_repo
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
         self._profile_provider = profile_provider
+        self._uow_factory = uow_factory
 
         self._recipe_generator = ParallelRecipeGenerator(
             generation_service=generation_service,
@@ -130,7 +132,12 @@ class SuggestionOrchestrationService:
         if not profile:
             raise ValueError(f"User {user_id} profile not found")
 
-        daily_tdee = await get_adjusted_daily_target(self._tdee_service, user_id, profile)
+        if self._uow_factory:
+            uow_ctx = self._uow_factory()
+            with uow_ctx as uow:
+                daily_tdee = await get_adjusted_daily_target(self._tdee_service, user_id, profile, uow=uow)
+        else:
+            daily_tdee = await get_adjusted_daily_target(self._tdee_service, user_id, profile)
         meals_per_day = getattr(profile, "meals_per_day", 3)
 
         if calorie_target_override:

@@ -380,10 +380,13 @@ def get_suggestion_orchestration_service():
         finally:
             db.close()
 
+    from src.infra.database.uow import UnitOfWork
+
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
         suggestion_repo=suggestion_repo,
         profile_provider=profile_provider,
+        uow_factory=UnitOfWork,
     )
 
 

@@ -11,7 +11,6 @@ from src.domain.model.user import TdeeRequest, Sex, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import get_user_monday
-from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -45,44 +44,53 @@ def calculate_daily_tdee(tdee_service: TdeeCalculationService, profile: Any) -> 
 
 
 async def get_adjusted_daily_target(
-    tdee_service: TdeeCalculationService, user_id: str, profile: Any
+    tdee_service: TdeeCalculationService, user_id: str, profile: Any, uow: Any = None
 ) -> float:
     """
     Return adjusted daily calorie target from this week's budget.
     Falls back to raw TDEE if no budget exists or calculation fails.
+
+    Args:
+        tdee_service: TDEE calculation service
+        user_id: User ID
+        profile: User profile domain object
+        uow: Unit of work instance (injected from infra layer)
     """
     try:
         tdee_result = tdee_service.calculate_tdee(build_tdee_request(profile))
         base_calories = tdee_result.macros.calories
         bmr = tdee_result.bmr
 
-        with UnitOfWork() as uow:
-            from src.domain.utils.timezone_utils import resolve_user_timezone, user_today
-            user_tz = resolve_user_timezone(user_id, uow)
-            today = user_today(user_tz)
-            week_start = get_user_monday(today, user_id, uow)
-            weekly_budget = uow.weekly_budgets.find_by_user_and_week(user_id, week_start)
+        if uow is None:
+            logger.info(f"No UoW provided for user {user_id}, using raw TDEE: {base_calories}")
+            return base_calories
 
-            if not weekly_budget:
-                logger.info(f"No weekly budget for user {user_id}, using raw TDEE: {base_calories}")
-                return base_calories
+        from src.domain.utils.timezone_utils import resolve_user_timezone, user_today
+        user_tz = resolve_user_timezone(user_id, uow)
+        today = user_today(user_tz)
+        week_start = get_user_monday(today, user_id, uow)
+        weekly_budget = uow.weekly_budgets.find_by_user_and_week(user_id, week_start)
 
-            remaining_days = WeeklyBudgetService.calculate_remaining_days(week_start, today)
-            adjusted = WeeklyBudgetService.calculate_adjusted_daily(
-                weekly_budget,
-                base_calories,
-                tdee_result.macros.carbs,
-                tdee_result.macros.fat,
-                tdee_result.macros.protein,
-                bmr=bmr,
-                remaining_days=remaining_days,
-            )
-            logger.info(
-                f"Adjusted daily target for user {user_id}: "
-                f"{adjusted.calories:.0f} kcal (base: {base_calories:.0f}, "
-                f"bmr_floor: {adjusted.bmr_floor_active})"
-            )
-            return adjusted.calories
+        if not weekly_budget:
+            logger.info(f"No weekly budget for user {user_id}, using raw TDEE: {base_calories}")
+            return base_calories
+
+        remaining_days = WeeklyBudgetService.calculate_remaining_days(week_start, today)
+        adjusted = WeeklyBudgetService.calculate_adjusted_daily(
+            weekly_budget,
+            base_calories,
+            tdee_result.macros.carbs,
+            tdee_result.macros.fat,
+            tdee_result.macros.protein,
+            bmr=bmr,
+            remaining_days=remaining_days,
+        )
+        logger.info(
+            f"Adjusted daily target for user {user_id}: "
+            f"{adjusted.calories:.0f} kcal (base: {base_calories:.0f}, "
+            f"bmr_floor: {adjusted.bmr_floor_active})"
+        )
+        return adjusted.calories
 
     except Exception as e:
         logger.warning(f"Failed to get adjusted daily target: {e}. Falling back to raw TDEE.")
