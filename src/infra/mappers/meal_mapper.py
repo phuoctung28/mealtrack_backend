@@ -48,7 +48,8 @@ class MealMapper:
             prep_time_min=db_meal.prep_time_min if hasattr(db_meal, 'prep_time_min') else None,
             cook_time_min=db_meal.cook_time_min if hasattr(db_meal, 'cook_time_min') else None,
             cuisine_type=db_meal.cuisine_type if hasattr(db_meal, 'cuisine_type') else None,
-            origin_country=db_meal.origin_country if hasattr(db_meal, 'origin_country') else None
+            origin_country=db_meal.origin_country if hasattr(db_meal, 'origin_country') else None,
+            emoji=db_meal.emoji if hasattr(db_meal, 'emoji') else None
         )
 
     @staticmethod
@@ -78,6 +79,7 @@ class MealMapper:
             cook_time_min=domain_meal.cook_time_min,
             cuisine_type=domain_meal.cuisine_type,
             origin_country=domain_meal.origin_country,
+            emoji=domain_meal.emoji,
         )
 
 

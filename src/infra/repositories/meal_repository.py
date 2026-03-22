@@ -50,6 +50,7 @@ class MealRepository(MealRepositoryPort):
                 existing_meal.last_edited_at = meal.last_edited_at
                 existing_meal.edit_count = meal.edit_count
                 existing_meal.is_manually_edited = meal.is_manually_edited
+                existing_meal.emoji = meal.emoji
 
                 # Handle nutrition sync
                 if meal.nutrition:
