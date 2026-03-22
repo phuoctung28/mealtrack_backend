@@ -149,6 +149,7 @@ class CreateManualMealFromFoodsRequest(BaseModel):
     meal_type: Optional[str] = Field(None, description="Meal type: breakfast, lunch, dinner, or snack")
     target_date: Optional[str] = Field(None, description="Target date in YYYY-MM-DD format for meal association")
     source: Optional[str] = Field(None, description="Meal source: scanner, prompt, food_search, manual")
+    emoji: Optional[str] = Field(None, description="AI-assigned dish emoji")
 
 
 # Meal Edit Feature Requests

@@ -35,3 +35,4 @@ class CreateManualMealCommand(Command):
     meal_type: Optional[str] = None
     target_date: Optional[date] = None
     source: Optional[str] = None  # scanner, prompt, food_search, manual
+    emoji: Optional[str] = None  # AI-assigned dish emoji

@@ -111,6 +111,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                 url=None,
             ),
             dish_name=event.dish_name,
+            emoji=event.emoji,
             nutrition=nutrition,
             ready_at=meal_datetime,
             meal_type=event.meal_type,

@@ -48,6 +48,7 @@ class ParseMealTextResponse(BaseModel):
     total_protein: float = Field(..., description="Total protein in grams")
     total_carbs: float = Field(..., description="Total carbohydrates in grams")
     total_fat: float = Field(..., description="Total fat in grams")
+    emoji: Optional[str] = Field(None, description="AI-assigned dish emoji")
 
 
 class TranslatedFoodItemResponse(BaseModel):

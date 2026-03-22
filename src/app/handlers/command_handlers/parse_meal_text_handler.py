@@ -24,6 +24,7 @@ from src.app.handlers.command_handlers.meal_text_parsing_utils import (
     extract_usda_nutrition,
     parse_fatsecret_nutrition,
 )
+from src.domain.services.emoji_validator import validate_emoji
 logger = logging.getLogger(__name__)
 
 
@@ -66,8 +67,19 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         response = await model.ainvoke(messages)
         content = response.content
 
-        # Extract JSON from response
-        parsed_items = extract_json_from_response(content)
+        # Extract JSON from response — may be {emoji, items: [...]} or plain [...]
+        emoji = None
+        try:
+            raw = json.loads(content)
+            if isinstance(raw, dict):
+                emoji = validate_emoji(raw.get("emoji"))
+                parsed_items = raw.get("items", [])
+                if not isinstance(parsed_items, list):
+                    parsed_items = [parsed_items]
+            else:
+                parsed_items = extract_json_from_response(content)
+        except (json.JSONDecodeError, TypeError):
+            parsed_items = extract_json_from_response(content)
 
         # Enhance items with USDA/FatSecret cascade lookup
         enhanced_items = []
@@ -115,6 +127,7 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
             total_protein=total_protein,
             total_carbs=total_carbs,
             total_fat=total_fat,
+            emoji=emoji,
         )
 
     # Max ratio between FatSecret and AI estimate before rejecting FatSecret
