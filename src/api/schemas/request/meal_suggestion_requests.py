@@ -236,6 +236,7 @@ class SaveMealSuggestionRequest(BaseModel):
     )
     cuisine_type: Optional[str] = Field(None, description="Cuisine type (e.g., Asian, Vietnamese)")
     origin_country: Optional[str] = Field(None, description="Country of origin")
+    emoji: Optional[str] = Field(None, description="AI-assigned food emoji")
 
     @field_validator("meal_date")
     @classmethod

@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Optional
 
 from src.domain.model.nutrition import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem
+from src.domain.services.emoji_validator import validate_emoji
 
 
 class GPTResponseParsingError(Exception):
@@ -139,6 +140,14 @@ class GPTResponseParser:
         except (KeyError, TypeError):
             return None
     
+    def parse_emoji(self, gpt_response: Dict[str, Any]) -> Optional[str]:
+        """Parse and validate emoji from AI response."""
+        try:
+            structured_data = gpt_response.get("structured_data", {})
+            return validate_emoji(structured_data.get("emoji"))
+        except (KeyError, TypeError):
+            return None
+
     def extract_raw_json(self, gpt_response: Dict[str, Any]) -> str:
         """
         Extract the raw JSON from GPT response as a string.

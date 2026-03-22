@@ -61,8 +61,11 @@ Parse the user's food description into a list of items with nutritional data. Ea
 - carbs: Carbohydrates in grams
 - fat: Fat in grams
 
-IMPORTANT: You MUST respond with ONLY valid JSON array (no markdown, no code blocks):
-{{json_example}}
+IMPORTANT: You MUST respond with ONLY valid JSON object (no markdown, no code blocks):
+{
+  "emoji": "single emoji representing the overall dish (🍜 noodle soup, 🍝 dry pasta, 🍚 rice, 🍲 stew/hotpot, 🍖 grilled meat, 🥗 salad, 🥘 braised, 🥟 rolls/dumplings, 🥪 sandwich)",
+  "items": {{json_example}}
+}
 
 Guidelines:
 - Estimate nutritional values based on standard food databases

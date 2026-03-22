@@ -26,3 +26,4 @@ class ParseMealTextResponseDto:
     total_protein: float
     total_carbs: float
     total_fat: float
+    emoji: Optional[str] = None

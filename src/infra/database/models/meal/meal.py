@@ -40,6 +40,7 @@ class Meal(Base, TimestampMixin):
     cook_time_min = Column(Integer, nullable=True)
     cuisine_type = Column(String(50), nullable=True)
     origin_country = Column(String(50), nullable=True)
+    emoji = Column(String(8), nullable=True)  # AI-assigned food emoji
 
     # Relationships
     image_id = Column(String(36), ForeignKey("mealimage.image_id"), nullable=False)
@@ -87,7 +88,8 @@ class Meal(Base, TimestampMixin):
             prep_time_min=self.prep_time_min,
             cook_time_min=self.cook_time_min,
             cuisine_type=self.cuisine_type,
-            origin_country=self.origin_country
+            origin_country=self.origin_country,
+            emoji=self.emoji
         )
     
     @classmethod
@@ -122,7 +124,8 @@ class Meal(Base, TimestampMixin):
             prep_time_min=getattr(domain_model, "prep_time_min", None),
             cook_time_min=getattr(domain_model, "cook_time_min", None),
             cuisine_type=getattr(domain_model, "cuisine_type", None),
-            origin_country=getattr(domain_model, "origin_country", None)
+            origin_country=getattr(domain_model, "origin_country", None),
+            emoji=getattr(domain_model, "emoji", None)
         )
 
         # Add image reference - convert UUID to string

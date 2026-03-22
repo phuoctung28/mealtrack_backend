@@ -15,6 +15,7 @@ from src.domain.model.meal_suggestion import (
     RecipeStep,
     SuggestionSession,
 )
+from src.domain.services.emoji_validator import validate_emoji
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
 
@@ -109,6 +110,7 @@ async def attempt_recipe_generation(
             confidence_score=0.85,
             origin_country=raw.get("origin_country"),
             cuisine_type=raw.get("cuisine_type", "International"),
+            emoji=validate_emoji(raw.get("emoji")),
         )
 
     except asyncio.TimeoutError:

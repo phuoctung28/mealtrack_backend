@@ -116,6 +116,7 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
             "type": "meal",
             "timestamp": format_iso_utc(meal.created_at) if meal.created_at else format_iso_utc(target_date),
             "title": title,
+            "emoji": getattr(meal, "emoji", None),
             "meal_type": meal_type,
             "calories": round(meal.nutrition.calories, 1) if meal.nutrition else 0,
             "macros": {

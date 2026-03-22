@@ -15,6 +15,7 @@ from .prompt_constants import (
     SYSTEM_MESSAGES,
     MACRO_ACCURACY_RULES,
     DECOMPOSITION_RULES,
+    EMOJI_RULES,
 )
 
 
@@ -162,8 +163,9 @@ INGREDIENTS: {ing_str}
 OUTPUT JSON:
 {cls.get_json_schema("suggestion_recipe")}
 
+{EMOJI_RULES}
 RULES:
-1. ALL fields required: name, description, ingredients (3-8), recipe_steps (2-6), prep_time_minutes
+1. ALL fields required: name, emoji, description, ingredients (3-8), recipe_steps (2-6), prep_time_minutes
 2. Complete entire JSON - no truncation
 3. Natural dish name (not "Quick/Speedy/Power Bowl")
 4. Use listed ingredients with exact amounts (g/ml/tbsp/tsp)
@@ -292,4 +294,10 @@ REQUIREMENTS:
 {MACRO_ACCURACY_RULES}
 
 {DECOMPOSITION_RULES}
+
+{EMOJI_RULES}
+
+OUTPUT JSON:
+{cls.get_json_schema("suggestion_recipe")}
+Return ONLY valid JSON, no markdown.
 """

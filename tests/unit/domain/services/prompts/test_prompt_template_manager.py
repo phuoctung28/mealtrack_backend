@@ -121,8 +121,8 @@ class TestSuggestionPrompts:
             dietary_preferences=["gluten-free"],
         )
 
-        # Should be compact (under 1200 chars, down from 1500+ before optimization)
-        assert len(result) < 1200
+        # Should be compact (under 1800 chars, grew with EMOJI_RULES and detailed rules)
+        assert len(result) < 1800
         
         # Should contain essential info
         assert "lunch" in result
@@ -175,8 +175,8 @@ class TestTokenReduction:
         # Rough token estimate: ~4 chars per token
         estimated_tokens = len(prompt) / 4
         
-        # Target: under 250 tokens (was ~500+ before)
-        assert estimated_tokens < 300, f"Prompt too long: ~{estimated_tokens} tokens"
+        # Target: under 450 tokens (grew with EMOJI_RULES and detailed ingredient rules)
+        assert estimated_tokens < 450, f"Prompt too long: ~{estimated_tokens} tokens"
 
     def test_recipe_details_prompt_token_estimate(self):
         """Recipe details prompt should be under 250 tokens."""
@@ -189,5 +189,5 @@ class TestTokenReduction:
         )
 
         estimated_tokens = len(prompt) / 4
-        # Target ~400 tokens per build_recipe_details_prompt docstring
-        assert estimated_tokens < 450, f"Prompt too long: ~{estimated_tokens} tokens"
+        # Target ~700 tokens (grew with MACRO_ACCURACY_RULES, DECOMPOSITION_RULES, EMOJI_RULES)
+        assert estimated_tokens < 700, f"Prompt too long: ~{estimated_tokens} tokens"

@@ -251,6 +251,7 @@ async def create_manual_meal(
             meal_type=payload.meal_type,
             target_date=target_date,
             source=payload.source,
+            emoji=payload.emoji,
         )
         meal = await event_bus.send(cmd)
 
@@ -318,6 +319,7 @@ async def parse_meal_text(
             total_protein=app_response.total_protein,
             total_carbs=app_response.total_carbs,
             total_fat=app_response.total_fat,
+            emoji=app_response.emoji,
         )
     except Exception as e:
         raise handle_exception(e) from e

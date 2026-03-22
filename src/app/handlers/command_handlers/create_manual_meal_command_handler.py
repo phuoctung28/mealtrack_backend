@@ -2,10 +2,13 @@
 Command handler for creating manual meals from selected foods with nutrition data.
 All items must provide their own nutrition (via custom_nutrition).
 """
+import logging
 import uuid
 from datetime import datetime
 from typing import Any, List, Optional
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.events.base import EventHandler
@@ -111,6 +114,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                 url=None,
             ),
             dish_name=event.dish_name,
+            emoji=event.emoji,
             nutrition=nutrition,
             ready_at=meal_datetime,
             meal_type=event.meal_type,

@@ -54,6 +54,7 @@ class Meal:
     cook_time_min: Optional[int] = None
     cuisine_type: Optional[str] = None
     origin_country: Optional[str] = None
+    emoji: Optional[str] = None  # AI-assigned food emoji, stored once on creation
 
     def __post_init__(self):
         """Validate invariants."""
@@ -99,6 +100,7 @@ class Meal:
             cook_time_min=self.cook_time_min,
             cuisine_type=self.cuisine_type,
             origin_country=self.origin_country,
+            emoji=self.emoji,
         )
 
     def mark_analyzing(self) -> 'Meal':
@@ -279,5 +281,7 @@ class Meal:
             result["cuisine_type"] = self.cuisine_type
         if self.origin_country is not None:
             result["origin_country"] = self.origin_country
+        if self.emoji is not None:
+            result["emoji"] = self.emoji
 
         return result

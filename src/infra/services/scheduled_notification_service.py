@@ -12,6 +12,7 @@ from src.domain.services.notification_service import NotificationService
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.services.meal_suggestion.suggestion_tdee_helpers import get_adjusted_daily_target
 from src.domain.utils.timezone_utils import utc_now, timezone
+from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -193,9 +194,10 @@ class ScheduledNotificationService:
             calorie_goal = 2000  # Default fallback
             if profile:
                 try:
-                    calorie_goal = await get_adjusted_daily_target(
-                        self._tdee_service, user_id, profile
-                    )
+                    with UnitOfWork() as uow:
+                        calorie_goal = await get_adjusted_daily_target(
+                            self._tdee_service, user_id, profile, uow=uow
+                        )
                 except Exception as tdee_err:
                     logger.warning(f"Adjusted daily target failed for user {user_id}, using default: {tdee_err}")
 

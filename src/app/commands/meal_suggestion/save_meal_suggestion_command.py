@@ -45,6 +45,7 @@ class SaveMealSuggestionCommand(Command):
     meal_date: str  # YYYY-MM-DD format
     cuisine_type: Optional[str] = None
     origin_country: Optional[str] = None
+    emoji: Optional[str] = None
 
     def __post_init__(self):
         """Validate command data."""

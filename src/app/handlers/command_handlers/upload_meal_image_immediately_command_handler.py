@@ -164,6 +164,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
 
             # Update meal with analysis results
             meal.dish_name = dish_name or "Unknown dish"
+            meal.emoji = self.gpt_parser.parse_emoji(vision_result)
             meal.status = MealStatus.READY
             meal.ready_at = utc_now()
             meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)

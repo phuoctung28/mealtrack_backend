@@ -38,6 +38,7 @@ class SuggestedMealResponse(BaseModel):
     meal_id: str = Field(..., description="Unique meal identifier")
     meal_type: MealTypeEnum = Field(..., description="Type of meal")
     name: str = Field(..., description="Meal name")
+    emoji: Optional[str] = Field(None, description="AI-assigned food emoji")
     description: str = Field(..., description="Meal description")
     
     # Time information
@@ -150,6 +151,7 @@ class QuickMealIdeaResponse(BaseModel):
     """Response DTO for a quick meal idea with enriched data."""
     meal_id: str = Field(..., description="Unique meal identifier")
     name: str = Field(..., description="Meal name")
+    emoji: Optional[str] = Field(None, description="AI-assigned food emoji")
     description: str = Field(..., description="Short tagline (10 words max)")
     time_minutes: int = Field(..., ge=0, description="Total cooking time in minutes")
     calories: float = Field(..., ge=0, description="Estimated calories")
