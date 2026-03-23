@@ -17,3 +17,4 @@ class UpdateNotificationPreferencesCommand(Command):
     lunch_time_minutes: Optional[int] = None
     dinner_time_minutes: Optional[int] = None
     daily_summary_time_minutes: Optional[int] = None
+    language: Optional[str] = None

@@ -26,6 +26,9 @@ class NotificationPreferences(Base, BaseMixin):
     # Daily Summary Timing (minutes from midnight)
     daily_summary_time_minutes = Column(Integer, nullable=True, default=1260)
 
+    # Preferred notification language (ISO 639-1: 'en', 'vi')
+    language = Column(String(5), default='en', nullable=False, server_default='en')
+
     # Soft delete flag
     is_deleted = Column(Boolean, default=False, nullable=False)
 
@@ -50,6 +53,7 @@ class NotificationPreferences(Base, BaseMixin):
             lunch_time_minutes=self.lunch_time_minutes,
             dinner_time_minutes=self.dinner_time_minutes,
             daily_summary_time_minutes=self.daily_summary_time_minutes,
+            language=self.language,
             created_at=self.created_at,
             updated_at=self.updated_at
         )

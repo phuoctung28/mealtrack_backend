@@ -132,6 +132,7 @@ async def update_notification_preferences(
             lunch_time_minutes=request.lunch_time_minutes,
             dinner_time_minutes=request.dinner_time_minutes,
             daily_summary_time_minutes=request.daily_summary_time_minutes,
+            language=request.language,
         )
         
         result = await event_bus.send(command)

@@ -23,45 +23,43 @@ DEACTIVATABLE_FCM_ERRORS = {
     "INVALID_ARGUMENT",  # Malformed token
 }
 
-# Meal reminder configuration
-MEAL_REMINDER_CONFIG = {
-    "breakfast": {
-        "title": "🍳 Breakfast Time!",
-        "body": "Start your day right - log your breakfast",
+# Locale-keyed notification messages (EN default, VI supported)
+# TODO: add more locales as needed
+NOTIFICATION_MESSAGES = {
+    "en": {
+        "meal_reminder": {
+            "breakfast": {"title": "🍳 Breakfast Time!", "body": "Start your day right - log your breakfast"},
+            "lunch": {"title": "🥗 Lunch Time!", "body": "Time for a nutritious lunch break"},
+            "dinner": {"title": "🍽️ Dinner Time!", "body": "Wind down with a healthy dinner"},
+        },
+        "daily_summary": {
+            "zero_logs": {"title": "📝 Log Your Meals", "body": "No meals logged today. Add them from memory to track your progress!"},
+            "on_target": {"title": "🎉 Great Job Today!", "body_template": "You hit {percentage}% of your calorie goal. View your daily success!"},
+            "under_goal": {"title": "📊 Daily Summary", "body_template": "You're {deficit} cal short today. Consider a healthy snack!"},
+            "slightly_over": {"title": "💡 Daily Summary", "body_template": "You went {excess} cal over today. No worries - track carefully tomorrow!"},
+            "way_over": {"title": "📝 Daily Summary", "body_template": "You went {excess} cal over today. Stay mindful - tomorrow is a fresh start!"},
+        },
     },
-    "lunch": {
-        "title": "🥗 Lunch Time!",
-        "body": "Time for a nutritious lunch break",
-    },
-    "dinner": {
-        "title": "🍽️ Dinner Time!",
-        "body": "Wind down with a healthy dinner",
+    "vi": {
+        "meal_reminder": {
+            "breakfast": {"title": "🍳 Giờ ăn sáng!", "body": "Bắt đầu ngày mới — ghi lại bữa sáng nhé"},
+            "lunch": {"title": "🥗 Giờ ăn trưa!", "body": "Nghỉ trưa bổ dưỡng nào"},
+            "dinner": {"title": "🍽️ Giờ ăn tối!", "body": "Thư giãn với bữa tối lành mạnh nhé"},
+        },
+        "daily_summary": {
+            "zero_logs": {"title": "📝 Ghi lại bữa ăn", "body": "Hôm nay chưa ghi bữa nào. Thêm từ trí nhớ để theo dõi tiến trình!"},
+            "on_target": {"title": "🎉 Tuyệt vời!", "body_template": "Bạn đạt {percentage}% mục tiêu calo. Xem thành tích!"},
+            "under_goal": {"title": "📊 Tổng kết ngày", "body_template": "Bạn thiếu {deficit} cal hôm nay. Ăn nhẹ gì đi!"},
+            "slightly_over": {"title": "💡 Tổng kết ngày", "body_template": "Bạn vượt {excess} cal hôm nay. Không sao — mai cố gắng hơn!"},
+            "way_over": {"title": "📝 Tổng kết ngày", "body_template": "Bạn vượt {excess} cal hôm nay. Chú ý hơn — ngày mai là khởi đầu mới!"},
+        },
     },
 }
 
-# Daily summary notification configuration
-DAILY_SUMMARY_CONFIG = {
-    "zero_logs": {
-        "title": "📝 Log Your Meals",
-        "body": "No meals logged today. Add them from memory to track your progress!",
-    },
-    "on_target": {
-        "title": "🎉 Great Job Today!",
-        "body_template": "You hit {percentage}% of your calorie goal. View your daily success!",
-    },
-    "under_goal": {
-        "title": "📊 Daily Summary",
-        "body_template": "You're {deficit} cal short today. Consider a healthy snack!",
-    },
-    "slightly_over": {
-        "title": "💡 Daily Summary",
-        "body_template": "You went {excess} cal over today. No worries - track carefully tomorrow!",
-    },
-    "way_over": {
-        "title": "📝 Daily Summary",
-        "body_template": "You went {excess} cal over today. Stay mindful - tomorrow is a fresh start!",
-    },
-}
+
+def _get_messages(language: str) -> dict:
+    """Get notification messages for language, fallback to EN."""
+    return NOTIFICATION_MESSAGES.get(language, NOTIFICATION_MESSAGES["en"])
 
 
 class NotificationService:
@@ -146,20 +144,21 @@ class NotificationService:
             logger.error(f"Error sending notification to user {user_id}: {e}")
             return {"success": False, "reason": "error", "error": str(e)}
 
-    async def send_meal_reminder(self, user_id: str, meal_type: str) -> Dict[str, Any]:
-        """Send meal reminder notification."""
-        config = MEAL_REMINDER_CONFIG.get(
+    async def send_meal_reminder(
+        self, user_id: str, meal_type: str, language: str = "en"
+    ) -> Dict[str, Any]:
+        """Send meal reminder notification in user's preferred language."""
+        messages = _get_messages(language)["meal_reminder"]
+        config = messages.get(
             meal_type, {"title": "🍽️ Meal Time!", "body": "Time to log your meal"}
         )
-        title = config["title"]
-        body = config["body"]
 
         notification_type = NotificationType(f"meal_reminder_{meal_type}")
 
         return await self.send_notification(
             user_id=user_id,
-            title=title,
-            body=body,
+            title=config["title"],
+            body=config["body"],
             notification_type=notification_type,
             data={"meal_type": meal_type},
         )
@@ -170,9 +169,12 @@ class NotificationService:
         calories_consumed: float,
         calorie_goal: float,
         meals_logged: int,
+        language: str = "en",
     ) -> Dict[str, Any]:
-        """Send daily summary notification with conditional logic based on calorie consumption."""
-        title, body = self._get_summary_message(calories_consumed, calorie_goal, meals_logged)
+        """Send daily summary notification in user's preferred language."""
+        title, body = self._get_summary_message(
+            calories_consumed, calorie_goal, meals_logged, language=language
+        )
 
         return await self.send_notification(
             user_id=user_id,
@@ -188,29 +190,32 @@ class NotificationService:
         )
 
     def _get_summary_message(
-        self, consumed: float, goal: float, meals_logged: int
+        self, consumed: float, goal: float, meals_logged: int,
+        language: str = "en",
     ) -> tuple[str, str]:
-        """Get title and body for summary based on consumption level."""
+        """Get title and body for summary based on consumption level and language."""
+        summary = _get_messages(language)["daily_summary"]
+
         if meals_logged == 0:
-            cfg = DAILY_SUMMARY_CONFIG["zero_logs"]
+            cfg = summary["zero_logs"]
             return cfg["title"], cfg["body"]
 
         percentage = (consumed / goal) * 100 if goal > 0 else 0
 
         if 95 <= percentage <= 105:  # ±5%
-            cfg = DAILY_SUMMARY_CONFIG["on_target"]
+            cfg = summary["on_target"]
             return cfg["title"], cfg["body_template"].format(percentage=int(percentage))
         elif percentage < 95:
             deficit = int(goal - consumed)
-            cfg = DAILY_SUMMARY_CONFIG["under_goal"]
+            cfg = summary["under_goal"]
             return cfg["title"], cfg["body_template"].format(deficit=deficit)
         elif 105 < percentage <= 120:  # 10-20% over
             excess = int(consumed - goal)
-            cfg = DAILY_SUMMARY_CONFIG["slightly_over"]
+            cfg = summary["slightly_over"]
             return cfg["title"], cfg["body_template"].format(excess=excess)
         else:  # 20%+ over
             excess = int(consumed - goal)
-            cfg = DAILY_SUMMARY_CONFIG["way_over"]
+            cfg = summary["way_over"]
             return cfg["title"], cfg["body_template"].format(excess=excess)
 
     async def send_bulk_notifications(

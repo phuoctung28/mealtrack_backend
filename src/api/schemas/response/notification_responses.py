@@ -25,6 +25,9 @@ class NotificationPreferencesResponse(BaseModel):
     # Daily summary timing
     daily_summary_time_minutes: Optional[int] = Field(None, description="Daily summary time (minutes from midnight)")
 
+    # Preferred notification language
+    language: str = Field("en", description="Preferred notification language (ISO 639-1)")
+
 
 class NotificationPreferencesUpdateResponse(BaseModel):
     """Response for notification preferences update."""

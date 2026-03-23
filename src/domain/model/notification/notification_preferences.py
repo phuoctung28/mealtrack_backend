@@ -31,6 +31,7 @@ class NotificationPreferences:
     lunch_time_minutes: Optional[int] = None
     dinner_time_minutes: Optional[int] = None
     daily_summary_time_minutes: Optional[int] = 1260  # 9:00 PM default
+    language: str = "en"  # ISO 639-1: 'en', 'vi'. TODO: add more locales
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -68,6 +69,7 @@ class NotificationPreferences:
             lunch_time_minutes=720,       # 12:00 PM
             dinner_time_minutes=1080,     # 6:00 PM
             daily_summary_time_minutes=1260,  # 9:00 PM
+            language="en",
             created_at=utc_now(),
             updated_at=utc_now()
         )
@@ -80,6 +82,7 @@ class NotificationPreferences:
         lunch_time_minutes: Optional[int] = None,
         dinner_time_minutes: Optional[int] = None,
         daily_summary_time_minutes: Optional[int] = None,
+        language: Optional[str] = None,
     ) -> 'NotificationPreferences':
         """Update notification preferences with new values."""
         if breakfast_time_minutes is not None:
@@ -100,6 +103,7 @@ class NotificationPreferences:
             lunch_time_minutes=lunch_time_minutes if lunch_time_minutes is not None else self.lunch_time_minutes,
             dinner_time_minutes=dinner_time_minutes if dinner_time_minutes is not None else self.dinner_time_minutes,
             daily_summary_time_minutes=daily_summary_time_minutes if daily_summary_time_minutes is not None else self.daily_summary_time_minutes,
+            language=language if language is not None else self.language,
             created_at=self.created_at,
             updated_at=utc_now()
         )
@@ -131,6 +135,7 @@ class NotificationPreferences:
             "lunch_time_minutes": self.lunch_time_minutes,
             "dinner_time_minutes": self.dinner_time_minutes,
             "daily_summary_time_minutes": self.daily_summary_time_minutes,
+            "language": self.language,
             "created_at": format_iso_utc(self.created_at),
             "updated_at": format_iso_utc(self.updated_at),
         }

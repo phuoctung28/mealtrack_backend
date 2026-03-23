@@ -44,6 +44,7 @@ class UpdateNotificationPreferencesCommandHandler(EventHandler[UpdateNotificatio
                 lunch_time_minutes=command.lunch_time_minutes,
                 dinner_time_minutes=command.dinner_time_minutes,
                 daily_summary_time_minutes=command.daily_summary_time_minutes,
+                language=command.language,
             )
 
             final_prefs = self.notification_repository.save_notification_preferences(updated_prefs)
