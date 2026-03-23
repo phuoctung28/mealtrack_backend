@@ -9,6 +9,7 @@ from src.app.commands.notification import RegisterFcmTokenCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.notification import UserFcmToken, DeviceType
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
+from src.domain.utils.timezone_utils import is_valid_timezone, normalize_timezone
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,12 @@ class RegisterFcmTokenCommandHandler(
             )
 
             saved_token = notification_repo.save_fcm_token(fcm_token)
+
+            # 3. Update user timezone if provided
+            if command.timezone and is_valid_timezone(command.timezone):
+                canonical_tz = normalize_timezone(command.timezone)
+                uow.users.update_user_timezone(command.user_id, canonical_tz)
+                logger.info(f"Updated timezone for user {command.user_id}: {canonical_tz}")
 
             # UoW auto-commits on exit
             
