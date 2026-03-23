@@ -138,10 +138,10 @@ def _seed_dev_meals(user_id: str) -> None:
     """
     session = SessionLocal()
     try:
-        # Check if there are any meals today for this user
-        from datetime import date, timedelta
-        today = date.today()
-        start_dt = datetime.combine(today, datetime.min.time())
+        # Check if there are any meals today for this user (use UTC to match created_at)
+        from datetime import timedelta
+        today_utc = datetime.now(timezone.utc).date()
+        start_dt = datetime.combine(today_utc, datetime.min.time(), tzinfo=timezone.utc)
         end_dt = start_dt + timedelta(days=1)
 
         existing = (
