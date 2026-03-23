@@ -21,6 +21,7 @@ DEACTIVATABLE_FCM_ERRORS = {
     "NOT_FOUND",  # Firebase messaging.exceptions.NotFoundError
     "UNREGISTERED",  # Token unregistered from FCM
     "INVALID_ARGUMENT",  # Malformed token
+    "UNAUTHENTICATED",  # Token from different Firebase project (e.g. debug build)
 }
 
 # Meal reminder configuration
