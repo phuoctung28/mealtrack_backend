@@ -28,6 +28,7 @@ class NotificationPreferencesOperations:
                 existing_prefs.lunch_time_minutes = preferences.lunch_time_minutes
                 existing_prefs.dinner_time_minutes = preferences.dinner_time_minutes
                 existing_prefs.daily_summary_time_minutes = preferences.daily_summary_time_minutes
+                existing_prefs.language = preferences.language
                 existing_prefs.updated_at = preferences.updated_at
                 db.commit()
                 return existing_prefs.to_domain()
@@ -41,6 +42,7 @@ class NotificationPreferencesOperations:
                     lunch_time_minutes=preferences.lunch_time_minutes,
                     dinner_time_minutes=preferences.dinner_time_minutes,
                     daily_summary_time_minutes=preferences.daily_summary_time_minutes,
+                    language=preferences.language,
                     created_at=preferences.created_at,
                     updated_at=preferences.updated_at
                 )

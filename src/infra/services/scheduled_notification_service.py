@@ -111,8 +111,12 @@ class ScheduledNotificationService:
 
             for user_id in user_ids:
                 try:
+                    # Look up user's preferred notification language
+                    prefs = self.notification_repository.find_notification_preferences_by_user(user_id)
+                    language = prefs.language if prefs else "en"
+
                     result = await self.notification_service.send_meal_reminder(
-                        user_id, meal_type
+                        user_id, meal_type, language=language
                     )
 
                     if result.get("success"):
@@ -133,6 +137,10 @@ class ScheduledNotificationService:
 
             for user_id in user_ids:
                 try:
+                    # Look up user's preferred notification language
+                    prefs = self.notification_repository.find_notification_preferences_by_user(user_id)
+                    language = prefs.language if prefs else "en"
+
                     # Get user's daily nutrition data
                     today = current_utc.date()
                     daily_summary = await self._get_user_daily_summary(user_id, today)
@@ -141,7 +149,8 @@ class ScheduledNotificationService:
                         user_id=user_id,
                         calories_consumed=daily_summary["calories_consumed"],
                         calorie_goal=daily_summary["calorie_goal"],
-                        meals_logged=daily_summary["meals_logged"]
+                        meals_logged=daily_summary["meals_logged"],
+                        language=language,
                     )
 
                     if result.get("success"):
