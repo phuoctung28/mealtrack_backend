@@ -158,4 +158,11 @@ def get_db():
         yield db
     finally:
         ScopedSession.remove()  # Clean up session for this scope
-        _request_id.reset(token) 
+        try:
+            _request_id.reset(token)
+        except ValueError:
+            # FastAPI runs sync generator cleanup in a different thread context
+            # (via contextmanager_in_threadpool), so reset() may fail.
+            # This is safe — ScopedSession.remove() already cleaned up the session,
+            # and each request creates a fresh UUID regardless.
+            pass
