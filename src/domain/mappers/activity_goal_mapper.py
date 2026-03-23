@@ -38,16 +38,22 @@ class ActivityGoalMapper:
     }
 
     @classmethod
-    def map_job_type(cls, job_type: str) -> JobType:
+    def map_job_type(cls, job_type: str | None) -> JobType:
         """Map job type string to enum, with fallback to DESK."""
+        if not job_type:
+            return JobType.DESK
         return cls.JOB_TYPE_MAP.get(job_type.lower(), JobType.DESK)
 
     @classmethod
-    def map_goal(cls, goal: str) -> Goal:
+    def map_goal(cls, goal: str | None) -> Goal:
         """Map goal string to enum, with fallback to RECOMP."""
+        if not goal:
+            return Goal.RECOMP
         return cls.GOAL_MAP.get(goal.lower(), Goal.RECOMP)
 
     @classmethod
-    def map_training_level(cls, training_level: str) -> TrainingLevel:
+    def map_training_level(cls, training_level: str | None) -> TrainingLevel:
         """Map training level string to enum, with fallback to BEGINNER."""
+        if not training_level:
+            return TrainingLevel.BEGINNER
         return cls.TRAINING_LEVEL_MAP.get(training_level.lower(), TrainingLevel.BEGINNER)
