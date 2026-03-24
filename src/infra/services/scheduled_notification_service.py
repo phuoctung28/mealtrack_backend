@@ -115,8 +115,16 @@ class ScheduledNotificationService:
                     prefs = self.notification_repository.find_notification_preferences_by_user(user_id)
                     language = prefs.language if prefs else "en"
 
+                    # Get gender + remaining calories for personalized messages
+                    gender, remaining_cal = await self._get_user_context(
+                        user_id, current_utc.date()
+                    )
+
                     result = await self.notification_service.send_meal_reminder(
-                        user_id, meal_type, language=language
+                        user_id, meal_type,
+                        language=language,
+                        gender=gender,
+                        remaining_calories=remaining_cal,
                     )
 
                     if result.get("success"):
@@ -141,7 +149,7 @@ class ScheduledNotificationService:
                     prefs = self.notification_repository.find_notification_preferences_by_user(user_id)
                     language = prefs.language if prefs else "en"
 
-                    # Get user's daily nutrition data
+                    # Get user's daily nutrition data + gender
                     today = current_utc.date()
                     daily_summary = await self._get_user_daily_summary(user_id, today)
 
@@ -151,6 +159,7 @@ class ScheduledNotificationService:
                         calorie_goal=daily_summary["calorie_goal"],
                         meals_logged=daily_summary["meals_logged"],
                         language=language,
+                        gender=daily_summary["gender"],
                     )
 
                     if result.get("success"):
@@ -164,15 +173,52 @@ class ScheduledNotificationService:
         except Exception as e:
             logger.error(f"Error checking daily summary: {e}")
 
+    async def _get_user_context(self, user_id: str, date) -> tuple:
+        """Get user's gender and remaining calories for personalized notifications.
+
+        Returns (gender, remaining_calories) tuple.
+        """
+        from src.infra.database.config import SessionLocal
+        from src.infra.repositories.user_repository import UserRepository
+        from src.infra.repositories.meal_repository import MealRepository
+
+        db = SessionLocal()
+        try:
+            user_repo = UserRepository(db)
+            profile = user_repo.get_profile(user_id)
+            gender = profile.gender if profile else "male"
+
+            # Calculate remaining calories for lunch/dinner reminders
+            user_tz = user_repo.get_user_timezone(user_id) or "UTC"
+            meal_repo = MealRepository(db)
+            meals = meal_repo.find_by_date(date, user_id=user_id, user_timezone=user_tz)
+
+            calories_consumed = sum(
+                meal.nutrition.calories
+                for meal in meals
+                if meal.nutrition and hasattr(meal.nutrition, 'calories')
+            )
+
+            calorie_goal = 2000
+            if profile:
+                try:
+                    with UnitOfWork() as uow:
+                        calorie_goal = await get_adjusted_daily_target(
+                            self._tdee_service, user_id, profile, uow=uow
+                        )
+                except Exception as e:
+                    logger.warning(f"Adjusted daily target failed for {user_id}: {e}")
+
+            remaining = max(0, int(calorie_goal - calories_consumed))
+            return gender, remaining
+        finally:
+            db.close()
+
     async def _get_user_daily_summary(self, user_id: str, date) -> dict:
         """Get user's daily nutrition summary for the given date.
 
-        Returns dict with:
-        - calories_consumed: total calories for the day
-        - calorie_goal: user's target calorie intake (TDEE-based)
-        - meals_logged: count of meals logged
+        Returns dict with calories_consumed, calorie_goal, meals_logged, gender.
         """
-        # Get meals for the day (synchronous call)
         from src.infra.database.config import SessionLocal
         from src.infra.repositories.meal_repository import MealRepository
 
@@ -185,22 +231,21 @@ class ScheduledNotificationService:
             user_tz = _user_repo.get_user_timezone(user_id) or "UTC"
             meals = meal_repo.find_by_date(date, user_id=user_id, user_timezone=user_tz)
 
-            # Count meals
             meals_logged = len(meals)
 
-            # Calculate total calories consumed from all meals
-            calories_consumed = 0
-            for meal in meals:
-                if meal.nutrition and hasattr(meal.nutrition, 'calories'):
-                    calories_consumed += meal.nutrition.calories
+            calories_consumed = sum(
+                meal.nutrition.calories
+                for meal in meals
+                if meal.nutrition and hasattr(meal.nutrition, 'calories')
+            )
 
-            # Get user profile to calculate calorie goal
+            # Get user profile for calorie goal and gender
             from src.infra.repositories.user_repository import UserRepository
             user_repo = UserRepository(db)
             profile = user_repo.get_profile(user_id)
 
-            # Get adjusted daily target (falls back to raw TDEE if no weekly budget)
-            calorie_goal = 2000  # Default fallback
+            gender = profile.gender if profile else "male"
+            calorie_goal = 2000
             if profile:
                 try:
                     with UnitOfWork() as uow:
@@ -214,6 +259,7 @@ class ScheduledNotificationService:
                 "calories_consumed": calories_consumed,
                 "calorie_goal": calorie_goal,
                 "meals_logged": meals_logged,
+                "gender": gender,
             }
         finally:
             db.close()
