@@ -23,7 +23,11 @@ from src.app.commands.meal import (
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
-from src.app.commands.meal_suggestion import GenerateMealSuggestionsCommand, SaveMealSuggestionCommand
+from src.app.commands.meal_suggestion import (
+    GenerateMealSuggestionsCommand,
+    StreamGenerateMealSuggestionsCommand,
+    SaveMealSuggestionCommand,
+)
 from src.app.commands.notification import (
     RegisterFcmTokenCommand,
     DeleteFcmTokenCommand,
@@ -60,6 +64,7 @@ from src.app.handlers.command_handlers import (
     UpdateCustomMacrosCommandHandler,
     UploadMealImageImmediatelyHandler,
     GenerateMealSuggestionsCommandHandler,
+    StreamGenerateMealSuggestionsCommandHandler,
     SaveMealSuggestionCommandHandler,
     ParseMealTextHandler,
 )
@@ -262,7 +267,6 @@ def get_configured_event_bus() -> EventBus:
         get_cache_service,
         get_ai_chat_service,
         get_suggestion_orchestration_service,
-        get_meal_translation_service,
     )
 
     image_store = get_image_store()
@@ -280,7 +284,6 @@ def get_configured_event_bus() -> EventBus:
 
     # Register meal command handlers
     # Note: Handlers now use UnitOfWork internally for fresh sessions per request
-    meal_translation_service = get_meal_translation_service()
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
@@ -288,7 +291,6 @@ def get_configured_event_bus() -> EventBus:
             vision_service=vision_service,
             gpt_parser=gpt_parser,
             cache_service=cache_service,
-            meal_translation_service=meal_translation_service,
         ),
     )
     event_bus.register_handler(
@@ -407,6 +409,10 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         GenerateMealSuggestionsCommand,
         GenerateMealSuggestionsCommandHandler(suggestion_service),
+    )
+    event_bus.register_handler(
+        StreamGenerateMealSuggestionsCommand,
+        StreamGenerateMealSuggestionsCommandHandler(suggestion_service),
     )
     event_bus.register_handler(
         SaveMealSuggestionCommand,
@@ -534,7 +540,6 @@ def get_configured_event_bus() -> EventBus:
         vision_service=vision_service,
         gpt_parser=gpt_parser,
         image_store=image_store,
-        meal_translation_service=meal_translation_service,
     )
     event_bus.subscribe(
         MealImageUploadedEvent, meal_analysis_handler
