@@ -11,6 +11,7 @@ from src.domain.model.notification import (
     NotificationPreferences,
 )
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
+from src.domain.services.notification_messages import get_messages
 
 logger = logging.getLogger(__name__)
 
@@ -23,44 +24,6 @@ DEACTIVATABLE_FCM_ERRORS = {
     "INVALID_ARGUMENT",  # Malformed token
     "UNAUTHENTICATED",  # Token from different Firebase project (e.g. debug build)
 }
-
-# Locale-keyed notification messages (EN default, VI supported)
-# TODO: add more locales as needed
-NOTIFICATION_MESSAGES = {
-    "en": {
-        "meal_reminder": {
-            "breakfast": {"title": "🍳 Breakfast Time!", "body": "Start your day right - log your breakfast"},
-            "lunch": {"title": "🥗 Lunch Time!", "body": "Time for a nutritious lunch break"},
-            "dinner": {"title": "🍽️ Dinner Time!", "body": "Wind down with a healthy dinner"},
-        },
-        "daily_summary": {
-            "zero_logs": {"title": "📝 Log Your Meals", "body": "No meals logged today. Add them from memory to track your progress!"},
-            "on_target": {"title": "🎉 Great Job Today!", "body_template": "You hit {percentage}% of your calorie goal. View your daily success!"},
-            "under_goal": {"title": "📊 Daily Summary", "body_template": "You're {deficit} cal short today. Consider a healthy snack!"},
-            "slightly_over": {"title": "💡 Daily Summary", "body_template": "You went {excess} cal over today. No worries - track carefully tomorrow!"},
-            "way_over": {"title": "📝 Daily Summary", "body_template": "You went {excess} cal over today. Stay mindful - tomorrow is a fresh start!"},
-        },
-    },
-    "vi": {
-        "meal_reminder": {
-            "breakfast": {"title": "🍳 Giờ ăn sáng!", "body": "Bắt đầu ngày mới — ghi lại bữa sáng nhé"},
-            "lunch": {"title": "🥗 Giờ ăn trưa!", "body": "Nghỉ trưa bổ dưỡng nào"},
-            "dinner": {"title": "🍽️ Giờ ăn tối!", "body": "Thư giãn với bữa tối lành mạnh nhé"},
-        },
-        "daily_summary": {
-            "zero_logs": {"title": "📝 Ghi lại bữa ăn", "body": "Hôm nay chưa ghi bữa nào. Thêm từ trí nhớ để theo dõi tiến trình!"},
-            "on_target": {"title": "🎉 Tuyệt vời!", "body_template": "Bạn đạt {percentage}% mục tiêu calo. Xem thành tích!"},
-            "under_goal": {"title": "📊 Tổng kết ngày", "body_template": "Bạn thiếu {deficit} cal hôm nay. Ăn nhẹ gì đi!"},
-            "slightly_over": {"title": "💡 Tổng kết ngày", "body_template": "Bạn vượt {excess} cal hôm nay. Không sao — mai cố gắng hơn!"},
-            "way_over": {"title": "📝 Tổng kết ngày", "body_template": "Bạn vượt {excess} cal hôm nay. Chú ý hơn — ngày mai là khởi đầu mới!"},
-        },
-    },
-}
-
-
-def _get_messages(language: str) -> dict:
-    """Get notification messages for language, fallback to EN."""
-    return NOTIFICATION_MESSAGES.get(language, NOTIFICATION_MESSAGES["en"])
 
 
 class NotificationService:
@@ -146,20 +109,32 @@ class NotificationService:
             return {"success": False, "reason": "error", "error": str(e)}
 
     async def send_meal_reminder(
-        self, user_id: str, meal_type: str, language: str = "en"
+        self,
+        user_id: str,
+        meal_type: str,
+        language: str = "en",
+        gender: str = "male",
+        remaining_calories: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Send meal reminder notification in user's preferred language."""
-        messages = _get_messages(language)["meal_reminder"]
+        """Send meal reminder with gender-aware tone and remaining calories."""
+        messages = get_messages(language, gender)["meal_reminder"]
         config = messages.get(
             meal_type, {"title": "🍽️ Meal Time!", "body": "Time to log your meal"}
         )
+
+        title = config["title"]
+        # Breakfast uses static body; lunch/dinner use body_template with remaining cal
+        if "body_template" in config and remaining_calories is not None:
+            body = config["body_template"].format(remaining=remaining_calories)
+        else:
+            body = config.get("body", "Time to log your meal")
 
         notification_type = NotificationType(f"meal_reminder_{meal_type}")
 
         return await self.send_notification(
             user_id=user_id,
-            title=config["title"],
-            body=config["body"],
+            title=title,
+            body=body,
             notification_type=notification_type,
             data={"meal_type": meal_type},
         )
@@ -171,10 +146,12 @@ class NotificationService:
         calorie_goal: float,
         meals_logged: int,
         language: str = "en",
+        gender: str = "male",
     ) -> Dict[str, Any]:
-        """Send daily summary notification in user's preferred language."""
+        """Send daily summary with gender-aware tone."""
         title, body = self._get_summary_message(
-            calories_consumed, calorie_goal, meals_logged, language=language
+            calories_consumed, calorie_goal, meals_logged,
+            language=language, gender=gender,
         )
 
         return await self.send_notification(
@@ -192,10 +169,10 @@ class NotificationService:
 
     def _get_summary_message(
         self, consumed: float, goal: float, meals_logged: int,
-        language: str = "en",
+        language: str = "en", gender: str = "male",
     ) -> tuple[str, str]:
-        """Get title and body for summary based on consumption level and language."""
-        summary = _get_messages(language)["daily_summary"]
+        """Get title and body for summary based on consumption level, language, and gender."""
+        summary = get_messages(language, gender)["daily_summary"]
 
         if meals_logged == 0:
             cfg = summary["zero_logs"]
