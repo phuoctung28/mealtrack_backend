@@ -11,7 +11,6 @@ from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
@@ -30,13 +29,11 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         image_store: ImageStorePort = None,
-        meal_translation_service: Optional[MealAnalysisTranslationService] = None
     ):
         self.uow = uow
         self.vision_service = vision_service or VisionAIService()
         self.gpt_parser = gpt_parser or GPTResponseParser()
         self.image_store = image_store or CloudinaryImageStore()
-        self.meal_translation_service = meal_translation_service
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
@@ -44,7 +41,6 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
         self.vision_service = kwargs.get('vision_service', self.vision_service)
         self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
         self.image_store = kwargs.get('image_store', self.image_store)
-        self.meal_translation_service = kwargs.get('meal_translation_service', self.meal_translation_service)
     
     async def handle(self, event: MealImageUploadedEvent) -> None:
         """Handle meal image uploaded event by triggering background analysis."""
@@ -76,14 +72,14 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
                 
                 # Try to perform real analysis if we can get image contents
                 # Otherwise fall back to mock analysis
-                await self._perform_analysis(meal, uow, language=event.language)
+                await self._perform_analysis(meal, uow)
                 
             except Exception as e:
                 uow.rollback()
                 logger.error(f"Error processing meal image upload event for meal {event.meal_id}: {str(e)}")
                 await self._mark_meal_as_failed(event.meal_id, str(e))
     
-    async def _perform_analysis(self, meal, uow: UnitOfWorkPort, language: str = "en"):
+    async def _perform_analysis(self, meal, uow: UnitOfWorkPort):
         """Perform real AI analysis using the same logic as UploadMealImageImmediatelyHandler."""
         try:
             # Add small delay to simulate processing time
@@ -112,23 +108,6 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             meal.ready_at = utc_now()
             meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)
             meal.nutrition = nutrition
-
-            # Translation (if non-English)
-            if language and language != "en" and self.meal_translation_service and nutrition and nutrition.food_items:
-                try:
-                    translation = await self.meal_translation_service.translate_meal(
-                        meal=meal,
-                        dish_name=meal.dish_name,
-                        food_items=nutrition.food_items,
-                        target_language=language
-                    )
-                    if translation:
-                        logger.info(
-                            f"Translation saved for meal={meal.meal_id}, language={language}"
-                        )
-                except Exception as e:
-                    logger.warning(f"Translation failed for meal {meal.meal_id}: {e}")
-                    # Don't fail the whole analysis if translation fails
 
             # Save the fully analyzed meal
             uow.meals.save(meal)
