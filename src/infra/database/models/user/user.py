@@ -40,6 +40,9 @@ class User(Base, BaseMixin):
     # Timezone (IANA format, e.g., "America/Los_Angeles")
     timezone = Column(String(50), nullable=False, server_default='UTC')
 
+    # Preferred language (ISO 639-1: 'en', 'vi', 'es', 'fr', 'de', 'ja', 'zh')
+    language_code = Column(String(5), nullable=False, default='en', server_default='en')
+
     # Indexes for performance
     __table_args__ = (
         Index('idx_firebase_uid', 'firebase_uid'),

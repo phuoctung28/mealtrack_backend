@@ -73,6 +73,14 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                     created = True
                     logger.info('Created new user')
 
+                    # Set language from Accept-Language header if provided
+                    if command.language_code:
+                        from src.app.commands.user.update_language_command import SUPPORTED_LANGUAGES
+                        lang = command.language_code.lower().strip()
+                        if lang in SUPPORTED_LANGUAGES:
+                            user.language_code = lang
+                            uow.users.save(user)
+
                     # Create default notification preferences
                     self._create_default_notification_preferences(user.id, uow)
 

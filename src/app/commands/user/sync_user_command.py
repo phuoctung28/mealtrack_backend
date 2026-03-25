@@ -20,6 +20,7 @@ class SyncUserCommand:
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    language_code: Optional[str] = None  # From Accept-Language header
 
 
 @dataclass

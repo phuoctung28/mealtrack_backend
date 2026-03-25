@@ -167,3 +167,11 @@ class UserRepository(UserRepositoryPort):
             .first()
         )
         return user_entity.timezone if user_entity else None
+
+    def update_user_language(self, user_id: UUID, language_code: str) -> None:
+        """Update user's preferred language in the database."""
+        rows = self.db.query(User).filter(User.id == user_id).update(
+            {"language_code": language_code}
+        )
+        self.db.commit()
+        logger.info(f"Language update: user={user_id} lang={language_code} rows={rows}")
