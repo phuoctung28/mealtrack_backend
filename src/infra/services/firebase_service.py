@@ -142,6 +142,10 @@ class FirebaseService:
                     ),
                 ),
                 apns=messaging.APNSConfig(
+                    headers={
+                        "apns-priority": "10",
+                        "apns-push-type": "alert",
+                    },
                     payload=messaging.APNSPayload(
                         aps=messaging.Aps(
                             sound="default",
@@ -223,6 +227,10 @@ class FirebaseService:
                     ),
                 ),
                 apns=messaging.APNSConfig(
+                    headers={
+                        "apns-priority": "10",
+                        "apns-push-type": "alert",
+                    },
                     payload=messaging.APNSPayload(
                         aps=messaging.Aps(
                             sound="default",

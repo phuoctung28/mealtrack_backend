@@ -83,6 +83,13 @@ class NotificationService:
 
             # 3. Send notification via Firebase
             fcm_tokens = [token.fcm_token for token in tokens]
+            for t in tokens:
+                logger.info(
+                    f"Sending to user {user_id} | "
+                    f"device={t.device_type} "
+                    f"token={t.fcm_token[:20]}... "
+                    f"updated={t.updated_at}"
+                )
 
             result = self.firebase_service.send_notification(
                 user_id=user_id,
