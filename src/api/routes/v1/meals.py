@@ -130,9 +130,6 @@ async def analyze_meal_image_immediate(
                     details={"date": target_date},
                 ) from e
 
-        # Get language from Accept-Language header via middleware
-        language = get_request_language(request)
-
         # Sanitize user description to prevent prompt injection
         sanitized_description = None
         if user_description:
@@ -144,9 +141,8 @@ async def analyze_meal_image_immediate(
 
         # Process the upload and analysis immediately
         logger.info(
-            "Processing meal photo for immediate analysis (target_date: %s, language: %s, has_description: %s)",
+            "Processing meal photo for immediate analysis (target_date: %s, has_description: %s)",
             parsed_target_date,
-            language,
             bool(sanitized_description),
         )
 
@@ -155,7 +151,6 @@ async def analyze_meal_image_immediate(
             file_contents=contents,
             content_type=file.content_type,
             target_date=parsed_target_date,
-            language=language,
             user_description=sanitized_description,
         )
 
@@ -193,8 +188,8 @@ async def analyze_meal_image_immediate(
             # Try to get URL from image store (injected via DI)
             image_url = image_store.get_url(meal.image.image_id)
 
-        # Return the detailed meal response using mapper with translation support
-        return MealMapper.to_detailed_response(meal, image_url, target_language=language)
+        # Return detailed meal response in source language (English)
+        return MealMapper.to_detailed_response(meal, image_url)
 
     except Exception as e:
         raise handle_exception(e) from e

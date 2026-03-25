@@ -1,11 +1,10 @@
 import logging
 import os
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
@@ -31,6 +30,10 @@ from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
 from src.infra.services.firebase_service import FirebaseService
 from src.infra.services.scheduled_notification_service import ScheduledNotificationService
+
+if TYPE_CHECKING:
+    from src.domain.services.meal_suggestion.translation_service import TranslationService
+    from src.domain.ports.subscription_service_port import SubscriptionServicePort
 
 # Note: Old handler imports removed - using event-driven architecture now
 # from src.app.handlers.activity_handler import ActivityHandler
@@ -392,27 +395,6 @@ def get_suggestion_orchestration_service():
 
 # Note: Old handler functions removed - using event-driven architecture now
 # The event bus configuration in event_bus.py handles all dependencies
-
-
-# Meal Analysis Translation Service
-def get_meal_translation_service() -> MealAnalysisTranslationService:
-    """
-    Get the meal analysis translation service instance.
-    Repository uses session factory internally — safe for singletons.
-    """
-    from src.domain.services.meal_suggestion.translation_service import TranslationService
-    from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
-    from src.infra.repositories.meal_translation_repository import MealTranslationRepository
-    from src.infra.adapters.meal_generation_service import MealGenerationService
-
-    translation_repo = MealTranslationRepository()  # uses SessionLocal factory
-    generation_service = MealGenerationService()
-    translation_service = TranslationService(generation_service)
-
-    return MealAnalysisTranslationService(
-        translation_repo=translation_repo,
-        translation_service=translation_service
-    )
 
 
 def get_translation_service() -> "TranslationService":

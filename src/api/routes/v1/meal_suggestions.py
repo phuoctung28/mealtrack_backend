@@ -4,6 +4,7 @@ Simplified to only include generation endpoint.
 """
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -21,6 +22,7 @@ from src.api.schemas.response.meal_suggestion_responses import (
 )
 from src.app.commands.meal_suggestion import (
     GenerateMealSuggestionsCommand,
+    StreamGenerateMealSuggestionsCommand,
     SaveMealSuggestionCommand,
     IngredientItem,
 )
@@ -84,6 +86,51 @@ async def generate_suggestions(
 
     except Exception as e:
         raise handle_exception(e) from e
+
+
+@router.post("/generate/stream")
+@limiter.limit("5/minute")
+async def generate_suggestions_stream(
+    request: Request,
+    body: MealSuggestionRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """Stream meal suggestion generation events using SSE."""
+    try:
+        language = get_request_language(request)
+        portion_type = body.get_effective_portion_type()
+
+        command = StreamGenerateMealSuggestionsCommand(
+            user_id=user_id,
+            meal_type=body.meal_type,
+            meal_portion_type=portion_type.value,
+            ingredients=body.ingredients,
+            time_available_minutes=body.cooking_time_minutes.value,
+            session_id=body.session_id,
+            language=language,
+            servings=body.servings,
+            cooking_equipment=body.cooking_equipment,
+            cuisine_region=body.cuisine_region,
+            calorie_target=body.calorie_target,
+            protein_target=body.protein_target,
+            carbs_target=body.carbs_target,
+            fat_target=body.fat_target,
+        )
+        generator = await event_bus.send(command)
+
+        return StreamingResponse(
+            generator,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except Exception as e:
+        raise handle_exception(e) from e
+
 
 @router.post("/save", response_model=SaveMealSuggestionResponse)
 async def save_meal_suggestion(
