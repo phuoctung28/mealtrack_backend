@@ -17,7 +17,7 @@ from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.domain.services.meal_type_determination_service import determine_meal_type_from_timestamp
-from src.domain.utils.timezone_utils import utc_now, get_zone_info, is_valid_timezone
+from src.domain.utils.timezone_utils import utc_now, get_zone_info, is_valid_timezone, noon_utc_for_date
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
 
@@ -73,14 +73,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     # Get the last part and remove file extension
                     image_id = parts[-1].split(".")[0]
             
-            # Determine the meal date - use target_date if provided, otherwise use now
-            meal_date = command.target_date if command.target_date else utc_now().date()
-            # IMPORTANT: Must be timezone-aware UTC for correct astimezone() conversion
-            meal_datetime = datetime.combine(meal_date, utc_now().time(), tzinfo=timezone.utc)
-
-            logger.info(f"Creating meal record for date: {meal_date}")
-
-            # Get user timezone from DB for meal type detection
+            # Get user timezone from DB for meal type detection and date handling
             with UnitOfWork() as uow:
                 user_timezone = uow.users.get_user_timezone(command.user_id)
 
@@ -88,6 +81,17 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             if not user_timezone or not is_valid_timezone(user_timezone):
                 user_timezone = "UTC"
                 logger.info("Using UTC fallback for meal type detection")
+
+            # Determine the meal date and datetime
+            meal_date = command.target_date if command.target_date else utc_now().date()
+            if command.target_date:
+                # Past/future date: use noon in user's local timezone to avoid
+                # created_at falling into the wrong date after UTC conversion
+                meal_datetime = noon_utc_for_date(meal_date, user_timezone)
+            else:
+                meal_datetime = utc_now()
+
+            logger.info(f"Creating meal record for date: {meal_date}")
 
             # 4. Convert UTC to local time for meal type detection
             zone_info = get_zone_info(user_timezone)
