@@ -61,6 +61,26 @@ class Settings(BaseSettings):
     CACHE_ENABLED: bool = Field(default=True)
     CACHE_DEFAULT_TTL: int = Field(default=3600)  # 1 hour
 
+    # Queue configuration
+    QUEUE_ENABLED: bool = Field(default=False)
+    QUEUE_PROVIDER: str = Field(
+        default="upstash",
+        description="Queue backend: 'upstash' or 'dedicated'",
+    )
+    UPSTASH_REDIS_URL: str | None = Field(
+        default=None,
+        description="Full Redis URL for Upstash (required when QUEUE_PROVIDER=upstash)",
+    )
+    DEDICATED_REDIS_URL: str | None = Field(
+        default=None,
+        description="Override Redis URL for dedicated provider; else uses redis_url",
+    )
+    QUEUE_STREAM_NAME: str = Field(default="jobs:stream")
+    QUEUE_DEAD_LETTER_STREAM_NAME: str = Field(default="jobs:dead")
+    QUEUE_CONSUMER_GROUP: str = Field(default="jobs:workers")
+    QUEUE_MAX_RETRIES: int = Field(default=3)
+    QUEUE_BLOCK_MS: int = Field(default=5000)
+
     # Firebase
     FIREBASE_CREDENTIALS: str | None = Field(default=None)
     FIREBASE_SERVICE_ACCOUNT_JSON: str | None = Field(default=None)
@@ -117,6 +137,10 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: str = Field(default="", description="Comma-separated list of allowed CORS origins")
 
     # Feature flags / development toggles
+    SERVICE_ROLE: str = Field(
+        default="api",
+        description="Process role: 'api' for HTTP server, 'worker' for background job consumer",
+    )
     USE_MOCK_STORAGE: int = Field(default=0)
     DEV_USER_FIREBASE_UID: str = Field(default="dev_firebase_uid")
     DEV_USER_EMAIL: str = Field(default="dev@example.com")

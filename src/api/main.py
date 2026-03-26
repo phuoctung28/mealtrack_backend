@@ -28,8 +28,10 @@ from firebase_admin import credentials
 
 from src.api.base_dependencies import (
     initialize_cache_layer,
+    initialize_queue_layer,
     initialize_scheduled_notification_service,
     shutdown_cache_layer,
+    shutdown_queue_layer,
 )
 from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
@@ -162,6 +164,14 @@ async def lifespan(app: FastAPI):
         if os.getenv("FAIL_ON_CACHE_ERROR", "false").lower() == "true":
             raise
 
+    # Initialize queue layer (Upstash or dedicated per QUEUE_PROVIDER)
+    try:
+        await initialize_queue_layer()
+    except Exception as exc:
+        logger.error("Failed to initialize queue layer: %s", exc)
+        if settings.QUEUE_ENABLED:
+            raise
+
     logger.info("MealTrack API started successfully!")
     yield
 
@@ -177,7 +187,8 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Error stopping scheduled notification service: {e}")
 
-    # Disconnect cache
+    # Disconnect queue and cache
+    await shutdown_queue_layer()
     await shutdown_cache_layer()
 
 
