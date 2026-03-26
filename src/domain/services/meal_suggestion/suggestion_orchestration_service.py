@@ -70,8 +70,18 @@ class SuggestionOrchestrationService:
         fat_target: Optional[float] = None,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """Generate 3 suggestions, excluding meals shown in existing session if provided."""
+        is_existing_session = False
         if session_id:
-            session, exclude_names = await self._load_existing_session(session_id, user_id, language)
+            try:
+                session, exclude_names = await self._load_existing_session(session_id, user_id, language)
+                is_existing_session = True
+            except ValueError:
+                logger.info(f"Session {session_id} not found, creating new session for user {user_id}")
+                session, exclude_names = await self._create_new_session(
+                    user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
+                    language, servings, cooking_equipment, cuisine_region,
+                    calorie_target_override, protein_target, carbs_target, fat_target,
+                )
         else:
             session, exclude_names = await self._create_new_session(
                 user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
@@ -83,7 +93,7 @@ class SuggestionOrchestrationService:
         session.add_shown_ids([s.id for s in suggestions])
         session.add_shown_meals([s.meal_name for s in suggestions])
 
-        if session_id:
+        if is_existing_session:
             await self._repo.update_session(session)
         else:
             await self._repo.save_session(session)
