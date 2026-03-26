@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from src.domain.ports.chat_repository_port import ChatRepositoryPort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
@@ -16,13 +16,15 @@ class UnitOfWorkPort(ABC):
     Interface for Unit of Work.
     Manages transactions and provides access to repositories.
     """
-    
+
     users: UserRepositoryPort
     subscriptions: SubscriptionRepositoryPort
     notifications: NotificationRepositoryPort
     meals: MealRepositoryPort
     meal_suggestions: MealSuggestionRepositoryPort
     chats: ChatRepositoryPort
+    weekly_budgets: Any  # WeeklyBudgetRepository (no port interface yet)
+    cheat_days: Any  # CheatDayRepository (no port interface yet)
     
     @abstractmethod
     def __enter__(self) -> 'UnitOfWorkPort':
