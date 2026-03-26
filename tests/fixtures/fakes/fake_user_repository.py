@@ -61,3 +61,8 @@ class FakeUserRepository(UserRepositoryPort):
     def get_user_timezone(self, firebase_uid: str) -> Optional[str]:
         """Get user's timezone from database (returns None for fake repository)."""
         return None
+
+    def update_user_language(self, user_id: UUID, language_code: str) -> None:
+        """Update user's language preference."""
+        if user_id in self.users:
+            self.users[user_id].language_code = language_code

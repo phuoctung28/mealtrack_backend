@@ -111,12 +111,8 @@ class ScheduledNotificationService:
 
             for user_id in user_ids:
                 try:
-                    # Look up user's preferred notification language
-                    prefs = self.notification_repository.find_notification_preferences_by_user(user_id)
-                    language = prefs.language if prefs else "en"
-
-                    # Get gender + remaining calories for personalized messages
-                    gender, remaining_cal = await self._get_user_context(
+                    # Get gender, remaining calories, and language for personalized messages
+                    gender, remaining_cal, language = await self._get_user_context(
                         user_id
                     )
 
@@ -145,12 +141,9 @@ class ScheduledNotificationService:
 
             for user_id in user_ids:
                 try:
-                    # Look up user's preferred notification language
-                    prefs = self.notification_repository.find_notification_preferences_by_user(user_id)
-                    language = prefs.language if prefs else "en"
-
-                    # Get user's daily nutrition data + gender
+                    # Get user's daily nutrition data + gender + language
                     daily_summary = await self._get_user_daily_summary(user_id)
+                    language = daily_summary.get("language", "en")
 
                     result = await self.notification_service.send_daily_summary(
                         user_id=user_id,
@@ -173,15 +166,19 @@ class ScheduledNotificationService:
             logger.error(f"Error checking daily summary: {e}")
 
     async def _get_user_context(self, user_id: str) -> tuple:
-        """Get user's gender and remaining calories for personalized notifications.
+        """Get user's gender, remaining calories, and language for personalized notifications.
 
-        Returns (gender, remaining_calories) tuple.
+        Returns (gender, remaining_calories, language) tuple.
         Uses single UoW for all DB ops and user's local date for meal lookup.
         """
         from src.infra.repositories.meal_repository import MealRepository
         from src.domain.utils.timezone_utils import user_today
 
         with UnitOfWork() as uow:
+            # Read language from users table (canonical source)
+            user = uow.users.find_by_id(user_id)
+            language = getattr(user, 'language_code', 'en') if user else "en"
+
             profile = uow.users.get_profile(user_id)
             gender = profile.gender if profile else "male"
 
@@ -219,7 +216,7 @@ class ScheduledNotificationService:
                 f"goal={calorie_goal:.0f}, consumed={calories_consumed:.0f}, "
                 f"remaining={remaining}, tz={user_tz}, date={local_date}"
             )
-            return gender, remaining
+            return gender, remaining, language
 
     async def _get_user_daily_summary(self, user_id: str) -> dict:
         """Get user's daily nutrition summary for the given date.
@@ -247,6 +244,10 @@ class ScheduledNotificationService:
                 if meal.nutrition and hasattr(meal.nutrition, 'calories')
             )
 
+            # Read language from users table (canonical source)
+            user = uow.users.find_by_id(user_id)
+            language = getattr(user, 'language_code', 'en') if user else "en"
+
             profile = uow.users.get_profile(user_id)
             gender = profile.gender if profile else "male"
 
@@ -271,6 +272,7 @@ class ScheduledNotificationService:
                 "calorie_goal": calorie_goal,
                 "meals_logged": meals_logged,
                 "gender": gender,
+                "language": language,
             }
 
     async def send_test_notification(

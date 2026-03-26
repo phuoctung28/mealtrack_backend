@@ -69,3 +69,8 @@ class UserRepositoryPort(ABC):
     def get_user_timezone(self, user_id: UUID) -> Optional[str]:
         """Get user's timezone from database."""
         pass
+
+    @abstractmethod
+    def update_user_language(self, user_id: UUID, language_code: str) -> None:
+        """Update user's preferred language."""
+        pass

@@ -4,7 +4,7 @@ Handles user authentication sync, profile retrieval, and status management.
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
@@ -21,7 +21,7 @@ from src.api.schemas.response.user_responses import (
     OnboardingCompletionResponse,
     UserDeleteResponse
 )
-from src.app.commands.user import CompleteOnboardingCommand, DeleteUserCommand, UpdateTimezoneCommand
+from src.app.commands.user import CompleteOnboardingCommand, DeleteUserCommand, UpdateLanguageCommand, UpdateTimezoneCommand
 from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
     UpdateUserLastAccessedCommand
@@ -35,6 +35,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/users", tags=["Users"])
 
 
+class UpdateLanguageRequest(BaseModel):
+    """Request body for language preference update."""
+    language_code: str
+
+
 class UpdateTimezoneRequest(BaseModel):
     """Request body for timezone update."""
     timezone: str
@@ -43,6 +48,7 @@ class UpdateTimezoneRequest(BaseModel):
 @router.post("/sync", response_model=UserSyncResponse)
 async def sync_user_from_firebase(
     request: UserSyncRequest,
+    http_request: Request,
     token: dict = Depends(verify_firebase_token),
     event_bus: EventBus = Depends(get_configured_event_bus)
 ):
@@ -76,6 +82,10 @@ async def sync_user_from_firebase(
     )
     try:
         # Create sync command
+        # Extract language from Accept-Language header for new user creation
+        accept_language = http_request.headers.get("accept-language", "")
+        language_code = accept_language.split(",")[0].split("-")[0].strip() or None
+
         command = SyncUserCommand(
             firebase_uid=request.firebase_uid,
             email=request.email,
@@ -85,7 +95,8 @@ async def sync_user_from_firebase(
             provider=request.provider,
             username=request.username,
             first_name=request.first_name,
-            last_name=request.last_name
+            last_name=request.last_name,
+            language_code=language_code,
         )
         
         # Send command
@@ -248,6 +259,27 @@ async def update_timezone(
     """
     try:
         command = UpdateTimezoneCommand(user_id=user_id, timezone=request.timezone)
+        result = await event_bus.send(command)
+        return result
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.patch("/language")
+async def update_language(
+    request: UpdateLanguageRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus)
+):
+    """
+    Update user's preferred language.
+
+    - **language_code**: ISO 639-1 code (en, vi, es, fr, de, ja, zh)
+    """
+    try:
+        command = UpdateLanguageCommand(
+            user_id=user_id, language_code=request.language_code
+        )
         result = await event_bus.send(command)
         return result
     except Exception as e:
