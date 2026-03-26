@@ -117,7 +117,7 @@ class ScheduledNotificationService:
 
                     # Get gender + remaining calories for personalized messages
                     gender, remaining_cal = await self._get_user_context(
-                        user_id, current_utc.date()
+                        user_id
                     )
 
                     result = await self.notification_service.send_meal_reminder(
@@ -150,8 +150,7 @@ class ScheduledNotificationService:
                     language = prefs.language if prefs else "en"
 
                     # Get user's daily nutrition data + gender
-                    today = current_utc.date()
-                    daily_summary = await self._get_user_daily_summary(user_id, today)
+                    daily_summary = await self._get_user_daily_summary(user_id)
 
                     result = await self.notification_service.send_daily_summary(
                         user_id=user_id,
@@ -173,25 +172,28 @@ class ScheduledNotificationService:
         except Exception as e:
             logger.error(f"Error checking daily summary: {e}")
 
-    async def _get_user_context(self, user_id: str, date) -> tuple:
+    async def _get_user_context(self, user_id: str) -> tuple:
         """Get user's gender and remaining calories for personalized notifications.
 
         Returns (gender, remaining_calories) tuple.
+        Uses single UoW for all DB ops and user's local date for meal lookup.
         """
-        from src.infra.database.config import SessionLocal
-        from src.infra.repositories.user_repository import UserRepository
         from src.infra.repositories.meal_repository import MealRepository
+        from src.domain.utils.timezone_utils import user_today
 
-        db = SessionLocal()
-        try:
-            user_repo = UserRepository(db)
-            profile = user_repo.get_profile(user_id)
+        with UnitOfWork() as uow:
+            profile = uow.users.get_profile(user_id)
             gender = profile.gender if profile else "male"
 
-            # Calculate remaining calories for lunch/dinner reminders
-            user_tz = user_repo.get_user_timezone(user_id) or "UTC"
-            meal_repo = MealRepository(db)
-            meals = meal_repo.find_by_date(date, user_id=user_id, user_timezone=user_tz)
+            # Resolve user timezone and derive local date
+            user_tz = uow.users.get_user_timezone(user_id) or "UTC"
+            local_date = user_today(user_tz)
+
+            # Query meals using user's local date (not UTC date)
+            meal_repo = MealRepository(uow.session)
+            meals = meal_repo.find_by_date(
+                local_date, user_id=user_id, user_timezone=user_tz
+            )
 
             calories_consumed = sum(
                 meal.nutrition.calories
@@ -199,70 +201,77 @@ class ScheduledNotificationService:
                 if meal.nutrition and hasattr(meal.nutrition, 'calories')
             )
 
+            # Get adjusted daily target (falls back to raw TDEE if no budget)
             calorie_goal = 2000
             if profile:
                 try:
-                    with UnitOfWork() as uow:
-                        calorie_goal = await get_adjusted_daily_target(
-                            self._tdee_service, user_id, profile, uow=uow
-                        )
+                    calorie_goal = await get_adjusted_daily_target(
+                        self._tdee_service, user_id, profile, uow=uow
+                    )
                 except Exception as e:
-                    logger.warning(f"Adjusted daily target failed for {user_id}: {e}")
+                    logger.warning(
+                        f"Adjusted daily target failed for {user_id}: {e}"
+                    )
 
             remaining = max(0, int(calorie_goal - calories_consumed))
+            logger.info(
+                f"Notification context for {user_id}: "
+                f"goal={calorie_goal:.0f}, consumed={calories_consumed:.0f}, "
+                f"remaining={remaining}, tz={user_tz}, date={local_date}"
+            )
             return gender, remaining
-        finally:
-            db.close()
 
-    async def _get_user_daily_summary(self, user_id: str, date) -> dict:
+    async def _get_user_daily_summary(self, user_id: str) -> dict:
         """Get user's daily nutrition summary for the given date.
 
         Returns dict with calories_consumed, calorie_goal, meals_logged, gender.
+        Uses single UoW for all DB ops and user's local date for meal lookup.
         """
-        from src.infra.database.config import SessionLocal
         from src.infra.repositories.meal_repository import MealRepository
+        from src.domain.utils.timezone_utils import user_today
 
-        db = SessionLocal()
-        try:
-            meal_repo = MealRepository(db)
-            # Resolve user timezone for correct date boundaries
-            from src.infra.repositories.user_repository import UserRepository as _UserRepo
-            _user_repo = _UserRepo(db)
-            user_tz = _user_repo.get_user_timezone(user_id) or "UTC"
-            meals = meal_repo.find_by_date(date, user_id=user_id, user_timezone=user_tz)
+        with UnitOfWork() as uow:
+            # Resolve user timezone and derive local date
+            user_tz = uow.users.get_user_timezone(user_id) or "UTC"
+            local_date = user_today(user_tz)
+
+            meal_repo = MealRepository(uow.session)
+            meals = meal_repo.find_by_date(
+                local_date, user_id=user_id, user_timezone=user_tz
+            )
 
             meals_logged = len(meals)
-
             calories_consumed = sum(
                 meal.nutrition.calories
                 for meal in meals
                 if meal.nutrition and hasattr(meal.nutrition, 'calories')
             )
 
-            # Get user profile for calorie goal and gender
-            from src.infra.repositories.user_repository import UserRepository
-            user_repo = UserRepository(db)
-            profile = user_repo.get_profile(user_id)
-
+            profile = uow.users.get_profile(user_id)
             gender = profile.gender if profile else "male"
+
             calorie_goal = 2000
             if profile:
                 try:
-                    with UnitOfWork() as uow:
-                        calorie_goal = await get_adjusted_daily_target(
-                            self._tdee_service, user_id, profile, uow=uow
-                        )
-                except Exception as tdee_err:
-                    logger.warning(f"Adjusted daily target failed for user {user_id}, using default: {tdee_err}")
+                    calorie_goal = await get_adjusted_daily_target(
+                        self._tdee_service, user_id, profile, uow=uow
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Adjusted daily target failed for {user_id}: {e}"
+                    )
 
+            logger.info(
+                f"Daily summary for {user_id}: "
+                f"goal={calorie_goal:.0f}, consumed={calories_consumed:.0f}, "
+                f"meals={meals_logged}, tz={user_tz}, date={local_date}"
+            )
             return {
                 "calories_consumed": calories_consumed,
                 "calorie_goal": calorie_goal,
                 "meals_logged": meals_logged,
                 "gender": gender,
             }
-        finally:
-            db.close()
 
     async def send_test_notification(
         self,
