@@ -65,11 +65,19 @@ class TestGetAdjustedDailyTarget:
     async def test_returns_adjusted_when_budget_exists(self, mock_tdee_service, mock_profile):
         """Should return adjusted calories when weekly budget exists."""
         from datetime import date
+        from src.domain.services.weekly_budget_service import EffectiveAdjustedResult, AdjustedDailyTargets
 
         mock_budget = Mock()
-        mock_adjusted = Mock()
-        mock_adjusted.calories = 2100.0
-        mock_adjusted.bmr_floor_active = False
+        mock_adjusted = AdjustedDailyTargets(
+            calories=2100.0, carbs=200, fat=70, protein=70,
+            bmr_floor_active=False, remaining_days=5,
+        )
+        mock_effective = EffectiveAdjustedResult(
+            adjusted=mock_adjusted,
+            consumed_before_today={"calories": 0, "protein": 0, "carbs": 0, "fat": 0},
+            consumed_total={"calories": 0, "protein": 0, "carbs": 0, "fat": 0},
+            logged_past_days=0, skipped_days=0, show_logging_prompt=False,
+        )
 
         mock_uow = Mock()
         mock_uow.weekly_budgets.find_by_user_and_week.return_value = mock_budget
@@ -79,8 +87,7 @@ class TestGetAdjustedDailyTarget:
              patch("src.domain.utils.timezone_utils.resolve_user_timezone", return_value="UTC"), \
              patch("src.domain.utils.timezone_utils.user_today", return_value=date(2026, 3, 13)):
 
-            mock_budget_svc.calculate_remaining_days.return_value = 5
-            mock_budget_svc.calculate_adjusted_daily.return_value = mock_adjusted
+            mock_budget_svc.get_effective_adjusted_daily.return_value = mock_effective
 
             result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile, uow=mock_uow)
 

@@ -46,15 +46,11 @@ def calculate_daily_tdee(tdee_service: TdeeCalculationService, profile: Any) -> 
 async def get_adjusted_daily_target(
     tdee_service: TdeeCalculationService, user_id: str, profile: Any, uow: Any = None
 ) -> float:
-    """
-    Return adjusted daily calorie target from this week's budget.
-    Falls back to raw TDEE if no budget exists or calculation fails.
+    """Return adjusted daily calorie target using Skip & Redistribute.
 
-    Args:
-        tdee_service: TDEE calculation service
-        user_id: User ID
-        profile: User profile domain object
-        uow: Unit of work instance (injected from infra layer)
+    Delegates to WeeklyBudgetService.get_effective_adjusted_daily() which
+    recalculates consumed from actual meals (not stale DB values).
+    Falls back to raw TDEE if no budget exists or uow not provided.
     """
     try:
         tdee_result = tdee_service.calculate_tdee(build_tdee_request(profile))
@@ -75,22 +71,23 @@ async def get_adjusted_daily_target(
             logger.info(f"No weekly budget for user {user_id}, using raw TDEE: {base_calories}")
             return base_calories
 
-        remaining_days = WeeklyBudgetService.calculate_remaining_days(week_start, today)
-        adjusted = WeeklyBudgetService.calculate_adjusted_daily(
-            weekly_budget,
-            base_calories,
-            tdee_result.macros.carbs,
-            tdee_result.macros.fat,
-            tdee_result.macros.protein,
-            bmr=bmr,
-            remaining_days=remaining_days,
+        # Use shared method: recalculates consumed, applies skip/redistribute
+        effective = WeeklyBudgetService.get_effective_adjusted_daily(
+            uow=uow, user_id=user_id,
+            week_start=week_start, target_date=today,
+            weekly_budget=weekly_budget,
+            base_daily_cal=base_calories,
+            base_daily_protein=tdee_result.macros.protein,
+            base_daily_carbs=tdee_result.macros.carbs,
+            base_daily_fat=tdee_result.macros.fat,
+            bmr=bmr, user_timezone=user_tz,
         )
         logger.info(
             f"Adjusted daily target for user {user_id}: "
-            f"{adjusted.calories:.0f} kcal (base: {base_calories:.0f}, "
-            f"bmr_floor: {adjusted.bmr_floor_active})"
+            f"{effective.adjusted.calories:.0f} kcal (base: {base_calories:.0f}, "
+            f"bmr_floor: {effective.adjusted.bmr_floor_active})"
         )
-        return adjusted.calories
+        return effective.adjusted.calories
 
     except Exception as e:
         logger.warning(f"Failed to get adjusted daily target: {e}. Falling back to raw TDEE.")
