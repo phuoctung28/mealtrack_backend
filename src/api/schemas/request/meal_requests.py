@@ -127,6 +127,36 @@ class AnalyzeMealImageRequest(BaseModel):
         return normalized
 
 
+class AnalyzeMealImageByUrlRequest(BaseModel):
+    """Request DTO for meal image analysis from an uploaded image URL."""
+
+    image_url: str = Field(..., description="Cloudinary secure URL")
+    public_id: str = Field(..., description="Cloudinary public ID (e.g. mealtrack/uuid)")
+    content_type: str = Field(..., description="Image MIME type")
+    file_size_bytes: int = Field(..., gt=0, description="Uploaded file size in bytes")
+    target_date: Optional[str] = Field(None, description="Target date in YYYY-MM-DD format")
+    user_description: Optional[str] = Field(
+        None,
+        description="Optional user context (max 200 chars): 'no sugar', 'grilled', etc.",
+    )
+
+    @field_validator("image_url")
+    @classmethod
+    def validate_cloudinary_url(cls, v: str) -> str:
+        """Allow only Cloudinary-hosted image URLs."""
+        if not v.startswith("https://res.cloudinary.com/"):
+            raise ValueError("image_url must be a valid Cloudinary URL")
+        return v
+
+    @field_validator("content_type")
+    @classmethod
+    def validate_content_type(cls, v: str) -> str:
+        allowed = {"image/jpeg", "image/png", "image/jpg"}
+        if v not in allowed:
+            raise ValueError(f"Invalid content type: {v}")
+        return v
+
+
 # Food database manual meal creation requests
 class ManualMealItemRequest(BaseModel):
     """Single selected food item with portion to create a manual meal.

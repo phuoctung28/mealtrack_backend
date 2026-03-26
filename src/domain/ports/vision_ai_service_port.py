@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List
 
+from src.domain.strategies.meal_analysis_strategy import MealAnalysisStrategy
+
 
 class VisionAIServicePort(ABC):
     """
@@ -26,6 +28,35 @@ class VisionAIServicePort(ABC):
 
         Raises:
             RuntimeError: If analysis fails
+        """
+        pass
+
+    @abstractmethod
+    def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
+        """
+        Analyze a food image from a public URL.
+
+        Args:
+            image_url: Public URL of image to analyze
+
+        Returns:
+            JSON-compatible dictionary with the raw AI response
+        """
+        pass
+
+    @abstractmethod
+    def analyze_by_url_with_strategy(
+        self, image_url: str, strategy: MealAnalysisStrategy
+    ) -> Dict[str, Any]:
+        """
+        Analyze a food image URL using a custom analysis strategy.
+
+        Args:
+            image_url: Public URL of image to analyze
+            strategy: The analysis strategy to use
+
+        Returns:
+            JSON-compatible dictionary with the raw AI response
         """
         pass
 

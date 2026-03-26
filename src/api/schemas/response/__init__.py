@@ -39,6 +39,7 @@ from .meal_responses import (
     NutritionResponse,
     FoodItemResponse,
     ManualMealCreationResponse,
+    UploadSignatureResponse,
     MealStatusEnum
 )
 # Meal suggestion responses
@@ -95,6 +96,7 @@ __all__ = [
     'NutritionResponse',
     'FoodItemResponse',
     'ManualMealCreationResponse',
+    'UploadSignatureResponse',
     'MealStatusEnum',
     
     # TDEE

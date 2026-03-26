@@ -20,6 +20,16 @@ class ImageStorePort(ABC):
             ValueError: If content_type is not supported or image is invalid
         """
         pass
+
+    @abstractmethod
+    def generate_upload_params(self) -> dict[str, str | int]:
+        """
+        Generate signed upload parameters for direct client upload.
+
+        Returns:
+            Signed parameters required by Cloudinary direct upload.
+        """
+        pass
     
     @abstractmethod
     def load(self, image_id: str) -> Optional[bytes]:
