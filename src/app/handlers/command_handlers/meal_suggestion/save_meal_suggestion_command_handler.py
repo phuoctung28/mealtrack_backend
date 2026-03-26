@@ -10,7 +10,7 @@ from src.app.commands.meal_suggestion import IngredientItem, SaveMealSuggestionC
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model import FoodItem, Meal, MealImage, MealStatus, Nutrition, Macros
-from src.domain.utils.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now, noon_utc_for_date, resolve_user_timezone
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
 
@@ -45,8 +45,11 @@ class SaveMealSuggestionCommandHandler(
         """
         # Parse target meal date
         meal_date = datetime.strptime(command.meal_date, "%Y-%m-%d").date()
-        now = utc_now()
-        meal_datetime = datetime.combine(meal_date, now.timetz())
+        # Use noon in user's local timezone to avoid created_at falling
+        # into the wrong date after UTC conversion
+        with UnitOfWork() as uow:
+            user_tz = resolve_user_timezone(command.user_id, uow)
+        meal_datetime = noon_utc_for_date(meal_date, user_tz)
 
         # Build nutrition: total macros from suggestion, food items from ingredient list
         macros = Macros(

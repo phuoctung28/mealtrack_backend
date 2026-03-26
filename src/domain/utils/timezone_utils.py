@@ -246,3 +246,20 @@ def user_today(user_timezone: str = "UTC") -> date:
     """Return today's date in user's timezone."""
     tz = get_zone_info(user_timezone)
     return datetime.now(tz).date()
+
+
+def noon_utc_for_date(target_date: date, user_timezone: str = "UTC") -> datetime:
+    """Return a UTC datetime at noon in the user's local timezone for the given date.
+
+    When logging meals for a specific date, using the current UTC time can place
+    the ``created_at`` outside the date boundary in the user's timezone (e.g.
+    UTC 17:30 is already March 24 in Asia/Saigon).  Setting the time to local
+    noon guarantees the stored UTC value falls within the correct date boundary
+    for any timezone from UTC-12 to UTC+14.
+    """
+    tz = get_zone_info(user_timezone)
+    local_noon = datetime(
+        target_date.year, target_date.month, target_date.day,
+        12, 0, 0, tzinfo=tz,
+    )
+    return local_noon.astimezone(timezone.utc)

@@ -18,7 +18,7 @@ from src.domain.model.meal import MealImage
 from src.domain.model.nutrition import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem as DomainFoodItem
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.domain.utils.timezone_utils import utc_now
+from src.domain.utils.timezone_utils import utc_now, noon_utc_for_date, resolve_user_timezone
 from src.infra.cache.cache_service import CacheService
 from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
 
@@ -39,6 +39,8 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                 return await self._process_meal(event, uow.meals)
 
     async def _process_meal(self, event: CreateManualMealCommand, meal_repo):
+        from src.infra.database.uow import UnitOfWork
+
         # All items must carry their own nutrition (custom_nutrition)
         total_protein = 0.0
         total_carbs = 0.0
@@ -89,9 +91,16 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             confidence_score=1.0,
         )
 
-        # Determine the meal date - use target_date if provided, otherwise use now
+        # Determine the meal date and datetime
         meal_date = event.target_date if event.target_date else utc_now().date()
-        meal_datetime = datetime.combine(meal_date, utc_now().time())
+        if event.target_date:
+            # Past/future date: use noon in user's local timezone to avoid
+            # created_at falling into the wrong date after UTC conversion
+            with UnitOfWork() as uow:
+                user_tz = resolve_user_timezone(event.user_id, uow)
+            meal_datetime = noon_utc_for_date(meal_date, user_tz)
+        else:
+            meal_datetime = utc_now()
         
         # Determine source: use explicit source if provided, otherwise infer
         source = event.source
