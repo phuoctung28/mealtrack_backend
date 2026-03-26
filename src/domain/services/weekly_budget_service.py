@@ -81,6 +81,21 @@ class WeeklyBudgetService:
         # Derive calories from rounded macros — single source of truth
         adjusted_calories = (rounded_protein * 4) + (rounded_carbs * 4) + (rounded_fat * 9)
 
+        # Calorie cap: prevent macro inflation above calorie-level redistribution.
+        # When user over-eats expensive macros (fat=9cal/g) but under-eats cheap
+        # macros (carbs=4cal/g), independent macro redistribution can inflate
+        # calories above what pure calorie redistribution would give.
+        calorie_redistributed = remaining_calories / remaining_days
+        if adjusted_calories > calorie_redistributed and calorie_redistributed < standard_daily_calories:
+            protein_cal = rounded_protein * 4
+            non_protein_target = calorie_redistributed - protein_cal
+            non_protein_current = (rounded_carbs * 4) + (rounded_fat * 9)
+            if non_protein_current > 0 and non_protein_target > 0:
+                scale = non_protein_target / non_protein_current
+                rounded_carbs = round(rounded_carbs * scale, 1)
+                rounded_fat = round(rounded_fat * scale, 1)
+                adjusted_calories = protein_cal + (rounded_carbs * 4) + (rounded_fat * 9)
+
         # Deficit cap: never reduce more than MAX_DAILY_DEFICIT_RATIO below base
         min_allowed = standard_daily_calories * (1 - WeeklyBudgetConstants.MAX_DAILY_DEFICIT_RATIO)
         if adjusted_calories < min_allowed:

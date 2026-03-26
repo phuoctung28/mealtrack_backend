@@ -236,6 +236,106 @@ class TestWeeklyBudgetService:
         assert result.calories > 2000
         assert result.bmr_floor_active is False
 
+    def test_calorie_cap_fat_heavy_surplus(self):
+        """Calorie cap: over-eating fat + under-eating carbs should NOT inflate target.
+
+        Real user scenario: base=2456, consumed Mon-Wed heavy on fat/protein,
+        light on carbs. Without cap, macro redistribution gives 2570 (+114).
+        With cap, should be ~2417 (-39).
+        """
+        # Base daily: P=114, C=346.6, F=68.2 → 2456 cal
+        # Weekly: P=798, C=2426.2, F=477.4 → 17192 cal
+        # Consumed Mon-Wed: P=494, C=784, F=268 → ~7521 cal
+        budget = WeeklyMacroBudget(
+            weekly_budget_id="test-cap-fat",
+            user_id="user-1",
+            week_start_date=date(2026, 3, 23),
+            target_calories=17192,
+            target_protein=798,
+            target_carbs=2426.2,
+            target_fat=477.4,
+            consumed_calories=7521,
+            consumed_protein=494,
+            consumed_carbs=784,
+            consumed_fat=268,
+        )
+        result = WeeklyBudgetService.calculate_adjusted_daily(
+            weekly_budget=budget,
+            standard_daily_calories=2456,
+            standard_daily_carbs=346.6,
+            standard_daily_fat=68.2,
+            standard_daily_protein=114,
+            bmr=1400,
+            remaining_days=4,
+        )
+        # Must be BELOW base (user is in calorie surplus)
+        assert result.calories < 2456
+        # Calorie-redistributed = (17192-7521)/4 = 2417.75
+        assert result.calories == pytest.approx(2417, abs=5)
+        assert result.protein == 114
+        # Carbs should still be above base (preserves "eat more carbs" signal)
+        assert result.carbs > 346.6
+        # Fat should be below base (user over-ate fat)
+        assert result.fat < 68.2
+
+    def test_calorie_cap_not_applied_when_under_eating(self):
+        """Calorie cap should NOT fire when user is under-eating overall.
+
+        calorie_redistributed > standard_daily → second condition fails.
+        """
+        budget = WeeklyMacroBudget(
+            weekly_budget_id="test-cap-under",
+            user_id="user-1",
+            week_start_date=date(2026, 3, 23),
+            target_calories=17192,
+            target_protein=798,
+            target_carbs=2426.2,
+            target_fat=477.4,
+            consumed_calories=5000,  # Well under target for 3 days
+            consumed_protein=300,
+            consumed_carbs=600,
+            consumed_fat=150,
+        )
+        result = WeeklyBudgetService.calculate_adjusted_daily(
+            weekly_budget=budget,
+            standard_daily_calories=2456,
+            standard_daily_carbs=346.6,
+            standard_daily_fat=68.2,
+            standard_daily_protein=114,
+            bmr=1400,
+            remaining_days=4,
+        )
+        # Under-eating: adjusted should be ABOVE base
+        assert result.calories > 2456
+
+    def test_calorie_cap_macros_balanced_no_cap(self):
+        """When macros are balanced, macro-derived ≈ calorie-redistributed. No cap."""
+        # Consume exactly at base ratios for 3 days
+        budget = WeeklyMacroBudget(
+            weekly_budget_id="test-cap-balanced",
+            user_id="user-1",
+            week_start_date=date(2026, 3, 23),
+            target_calories=17192,
+            target_protein=798,
+            target_carbs=2426.2,
+            target_fat=477.4,
+            consumed_calories=7368,   # 3 × 2456
+            consumed_protein=342,     # 3 × 114
+            consumed_carbs=1039.8,    # 3 × 346.6
+            consumed_fat=204.6,       # 3 × 68.2
+        )
+        result = WeeklyBudgetService.calculate_adjusted_daily(
+            weekly_budget=budget,
+            standard_daily_calories=2456,
+            standard_daily_carbs=346.6,
+            standard_daily_fat=68.2,
+            standard_daily_protein=114,
+            bmr=1400,
+            remaining_days=4,
+        )
+        # Balanced consumption: should be close to base
+        assert result.calories == pytest.approx(2456, abs=5)
+
     def test_should_suggest_cheat_day_above_threshold(self):
         """Test cheat day suggestion triggers above threshold."""
         result = WeeklyBudgetService.should_suggest_cheat_day(
