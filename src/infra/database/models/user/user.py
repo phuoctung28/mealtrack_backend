@@ -16,7 +16,7 @@ class User(Base, BaseMixin):
     __tablename__ = 'users'
     
     # Firebase Integration
-    firebase_uid = Column(String(36), unique=True, nullable=False, index=True)
+    firebase_uid = Column(String(128), unique=True, nullable=False, index=True)
     
     # Basic Information
     email = Column(String(255), unique=True, nullable=False)
