@@ -61,7 +61,7 @@ async def require_subscription(request: Request):
         )
 
     subscription_service = _get_subscription_service()
-    has_subscription = await subscription_service.has_active_subscription(app_user_id=user.id)
+    has_subscription = await subscription_service.has_active_subscription(app_user_id=user.firebase_uid)
 
     if has_subscription:
         # User has subscription in RevenueCat but not in local cache

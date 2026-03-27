@@ -55,15 +55,35 @@ async def revenuecat_webhook(
     event_type = event.get("type")
     app_user_id = event.get("app_user_id")
     
-    logger.info(f"RevenueCat webhook: {event_type} for user {app_user_id}")
-    
+    logger.error(f"RevenueCat webhook received: {event_type} for app_user_id={app_user_id}")
+
     # Get user
     with UnitOfWork() as uow:
-        # Find user by firebase_uid (app_user_id from RevenueCat)
+        # Try firebase_uid first (primary lookup path)
         user = uow.session.query(User).filter_by(firebase_uid=app_user_id).first()
+
+        # Fallback: try matching by internal user ID (UUID)
         if not user:
-            logger.warning(f"User not found: {app_user_id}")
-            return {"status": "user_not_found"}
+            user = uow.session.query(User).filter_by(id=app_user_id).first()
+
+        # Fallback: try aliases from event payload (RevenueCat may send anonymous ID)
+        if not user:
+            aliases = event.get("aliases", [])
+            for alias in aliases:
+                if alias != app_user_id:
+                    user = uow.session.query(User).filter_by(firebase_uid=alias).first()
+                    if not user:
+                        user = uow.session.query(User).filter_by(id=alias).first()
+                    if user:
+                        break
+
+        if not user:
+            logger.error(
+                f"RevenueCat webhook: user not found — "
+                f"event_type={event_type}, app_user_id={app_user_id}, "
+                f"aliases={event.get('aliases', [])}, product_id={event.get('product_id')}"
+            )
+            raise HTTPException(status_code=404, detail="User not found")
         
         # Handle events
         try:
@@ -91,7 +111,10 @@ async def revenuecat_webhook(
             uow.commit()
             
         except Exception as e:
-            logger.error(f"Error handling webhook event {event_type}: {e}")
+            logger.error(
+                f"RevenueCat webhook handler error — "
+                f"event_type={event_type}, user_id={user.id}, error={e}"
+            )
             uow.rollback()
             raise
     

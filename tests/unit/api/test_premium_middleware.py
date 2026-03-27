@@ -42,6 +42,7 @@ class TestSubscriptionMiddleware:
         """Create mock user without subscription."""
         user = MagicMock()
         user.id = "user_456"
+        user.firebase_uid = "firebase_uid_456"
         user.has_active_subscription.return_value = False
         user.get_active_subscription.return_value = None
         return user
@@ -81,7 +82,7 @@ class TestSubscriptionMiddleware:
                 # Should not raise exception - user has subscription in RevenueCat
                 result = await require_subscription(mock_request)
                 assert result is None
-                mock_service.has_active_subscription.assert_called_once_with(app_user_id="user_456")
+                mock_service.has_active_subscription.assert_called_once_with(app_user_id="firebase_uid_456")
 
     async def test_require_subscription_denies_without_any_subscription(
         self, mock_request, mock_user_without_subscription
