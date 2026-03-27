@@ -114,7 +114,7 @@ class TestWebhookHandler:
                 mock_uow.commit.assert_called_once()
     
     async def test_webhook_user_not_found(self, mock_request, webhook_event):
-        """Test webhook when user not found."""
+        """Test webhook returns 404 when user not found (so RevenueCat retries)."""
         mock_request.json.return_value = webhook_event
 
         # Set a valid webhook secret for the test
@@ -124,14 +124,15 @@ class TestWebhookHandler:
                 mock_uow_class.return_value.__enter__ = MagicMock(return_value=mock_uow)
                 mock_uow_class.return_value.__exit__ = MagicMock(return_value=False)
 
-                # Mock user not found
+                # Mock user not found for all lookup strategies
                 mock_query = MagicMock()
                 mock_uow.session.query.return_value = mock_query
                 mock_query.filter_by.return_value.first.return_value = None
 
-                result = await revenuecat_webhook(mock_request, authorization="test_secret")
+                with pytest.raises(HTTPException) as exc_info:
+                    await revenuecat_webhook(mock_request, authorization="test_secret")
 
-                assert result == {"status": "user_not_found"}
+                assert exc_info.value.status_code == 404
     
     async def test_webhook_invalid_json(self, mock_request):
         """Test webhook with invalid JSON."""
