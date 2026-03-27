@@ -19,7 +19,8 @@ from .meal_requests import (
     UpdateMealMacrosRequest,
     MealSearchRequest,
     AnalyzeMealImageRequest,
-    MacrosRequest
+    AnalyzeMealImageByUrlRequest,
+    MacrosRequest,
 )
 # Meal suggestion requests
 from .meal_suggestion_requests import MealSuggestionRequest
@@ -57,6 +58,7 @@ __all__ = [
     'UpdateMealMacrosRequest',
     'MealSearchRequest',
     'AnalyzeMealImageRequest',
+    'AnalyzeMealImageByUrlRequest',
     'MacrosRequest',
     
     # TDEE

@@ -31,7 +31,58 @@ class VisionAIService(VisionAIServicePort):
         self._model_manager = GeminiModelManager.get_instance()
         # Use standard temperature=0.7 to share model instance across all services
         self.model = self._model_manager.get_model()
-        
+
+    def _analyze_image_reference(
+        self, image_reference: str, strategy: MealAnalysisStrategy
+    ) -> Dict[str, Any]:
+        """
+        Analyze an image reference (data URL or public URL) using strategy.
+        """
+        try:
+            messages = [
+                SystemMessage(content=strategy.get_analysis_prompt()),
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": strategy.get_user_message()},
+                        {"type": "image_url", "image_url": {"url": image_reference}},
+                    ]
+                ),
+            ]
+
+            response = self.model.invoke(messages)
+            content = response.content
+
+            if not content or (isinstance(content, str) and not content.strip()):
+                response_metadata = getattr(response, "response_metadata", {})
+                finish_reason = response_metadata.get("finish_reason", "unknown")
+                safety_ratings = response_metadata.get("safety_ratings", [])
+
+                logger.warning(
+                    f"Empty response from Gemini API. finish_reason={finish_reason}, "
+                    f"safety_ratings={safety_ratings}"
+                )
+
+                if finish_reason == "SAFETY":
+                    raise ValueError(
+                        "Image was blocked by AI safety filters. "
+                        "Please try a different image of food."
+                    )
+                raise ValueError(
+                    f"AI returned empty response (finish_reason: {finish_reason}). "
+                    "The image may not be clear or recognizable as food."
+                )
+
+            result = self._extract_json_from_response(content)
+            return {
+                "raw_response": content,
+                "structured_data": result,
+                "strategy_used": strategy.get_strategy_name(),
+            }
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}"
+            )
+
     def analyze_with_strategy(self, image_bytes: bytes, strategy: MealAnalysisStrategy) -> Dict[str, Any]:
         """
         Analyze a food image using the provided analysis strategy.
@@ -46,60 +97,17 @@ class VisionAIService(VisionAIServicePort):
         Raises:
             RuntimeError: If analysis fails
         """
-        try:
-            # Encode image for the API
-            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+        image_data_url = f"data:image/jpeg;base64,{image_base64}"
+        return self._analyze_image_reference(image_data_url, strategy)
 
-            # Create message with the image using strategy
-            messages = [
-                SystemMessage(content=strategy.get_analysis_prompt()),
-                HumanMessage(
-                    content=[
-                        {"type": "text", "text": strategy.get_user_message()},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
-                    ]
-                )
-            ]
-
-            # Call the API
-            response = self.model.invoke(messages)
-
-            # Parse the response to extract the JSON
-            content = response.content
-
-            # Validate response content is not empty
-            if not content or (isinstance(content, str) and not content.strip()):
-                # Check for safety blocking or other issues
-                response_metadata = getattr(response, 'response_metadata', {})
-                finish_reason = response_metadata.get('finish_reason', 'unknown')
-                safety_ratings = response_metadata.get('safety_ratings', [])
-
-                logger.warning(
-                    f"Empty response from Gemini API. finish_reason={finish_reason}, "
-                    f"safety_ratings={safety_ratings}"
-                )
-
-                if finish_reason == 'SAFETY':
-                    raise ValueError(
-                        "Image was blocked by AI safety filters. "
-                        "Please try a different image of food."
-                    )
-                raise ValueError(
-                    f"AI returned empty response (finish_reason: {finish_reason}). "
-                    "The image may not be clear or recognizable as food."
-                )
-
-            # Extract JSON from the response
-            result = self._extract_json_from_response(content)
-
-            return {
-                "raw_response": content,
-                "structured_data": result,
-                "strategy_used": strategy.get_strategy_name()
-            }
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}")
+    def analyze_by_url_with_strategy(
+        self, image_url: str, strategy: MealAnalysisStrategy
+    ) -> Dict[str, Any]:
+        """
+        Analyze a food image by public URL using the provided analysis strategy.
+        """
+        return self._analyze_image_reference(image_url, strategy)
 
     def _extract_json_from_response(self, content: str) -> Dict[str, Any]:
         """
@@ -164,6 +172,13 @@ class VisionAIService(VisionAIServicePort):
         """
         strategy = AnalysisStrategyFactory.create_basic_strategy()
         return self.analyze_with_strategy(image_bytes, strategy)
+
+    def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
+        """
+        Analyze a food image from a public URL.
+        """
+        strategy = AnalysisStrategyFactory.create_basic_strategy()
+        return self.analyze_by_url_with_strategy(image_url, strategy)
 
     def analyze_with_portion_context(
         self, image_bytes: bytes, portion_size: float, unit: str

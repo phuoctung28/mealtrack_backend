@@ -17,6 +17,7 @@ from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.schemas.request.meal_requests import (
+    AnalyzeMealImageByUrlRequest,
     EditMealIngredientsRequest,
     CreateManualMealFromFoodsRequest,
     ParseMealTextRequest,
@@ -35,6 +36,9 @@ from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
+)
+from src.app.commands.meal.analyze_meal_image_by_url_command import (
+    AnalyzeMealImageByUrlCommand,
 )
 from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
@@ -196,6 +200,85 @@ async def analyze_meal_image_immediate(
         # Return the detailed meal response using mapper with translation support
         return MealMapper.to_detailed_response(meal, image_url, target_language=language)
 
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.post(
+    "/image/analyze-url",
+    status_code=status.HTTP_200_OK,
+    response_model=DetailedMealResponse,
+)
+@limiter.limit("10/minute")
+async def analyze_meal_image_by_url(
+    request: Request,
+    payload: AnalyzeMealImageByUrlRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+    image_store=Depends(get_image_store),
+):
+    """
+    Analyze a pre-uploaded image URL and return meal analysis immediately.
+    """
+    try:
+        parsed_target_date = None
+        if payload.target_date:
+            try:
+                parsed_target_date = datetime.strptime(
+                    payload.target_date, "%Y-%m-%d"
+                ).date()
+            except ValueError as e:
+                raise ValidationException(
+                    message="Invalid date format. Use YYYY-MM-DD format.",
+                    error_code="INVALID_DATE_FORMAT",
+                    details={"date": payload.target_date},
+                ) from e
+
+        language = get_request_language(request)
+
+        sanitized_description = None
+        if payload.user_description:
+            from src.domain.services.prompts.input_sanitizer import (
+                sanitize_user_description,
+            )
+
+            sanitized_description = sanitize_user_description(payload.user_description)
+
+        command = AnalyzeMealImageByUrlCommand(
+            user_id=user_id,
+            image_url=payload.image_url,
+            public_id=payload.public_id,
+            content_type=payload.content_type,
+            file_size_bytes=payload.file_size_bytes,
+            target_date=parsed_target_date,
+            language=language,
+            user_description=sanitized_description,
+        )
+
+        try:
+            meal = await event_bus.send(command)
+        except (RuntimeError, ValueError) as e:
+            error_msg = str(e)
+            logger.warning("Meal image URL analysis failed: %s", error_msg)
+            raise ValidationException(
+                message="Could not identify food in the image. Please try again with a food photo.",
+                error_code="NOT_FOOD_IMAGE",
+                details={"error_message": error_msg},
+            ) from e
+
+        if meal.status.value == "FAILED":
+            error_message = meal.error_message or "Analysis failed"
+            raise ValidationException(
+                message=f"Failed to analyze meal image: {error_message}",
+                error_code="FAILED_TO_ANALYZE_MEAL_IMAGE",
+                details={"error_message": error_message},
+            )
+
+        image_url = None
+        if meal.image:
+            image_url = image_store.get_url(meal.image.image_id) or meal.image.url
+
+        return MealMapper.to_detailed_response(meal, image_url, target_language=language)
     except Exception as e:
         raise handle_exception(e) from e
 

@@ -19,7 +19,6 @@ from src.domain.services.notification_service import NotificationService
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.food_cache_service import FoodCacheService
 from src.infra.adapters.food_data_service import FoodDataService
-from src.infra.adapters.image_store import ImageStore
 from src.infra.adapters.open_food_facts_service import OpenFoodFactsService, get_open_food_facts_service
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.cache.cache_service import CacheService
@@ -107,11 +106,7 @@ def get_image_store() -> ImageStorePort:
     """
     global _image_store
     if _image_store is None:
-        use_mock = bool(int(os.getenv("USE_MOCK_STORAGE", "0")))
-        if use_mock:
-            _image_store = ImageStore()
-        else:
-            _image_store = CloudinaryImageStore()
+        _image_store = CloudinaryImageStore()
     return _image_store
 
 

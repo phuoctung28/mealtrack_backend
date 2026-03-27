@@ -3,6 +3,7 @@ Mock Vision AI Service for testing.
 """
 from typing import Dict, Any, List
 
+from src.domain.strategies.meal_analysis_strategy import MealAnalysisStrategy
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 
 
@@ -16,6 +17,21 @@ class MockVisionAIService(VisionAIServicePort):
     def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
         """Return mock analysis result."""
         return self.mock_response
+
+    def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
+        """Return mock analysis result for URL-based analysis."""
+        response = self.mock_response.copy()
+        response["image_url"] = image_url
+        return response
+
+    def analyze_by_url_with_strategy(
+        self, image_url: str, strategy: MealAnalysisStrategy
+    ) -> Dict[str, Any]:
+        """Return mock analysis result for URL-based strategy analysis."""
+        response = self.mock_response.copy()
+        response["image_url"] = image_url
+        response["strategy_used"] = strategy.get_strategy_name()
+        return response
     
     def analyze_with_ingredients_context(self, image_bytes: bytes, ingredients: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Return mock analysis result with ingredients context."""
