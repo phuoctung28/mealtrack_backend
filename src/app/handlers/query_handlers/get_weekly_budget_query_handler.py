@@ -158,11 +158,8 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                             "preview_today_delta": int(abs(today_consumed_cal - adjusted.calories)),
                         }
 
-                # Derive remaining calories from macros for consistency
-                remaining_p = weekly_budget.remaining_protein
-                remaining_c = weekly_budget.remaining_carbs
-                remaining_f = weekly_budget.remaining_fat
-                derived_remaining_cal = (remaining_p * 4) + (remaining_c * 4) + (remaining_f * 9)
+                # Derive remaining calories directly from target - consumed (negatives flow through)
+                derived_remaining_cal = weekly_budget.target_calories - weekly_budget.consumed_calories
 
                 return {
                     "week_start_date": week_start.isoformat(),

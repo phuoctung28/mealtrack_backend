@@ -34,23 +34,23 @@ class WeeklyMacroBudget:
 
     @property
     def remaining_calories(self) -> float:
-        """Calculate remaining calories for the week."""
-        return max(0, self.target_calories - self.consumed_calories)
+        """Calculate remaining calories for the week. Can be negative when over budget."""
+        return self.target_calories - self.consumed_calories
 
     @property
     def remaining_protein(self) -> float:
-        """Calculate remaining protein for the week."""
-        return max(0, self.target_protein - self.consumed_protein)
+        """Calculate remaining protein for the week. Can be negative when over-consumed."""
+        return self.target_protein - self.consumed_protein
 
     @property
     def remaining_carbs(self) -> float:
-        """Calculate remaining carbs for the week."""
-        return max(0, self.target_carbs - self.consumed_carbs)
+        """Calculate remaining carbs for the week. Can be negative when over-consumed."""
+        return self.target_carbs - self.consumed_carbs
 
     @property
     def remaining_fat(self) -> float:
-        """Calculate remaining fat for the week."""
-        return max(0, self.target_fat - self.consumed_fat)
+        """Calculate remaining fat for the week. Can be negative when over-consumed."""
+        return self.target_fat - self.consumed_fat
 
     @property
     def consumption_percentage(self) -> float:
