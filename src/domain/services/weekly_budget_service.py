@@ -236,6 +236,27 @@ class WeeklyBudgetService:
                 remaining_days=remaining_days,
             )
 
+        # --- Budget cap: adjusted daily must not exceed actual remaining per day ---
+        # Skip & Redistribute can inflate adjusted daily above what the real
+        # remaining budget allows (e.g. cheat day consumption excluded from
+        # redistribution but still counts toward weekly total). Cap to prevent
+        # promising more than the budget can deliver.
+        # Uses consumed_before_today (not consumed_total) so today's eating
+        # doesn't change today's target mid-day.
+        remaining_before_today = weekly_budget.target_calories - consumed_before_today["calories"]
+        if remaining_days > 0 and remaining_before_today > 0:
+            max_daily = remaining_before_today / remaining_days
+            if adjusted.calories > max_daily:
+                scale = max_daily / adjusted.calories
+                adjusted = AdjustedDailyTargets(
+                    calories=round(max_daily, 1),
+                    carbs=round(adjusted.carbs * scale, 1),
+                    fat=round(adjusted.fat * scale, 1),
+                    protein=adjusted.protein,  # protein stays fixed
+                    bmr_floor_active=adjusted.bmr_floor_active,
+                    remaining_days=adjusted.remaining_days,
+                )
+
         return EffectiveAdjustedResult(
             adjusted=adjusted,
             consumed_before_today=consumed_before_today,

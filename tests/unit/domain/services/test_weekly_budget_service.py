@@ -694,8 +694,11 @@ class TestGetEffectiveAdjustedDaily:
             bmr=_BMR, cheat_dates=[],
         )
 
-        # With cheat exclusion, adjusted should be higher (cheat consumption not counted)
-        assert result_with_cheat.adjusted.calories > result_no_cheat.adjusted.calories
+        # Budget cap: both are capped at actual_remaining / remaining_days (8000/5=1600)
+        # Cheat exclusion changes macro distribution but not total calories
+        assert result_with_cheat.adjusted.calories == result_no_cheat.adjusted.calories
+        # Macros may differ due to different redistribution paths
+        assert result_with_cheat.adjusted.carbs != result_no_cheat.adjusted.carbs
 
     def test_cheat_dates_none_auto_loads(self):
         """When cheat_dates=None, auto-loads from uow.cheat_days."""
