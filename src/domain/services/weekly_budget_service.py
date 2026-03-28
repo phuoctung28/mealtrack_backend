@@ -241,9 +241,11 @@ class WeeklyBudgetService:
         # remaining budget allows (e.g. cheat day consumption excluded from
         # redistribution but still counts toward weekly total). Cap to prevent
         # promising more than the budget can deliver.
-        actual_remaining = weekly_budget.target_calories - consumed_total["calories"]
-        if remaining_days > 0 and actual_remaining > 0:
-            max_daily = actual_remaining / remaining_days
+        # Uses consumed_before_today (not consumed_total) so today's eating
+        # doesn't change today's target mid-day.
+        remaining_before_today = weekly_budget.target_calories - consumed_before_today["calories"]
+        if remaining_days > 0 and remaining_before_today > 0:
+            max_daily = remaining_before_today / remaining_days
             if adjusted.calories > max_daily:
                 scale = max_daily / adjusted.calories
                 adjusted = AdjustedDailyTargets(
