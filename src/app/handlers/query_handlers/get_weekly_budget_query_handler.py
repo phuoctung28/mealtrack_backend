@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from src.app.events.base import EventHandler, handles
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.domain.constants import WeeklyBudgetConstants
-from src.domain.services.weekly_budget_service import WeeklyBudgetService
+from src.domain.services.weekly_budget_service import AdjustedDailyTargets, WeeklyBudgetService
 from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import get_user_monday, get_zone_info, resolve_user_timezone
@@ -139,6 +139,21 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                         bmr=bmr,
                         remaining_days=tomorrow_remaining,
                     )
+
+                    # Budget cap: preview can't exceed actual remaining after today
+                    actual_remaining_after_today = weekly_budget.target_calories - consumed_including_today["calories"]
+                    if tomorrow_remaining > 0 and actual_remaining_after_today > 0:
+                        max_tomorrow = actual_remaining_after_today / tomorrow_remaining
+                        if tomorrow_adjusted.calories > max_tomorrow:
+                            scale = max_tomorrow / tomorrow_adjusted.calories
+                            tomorrow_adjusted = AdjustedDailyTargets(
+                                calories=round(max_tomorrow, 1),
+                                carbs=round(tomorrow_adjusted.carbs * scale, 1),
+                                fat=round(tomorrow_adjusted.fat * scale, 1),
+                                protein=tomorrow_adjusted.protein,
+                                bmr_floor_active=tomorrow_adjusted.bmr_floor_active,
+                                remaining_days=tomorrow_adjusted.remaining_days,
+                            )
 
                     deviation = abs(tomorrow_adjusted.calories - base_daily_cal) / max(base_daily_cal, 1)
                     logger.info(
