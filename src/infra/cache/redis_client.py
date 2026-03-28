@@ -4,8 +4,9 @@ Async Redis client with connection pooling.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
+import certifi
 import redis.asyncio as redis
 from redis.exceptions import RedisError
 
@@ -17,11 +18,15 @@ class RedisClient:
 
     def __init__(self, redis_url: str, max_connections: int = 50):
         self._redis_url = redis_url
-        self.pool = redis.ConnectionPool.from_url(
-            redis_url,
-            max_connections=max_connections,
-            decode_responses=True,
-        )
+
+        pool_kwargs: dict[str, Any] = {
+            "max_connections": max_connections,
+            "decode_responses": True,
+        }
+        if redis_url.startswith("rediss://"):
+            pool_kwargs["ssl_ca_certs"] = certifi.where()
+
+        self.pool = redis.ConnectionPool.from_url(redis_url, **pool_kwargs)
         self.client: Optional[redis.Redis] = None
 
     async def connect(self) -> None:
