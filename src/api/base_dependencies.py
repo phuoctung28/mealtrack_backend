@@ -26,6 +26,7 @@ from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
 from src.infra.config.settings import settings
 from src.infra.database.config import get_db as get_db_from_config
+from src.infra.queue import RedisJobQueue, create_queue_redis_client
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
 from src.infra.services.firebase_service import FirebaseService
@@ -39,7 +40,9 @@ from src.infra.services.scheduled_notification_service import ScheduledNotificat
 # Globals
 logger = logging.getLogger(__name__)
 _redis_client: Optional[RedisClient] = None
+_queue_redis_client: Optional[RedisClient] = None
 _cache_service: Optional[CacheService] = None
+_job_queue: Optional[RedisJobQueue] = None
 _cache_monitor = CacheMonitor()
 
 # Singleton service instances (initialized once, reused across requests)
@@ -72,13 +75,43 @@ async def initialize_cache_layer() -> None:
 
 async def shutdown_cache_layer() -> None:
     """Gracefully close Redis connections."""
-    global _redis_client, _cache_service
+    global _redis_client, _cache_service, _job_queue
 
     if _cache_service:
         _cache_service = None
+    if _job_queue:
+        _job_queue = None
     if _redis_client:
         await _redis_client.disconnect()
         _redis_client = None
+
+
+async def initialize_queue_layer() -> None:
+    """Initialize queue Redis client when QUEUE_ENABLED. Uses factory for provider selection."""
+    global _queue_redis_client
+
+    if not settings.QUEUE_ENABLED:
+        logger.info("Queue disabled via settings")
+        return
+
+    try:
+        _queue_redis_client = create_queue_redis_client()
+        await _queue_redis_client.connect()
+        logger.info("Queue Redis client initialized (provider=%s)", settings.QUEUE_PROVIDER)
+    except ValueError as exc:
+        logger.error("Queue configuration error: %s", exc)
+        raise
+
+
+async def shutdown_queue_layer() -> None:
+    """Disconnect queue Redis client."""
+    global _queue_redis_client, _job_queue
+
+    if _job_queue:
+        _job_queue = None
+    if _queue_redis_client:
+        await _queue_redis_client.disconnect()
+        _queue_redis_client = None
 
 
 # Database
@@ -341,6 +374,36 @@ def initialize_scheduled_notification_service() -> ScheduledNotificationService:
 def get_redis_client() -> Optional[RedisClient]:
     """Get Redis client for meal suggestions repository."""
     return _redis_client
+
+
+def get_job_queue() -> Optional[RedisJobQueue]:
+    """
+    Get the Redis-backed distributed job queue instance.
+
+    Uses queue-specific Redis client (Upstash or dedicated per QUEUE_PROVIDER).
+    No automatic fallback.
+
+    Returns:
+        Optional[RedisJobQueue]: Queue instance if enabled and client is initialized,
+        otherwise None.
+    """
+    global _job_queue
+
+    if not settings.QUEUE_ENABLED:
+        return None
+    if _queue_redis_client is None:
+        return None
+    if _job_queue is not None:
+        return _job_queue
+
+    _job_queue = RedisJobQueue(
+        redis_client=_queue_redis_client,
+        stream_name=settings.QUEUE_STREAM_NAME,
+        dead_letter_stream=settings.QUEUE_DEAD_LETTER_STREAM_NAME,
+        consumer_group=settings.QUEUE_CONSUMER_GROUP,
+        max_retries=settings.QUEUE_MAX_RETRIES,
+    )
+    return _job_queue
 
 
 def get_meal_suggestion_repository():
