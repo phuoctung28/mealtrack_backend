@@ -277,6 +277,41 @@ class MealRepository(MealRepositoryPort):
             result[day_val] = count
         return result
 
+    def get_dates_with_meals(
+        self,
+        user_id: str,
+        user_timezone: Optional[str] = None,
+    ) -> List[date]:
+        """Return all distinct dates (descending) where user has ≥1 active meal.
+
+        Reuses timezone logic from get_daily_meal_counts().
+        """
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
+
+        if user_timezone and user_timezone != "UTC":
+            date_expr = func.date(func.convert_tz(DBMeal.created_at, "+00:00", self._tz_offset(tz)))
+        else:
+            date_expr = func.date(DBMeal.created_at)
+
+        rows = (
+            self.db.query(date_expr)
+            .filter(
+                DBMeal.user_id == user_id,
+                DBMeal.status != MealStatusEnum.INACTIVE,
+            )
+            .distinct()
+            .order_by(date_expr.desc())
+            .all()
+        )
+
+        result: List[date] = []
+        for (day_val,) in rows:
+            if isinstance(day_val, str):
+                day_val = date.fromisoformat(day_val)
+            if isinstance(day_val, date):
+                result.append(day_val)
+        return result
+
     @staticmethod
     def _tz_offset(tz) -> str:
         """Convert a timezone to a UTC offset string like '+07:00'."""
