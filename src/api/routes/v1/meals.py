@@ -24,6 +24,7 @@ from src.api.schemas.request.meal_requests import (
 )
 from src.api.schemas.response import DetailedMealResponse, ManualMealCreationResponse
 from src.api.schemas.response.meal_responses import ParseMealTextResponse
+from src.api.schemas.progress_schemas import DailyBreakdownResponse, StreakResponse
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.api.schemas.response.weekly_budget_response import WeeklyBudgetResponse
 from src.app.commands.meal import EditMealCommand, FoodItemChange, CustomNutritionData
@@ -40,7 +41,7 @@ from src.app.commands.meal.upload_meal_image_immediately_command import (
 from src.app.commands.meal.analyze_meal_image_by_url_command import (
     AnalyzeMealImageByUrlCommand,
 )
-from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery
+from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery, GetStreakQuery, GetDailyBreakdownQuery
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.infra.event_bus import EventBus
 
@@ -404,6 +405,61 @@ async def parse_meal_text(
             total_fat=app_response.total_fat,
             emoji=app_response.emoji,
         )
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.get("/streak", response_model=StreakResponse)
+async def get_streak(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    Get the user's current and best logging streak.
+
+    - current_streak: consecutive days logged up to today (streak not broken until end of day)
+    - best_streak: longest consecutive run ever
+    - last_logged_date: most recent date with a meal (YYYY-MM-DD), null if never logged
+    """
+    try:
+        header_tz = request.headers.get("X-Timezone")
+        query = GetStreakQuery(user_id=user_id, header_timezone=header_tz)
+        result = await event_bus.send(query)
+        return result
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.get("/weekly/daily-breakdown", response_model=DailyBreakdownResponse)
+async def get_daily_breakdown(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+    week_start: Optional[str] = Query(
+        None,
+        description="Week start date (Monday) in YYYY-MM-DD format. Defaults to current week.",
+    ),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    Get 7-day macro breakdown (Mon–Sun) with consumed vs target per day.
+
+    Returns an array of 7 entries, one per day, with calories/protein/carbs/fat
+    consumed and base daily targets from the user's TDEE.
+    """
+    try:
+        parsed_week_start = None
+        if week_start:
+            parsed_week_start = datetime.strptime(week_start, "%Y-%m-%d").date()
+
+        header_tz = request.headers.get("X-Timezone")
+        query = GetDailyBreakdownQuery(
+            user_id=user_id,
+            week_start=parsed_week_start,
+            header_timezone=header_tz,
+        )
+        result = await event_bus.send(query)
+        return result
     except Exception as e:
         raise handle_exception(e) from e
 

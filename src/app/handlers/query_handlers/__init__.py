@@ -5,7 +5,9 @@ Each handler is in its own file for better maintainability.
 
 # Activity handlers
 from .get_daily_activities_query_handler import GetDailyActivitiesQueryHandler
+from .get_daily_breakdown_query_handler import GetDailyBreakdownQueryHandler
 from .get_daily_macros_query_handler import GetDailyMacrosQueryHandler
+from .get_streak_query_handler import GetStreakQueryHandler
 from .get_food_details_query_handler import GetFoodDetailsQueryHandler
 # Meal handlers
 from .get_meal_by_id_query_handler import GetMealByIdQueryHandler
@@ -51,6 +53,9 @@ __all__ = [
     "GetDailyActivitiesQueryHandler",
     # Meal Plan / Daily Meal
     "GetMealsByDateQueryHandler",
+    # Progress
+    "GetStreakQueryHandler",
+    "GetDailyBreakdownQueryHandler",
     # Daily Meal specific
     "GetMealSuggestionsForProfileQueryHandler",
     "GetSingleMealForProfileQueryHandler",
