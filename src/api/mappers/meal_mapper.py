@@ -53,7 +53,6 @@ class MealMapper:
     def to_detailed_response(
         meal: Meal,
         image_url: Optional[str] = None,
-        target_language: Optional[str] = None
     ) -> DetailedMealResponse:
         """
         Convert Meal domain model to DetailedMealResponse DTO.
@@ -61,10 +60,9 @@ class MealMapper:
         Args:
             meal: Meal domain model
             image_url: Optional image URL
-            target_language: Unused; kept for backward compatibility
 
         Returns:
-            DetailedMealResponse DTO with localized content
+            DetailedMealResponse DTO
         """
         from src.api.schemas.response.meal_responses import (
             MacrosResponse,

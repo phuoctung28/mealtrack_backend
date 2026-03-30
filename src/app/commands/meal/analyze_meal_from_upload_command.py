@@ -15,6 +15,5 @@ class AnalyzeMealFromUploadCommand(Command):
     cloudinary_url: str
     cloudinary_public_id: str
     target_date: Optional[date] = None
-    language: str = "en"
     user_description: Optional[str] = None
 

@@ -6,8 +6,9 @@ This flow avoids transferring raw image bytes through the API server.
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from src.app.commands.meal.analyze_meal_from_upload_command import (
@@ -18,7 +19,6 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
 )
@@ -36,16 +36,16 @@ def _is_allowed_cloudinary_public_id(public_id: str, folder: str) -> bool:
 
 
 def _is_allowed_cloudinary_url(url: str, folder: str) -> bool:
-    # Basic allowlist: must be https and include folder segment.
-    # We keep this intentionally simple because Cloudinary URLs vary by transformations.
+    """Validate URL is a genuine Cloudinary URL containing the expected folder."""
     try:
-        lower = url.strip().lower()
-        if not lower.startswith("https://"):
+        parsed = urlparse(url.strip())
+        if parsed.scheme != "https":
             return False
-        if "cloudinary.com" not in lower:
+        hostname = parsed.hostname or ""
+        if not hostname.endswith("cloudinary.com"):
             return False
         folder_norm = folder.strip().strip("/").lower()
-        return f"/{folder_norm}/" in lower
+        return f"/{folder_norm}/" in parsed.path.lower()
     except Exception:
         return False
 
@@ -59,20 +59,15 @@ class AnalyzeMealFromUploadCommandHandler(
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         cache_service: Optional[CacheService] = None,
-        meal_translation_service: Optional[MealAnalysisTranslationService] = None,
     ):
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
         self.cache_service = cache_service
-        self.meal_translation_service = meal_translation_service
 
     def set_dependencies(self, **kwargs):
         self.vision_service = kwargs.get("vision_service", self.vision_service)
         self.gpt_parser = kwargs.get("gpt_parser", self.gpt_parser)
         self.cache_service = kwargs.get("cache_service", self.cache_service)
-        self.meal_translation_service = kwargs.get(
-            "meal_translation_service", self.meal_translation_service
-        )
 
     async def handle(self, command: AnalyzeMealFromUploadCommand) -> Meal:
         if not all([self.vision_service, self.gpt_parser]):
@@ -87,13 +82,11 @@ class AnalyzeMealFromUploadCommandHandler(
             raise ValueError("Invalid Cloudinary URL")
 
         try:
-            # Determine meal date - use target_date if provided, otherwise use now
             meal_date = command.target_date if command.target_date else utc_now().date()
             meal_datetime = datetime.combine(
                 meal_date, utc_now().time(), tzinfo=timezone.utc
             )
 
-            # Get user timezone from DB for meal type detection
             with UnitOfWork() as uow:
                 user_timezone = uow.users.get_user_timezone(command.user_id)
 
@@ -105,7 +98,6 @@ class AnalyzeMealFromUploadCommandHandler(
             local_datetime = meal_datetime.astimezone(zone_info)
             meal_type = determine_meal_type_from_timestamp(local_datetime)
 
-            # Extract image_id from public_id: mealtrack/<uuid>
             image_id = command.cloudinary_public_id.strip().split("/")[-1]
 
             meal = Meal(
@@ -116,8 +108,8 @@ class AnalyzeMealFromUploadCommandHandler(
                 meal_type=meal_type,
                 image=MealImage(
                     image_id=image_id,
-                    format="jpeg",  # client compresses to jpeg; URL may also serve other formats
-                    size_bytes=0,  # direct upload: API never sees bytes
+                    format="jpeg",
+                    size_bytes=0,
                     url=command.cloudinary_url,
                 ),
                 source="scanner",
@@ -156,44 +148,15 @@ class AnalyzeMealFromUploadCommandHandler(
             meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)
             meal.nutrition = nutrition
 
-            phase2_elapsed = 0.0
-            if (
-                command.language
-                and command.language != "en"
-                and self.meal_translation_service
-            ):
-                phase2_start = time.time()
-                if nutrition and nutrition.food_items:
-                    try:
-                        await self.meal_translation_service.translate_meal(
-                            meal=saved_meal,
-                            dish_name=meal.dish_name,
-                            food_items=nutrition.food_items,
-                            target_language=command.language,
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "[PHASE-2] translation failed for meal=%s: %s",
-                            saved_meal.meal_id,
-                            e,
-                        )
-                phase2_elapsed = time.time() - phase2_start
-
             with UnitOfWork() as uow:
                 final_meal = uow.meals.save(meal)
                 uow.commit()
                 logger.info(
-                    "[ANALYSIS-COMPLETE] meal=%s | total_elapsed=%.2fs | phase1=%.2fs | phase2=%.2fs | language=%s | status=%s",
+                    "[ANALYSIS-COMPLETE] meal=%s | elapsed=%.2fs | status=%s",
                     final_meal.meal_id,
-                    phase1_elapsed + phase2_elapsed,
                     phase1_elapsed,
-                    phase2_elapsed,
-                    command.language,
                     final_meal.status,
                 )
-
-            with UnitOfWork() as uow:
-                final_meal = uow.meals.find_by_id(meal.meal_id)
 
             await self._invalidate_daily_macros(command.user_id, meal_date)
             return final_meal
@@ -214,9 +177,6 @@ class AnalyzeMealFromUploadCommandHandler(
         cache_key, _ = CacheKeys.daily_macros(user_id, target_date)
         await self.cache_service.invalidate(cache_key)
 
-        from datetime import timedelta
-
         week_start = target_date - timedelta(days=target_date.weekday())
         weekly_key, _ = CacheKeys.weekly_budget(user_id, week_start)
         await self.cache_service.invalidate(weekly_key)
-

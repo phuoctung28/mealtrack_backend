@@ -15,6 +15,17 @@ from src.domain.services.meal_suggestion.recipe_attempt_builder import attempt_r
 
 logger = logging.getLogger(__name__)
 
+RECIPE_SYSTEM_PROMPT = (
+    "You are a professional chef and nutritionist. Return ONLY this exact JSON structure:\n"
+    '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
+    '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
+    '"prep_time_minutes":0,"calories":0,"protein":0.0,"carbs":0.0,"fat":0.0}}\n'
+    "All ingredient amounts MUST be in GRAMS. Verify: calories=protein*4+carbs*4+fat*9.\n"
+    "Output string values in English. JSON keys in English only."
+)
+
+NAMES_TO_GENERATE = 4
+
 
 class ParallelRecipeGenerator:
     """
@@ -77,20 +88,12 @@ class ParallelRecipeGenerator:
 
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_recipe_details_prompt
 
-        recipe_system = (
-            "You are a professional chef and nutritionist. Return ONLY this exact JSON structure:\n"
-            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
-            '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
-            '"prep_time_minutes":0,"calories":0,"protein":0.0,"carbs":0.0,"fat":0.0}}\n'
-            "All ingredient amounts MUST be in GRAMS. Verify: calories=protein*4+carbs*4+fat*9.\n"
-            "Output string values in English. JSON keys in English only."
-        )
         prompts = [build_recipe_details_prompt(name, session) for name in meal_names]
         tasks = [
             asyncio.create_task(
-                self._generate_with_retry(prompts[i], meal_names[i], i, recipe_system, session)
+                self._generate_with_retry(prompts[i], meal_names[i], i, RECIPE_SYSTEM_PROMPT, session)
             )
-            for i in range(4)
+            for i in range(len(meal_names))
         ]
 
         successful: List[MealSuggestion] = []
@@ -114,12 +117,12 @@ class ParallelRecipeGenerator:
             except Exception as e:
                 yield {
                     "event": "error",
-                    "data": {"message": f"Recipe generation failed: {str(e)}"},
+                    "data": {"message": "Recipe generation failed"},
                 }
 
         if len(successful) < self.MIN_ACCEPTABLE_RESULTS:
             if not successful:
-                raise RuntimeError("Failed to generate any recipes from 4 attempts")
+                raise RuntimeError(f"Failed to generate any recipes from {len(meal_names)} attempts")
             raise RuntimeError(
                 f"Insufficient recipes: {len(successful)}/{self.MIN_ACCEPTABLE_RESULTS} minimum"
             )
@@ -167,18 +170,10 @@ class ParallelRecipeGenerator:
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_recipe_details_prompt
 
         logger.info(f"[PHASE-2-START] session={session.id} | recipes for {meal_names}")
-        recipe_system = (
-            "You are a professional chef and nutritionist. Return ONLY this exact JSON structure:\n"
-            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
-            '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
-            '"prep_time_minutes":0,"calories":0,"protein":0.0,"carbs":0.0,"fat":0.0}}\n'
-            "All ingredient amounts MUST be in GRAMS. Verify: calories=protein*4+carbs*4+fat*9.\n"
-            "Output string values in English. JSON keys in English only."
-        )
         prompts = [build_recipe_details_prompt(n, session) for n in meal_names]
         tasks = [
-            asyncio.create_task(self._generate_with_retry(prompts[i], meal_names[i], i, recipe_system, session))
-            for i in range(4)
+            asyncio.create_task(self._generate_with_retry(prompts[i], meal_names[i], i, RECIPE_SYSTEM_PROMPT, session))
+            for i in range(len(meal_names))
         ]
 
         gen_start = time.time()

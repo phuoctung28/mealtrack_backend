@@ -60,7 +60,7 @@ class StreamGenerateMealSuggestionsCommandHandler(
                     yield f"event: {event_name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
             except Exception as e:
                 logger.error("Streaming meal suggestions failed: %s", e)
-                error_data = {"message": str(e)}
+                error_data = {"message": "Failed to generate meal suggestions"}
                 yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
 
         return sse_generator()
