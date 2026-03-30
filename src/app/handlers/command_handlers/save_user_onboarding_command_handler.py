@@ -71,6 +71,8 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                         dietary_preferences=command.dietary_preferences,
                         training_level=command.training_level,
                         referral_sources=command.referral_sources,
+                        challenge_duration=command.challenge_duration,
+                        training_types=command.training_types,
                     )
                 else:
                     # Update existing profile
@@ -92,6 +94,8 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     # Write-once — don't overwrite if already set
                     if command.referral_sources and not profile.referral_sources:
                         profile.referral_sources = command.referral_sources
+                    profile.challenge_duration = command.challenge_duration
+                    profile.training_types = command.training_types
 
                 # Save custom macro overrides if all three provided
                 custom_values = [command.custom_protein_g, command.custom_carbs_g, command.custom_fat_g]

@@ -33,6 +33,10 @@ class UserProfile(Base, BaseMixin):
     # Training experience level (beginner, intermediate, advanced)
     training_level = Column(String(20), nullable=True, default=None)
 
+    # Onboarding redesign fields (NM-44)
+    challenge_duration = Column(String(30), nullable=True, default=None)
+    training_types = Column(JSON, nullable=True, default=None)
+
     # Custom macro overrides — when ALL three non-null, overrides calculated macros
     custom_protein_g = Column(Float, nullable=True, default=None)
     custom_carbs_g = Column(Float, nullable=True, default=None)

@@ -42,14 +42,18 @@ class OnboardingCompleteRequest(BaseModel):
     pain_points: List[str] = Field(..., min_items=1, description="User pain points")
     dietary_preferences: List[str] = Field(..., min_items=1, description="Dietary preferences")
 
-    # Meal preferences - REQUIRED
-    meals_per_day: int = Field(..., ge=1, le=10)
+    # Meal preferences - OPTIONAL (default 3, screen removed in onboarding redesign)
+    meals_per_day: int = Field(3, ge=1, le=10)
 
     # Target weight - OPTIONAL
     target_weight_kg: Optional[float] = Field(None, gt=0)
 
-    # Attribution - REQUIRED (multi-select, min 1 item)
-    referral_sources: List[str] = Field(..., min_items=1, description="How user heard about us")
+    # Attribution - OPTIONAL (screen removed in onboarding redesign)
+    referral_sources: List[str] = Field(default_factory=list, description="How user heard about us")
+
+    # Onboarding redesign fields (NM-44)
+    challenge_duration: Optional[str] = Field(None, description="e.g. '30_days', '60_days', '90_days'")
+    training_types: Optional[List[str]] = Field(None, description="e.g. ['strength', 'cardio', 'yoga']")
 
     # Custom macro overrides (optional, set during onboarding)
     custom_protein_g: Optional[float] = Field(None, gt=0, description="Custom protein target in grams")
