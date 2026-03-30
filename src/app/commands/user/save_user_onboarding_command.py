@@ -40,6 +40,10 @@ class SaveUserOnboardingCommand(Command):
     date_of_birth: Optional[date] = None
     target_weight_kg: Optional[float] = None
 
+    # Onboarding redesign fields (NM-44)
+    challenge_duration: Optional[str] = None
+    training_types: Optional[List[str]] = None
+
     # Custom macro overrides (set during onboarding)
     custom_protein_g: Optional[float] = None
     custom_carbs_g: Optional[float] = None
