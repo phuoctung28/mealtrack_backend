@@ -160,18 +160,18 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                         f"Preview deviation: {deviation:.4f} (threshold={WeeklyBudgetConstants.PREVIEW_DEVIATION_THRESHOLD}), "
                         f"tomorrow_cal={tomorrow_adjusted.calories:.1f}, effective_days={effective_days_tomorrow}"
                     )
-                    if deviation >= WeeklyBudgetConstants.PREVIEW_DEVIATION_THRESHOLD:
-                        # Delta relative to today's adjusted target (what user sees on screen)
-                        direction = "over" if today_consumed_cal > adjusted.calories else "under"
-                        preview_data = {
-                            "preview_tomorrow_calories": tomorrow_adjusted.calories,
-                            "preview_tomorrow_protein": tomorrow_adjusted.protein,
-                            "preview_tomorrow_carbs": tomorrow_adjusted.carbs,
-                            "preview_tomorrow_fat": tomorrow_adjusted.fat,
-                            "preview_direction": direction,
-                            "preview_delta": int(abs(tomorrow_adjusted.calories - adjusted.calories)),
-                            "preview_today_delta": int(abs(today_consumed_cal - adjusted.calories)),
-                        }
+                    # Always send preview when meals logged today;
+                    # mobile shows expanded (with delta badge) or just the projected number
+                    direction = "over" if today_consumed_cal > adjusted.calories else "under"
+                    preview_data = {
+                        "preview_tomorrow_calories": tomorrow_adjusted.calories,
+                        "preview_tomorrow_protein": tomorrow_adjusted.protein,
+                        "preview_tomorrow_carbs": tomorrow_adjusted.carbs,
+                        "preview_tomorrow_fat": tomorrow_adjusted.fat,
+                        "preview_direction": direction,
+                        "preview_delta": int(abs(tomorrow_adjusted.calories - adjusted.calories)),
+                        "preview_today_delta": int(abs(today_consumed_cal - adjusted.calories)),
+                    }
 
                 # Derive remaining calories directly from target - consumed (negatives flow through)
                 derived_remaining_cal = weekly_budget.target_calories - weekly_budget.consumed_calories
