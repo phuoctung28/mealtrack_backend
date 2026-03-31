@@ -64,11 +64,16 @@ class AnalyzeMealImageByUrlHandler(
                 user_timezone = "UTC"
                 logger.info("Using UTC fallback for meal type detection")
 
-            meal_date = command.target_date if command.target_date else utc_now().date()
-            if command.target_date:
+            now = utc_now()
+            meal_date = command.target_date if command.target_date else now.date()
+            if command.target_date and command.target_date != now.date():
+                # Past/future date — use noon to avoid date-boundary issues
                 meal_datetime = noon_utc_for_date(meal_date, user_timezone)
+                logger.info(f"Using noon for past/future date: {meal_datetime}")
             else:
-                meal_datetime = utc_now()
+                # Today or no date — use actual current time
+                meal_datetime = now
+                logger.info(f"Using current time: {meal_datetime}")
 
             zone_info = get_zone_info(user_timezone)
             local_datetime = meal_datetime.astimezone(zone_info)

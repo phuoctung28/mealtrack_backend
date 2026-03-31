@@ -44,12 +44,16 @@ class SaveMealSuggestionCommandHandler(
             meal_id: ID of the created meal
         """
         # Parse target meal date
+        now = utc_now()
         meal_date = datetime.strptime(command.meal_date, "%Y-%m-%d").date()
-        # Use noon in user's local timezone to avoid created_at falling
-        # into the wrong date after UTC conversion
-        with UnitOfWork() as uow:
-            user_tz = resolve_user_timezone(command.user_id, uow)
-        meal_datetime = noon_utc_for_date(meal_date, user_tz)
+        if meal_date != now.date():
+            # Past/future date: use noon to avoid date-boundary issues
+            with UnitOfWork() as uow:
+                user_tz = resolve_user_timezone(command.user_id, uow)
+            meal_datetime = noon_utc_for_date(meal_date, user_tz)
+        else:
+            # Today — use actual current time
+            meal_datetime = now
 
         # Build nutrition: total macros from suggestion, food items from ingredient list
         macros = Macros(
