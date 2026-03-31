@@ -31,7 +31,6 @@ from src.infra.services.firebase_service import FirebaseService
 from src.infra.services.scheduled_notification_service import ScheduledNotificationService
 
 if TYPE_CHECKING:
-    from src.domain.services.meal_suggestion.translation_service import TranslationService
     from src.domain.ports.subscription_service_port import SubscriptionServicePort
 
 # Note: Old handler imports removed - using event-driven architecture now
@@ -354,6 +353,36 @@ def get_meal_suggestion_repository():
     return MealSuggestionRepository(_redis_client)
 
 
+_deepl_suggestion_translation_service = None
+
+
+def get_deepl_suggestion_translation_service():
+    """Get DeepL-backed suggestion translation service (singleton).
+
+    Replaces the Gemini-based TranslationService for meal suggestions.
+    Returns None if DEEPL_API_KEY is not set (generation still works, just in English).
+    """
+    global _deepl_suggestion_translation_service
+
+    if _deepl_suggestion_translation_service is not None:
+        return _deepl_suggestion_translation_service
+
+    if not settings.DEEPL_API_KEY:
+        logger.warning("DEEPL_API_KEY not set – suggestion translation will be skipped")
+        return None
+
+    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
+    from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
+        DeepLSuggestionTranslationService,
+    )
+
+    _deepl_suggestion_translation_service = DeepLSuggestionTranslationService(
+        deepl_port=DeepLTranslationAdapter(settings.DEEPL_API_KEY),
+    )
+    logger.info("DeepL suggestion translation service initialised")
+    return _deepl_suggestion_translation_service
+
+
 def get_suggestion_orchestration_service():
     """
     Get suggestion orchestration service (singleton-safe).
@@ -368,6 +397,7 @@ def get_suggestion_orchestration_service():
 
     meal_gen_service = MealGenerationService()
     suggestion_repo = get_meal_suggestion_repository()
+    translation_service = get_deepl_suggestion_translation_service()
 
     # Profile provider keeps domain decoupled from infra while still using SessionLocal
     def profile_provider(user_id: str):
@@ -383,6 +413,7 @@ def get_suggestion_orchestration_service():
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
         suggestion_repo=suggestion_repo,
+        translation_service=translation_service,
         profile_provider=profile_provider,
         uow_factory=UnitOfWork,
     )
@@ -392,12 +423,34 @@ def get_suggestion_orchestration_service():
 # The event bus configuration in event_bus.py handles all dependencies
 
 
-def get_translation_service() -> "TranslationService":
-    """Get lightweight TranslationService for translating strings via Gemini."""
-    from src.domain.services.meal_suggestion.translation_service import TranslationService
-    from src.infra.adapters.meal_generation_service import MealGenerationService
+_deepl_meal_translation_service = None
 
-    return TranslationService(MealGenerationService())
+
+def get_deepl_meal_translation_service():
+    """Get DeepL-backed meal translation service (singleton).
+
+    Returns None if DEEPL_API_KEY is not configured so callers can
+    treat translation as optional.
+    """
+    global _deepl_meal_translation_service
+
+    if _deepl_meal_translation_service is not None:
+        return _deepl_meal_translation_service
+
+    if not settings.DEEPL_API_KEY:
+        logger.warning("DEEPL_API_KEY not set – meal translation will be skipped")
+        return None
+
+    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
+    from src.infra.repositories.meal_translation_repository import MealTranslationRepository
+    from src.domain.services.meal_analysis.deepl_meal_translation_service import DeepLMealTranslationService
+
+    _deepl_meal_translation_service = DeepLMealTranslationService(
+        translation_repo=MealTranslationRepository(),
+        deepl_port=DeepLTranslationAdapter(settings.DEEPL_API_KEY),
+    )
+    logger.info("DeepL meal translation service initialised")
+    return _deepl_meal_translation_service
 
 
 # Singleton subscription service instance

@@ -32,6 +32,7 @@ class SuggestionOrchestrationService:
         self,
         generation_service: MealGenerationServicePort,
         suggestion_repo: MealSuggestionRepositoryPort,
+        translation_service=None,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
         profile_provider: Optional[Callable[[str], Any]] = None,
@@ -39,6 +40,7 @@ class SuggestionOrchestrationService:
     ):
         self._generation = generation_service
         self._repo = suggestion_repo
+        self._translation = translation_service
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
         self._profile_provider = profile_provider
@@ -85,6 +87,12 @@ class SuggestionOrchestrationService:
         )
 
         suggestions = await self._recipe_generator.generate(session=session, exclude_meal_names=exclude_names)
+
+        if self._translation and session.language != "en":
+            suggestions = await self._translation.translate_meal_suggestions_batch(
+                suggestions, target_language=session.language
+            )
+
         await self._persist_generation_result(
             session=session,
             suggestions=suggestions,
@@ -134,6 +142,11 @@ class SuggestionOrchestrationService:
             if event.get("event") == "meal_detail":
                 suggestion = event.get("data", {}).get("suggestion")
                 if suggestion is not None:
+                    if self._translation and session.language != "en":
+                        suggestion = await self._translation.translate_meal_suggestion(
+                            suggestion, target_language=session.language
+                        )
+                        event["data"]["suggestion"] = suggestion
                     suggestions.append(suggestion)
             yield event
 

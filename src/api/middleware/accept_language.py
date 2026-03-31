@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Supported languages (ISO 639-1)
 SUPPORTED_LANGUAGES = {"en", "vi", "es", "fr", "de", "ja", "zh"}
-DEFAULT_LANGUAGE = "en"
+DEFAULT_LANGUAGE = "es"
 
 
 class AcceptLanguageMiddleware(BaseHTTPMiddleware):

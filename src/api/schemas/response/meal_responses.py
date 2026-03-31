@@ -62,9 +62,17 @@ class MealTranslationResponse(BaseModel):
     """Response DTO for meal translation."""
     language: str = Field(..., description="ISO 639-1 language code")
     dish_name: str = Field(..., description="Translated dish name")
+    meal_instruction: Optional[List[dict]] = Field(
+        None,
+        description="Translated instructions: [{instruction, duration_minutes}]"
+    )
+    meal_ingredients: Optional[List[str]] = Field(
+        None,
+        description="Translated ingredient names in food-item order"
+    )
     food_items: List[TranslatedFoodItemResponse] = Field(
         default_factory=list,
-        description="Translated food items"
+        description="Translated food items (legacy)"
     )
     translated_at: Optional[datetime] = Field(
         None,

@@ -13,9 +13,6 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_analysis.translation_service import (
-    MealAnalysisTranslationService,
-)
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
 )
@@ -42,7 +39,7 @@ class AnalyzeMealImageByUrlHandler(
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         cache_service: Optional[CacheService] = None,
-        meal_translation_service: Optional[MealAnalysisTranslationService] = None,
+        meal_translation_service=None,
     ):
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
@@ -150,6 +147,7 @@ class AnalyzeMealImageByUrlHandler(
                             dish_name=meal.dish_name,
                             food_items=nutrition.food_items,
                             target_language=command.language,
+                            instructions=getattr(meal, 'instructions', None),
                         )
                     except Exception as e:
                         logger.warning(

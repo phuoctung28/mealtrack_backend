@@ -33,11 +33,13 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         cache_service: Optional[CacheService] = None,
+        meal_translation_service=None,
     ):
         self.image_store = image_store
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
         self.cache_service = cache_service
+        self.meal_translation_service = meal_translation_service
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
@@ -45,6 +47,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         self.vision_service = kwargs.get('vision_service', self.vision_service)
         self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
         self.cache_service = kwargs.get('cache_service', self.cache_service)
+        self.meal_translation_service = kwargs.get('meal_translation_service', self.meal_translation_service)
     
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
@@ -181,6 +184,39 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"phase1={phase1_elapsed:.2f}s | "
                     f"status={final_meal.status}"
                 )
+
+            # PHASE 2: DeepL translation (if non-English and service available)
+            needs_reload = False
+            if (
+                command.language
+                and command.language != "en"
+                and self.meal_translation_service
+                and nutrition
+                and nutrition.food_items
+            ):
+                phase2_start = time.time()
+                try:
+                    result = await self.meal_translation_service.translate_meal(
+                        meal=final_meal,
+                        dish_name=meal.dish_name,
+                        food_items=nutrition.food_items,
+                        target_language=command.language,
+                        instructions=getattr(meal, 'instructions', None),
+                    )
+                    needs_reload = result is not None
+                except Exception as e:
+                    logger.warning(
+                        "Translation failed for meal=%s: %s", final_meal.meal_id, e
+                    )
+                phase2_elapsed = time.time() - phase2_start
+                logger.info(
+                    "[TRANSLATION] meal=%s | lang=%s | elapsed=%.2fs",
+                    final_meal.meal_id, command.language, phase2_elapsed
+                )
+
+            if needs_reload:
+                with UnitOfWork() as uow:
+                    final_meal = uow.meals.find_by_id(meal.meal_id)
 
             await self._invalidate_daily_macros(command.user_id, meal_date)
 

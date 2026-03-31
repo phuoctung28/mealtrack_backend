@@ -4,8 +4,6 @@ Simplified to only include generation endpoint.
 """
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import StreamingResponse
-
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
@@ -22,7 +20,6 @@ from src.api.schemas.response.meal_suggestion_responses import (
 )
 from src.app.commands.meal_suggestion import (
     GenerateMealSuggestionsCommand,
-    StreamGenerateMealSuggestionsCommand,
     SaveMealSuggestionCommand,
     IngredientItem,
 )
@@ -88,53 +85,10 @@ async def generate_suggestions(
         raise handle_exception(e) from e
 
 
-@router.post("/generate/stream")
-@limiter.limit("5/minute")
-async def generate_suggestions_stream(
-    request: Request,
-    body: MealSuggestionRequest,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus),
-):
-    """Stream meal suggestion generation events using SSE."""
-    try:
-        language = get_request_language(request)
-        portion_type = body.get_effective_portion_type()
-
-        command = StreamGenerateMealSuggestionsCommand(
-            user_id=user_id,
-            meal_type=body.meal_type,
-            meal_portion_type=portion_type.value,
-            ingredients=body.ingredients,
-            time_available_minutes=body.cooking_time_minutes.value,
-            session_id=body.session_id,
-            language=language,
-            servings=body.servings,
-            cooking_equipment=body.cooking_equipment,
-            cuisine_region=body.cuisine_region,
-            calorie_target=body.calorie_target,
-            protein_target=body.protein_target,
-            carbs_target=body.carbs_target,
-            fat_target=body.fat_target,
-        )
-        generator = await event_bus.send(command)
-
-        return StreamingResponse(
-            generator,
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
-    except Exception as e:
-        raise handle_exception(e) from e
-
-
 @router.post("/save", response_model=SaveMealSuggestionResponse)
 async def save_meal_suggestion(
-    request: SaveMealSuggestionRequest,
+    http_request: Request,
+    body: SaveMealSuggestionRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
@@ -143,19 +97,22 @@ async def save_meal_suggestion(
 
     This creates a Meal entity populated with the suggestion's nutrition data
     for the specified date so that it participates in daily macros and history.
+    Language preference from Accept-Language header is persisted to meal_translation.
     """
     try:
+        language = get_request_language(http_request)
+
         command = SaveMealSuggestionCommand(
             user_id=user_id,
-            suggestion_id=request.suggestion_id,
-            name=request.name,
-            meal_type=request.meal_type,
-            calories=request.calories or round(request.protein * 4 + request.carbs * 4 + request.fat * 9),
-            protein=request.protein,
-            carbs=request.carbs,
-            fat=request.fat,
-            description=request.description,
-            estimated_cook_time_minutes=request.estimated_cook_time_minutes,
+            suggestion_id=body.suggestion_id,
+            name=body.name,
+            meal_type=body.meal_type,
+            calories=body.calories or round(body.protein * 4 + body.carbs * 4 + body.fat * 9),
+            protein=body.protein,
+            carbs=body.carbs,
+            fat=body.fat,
+            description=body.description,
+            estimated_cook_time_minutes=body.estimated_cook_time_minutes,
             ingredients=[
                 IngredientItem(
                     name=i.name,
@@ -166,17 +123,18 @@ async def save_meal_suggestion(
                     carbs=i.carbs,
                     fat=i.fat,
                 )
-                for i in request.ingredients
+                for i in body.ingredients
             ],
             instructions=[
                 i.model_dump() if hasattr(i, 'model_dump') else i
-                for i in request.instructions
+                for i in body.instructions
             ],
-            portion_multiplier=request.portion_multiplier,
-            meal_date=request.meal_date,
-            cuisine_type=request.cuisine_type,
-            origin_country=request.origin_country,
-            emoji=request.emoji,
+            portion_multiplier=body.portion_multiplier,
+            meal_date=body.meal_date,
+            cuisine_type=body.cuisine_type,
+            origin_country=body.origin_country,
+            emoji=body.emoji,
+            language=language,
         )
 
         meal_id = await event_bus.send(command)
@@ -184,7 +142,7 @@ async def save_meal_suggestion(
         return SaveMealSuggestionResponse(
             meal_id=meal_id,
             message="Meal suggestion saved successfully",
-            meal_date=request.meal_date,
+            meal_date=body.meal_date,
         )
 
     except Exception as e:

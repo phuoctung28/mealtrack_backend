@@ -151,12 +151,15 @@ async def analyze_meal_image_immediate(
             bool(sanitized_description),
         )
 
+        language = get_request_language(request)
+
         command = UploadMealImageImmediatelyCommand(
             user_id=user_id,
             file_contents=contents,
             content_type=file.content_type,
             target_date=parsed_target_date,
             user_description=sanitized_description,
+            language=language,
         )
 
         logger.info("Uploading and analyzing meal immediately")
@@ -194,8 +197,8 @@ async def analyze_meal_image_immediate(
             # Avoid extra Cloudinary API calls unless URL is missing.
             image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
-        # Return detailed meal response in source language (English)
-        return MealMapper.to_detailed_response(meal, image_url)
+        # Return detailed meal response with translations applied if available
+        return MealMapper.to_detailed_response(meal, image_url, target_language=language)
 
     except Exception as e:
         raise handle_exception(e) from e
@@ -277,7 +280,7 @@ async def analyze_meal_image_by_url(
             # Avoid extra Cloudinary API calls unless URL is missing.
             image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
-        return MealMapper.to_detailed_response(meal, image_url)
+        return MealMapper.to_detailed_response(meal, image_url, target_language=language)
     except Exception as e:
         raise handle_exception(e) from e
 
