@@ -190,8 +190,9 @@ async def analyze_meal_image_immediate(
         # Get the image URL if available
         image_url = None
         if meal.image:
-            # Try to get URL from image store (injected via DI)
-            image_url = image_store.get_url(meal.image.image_id)
+            # Prefer persisted Cloudinary URL from upload response.
+            # Avoid extra Cloudinary API calls unless URL is missing.
+            image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
         # Return detailed meal response in source language (English)
         return MealMapper.to_detailed_response(meal, image_url)
@@ -272,9 +273,11 @@ async def analyze_meal_image_by_url(
 
         image_url = None
         if meal.image:
-            image_url = image_store.get_url(meal.image.image_id) or meal.image.url
+            # Prefer persisted Cloudinary URL from upload response.
+            # Avoid extra Cloudinary API calls unless URL is missing.
+            image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
-        return MealMapper.to_detailed_response(meal, image_url, target_language=language)
+        return MealMapper.to_detailed_response(meal, image_url)
     except Exception as e:
         raise handle_exception(e) from e
 
@@ -480,7 +483,9 @@ async def get_meal(
         # Get image URL if available (injected via DI)
         image_url = None
         if meal.image:
-            image_url = image_store.get_url(meal.image.image_id)
+            # Prefer persisted Cloudinary URL from upload response.
+            # Avoid extra Cloudinary API calls unless URL is missing.
+            image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
         # Get language from Accept-Language header via middleware
         language = get_request_language(request)

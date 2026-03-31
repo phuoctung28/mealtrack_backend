@@ -92,15 +92,17 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         )
 
         # Determine the meal date and datetime
-        meal_date = event.target_date if event.target_date else utc_now().date()
-        if event.target_date:
+        now = utc_now()
+        meal_date = event.target_date if event.target_date else now.date()
+        if event.target_date and event.target_date != now.date():
             # Past/future date: use noon in user's local timezone to avoid
             # created_at falling into the wrong date after UTC conversion
             with UnitOfWork() as uow:
                 user_tz = resolve_user_timezone(event.user_id, uow)
             meal_datetime = noon_utc_for_date(meal_date, user_tz)
         else:
-            meal_datetime = utc_now()
+            # Today or no date — use actual current time
+            meal_datetime = now
         
         # Determine source: use explicit source if provided, otherwise infer
         source = event.source

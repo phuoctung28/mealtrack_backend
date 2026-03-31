@@ -79,13 +79,15 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                 logger.info("Using UTC fallback for meal type detection")
 
             # Determine the meal date and datetime
-            meal_date = command.target_date if command.target_date else utc_now().date()
-            if command.target_date:
+            now = utc_now()
+            meal_date = command.target_date if command.target_date else now.date()
+            if command.target_date and command.target_date != now.date():
                 # Past/future date: use noon in user's local timezone to avoid
                 # created_at falling into the wrong date after UTC conversion
                 meal_datetime = noon_utc_for_date(meal_date, user_timezone)
             else:
-                meal_datetime = utc_now()
+                # Today or no date — use actual current time
+                meal_datetime = now
 
             logger.info(f"Creating meal record for date: {meal_date}")
 
