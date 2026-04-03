@@ -56,7 +56,7 @@ class UserProfile(Base, BaseMixin):
     health_conditions = Column(JSON, default=[], nullable=False)    # ['diabetes', 'hypertension', etc.]
     allergies = Column(JSON, default=[], nullable=False)           # ['nuts', 'dairy', 'shellfish', etc.]
     pain_points = Column(JSON, default=[], nullable=True)
-    disliked_foods = Column(JSON, default=[], nullable=False)  # soft exclusion for discovery (NM-63)
+    disliked_foods = Column(JSON, nullable=True)  # soft exclusion for discovery (NM-63), [] in app code
 
     # Attribution — JSON array, nullable for existing users
     referral_sources = Column(JSON, nullable=True, default=None)

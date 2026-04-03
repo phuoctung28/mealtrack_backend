@@ -19,7 +19,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         'user_profiles',
-        sa.Column('disliked_foods', sa.JSON(), nullable=False, server_default='[]'),
+        sa.Column('disliked_foods', sa.JSON(), nullable=True),
     )
 
 
