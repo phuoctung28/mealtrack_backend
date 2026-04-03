@@ -39,6 +39,8 @@ class MealTranslationRepository(MealTranslationRepositoryPort):
                 # Update existing
                 existing.dish_name = translation.dish_name
                 existing.translated_at = translation.translated_at
+                existing.meal_instruction = translation.meal_instruction
+                existing.meal_ingredients = translation.meal_ingredients
                 # Delete old food item translations and create new ones
                 for fi in existing.food_items:
                     db.delete(fi)

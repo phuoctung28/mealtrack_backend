@@ -15,7 +15,6 @@ from src.domain.model.meal import MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.domain.services.meal_type_determination_service import determine_meal_type_from_timestamp
 from src.domain.utils.timezone_utils import utc_now, get_zone_info, is_valid_timezone, noon_utc_for_date
 from src.infra.cache.cache_service import CacheService
@@ -34,7 +33,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         cache_service: Optional[CacheService] = None,
-        meal_translation_service: Optional[MealAnalysisTranslationService] = None,
+        meal_translation_service=None,
     ):
         self.image_store = image_store
         self.vision_service = vision_service
@@ -176,56 +175,48 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)
             meal.nutrition = nutrition
 
-            # PHASE 2: Translation (after parsing, before final save)
-            phase2_elapsed = 0.0
-            if command.language and command.language != "en" and self.meal_translation_service:
-                phase2_start = time.time()
-                logger.info(
-                    f"[PHASE-2-START] meal={saved_meal.meal_id} | "
-                    f"translating to {command.language}"
-                )
-                if nutrition and nutrition.food_items:
-                    try:
-                        translation = await self.meal_translation_service.translate_meal(
-                            meal=saved_meal,
-                            dish_name=meal.dish_name,
-                            food_items=nutrition.food_items,
-                            target_language=command.language
-                        )
-                        if translation:
-                            logger.info(
-                                f"[PHASE-2] translation saved for meal={saved_meal.meal_id}, "
-                                f"language={command.language}"
-                            )
-                    except Exception as e:
-                        logger.warning(
-                            f"[PHASE-2] translation failed for meal={saved_meal.meal_id}: {e}"
-                        )
-                        # Don't fail the whole analysis if translation fails
-                phase2_elapsed = time.time() - phase2_start
-                logger.info(
-                    f"[PHASE-2-COMPLETE] meal={saved_meal.meal_id} | "
-                    f"elapsed={phase2_elapsed:.2f}s | "
-                    f"language={command.language}"
-                )
-
             # Save the fully analyzed meal using UoW
             with UnitOfWork() as uow:
                 final_meal = uow.meals.save(meal)
                 uow.commit()
-                total_elapsed = phase1_elapsed + phase2_elapsed
                 logger.info(
                     f"[ANALYSIS-COMPLETE] meal={final_meal.meal_id} | "
-                    f"total_elapsed={total_elapsed:.2f}s | "
                     f"phase1={phase1_elapsed:.2f}s | "
-                    f"phase2={phase2_elapsed:.2f}s | "
-                    f"language={command.language} | "
                     f"status={final_meal.status}"
                 )
 
-            # Reload meal with translations for response
-            with UnitOfWork() as uow:
-                final_meal = uow.meals.find_by_id(meal.meal_id)
+            # PHASE 2: DeepL translation (if non-English and service available)
+            needs_reload = False
+            if (
+                command.language
+                and command.language != "en"
+                and self.meal_translation_service
+                and nutrition
+                and nutrition.food_items
+            ):
+                phase2_start = time.time()
+                try:
+                    result = await self.meal_translation_service.translate_meal(
+                        meal=final_meal,
+                        dish_name=meal.dish_name,
+                        food_items=nutrition.food_items,
+                        target_language=command.language,
+                        instructions=getattr(meal, 'instructions', None),
+                    )
+                    needs_reload = result is not None
+                except Exception as e:
+                    logger.warning(
+                        "Translation failed for meal=%s: %s", final_meal.meal_id, e
+                    )
+                phase2_elapsed = time.time() - phase2_start
+                logger.info(
+                    "[TRANSLATION] meal=%s | lang=%s | elapsed=%.2fs",
+                    final_meal.meal_id, command.language, phase2_elapsed
+                )
+
+            if needs_reload:
+                with UnitOfWork() as uow:
+                    final_meal = uow.meals.find_by_id(meal.meal_id)
 
             await self._invalidate_daily_macros(command.user_id, meal_date)
 

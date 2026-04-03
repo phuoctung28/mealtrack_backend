@@ -24,14 +24,14 @@ class SaveUserOnboardingCommand(Command):
     training_minutes_per_session: int
     fitness_goal: str
 
-    # Preferences - REQUIRED
-    pain_points: List[str]
-    dietary_preferences: List[str]
+    # Preferences - optional (may be empty from new onboarding flow)
+    pain_points: Optional[List[str]] = None
+    dietary_preferences: Optional[List[str]] = None
 
-    # Attribution
-    referral_sources: List[str]
+    # Attribution - optional (removed from onboarding flow)
+    referral_sources: Optional[List[str]] = None
 
-    # Meal preferences
+    # Meal preferences - optional (removed from onboarding flow, default 3)
     meals_per_day: int = 3
 
     # Optional fields

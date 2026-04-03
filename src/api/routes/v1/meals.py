@@ -135,9 +135,6 @@ async def analyze_meal_image_immediate(
                     details={"date": target_date},
                 ) from e
 
-        # Get language from Accept-Language header via middleware
-        language = get_request_language(request)
-
         # Sanitize user description to prevent prompt injection
         sanitized_description = None
         if user_description:
@@ -149,19 +146,20 @@ async def analyze_meal_image_immediate(
 
         # Process the upload and analysis immediately
         logger.info(
-            "Processing meal photo for immediate analysis (target_date: %s, language: %s, has_description: %s)",
+            "Processing meal photo for immediate analysis (target_date: %s, has_description: %s)",
             parsed_target_date,
-            language,
             bool(sanitized_description),
         )
+
+        language = get_request_language(request)
 
         command = UploadMealImageImmediatelyCommand(
             user_id=user_id,
             file_contents=contents,
             content_type=file.content_type,
             target_date=parsed_target_date,
-            language=language,
             user_description=sanitized_description,
+            language=language,
         )
 
         logger.info("Uploading and analyzing meal immediately")
@@ -199,7 +197,7 @@ async def analyze_meal_image_immediate(
             # Avoid extra Cloudinary API calls unless URL is missing.
             image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
-        # Return the detailed meal response using mapper with translation support
+        # Return detailed meal response with translations applied if available
         return MealMapper.to_detailed_response(meal, image_url, target_language=language)
 
     except Exception as e:
@@ -282,7 +280,7 @@ async def analyze_meal_image_by_url(
             # Avoid extra Cloudinary API calls unless URL is missing.
             image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
-        return MealMapper.to_detailed_response(meal, image_url)
+        return MealMapper.to_detailed_response(meal, image_url, target_language=language)
     except Exception as e:
         raise handle_exception(e) from e
 

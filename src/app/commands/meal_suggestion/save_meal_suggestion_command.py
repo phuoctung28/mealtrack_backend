@@ -46,6 +46,7 @@ class SaveMealSuggestionCommand(Command):
     cuisine_type: Optional[str] = None
     origin_country: Optional[str] = None
     emoji: Optional[str] = None
+    language: str = "en"  # ISO 639-1 code; used to persist meal_translation on save
 
     def __post_init__(self):
         """Validate command data."""
