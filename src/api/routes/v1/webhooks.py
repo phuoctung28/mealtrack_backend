@@ -89,7 +89,23 @@ async def revenuecat_webhook(
         try:
             if event_type == "INITIAL_PURCHASE":
                 handle_purchase(uow, user, event)
-                
+
+                # Fire TikTok CompletePayment for ad attribution (fire-and-forget)
+                try:
+                    from src.infra.adapters.tiktok_events_service import get_tiktok_events_service
+                    import asyncio
+                    tiktok = get_tiktok_events_service()
+                    if tiktok:
+                        asyncio.ensure_future(tiktok.track_complete_payment(
+                            event_id=f"purchase_{user.id}_{event.get('transaction_id', '')}",
+                            user_email=getattr(user, "email", "") or "",
+                            firebase_uid=user.firebase_uid,
+                            value=float(event.get("price", 0) or 0),
+                            currency=event.get("currency", "USD"),
+                        ))
+                except Exception as e:
+                    logger.warning(f"TikTok CompletePayment event failed: {e}")
+
             elif event_type == "RENEWAL":
                 handle_renewal(uow, user, event)
                 
