@@ -115,12 +115,10 @@ class DiscoveryOrchestrationService:
         if profile is None:
             return 2000.0
         try:
-            uow = self._uow_factory()
-            daily_target = await get_adjusted_daily_target(
-                self._tdee_service, user_id, profile, uow
-            )
-            # We don't have real-time consumed here; return full daily target
-            # (frontend can pass consumed if needed in future)
+            with self._uow_factory() as uow:
+                daily_target = await get_adjusted_daily_target(
+                    self._tdee_service, user_id, profile, uow=uow
+                )
             return max(300.0, daily_target)
         except Exception as e:
             logger.warning(f"Failed adjusted target for {user_id}: {e}")
