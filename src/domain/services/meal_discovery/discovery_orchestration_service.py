@@ -127,8 +127,20 @@ class DiscoveryOrchestrationService:
     async def _generate_meals(self, prompt: str) -> List[DiscoveryMeal]:
         """Call AI, parse response, return validated DiscoveryMeal list."""
         try:
-            raw = await self._generation.generate_content(prompt)
-            return self._parse_meals(raw)
+            result = self._generation.generate_meal_plan(
+                prompt=prompt,
+                system_message="You are a meal discovery engine. Generate diverse meal ideas as JSON.",
+                response_type="json",
+            )
+            # generate_meal_plan returns Dict when response_type="json"
+            if isinstance(result, dict):
+                raw_meals = result.get("meals", [])
+            elif isinstance(result, str):
+                data = self._extract_json(result)
+                raw_meals = data.get("meals", [])
+            else:
+                raw_meals = []
+            return [m for m in (self._parse_single_meal(item) for item in raw_meals) if m]
         except Exception as e:
             logger.error(f"Discovery generation failed: {e}")
             return []
