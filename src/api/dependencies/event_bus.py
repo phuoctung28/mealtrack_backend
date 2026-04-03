@@ -84,6 +84,8 @@ from src.app.commands.saved_suggestion import (
 )
 from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
 from src.app.handlers.query_handlers import GetSavedSuggestionsQueryHandler
+from src.app.commands.meal_discovery import GenerateDiscoveryCommand
+from src.app.handlers.command_handlers.meal_discovery import GenerateDiscoveryCommandHandler
 from src.app.commands.cheat_day import MarkCheatDayCommand, UnmarkCheatDayCommand
 from src.app.queries.cheat_day import GetCheatDaysQuery
 from src.app.handlers.command_handlers.mark_cheat_day_command_handler import MarkCheatDayCommandHandler
@@ -511,6 +513,14 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         GetMessagesQuery,
         GetMessagesQueryHandler()
+    )
+
+    # Register meal discovery handlers
+    from src.api.base_dependencies import get_discovery_orchestration_service
+    discovery_service = get_discovery_orchestration_service()
+    event_bus.register_handler(
+        GenerateDiscoveryCommand,
+        GenerateDiscoveryCommandHandler(discovery_service),
     )
 
     # Register cheat day handlers

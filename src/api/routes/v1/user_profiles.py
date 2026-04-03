@@ -21,6 +21,10 @@ from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import GetUserMetricsQuery
 from src.domain.model.user import TdeeResponse, Goal, MacroTargets
 from src.infra.event_bus import EventBus
+from src.api.schemas.response.meal_discovery_responses import (
+    FoodPreferencesResponse,
+    UpdateFoodPreferencesRequest,
+)
 
 router = APIRouter(prefix="/v1/user-profiles", tags=["User Profiles"])
 
@@ -227,6 +231,79 @@ async def update_user_metrics(
         response.is_custom = result.get("is_custom", False)
         return response
 
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.get("/food-preferences")
+async def get_food_preferences(
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    [NM-63] Get user's food preference settings: allergies, dietary restrictions, disliked foods.
+
+    Returns all three lists used to filter meal discovery and AI generation.
+    """
+    from src.infra.database.config import SessionLocal
+    from src.infra.repositories.user_repository import UserRepository
+
+    try:
+        db = SessionLocal()
+        try:
+            profile = UserRepository(db).get_profile(user_id)
+        finally:
+            db.close()
+
+        if profile is None:
+            return FoodPreferencesResponse()
+
+        return FoodPreferencesResponse(
+            allergies=profile.allergies or [],
+            dietary_preferences=profile.dietary_preferences or [],
+            disliked_foods=profile.disliked_foods or [],
+        )
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.put("/food-preferences")
+async def update_food_preferences(
+    body: UpdateFoodPreferencesRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    [NM-63] Update user's food preference settings.
+
+    - allergies: strict exclusions (NEVER include in AI-generated meals)
+    - dietary_preferences: strict dietary restrictions (vegan, gluten-free, etc.)
+    - disliked_foods: soft exclusions (avoid when possible in discovery)
+    """
+    from src.infra.database.config import SessionLocal
+    from src.infra.repositories.user_repository import UserRepository
+    from fastapi import HTTPException
+
+    try:
+        db = SessionLocal()
+        try:
+            repo = UserRepository(db)
+            profile = repo.get_profile(user_id)
+            if profile is None:
+                raise HTTPException(status_code=404, detail="Profile not found")
+
+            profile.allergies = body.allergies
+            profile.dietary_preferences = body.dietary_preferences
+            profile.disliked_foods = body.disliked_foods
+            db.commit()
+        finally:
+            db.close()
+
+        return FoodPreferencesResponse(
+            allergies=body.allergies,
+            dietary_preferences=body.dietary_preferences,
+            disliked_foods=body.disliked_foods,
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise handle_exception(e) from e
 
