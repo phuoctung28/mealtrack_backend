@@ -107,6 +107,10 @@ class Settings(BaseSettings):
     CHAT_ENABLE_WELCOME_MESSAGE: bool = Field(
         default=True, description="Auto-generate welcome message on thread creation"
     )
+    # Food image search APIs (NM-72) — optional, service returns None if missing
+    PEXELS_API_KEY: str | None = Field(default=None, description="Pexels API key for food photos")
+    UNSPLASH_ACCESS_KEY: str | None = Field(default=None, description="Unsplash Client-ID access key")
+
     REVENUECAT_SECRET_API_KEY: str | None = Field(default=None)
     REVENUECAT_WEBHOOK_SECRET: str | None = Field(default=None)
     CLOUDINARY_CLOUD_NAME: str | None = Field(default=None)
