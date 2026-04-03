@@ -109,6 +109,10 @@ class Settings(BaseSettings):
     )
     REVENUECAT_SECRET_API_KEY: str | None = Field(default=None)
     REVENUECAT_WEBHOOK_SECRET: str | None = Field(default=None)
+
+    # TikTok Events API (ad attribution)
+    TIKTOK_ACCESS_TOKEN: str | None = Field(default=None, description="TikTok Events API access token")
+    TIKTOK_APP_ID: str | None = Field(default=None, description="TikTok App ID for Events API")
     CLOUDINARY_CLOUD_NAME: str | None = Field(default=None)
     CLOUDINARY_API_KEY: str | None = Field(default=None)
     CLOUDINARY_API_SECRET: str | None = Field(default=None)
