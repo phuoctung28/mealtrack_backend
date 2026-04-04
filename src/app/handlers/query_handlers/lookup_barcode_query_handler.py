@@ -157,8 +157,11 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
                 "barcode prefix (country of origin), and your knowledge, provide your best "
                 "estimate of approximate nutrition per 100g. "
                 "Be conservative with estimates. "
+                "IMPORTANT: If the product is clearly NOT a food item (e.g. electronics, "
+                "cleaning products, cosmetics, medicine, household items), return "
+                '{"is_food": false} instead. '
                 "Return ONLY valid JSON: "
-                '{"name": "product name", "brand": null, '
+                '{"is_food": true, "name": "product name", "brand": null, '
                 '"protein_100g": float, "carbs_100g": float, "fat_100g": float, '
                 '"fiber_100g": float, "sugar_100g": float}'
             )
@@ -173,6 +176,11 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
                 user_prompt, system_prompt, response_type="json",
             )
             if not result or not isinstance(result, dict):
+                return None
+
+            # Non-food item detected by AI
+            if not result.get("is_food", True):
+                logger.info(f"Non-food item detected for barcode {barcode}")
                 return None
 
             # Validate with macro validator if available
