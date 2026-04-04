@@ -158,8 +158,10 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
                             logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5b HIT (fatsecret name): {fs_item.get('name')}")
                             fs_item["source"] = "fatsecret"
                             fs_item["barcode"] = query.barcode
+                            # Use brave_name as the display name (original brand name)
+                            fs_item["name"] = brave_name
                             self._cache_result(fs_item)
-                            return await self._maybe_translate(fs_item, query.language)
+                            return fs_item  # Don't translate — brand names should stay as-is
             except Exception as e:
                 logger.warning(f"FatSecret name search failed for '{brave_name}': {e}")
 
@@ -169,7 +171,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
             brave_result["source"] = "brave_search"
             brave_result["barcode"] = query.barcode
             self._cache_result(brave_result)
-            return await self._maybe_translate(brave_result, query.language)
+            return brave_result  # Don't translate — brand names should stay as-is
         elif brave_result:
             logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5 MISS (brave, no nutrition)")
         else:
