@@ -237,6 +237,34 @@ def get_fat_secret_service_instance():
     return get_fat_secret_service()
 
 
+# Nutritionix Service
+def get_nutritionix_service_instance():
+    """Get the Nutritionix service instance, or None if not configured."""
+    from src.infra.adapters.nutritionix_service import get_nutritionix_service
+    return get_nutritionix_service()
+
+
+# BraveSearch Nutrition Service (singleton — None when API key not configured)
+_brave_search_nutrition_service = None
+
+
+def get_brave_search_nutrition_service_instance():
+    """Get the BraveSearch nutrition service singleton, or None if unconfigured."""
+    global _brave_search_nutrition_service
+    if _brave_search_nutrition_service is None:
+        from src.infra.adapters.brave_search_nutrition_service import get_brave_search_nutrition_service
+        from src.infra.adapters.meal_generation_service import MealGenerationService
+        from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+
+        meal_gen = MealGenerationService()
+        macro_validator = MacroValidationService()
+        _brave_search_nutrition_service = get_brave_search_nutrition_service(
+            meal_generation_service=meal_gen,
+            macro_validation_service=macro_validator,
+        )
+    return _brave_search_nutrition_service
+
+
 # Food Reference Repository (replaces barcode_product_repository)
 _food_reference_repository = None
 
