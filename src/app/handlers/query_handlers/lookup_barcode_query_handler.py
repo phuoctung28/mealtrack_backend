@@ -176,7 +176,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
             )
             result = self.meal_gen.generate_meal_plan(
                 user_prompt, system_prompt, response_type="json",
-                max_tokens=500, model_purpose="recipe_primary",
+                max_tokens=500, model_purpose="barcode",
             )
             if not result or not isinstance(result, dict):
                 return None
@@ -193,6 +193,9 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
             result["barcode"] = barcode
             result["source"] = "ai_estimate"
             result["is_estimate"] = True
+            # Ensure name is never null (required by response schema)
+            if not result.get("name"):
+                result["name"] = partial_name or f"Unknown product ({country})"
             return result
         except Exception as e:
             logger.warning(f"AI estimation failed for barcode {barcode}: {e}")

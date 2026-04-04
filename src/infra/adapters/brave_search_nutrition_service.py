@@ -98,7 +98,7 @@ class BraveSearchNutritionService:
 
             result = self._meal_gen.generate_meal_plan(
                 user_prompt, system_prompt, response_type="json",
-                max_tokens=500, model_purpose="recipe_primary",
+                max_tokens=500, model_purpose="barcode",
             )
 
             if not result or not isinstance(result, dict):
