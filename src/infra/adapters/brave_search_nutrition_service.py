@@ -25,10 +25,12 @@ class BraveSearchNutritionService:
             self._client = httpx.AsyncClient(timeout=5.0)
         return self._client
 
-    async def get_product(self, barcode: str, language: str = "en") -> Optional[Dict[str, Any]]:
+    async def get_product(
+        self, barcode: str, language: str = "en", product_name: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Search barcode nutrition via web search + AI extraction."""
         try:
-            snippets = await self._search_barcode(barcode)
+            snippets = await self._search_barcode(barcode, product_name)
             if not snippets:
                 return None
 
@@ -43,13 +45,15 @@ class BraveSearchNutritionService:
             logger.warning(f"Brave search failed for barcode {barcode}: {e}")
             return None
 
-    async def _search_barcode(self, barcode: str) -> Optional[str]:
+    async def _search_barcode(self, barcode: str, product_name: Optional[str] = None) -> Optional[str]:
         """Search Brave for barcode nutrition info, return combined snippets."""
         try:
+            # Search with barcode + product name if available, otherwise just barcode
+            query = f"{barcode} {product_name} nutrition" if product_name else f"{barcode} barcode product"
             client = self._get_client()
             response = await client.get(
                 self.SEARCH_URL,
-                params={"q": f"{barcode} nutrition facts", "count": 5},
+                params={"q": query, "count": 5},
                 headers={
                     "X-Subscription-Token": self._api_key,
                     "Accept": "application/json",

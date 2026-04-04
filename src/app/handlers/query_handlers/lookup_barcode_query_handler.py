@@ -131,7 +131,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
         # Step 5: Try Brave Search + Gemini extraction
         if self.brave_search:
             brave_result = await self.brave_search.get_product(
-                query.barcode, query.language,
+                query.barcode, query.language, product_name=partial_name,
             )
             if brave_result and self._has_nutrition(brave_result):
                 logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5 HIT (brave): {brave_result.get('name')}")
