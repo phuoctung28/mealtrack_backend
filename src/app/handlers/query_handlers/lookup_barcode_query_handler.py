@@ -71,57 +71,80 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
 
     async def handle(self, query: LookupBarcodeQuery) -> Optional[Dict[str, Any]]:
         """Look up product by barcode with 6-step cascade."""
+        # Track product name from partial matches (has name but no nutrition)
+        partial_name: Optional[str] = None
 
         # Step 1: Check local cache (DB)
         cached = self.repo.get_by_barcode(query.barcode)
-        if cached:
+        if cached and self._has_nutrition(cached):
             cached["source"] = "cache"
             return await self._maybe_translate(cached, query.language)
+        if cached:
+            partial_name = cached.get("name")
 
         # Step 2: Try FatSecret
         region = LANGUAGE_TO_REGION.get(query.language, "US")
         fat_secret_result = await self.fat_secret.get_product(
             query.barcode, region=region, language=query.language,
         )
-        if fat_secret_result:
+        if fat_secret_result and self._has_nutrition(fat_secret_result):
             fat_secret_result["source"] = "fatsecret"
             self._cache_result(fat_secret_result)
             return await self._maybe_translate(fat_secret_result, query.language)
+        if fat_secret_result:
+            partial_name = partial_name or fat_secret_result.get("name")
 
         # Step 3: Try OpenFoodFacts
         off_result = await self.off.get_product(query.barcode)
-        if off_result:
+        if off_result and self._has_nutrition(off_result):
             off_result["source"] = "openfoodfacts"
             self._cache_result(off_result)
             return await self._maybe_translate(off_result, query.language)
+        if off_result:
+            partial_name = partial_name or off_result.get("name")
 
         # Step 4: Try Nutritionix
         if self.nutritionix:
             nx_result = await self.nutritionix.get_product(query.barcode)
-            if nx_result:
+            if nx_result and self._has_nutrition(nx_result):
                 nx_result["source"] = "nutritionix"
                 self._cache_result(nx_result)
                 return await self._maybe_translate(nx_result, query.language)
+            if nx_result:
+                partial_name = partial_name or nx_result.get("name")
 
         # Step 5: Try Brave Search + Gemini extraction
         if self.brave_search:
             brave_result = await self.brave_search.get_product(
                 query.barcode, query.language,
             )
-            if brave_result:
+            if brave_result and self._has_nutrition(brave_result):
                 brave_result["source"] = "brave_search"
                 self._cache_result(brave_result)
                 return await self._maybe_translate(brave_result, query.language)
 
         # Step 6: AI estimation (last resort — don't cache unreliable data)
-        estimate = await self._ai_estimate(query.barcode, query.language)
+        # Pass partial_name so AI can make a better guess
+        estimate = await self._ai_estimate(query.barcode, query.language, partial_name)
         if estimate:
             return estimate
 
         return None
 
+    @staticmethod
+    def _has_nutrition(result: Dict[str, Any]) -> bool:
+        """Check if result has meaningful macro data (not all zeros/None)."""
+        protein = result.get("protein_100g")
+        carbs = result.get("carbs_100g")
+        fat = result.get("fat_100g")
+        # At least one macro must be a positive number
+        for val in (protein, carbs, fat):
+            if val is not None and val > 0:
+                return True
+        return False
+
     async def _ai_estimate(
-        self, barcode: str, language: str,
+        self, barcode: str, language: str, partial_name: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Estimate nutrition via Gemini when all other sources fail."""
         if not self.meal_gen:
@@ -129,17 +152,19 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
         try:
             country = _get_country_from_barcode(barcode)
             system_prompt = (
-                "You are a nutrition expert. A barcode was scanned but not found "
-                "in any food database. Based on the barcode prefix (country of origin) "
-                "and your knowledge, provide your best estimate of what this product "
-                "might be and its approximate nutrition per 100g. "
+                "You are a nutrition expert. A barcode was scanned but nutrition data "
+                "was not found in any food database. Based on the product name (if known), "
+                "barcode prefix (country of origin), and your knowledge, provide your best "
+                "estimate of approximate nutrition per 100g. "
                 "Be conservative with estimates. "
                 "Return ONLY valid JSON: "
-                '{"name": "estimated product name", "brand": null, '
+                '{"name": "product name", "brand": null, '
                 '"protein_100g": float, "carbs_100g": float, "fat_100g": float, '
                 '"fiber_100g": float, "sugar_100g": float}'
             )
+            name_hint = f"Product name: {partial_name}\n" if partial_name else ""
             user_prompt = (
+                f"{name_hint}"
                 f"Barcode: {barcode}\n"
                 f"Country of origin: {country}\n"
                 f"Language: {language}"
