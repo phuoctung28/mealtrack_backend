@@ -176,7 +176,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
             )
             result = self.meal_gen.generate_meal_plan(
                 user_prompt, system_prompt, response_type="json",
-                max_tokens=500,
+                max_tokens=500, model_purpose="recipe_primary",
             )
             if not result or not isinstance(result, dict):
                 return None
