@@ -394,20 +394,23 @@ class TestNotificationRepository:
     
     # Utility Operations Tests
 
-    def test_find_users_for_meal_reminder_breakfast(self, repository, mock_db_session):
+    @patch('src.infra.repositories.notification.reminder_query_builder.ReminderQueryBuilder._active_token_users_subquery')
+    def test_find_users_for_meal_reminder_breakfast(self, mock_subquery_method, repository, mock_db_session):
         """Test finding users for breakfast reminder with timezone-aware query.
 
         Verifies the optimized query that includes time_field in initial query
         to avoid N+1 queries (no secondary query in loop).
         """
-        # Arrange - mock returns tuples of (user_id, timezone, pref_minutes)
-        # This is the optimized single-query pattern (no N+1)
+        # Arrange - patch subquery to return a real SQLAlchemy select
+        from sqlalchemy import select, literal_column
+        mock_subquery_method.return_value = select(literal_column("'dummy'")).subquery()
+
+        # Main query mock returns tuples of (user_id, timezone, pref_minutes)
         mock_query = Mock()
         mock_query.join = Mock(return_value=mock_query)
         mock_query.filter = Mock(return_value=mock_query)
-        # Both users have breakfast at 480 minutes (8:00 AM)
         mock_query.all = Mock(return_value=[
-            ("user-1", "UTC", 480),  # user_id, timezone, breakfast_time_minutes
+            ("user-1", "UTC", 480),
             ("user-2", "UTC", 480)
         ])
         mock_db_session.query = Mock(return_value=mock_query)
@@ -419,7 +422,6 @@ class TestNotificationRepository:
         # Assert - both users should match at 8:00 AM
         assert "user-1" in result
         assert "user-2" in result
-        # Verify only ONE query was made (no N+1 - no secondary query.first calls)
         mock_db_session.query.assert_called_once()
     
     def test_find_users_for_meal_reminder_invalid_meal_type(self, repository, mock_db_session):
