@@ -66,9 +66,13 @@ class BraveSearchNutritionService:
             for r in results[:5]:
                 title = r.get("title", "")
                 description = r.get("description", "")
+                url = r.get("url", "")
                 snippets.append(f"{title}: {description}")
+                logger.info(f"Brave result for {barcode}: {title} | {url}")
 
-            return "\n\n".join(snippets)
+            combined = "\n\n".join(snippets)
+            logger.info(f"Brave snippets for {barcode} ({len(results)} results, {len(combined)} chars)")
+            return combined
         except Exception as e:
             logger.warning(f"Brave search API error for {barcode}: {e}")
             return None
