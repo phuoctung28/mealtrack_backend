@@ -31,9 +31,10 @@ class GetStreakQueryHandler(EventHandler[GetStreakQuery, Dict[str, Any]]):
             dates = uow.meals.get_dates_with_meals(
                 query.user_id, user_timezone=user_tz_str
             )
+            scan_count = uow.meals.count_by_source(query.user_id, "scanner")
 
         if not dates:
-            return {"current_streak": 0, "best_streak": 0, "last_logged_date": None}
+            return {"current_streak": 0, "best_streak": 0, "last_logged_date": None, "scan_count": scan_count}
 
         last_logged = dates[0]
 
@@ -44,6 +45,7 @@ class GetStreakQueryHandler(EventHandler[GetStreakQuery, Dict[str, Any]]):
             "current_streak": current_streak,
             "best_streak": best_streak,
             "last_logged_date": last_logged.isoformat(),
+            "scan_count": scan_count,
         }
 
     def _calculate_current_streak(self, dates: list[date], today: date) -> int:

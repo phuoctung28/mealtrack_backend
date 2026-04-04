@@ -14,6 +14,7 @@ class StreakResponse(BaseModel):
     current_streak: int
     best_streak: int
     last_logged_date: Optional[str] = None  # YYYY-MM-DD, None if never logged
+    scan_count: int = 0  # total meals created via scanner
 
 
 class DailyBreakdownEntry(BaseModel):

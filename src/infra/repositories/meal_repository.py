@@ -164,6 +164,14 @@ class MealRepository(MealRepositoryPort):
     def count(self) -> int:
         """Counts the total number of meals."""
         return self.db.query(DBMeal).count()
+
+    def count_by_source(self, user_id: str, source: str) -> int:
+        """Count meals by source type for a user."""
+        return (
+            self.db.query(DBMeal)
+            .filter(DBMeal.user_id == user_id, DBMeal.source == source)
+            .count()
+        )
     
     def find_by_date(
         self, date_obj: date, user_id: str = None, limit: int = 50,
