@@ -112,10 +112,12 @@ class BraveSearchNutritionService:
             if not result or not isinstance(result, dict):
                 return None
 
+            # Accept all confidence levels — the data is from web search,
+            # user will verify in editable UI. Only reject if macros are missing.
             confidence = result.get("confidence", "low")
             if confidence == "low":
-                logger.info(f"Brave+AI extraction low confidence for {barcode}, skipping")
-                return None
+                result["is_estimate"] = True  # Mark low-confidence as estimate
+                logger.info(f"Brave+AI extraction low confidence for {barcode}, marking as estimate")
 
             required = ["protein_100g", "carbs_100g", "fat_100g"]
             if not all(result.get(f) is not None for f in required):
