@@ -149,9 +149,12 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
                     brave_name, max_results=3, region=region, language=query.language,
                 )
                 if fs_results:
-                    # Use first result with nutrition
+                    # Use first result with nutrition and a valid name
                     for fs_item in fs_results:
                         if self._has_nutrition(fs_item):
+                            # Ensure name is set (FatSecret search can return null names)
+                            if not fs_item.get("name"):
+                                fs_item["name"] = brave_name
                             logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5b HIT (fatsecret name): {fs_item.get('name')}")
                             fs_item["source"] = "fatsecret"
                             fs_item["barcode"] = query.barcode
@@ -269,6 +272,9 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
 
     def _cache_result(self, result: Dict[str, Any]) -> None:
         """Cache API result to food_reference table (fail silently on error)."""
+        if not result.get("name"):
+            logger.warning(f"Skipping cache for barcode {result.get('barcode')}: name is required")
+            return
         try:
             self.repo.upsert(result)
         except Exception as e:
