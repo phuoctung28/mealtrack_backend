@@ -129,19 +129,48 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
             logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 4 SKIP (nutritionix not configured)")
 
         # Step 5: Try Brave Search + Gemini extraction
+        brave_name: Optional[str] = None
         if self.brave_search:
             brave_result = await self.brave_search.get_product(
                 query.barcode, query.language, product_name=partial_name,
             )
-            if brave_result and self._has_nutrition(brave_result):
-                logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5 HIT (brave): {brave_result.get('name')}")
-                brave_result["source"] = "brave_search"
-                self._cache_result(brave_result)
-                return await self._maybe_translate(brave_result, query.language)
-            else:
-                logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5 MISS (brave search)")
+            if brave_result:
+                brave_name = brave_result.get("name")
+                partial_name = partial_name or brave_name
         else:
             logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5 SKIP (brave not configured)")
+
+        # Step 5b: If Brave found a product name, search FatSecret by name for verified nutrition
+        if brave_name:
+            logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5b FatSecret name search: {brave_name}")
+            region = LANGUAGE_TO_REGION.get(query.language, "US")
+            try:
+                fs_results = await self.fat_secret.search_foods(
+                    brave_name, max_results=3, region=region, language=query.language,
+                )
+                if fs_results:
+                    # Use first result with nutrition
+                    for fs_item in fs_results:
+                        if self._has_nutrition(fs_item):
+                            logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5b HIT (fatsecret name): {fs_item.get('name')}")
+                            fs_item["source"] = "fatsecret"
+                            fs_item["barcode"] = query.barcode
+                            self._cache_result(fs_item)
+                            return await self._maybe_translate(fs_item, query.language)
+            except Exception as e:
+                logger.warning(f"FatSecret name search failed for '{brave_name}': {e}")
+
+        # Step 5c: Return Brave estimate if available (editable)
+        if brave_result and self._has_nutrition(brave_result):
+            logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5c using Brave estimate: {brave_name}")
+            brave_result["source"] = "brave_search"
+            brave_result["barcode"] = query.barcode
+            self._cache_result(brave_result)
+            return await self._maybe_translate(brave_result, query.language)
+        elif brave_result:
+            logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5 MISS (brave, no nutrition)")
+        else:
+            logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 5 MISS (brave search)")
 
         # Step 6: AI estimation (last resort — don't cache unreliable data)
         logger.info(f"[BARCODE-CASCADE] {query.barcode} → step 6 AI estimation (partial_name={partial_name})")
