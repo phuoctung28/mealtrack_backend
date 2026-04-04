@@ -190,6 +190,9 @@ def get_food_search_event_bus() -> EventBus:
 
     from src.infra.adapters.meal_generation_service import MealGenerationService
     from src.domain.services.food_search_translation_service import FoodSearchTranslationService
+    from src.infra.adapters.nutritionix_service import get_nutritionix_service
+    from src.infra.adapters.brave_search_nutrition_service import get_brave_search_nutrition_service
+    from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
 
     event_bus = PyMediatorEventBus()
 
@@ -202,7 +205,16 @@ def get_food_search_event_bus() -> EventBus:
     food_reference_repository = get_food_reference_repository()
 
     # Translation service for localized food search
-    food_translation_service = FoodSearchTranslationService(MealGenerationService())
+    meal_generation_service = MealGenerationService()
+    food_translation_service = FoodSearchTranslationService(meal_generation_service)
+
+    # Barcode cascade: Nutritionix + Brave Search (optional — None if keys not set)
+    nutritionix_service = get_nutritionix_service()
+    macro_validation_service = MacroValidationService()
+    brave_search_service = get_brave_search_nutrition_service(
+        meal_generation_service=meal_generation_service,
+        macro_validation_service=macro_validation_service,
+    )
 
     event_bus.register_handler(
         SearchFoodsQuery,
@@ -225,6 +237,10 @@ def get_food_search_event_bus() -> EventBus:
             fat_secret_service=fat_secret_service,
             food_reference_repository=food_reference_repository,
             translation_service=food_translation_service,
+            nutritionix_service=nutritionix_service,
+            brave_search_service=brave_search_service,
+            meal_generation_service=meal_generation_service,
+            macro_validation_service=macro_validation_service,
         ),
     )
 

@@ -19,7 +19,8 @@ class BarcodeProductResponse(BaseModel):
     sugar_100g: float = Field(0, description="Sugar per 100g")
     serving_size: Optional[str] = Field(None, description="Serving size description")
     image_url: Optional[str] = Field(None, description="Product image URL")
-    source: Optional[str] = Field(None, description="Data source: cache, fatsecret, openfoodfacts")
+    source: Optional[str] = Field(None, description="Data source: cache, fatsecret, openfoodfacts, nutritionix, brave_search, ai_estimate")
     food_reference_id: Optional[int] = Field(None, description="Food reference table ID")
+    is_estimate: bool = Field(False, description="True when macros are AI-estimated, user should verify")
 
     model_config = {"from_attributes": True}
