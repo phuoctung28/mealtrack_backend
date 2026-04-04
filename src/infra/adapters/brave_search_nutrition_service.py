@@ -81,13 +81,15 @@ class BraveSearchNutritionService:
             system_prompt = (
                 "You are a nutrition data extraction expert. "
                 "Extract nutrition information per 100g from web search snippets about a food product. "
+                "If snippets mention nutrition values per serving, convert to per 100g. "
+                "If snippets identify the product but lack exact macros, estimate based on "
+                "your knowledge of similar products and set confidence to medium. "
                 "Return ONLY valid JSON with these fields: "
                 '{"name": "product name", "brand": "brand or null", '
                 '"protein_100g": float, "carbs_100g": float, "fat_100g": float, '
                 '"fiber_100g": float, "sugar_100g": float, "serving_size": "description or null", '
                 '"confidence": "high|medium|low"} '
-                "If snippets don't contain enough nutrition data, return null. "
-                "Be precise — only extract values explicitly stated in the snippets."
+                "Return null ONLY if you cannot identify the product at all from the snippets."
             )
 
             user_prompt = (

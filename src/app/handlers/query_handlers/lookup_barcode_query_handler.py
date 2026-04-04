@@ -23,6 +23,8 @@ GS1_COUNTRY_PREFIXES = {
     "400": "Germany", "300": "France",
     "500": "United Kingdom", "800": "Italy",
     "450": "Japan", "840": "Spain",
+    "528": "Lebanon", "529": "Cyprus",
+    "460": "Russia", "470": "Kyrgyzstan",
 }
 
 
@@ -152,15 +154,15 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
         try:
             country = _get_country_from_barcode(barcode)
             system_prompt = (
-                "You are a nutrition expert. A barcode was scanned but nutrition data "
-                "was not found in any food database. Based on the product name (if known), "
-                "barcode prefix (country of origin), and your knowledge, provide your best "
-                "estimate of approximate nutrition per 100g. "
+                "You are a nutrition expert. This barcode was scanned in a food tracking app. "
+                "Assume it IS a food product unless the product name clearly indicates otherwise "
+                "(e.g. 'Dettol Soap', 'iPhone Charger', 'Paracetamol'). "
+                "Based on the product name (if known), barcode prefix (country of origin), "
+                "and your knowledge, estimate approximate nutrition per 100g. "
                 "Be conservative with estimates. "
-                "IMPORTANT: If the product is clearly NOT a food item (e.g. electronics, "
-                "cleaning products, cosmetics, medicine, household items), return "
-                '{"is_food": false} instead. '
-                "Return ONLY valid JSON: "
+                "If the product name clearly indicates a non-food item, return "
+                '{"is_food": false}. '
+                "Otherwise return ONLY valid JSON: "
                 '{"is_food": true, "name": "product name", "brand": null, '
                 '"protein_100g": float, "carbs_100g": float, "fat_100g": float, '
                 '"fiber_100g": float, "sugar_100g": float}'
