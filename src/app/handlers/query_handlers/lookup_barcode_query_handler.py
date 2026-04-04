@@ -172,7 +172,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
                 f"Country of origin: {country}\n"
                 f"Language: {language}"
             )
-            result = await self.meal_gen.generate_meal_plan(
+            result = self.meal_gen.generate_meal_plan(
                 user_prompt, system_prompt, response_type="json",
             )
             if not result or not isinstance(result, dict):
