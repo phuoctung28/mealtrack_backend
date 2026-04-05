@@ -34,6 +34,7 @@ class UserProfileDomainModel(BaseDomainModel):
     dietary_preferences: List[str] = field(default_factory=list)
     health_conditions: List[str] = field(default_factory=list)
     allergies: List[str] = field(default_factory=list)
+    disliked_foods: List[str] = field(default_factory=list)
     pain_points: List[str] = field(default_factory=list)
     training_level: Optional[str] = None
     referral_sources: List[str] = field(default_factory=list)
