@@ -27,6 +27,7 @@ from src.api.schemas.response.meal_responses import ParseMealTextResponse
 from src.api.schemas.progress_schemas import DailyBreakdownResponse, StreakResponse
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.api.schemas.response.weekly_budget_response import WeeklyBudgetResponse
+from src.api.schemas.response.weekly_recap_response import WeeklyRecapResponse as WeeklyRecapResponseSchema
 from src.app.commands.meal import EditMealCommand, FoodItemChange, CustomNutritionData
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
@@ -43,6 +44,7 @@ from src.app.commands.meal.analyze_meal_image_by_url_command import (
 )
 from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery, GetStreakQuery, GetDailyBreakdownQuery
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
+from src.app.queries.meal.get_weekly_recap_query import GetWeeklyRecapQuery
 from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -632,6 +634,39 @@ async def get_weekly_budget(
         header_tz = request.headers.get("X-Timezone")
         query = GetWeeklyBudgetQuery(
             user_id=user_id, target_date=target_date, header_timezone=header_tz,
+        )
+        result = await event_bus.send(query)
+        return result
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.get("/weekly/recap", response_model=WeeklyRecapResponseSchema)
+async def get_weekly_recap(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+    week_start: Optional[str] = Query(
+        None,
+        description="Week start date in YYYY-MM-DD format (Monday). Defaults to previous week.",
+    ),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    Get weekly performance recap.
+
+    Returns aggregated stats for the previous week (or the week specified by week_start):
+    consumed vs target macros, adherence percentages, daily breakdown, and week number.
+    """
+    try:
+        parsed_week_start = None
+        if week_start:
+            parsed_week_start = datetime.strptime(week_start, "%Y-%m-%d").date()
+
+        header_tz = request.headers.get("X-Timezone")
+        query = GetWeeklyRecapQuery(
+            user_id=user_id,
+            week_start=parsed_week_start,
+            header_timezone=header_tz,
         )
         result = await event_bus.send(query)
         return result

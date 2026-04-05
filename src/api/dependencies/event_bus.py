@@ -115,6 +115,7 @@ from src.app.handlers.query_handlers import (
     GetMealByIdQueryHandler,
     GetDailyMacrosQueryHandler,
     GetWeeklyBudgetQueryHandler,
+    GetWeeklyRecapQueryHandler,
     GetUserProfileQueryHandler,
     GetUserByFirebaseUidQueryHandler,
     GetUserOnboardingStatusQueryHandler,
@@ -153,6 +154,7 @@ from src.app.queries.meal import (
     GetMealsByDateQuery,
     GetStreakQuery,
     GetDailyBreakdownQuery,
+    GetWeeklyRecapQuery,
 )
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.app.queries.notification import GetNotificationPreferencesQuery
@@ -375,6 +377,10 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         GetDailyBreakdownQuery,
         GetDailyBreakdownQueryHandler(),
+    )
+    event_bus.register_handler(
+        GetWeeklyRecapQuery,
+        GetWeeklyRecapQueryHandler(),
     )
 
     # Register activity query handlers

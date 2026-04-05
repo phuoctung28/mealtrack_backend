@@ -32,6 +32,7 @@ from .lookup_barcode_query_handler import LookupBarcodeQueryHandler
 from .search_foods_query_handler import SearchFoodsQueryHandler
 from .get_saved_suggestions_query_handler import GetSavedSuggestionsQueryHandler
 from .get_weekly_budget_query_handler import GetWeeklyBudgetQueryHandler
+from .get_weekly_recap_query_handler import GetWeeklyRecapQueryHandler
 
 __all__ = [
     # TDEE
@@ -63,6 +64,7 @@ __all__ = [
     # Notification
     "GetNotificationPreferencesQueryHandler",
     "GetWeeklyBudgetQueryHandler",
+    "GetWeeklyRecapQueryHandler",
     # Saved suggestion
     "GetSavedSuggestionsQueryHandler",
 ]
