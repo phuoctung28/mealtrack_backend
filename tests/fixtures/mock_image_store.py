@@ -37,15 +37,3 @@ class MockImageStore(ImageStorePort):
     def get_url(self, image_id: str) -> str:
         """Get mock URL for image."""
         return f"mock://images/{image_id}"
-
-    def generate_upload_params(self) -> dict[str, str | int]:
-        """Return deterministic mock signed params."""
-        image_id = str(uuid.uuid4())
-        return {
-            "timestamp": 1700000000,
-            "signature": "mock_signature",
-            "api_key": "mock_api_key",
-            "cloud_name": "mock_cloud",
-            "public_id": f"mealtrack/{image_id}",
-            "folder": "mealtrack",
-        }

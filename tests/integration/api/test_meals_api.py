@@ -78,47 +78,6 @@ class TestMealsAPI:
         data = response.json()
         assert "File size exceeds" in data["detail"]["message"] or "File size exceeds" in str(data["detail"])
 
-    def test_analyze_meal_image_by_url_success(
-        self, authenticated_client, test_user, test_session
-    ):
-        """Test immediate meal image analysis by URL."""
-        meal = MealFactory.create_meal(test_session, test_user.id)
-        domain_meal = meal.to_domain()
-        image_id = domain_meal.image.image_id if domain_meal.image else str(uuid4())
-        payload = {
-            "image_url": f"https://res.cloudinary.com/mock-cloud/image/upload/v1/mealtrack/{image_id}.jpg",
-            "public_id": f"mealtrack/{image_id}",
-            "content_type": "image/jpeg",
-            "file_size_bytes": 123456,
-            "target_date": "2024-12-25",
-            "user_description": "grilled and low sugar",
-        }
-
-        with patch("src.api.dependencies.event_bus.get_configured_event_bus") as mock_get_bus:
-            mock_bus = mock_get_bus.return_value
-            mock_bus.send = AsyncMock(return_value=domain_meal)
-
-            response = authenticated_client.post("/v1/meals/image/analyze-url", json=payload)
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["meal_id"] is not None
-        assert data["status"] == "ready"
-        assert data["dish_name"] == "Grilled Chicken with Rice"
-
-    def test_analyze_meal_image_by_url_invalid_host(self, authenticated_client):
-        """Reject non-Cloudinary image URLs."""
-        payload = {
-            "image_url": "https://example.com/meal.jpg",
-            "public_id": "mealtrack/test-image",
-            "content_type": "image/jpeg",
-            "file_size_bytes": 123456,
-        }
-
-        response = authenticated_client.post("/v1/meals/image/analyze-url", json=payload)
-
-        assert response.status_code == 422
-    
     # POST /v1/meals/manual
     def test_create_manual_meal_success(self, authenticated_client, test_user, test_session):
         """Test creating manual meal from foods."""

@@ -165,18 +165,6 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
             """Mock delete - always succeeds."""
             return True
 
-        def generate_upload_params(self) -> dict[str, str | int]:
-            """Return mock signed upload params."""
-            image_id = str(uuid4())
-            return {
-                "timestamp": 1700000000,
-                "signature": "mock_signature",
-                "api_key": "mock_api_key",
-                "cloud_name": "mock_cloud",
-                "public_id": f"mealtrack/{image_id}",
-                "folder": "mealtrack",
-            }
-    
     mock_image_store = MockImageStore()
     base_deps_module._image_store = mock_image_store
     

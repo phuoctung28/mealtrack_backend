@@ -15,7 +15,6 @@ from src.app.commands.daily_meal import (
 from src.app.commands.ingredient import RecognizeIngredientCommand
 # Import all commands
 from src.app.commands.meal import (
-    AnalyzeMealImageByUrlCommand,
     UploadMealImageImmediatelyCommand,
     EditMealCommand,
     AddCustomIngredientCommand,
@@ -59,7 +58,6 @@ from src.app.handlers.command_handlers import (
     GenerateSingleMealCommandHandler,
     CreateManualMealCommandHandler,
     UpdateUserMetricsCommandHandler,
-    AnalyzeMealImageByUrlHandler,
     UpdateCustomMacrosCommandHandler,
     UploadMealImageImmediatelyHandler,
     GenerateMealSuggestionsCommandHandler,
@@ -294,16 +292,6 @@ def get_configured_event_bus() -> EventBus:
             meal_translation_service=deepl_translation_service,
         ),
     )
-    event_bus.register_handler(
-        AnalyzeMealImageByUrlCommand,
-        AnalyzeMealImageByUrlHandler(
-            vision_service=vision_service,
-            gpt_parser=gpt_parser,
-            cache_service=cache_service,
-            meal_translation_service=deepl_translation_service,
-        ),
-    )
-
     # Register meal edit command handlers
     event_bus.register_handler(
         EditMealCommand,

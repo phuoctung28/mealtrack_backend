@@ -17,7 +17,6 @@ from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
 from src.api.mappers.meal_mapper import MealMapper
 from src.api.schemas.request.meal_requests import (
-    AnalyzeMealImageByUrlRequest,
     EditMealIngredientsRequest,
     CreateManualMealFromFoodsRequest,
     ParseMealTextRequest,
@@ -38,11 +37,9 @@ from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
 )
-from src.app.commands.meal.analyze_meal_image_by_url_command import (
-    AnalyzeMealImageByUrlCommand,
-)
 from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery, GetStreakQuery, GetDailyBreakdownQuery
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
+from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -57,7 +54,7 @@ ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "image/jpg"]
 STATUS_MAPPING = {
     "PROCESSING": "pending",
     "ANALYZING": "analyzing",
-    "ENRICHING": "analyzing",  # Map to analyzI mean ing since API doesn't have enriching
+    "ENRICHING": "analyzing",  # API doesn't have enriching status
     "READY": "ready",
     "FAILED": "failed",
     "INACTIVE": "inactive",
@@ -82,25 +79,15 @@ async def analyze_meal_image_immediate(
         description="Optional user context (max 200 chars): 'no sugar', 'grilled', etc.",
     ),
     event_bus: EventBus = Depends(get_configured_event_bus),
-    image_store = Depends(get_image_store),
+    image_store=Depends(get_image_store),
 ):
     """
     Send meal photo and return immediate meal analysis with nutritional data.
-
-    This endpoint processes the image and returns complete nutritional analysis
-    synchronously without background processing. Use this when you need
-    immediate results.
-
-    - Accepts image/jpeg or image/png files up to 8MB
-    - Returns complete meal analysis immediately
-    - Processing time may be longer than the background version
-    - Recommended for interactive use cases
 
     Authentication required: User ID is automatically extracted from the Firebase token.
     Language preference is read from Accept-Language header.
     """
     try:
-        # Validate content type
         if file.content_type not in ALLOWED_CONTENT_TYPES:
             raise ValidationException(
                 message=f"Invalid file type. Only {', '.join(ALLOWED_CONTENT_TYPES)} are allowed.",
@@ -111,10 +98,8 @@ async def analyze_meal_image_immediate(
                 },
             )
 
-        # Read file content
         contents = await file.read()
 
-        # Validate file size
         if len(contents) > MAX_FILE_SIZE:
             raise ValidationException(
                 message=f"File size exceeds maximum allowed ({MAX_FILE_SIZE // (1024*1024)} MB)",
@@ -122,12 +107,10 @@ async def analyze_meal_image_immediate(
                 details={"size": len(contents), "max_size": MAX_FILE_SIZE},
             )
 
-        # Parse target date if provided
         parsed_target_date = None
         if target_date:
             try:
                 parsed_target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
-                logger.info("Target date specified: %s", parsed_target_date)
             except ValueError as e:
                 raise ValidationException(
                     message="Invalid date format. Use YYYY-MM-DD format.",
@@ -135,21 +118,9 @@ async def analyze_meal_image_immediate(
                     details={"date": target_date},
                 ) from e
 
-        # Sanitize user description to prevent prompt injection
         sanitized_description = None
         if user_description:
-            from src.domain.services.prompts.input_sanitizer import (
-                sanitize_user_description,
-            )
-
             sanitized_description = sanitize_user_description(user_description)
-
-        # Process the upload and analysis immediately
-        logger.info(
-            "Processing meal photo for immediate analysis (target_date: %s, has_description: %s)",
-            parsed_target_date,
-            bool(sanitized_description),
-        )
 
         language = get_request_language(request)
 
@@ -162,7 +133,6 @@ async def analyze_meal_image_immediate(
             language=language,
         )
 
-        logger.info("Uploading and analyzing meal immediately")
         try:
             meal = await event_bus.send(command)
         except (RuntimeError, ValueError) as e:
@@ -174,98 +144,6 @@ async def analyze_meal_image_immediate(
                 details={"error_message": error_msg},
             ) from e
 
-        logger.info(
-            "Immediate analysis completed for meal ID: %s, status: %s",
-            meal.meal_id,
-            meal.status,
-        )
-
-        # Check if analysis was successful
-        if meal.status.value == "FAILED":
-            error_message = meal.error_message or "Analysis failed"
-            logger.error("Immediate analysis failed: %s", error_message)
-            raise ValidationException(
-                message=f"Failed to analyze meal image: {error_message}",
-                error_code="FAILED_TO_ANALYZE_MEAL_IMAGE",
-                details={"error_message": error_message},
-            )
-
-        # Get the image URL if available
-        image_url = None
-        if meal.image:
-            # Prefer persisted Cloudinary URL from upload response.
-            # Avoid extra Cloudinary API calls unless URL is missing.
-            image_url = meal.image.url or image_store.get_url(meal.image.image_id)
-
-        # Return detailed meal response with translations applied if available
-        return MealMapper.to_detailed_response(meal, image_url, target_language=language)
-
-    except Exception as e:
-        raise handle_exception(e) from e
-
-
-@router.post(
-    "/image/analyze-url",
-    status_code=status.HTTP_200_OK,
-    response_model=DetailedMealResponse,
-)
-@limiter.limit("10/minute")
-async def analyze_meal_image_by_url(
-    request: Request,
-    payload: AnalyzeMealImageByUrlRequest,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus),
-    image_store=Depends(get_image_store),
-):
-    """
-    Analyze a pre-uploaded image URL and return meal analysis immediately.
-    """
-    try:
-        parsed_target_date = None
-        if payload.target_date:
-            try:
-                parsed_target_date = datetime.strptime(
-                    payload.target_date, "%Y-%m-%d"
-                ).date()
-            except ValueError as e:
-                raise ValidationException(
-                    message="Invalid date format. Use YYYY-MM-DD format.",
-                    error_code="INVALID_DATE_FORMAT",
-                    details={"date": payload.target_date},
-                ) from e
-
-        language = get_request_language(request)
-
-        sanitized_description = None
-        if payload.user_description:
-            from src.domain.services.prompts.input_sanitizer import (
-                sanitize_user_description,
-            )
-
-            sanitized_description = sanitize_user_description(payload.user_description)
-
-        command = AnalyzeMealImageByUrlCommand(
-            user_id=user_id,
-            image_url=payload.image_url,
-            public_id=payload.public_id,
-            content_type=payload.content_type,
-            file_size_bytes=payload.file_size_bytes,
-            target_date=parsed_target_date,
-            language=language,
-            user_description=sanitized_description,
-        )
-
-        try:
-            meal = await event_bus.send(command)
-        except (RuntimeError, ValueError) as e:
-            error_msg = str(e)
-            logger.warning("Meal image URL analysis failed: %s", error_msg)
-            raise ValidationException(
-                message="Could not identify food in the image. Please try again with a food photo.",
-                error_code="NOT_FOOD_IMAGE",
-                details={"error_message": error_msg},
-            ) from e
-
         if meal.status.value == "FAILED":
             error_message = meal.error_message or "Analysis failed"
             raise ValidationException(
@@ -276,11 +154,10 @@ async def analyze_meal_image_by_url(
 
         image_url = None
         if meal.image:
-            # Prefer persisted Cloudinary URL from upload response.
-            # Avoid extra Cloudinary API calls unless URL is missing.
             image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
         return MealMapper.to_detailed_response(meal, image_url, target_language=language)
+
     except Exception as e:
         raise handle_exception(e) from e
 

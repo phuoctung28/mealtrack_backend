@@ -55,14 +55,6 @@ class ImageStore(ImageStorePort):
         
         return image_id
 
-    def generate_upload_params(self) -> dict[str, str | int]:
-        """
-        Direct signed uploads are not supported by local mock storage.
-        """
-        raise NotImplementedError(
-            "generate_upload_params is only supported by CloudinaryImageStore"
-        )
-    
     def load(self, image_id: str) -> Optional[bytes]:
         """
         Load image bytes by ID.
