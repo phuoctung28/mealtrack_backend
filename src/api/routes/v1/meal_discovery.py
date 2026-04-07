@@ -49,6 +49,9 @@ async def generate_discovery_batch(
             user_id=user_id,
             meal_type=body.meal_type,
             cuisine_filter=body.cuisine_filter,
+            cooking_time=body.cooking_time,
+            calorie_level=body.calorie_level,
+            macro_focus=body.macro_focus,
             exclude_ids=body.exclude_ids,
             language=language,
         )

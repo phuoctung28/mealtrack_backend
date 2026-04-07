@@ -15,7 +15,10 @@ class GenerateDiscoveryCommand(Command):
     """
 
     user_id: str
-    meal_type: Optional[str] = None        # breakfast/lunch/dinner/snack
-    cuisine_filter: Optional[str] = None   # vietnamese/asian/western
+    meal_type: Optional[str] = None        # auto-detected from time if not set
+    cuisine_filter: Optional[str] = None   # vietnamese/asian/western/etc
+    cooking_time: Optional[str] = None     # quick/medium/long
+    calorie_level: Optional[str] = None    # light/regular/hearty
+    macro_focus: Optional[str] = None      # high_protein/high_carb/low_fat
     exclude_ids: List[str] = field(default_factory=list)
     language: str = "en"

@@ -28,6 +28,9 @@ class GenerateDiscoveryCommandHandler:
             user_id=command.user_id,
             meal_type=command.meal_type,
             cuisine_filter=command.cuisine_filter,
+            cooking_time=command.cooking_time,
+            calorie_level=command.calorie_level,
+            macro_focus=command.macro_focus,
             exclude_ids=command.exclude_ids,
             language=command.language,
         )

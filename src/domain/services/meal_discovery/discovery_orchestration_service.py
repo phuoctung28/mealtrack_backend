@@ -56,11 +56,14 @@ class DiscoveryOrchestrationService:
         user_id: str,
         meal_type: Optional[str] = None,
         cuisine_filter: Optional[str] = None,
+        cooking_time: Optional[str] = None,
+        calorie_level: Optional[str] = None,
+        macro_focus: Optional[str] = None,
         exclude_ids: Optional[List[str]] = None,
         language: str = "en",
         session_id: Optional[str] = None,
     ) -> Tuple[DiscoverySession, List[DiscoveryMeal]]:
-        """Generate a batch of 15 discovery meals, returning session + meals."""
+        """Generate a batch of 6 discovery meals, returning session + meals."""
 
         # Load or create session
         session = self._get_or_create_session(user_id, session_id)
@@ -72,7 +75,7 @@ class DiscoveryOrchestrationService:
             logger.warning(f"Could not fetch profile for {user_id}: {e}")
             profile = None
 
-        # Determine remaining calories
+        # Determine remaining calories (can be overridden by calorie_level)
         remaining_calories = await self._get_remaining_calories(user_id, profile)
 
         # Derive user preferences from profile
@@ -88,6 +91,9 @@ class DiscoveryOrchestrationService:
             remaining_calories=remaining_calories,
             meal_type=meal_type,
             cuisine_filter=cuisine_filter,
+            cooking_time=cooking_time,
+            calorie_level=calorie_level,
+            macro_focus=macro_focus,
             exclude_names=exclude_names,
             allergies=allergies,
             dietary_preferences=dietary_preferences,
@@ -95,7 +101,15 @@ class DiscoveryOrchestrationService:
             language=language,
         )
 
-        meals = await self._generate_meals(prompt)
+        # Retry up to 3 times if AI returns fewer than 5 meals
+        meals: List[DiscoveryMeal] = []
+        for attempt in range(3):
+            meals = await self._generate_meals(prompt)
+            if len(meals) >= 6:
+                break
+            logger.warning(
+                f"Discovery attempt {attempt + 1}: got {len(meals)} meals, expected 6. Retrying..."
+            )
 
         # Update session with newly shown meals
         for meal in meals:
@@ -131,6 +145,7 @@ class DiscoveryOrchestrationService:
                 prompt=prompt,
                 system_message="You are a meal discovery engine. Generate diverse meal ideas as JSON.",
                 response_type="json",
+                max_tokens=6000,  # ~800 tokens per meal × 6 + overhead (Vietnamese is longer)
             )
             # generate_meal_plan returns Dict when response_type="json"
             if isinstance(result, dict):
