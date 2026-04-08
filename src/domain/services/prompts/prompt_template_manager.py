@@ -118,8 +118,8 @@ class PromptTemplateManager:
         cls,
         meal_type: str,
         target_calories: int,
-        cooking_time_minutes: int,
-        ingredients: List[str],
+        cooking_time_minutes: Optional[int] = None,
+        ingredients: Optional[List[str]] = None,
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
         protein_hint: str = "",
@@ -127,19 +127,8 @@ class PromptTemplateManager:
         """
         Build compressed meal suggestion prompt.
         Target: ~500 tokens (down from ~1000+).
-        
-        Args:
-            meal_type: Type of meal (breakfast, lunch, dinner)
-            target_calories: Target calories for the meal
-            cooking_time_minutes: Max cooking time
-            ingredients: Available ingredients
-            allergies: Allergies to avoid
-            dietary_preferences: Dietary preferences
-            protein_hint: Optional protein rotation hint
-            
-        Returns:
-            Compressed prompt string
         """
+        ingredients = ingredients or []
         # Build constraints
         constraints = []
         if allergies:
@@ -147,11 +136,13 @@ class PromptTemplateManager:
         if dietary_preferences:
             constraints.append(f"Diet: {', '.join(dietary_preferences)}")
         constraints_str = "\n".join(constraints) if constraints else ""
-        
+
         # Build ingredients string
         ing_str = ", ".join(ingredients[:8]) if ingredients else "common ingredients"
-        
-        return f"""Generate 1 {meal_type} meal (~{target_calories} cal, ≤{cooking_time_minutes}min).
+
+        time_str = f", ≤{cooking_time_minutes}min" if cooking_time_minutes else ""
+
+        return f"""Generate 1 {meal_type} meal (~{target_calories} cal{time_str}).
 
 INGREDIENTS: {ing_str}
 {constraints_str}
@@ -177,8 +168,8 @@ RULES:
         cls,
         meal_type: str,
         target_calories: int,
-        cooking_time_minutes: int,
-        ingredients: List[str],
+        cooking_time_minutes: Optional[int] = None,
+        ingredients: Optional[List[str]] = None,
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
         exclude_meal_names: Optional[List[str]] = None,
@@ -191,6 +182,7 @@ RULES:
         Target: ~200 tokens.
         Always generates in English (translation happens in Phase 3).
         """
+        ingredients = ingredients or []
         ing_str = ", ".join(ingredients[:4]) if ingredients else "common ingredients"
 
         constraints = []
@@ -221,7 +213,9 @@ RULES:
         else:
             cuisine_str = "\nCuisines: 4 distinct (Asian, Mediterranean, Latin, American)"
 
-        return f"""Generate 4 different {meal_type} names, ~{target_calories}cal{servings_str}, ≤{cooking_time_minutes}min.
+        time_str = f", ≤{cooking_time_minutes}min" if cooking_time_minutes else ""
+
+        return f"""Generate 4 different {meal_type} names, ~{target_calories}cal{servings_str}{time_str}.
 MUST USE these ingredients as main components: {ing_str}{constraints_str}{equipment_str}{cuisine_str}
 Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}."""
 
@@ -231,13 +225,13 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         meal_name: str,
         meal_type: str,
         target_calories: int,
-        cooking_time_minutes: int,
-        ingredients: List[str],
+        cooking_time_minutes: Optional[int] = None,
+        ingredients: Optional[List[str]] = None,
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
         servings: int = 1,
         cooking_equipment: Optional[List[str]] = None,
-        cuisine_region = None,
+        cuisine_region=None,
         protein_target: Optional[float] = None,
         carbs_target: Optional[float] = None,
         fat_target: Optional[float] = None,
@@ -247,6 +241,7 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         Target: ~400 tokens.
         Always generates in English (translation happens in Phase 3).
         """
+        ingredients = ingredients or []
         ing_str = ", ".join(ingredients[:6]) if ingredients else "any ingredients"
 
         constraints_parts = []
@@ -275,10 +270,17 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         if protein_target is not None and carbs_target is not None and fat_target is not None:
             macro_target_str = f"\nMacro targets: ~{int(protein_target)}g protein, ~{int(carbs_target)}g carbs, ~{int(fat_target)}g fat"
 
+        time_str = f" | ≤{cooking_time_minutes} min" if cooking_time_minutes else ""
+        time_req_str = (
+            f"\n- 2-6 clear recipe steps with duration\n- Total prep_time ≤{cooking_time_minutes} min"
+            if cooking_time_minutes
+            else "\n- 2-6 clear recipe steps with duration"
+        )
+
         return f"""Generate complete recipe for: "{meal_name}"
 
 MUST USE these ingredients as main components: {ing_str}{' | ' + constraints_str if constraints_str else ''}
-Target: ~{target_calories} cal{servings_str} | ≤{cooking_time_minutes} min{equipment_str}{cuisine_str}{macro_target_str}
+Target: ~{target_calories} cal{servings_str}{time_str}{equipment_str}{cuisine_str}{macro_target_str}
 
 PORTION SIZING for {target_calories} cal:
 - {'Small portions: 150g protein, 100g carbs' if target_calories < 600 else 'Standard: 200g protein, 150g carbs' if target_calories < 1000 else 'Large: 300g protein, 200g carbs'}
@@ -286,9 +288,7 @@ PORTION SIZING for {target_calories} cal:
 REQUIREMENTS:
 - Match name "{meal_name}" exactly
 - MUST include the user's specified ingredients ({ing_str}) — do NOT substitute them
-- 3-8 ingredients with amounts in GRAMS scaled for {servings} serving{'s' if servings > 1 else ''}
-- 2-6 clear recipe steps with duration
-- Total prep_time ≤{cooking_time_minutes} min
+- 3-8 ingredients with amounts in GRAMS scaled for {servings} serving{'s' if servings > 1 else ''}{time_req_str}
 - Include origin_country and cuisine_type in JSON
 
 {MACRO_ACCURACY_RULES}

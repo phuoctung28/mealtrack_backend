@@ -24,7 +24,7 @@ class MealPortionTypeEnum(str, Enum):
 
     SNACK = "snack"  # Fixed ~150-300 kcal
     MAIN = "main"  # Calculated from TDEE / meals_per_day
-    OMAD = "omad"  # Full daily target
+    OMAD = "omad"  # DEPRECATED — kept for backward compatibility with older mobile versions
 
 
 def map_legacy_size_to_type(size: MealSizeEnum) -> MealPortionTypeEnum:
@@ -80,8 +80,9 @@ class MealSuggestionRequest(BaseModel):
     ingredient_image_url: Optional[str] = Field(
         None, description="Optional photo of ingredients for AI recognition"
     )
-    cooking_time_minutes: CookingTimeEnum = Field(
-        ..., description="Cooking time constraint (20/30/45/60 minutes)"
+    cooking_time_minutes: Optional[CookingTimeEnum] = Field(
+        None,
+        description="Cooking time constraint (20/30/45/60 minutes). If omitted, no time limit.",
     )
     dietary_preferences: List[str] = Field(
         default_factory=list,

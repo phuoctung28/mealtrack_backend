@@ -67,7 +67,9 @@ async def generate_suggestions(
             meal_type=body.meal_type,
             meal_portion_type=portion_type.value,
             ingredients=body.ingredients,
-            time_available_minutes=body.cooking_time_minutes.value,
+            time_available_minutes=(
+                body.cooking_time_minutes.value if body.cooking_time_minutes else None
+            ),
             session_id=body.session_id,
             language=language,
             servings=body.servings,
