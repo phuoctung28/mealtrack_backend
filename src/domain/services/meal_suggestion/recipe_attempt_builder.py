@@ -67,7 +67,7 @@ async def attempt_recipe_generation(
 
         ingredients: List[Dict] = raw.get("ingredients", [])
         recipe_steps: List[Dict] = raw.get("recipe_steps", [])
-        prep_time: int = raw.get("prep_time_minutes", session.cooking_time_minutes)
+        prep_time: int = raw.get("prep_time_minutes") or session.cooking_time_minutes or 30
 
         if not ingredients or not recipe_steps:
             logger.warning(
