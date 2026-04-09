@@ -199,8 +199,10 @@ RULES:
         if exclude_meal_names:
             exclude_str = f"\nDO NOT suggest: {', '.join(exclude_meal_names[:10])}"  # Limit to 10 to keep prompt short
 
-        # Add servings instruction when > 1
-        servings_str = f" for {servings} servings" if servings > 1 else ""
+        # Always state serving count explicitly so the AI sizes the
+        # recipe correctly. Silence here was causing multi-serving
+        # recipes to slip through for single-serving requests.
+        servings_str = f" for {servings} serving{'s' if servings > 1 else ''}"
 
         # Add cooking equipment constraint
         equipment_str = ""
@@ -252,8 +254,9 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
 
         constraints_str = " | ".join(constraints_parts) if constraints_parts else ""
 
-        # Add servings instruction when > 1
-        servings_str = f" for {servings} servings" if servings > 1 else ""
+        # Always state serving count explicitly so the AI sizes the
+        # recipe correctly.
+        servings_str = f" for {servings} serving{'s' if servings > 1 else ''}"
 
         # Add cooking equipment constraint
         equipment_str = ""
@@ -277,13 +280,20 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
             else "\n- 2-6 clear recipe steps with duration"
         )
 
+        # Hard calorie bounds — AI was routinely generating >1.5x the
+        # target when the "~X cal" hint was loose. Enforce a ±15% band.
+        cal_min = int(target_calories * 0.85)
+        cal_max = int(target_calories * 1.15)
+
         return f"""Generate complete recipe for: "{meal_name}"
 
 MUST USE these ingredients as main components: {ing_str}{' | ' + constraints_str if constraints_str else ''}
-Target: ~{target_calories} cal{servings_str}{time_str}{equipment_str}{cuisine_str}{macro_target_str}
+Target:{servings_str} — derived calories MUST be between {cal_min} and {cal_max} cal (aim for ~{target_calories}){time_str}{equipment_str}{cuisine_str}{macro_target_str}
 
-PORTION SIZING for {target_calories} cal:
-- {'Small portions: 150g protein, 100g carbs' if target_calories < 600 else 'Standard: 200g protein, 150g carbs' if target_calories < 1000 else 'Large: 300g protein, 200g carbs'}
+CRITICAL: This recipe is for {servings} serving{'s' if servings > 1 else ''} ONLY. Do NOT scale for a family or batch. Total ingredient grams must reflect a single-person portion when servings=1.
+
+PORTION SIZING for {target_calories} cal ({servings} serving{'s' if servings > 1 else ''}):
+- {'Small portions: 100-120g protein, 60-80g carbs, minimal fat' if target_calories < 600 else 'Standard: 130-160g protein, 90-120g carbs, 10-15g fat' if target_calories < 1000 else 'Large: 180-220g protein, 130-160g carbs, 15-25g fat'}
 
 REQUIREMENTS:
 - Match name "{meal_name}" exactly
