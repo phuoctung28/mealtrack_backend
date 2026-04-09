@@ -170,7 +170,9 @@ class SuggestionOrchestrationService:
             cooking_time_minutes=cooking_time_minutes,
             servings=servings,
             language=language,
-            dietary_preferences=getattr(profile, "dietary_preferences", None) or [],
+            # Skip user's dietary_preferences from onboarding for now.
+            # Allergies are still applied for safety.
+            dietary_preferences=[],
             allergies=getattr(profile, "allergies", None) or [],
             cooking_equipment=cooking_equipment or [],
             cuisine_region=cuisine_region,

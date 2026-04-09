@@ -101,7 +101,7 @@ class MealSuggestionRequest(BaseModel):
         default=1,
         ge=1,
         le=4,
-        description="Number of servings (1-4). Ingredient amounts and calories scale accordingly.",
+        description="DEPRECATED: Server now strictly generates 1 serving per suggestion. Field kept for backward compatibility with older clients.",
     )
     cooking_equipment: List[str] = Field(
         default_factory=list,
