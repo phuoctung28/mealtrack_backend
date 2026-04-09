@@ -72,7 +72,9 @@ async def generate_suggestions(
             ),
             session_id=body.session_id,
             language=language,
-            servings=body.servings,
+            # Strictly enforce 1 serving per suggestion regardless of client input.
+            # Older clients may still send 2-4 but are coerced to 1 for consistency.
+            servings=1,
             cooking_equipment=body.cooking_equipment,
             cuisine_region=body.cuisine_region,
             calorie_target=body.calorie_target,
