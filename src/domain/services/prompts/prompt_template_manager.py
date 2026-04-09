@@ -290,15 +290,15 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
 MUST USE these ingredients as main components: {ing_str}{' | ' + constraints_str if constraints_str else ''}
 Target:{servings_str} — derived calories MUST be between {cal_min} and {cal_max} cal (aim for ~{target_calories}){time_str}{equipment_str}{cuisine_str}{macro_target_str}
 
-CRITICAL: This recipe is for {servings} serving{'s' if servings > 1 else ''} ONLY. Do NOT scale for a family or batch. Total ingredient grams must reflect a single-person portion when servings=1.
+CRITICAL: Size all quantities for {servings} serving only — no batch scaling.
 
-PORTION SIZING for {target_calories} cal ({servings} serving{'s' if servings > 1 else ''}):
-- {'Small portions: 100-120g protein, 60-80g carbs, minimal fat' if target_calories < 600 else 'Standard: 130-160g protein, 90-120g carbs, 10-15g fat' if target_calories < 1000 else 'Large: 180-220g protein, 130-160g carbs, 15-25g fat'}
+PORTION for {target_calories} cal:
+- {'Small: 100-120g protein, 60-80g carbs, minimal fat' if target_calories < 600 else 'Standard: 130-160g protein, 90-120g carbs, 10-15g fat' if target_calories < 1000 else 'Large: 180-220g protein, 130-160g carbs, 15-25g fat'}
 
 REQUIREMENTS:
 - Match name "{meal_name}" exactly
-- MUST include the user's specified ingredients ({ing_str}) — do NOT substitute them
-- 3-8 ingredients with amounts in GRAMS scaled for {servings} serving{'s' if servings > 1 else ''}{time_req_str}
+- MUST include user's ingredients ({ing_str}) — no substitutions
+- 3-8 ingredients in GRAMS, scaled for {servings} serving{'s' if servings > 1 else ''}{time_req_str}
 - Include origin_country and cuisine_type in JSON
 
 {MACRO_ACCURACY_RULES}
