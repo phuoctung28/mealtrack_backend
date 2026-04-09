@@ -193,3 +193,147 @@ class TestSuggestionGenerationPipeline:
         assert recipe_generator.SUGGESTIONS_COUNT == 3
         assert recipe_generator.MIN_ACCEPTABLE_RESULTS == 2
         assert PARALLEL_SINGLE_MEAL_TIMEOUT == 35
+
+
+# -----------------------------------------------------------------------------
+# Regression guards for the "strictly 1 serving + skip dietary_preferences" fix.
+# See PR: fix(suggestions): strictly 1 serving & skip user dietary preferences.
+# -----------------------------------------------------------------------------
+@pytest.mark.asyncio
+class TestSessionCreationInvariants:
+    """Verify `_create_new_session` enforces the post-fix invariants.
+
+    Locks in two behaviors a future refactor might silently revert:
+      1. `dietary_preferences` is ALWAYS empty on new sessions — even when
+         the profile has preferences. Onboarding prefs were over-filtering
+         AI output, so we skip them while still applying `allergies`.
+      2. `allergies` still flow through from the profile — stripping diet
+         prefs must NEVER weaken allergen avoidance.
+    """
+
+    @pytest.fixture
+    def orchestration_service(self, mock_generation_service, mock_suggestion_repo, mock_user_repo):
+        from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
+            SuggestionOrchestrationService,
+        )
+        # Stub TDEE + portion services so _create_new_session doesn't depend
+        # on real TDEE math. The test only cares about field passthrough.
+        tdee_stub = Mock()
+        tdee_stub.calculate_tdee = Mock(return_value=2000)
+        portion_stub = Mock()
+        portion_stub.get_target_for_meal_type = Mock(
+            return_value=Mock(target_calories=600)
+        )
+
+        service = SuggestionOrchestrationService(
+            generation_service=mock_generation_service,
+            suggestion_repo=mock_suggestion_repo,
+            tdee_service=tdee_stub,
+            portion_service=portion_stub,
+            profile_provider=lambda uid: mock_user_repo.get_profile(uid),
+        )
+        return service
+
+    async def test_new_session_strips_profile_dietary_preferences(
+        self, orchestration_service, mock_user_repo, monkeypatch
+    ):
+        """Profile has dietary_preferences=['vegetarian'] → session must have []."""
+        # Stub the adjusted-daily helper so we don't need a UoW or DB.
+        from src.domain.services.meal_suggestion import suggestion_orchestration_service as mod
+        async def _fake_adjusted(*args, **kwargs):
+            return 2000
+        monkeypatch.setattr(mod, "get_adjusted_daily_target", _fake_adjusted)
+
+        # Profile fixture already sets dietary_preferences=["vegetarian"].
+        assert mock_user_repo.get_profile("user_456").dietary_preferences == ["vegetarian"]
+
+        session, _ = await orchestration_service._create_new_session(
+            user_id="user_456",
+            meal_type="lunch",
+            meal_portion_type="main",
+            ingredients=["chicken"],
+            cooking_time_minutes=20,
+            language="en",
+            servings=1,
+        )
+
+        assert session.dietary_preferences == [], (
+            "Session must strip profile dietary_preferences to avoid over-filtering"
+        )
+
+    async def test_new_session_preserves_profile_allergies(
+        self, orchestration_service, mock_user_repo, monkeypatch
+    ):
+        """Allergies must flow through unchanged — skipping diet prefs must
+        NEVER weaken allergen avoidance (food safety)."""
+        from src.domain.services.meal_suggestion import suggestion_orchestration_service as mod
+        async def _fake_adjusted(*args, **kwargs):
+            return 2000
+        monkeypatch.setattr(mod, "get_adjusted_daily_target", _fake_adjusted)
+
+        session, _ = await orchestration_service._create_new_session(
+            user_id="user_456",
+            meal_type="lunch",
+            meal_portion_type="main",
+            ingredients=["chicken"],
+            cooking_time_minutes=20,
+            language="en",
+            servings=1,
+        )
+
+        assert session.allergies == ["peanuts"], (
+            "Profile allergies must still be applied — food safety critical"
+        )
+
+    async def test_new_session_passes_servings_through(
+        self, orchestration_service, monkeypatch
+    ):
+        """_create_new_session receives `servings` from the caller.
+        Route handler hardcodes 1; this test locks the passthrough so the
+        route-level coercion is the single source of truth (no silent
+        default re-inflation inside the service)."""
+        from src.domain.services.meal_suggestion import suggestion_orchestration_service as mod
+        async def _fake_adjusted(*args, **kwargs):
+            return 2000
+        monkeypatch.setattr(mod, "get_adjusted_daily_target", _fake_adjusted)
+
+        session, _ = await orchestration_service._create_new_session(
+            user_id="user_456",
+            meal_type="lunch",
+            meal_portion_type="main",
+            ingredients=["chicken"],
+            cooking_time_minutes=20,
+            language="en",
+            servings=1,
+        )
+
+        assert session.servings == 1
+
+
+# -----------------------------------------------------------------------------
+# Route-layer guard: the `/generate` endpoint must ALWAYS dispatch the command
+# with servings=1, regardless of what the (deprecated) body field contains.
+# -----------------------------------------------------------------------------
+class TestRouteServingsCoercion:
+    """Lock the route-layer hardcoding of servings=1.
+
+    Older mobile clients may still POST `servings=3` via the deprecated
+    request field; the route must coerce to 1 before dispatching to the
+    event bus. This test asserts the line `servings=1` in meal_suggestions.py
+    never silently reverts to `body.servings`.
+    """
+
+    def test_route_hardcodes_servings_one(self):
+        """Static check: the route literal is `servings=1`, never body-derived."""
+        import inspect
+        from src.api.routes.v1 import meal_suggestions
+
+        source = inspect.getsource(meal_suggestions.generate_suggestions)
+        # The explicit literal must still be present.
+        assert "servings=1" in source, (
+            "Route must hardcode servings=1 — see PR: strict single-serving fix"
+        )
+        # And body.servings must NOT be the value being dispatched.
+        assert "servings=body.servings" not in source, (
+            "Route must not pass body.servings to the command"
+        )
