@@ -48,23 +48,6 @@ class PlanDurationEnum(str, enum.Enum):
     weekly = "weekly"
 
 
-class ConversationStateEnum(str, enum.Enum):
-    """Conversation state options for chat flow."""
-    greeting = "greeting"
-    asking_dietary_preferences = "asking_dietary_preferences"
-    asking_allergies = "asking_allergies"
-    asking_fitness_goals = "asking_fitness_goals"
-    asking_meal_count = "asking_meal_count"
-    asking_plan_duration = "asking_plan_duration"
-    asking_cooking_time = "asking_cooking_time"
-    asking_cuisine_preferences = "asking_cuisine_preferences"
-    confirming_preferences = "confirming_preferences"
-    generating_plan = "generating_plan"
-    showing_plan = "showing_plan"
-    adjusting_meal = "adjusting_meal"
-    completed = "completed"
-
-
 class JobTypeEnum(str, enum.Enum):
     """Job type for TDEE calculations based on daily movement."""
     desk = "desk"

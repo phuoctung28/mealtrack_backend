@@ -24,11 +24,11 @@ class Subscription(Base, BaseMixin):
     # RevenueCat data
     revenuecat_subscriber_id = Column(String(255), nullable=False, index=True)
     product_id = Column(String(255), nullable=False)  # "premium_monthly" or "premium_yearly"
-    platform = Column(Enum('ios', 'android', 'web'), nullable=False)
-    
+    platform = Column(Enum('ios', 'android', 'web', native_enum=False), nullable=False)
+
     # Subscription status
     status = Column(
-        Enum('active', 'expired', 'cancelled', 'billing_issue'),
+        Enum('active', 'expired', 'cancelled', 'billing_issue', native_enum=False),
         nullable=False,
         default='active'
     )
