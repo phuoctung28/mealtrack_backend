@@ -25,26 +25,21 @@ class Settings(BaseSettings):
     DB_USER: str = Field(default="nutree")
     DB_PASSWORD: str = Field(default="")
     DB_HOST: str = Field(default="localhost")
-    DB_PORT: int = Field(default=3306)
+    DB_PORT: int = Field(default=5432)
     DB_NAME: str = Field(default="nutree")
 
-    # SSL controls
-    DB_SSL_ENABLED: bool = Field(default=True)
-    DB_SSL_VERIFY_CERT: bool = Field(default=False)
-    DB_SSL_VERIFY_IDENTITY: bool = Field(default=False)
-
-    # Connection pool tuning (optimized for 512MB instances)
+    # Connection pool tuning
     UVICORN_WORKERS: int = Field(
-        default=1, description="Number of worker processes (1 for low-memory)"
+        default=4, description="Number of worker processes"
     )
     POOL_SIZE_PER_WORKER: int = Field(
-        default=2, description="DB connections per worker (reduced from 5)"
+        default=3, description="DB connections per worker"
     )
     POOL_MAX_OVERFLOW: int = Field(
-        default=3, description="Max overflow connections (reduced from 10)"
+        default=2, description="Max overflow connections"
     )
     POOL_TIMEOUT: int = Field(default=30)
-    POOL_RECYCLE: int = Field(default=300)
+    POOL_RECYCLE: int = Field(default=120)
     POOL_ECHO: bool = Field(default=False)
 
     # Redis configuration (optimized for low-memory)
@@ -69,7 +64,6 @@ class Settings(BaseSettings):
     # External APIs & integrations
     GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
-    PINECONE_API_KEY: str | None = Field(default=None)
     FATSECRET_CLIENT_ID: str | None = Field(default=None, description="FatSecret OAuth 2.0 client ID")
     FATSECRET_CLIENT_SECRET: str | None = Field(default=None, description="FatSecret OAuth 2.0 client secret")
     NUTRITIONIX_APP_ID: str | None = Field(default=None, description="Nutritionix API app ID")
@@ -103,13 +97,7 @@ class Settings(BaseSettings):
         description="Secondary model for recipe generation (5 RPM, load distribution)",
     )
 
-    # Chat/AI configuration
-    CHAT_ENABLE_STRUCTURED_RESPONSES: bool = Field(
-        default=True, description="Enable structured JSON responses from chat AI"
-    )
-    CHAT_ENABLE_WELCOME_MESSAGE: bool = Field(
-        default=True, description="Auto-generate welcome message on thread creation"
-    )
+    # Image search (meal discovery photos)
     PEXELS_API_KEY: str | None = Field(default=None, description="Pexels API key for food photos")
     UNSPLASH_ACCESS_KEY: str | None = Field(default=None, description="Unsplash Client-ID access key")
     REVENUECAT_SECRET_API_KEY: str | None = Field(default=None)

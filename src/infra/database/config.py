@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, scoped_session
+from sqlalchemy.pool import NullPool, QueuePool
 
 load_dotenv()
 
@@ -15,112 +16,99 @@ logger = logging.getLogger(__name__)
 # Context variable to hold request-scoped session identifier
 _request_id: ContextVar[str] = ContextVar("request_id", default=None)
 
-SSL_ENABLED = os.getenv("DB_SSL_ENABLED", "true").lower() == "true"
-SSL_VERIFY_CERT = os.getenv("DB_SSL_VERIFY_CERT", "false").lower() == "true"
-SSL_VERIFY_IDENTITY = os.getenv("DB_SSL_VERIFY_IDENTITY", "false").lower() == "true"
-
-logger.info(
-    "SSL Configuration: enabled=%s, verify_cert=%s, verify_identity=%s",
-    SSL_ENABLED,
-    SSL_VERIFY_CERT,
-    SSL_VERIFY_IDENTITY,
-)
-
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
     SQLALCHEMY_DATABASE_URL = DATABASE_URL
-    if SQLALCHEMY_DATABASE_URL.startswith("mysql://"):
+    # Normalise protocol — psycopg2 driver required
+    if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
         SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace(
-            "mysql://", "mysql+mysqlconnector://", 1
+            "postgres://", "postgresql+psycopg2://", 1
         )
-    elif SQLALCHEMY_DATABASE_URL.startswith("mysql+pymysql://"):
+    elif SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
         SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace(
-            "mysql+pymysql://", "mysql+mysqlconnector://", 1
+            "postgresql://", "postgresql+psycopg2://", 1
         )
-
-    if SSL_ENABLED:
-        ssl_params = [
-            "ssl_disabled=false",
-            f"ssl_verify_cert={str(SSL_VERIFY_CERT).lower()}",
-            f"ssl_verify_identity={str(SSL_VERIFY_IDENTITY).lower()}",
-            "ssl_ca=",
-        ]
-
-        if "?" in SQLALCHEMY_DATABASE_URL:
-            SQLALCHEMY_DATABASE_URL += "&" + "&".join(ssl_params)
-        else:
-            SQLALCHEMY_DATABASE_URL += "?" + "&".join(ssl_params)
-
-        masked_url = SQLALCHEMY_DATABASE_URL
-        if "://" in masked_url and "@" in masked_url:
-            protocol, remainder = masked_url.split("://", maxsplit=1)
-            if ":" in remainder and "@" in remainder:
-                auth_host = remainder.split("@")[0]
-                if ":" in auth_host:
-                    user = auth_host.split(":")[0]
-                    masked_url = masked_url.replace(auth_host, f"{user}:***")
-        logger.info("Final Database URL: %s", masked_url)
-        logger.info("SSL Parameters added: %s", ssl_params)
 else:
-    db_user = os.getenv("DB_USER", "root")
+    db_user = os.getenv("DB_USER", "nutree")
     db_password = os.getenv("DB_PASSWORD", "")
     db_host = os.getenv("DB_HOST", "localhost")
-    db_port = os.getenv("DB_PORT", "3306")
-    db_name = os.getenv("DB_NAME", "mealtrack")
+    db_port = os.getenv("DB_PORT", "5432")
+    db_name = os.getenv("DB_NAME", "nutree")
+    SQLALCHEMY_DATABASE_URL = (
+        f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    )
 
-    base_url = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-    if SSL_ENABLED:
-        ssl_params = [
-            "ssl_disabled=false",
-            f"ssl_verify_cert={str(SSL_VERIFY_CERT).lower()}",
-            f"ssl_verify_identity={str(SSL_VERIFY_IDENTITY).lower()}",
-            "ssl_ca=",
-        ]
-        SQLALCHEMY_DATABASE_URL = base_url + "?" + "&".join(ssl_params)
-    else:
-        SQLALCHEMY_DATABASE_URL = base_url
+# Detect Neon pooler endpoint (PgBouncer) vs direct connection.
+# Pooler URLs contain "-pooler" in the hostname.
+# When using pooler: SQLAlchemy should NOT maintain its own pool (NullPool)
+# because Neon's PgBouncer already handles connection reuse.
+IS_NEON_POOLER = "-pooler" in SQLALCHEMY_DATABASE_URL
 
-UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
-POOL_SIZE_PER_WORKER = int(os.getenv("POOL_SIZE_PER_WORKER", "5"))
-POOL_MAX_OVERFLOW = int(os.getenv("POOL_MAX_OVERFLOW", "10"))
-POOL_TIMEOUT = int(os.getenv("POOL_TIMEOUT", "30"))
-POOL_RECYCLE = int(os.getenv("POOL_RECYCLE", "300"))
+# psycopg2 TCP keepalive — prevents idle connections from being silently dropped
+# by firewalls/load balancers between app and Neon.
+CONNECT_ARGS = {
+    "connect_timeout": 10,
+    "keepalives": 1,
+    "keepalives_idle": 30,
+    "keepalives_interval": 10,
+    "keepalives_count": 5,
+}
+
 POOL_ECHO = os.getenv("POOL_ECHO", "false").lower() == "true"
 
-POOL_SIZE = max(1, UVICORN_WORKERS * POOL_SIZE_PER_WORKER)
-TOTAL_POOL_CAPACITY = POOL_SIZE + POOL_MAX_OVERFLOW
+if IS_NEON_POOLER:
+    # Neon pooler (PgBouncer) handles connection reuse.
+    # NullPool = each request opens a fresh connection to PgBouncer (cheap).
+    POOL_SIZE = 0
+    POOL_MAX_OVERFLOW = 0
+    TOTAL_POOL_CAPACITY = 0
 
-logger.info(
-    "Connection pool configuration -> workers: %s, pool_size: %s, "
-    "max_overflow: %s, total_capacity: %s, timeout: %ss, recycle: %ss",
-    UVICORN_WORKERS,
-    POOL_SIZE,
-    POOL_MAX_OVERFLOW,
-    TOTAL_POOL_CAPACITY,
-    POOL_TIMEOUT,
-    POOL_RECYCLE,
-)
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        echo=False,
+        echo_pool=POOL_ECHO,
+        poolclass=NullPool,
+        connect_args=CONNECT_ARGS,
+    )
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    echo=False,
-    echo_pool=POOL_ECHO,
-    pool_pre_ping=True,
-    pool_recycle=POOL_RECYCLE,
-    pool_size=POOL_SIZE,
-    max_overflow=POOL_MAX_OVERFLOW,
-    pool_timeout=POOL_TIMEOUT,
-    connect_args={
-        "connection_timeout": 60,
-        "charset": "utf8mb4",
-        "autocommit": False,
-        "ssl_disabled": not SSL_ENABLED,
-        "ssl_verify_cert": SSL_VERIFY_CERT,
-        "ssl_verify_identity": SSL_VERIFY_IDENTITY,
-        "ssl_ca": "",
-    },
-)
+    logger.info(
+        "Database engine created with NullPool (Neon pooler detected)"
+    )
+else:
+    # Direct connection or local PostgreSQL — use a small QueuePool.
+    UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
+    POOL_SIZE_PER_WORKER = int(os.getenv("POOL_SIZE_PER_WORKER", "3"))
+    POOL_MAX_OVERFLOW = int(os.getenv("POOL_MAX_OVERFLOW", "2"))
+    POOL_TIMEOUT = int(os.getenv("POOL_TIMEOUT", "30"))
+    POOL_RECYCLE = int(os.getenv("POOL_RECYCLE", "120"))
+
+    POOL_SIZE = max(1, UVICORN_WORKERS * POOL_SIZE_PER_WORKER)
+    TOTAL_POOL_CAPACITY = POOL_SIZE + POOL_MAX_OVERFLOW
+
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        echo=False,
+        echo_pool=POOL_ECHO,
+        poolclass=QueuePool,
+        pool_recycle=POOL_RECYCLE,
+        pool_size=POOL_SIZE,
+        max_overflow=POOL_MAX_OVERFLOW,
+        pool_timeout=POOL_TIMEOUT,
+        connect_args=CONNECT_ARGS,
+    )
+
+    logger.info(
+        "Database engine created with QueuePool -> "
+        "workers: %s, pool_size: %s, max_overflow: %s, "
+        "total_capacity: %s, timeout: %ss, recycle: %ss",
+        UVICORN_WORKERS,
+        POOL_SIZE,
+        POOL_MAX_OVERFLOW,
+        TOTAL_POOL_CAPACITY,
+        POOL_TIMEOUT,
+        POOL_RECYCLE,
+    )
 
 SessionLocal = sessionmaker(
     bind=engine,
@@ -133,7 +121,7 @@ SessionLocal = sessionmaker(
 # This ensures each request gets its own session, even when using singleton services
 ScopedSession = scoped_session(
     SessionLocal,
-    scopefunc=lambda: _request_id.get()  # Scope based on request ID
+    scopefunc=lambda: _request_id.get()
 )
 
 
@@ -145,14 +133,14 @@ def get_db():
     """
     Dependency for FastAPI to get a database session.
     Uses scoped session for request isolation.
-    
+
     This allows singleton services (like event bus) to safely access
     the current request's database session via ScopedSession().
     """
     # Set unique request ID for this scope
     request_id = str(uuid.uuid4())
     token = _request_id.set(request_id)
-    
+
     try:
         db = ScopedSession()
         yield db

@@ -144,6 +144,16 @@ async def lifespan(app: FastAPI):
     # This ensures migrations complete before any workers start, preventing race conditions
     # See: migrations/run.py and docker-entrypoint.sh
 
+    # Warm database connection — triggers Neon compute wakeup on cold start
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+            conn.commit()
+        logger.info("Database connection warmed successfully")
+    except Exception as e:
+        logger.warning("Database connection warming failed: %s", e)
+
     # Initialize and start scheduled notification service
     scheduled_service = None
     try:
@@ -216,8 +226,6 @@ add_dev_auth_bypass(app)
 
 # Include all routers
 app.include_router(health_router)
-# app.include_router(chat_router)
-# app.include_router(chat_ws_router)  # WebSocket router
 app.include_router(meals_router)
 app.include_router(uploads_router)
 app.include_router(activities_router)
