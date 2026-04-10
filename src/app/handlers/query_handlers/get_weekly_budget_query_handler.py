@@ -43,8 +43,8 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                 else:
                     target_date = datetime.now(user_tz).date()
 
-                # Get Monday for user's timezone
-                week_start = get_user_monday(target_date, query.user_id, uow)
+                # target_date is already a local date — no timezone re-lookup needed
+                week_start = get_user_monday(target_date, query.user_id)
 
                 # Find or create weekly budget
                 weekly_budget = uow.weekly_budgets.find_by_user_and_week(query.user_id, week_start)
