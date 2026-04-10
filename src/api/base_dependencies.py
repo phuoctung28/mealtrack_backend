@@ -438,6 +438,36 @@ def get_meal_translation_service() -> MealAnalysisTranslationService:
     )
 
 
+def get_discovery_orchestration_service():
+    """
+    Get discovery orchestration service (singleton-safe).
+
+    Uses SessionLocal-based profile_provider and UnitOfWork factory,
+    matching the same pattern as get_suggestion_orchestration_service().
+    """
+    from src.domain.services.meal_discovery.discovery_orchestration_service import DiscoveryOrchestrationService
+    from src.infra.adapters.meal_generation_service import MealGenerationService
+    from src.infra.database.config import SessionLocal
+    from src.infra.repositories.user_repository import UserRepository
+    from src.infra.database.uow import UnitOfWork
+
+    meal_gen_service = MealGenerationService()
+
+    def profile_provider(user_id: str):
+        db = SessionLocal()
+        try:
+            repo = UserRepository(db)
+            return repo.get_profile(user_id)
+        finally:
+            db.close()
+
+    return DiscoveryOrchestrationService(
+        generation_service=meal_gen_service,
+        profile_provider=profile_provider,
+        uow_factory=UnitOfWork,
+    )
+
+
 def get_translation_service() -> "TranslationService":
     """Get lightweight TranslationService for translating strings via Gemini."""
     from src.domain.services.meal_suggestion.translation_service import TranslationService
