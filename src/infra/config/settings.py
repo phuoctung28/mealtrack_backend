@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     NUTRITIONIX_APP_ID: str | None = Field(default=None, description="Nutritionix API app ID")
     NUTRITIONIX_API_KEY: str | None = Field(default=None, description="Nutritionix API key")
     BRAVE_SEARCH_API_KEY: str | None = Field(default=None, description="Brave Search API key (free tier: 2K/mo)")
+    SERPAPI_KEY: str | None = Field(default=None, description="SerpAPI key for Google Images (free: 100 searches/mo)")
+    UNSPLASH_ACCESS_KEY: str | None = Field(default=None, description="Unsplash API access key (free: 50 req/hr)")
+    GEMINI_IMAGE_MODEL: str | None = Field(default="imagen-3.0-fast-generate-001", description="Imagen model for meal image generation")
 
     # LLM Provider configuration
     LLM_PROVIDER: str | None = Field(

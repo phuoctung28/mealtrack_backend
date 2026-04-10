@@ -35,6 +35,7 @@ from .update_user_last_accessed_command_handler import UpdateUserLastAccessedCom
 from .update_user_metrics_command_handler import UpdateUserMetricsCommandHandler
 from .upload_meal_image_immediately_command_handler import UploadMealImageImmediatelyHandler
 from .saved_suggestion import SaveSuggestionCommandHandler, DeleteSavedSuggestionCommandHandler
+from .generate_meal_info_command_handler import GenerateMealInfoCommandHandler
 
 __all__ = [
     # Meal handlers
@@ -71,4 +72,6 @@ __all__ = [
     # Saved suggestion handlers
     "SaveSuggestionCommandHandler",
     "DeleteSavedSuggestionCommandHandler",
+    # Meal info handler
+    "GenerateMealInfoCommandHandler",
 ]

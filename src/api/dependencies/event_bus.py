@@ -545,6 +545,33 @@ def get_configured_event_bus() -> EventBus:
         GetSavedSuggestionsQuery, GetSavedSuggestionsQueryHandler()
     )
 
+    # Register meal info handler
+    from src.app.commands.meal_info import GenerateMealInfoCommand
+    from src.app.handlers.command_handlers import GenerateMealInfoCommandHandler
+    from src.domain.services.meal_info_service import MealInfoService
+    from src.domain.services.meal_image_retrieval_service import MealImageRetrievalService
+    from src.domain.services.nutrition_description_service import NutritionDescriptionService
+    from src.infra.adapters.serpapi_image_adapter import get_serpapi_image_adapter
+    from src.infra.adapters.unsplash_image_adapter import get_unsplash_image_adapter
+    from src.infra.adapters.gemini_image_generation_adapter import get_gemini_image_generation_adapter
+    from src.infra.adapters.meal_generation_service import MealGenerationService as _MealGenService
+
+    _meal_gen_service = _MealGenService()
+    _image_retrieval_service = MealImageRetrievalService(
+        serpapi_adapter=get_serpapi_image_adapter(),
+        unsplash_adapter=get_unsplash_image_adapter(),
+        gemini_adapter=get_gemini_image_generation_adapter(),
+    )
+    _meal_info_service = MealInfoService(
+        generation_service=_meal_gen_service,
+        image_service=_image_retrieval_service,
+        description_service=NutritionDescriptionService(),
+    )
+    event_bus.register_handler(
+        GenerateMealInfoCommand,
+        GenerateMealInfoCommandHandler(service=_meal_info_service),
+    )
+
     # Register domain event subscribers
     meal_analysis_handler = MealAnalysisEventHandler(
         vision_service=vision_service,
