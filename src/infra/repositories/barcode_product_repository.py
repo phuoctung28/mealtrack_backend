@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 import logging
 
 from sqlalchemy import select
-from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from src.infra.database.config import SessionLocal
@@ -65,7 +65,7 @@ class BarcodeProductRepository:
         """
         session: Session = SessionLocal()
         try:
-            stmt = mysql_insert(BarcodeProductModel).values(
+            stmt = pg_insert(BarcodeProductModel).values(
                 barcode=data.get("barcode"),
                 name=data.get("name"),
                 brand=data.get("brand"),
@@ -78,17 +78,19 @@ class BarcodeProductRepository:
                 source=data.get("source", "unknown"),
             )
 
-            # On conflict, update all fields except barcode
-            stmt = stmt.on_duplicate_key_update(
-                name=data.get("name"),
-                brand=data.get("brand"),
-                calories_100g=data.get("calories_100g"),
-                protein_100g=data.get("protein_100g"),
-                carbs_100g=data.get("carbs_100g"),
-                fat_100g=data.get("fat_100g"),
-                serving_size=data.get("serving_size"),
-                image_url=data.get("image_url"),
-                source=data.get("source", "unknown"),
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[BarcodeProductModel.barcode],
+                set_={
+                    "name": data.get("name"),
+                    "brand": data.get("brand"),
+                    "calories_100g": data.get("calories_100g"),
+                    "protein_100g": data.get("protein_100g"),
+                    "carbs_100g": data.get("carbs_100g"),
+                    "fat_100g": data.get("fat_100g"),
+                    "serving_size": data.get("serving_size"),
+                    "image_url": data.get("image_url"),
+                    "source": data.get("source", "unknown"),
+                },
             )
 
             session.execute(stmt)

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.utils.timezone_utils import get_zone_info, utc_now
+from src.infra.database.utils.datetime_helper import local_date_expr
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import Meal as DBMeal
 from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
@@ -259,12 +260,7 @@ class MealRepository(MealRepositoryPort):
             datetime.combine(end_date, datetime.min.time(), tzinfo=tz) + timedelta(days=1)
         ).astimezone(timezone.utc)
 
-        # For timezone-aware date grouping, we convert created_at to user-local date
-        # MySQL: CONVERT_TZ + DATE; SQLite (tests): just DATE
-        if user_timezone and user_timezone != "UTC":
-            date_expr = func.date(func.convert_tz(DBMeal.created_at, "+00:00", self._tz_offset(tz)))
-        else:
-            date_expr = func.date(DBMeal.created_at)
+        date_expr = local_date_expr(self.db, DBMeal.created_at, user_timezone)
 
         rows = (
             self.db.query(date_expr, func.count())
@@ -294,12 +290,7 @@ class MealRepository(MealRepositoryPort):
 
         Reuses timezone logic from get_daily_meal_counts().
         """
-        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
-
-        if user_timezone and user_timezone != "UTC":
-            date_expr = func.date(func.convert_tz(DBMeal.created_at, "+00:00", self._tz_offset(tz)))
-        else:
-            date_expr = func.date(DBMeal.created_at)
+        date_expr = local_date_expr(self.db, DBMeal.created_at, user_timezone)
 
         rows = (
             self.db.query(date_expr)
@@ -319,20 +310,6 @@ class MealRepository(MealRepositoryPort):
             if isinstance(day_val, date):
                 result.append(day_val)
         return result
-
-    @staticmethod
-    def _tz_offset(tz) -> str:
-        """Convert a timezone to a UTC offset string like '+07:00'."""
-        from datetime import datetime as dt
-        offset = dt.now(tz).utcoffset()
-        if offset is None:
-            return "+00:00"
-        total_seconds = int(offset.total_seconds())
-        sign = "+" if total_seconds >= 0 else "-"
-        total_seconds = abs(total_seconds)
-        hours, remainder = divmod(total_seconds, 3600)
-        minutes = remainder // 60
-        return f"{sign}{hours:02d}:{minutes:02d}"
 
     def _update_nutrition(self, db_nutrition: DBNutrition, domain_nutrition: Meal.nutrition):
         """Helper to sync nutrition data."""

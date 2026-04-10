@@ -16,8 +16,6 @@ from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
-from src.infra.services.pinecone_service import get_pinecone_service
-
 logger = logging.getLogger(__name__)
 
 
@@ -27,16 +25,13 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
 
     def __init__(self,
                  uow: Optional[UnitOfWorkPort] = None,
-                 pinecone_service=None,
                  cache_service: Optional[CacheService] = None):
         self.uow = uow
-        self.pinecone_service = pinecone_service
         self.cache_service = cache_service
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
         self.uow = kwargs.get('uow', self.uow)
-        self.pinecone_service = kwargs.get('pinecone_service', self.pinecone_service)
         self.cache_service = kwargs.get('cache_service', self.cache_service)
 
     async def handle(self, command: EditMealCommand) -> Dict[str, Any]:
@@ -131,9 +126,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 food_items_dict[item.id] = item
 
         # Initialize nutrition service and create strategies
-        nutrition_service = NutritionCalculationService(
-            pinecone_service=self.pinecone_service or get_pinecone_service(),
-        )
+        nutrition_service = NutritionCalculationService()
         strategies = FoodItemChangeStrategyFactory.create_strategies(
             nutrition_service,
         )
