@@ -36,7 +36,7 @@ class MealImage(Base, TimestampMixin):
     @classmethod
     def from_domain(cls, domain_model):
         """Create DB model from domain model."""
-        # Convert UUID objects to strings to ensure compatibility with MySQL
+        # Convert UUID objects to strings for DB storage
         return cls(
             image_id=str(domain_model.image_id),
             format=domain_model.format,

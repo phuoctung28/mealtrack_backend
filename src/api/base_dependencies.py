@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
-from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
@@ -44,7 +43,6 @@ _cache_monitor = CacheMonitor()
 
 # Singleton service instances (initialized once, reused across requests)
 _image_store: Optional[ImageStorePort] = None
-_ai_chat_service: Optional[AIChatServicePort] = None
 _vision_service: Optional[VisionAIServicePort] = None
 
 async def initialize_cache_layer() -> None:
@@ -136,39 +134,6 @@ def get_vision_service() -> VisionAIServicePort:
     if _vision_service is None:
         _vision_service = VisionAIService()
     return _vision_service
-
-
-# AI Chat Service (singleton pattern)
-def get_ai_chat_service() -> AIChatServicePort:
-    """
-    Get the AI chat service instance (singleton).
-
-    Uses GeminiChatService which internally uses the GeminiModelManager singleton
-    to share model instances across all services.
-
-    Returns:
-        AIChatServicePort: The configured Gemini chat service
-
-    Raises:
-        ValueError: If GOOGLE_API_KEY is not configured
-    """
-    global _ai_chat_service
-    if _ai_chat_service is not None:
-        return _ai_chat_service
-
-    from src.infra.services.ai.gemini_chat_service import GeminiChatService
-
-    try:
-        # GeminiChatService uses the singleton model manager internally
-        _ai_chat_service = GeminiChatService()
-        logger.info("AI chat service initialized (using shared singleton model)")
-        return _ai_chat_service
-    except ValueError as e:
-        logger.error(f"Failed to create AI chat service: {e}")
-        raise ValueError(
-            "AI chat service is not available. "
-            "Please configure GOOGLE_API_KEY environment variable."
-        ) from e
 
 
 # GPT Parser

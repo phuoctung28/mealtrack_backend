@@ -15,7 +15,6 @@ from src.api.base_dependencies import (
     get_cache_service,
     get_food_cache_service,
     get_food_data_service,
-    get_ai_chat_service,
 )
 from src.api.dependencies.auth import get_current_user_id
 from src.infra.database.models.user.user import User
@@ -213,16 +212,6 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
     db_config_module.SessionLocal = test_session_local
     db_config_module.ScopedSession = TestScopedSession()
     
-    # === Mock AI Chat Service (3rd party - Gemini) ===
-    # The real services will use this mocked AI instead of calling Gemini
-    mock_ai_chat = Mock()
-    mock_ai_chat.invoke = AsyncMock(return_value="Mocked AI response")
-    mock_ai_chat.stream = AsyncMock(return_value=iter(["Mocked", " AI", " response"]))
-    base_deps_module._ai_chat_service = mock_ai_chat
-    
-    def override_get_ai_chat_service():
-        return mock_ai_chat
-    
     # === Mock MealGenerationService (uses AI - 3rd party) ===
     # Patch it in the infra.adapters module where it's imported from
     from src.infra.adapters.meal_generation_service import MealGenerationService as OriginalMealGen
@@ -391,8 +380,7 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_cache_service] = override_get_cache_service
     app.dependency_overrides[get_food_cache_service] = override_get_food_cache_service
     app.dependency_overrides[get_food_data_service] = override_get_food_data_service
-    app.dependency_overrides[get_ai_chat_service] = override_get_ai_chat_service
-    
+
     client = TestClient(app)
     yield client
     
@@ -405,7 +393,6 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
     base_deps_module._image_store = None
     base_deps_module._vision_service = None
     base_deps_module._gpt_parser = None
-    base_deps_module._ai_chat_service = None
     base_deps_module.get_food_data_service = original_get_food_data_service
     # Restore MealGenerationService
     import src.infra.adapters.meal_generation_service as meal_gen_module

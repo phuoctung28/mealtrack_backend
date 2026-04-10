@@ -6,7 +6,6 @@ from typing import TypeVar
 from sqlalchemy.orm import Session
 
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.infra.repositories.chat_repository import ChatRepository
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.meal_suggestion_repository import MealSuggestionRepository
 from src.infra.repositories.notification_repository import NotificationRepository
@@ -37,7 +36,6 @@ class UnitOfWork(UnitOfWorkPort):
         self.notifications = NotificationRepository(session)
         self.meals = MealRepository(session)
         self.meal_suggestions = MealSuggestionRepository(session)
-        self.chats = ChatRepository(session)
         self.weekly_budgets = WeeklyBudgetRepository(session)
         self.saved_suggestions_db = SavedSuggestionDbRepository(session)
         self.cheat_days = CheatDayRepository(session)

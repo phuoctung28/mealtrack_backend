@@ -130,7 +130,7 @@ class MigrationManager:
     def _acquire_migration_lock(self) -> bool:
         """
         Acquire a migration lock to prevent concurrent migrations.
-        Uses MySQL GET_LOCK or PostgreSQL advisory locks.
+        Uses PostgreSQL advisory locks.
         
         Returns:
             bool: True if lock acquired, False otherwise
@@ -139,16 +139,7 @@ class MigrationManager:
             with self.engine.connect() as conn:
                 dialect_name = self.engine.dialect.name
                 
-                if dialect_name == 'mysql':
-                    # MySQL: GET_LOCK returns 1 if lock acquired, 0 if timeout
-                    # Increased timeout to 60s to handle longer migrations
-                    result = conn.execute(
-                        text("SELECT GET_LOCK('alembic_migration_lock', 60)")
-                    ).scalar()
-                    self._lock_acquired = result == 1
-                    return self._lock_acquired
-                    
-                elif dialect_name == 'postgresql':
+                if dialect_name == 'postgresql':
                     # PostgreSQL: advisory lock
                     conn.execute(text("SELECT pg_advisory_lock(12345)"))
                     self._lock_acquired = True
@@ -172,9 +163,7 @@ class MigrationManager:
             with self.engine.connect() as conn:
                 dialect_name = self.engine.dialect.name
                 
-                if dialect_name == 'mysql':
-                    conn.execute(text("SELECT RELEASE_LOCK('alembic_migration_lock')"))
-                elif dialect_name == 'postgresql':
+                if dialect_name == 'postgresql':
                     conn.execute(text("SELECT pg_advisory_unlock(12345)"))
                     
                 self._lock_acquired = False
@@ -274,14 +263,17 @@ class MigrationManager:
                     # First, manually create the alembic_version table if it doesn't exist
                     with self.engine.connect() as conn:
                         # Check if alembic_version table exists
-                        result = conn.execute(text("SHOW TABLES LIKE 'alembic_version'"))
+                        result = conn.execute(text(
+                            "SELECT table_name FROM information_schema.tables "
+                            "WHERE table_name = 'alembic_version' AND table_schema = current_schema()"
+                        ))
                         if not result.fetchone():
                             logger.info("Creating alembic_version table manually...")
                             conn.execute(text("""
-                                CREATE TABLE alembic_version (
+                                CREATE TABLE IF NOT EXISTS alembic_version (
                                     version_num VARCHAR(32) NOT NULL,
                                     CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
-                                ) ENGINE=InnoDB
+                                )
                             """))
                             conn.commit()
                             logger.info("✅ alembic_version table created")

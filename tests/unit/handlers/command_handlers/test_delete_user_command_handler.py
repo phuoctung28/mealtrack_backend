@@ -18,10 +18,6 @@ from src.infra.database.models.meal.meal import Meal
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.notification.notification_preferences import NotificationPreferences
 from src.infra.database.models.notification.user_fcm_token import UserFcmToken
-from src.infra.database.models.chat.thread import ChatThread
-# TODO: Conversation table never created in database. See delete_user_command_handler.py for details.
-# from src.infra.database.models.conversation.conversation import Conversation
-# from src.infra.database.models.enums import ConversationStateEnum
 from src.infra.repositories.user_repository import UserRepository
 
 

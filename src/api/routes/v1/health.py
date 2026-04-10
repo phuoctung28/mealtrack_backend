@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from src.infra.database.config import (
+    IS_NEON_POOLER,
     POOL_MAX_OVERFLOW,
     TOTAL_POOL_CAPACITY,
     engine,
@@ -52,7 +53,15 @@ async def root():
 async def database_pool_status():
     """
     Inspect SQLAlchemy connection pool metrics.
+    When using NullPool (Neon pooler), pool metrics are not available.
     """
+    if IS_NEON_POOLER:
+        return {
+            "status": "healthy",
+            "pool_type": "NullPool",
+            "note": "Neon pooler (PgBouncer) handles connection reuse",
+        }
+
     try:
         pool = engine.pool
         checked_out = pool.checkedout()
@@ -63,6 +72,7 @@ async def database_pool_status():
 
         return {
             "status": "healthy",
+            "pool_type": "QueuePool",
             "pool_size": pool_size,
             "max_overflow": POOL_MAX_OVERFLOW,
             "checked_out": checked_out,
@@ -74,62 +84,50 @@ async def database_pool_status():
     except Exception as exc:
         return JSONResponse(
             status_code=503,
-            content={
-                "status": "error",
-                "error": str(exc),
-            },
+            content={"status": "error", "error": str(exc)},
         )
 
 
-@router.get("/health/mysql-connections")
-async def mysql_connection_status():
+@router.get("/health/db-connections")
+async def db_connection_status():
     """
-    Return active MySQL connection counts for the application.
+    Return active PostgreSQL connection counts.
     """
     try:
-        stats = await _fetch_mysql_connection_stats()
-        return {
-            "status": "healthy",
-            **stats,
-        }
+        stats = await _fetch_pg_connection_stats()
+        return {"status": "healthy", **stats}
     except Exception as exc:
         return JSONResponse(
             status_code=503,
-            content={
-                "status": "error",
-                "error": str(exc),
-            },
+            content={"status": "error", "error": str(exc)},
         )
 
 
-async def _fetch_mysql_connection_stats() -> Dict[str, Any]:
-    username = engine.url.username
+async def _fetch_pg_connection_stats() -> Dict[str, Any]:
+    db_name = engine.url.database
 
     def _query() -> Dict[str, Any]:
         with engine.connect() as connection:
-            params = {}
-            where_clause = ""
-            if username:
-                where_clause = "WHERE user = :user"
-                params["user"] = username
-
+            # pg_stat_activity works through PgBouncer (it's a regular SELECT)
             active_result = connection.execute(
                 text(
-                    f"SELECT COUNT(*) AS count FROM information_schema.processlist {where_clause}"
+                    "SELECT COUNT(*) FROM pg_stat_activity "
+                    "WHERE datname = :db_name AND state IS NOT NULL"
                 ),
-                params,
+                {"db_name": db_name},
             )
             active_connections = active_result.scalar_one()
 
-            max_conn_row = connection.execute(
-                text("SHOW VARIABLES LIKE 'max_connections'")
-            ).fetchone()
+            # SHOW commands may fail through PgBouncer in transaction mode
             max_connections: Optional[int] = None
-            if max_conn_row and len(max_conn_row) > 1:
-                try:
-                    max_connections = int(max_conn_row[1])
-                except (TypeError, ValueError):
-                    max_connections = None
+            try:
+                max_conn_row = connection.execute(
+                    text("SHOW max_connections")
+                ).fetchone()
+                if max_conn_row:
+                    max_connections = int(max_conn_row[0])
+            except Exception:
+                pass
 
             utilization_pct: Optional[float] = None
             if max_connections:
@@ -137,7 +135,6 @@ async def _fetch_mysql_connection_stats() -> Dict[str, Any]:
 
             return {
                 "active_connections": active_connections,
-                "pool_capacity": TOTAL_POOL_CAPACITY,
                 "max_connections": max_connections,
                 "utilization_pct": (
                     round(utilization_pct, 2) if utilization_pct is not None else None

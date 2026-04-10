@@ -18,7 +18,7 @@ class Meal(Base, TimestampMixin):
     # Primary key
     meal_id = Column(String(36), primary_key=True)
     user_id = Column(String(36), nullable=False, index=True)  # User who created this meal
-    status = Column(Enum(MealStatusEnum), nullable=False)
+    status = Column(Enum(MealStatusEnum, native_enum=False), nullable=False)
     dish_name = Column(String(255), nullable=True)  # The name of the dish
     meal_type = Column(String(20), nullable=True)  # breakfast, lunch, dinner, snack
     ready_at = Column(DateTime, nullable=True)  # When meal analysis was completed
@@ -97,7 +97,7 @@ class Meal(Base, TimestampMixin):
         """Create DB model from domain model."""
         from src.infra.mappers import MealStatusMapper
 
-        # Convert UUID objects to strings to ensure compatibility with MySQL
+        # Convert UUID objects to strings for DB storage
         meal_id = str(domain_model.meal_id) if domain_model.meal_id else None
         user_id = getattr(domain_model, "user_id", None)
         if user_id:
