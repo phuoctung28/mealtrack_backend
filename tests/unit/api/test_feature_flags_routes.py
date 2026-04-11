@@ -40,6 +40,41 @@ def test_get_feature_flags_empty_db(app_no_cache):
     app_no_cache.dependency_overrides = {}
 
 
+def test_get_feature_flags_cache_miss_then_set_json(app_no_cache):
+    """Covers cache set after DB read (lines ~49–51)."""
+    cache = AsyncMock()
+    cache.get_json = AsyncMock(return_value=None)
+    cache.set_json = AsyncMock()
+    app_no_cache.dependency_overrides[get_cache_service] = lambda: cache
+
+    session = MagicMock()
+    session.query.return_value.all.return_value = []
+    app_no_cache.dependency_overrides[get_db] = lambda: session
+
+    r = TestClient(app_no_cache).get("/v1/feature-flags/")
+    assert r.status_code == 200
+    cache.set_json.assert_awaited()
+    app_no_cache.dependency_overrides = {}
+
+
+def test_get_individual_flag_cache_miss_then_set_json(app_no_cache):
+    """Covers per-flag cache set (lines ~90–91)."""
+    cache = AsyncMock()
+    cache.get_json = AsyncMock(return_value=None)
+    cache.set_json = AsyncMock()
+    app_no_cache.dependency_overrides[get_cache_service] = lambda: cache
+
+    flag = _make_flag()
+    session = MagicMock()
+    session.query.return_value.filter.return_value.first.return_value = flag
+    app_no_cache.dependency_overrides[get_db] = lambda: session
+
+    r = TestClient(app_no_cache).get("/v1/feature-flags/beta")
+    assert r.status_code == 200
+    cache.set_json.assert_awaited()
+    app_no_cache.dependency_overrides = {}
+
+
 def test_get_feature_flags_uses_cache_hit(app_no_cache):
     cache = AsyncMock()
     cache.get_json = AsyncMock(

@@ -109,3 +109,54 @@ def test_verify_thread_access_true_when_send_succeeds():
 
     ok = asyncio.run(chat_ws.verify_thread_access("t1", "u1", _Bus()))
     assert ok is True
+
+
+def test_chat_websocket_thread_access_denied(app, monkeypatch):
+    async def deny(*_a, **_k):
+        return False
+
+    monkeypatch.setattr(chat_ws, "verify_thread_access", deny)
+    with TestClient(app) as client:
+        with pytest.raises(Exception):  # WebSocket closed / disconnect
+            with client.websocket_connect("/v1/chat/ws/thread-x?token=fake"):
+                pass
+
+
+def test_chat_websocket_unknown_message_type_logs(app):
+    with TestClient(app) as client:
+        with client.websocket_connect("/v1/chat/ws/thread-1?token=fake") as ws:
+            ws.receive_json()
+            ws.send_text(json.dumps({"type": "unknown_type_xyz"}))
+
+
+def test_chat_websocket_message_loop_error_returns_error_json(app, monkeypatch):
+    async def boom(_tid, _it):
+        raise RuntimeError("broadcast failed")
+
+    monkeypatch.setattr(
+        chat_ws.chat_connection_manager,
+        "broadcast_typing_indicator",
+        boom,
+    )
+    with TestClient(app) as client:
+        with client.websocket_connect("/v1/chat/ws/thread-1?token=fake") as ws:
+            ws.receive_json()
+            ws.send_text(json.dumps({"type": "typing", "is_typing": True}))
+            err = ws.receive_json()
+            assert err["type"] == "error"
+            assert "broadcast failed" in err["message"]
+
+
+def test_chat_websocket_outer_exception_becomes_1011(app, monkeypatch):
+    async def bad_verify(_token):
+        raise RuntimeError("auth exploded")
+
+    monkeypatch.setattr(
+        chat_ws,
+        "verify_firebase_token_and_get_user_id",
+        bad_verify,
+    )
+    with TestClient(app) as client:
+        with pytest.raises(Exception):
+            with client.websocket_connect("/v1/chat/ws/t?token=x"):
+                pass

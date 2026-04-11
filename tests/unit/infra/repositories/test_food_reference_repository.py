@@ -66,6 +66,18 @@ def test_get_by_barcode_returns_none_on_exception(patched_session):
     patched_session.close.assert_called_once()
 
 
+def test_get_by_id_returns_none_on_exception(patched_session):
+    patched_session.execute.side_effect = OSError("db")
+    repo = FoodReferenceRepository()
+    assert repo.get_by_id(99) is None
+
+
+def test_get_by_fdc_id_returns_none_on_exception(patched_session):
+    patched_session.execute.side_effect = OSError("db")
+    repo = FoodReferenceRepository()
+    assert repo.get_by_fdc_id(123) is None
+
+
 def test_get_by_id_and_get_by_fdc_id(patched_session):
     patched_session.execute.return_value.scalar_one_or_none.return_value = _fake_row(
         id=5, fdc_id=555

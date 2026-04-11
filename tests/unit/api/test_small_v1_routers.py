@@ -170,3 +170,37 @@ def test_ingredients_health(ingredients_app):
     r = TestClient(ingredients_app).get("/v1/ingredients/health")
     assert r.status_code == 200
     assert r.json()["status"] == "healthy"
+
+
+def test_ingredients_recognize_handle_exception(ingredients_app):
+    class _Bad:
+        async def send(self, msg):
+            raise RuntimeError("vision down")
+
+    ingredients_app.dependency_overrides[get_configured_event_bus] = lambda: _Bad()
+    r = TestClient(ingredients_app).post(
+        "/v1/ingredients/recognize",
+        json={"image_data": "abc"},
+    )
+    assert r.status_code == 500
+
+
+def test_cheat_days_handle_exception(cheat_app):
+    class _Bad:
+        async def send(self, msg):
+            raise RuntimeError("db")
+
+    cheat_app.dependency_overrides[get_configured_event_bus] = lambda: _Bad()
+    r = TestClient(cheat_app).post("/v1/cheat-days?date=2026-06-15")
+    assert r.status_code == 500
+
+
+def test_foods_barcode_generic_exception(foods_app, monkeypatch):
+    class _Bad:
+        async def send(self, msg):
+            raise RuntimeError("lookup failed")
+
+    monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: _Bad())
+    foods_app.dependency_overrides[get_current_user_id] = lambda: "u1"
+    r = TestClient(foods_app).get("/v1/foods/barcode/xyz")
+    assert r.status_code == 500
