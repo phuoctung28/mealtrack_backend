@@ -8,6 +8,8 @@ from src.api.schemas.response.meal_suggestion_responses import (
     IngredientResponse,
     RecipeStepResponse,
     SuggestionsListResponse,
+    DiscoveryMealResponse,
+    DiscoveryBatchResponse,
 )
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 
@@ -45,6 +47,43 @@ def to_meal_suggestion_response(suggestion: MealSuggestion) -> MealSuggestionRes
         confidence_score=suggestion.confidence_score,
         origin_country=suggestion.origin_country,
         cuisine_type=suggestion.cuisine_type,
+    )
+
+
+def to_discovery_meal_response(suggestion: MealSuggestion) -> DiscoveryMealResponse:
+    """Convert domain MealSuggestion to lightweight discovery response (no recipe)."""
+    return DiscoveryMealResponse(
+        id=suggestion.id,
+        meal_name=suggestion.meal_name,
+        emoji=suggestion.emoji,
+        description=suggestion.description,
+        macros=MacroEstimateResponse(
+            calories=suggestion.macros.calories,
+            protein=suggestion.macros.protein,
+            carbs=suggestion.macros.carbs,
+            fat=suggestion.macros.fat,
+        ),
+        ingredient_names=[ing.name for ing in suggestion.ingredients],
+        prep_time_minutes=suggestion.prep_time_minutes,
+        cuisine_type=suggestion.cuisine_type,
+        origin_country=suggestion.origin_country,
+    )
+
+
+def to_discovery_batch_response(
+    session: SuggestionSession,
+    suggestions: List[MealSuggestion],
+) -> DiscoveryBatchResponse:
+    """Convert session + suggestions to discovery batch response."""
+    # has_more = false when fewer meals returned than expected (AI exhausted diversity)
+    # or when session has shown too many meals (>30)
+    shown_count = len(session.shown_suggestion_ids)
+    has_more = len(suggestions) >= 4 and shown_count < 30
+    return DiscoveryBatchResponse(
+        session_id=session.id,
+        meals=[to_discovery_meal_response(s) for s in suggestions],
+        has_more=has_more,
+        meal_count=len(suggestions),
     )
 
 

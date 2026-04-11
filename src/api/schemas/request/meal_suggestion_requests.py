@@ -159,6 +159,46 @@ class MealSuggestionRequest(BaseModel):
         }
 
 
+class DiscoverMealsRequest(BaseModel):
+    """Request schema for discovery endpoint — generates 6 meals per batch."""
+
+    meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
+        ..., description="Type of meal"
+    )
+    meal_portion_type: Optional[MealPortionTypeEnum] = Field(
+        None, description="Portion type: snack, main, omad"
+    )
+    ingredients: List[str] = Field(
+        default_factory=list, max_length=20,
+        description="Optional available ingredients (max 20)",
+    )
+    cooking_time_minutes: Optional[CookingTimeEnum] = Field(
+        None, description="Cooking time constraint",
+    )
+    cuisine_region: Optional[str] = Field(
+        None, description="Preferred cuisine region",
+    )
+    calorie_target: Optional[int] = Field(
+        None, gt=0, description="Override calorie target",
+    )
+    protein_target: Optional[float] = Field(None, ge=0)
+    carbs_target: Optional[float] = Field(None, ge=0)
+    fat_target: Optional[float] = Field(None, ge=0)
+    session_id: Optional[str] = Field(
+        None, description="Session ID for load-more (auto-excludes shown meals)",
+    )
+    batch_size: int = Field(
+        default=6, ge=1, le=8, description="Meals per batch (default 6, max 8)",
+    )
+
+    def get_effective_portion_type(self) -> MealPortionTypeEnum:
+        if self.meal_portion_type is not None:
+            return self.meal_portion_type
+        if self.meal_type == "snack":
+            return MealPortionTypeEnum.SNACK
+        return MealPortionTypeEnum.MAIN
+
+
 class SaveInstructionItem(BaseModel):
     """A single cooking instruction step with optional duration."""
 

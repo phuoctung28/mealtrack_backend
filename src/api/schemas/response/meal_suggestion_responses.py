@@ -105,6 +105,31 @@ class SuggestionsListResponse(BaseModel):
 MealSuggestionsResponse = SuggestionsListResponse
 
 
+class DiscoveryMealResponse(BaseModel):
+    """Lightweight meal for discovery grid — no recipe steps."""
+
+    id: str
+    meal_name: str
+    emoji: Optional[str] = None
+    description: str
+    macros: MacroEstimateResponse
+    ingredient_names: List[str] = Field(
+        ..., description="Ingredient names only (no amounts)"
+    )
+    prep_time_minutes: int
+    cuisine_type: Optional[str] = None
+    origin_country: Optional[str] = None
+
+
+class DiscoveryBatchResponse(BaseModel):
+    """Batch of discovery meals with session tracking."""
+
+    session_id: str
+    meals: List[DiscoveryMealResponse]
+    has_more: bool = Field(default=True, description="Whether more batches can be loaded")
+    meal_count: int
+
+
 class SaveMealSuggestionResponse(BaseModel):
     """
     Response schema for saving a meal suggestion as a regular meal.
