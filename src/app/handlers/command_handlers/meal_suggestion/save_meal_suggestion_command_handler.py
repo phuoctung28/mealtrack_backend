@@ -110,16 +110,18 @@ class SaveMealSuggestionCommandHandler(
         with UnitOfWork() as uow:
             saved_meal = uow.meals.save(meal)
 
-            # Invalidate daily macros cache for this user/date if cache is configured
-            await self._invalidate_daily_macros(command.user_id, meal_date)
+        await self._invalidate_daily_macros(command.user_id, meal_date)
 
-            logger.info(
-                f"Saved meal suggestion {command.suggestion_id} as meal {saved_meal.meal_id} "
-                f"for user {command.user_id} on {meal_date} "
-                f"({command.portion_multiplier}x servings, {command.calories} cal)"
-            )
+        if command.language and command.language != "en":
+            self._save_translation(saved_meal.meal_id, command)
 
-            return saved_meal.meal_id
+        logger.info(
+            f"Saved meal suggestion {command.suggestion_id} as meal {saved_meal.meal_id} "
+            f"for user {command.user_id} on {meal_date} "
+            f"({command.portion_multiplier}x servings, {command.calories} cal)"
+        )
+
+        return saved_meal.meal_id
 
     def _build_food_items(
         self,
@@ -209,6 +211,47 @@ class SaveMealSuggestionCommandHandler(
                 is_custom=True,
             ))
         return distributed
+
+    def _save_translation(self, meal_id: str, command) -> None:
+        """Persist translated meal content to meal_translation table."""
+        from src.domain.model.meal.meal_translation_domain_models import MealTranslation
+        from src.infra.repositories.meal_translation_repository import MealTranslationRepository
+        from src.domain.utils.timezone_utils import utc_now
+
+        # Normalise instructions to List[{instruction, duration_minutes}]
+        meal_instruction = None
+        if command.instructions:
+            meal_instruction = []
+            for step in command.instructions:
+                if isinstance(step, dict):
+                    meal_instruction.append({
+                        "instruction": step.get("instruction", ""),
+                        "duration_minutes": step.get("duration_minutes"),
+                    })
+                elif isinstance(step, str):
+                    meal_instruction.append({"instruction": step, "duration_minutes": None})
+
+        meal_ingredients = [i.name for i in command.ingredients] if command.ingredients else None
+
+        translation = MealTranslation(
+            meal_id=meal_id,
+            language=command.language,
+            dish_name=command.name,
+            food_items=[],
+            meal_instruction=meal_instruction,
+            meal_ingredients=meal_ingredients,
+            translated_at=utc_now(),
+        )
+
+        try:
+            MealTranslationRepository().save(translation)
+            logger.info(
+                "Saved meal_translation meal=%s lang=%s", meal_id, command.language
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to save meal_translation meal=%s: %s", meal_id, exc
+            )
 
     async def _invalidate_daily_macros(self, user_id: str, target_date) -> None:
         if not self.cache_service:

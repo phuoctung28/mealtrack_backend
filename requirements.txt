@@ -49,5 +49,8 @@ redis[hiredis]>=5.0.0
 # FatSecret API
 fatsecret
 
+# Translation
+deepl>=1.18.0
+
 # Rate limiting
 slowapi>=0.1.9

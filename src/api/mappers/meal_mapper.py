@@ -53,42 +53,26 @@ class MealMapper:
     def to_detailed_response(
         meal: Meal,
         image_url: Optional[str] = None,
-        target_language: Optional[str] = None
+        target_language: Optional[str] = None,
     ) -> DetailedMealResponse:
         """
         Convert Meal domain model to DetailedMealResponse DTO.
 
-        When target_language is specified and translations exist, the translated
-        values are returned directly in dish_name and food item names (not in a
-        separate translations object). This allows clients to use the response
-        directly without needing to check translations.
-
         Args:
             meal: Meal domain model
             image_url: Optional image URL
-            target_language: Optional language code for translation display
+            target_language: ISO 639-1 code; if provided and a cached DeepL
+                translation exists, translated fields are applied to the response.
 
         Returns:
-            DetailedMealResponse DTO with localized content
+            DetailedMealResponse DTO
         """
         from src.api.schemas.response.meal_responses import (
             MacrosResponse,
+            CustomNutritionResponse,
             MealTranslationResponse,
             TranslatedFoodItemResponse,
-            CustomNutritionResponse
         )
-
-        # Check for available translation
-        translation = None
-        if meal.translations and target_language and target_language != "en":
-            translation = meal.translations.get(target_language)
-
-        # Build food item translations list (matched by index, not ID)
-        # Note: IDs don't match because translations are created before food items
-        # are persisted to DB, so we rely on array order being preserved
-        food_item_translations_list = []
-        if translation and translation.food_items:
-            food_item_translations_list = translation.food_items
 
         # Map food items from nutrition if available
         food_items = []
@@ -115,9 +99,9 @@ class MealMapper:
                     fat=meal.nutrition.fat,
                 )
 
-            # Map food items with translation applied (match by index)
+            # Map food items in source language (English)
             if meal.nutrition.food_items:
-                for idx, item in enumerate(meal.nutrition.food_items):
+                for item in meal.nutrition.food_items:
                     nutrition_dto = None
                     if hasattr(item, 'macros') and item.macros:
                         nutrition_dto = NutritionResponse(
@@ -141,14 +125,9 @@ class MealMapper:
                             fat_per_100g=item.macros.fat * scale_factor if item.macros else 0.0,
                         )
 
-                    # Use translated name if available (match by index), otherwise use original
-                    item_name = item.name
-                    if idx < len(food_item_translations_list):
-                        item_name = food_item_translations_list[idx].name
-
                     food_item_dto = FoodItemResponse(
                         id=str(item.id),
-                        name=item_name,
+                        name=item.name,
                         category=None,
                         quantity=item.quantity,
                         unit=item.unit,
@@ -160,27 +139,44 @@ class MealMapper:
                     )
                     food_items.append(food_item_dto)
 
-        # Build translations response for backward compatibility
-        translations = None
-        if translation:
-            translations = {
-                target_language: MealTranslationResponse(
-                    language=translation.language,
-                    dish_name=translation.dish_name,
+        # --- Apply DeepL translation if available ---
+        dish_name = meal.dish_name
+        instructions = MealMapper._normalize_instructions(getattr(meal, 'instructions', None))
+
+        if (
+            target_language
+            and target_language != "en"
+            and meal.translations
+        ):
+            tr = meal.translations.get(target_language)
+            if tr and tr.is_fully_cached():
+                dish_name = tr.dish_name
+                if tr.meal_instruction:
+                    instructions = tr.meal_instruction
+                if tr.meal_ingredients and len(tr.meal_ingredients) == len(food_items):
+                    for i, fi in enumerate(food_items):
+                        fi.name = tr.meal_ingredients[i]
+
+        # --- Build translations dict for the response ---
+        translations_response = None
+        if meal.translations:
+            translations_response = {}
+            for lang, tr in meal.translations.items():
+                translations_response[lang] = MealTranslationResponse(
+                    language=tr.language,
+                    dish_name=tr.dish_name,
+                    meal_instruction=tr.meal_instruction,
+                    meal_ingredients=tr.meal_ingredients,
                     food_items=[
                         TranslatedFoodItemResponse(
                             id=fi.food_item_id,
                             name=fi.name,
-                            description=fi.description
+                            description=fi.description,
                         )
-                        for fi in translation.food_items
+                        for fi in tr.food_items
                     ],
-                    translated_at=translation.translated_at
+                    translated_at=tr.translated_at,
                 )
-            }
-
-        # Use translated dish_name if available, otherwise use original
-        dish_name = translation.dish_name if translation else meal.dish_name
 
         return DetailedMealResponse(
             meal_id=meal.meal_id,
@@ -197,9 +193,9 @@ class MealMapper:
             total_calories=total_calories,
             total_weight_grams=meal.weight_grams if hasattr(meal, 'weight_grams') else None,
             total_nutrition=total_nutrition,
-            translations=translations,
+            translations=translations_response,
             description=getattr(meal, 'description', None),
-            instructions=MealMapper._normalize_instructions(getattr(meal, 'instructions', None)),
+            instructions=instructions,
             prep_time_min=getattr(meal, 'prep_time_min', None),
             cook_time_min=getattr(meal, 'cook_time_min', None),
             cuisine_type=getattr(meal, 'cuisine_type', None),

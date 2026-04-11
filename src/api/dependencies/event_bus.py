@@ -15,7 +15,6 @@ from src.app.commands.daily_meal import (
 from src.app.commands.ingredient import RecognizeIngredientCommand
 # Import all commands
 from src.app.commands.meal import (
-    AnalyzeMealImageByUrlCommand,
     UploadMealImageImmediatelyCommand,
     EditMealCommand,
     AddCustomIngredientCommand,
@@ -23,7 +22,10 @@ from src.app.commands.meal import (
 )
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
-from src.app.commands.meal_suggestion import GenerateMealSuggestionsCommand, SaveMealSuggestionCommand
+from src.app.commands.meal_suggestion import (
+    GenerateMealSuggestionsCommand,
+    SaveMealSuggestionCommand,
+)
 from src.app.commands.notification import (
     RegisterFcmTokenCommand,
     DeleteFcmTokenCommand,
@@ -56,7 +58,6 @@ from src.app.handlers.command_handlers import (
     GenerateSingleMealCommandHandler,
     CreateManualMealCommandHandler,
     UpdateUserMetricsCommandHandler,
-    AnalyzeMealImageByUrlHandler,
     UpdateCustomMacrosCommandHandler,
     UploadMealImageImmediatelyHandler,
     GenerateMealSuggestionsCommandHandler,
@@ -278,7 +279,7 @@ def get_configured_event_bus() -> EventBus:
         get_cache_service,
         get_ai_chat_service,
         get_suggestion_orchestration_service,
-        get_meal_translation_service,
+        get_deepl_meal_translation_service,
     )
 
     image_store = get_image_store()
@@ -291,12 +292,12 @@ def get_configured_event_bus() -> EventBus:
     cache_service = get_cache_service()
     ai_chat_service = get_ai_chat_service()
     suggestion_service = get_suggestion_orchestration_service()
+    deepl_translation_service = get_deepl_meal_translation_service()
     
     event_bus = PyMediatorEventBus()
 
     # Register meal command handlers
     # Note: Handlers now use UnitOfWork internally for fresh sessions per request
-    meal_translation_service = get_meal_translation_service()
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
@@ -304,19 +305,9 @@ def get_configured_event_bus() -> EventBus:
             vision_service=vision_service,
             gpt_parser=gpt_parser,
             cache_service=cache_service,
-            meal_translation_service=meal_translation_service,
+            meal_translation_service=deepl_translation_service,
         ),
     )
-    event_bus.register_handler(
-        AnalyzeMealImageByUrlCommand,
-        AnalyzeMealImageByUrlHandler(
-            vision_service=vision_service,
-            gpt_parser=gpt_parser,
-            cache_service=cache_service,
-            meal_translation_service=meal_translation_service,
-        ),
-    )
-
     # Register meal edit command handlers
     event_bus.register_handler(
         EditMealCommand,
@@ -492,13 +483,10 @@ def get_configured_event_bus() -> EventBus:
     )
 
     # Register ingredient recognition handler
-    from src.api.base_dependencies import get_translation_service
-    translation_service = get_translation_service()
     event_bus.register_handler(
         RecognizeIngredientCommand,
         RecognizeIngredientCommandHandler(
             vision_service=vision_service,
-            translation_service=translation_service,
         )
     )
 
@@ -550,7 +538,6 @@ def get_configured_event_bus() -> EventBus:
         vision_service=vision_service,
         gpt_parser=gpt_parser,
         image_store=image_store,
-        meal_translation_service=meal_translation_service,
     )
     event_bus.subscribe(
         MealImageUploadedEvent, meal_analysis_handler

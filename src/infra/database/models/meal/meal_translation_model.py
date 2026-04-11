@@ -6,7 +6,7 @@ multiple languages.
 """
 from datetime import datetime
 
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Boolean
+from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Boolean, JSON
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -28,6 +28,10 @@ class MealTranslation(Base):
     dish_name = Column(String(255), nullable=False)
     translated_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, nullable=False)
+
+    # DeepL-translated rich fields
+    meal_instruction = Column(JSON, nullable=True)   # List[{instruction, duration_minutes}]
+    meal_ingredients = Column(JSON, nullable=True)   # List[str] – ingredient names in order
 
     # Soft delete
     is_deleted = Column(Boolean, default=False, nullable=False, server_default='false')
@@ -60,7 +64,9 @@ class MealTranslation(Base):
                 )
                 for fi in self.food_items
             ],
-            translated_at=self.translated_at
+            translated_at=self.translated_at,
+            meal_instruction=self.meal_instruction,
+            meal_ingredients=self.meal_ingredients,
         )
 
     @classmethod
@@ -75,7 +81,9 @@ class MealTranslation(Base):
             language=domain_model.language,
             dish_name=domain_model.dish_name,
             translated_at=domain_model.translated_at or now,
-            created_at=now
+            created_at=now,
+            meal_instruction=domain_model.meal_instruction,
+            meal_ingredients=domain_model.meal_ingredients,
         )
 
         # Add food item translations

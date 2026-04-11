@@ -1,6 +1,5 @@
 import logging
 import os
-import time
 import uuid
 from typing import Optional
 
@@ -8,7 +7,6 @@ import cloudinary
 import cloudinary.api
 import cloudinary.exceptions
 import cloudinary.uploader
-import cloudinary.utils
 from dotenv import load_dotenv
 
 from src.domain.ports.image_store_port import ImageStorePort
@@ -110,33 +108,6 @@ class CloudinaryImageStore(ImageStorePort):
             logger.error(f"Error uploading to Cloudinary: {str(e)}")
             raise
 
-    def generate_upload_params(self) -> dict[str, str | int]:
-        """
-        Generate signed parameters for direct client uploads.
-        """
-        timestamp = int(time.time())
-        image_id = str(uuid.uuid4())
-        folder = "mealtrack"
-        public_id = f"{folder}/{image_id}"
-
-        params_to_sign = {
-            "timestamp": timestamp,
-            "folder": folder,
-            "public_id": public_id,
-        }
-        signature = cloudinary.utils.api_sign_request(
-            params_to_sign, cloudinary.config().api_secret
-        )
-
-        return {
-            "timestamp": timestamp,
-            "signature": signature,
-            "api_key": cloudinary.config().api_key,
-            "cloud_name": cloudinary.config().cloud_name,
-            "public_id": public_id,
-            "folder": folder,
-        }
-    
     def load(self, image_id: str) -> Optional[bytes]:
         """
         Load image bytes by ID from Cloudinary.

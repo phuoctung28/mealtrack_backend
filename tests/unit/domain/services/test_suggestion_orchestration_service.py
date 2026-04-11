@@ -53,11 +53,9 @@ def mock_user_repo():
 @pytest.fixture
 def recipe_generator(mock_generation_service):
     """Create ParallelRecipeGenerator with mocked dependencies."""
-    from src.domain.services.meal_suggestion.translation_service import TranslationService
     from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
     return ParallelRecipeGenerator(
         generation_service=mock_generation_service,
-        translation_service=TranslationService(mock_generation_service),
         macro_validator=MacroValidationService(),
     )
 
@@ -157,15 +155,14 @@ class TestSuggestionGenerationPipeline:
                 exclude_meal_names=[]
             )
 
-    async def test_direct_language_generation_prompts(self, recipe_generator, mock_generation_service, mock_session, mock_recipe_response):
+    async def test_generation_always_uses_english_prompts(self, recipe_generator, mock_generation_service, mock_session, mock_recipe_response):
         """
-        Tests that the system prompts correctly instruct the LLM to generate content
-        directly in the requested non-English language, while keeping JSON keys in English.
+        Tests that generation always uses English prompts regardless of session language.
+        Translation is removed — all AI output is in English.
         """
         mock_session.language = "vi"
-        target_lang_name = "Vietnamese"
 
-        mock_names = {"meal_names": ["Cháo yến mạch", "Trứng bác đậu phụ", "Sinh tố xanh", "Bánh mì bơ"]}
+        mock_names = {"meal_names": ["Oat porridge", "Tofu scramble", "Green smoothie", "Avocado toast"]}
         mock_generation_service.generate_meal_plan.side_effect = [
             mock_names,
             mock_recipe_response, mock_recipe_response, mock_recipe_response, mock_recipe_response
@@ -178,14 +175,14 @@ class TestSuggestionGenerationPipeline:
 
         all_calls = mock_generation_service.generate_meal_plan.call_args_list
 
-        # Check name generation system prompt
+        # Name generation always uses English
         name_gen_system_prompt = all_calls[0].args[1]
-        assert f"Output content in {target_lang_name}" in name_gen_system_prompt
+        assert "Output content in English" in name_gen_system_prompt
         assert "Keep all JSON keys (like 'meal_names') in English" in name_gen_system_prompt
 
-        # Check recipe generation system prompt
+        # Recipe generation always uses English
         recipe_gen_system_prompt = all_calls[1].args[1]
-        assert f"Output string values in {target_lang_name}" in recipe_gen_system_prompt
+        assert "Output string values in English" in recipe_gen_system_prompt
         assert "JSON keys in English only" in recipe_gen_system_prompt
 
     def test_constants_are_set_correctly(self, recipe_generator):

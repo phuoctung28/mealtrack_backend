@@ -20,5 +20,5 @@ class UploadMealImageImmediatelyCommand(Command):
     file_contents: bytes
     content_type: str
     target_date: Optional[date] = None
-    language: str = "en"
     user_description: Optional[str] = None  # User-provided context for better accuracy
+    language: str = "en"  # ISO 639-1 language code from Accept-Language header

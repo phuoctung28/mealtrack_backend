@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     FIREBASE_SERVICE_ACCOUNT_PATH: str | None = Field(default=None)
 
     # External APIs & integrations
+    DEEPL_API_KEY: str | None = Field(default=None, description="DeepL API key for meal translation")
     GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
     PINECONE_API_KEY: str | None = Field(default=None)
