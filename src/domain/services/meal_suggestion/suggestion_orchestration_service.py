@@ -68,6 +68,7 @@ class SuggestionOrchestrationService:
         protein_target: Optional[float] = None,
         carbs_target: Optional[float] = None,
         fat_target: Optional[float] = None,
+        suggestion_count: int = 3,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """Generate 3 suggestions, excluding meals shown in existing session if provided."""
         is_existing_session = False
@@ -89,7 +90,9 @@ class SuggestionOrchestrationService:
                 calorie_target_override, protein_target, carbs_target, fat_target,
             )
 
-        suggestions = await self._recipe_generator.generate(session=session, exclude_meal_names=exclude_names)
+        suggestions = await self._recipe_generator.generate(
+            session=session, exclude_meal_names=exclude_names, suggestion_count=suggestion_count,
+        )
         session.add_shown_ids([s.id for s in suggestions])
         session.add_shown_meals([s.meal_name for s in suggestions])
 

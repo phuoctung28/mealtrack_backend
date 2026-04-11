@@ -176,6 +176,7 @@ RULES:
         servings: int = 1,
         cooking_equipment: Optional[List[str]] = None,
         cuisine_region: Optional[str] = None,
+        names_count: int = 4,
     ) -> str:
         """
         Build prompt for Phase 1 meal name generation.
@@ -211,13 +212,13 @@ RULES:
 
         # Add cuisine region constraint
         if cuisine_region:
-            cuisine_str = f"\nCuisine: {cuisine_region} (4 different dishes from this region)"
+            cuisine_str = f"\nCuisine: {cuisine_region} ({names_count} different dishes from this region)"
         else:
-            cuisine_str = "\nCuisines: 4 distinct (Asian, Mediterranean, Latin, American)"
+            cuisine_str = f"\nCuisines: {names_count} distinct (Asian, Mediterranean, Latin, American)"
 
         time_str = f", ≤{cooking_time_minutes}min" if cooking_time_minutes else ""
 
-        return f"""Generate 4 different {meal_type} names, ~{target_calories}cal{servings_str}{time_str}.
+        return f"""Generate {names_count} different {meal_type} names, ~{target_calories}cal{servings_str}{time_str}.
 MUST USE these ingredients as main components: {ing_str}{constraints_str}{equipment_str}{cuisine_str}
 Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}."""
 
