@@ -137,7 +137,24 @@ async def discover_meals(
         )
 
         session, suggestions = await event_bus.send(command)
-        return to_discovery_batch_response(session, suggestions)
+
+        # Fetch images in parallel for all meals (non-blocking, best-effort)
+        from src.api.dependencies.food_image import get_food_image_service
+        image_service = get_food_image_service()
+        import asyncio
+        image_tasks = [
+            image_service.search_food_image(s.meal_name)
+            for s in suggestions
+        ]
+        images = await asyncio.gather(*image_tasks, return_exceptions=True)
+
+        # Attach images to response
+        meal_images = {}
+        for s, img in zip(suggestions, images):
+            if img is not None and not isinstance(img, Exception):
+                meal_images[s.id] = img
+
+        return to_discovery_batch_response(session, suggestions, meal_images)
 
     except Exception as e:
         raise handle_exception(e) from e

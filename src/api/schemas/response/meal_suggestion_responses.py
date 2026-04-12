@@ -119,6 +119,8 @@ class DiscoveryMealResponse(BaseModel):
     prep_time_minutes: int
     cuisine_type: Optional[str] = None
     origin_country: Optional[str] = None
+    image_url: Optional[str] = Field(None, description="Food photo URL (from Pexels/Unsplash)")
+    thumbnail_url: Optional[str] = Field(None, description="Thumbnail URL")
 
 
 class DiscoveryBatchResponse(BaseModel):

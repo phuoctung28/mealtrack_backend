@@ -50,7 +50,10 @@ def to_meal_suggestion_response(suggestion: MealSuggestion) -> MealSuggestionRes
     )
 
 
-def to_discovery_meal_response(suggestion: MealSuggestion) -> DiscoveryMealResponse:
+def to_discovery_meal_response(
+    suggestion: MealSuggestion,
+    image=None,
+) -> DiscoveryMealResponse:
     """Convert domain MealSuggestion to lightweight discovery response (no recipe)."""
     return DiscoveryMealResponse(
         id=suggestion.id,
@@ -67,21 +70,26 @@ def to_discovery_meal_response(suggestion: MealSuggestion) -> DiscoveryMealRespo
         prep_time_minutes=suggestion.prep_time_minutes,
         cuisine_type=suggestion.cuisine_type,
         origin_country=suggestion.origin_country,
+        image_url=image.url if image else None,
+        thumbnail_url=image.thumbnail_url if image else None,
     )
 
 
 def to_discovery_batch_response(
     session: SuggestionSession,
     suggestions: List[MealSuggestion],
+    meal_images: dict = None,
 ) -> DiscoveryBatchResponse:
     """Convert session + suggestions to discovery batch response."""
-    # has_more = false when fewer meals returned than expected (AI exhausted diversity)
-    # or when session has shown too many meals (>30)
     shown_count = len(session.shown_suggestion_ids)
     has_more = len(suggestions) >= 4 and shown_count < 30
+    images = meal_images or {}
     return DiscoveryBatchResponse(
         session_id=session.id,
-        meals=[to_discovery_meal_response(s) for s in suggestions],
+        meals=[
+            to_discovery_meal_response(s, images.get(s.id))
+            for s in suggestions
+        ],
         has_more=has_more,
         meal_count=len(suggestions),
     )
