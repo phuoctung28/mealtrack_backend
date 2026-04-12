@@ -130,6 +130,15 @@ class DiscoveryBatchResponse(BaseModel):
     meal_count: int
 
 
+class FoodImageResponse(BaseModel):
+    """Food image search result."""
+
+    url: str = Field(..., description="Full-size image URL")
+    thumbnail_url: str = Field(..., description="Thumbnail URL")
+    source: str = Field(..., description="Image provider (pexels/unsplash)")
+    photographer: Optional[str] = Field(None, description="Photographer name")
+
+
 class SaveMealSuggestionResponse(BaseModel):
     """
     Response schema for saving a meal suggestion as a regular meal.
