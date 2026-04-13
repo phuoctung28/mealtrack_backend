@@ -1,17 +1,53 @@
 """
-Post-generation validation for AI-generated macros.
-Ensures P*4 + (C-fiber)*4 + fiber*2 + F*9 ≈ reported calories.
+Macro validation service.
+
+Two roles:
+  validate_and_correct — AI macro sanity check (discovery path, legacy scan/parsing paths)
+  validate_deterministic — sanity check + tier logging for deterministic recipe macros
 """
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.domain.services.meal_suggestion.nutrition_lookup_service import MealMacros
 
 logger = logging.getLogger(__name__)
 
 
 class MacroValidationService:
-    """Validate and correct AI-generated macros after generation."""
+    """Validate AI-generated macros and sanity-check deterministic macros."""
 
     # Max acceptable divergence between derived and reported calories
     CALORIE_DIFF_THRESHOLD_PCT = 10.0
+
+    def validate_deterministic(self, meal_macros: "MealMacros") -> "MealMacros":
+        """Sanity check deterministic macros from NutritionLookupService.
+
+        Logs tier distribution for observability. Returns meal_macros unchanged.
+        This should always pass since calories are derived from macros.
+
+        Args:
+            meal_macros: MealMacros dataclass from NutritionLookupService.calculate_meal_macros()
+
+        Returns:
+            meal_macros unchanged — this is a validator/logger, not a transformer.
+        """
+        logger.info(
+            "Macro sources: T1=%d, T2=%d, T3=%d",
+            meal_macros.t1_count,
+            meal_macros.t2_count,
+            meal_macros.t3_count,
+        )
+
+        if meal_macros.calories <= 0:
+            logger.error(
+                "Zero/negative calories from deterministic calc: calories=%.1f | "
+                "ingredients=%s",
+                meal_macros.calories,
+                [i.name for i in meal_macros.ingredients],
+            )
+
+        return meal_macros
 
     def validate_and_correct(self, macros: dict) -> dict:
         """Verify P*4 + C*4 + F*9 ≈ reported calories. Correct if off.

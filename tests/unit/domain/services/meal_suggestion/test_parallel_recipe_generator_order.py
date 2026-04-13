@@ -61,7 +61,10 @@ def make_generator() -> ParallelRecipeGenerator:
     generation_service = MagicMock()
     translation_service = MagicMock()
     macro_validator = MagicMock()
-    return ParallelRecipeGenerator(generation_service, translation_service, macro_validator)
+    nutrition_lookup = MagicMock()
+    return ParallelRecipeGenerator(
+        generation_service, translation_service, macro_validator, nutrition_lookup
+    )
 
 
 # ---------------------------------------------------------------------------

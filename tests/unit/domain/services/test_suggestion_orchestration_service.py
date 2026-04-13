@@ -14,7 +14,31 @@ import pytest
 from src.domain.model.meal_suggestion import SuggestionSession, MealSuggestion, MealType, MacroEstimate, Ingredient, RecipeStep
 from src.domain.schemas.meal_generation_schemas import MealNamesResponse, RecipeDetailsResponse
 from src.domain.services.meal_suggestion.parallel_recipe_generator import ParallelRecipeGenerator
+from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+    NutritionLookupService,
+    MealMacros,
+    IngredientMacros,
+)
 from src.domain.services.meal_suggestion.recipe_attempt_builder import PARALLEL_SINGLE_MEAL_TIMEOUT
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _make_meal_macros() -> MealMacros:
+    """Minimal but realistic MealMacros for tests that exercise the nutrition path."""
+    ingredient = IngredientMacros(
+        name="eggs", quantity_g=100.0, calories=155.0,
+        protein=13.0, carbs=1.1, fat=11.0, fiber=0.0, sugar=0.0,
+        source_tier="T1_food_reference",
+    )
+    return MealMacros(
+        calories=450.0, protein=40.0, carbs=30.0, fat=15.0,
+        fiber=2.0, sugar=1.0,
+        ingredients=[ingredient],
+        t1_count=1, t2_count=0, t3_count=0,
+    )
+
 
 # Fixtures for mocked dependencies
 @pytest.fixture
@@ -55,10 +79,15 @@ def recipe_generator(mock_generation_service):
     """Create ParallelRecipeGenerator with mocked dependencies."""
     from src.domain.services.meal_suggestion.translation_service import TranslationService
     from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+    meal_macros = _make_meal_macros()
+    nutrition_lookup = AsyncMock(spec=NutritionLookupService)
+    nutrition_lookup.calculate_meal_macros = AsyncMock(return_value=meal_macros)
+    nutrition_lookup.scale_to_target = Mock(return_value=meal_macros)
     return ParallelRecipeGenerator(
         generation_service=mock_generation_service,
         translation_service=TranslationService(mock_generation_service),
         macro_validator=MacroValidationService(),
+        nutrition_lookup=nutrition_lookup,
     )
 
 # Fixtures for test data
@@ -224,10 +253,14 @@ class TestSessionCreationInvariants:
         portion_stub.get_target_for_meal_type = Mock(
             return_value=Mock(target_calories=600)
         )
+        nutrition_lookup = AsyncMock(spec=NutritionLookupService)
+        nutrition_lookup.calculate_meal_macros = AsyncMock(return_value=None)
+        nutrition_lookup.scale_to_target = Mock(return_value=None)
 
         service = SuggestionOrchestrationService(
             generation_service=mock_generation_service,
             suggestion_repo=mock_suggestion_repo,
+            nutrition_lookup=nutrition_lookup,
             tdee_service=tdee_stub,
             portion_service=portion_stub,
             profile_provider=lambda uid: mock_user_repo.get_profile(uid),

@@ -143,8 +143,12 @@ class TestSuggestionPrompts:
         assert "dinner" in result
         assert "4" in result  # 4 different names
 
-    def test_build_recipe_details_prompt_includes_portion_guidance(self):
-        """Recipe details prompt should include portion sizing."""
+    def test_build_recipe_details_prompt_includes_core_content(self):
+        """Recipe details prompt should include meal name, target, and ingredient guidance.
+
+        Phase 4 removed MACRO_ACCURACY_RULES / PORTION block — macros are now
+        derived deterministically by NutritionLookupService, not requested from the AI.
+        """
         result = PromptTemplateManager.build_recipe_details_prompt(
             meal_name="Grilled Salmon",
             meal_type="dinner",
@@ -152,10 +156,14 @@ class TestSuggestionPrompts:
             cooking_time_minutes=30,
             ingredients=["salmon", "lemon", "herbs"],
         )
-        
+
         assert "Grilled Salmon" in result
-        assert "PORTION" in result
         assert "800" in result
+        # Prompt must still guide the AI to specify gram/ml amounts per ingredient
+        assert any(unit in result for unit in ["g", "gram", "ml", "amount"])
+        # Macro fields must NOT be requested — backend calculates them deterministically
+        assert "protein" not in result.lower()
+        assert "macros" not in result.lower()
 
 
 class TestTokenReduction:

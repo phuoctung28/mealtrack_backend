@@ -11,6 +11,7 @@ from typing import List, Optional, Tuple
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+from src.domain.services.meal_suggestion.nutrition_lookup_service import NutritionLookupService
 from src.domain.services.meal_suggestion.recipe_attempt_builder import attempt_recipe_generation
 from src.domain.services.meal_suggestion.translation_service import TranslationService
 
@@ -50,10 +51,12 @@ class ParallelRecipeGenerator:
         generation_service: MealGenerationServicePort,
         translation_service: TranslationService,
         macro_validator: MacroValidationService,
+        nutrition_lookup: NutritionLookupService,
     ) -> None:
         self._generation = generation_service
         self._translation_service = translation_service
         self._macro_validator = macro_validator
+        self._nutrition_lookup = nutrition_lookup
 
     async def generate(
         self,
@@ -240,12 +243,12 @@ class ParallelRecipeGenerator:
         min_acceptable = min_acceptable_override or max(suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS)
         logger.info(f"[PHASE-2-START] session={session.id} | recipes for {meal_names} | preserve_order={preserve_order}")
         recipe_system = (
-            "You are a professional chef and nutritionist. Return ONLY this exact JSON structure:\n"
+            "You are a professional chef. Return ONLY this exact JSON structure:\n"
             '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
             '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
-            '"prep_time_minutes":0,"calories":0,"protein":0.0,"carbs":0.0,"fat":0.0}}\n'
-            "All ingredient amounts MUST be in GRAMS. Verify: calories=protein*4+carbs*4+fat*9.\n"
-            "CRITICAL: ALL text (ingredient names, instructions, descriptions) MUST be in ENGLISH ONLY. "
+            '"prep_time_minutes":0}}\n'
+            "All ingredient amounts MUST be in GRAMS.\n"
+            "CRITICAL: ALL text (ingredient names, instructions) MUST be in ENGLISH ONLY. "
             "Do NOT include Vietnamese, Japanese, or any non-English text (no 'gà', 'cơm', 'trứng' — "
             "use 'chicken', 'rice', 'egg'). No parenthetical translations. JSON keys in English only."
         )
@@ -301,14 +304,16 @@ class ParallelRecipeGenerator:
         """Try primary model pool; retry on alternate pool if first attempt fails."""
         primary = "recipe_primary" if index % 2 == 0 else "recipe_secondary"
         result = await attempt_recipe_generation(
-            self._generation, self._macro_validator, prompt, meal_name, index, primary, recipe_system, session
+            self._generation, self._macro_validator, self._nutrition_lookup,
+            prompt, meal_name, index, primary, recipe_system, session,
         )
         if result is not None:
             return result
         alternate = "recipe_secondary" if primary == "recipe_primary" else "recipe_primary"
         logger.info(f"[PHASE-2-RETRY] index={index} | {primary} → {alternate} | meal={meal_name}")
         return await attempt_recipe_generation(
-            self._generation, self._macro_validator, prompt, meal_name, index, alternate, recipe_system, session,
+            self._generation, self._macro_validator, self._nutrition_lookup,
+            prompt, meal_name, index, alternate, recipe_system, session,
             is_retry=True,
         )
 

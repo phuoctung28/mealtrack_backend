@@ -13,7 +13,6 @@ from .prompt_constants import (
     JSON_SCHEMAS,
     GOAL_GUIDANCE,
     SYSTEM_MESSAGES,
-    MACRO_ACCURACY_RULES,
     DECOMPOSITION_RULES,
     EMOJI_RULES,
 )
@@ -317,28 +316,18 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
             else "\n- 2-6 clear recipe steps with duration"
         )
 
-        # Hard calorie bounds — AI was routinely generating >1.5x the
-        # target when the "~X cal" hint was loose. Enforce a ±15% band.
-        cal_min = int(target_calories * 0.85)
-        cal_max = int(target_calories * 1.15)
-
         return f"""Generate complete recipe for: "{meal_name}"
 
 MUST USE these ingredients as main components: {ing_str}{' | ' + constraints_str if constraints_str else ''}
-Target:{servings_str} — derived calories MUST be between {cal_min} and {cal_max} cal (aim for ~{target_calories}){time_str}{equipment_str}{cuisine_str}{macro_target_str}
+Target:{servings_str} — ~{target_calories} cal{time_str}{equipment_str}{cuisine_str}{macro_target_str}
 
 CRITICAL: Size all quantities for {servings} serving only — no batch scaling.
-
-PORTION for {target_calories} cal (use macros formula: P*4 + C*4 + F*9 = total cal):
-- {'Light meal: ~25-30g protein, ~30-40g carbs, ~8-12g fat' if target_calories < 400 else 'Small meal: ~30-40g protein, ~40-55g carbs, ~10-15g fat' if target_calories < 600 else 'Standard meal: ~35-50g protein, ~55-80g carbs, ~15-22g fat' if target_calories < 1000 else 'Large meal: ~50-70g protein, ~80-120g carbs, ~22-35g fat'}
 
 REQUIREMENTS:
 - Match name "{meal_name}" exactly
 - MUST include user's ingredients ({ing_str}) — no substitutions
 - 3-8 ingredients in GRAMS, scaled for {servings} serving{'s' if servings > 1 else ''}{time_req_str}
 - Include origin_country and cuisine_type in JSON
-
-{MACRO_ACCURACY_RULES}
 
 {DECOMPOSITION_RULES}
 

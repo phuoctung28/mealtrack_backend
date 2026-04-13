@@ -373,6 +373,7 @@ def get_suggestion_orchestration_service():
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
         suggestion_repo=suggestion_repo,
+        nutrition_lookup=get_nutrition_lookup_service(),
         profile_provider=profile_provider,
         uow_factory=UnitOfWork,
     )
@@ -409,6 +410,44 @@ def get_translation_service() -> "TranslationService":
     from src.infra.adapters.meal_generation_service import MealGenerationService
 
     return TranslationService(MealGenerationService())
+
+
+# IngredientNutritionResolver (singleton — reuses FatSecret + FoodReferenceRepository singletons)
+_ingredient_nutrition_resolver = None
+
+
+def get_ingredient_nutrition_resolver():
+    """Get IngredientNutritionResolver singleton."""
+    global _ingredient_nutrition_resolver
+    if _ingredient_nutrition_resolver is None:
+        from src.domain.services.meal_suggestion.ingredient_nutrition_resolver import (
+            IngredientNutritionResolver,
+        )
+        _ingredient_nutrition_resolver = IngredientNutritionResolver(
+            fatsecret=get_fat_secret_service_instance(),
+            food_ref_repo=get_food_reference_repository(),
+        )
+    return _ingredient_nutrition_resolver
+
+
+# NutritionLookupService (singleton — depends on food_ref_repo, resolver, generation_service)
+_nutrition_lookup_service = None
+
+
+def get_nutrition_lookup_service():
+    """Get NutritionLookupService singleton."""
+    global _nutrition_lookup_service
+    if _nutrition_lookup_service is None:
+        from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+            NutritionLookupService,
+        )
+        from src.infra.adapters.meal_generation_service import MealGenerationService
+        _nutrition_lookup_service = NutritionLookupService(
+            food_ref_repo=get_food_reference_repository(),
+            ingredient_nutrition_resolver=get_ingredient_nutrition_resolver(),
+            generation_service=MealGenerationService(),
+        )
+    return _nutrition_lookup_service
 
 
 # Singleton subscription service instance
