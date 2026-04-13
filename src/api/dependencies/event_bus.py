@@ -29,6 +29,7 @@ from src.app.commands.user import (
     CompleteOnboardingCommand,
     DeleteUserCommand,
     UpdateCustomMacrosCommand,
+    UpdateLanguageCommand,
     UpdateTimezoneCommand,
 )
 from src.app.commands.user.sync_user_command import (
@@ -65,6 +66,7 @@ from src.app.handlers.command_handlers import (
 from src.app.handlers.command_handlers import (
     RegisterFcmTokenCommandHandler,
     DeleteFcmTokenCommandHandler,
+    UpdateLanguageCommandHandler,
     UpdateNotificationPreferencesCommandHandler,
     UpdateTimezoneCommandHandler,
 )
@@ -429,6 +431,10 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         UpdateTimezoneCommand,
         UpdateTimezoneCommandHandler(),
+    )
+    event_bus.register_handler(
+        UpdateLanguageCommand,
+        UpdateLanguageCommandHandler(),
     )
     event_bus.register_handler(
         UpdateCustomMacrosCommand,
