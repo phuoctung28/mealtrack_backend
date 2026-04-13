@@ -242,11 +242,14 @@ class FoodReferenceRepository:
                 "is_verified": is_verified,
                 "region": "global",
             }
-            stmt = mysql_insert(FoodReferenceModel).values(**values)
             update_fields = {
                 k: v for k, v in values.items() if k != "name_normalized"
             }
-            stmt = stmt.on_duplicate_key_update(**update_fields)
+            stmt = pg_insert(FoodReferenceModel).values(**values)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["name_normalized"],
+                set_=update_fields,
+            )
             session.execute(stmt)
             session.commit()
 

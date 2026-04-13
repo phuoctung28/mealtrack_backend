@@ -6,7 +6,7 @@ Test layers:
 1. InMemoryFoodReferenceStore — in-memory stub that exercises business logic
    (is_verified protection, create/update semantics) without a live DB.
 2. TestUniqueConstraintBehavior — mocks the real FoodReferenceRepository to
-   verify C5 fixes: mysql_insert ON DUPLICATE KEY UPDATE used in the update
+   verify C5 fixes: pg_insert ON DUPLICATE KEY UPDATE used in the update
    path, and .scalars().first() used in find_by_normalized_name (C5 defensive).
 """
 from typing import Dict, Any, Optional
@@ -285,8 +285,8 @@ class TestUniqueConstraintBehavior:
         mock_scalars.first.assert_called_once()
         assert result is not None
 
-    def test_upsert_by_normalized_name_uses_on_duplicate_key_update_for_new_entry(self):
-        """C5: insert path uses mysql_insert().values().on_duplicate_key_update() — not session.add()."""
+    def test_upsert_by_normalized_name_uses_on_conflict_do_update_for_new_entry(self):
+        """C5: insert path uses pg_insert().values().on_conflict_do_update() — not session.add()."""
         from src.infra.repositories.food_reference_repository import FoodReferenceRepository
 
         # First SELECT returns None (no existing row)
@@ -313,15 +313,15 @@ class TestUniqueConstraintBehavior:
         mock_session = MagicMock()
         mock_session.execute.side_effect = execute_side_effect
 
-        # Track the full call chain: mysql_insert(Model).values(...).on_duplicate_key_update(...)
+        # Track the full call chain: pg_insert(Model).values(...).on_conflict_do_update(...)
         # Each method in the chain returns the same fluent mock so we can assert on it.
         fluent_stmt = MagicMock()
         fluent_stmt.values.return_value = fluent_stmt
-        fluent_stmt.on_duplicate_key_update.return_value = fluent_stmt
+        fluent_stmt.on_conflict_do_update.return_value = fluent_stmt
 
         with patch("src.infra.repositories.food_reference_repository.SessionLocal",
                    return_value=mock_session):
-            with patch("src.infra.repositories.food_reference_repository.mysql_insert",
+            with patch("src.infra.repositories.food_reference_repository.pg_insert",
                        return_value=fluent_stmt):
                 repo = FoodReferenceRepository()
                 repo.upsert_by_normalized_name(
@@ -336,9 +336,9 @@ class TestUniqueConstraintBehavior:
                     is_verified=False,
                 )
 
-        # .values() and .on_duplicate_key_update() must both be called → atomic upsert
+        # .values() and .on_conflict_do_update() must both be called → atomic upsert
         fluent_stmt.values.assert_called_once()
-        fluent_stmt.on_duplicate_key_update.assert_called_once()
+        fluent_stmt.on_conflict_do_update.assert_called_once()
         # session.add() must NOT be called (not a plain ORM insert)
         mock_session.add.assert_not_called()
 
@@ -358,7 +358,7 @@ class TestUniqueConstraintBehavior:
 
         with patch("src.infra.repositories.food_reference_repository.SessionLocal",
                    return_value=mock_session):
-            with patch("src.infra.repositories.food_reference_repository.mysql_insert") as mock_insert:
+            with patch("src.infra.repositories.food_reference_repository.pg_insert") as mock_insert:
                 repo = FoodReferenceRepository()
                 result = repo.upsert_by_normalized_name(
                     name="chicken breast",
@@ -372,7 +372,7 @@ class TestUniqueConstraintBehavior:
                     is_verified=False,  # incoming unverified — must be blocked
                 )
 
-        # mysql_insert must NOT have been called — we short-circuited
+        # pg_insert must NOT have been called — we short-circuited
         mock_insert.assert_not_called()
         # Returned value must reflect the original verified row (protein=23.0, not 99.0)
         assert result is not None
