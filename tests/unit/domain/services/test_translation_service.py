@@ -89,12 +89,12 @@ class TestExtractTranslatableStrings:
         assert "ingredients[1].name" in paths
         assert "ingredients[2].name" in paths
 
-    def test_extracts_ingredient_units(self, translation_service, sample_meal_suggestion):
-        """Test that ingredient units are extracted."""
+    def test_skips_ingredient_units(self, translation_service, sample_meal_suggestion):
+        """Units ('g', 'ml', etc.) are universal — intentionally skipped in _SKIP_FIELDS."""
         items = extract_translatable_strings(sample_meal_suggestion)
         paths = [item[0] for item in items]
-        assert "ingredients[0].unit" in paths
-        assert "ingredients[1].unit" in paths
+        assert "ingredients[0].unit" not in paths
+        assert "ingredients[1].unit" not in paths
 
     def test_extracts_recipe_step_instructions(
         self, translation_service, sample_meal_suggestion

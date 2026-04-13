@@ -157,15 +157,15 @@ class TestSuggestionGenerationPipeline:
                 exclude_meal_names=[]
             )
 
-    async def test_direct_language_generation_prompts(self, recipe_generator, mock_generation_service, mock_session, mock_recipe_response):
+    async def test_english_only_generation_prompts(self, recipe_generator, mock_generation_service, mock_session, mock_recipe_response):
         """
-        Tests that the system prompts correctly instruct the LLM to generate content
-        directly in the requested non-English language, while keeping JSON keys in English.
+        Tests that generation prompts enforce English-only output regardless of session language.
+        Translation to the target language happens in Phase 3 (post-generation), not during
+        generation — this keeps prompts stable and avoids LLM mixing languages mid-response.
         """
         mock_session.language = "vi"
-        target_lang_name = "Vietnamese"
 
-        mock_names = {"meal_names": ["Cháo yến mạch", "Trứng bác đậu phụ", "Sinh tố xanh", "Bánh mì bơ"]}
+        mock_names = {"meal_names": ["Oatmeal Porridge", "Tofu Scramble", "Green Smoothie", "Avocado Toast"]}
         mock_generation_service.generate_meal_plan.side_effect = [
             mock_names,
             mock_recipe_response, mock_recipe_response, mock_recipe_response, mock_recipe_response
@@ -178,14 +178,14 @@ class TestSuggestionGenerationPipeline:
 
         all_calls = mock_generation_service.generate_meal_plan.call_args_list
 
-        # Check name generation system prompt
+        # Name generation: English-only enforcement
         name_gen_system_prompt = all_calls[0].args[1]
-        assert f"Output content in {target_lang_name}" in name_gen_system_prompt
-        assert "Keep all JSON keys (like 'meal_names') in English" in name_gen_system_prompt
+        assert "Output meal names in ENGLISH" in name_gen_system_prompt
+        assert "JSON keys in English" in name_gen_system_prompt
 
-        # Check recipe generation system prompt
+        # Recipe generation: English-only enforcement for all text
         recipe_gen_system_prompt = all_calls[1].args[1]
-        assert f"Output string values in {target_lang_name}" in recipe_gen_system_prompt
+        assert "MUST be in ENGLISH ONLY" in recipe_gen_system_prompt
         assert "JSON keys in English only" in recipe_gen_system_prompt
 
     def test_constants_are_set_correctly(self, recipe_generator):

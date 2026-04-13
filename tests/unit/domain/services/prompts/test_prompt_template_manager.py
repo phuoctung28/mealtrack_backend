@@ -189,5 +189,6 @@ class TestTokenReduction:
         )
 
         estimated_tokens = len(prompt) / 4
-        # Target ~700 tokens (grew with MACRO_ACCURACY_RULES, DECOMPOSITION_RULES, EMOJI_RULES)
-        assert estimated_tokens < 700, f"Prompt too long: ~{estimated_tokens} tokens"
+        # Target ~750 tokens (grew with MACRO_ACCURACY_RULES, DECOMPOSITION_RULES, EMOJI_RULES,
+        # and English-only enforcement for multilingual translation pipeline)
+        assert estimated_tokens < 750, f"Prompt too long: ~{estimated_tokens} tokens"
