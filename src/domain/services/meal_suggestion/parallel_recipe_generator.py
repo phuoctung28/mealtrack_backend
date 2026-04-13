@@ -69,7 +69,10 @@ class ParallelRecipeGenerator:
         meal_names = await self._phase1_generate_names(session, exclude_meal_names, target_lang, count)
         phase1_elapsed = time.time() - start_time
 
-        suggestions = await self._phase2_generate_recipes(session, meal_names, target_lang, count)
+        # Discovery flow: more names than needed (headroom), use as_completed for early-stop benefit.
+        suggestions = await self._phase2_generate_recipes(
+            session, meal_names, target_lang, count, preserve_order=False
+        )
         phase2_elapsed = time.time() - start_time - phase1_elapsed
 
         phase3_elapsed = 0.0
@@ -229,12 +232,13 @@ class ParallelRecipeGenerator:
         self, session: SuggestionSession, meal_names: List[str], target_lang: str,
         suggestion_count: int = 3,
         min_acceptable_override: int = 0,
+        preserve_order: bool = True,
     ) -> List[MealSuggestion]:
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_recipe_details_prompt
 
         total_attempts = len(meal_names)
         min_acceptable = min_acceptable_override or max(suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS)
-        logger.info(f"[PHASE-2-START] session={session.id} | recipes for {meal_names}")
+        logger.info(f"[PHASE-2-START] session={session.id} | recipes for {meal_names} | preserve_order={preserve_order}")
         recipe_system = (
             "You are a professional chef and nutritionist. Return ONLY this exact JSON structure:\n"
             '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
@@ -253,17 +257,31 @@ class ParallelRecipeGenerator:
 
         gen_start = time.time()
         successful: List[MealSuggestion] = []
-        for coro in asyncio.as_completed(tasks):
-            try:
-                result = await coro
-                if result is not None:
+
+        if preserve_order:
+            # gather preserves submission order — required for /recipes endpoint where mobile
+            # pairs results to selected meal names by index position.
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.warning(f"[RECIPE-ERROR] {type(result).__name__}: {result}")
+                elif result is not None:
                     successful.append(result)
-                    if len(successful) >= suggestion_count:
-                        cancelled = sum(1 for t in tasks if not t.done() and t.cancel())
-                        logger.info(f"[EARLY-STOP] Got {suggestion_count} meals, cancelled {cancelled} tasks")
-                        break
-            except Exception as e:
-                logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
+        else:
+            # as_completed yields in completion-time order, enabling early-stop once
+            # suggestion_count successes arrive. Used by the discovery flow which spawns
+            # total_attempts > suggestion_count tasks for headroom.
+            for coro in asyncio.as_completed(tasks):
+                try:
+                    result = await coro
+                    if result is not None:
+                        successful.append(result)
+                        if len(successful) >= suggestion_count:
+                            cancelled = sum(1 for t in tasks if not t.done() and t.cancel())
+                            logger.info(f"[EARLY-STOP] Got {suggestion_count} meals, cancelled {cancelled} tasks")
+                            break
+                except Exception as e:
+                    logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
 
         logger.info(
             f"[PHASE-2-COMPLETE] session={session.id} | "
