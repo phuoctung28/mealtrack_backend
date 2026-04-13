@@ -105,22 +105,35 @@ class SuggestionsListResponse(BaseModel):
 MealSuggestionsResponse = SuggestionsListResponse
 
 
+class RecipeBatchResponse(BaseModel):
+    """Response containing full recipes for 1-3 selected discovery meals."""
+
+    recipes: List[MealSuggestionResponse] = Field(
+        ..., min_length=1, max_length=3,
+        description="Full recipe details for selected meals",
+    )
+
+
 class DiscoveryMealResponse(BaseModel):
-    """Lightweight meal for discovery grid — no recipe steps."""
+    """Lightweight meal for discovery grid — name + macros + optional image."""
 
     id: str
     meal_name: str
-    emoji: Optional[str] = None
-    description: str
+    english_name: Optional[str] = Field(None, description="Original English name for recipe generation")
     macros: MacroEstimateResponse
-    ingredient_names: List[str] = Field(
-        ..., description="Ingredient names only (no amounts)"
-    )
-    prep_time_minutes: int
+    # Fields below are optional — not returned in lightweight discovery
+    emoji: Optional[str] = None
+    description: Optional[str] = None
+    ingredient_names: Optional[List[str]] = Field(default=None, description="Ingredient names (only in full response)")
+    prep_time_minutes: Optional[int] = None
     cuisine_type: Optional[str] = None
     origin_country: Optional[str] = None
-    image_url: Optional[str] = Field(None, description="Food photo URL (from Pexels/Unsplash)")
+    image_url: Optional[str] = Field(None, description="Food photo URL (hotlinked from Pexels/Unsplash)")
     thumbnail_url: Optional[str] = Field(None, description="Thumbnail URL")
+    image_source: Optional[str] = Field(None, description="Image provider: pexels | unsplash")
+    photographer: Optional[str] = Field(None, description="Photographer name for attribution")
+    photographer_url: Optional[str] = Field(None, description="Photographer profile URL with UTM params")
+    unsplash_download_location: Optional[str] = Field(None, description="Unsplash download trigger URL (pass back on save)")
 
 
 class DiscoveryBatchResponse(BaseModel):

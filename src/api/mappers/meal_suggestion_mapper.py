@@ -72,6 +72,10 @@ def to_discovery_meal_response(
         origin_country=suggestion.origin_country,
         image_url=image.url if image else None,
         thumbnail_url=image.thumbnail_url if image else None,
+        image_source=image.source if image else None,
+        photographer=image.photographer if image else None,
+        photographer_url=image.photographer_url if image else None,
+        unsplash_download_location=image.download_location if image else None,
     )
 
 

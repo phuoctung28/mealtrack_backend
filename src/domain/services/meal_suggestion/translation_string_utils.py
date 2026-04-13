@@ -76,9 +76,12 @@ def reconstruct_with_translations(obj: Any, translation_map: Dict[str, str]) -> 
 # Private helpers
 # ---------------------------------------------------------------------------
 
+_SKIP_FIELDS = frozenset({"english_name", "emoji", "unit"})
+
+
 def _should_skip_field(key: str, value: Any) -> bool:
     """Return True if the field should be excluded from translation."""
-    if key.endswith("_id") or key == "id":
+    if key.endswith("_id") or key == "id" or key in _SKIP_FIELDS:
         return True
     if isinstance(value, (int, float, bool, type(None))):
         return True

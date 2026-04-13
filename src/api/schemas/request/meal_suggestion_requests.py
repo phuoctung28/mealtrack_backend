@@ -188,7 +188,7 @@ class DiscoverMealsRequest(BaseModel):
         None, description="Session ID for load-more (auto-excludes shown meals)",
     )
     batch_size: int = Field(
-        default=6, ge=1, le=8, description="Meals per batch (default 6, max 8)",
+        default=10, ge=1, le=12, description="Meals per batch (default 10, max 12)",
     )
 
     def get_effective_portion_type(self) -> MealPortionTypeEnum:
@@ -197,6 +197,25 @@ class DiscoverMealsRequest(BaseModel):
         if self.meal_type == "snack":
             return MealPortionTypeEnum.SNACK
         return MealPortionTypeEnum.MAIN
+
+
+class GenerateRecipesRequest(BaseModel):
+    """Request to generate full recipes for 1-3 selected discovery meals."""
+
+    meal_names: List[str] = Field(
+        ..., min_length=1, max_length=3,
+        description="English meal names from discovery grid (1-3)",
+    )
+    meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
+        ..., description="Type of meal"
+    )
+    calorie_target: Optional[int] = Field(None, gt=0)
+    cuisine_region: Optional[str] = None
+    ingredients: List[str] = Field(default_factory=list, max_length=20)
+    cooking_time_minutes: Optional[int] = Field(None, ge=5, le=120)
+    protein_target: Optional[float] = Field(None, ge=0)
+    carbs_target: Optional[float] = Field(None, ge=0)
+    fat_target: Optional[float] = Field(None, ge=0)
 
 
 class SaveInstructionItem(BaseModel):
@@ -278,6 +297,9 @@ class SaveMealSuggestionRequest(BaseModel):
     cuisine_type: Optional[str] = Field(None, description="Cuisine type (e.g., Asian, Vietnamese)")
     origin_country: Optional[str] = Field(None, description="Country of origin")
     emoji: Optional[str] = Field(None, description="AI-assigned food emoji")
+    unsplash_download_location: Optional[str] = Field(
+        None, description="Unsplash download_location URL — triggers download event per API guidelines"
+    )
 
     @field_validator("meal_date")
     @classmethod

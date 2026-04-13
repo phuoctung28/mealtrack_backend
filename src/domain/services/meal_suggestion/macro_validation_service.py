@@ -24,7 +24,8 @@ class MacroValidationService:
         """
         protein = max(0.0, macros.get("protein", 0.0))
         carbs = max(0.0, macros.get("carbs", 0.0))
-        fat = max(0.0, macros.get("fat", 0.0))
+        # Real meals always have some fat — floor at 3g to catch AI hallucinations
+        fat = max(3.0, macros.get("fat", 0.0))
         fiber = max(0.0, macros.get("fiber", 0.0))
         reported_cal = macros.get("calories", 0.0)
 

@@ -111,6 +111,7 @@ async def attempt_recipe_generation(
             origin_country=raw.get("origin_country"),
             cuisine_type=raw.get("cuisine_type", "International"),
             emoji=validate_emoji(raw.get("emoji")),
+            english_name=meal_name,
         )
 
     except asyncio.TimeoutError:

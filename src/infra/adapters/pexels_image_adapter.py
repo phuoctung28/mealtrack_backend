@@ -39,8 +39,8 @@ class PexelsImageAdapter(FoodImageSearchPort):
             photos = data.get("photos", [])
             for photo in photos:
                 src = photo.get("src", {})
-                url = src.get("medium", "")
-                thumbnail = src.get("small", "")
+                url = src.get("large", "") or src.get("medium", "")
+                thumbnail = src.get("medium", "") or src.get("small", "")
                 alt = photo.get("alt", "")
                 width = photo.get("width", 0)
 
@@ -53,6 +53,8 @@ class PexelsImageAdapter(FoodImageSearchPort):
                     thumbnail_url=thumbnail or url,
                     source="pexels",
                     photographer=photo.get("photographer"),
+                    photographer_url=photo.get("photographer_url"),
+                    alt_text=alt,
                 )
 
         except Exception as e:

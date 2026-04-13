@@ -43,6 +43,7 @@ class ParallelRecipeGenerator:
     DEFAULT_SUGGESTIONS_COUNT = 3
     MIN_ACCEPTABLE_RESULTS = 2
     PHASE1_TIMEOUT = 20
+    DISCOVERY_TIMEOUT = 15
 
     def __init__(
         self,
@@ -84,6 +85,92 @@ class ParallelRecipeGenerator:
         )
         return suggestions
 
+    async def generate_discovery(
+        self,
+        session: SuggestionSession,
+        exclude_meal_names: List[str],
+        count: int = 6,
+    ) -> List[dict]:
+        """Lightweight discovery: single AI call → list of {name, calories, P, C, F}.
+
+        Returns list of dicts with validated macros. ~200 tokens total.
+        """
+        from src.domain.services.prompts.prompt_template_manager import PromptTemplateManager
+        from src.domain.schemas.meal_generation_schemas import DiscoveryMealsResponse
+
+        start = time.time()
+        # Request extra for dedup headroom
+        request_count = count + 2
+
+        system = (
+            f"You are a creative chef and nutritionist. Generate {request_count} VERY DIFFERENT meals. "
+            "CRITICAL: ALL meal names MUST be in ENGLISH ONLY. Do NOT use Vietnamese, Japanese, or any "
+            "non-English words in meal names. Translate ingredient names to English. Return valid JSON only."
+        )
+        prompt = PromptTemplateManager.build_discovery_prompt(
+            meal_type=session.meal_type,
+            target_calories=session.target_calories,
+            count=request_count,
+            ingredients=session.ingredients[:4] if session.ingredients else [],
+            cuisine_region=getattr(session, "cuisine_region", None),
+            exclude_meal_names=exclude_meal_names,
+            protein_target=getattr(session, "protein_target", None),
+            carbs_target=getattr(session, "carbs_target", None),
+            fat_target=getattr(session, "fat_target", None),
+        )
+
+        try:
+            raw = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self._generation.generate_meal_plan,
+                    prompt, system, "json", 1000, DiscoveryMealsResponse, "meal_names",
+                ),
+                timeout=self.DISCOVERY_TIMEOUT,
+            )
+        except Exception as e:
+            logger.error(f"[DISCOVERY-FAILED] session={session.id} | {type(e).__name__}: {e}")
+            raise RuntimeError(f"Discovery generation failed: {e}") from e
+
+        # Dedup + validate macros
+        seen: set = set()
+        results: list = []
+        raw_meals = raw.get("meals", [])
+        for meal in raw_meals:
+            name = meal.get("name", "").strip()
+            if not name or name.lower() in seen:
+                continue
+            seen.add(name.lower())
+
+            macros = self._macro_validator.validate_and_correct({
+                "calories": meal.get("calories", 0),
+                "protein": meal.get("protein", 0),
+                "carbs": meal.get("carbs", 0),
+                "fat": meal.get("fat", 0),
+            })
+
+            results.append({
+                "name": name,
+                "english_name": name,
+                "calories": macros["calories"],
+                "protein": macros["protein"],
+                "carbs": macros["carbs"],
+                "fat": macros["fat"],
+            })
+
+            if len(results) >= count:
+                break
+
+        elapsed = time.time() - start
+        logger.info(
+            f"[DISCOVERY-COMPLETE] session={session.id} | elapsed={elapsed:.2f}s | "
+            f"meals={[r['name'] for r in results]}"
+        )
+
+        if not results:
+            raise RuntimeError("Discovery returned no valid meals")
+
+        return results
+
     async def _phase1_generate_names(
         self, session: SuggestionSession, exclude_meal_names: List[str], target_lang: str,
         suggestion_count: int = 3,
@@ -91,33 +178,47 @@ class ParallelRecipeGenerator:
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_meal_names_prompt
         from src.domain.schemas.meal_generation_schemas import MealNamesResponse
 
-        # Request extra names for headroom (failures, dedup)
-        names_to_generate = suggestion_count + 2
+        # Request extra names for headroom (failures, dedup); retry once on shortage
+        names_to_generate = suggestion_count + 4
         logger.info(
             f"[PHASE-1-START] session={session.id} | generating {names_to_generate} names in {target_lang} | "
             f"excluding {len(exclude_meal_names)} previous meals"
         )
+        # Always generate names in English — Phase 3 translates to target language.
+        # English names are preserved in MealSuggestion.english_name for image search.
         names_system = (
             f"You are a creative chef. Generate {names_to_generate} VERY DIFFERENT meal names with "
-            f"diverse flavors and cooking styles. Output content in {target_lang}. "
-            "IMPORTANT: Keep all JSON keys (like 'meal_names') in English."
+            f"diverse flavors and cooking styles. Each name must be unique. "
+            "Output meal names in ENGLISH. Keep all JSON keys in English."
         )
+        seen: set = set()
+        meal_names: list = []
+        max_attempts = 2
         try:
-            names_raw = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._generation.generate_meal_plan,
-                    build_meal_names_prompt(session, exclude_meal_names, names_to_generate),
-                    names_system, "json", 1000, MealNamesResponse, "meal_names",
-                ),
-                timeout=self.PHASE1_TIMEOUT,
-            )
-            seen: set = set()
-            meal_names = [
-                n for n in names_raw.get("meal_names", [])
-                if not (n.lower() in seen or seen.add(n.lower()))  # type: ignore[func-returns-value]
-            ]
+            for attempt in range(1, max_attempts + 1):
+                names_raw = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self._generation.generate_meal_plan,
+                        build_meal_names_prompt(session, exclude_meal_names, names_to_generate),
+                        names_system, "json", 1000, MealNamesResponse, "meal_names",
+                    ),
+                    timeout=self.PHASE1_TIMEOUT,
+                )
+                for n in names_raw.get("meal_names", []):
+                    if n.lower() not in seen:
+                        seen.add(n.lower())
+                        meal_names.append(n)
+                if len(meal_names) >= suggestion_count:
+                    break
+                logger.warning(
+                    f"[PHASE-1-RETRY] session={session.id} | attempt={attempt} | "
+                    f"got {len(meal_names)} unique names, need {suggestion_count}"
+                )
             if len(meal_names) < suggestion_count:
-                raise RuntimeError("Could not generate enough unique meal names.")
+                raise RuntimeError(
+                    f"Could not generate enough unique meal names "
+                    f"(got {len(meal_names)}, need {suggestion_count})."
+                )
             logger.info(f"[PHASE-1-COMPLETE] session={session.id} | names={meal_names}")
             return meal_names
         except Exception as e:
@@ -127,11 +228,12 @@ class ParallelRecipeGenerator:
     async def _phase2_generate_recipes(
         self, session: SuggestionSession, meal_names: List[str], target_lang: str,
         suggestion_count: int = 3,
+        min_acceptable_override: int = 0,
     ) -> List[MealSuggestion]:
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_recipe_details_prompt
 
         total_attempts = len(meal_names)
-        min_acceptable = max(suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS)
+        min_acceptable = min_acceptable_override or max(suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS)
         logger.info(f"[PHASE-2-START] session={session.id} | recipes for {meal_names}")
         recipe_system = (
             "You are a professional chef and nutritionist. Return ONLY this exact JSON structure:\n"
@@ -139,7 +241,9 @@ class ParallelRecipeGenerator:
             '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
             '"prep_time_minutes":0,"calories":0,"protein":0.0,"carbs":0.0,"fat":0.0}}\n'
             "All ingredient amounts MUST be in GRAMS. Verify: calories=protein*4+carbs*4+fat*9.\n"
-            f"Output string values in {target_lang}. JSON keys in English only."
+            "CRITICAL: ALL text (ingredient names, instructions, descriptions) MUST be in ENGLISH ONLY. "
+            "Do NOT include Vietnamese, Japanese, or any non-English text (no 'gà', 'cơm', 'trứng' — "
+            "use 'chicken', 'rice', 'egg'). No parenthetical translations. JSON keys in English only."
         )
         prompts = [build_recipe_details_prompt(n, session) for n in meal_names]
         tasks = [

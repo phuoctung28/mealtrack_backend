@@ -185,3 +185,51 @@ class SuggestionOrchestrationService:
         )
         logger.info(f"Creating new session {session.id}")
         return session, []
+
+    async def generate_discovery(
+        self,
+        user_id: str,
+        meal_type: str,
+        meal_portion_type: str,
+        ingredients: List[str],
+        cooking_time_minutes: Optional[int] = None,
+        session_id: Optional[str] = None,
+        language: str = "en",
+        cuisine_region: Optional[str] = None,
+        calorie_target_override: Optional[int] = None,
+        protein_target: Optional[float] = None,
+        carbs_target: Optional[float] = None,
+        fat_target: Optional[float] = None,
+        count: int = 6,
+    ) -> Tuple[SuggestionSession, List[dict]]:
+        """Lightweight discovery: names + macros only. No recipes."""
+        is_existing = False
+        if session_id:
+            try:
+                session, exclude_names = await self._load_existing_session(session_id, user_id, language)
+                is_existing = True
+            except ValueError:
+                session, exclude_names = await self._create_new_session(
+                    user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
+                    language, 1, [], cuisine_region,
+                    calorie_target_override, protein_target, carbs_target, fat_target,
+                )
+        else:
+            session, exclude_names = await self._create_new_session(
+                user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
+                language, 1, [], cuisine_region,
+                calorie_target_override, protein_target, carbs_target, fat_target,
+            )
+
+        meals = await self._recipe_generator.generate_discovery(
+            session=session, exclude_meal_names=exclude_names, count=count,
+        )
+
+        # Track shown names for "load more" exclusion
+        session.add_shown_meals([m["name"] for m in meals])
+        if is_existing:
+            await self._repo.update_session(session)
+        else:
+            await self._repo.save_session(session)
+
+        return session, meals

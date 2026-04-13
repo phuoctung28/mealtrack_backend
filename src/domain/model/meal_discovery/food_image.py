@@ -1,5 +1,5 @@
 """Result model for food image search (NM-72)."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -11,3 +11,6 @@ class FoodImageResult:
     thumbnail_url: str  # Small thumbnail URL
     source: str         # "pexels" | "unsplash"
     photographer: Optional[str] = None
+    photographer_url: Optional[str] = None   # Profile URL with UTM params
+    download_location: Optional[str] = None  # Unsplash download trigger URL
+    alt_text: Optional[str] = None           # Image description for relevance validation

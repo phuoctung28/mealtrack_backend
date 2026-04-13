@@ -21,11 +21,13 @@ from src.api.schemas.request.meal_suggestion_requests import (
     MealSuggestionRequest,
     SaveMealSuggestionRequest,
     DiscoverMealsRequest,
+    GenerateRecipesRequest,
 )
 from src.api.schemas.response.meal_suggestion_responses import (
     SuggestionsListResponse,
     SaveMealSuggestionResponse,
     DiscoveryBatchResponse,
+    RecipeBatchResponse,
     FoodImageResponse,
 )
 
@@ -109,52 +111,152 @@ async def discover_meals(
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
-    Generate 6 discovery meals (lightweight, no recipe steps in response).
+    Lightweight discovery: single AI call → 6 meals with names + macros.
+    No recipes/ingredients generated here — use POST /recipes for selected meals.
     Supports pagination via session_id — previously shown meals are auto-excluded.
     """
     try:
+        import asyncio
+        import uuid
         language = get_request_language(request)
         portion_type = body.get_effective_portion_type()
 
-        command = GenerateMealSuggestionsCommand(
+        from src.api.base_dependencies import get_suggestion_orchestration_service
+        service = get_suggestion_orchestration_service()
+
+        session, meals = await service.generate_discovery(
             user_id=user_id,
             meal_type=body.meal_type,
             meal_portion_type=portion_type.value,
             ingredients=body.ingredients,
-            time_available_minutes=(
+            cooking_time_minutes=(
                 body.cooking_time_minutes.value if body.cooking_time_minutes else None
             ),
             session_id=body.session_id,
             language=language,
-            servings=1,
-            cooking_equipment=[],
             cuisine_region=body.cuisine_region,
-            calorie_target=body.calorie_target,
+            calorie_target_override=body.calorie_target,
             protein_target=body.protein_target,
             carbs_target=body.carbs_target,
             fat_target=body.fat_target,
-            suggestion_count=body.batch_size,
+            count=body.batch_size,
         )
 
-        session, suggestions = await event_bus.send(command)
-
-        # Fetch images in parallel for all meals (non-blocking, best-effort)
+        # Fetch images in parallel using English names (best-effort)
         from src.api.dependencies.food_image import get_food_image_service
         image_service = get_food_image_service()
-        import asyncio
         image_tasks = [
-            image_service.search_food_image(s.meal_name)
-            for s in suggestions
+            image_service.search_food_image(m["english_name"])
+            for m in meals
         ]
         images = await asyncio.gather(*image_tasks, return_exceptions=True)
 
-        # Attach images to response
-        meal_images = {}
-        for s, img in zip(suggestions, images):
-            if img is not None and not isinstance(img, Exception):
-                meal_images[s.id] = img
+        # Translate names if non-English
+        translated_names = [m["name"] for m in meals]
+        if language != "en":
+            from src.api.base_dependencies import get_translation_service
+            try:
+                translation_svc = get_translation_service()
+                translated = await translation_svc.translate_names(
+                    [m["name"] for m in meals], language
+                )
+                if translated and len(translated) == len(meals):
+                    translated_names = translated
+            except Exception as e:
+                logger.warning(f"Name translation failed, using English: {e}")
 
-        return to_discovery_batch_response(session, suggestions, meal_images)
+        # Build response
+        from src.api.schemas.response.meal_suggestion_responses import (
+            DiscoveryMealResponse, MacroEstimateResponse,
+        )
+        response_meals = []
+        for i, m in enumerate(meals):
+            img = images[i] if i < len(images) and not isinstance(images[i], Exception) else None
+            meal_id = f"disc_{uuid.uuid4().hex[:12]}"
+            response_meals.append(DiscoveryMealResponse(
+                id=meal_id,
+                meal_name=translated_names[i],
+                english_name=m["english_name"],
+                macros=MacroEstimateResponse(
+                    calories=m["calories"],
+                    protein=m["protein"],
+                    carbs=m["carbs"],
+                    fat=m["fat"],
+                ),
+                image_url=img.url if img else None,
+                thumbnail_url=img.thumbnail_url if img else None,
+                image_source=img.source if img else None,
+                photographer=img.photographer if img else None,
+                photographer_url=img.photographer_url if img else None,
+                unsplash_download_location=img.download_location if img else None,
+            ))
+
+        shown_count = len(session.shown_meal_names)
+        return DiscoveryBatchResponse(
+            session_id=session.id,
+            meals=response_meals,
+            has_more=len(meals) >= 4 and shown_count < 30,
+            meal_count=len(response_meals),
+        )
+
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.post("/recipes", response_model=RecipeBatchResponse)
+@limiter.limit("5/minute")
+async def generate_recipes(
+    request: Request,
+    body: GenerateRecipesRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Generate full recipes for 1-3 selected discovery meals.
+    Called after user picks meals from the discovery grid.
+    """
+    try:
+        import uuid
+        language = get_request_language(request)
+
+        from src.api.base_dependencies import get_suggestion_orchestration_service
+        service = get_suggestion_orchestration_service()
+
+        # Build a minimal session for recipe generation
+        from src.domain.model.meal_suggestion import SuggestionSession
+        session = SuggestionSession(
+            id=f"recipe_{uuid.uuid4().hex[:16]}",
+            user_id=user_id,
+            meal_type=body.meal_type,
+            meal_portion_type="main",
+            target_calories=body.calorie_target or 500,
+            ingredients=body.ingredients,
+            cooking_time_minutes=body.cooking_time_minutes,
+            language=language,
+            cuisine_region=body.cuisine_region,
+            protein_target=body.protein_target,
+            carbs_target=body.carbs_target,
+            fat_target=body.fat_target,
+        )
+
+        # Reuse existing Phase 2 recipe generation for selected names
+        recipes = await service._recipe_generator._phase2_generate_recipes(
+            session, body.meal_names, "English",
+            suggestion_count=len(body.meal_names),
+            min_acceptable_override=1,
+        )
+
+        # Translate if non-English
+        if language != "en" and recipes:
+            from src.domain.services.meal_suggestion.parallel_recipe_generator import get_language_name
+            recipes, _ = await service._recipe_generator._phase3_translate(
+                session, recipes, get_language_name(language),
+            )
+
+        # Map to response
+        from src.api.mappers.meal_suggestion_mapper import to_meal_suggestion_response
+        return RecipeBatchResponse(
+            recipes=[to_meal_suggestion_response(r) for r in recipes],
+        )
 
     except Exception as e:
         raise handle_exception(e) from e
@@ -233,6 +335,14 @@ async def save_meal_suggestion(
         )
 
         meal_id = await event_bus.send(command)
+
+        # Unsplash API compliance: trigger download event (fire-and-forget)
+        if request.unsplash_download_location:
+            import asyncio
+            from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
+            asyncio.create_task(
+                UnsplashImageAdapter.trigger_download(request.unsplash_download_location)
+            )
 
         return SaveMealSuggestionResponse(
             meal_id=meal_id,
