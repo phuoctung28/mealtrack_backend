@@ -18,6 +18,7 @@ class FoodReferenceModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     barcode = Column(String(20), unique=True, nullable=True, index=True)
     name = Column(String(255), nullable=False)
+    name_normalized = Column(String(255), nullable=True, index=True)
     name_vi = Column(String(255), nullable=True)
     brand = Column(String(255), nullable=True)
     category = Column(String(100), nullable=True, index=True)

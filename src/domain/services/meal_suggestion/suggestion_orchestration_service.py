@@ -12,6 +12,7 @@ from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.ports.meal_suggestion_repository_port import MealSuggestionRepositoryPort
 from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+from src.domain.services.meal_suggestion.nutrition_lookup_service import NutritionLookupService
 from src.domain.services.meal_suggestion.parallel_recipe_generator import ParallelRecipeGenerator
 from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
     get_adjusted_daily_target,
@@ -34,6 +35,7 @@ class SuggestionOrchestrationService:
         self,
         generation_service: MealGenerationServicePort,
         suggestion_repo: MealSuggestionRepositoryPort,
+        nutrition_lookup: NutritionLookupService,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
         profile_provider: Optional[Callable[[str], Any]] = None,
@@ -50,6 +52,7 @@ class SuggestionOrchestrationService:
             generation_service=generation_service,
             translation_service=TranslationService(generation_service),
             macro_validator=MacroValidationService(),
+            nutrition_lookup=nutrition_lookup,
         )
 
     async def generate_suggestions(

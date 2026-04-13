@@ -18,6 +18,7 @@ from src.domain.model.meal_suggestion import (
 from src.domain.services.emoji_validator import validate_emoji
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+from src.domain.services.meal_suggestion.nutrition_lookup_service import NutritionLookupService
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ PARALLEL_SINGLE_MEAL_TIMEOUT = 35
 async def attempt_recipe_generation(
     generation_service: MealGenerationServicePort,
     macro_validator: MacroValidationService,
+    nutrition_lookup: NutritionLookupService,
     prompt: str,
     meal_name: str,
     index: int,
@@ -39,9 +41,13 @@ async def attempt_recipe_generation(
     """
     Single AI call to generate one recipe. Returns MealSuggestion on success, None on failure.
 
+    Macros are calculated deterministically from ingredients via NutritionLookupService.
+    AI-reported macro values are ignored.
+
     Args:
         generation_service: Port for calling the AI generation API
-        macro_validator: Validates and corrects raw macro values
+        macro_validator: Validates and corrects raw macro values (used for discovery path)
+        nutrition_lookup: Deterministic macro calculator (T1→T2→T3 tier lookup)
         prompt: Recipe-specific prompt text
         meal_name: Name of the meal being generated
         index: Slot index (0-3) for logging
@@ -76,13 +82,38 @@ async def attempt_recipe_generation(
             )
             return None
 
-        raw_macros = {
-            "calories": raw.get("calories", session.target_calories),
-            "protein": raw.get("protein", 20.0),
-            "carbs": raw.get("carbs", 30.0),
-            "fat": raw.get("fat", 10.0),
-        }
-        validated = macro_validator.validate_and_correct(raw_macros)
+        # Calculate macros deterministically from ingredient list — ignore AI-reported values
+        meal_macros = await nutrition_lookup.calculate_meal_macros(ingredients)
+
+        # Scale ingredient quantities to match the session's calorie target
+        scaled_macros = nutrition_lookup.scale_to_target(meal_macros, session.target_calories)
+        if scaled_macros is None:
+            logger.info(
+                f"[PHASE-2-SCALE-REJECT]{marker} index={index} | "
+                f"actual={meal_macros.calories:.0f} kcal | "
+                f"target={session.target_calories} kcal | meal_name={meal_name}"
+            )
+            return None
+
+        # Warn (don't reject) if protein ratio is >20% off the session's protein target
+        if session.protein_target and session.protein_target > 0:
+            protein_diff = abs(scaled_macros.protein - session.protein_target) / session.protein_target
+            if protein_diff > 0.20:
+                logger.warning(
+                    f"[PHASE-2-PROTEIN-DRIFT]{marker} index={index} | "
+                    f"scaled_protein={scaled_macros.protein:.1f}g | "
+                    f"target={session.protein_target:.1f}g | drift={protein_diff:.0%}"
+                )
+
+        validated_macros = macro_validator.validate_deterministic(scaled_macros)
+
+        # Update ingredient amounts in the raw response to reflect scaled quantities.
+        # Also normalise unit to "g" — amount is now in grams regardless of original unit.
+        scaled_ing_list = scaled_macros.ingredients
+        for i, raw_ing in enumerate(ingredients):
+            if i < len(scaled_ing_list):
+                raw_ing["amount"] = round(scaled_ing_list[i].quantity_g)
+                raw_ing["unit"] = "g"
 
         _log_ingredient_coverage(session, ingredients, meal_name, index, marker)
 
@@ -99,10 +130,10 @@ async def attempt_recipe_generation(
             description="",
             meal_type=MealType(session.meal_type),
             macros=MacroEstimate(
-                calories=validated["calories"],
-                protein=validated["protein"],
-                carbs=validated["carbs"],
-                fat=validated["fat"],
+                calories=validated_macros.calories,
+                protein=validated_macros.protein,
+                carbs=validated_macros.carbs,
+                fat=validated_macros.fat,
             ),
             ingredients=[Ingredient(**ing) for ing in ingredients],
             recipe_steps=[RecipeStep(**step) for step in recipe_steps],

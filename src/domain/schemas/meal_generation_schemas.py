@@ -2,7 +2,7 @@
 Pydantic schemas for structured meal generation output.
 Used with LangChain's with_structured_output() for guaranteed valid responses.
 """
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -66,7 +66,11 @@ class RecipeStepItem(BaseModel):
 
 
 class RecipeDetailsResponse(BaseModel):
-    """Phase 2: Complete recipe details for a meal (description removed for performance)."""
+    """Phase 2: Complete recipe details for a meal (description removed for performance).
+
+    Macros are optional — AI no longer required to calculate them.
+    Deterministic macros are calculated from ingredients via NutritionLookupService.
+    """
 
     ingredients: List[IngredientItem] = Field(
         description="List of 3-8 ingredients with exact amounts",
@@ -83,23 +87,8 @@ class RecipeDetailsResponse(BaseModel):
         ge=5,
         le=120
     )
-    calories: int = Field(
-        description="Total calories (kcal) calculated from all ingredients",
-        ge=50,
-        le=3000
-    )
-    protein: float = Field(
-        description="Total protein (grams) calculated from all ingredients",
-        ge=0,
-        le=300
-    )
-    carbs: float = Field(
-        description="Total carbohydrates (grams) calculated from all ingredients",
-        ge=0,
-        le=500
-    )
-    fat: float = Field(
-        description="Total fat (grams) calculated from all ingredients",
-        ge=0,
-        le=200
-    )
+    # Macros optional — ignored if present; computed deterministically from ingredients
+    calories: Optional[int] = Field(default=None, description="AI-reported calories (ignored)")
+    protein: Optional[float] = Field(default=None, description="AI-reported protein (ignored)")
+    carbs: Optional[float] = Field(default=None, description="AI-reported carbs (ignored)")
+    fat: Optional[float] = Field(default=None, description="AI-reported fat (ignored)")
