@@ -3,11 +3,6 @@ Event bus dependency for FastAPI with proper type registrations.
 """
 from typing import Optional
 
-from src.app.commands.chat import (
-    CreateThreadCommand,
-    SendMessageCommand,
-    DeleteThreadCommand,
-)
 from src.app.commands.daily_meal import (
     GenerateDailyMealSuggestionsCommand,
     GenerateSingleMealCommand,
@@ -90,12 +85,6 @@ from src.app.handlers.command_handlers.mark_cheat_day_command_handler import Mar
 from src.app.handlers.command_handlers.unmark_cheat_day_command_handler import UnmarkCheatDayCommandHandler
 from src.app.handlers.query_handlers.get_cheat_days_query_handler import GetCheatDaysQueryHandler
 
-# Chat handlers
-from src.app.handlers.command_handlers.chat import (
-    CreateThreadCommandHandler,
-    SendMessageCommandHandler,
-    DeleteThreadCommandHandler,
-)
 # Import event handlers
 from src.app.handlers.event_handlers.meal_analysis_event_handler import (
     MealAnalysisEventHandler,
@@ -125,17 +114,7 @@ from src.app.handlers.query_handlers import (
     GetStreakQueryHandler,
     GetDailyBreakdownQueryHandler,
 )
-from src.app.handlers.query_handlers.chat import (
-    GetThreadsQueryHandler,
-    GetThreadQueryHandler,
-    GetMessagesQueryHandler,
-)
 from src.app.queries.activity import GetDailyActivitiesQuery
-from src.app.queries.chat import (
-    GetThreadsQuery,
-    GetThreadQuery,
-    GetMessagesQuery,
-)
 from src.app.queries.daily_meal import (
     GetMealSuggestionsForProfileQuery,
     GetSingleMealForProfileQuery,
@@ -276,7 +255,6 @@ def get_configured_event_bus() -> EventBus:
         get_food_mapping_service,
         get_fat_secret_service_instance,
         get_cache_service,
-        get_ai_chat_service,
         get_suggestion_orchestration_service,
         get_meal_translation_service,
     )
@@ -289,7 +267,6 @@ def get_configured_event_bus() -> EventBus:
     food_mapping_service = get_food_mapping_service()
     fat_secret_service = get_fat_secret_service_instance()
     cache_service = get_cache_service()
-    ai_chat_service = get_ai_chat_service()
     suggestion_service = get_suggestion_orchestration_service()
     
     event_bus = PyMediatorEventBus()
@@ -500,33 +477,6 @@ def get_configured_event_bus() -> EventBus:
             vision_service=vision_service,
             translation_service=translation_service,
         )
-    )
-
-    # Register chat handlers
-    # Chat handlers use ScopedSession internally
-    event_bus.register_handler(
-        CreateThreadCommand,
-        CreateThreadCommandHandler()
-    )
-    event_bus.register_handler(
-        SendMessageCommand,
-        SendMessageCommandHandler(ai_chat_service)
-    )
-    event_bus.register_handler(
-        DeleteThreadCommand,
-        DeleteThreadCommandHandler()
-    )
-    event_bus.register_handler(
-        GetThreadsQuery,
-        GetThreadsQueryHandler()
-    )
-    event_bus.register_handler(
-        GetThreadQuery,
-        GetThreadQueryHandler()
-    )
-    event_bus.register_handler(
-        GetMessagesQuery,
-        GetMessagesQueryHandler()
     )
 
     # Register cheat day handlers

@@ -1,7 +1,6 @@
 """
 Unit tests for meal edit command handlers.
 """
-import os
 
 import pytest
 
@@ -15,23 +14,7 @@ from src.app.commands.meal import (
 from src.app.events.meal import MealEditedEvent
 
 
-def _pinecone_indexes_available():
-    """Check if Pinecone indexes are available."""
-    if not os.getenv("PINECONE_API_KEY"):
-        return False
-    try:
-        from src.infra.services.pinecone_service import PineconeNutritionService
-        service = PineconeNutritionService()
-        return service.ingredients_index is not None or service.usda_index is not None
-    except (ValueError, Exception):
-        return False
-
-
 @pytest.mark.unit
-@pytest.mark.skipif(
-    not _pinecone_indexes_available(),
-    reason="Pinecone indexes not available - skipping meal edit tests"
-)
 class TestEditMealCommandHandler:
     """Test EditMealCommand handler."""
     
@@ -292,10 +275,6 @@ class TestEditMealCommandHandler:
 
 
 @pytest.mark.unit
-@pytest.mark.skipif(
-    not _pinecone_indexes_available(),
-    reason="Pinecone indexes not available - skipping add custom ingredient tests"
-)
 class TestAddCustomIngredientCommandHandler:
     """Test AddCustomIngredientCommand handler."""
     

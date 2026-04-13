@@ -1,4 +1,4 @@
-"""MySQL repository for persisted saved suggestions."""
+"""Repository for persisted saved suggestions."""
 import logging
 import uuid
 from typing import List, Optional

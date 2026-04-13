@@ -1,9 +1,6 @@
 """Domain model package."""
 # flake8: noqa
 from .base import BaseDomainModel
-from .chat import (
-    Message,
-)
 from .meal import (
     Meal,
     MealStatus,

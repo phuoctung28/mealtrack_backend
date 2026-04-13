@@ -154,8 +154,8 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
         """Get weekly budget context for the daily macros response."""
         try:
             with UnitOfWork() as uow:
-                # Get user's week start
-                week_start = get_user_monday(target_date, user_id, uow)
+                # target_date is already a local date — no timezone re-lookup needed
+                week_start = get_user_monday(target_date, user_id)
 
                 # Find or create weekly budget
                 weekly_budget = uow.weekly_budgets.find_by_user_and_week(user_id, week_start)

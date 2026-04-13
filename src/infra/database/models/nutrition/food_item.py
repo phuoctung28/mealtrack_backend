@@ -81,7 +81,7 @@ class FoodItem(Base, PrimaryEntityMixin):
         )
 
         # Set the ID if provided (for updates)
-        # Convert UUID objects to strings to ensure compatibility with MySQL
+        # Convert UUID objects to strings for DB storage
         if hasattr(domain_model, 'id') and domain_model.id:
             item.id = str(domain_model.id)
 

@@ -6,7 +6,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
-from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from src.infra.database.config import SessionLocal
@@ -109,11 +109,12 @@ class FoodReferenceRepository:
                 "density": data.get("density", 1.0),
                 "extra_nutrients": data.get("extra_nutrients"),
             }
-            stmt = mysql_insert(FoodReferenceModel).values(**values)
-            update_fields = {
-                k: v for k, v in values.items() if k != "barcode"
-            }
-            stmt = stmt.on_duplicate_key_update(**update_fields)
+            stmt = pg_insert(FoodReferenceModel).values(**values)
+            update_fields = {k: v for k, v in values.items() if k != "barcode"}
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[FoodReferenceModel.barcode],
+                set_=update_fields,
+            )
             session.execute(stmt)
             session.commit()
         except Exception as e:

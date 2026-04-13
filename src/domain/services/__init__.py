@@ -1,7 +1,6 @@
 """Domain services with backward compatibility aliases."""
 
 # Existing services
-from .conversation_service import ConversationService
 from .daily_meal_suggestion_service import DailyMealSuggestionService
 # New consolidated services
 from .meal import MealCoreService, MealFallbackService
@@ -17,7 +16,6 @@ from .tdee_service import TdeeCalculationService
 __all__ = [
     # Existing services
     "TdeeCalculationService",
-    "ConversationService",
     "DailyMealSuggestionService",
     "NutritionCalculationService",
     "ScaledNutritionResult",

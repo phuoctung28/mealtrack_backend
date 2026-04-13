@@ -175,24 +175,6 @@ class TDEEConstants:
     MAX_BODY_FAT_PCT = 60
 
 
-class ConversationConstants:
-    """Constants for conversation flow."""
-
-    # Message limits
-    MAX_MESSAGE_LENGTH = 1000
-    MAX_CONVERSATION_MESSAGES = 100
-
-    # Timeout settings
-    CONVERSATION_TIMEOUT_MINUTES = 30
-
-    # Retry limits
-    MAX_GENERATION_RETRIES = 3
-
-    # Common responses
-    ERROR_RESPONSE = "I'm sorry, something went wrong. Let's try again."
-    TIMEOUT_RESPONSE = "This conversation has timed out. Please start a new one."
-
-
 class WeeklyBudgetConstants:
     """Constants for weekly macro budget feature."""
 

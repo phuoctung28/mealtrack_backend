@@ -1,0 +1,12 @@
+-- pgloader configuration for MySQL → PostgreSQL migration
+-- Usage: MYSQL_URL=... DATABASE_URL=... pgloader scripts/migration.load
+-- Requires envsubst: envsubst < scripts/migration.load | pgloader -
+
+LOAD DATABASE
+  FROM ${MYSQL_URL}
+  INTO ${DATABASE_URL}
+
+WITH data only, reset sequences
+
+SET work_mem to '128MB'
+;

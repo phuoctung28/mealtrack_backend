@@ -304,14 +304,8 @@ class NutritionCalculationService:
     fallback mechanisms for robustness.
     """
 
-    def __init__(self, pinecone_service=None):
-        """
-        Initialize with optional services.
-
-        Args:
-            pinecone_service: Pinecone vector search service for ingredient lookup
-        """
-        self.pinecone_service = pinecone_service
+    def __init__(self):
+        pass
 
     def get_nutrition_for_ingredient(
         self,
@@ -321,58 +315,10 @@ class NutritionCalculationService:
         fdc_id: Optional[int] = None
     ) -> Optional[ScaledNutritionResult]:
         """
-        Get nutrition data for an ingredient from any available source.
-
-        Priority:
-        1. Pinecone vector search (semantic matching)
-        2. None if no source available
-
-        Args:
-            name: Ingredient name
-            quantity: Amount of ingredient
-            unit: Unit of measurement
-            fdc_id: Optional food ID (kept for backward compat)
-
-        Returns:
-            ScaledNutritionResult or None if not found
+        Get nutrition data for an ingredient.
+        Currently returns None — vector search removed, to be re-added later.
         """
-        # Priority 1: Pinecone semantic search
-        if self.pinecone_service:
-            try:
-                result = self._get_from_pinecone(name, quantity, unit)
-                if result:
-                    logger.info(f"Got nutrition for '{name}' from Pinecone")
-                    return result
-            except Exception as e:
-                logger.warning(f"Pinecone lookup failed for '{name}': {e}")
-
-        logger.warning(f"Could not find nutrition data for '{name}'")
-        return None
-
-    def _get_from_pinecone(
-        self,
-        name: str,
-        quantity: float,
-        unit: str
-    ) -> Optional[ScaledNutritionResult]:
-        """Get nutrition from Pinecone service."""
-        if not self.pinecone_service:
-            return None
-
-        scaled_nutrition = self.pinecone_service.get_scaled_nutrition(
-            ingredient_name=name,
-            quantity=quantity,
-            unit=unit
-        )
-
-        if scaled_nutrition:
-            return ScaledNutritionResult(
-                calories=scaled_nutrition.calories,
-                protein=scaled_nutrition.protein,
-                carbs=scaled_nutrition.carbs,
-                fat=scaled_nutrition.fat
-            )
-
+        logger.warning(f"Could not find nutrition data for '{name}' — no vector search configured")
         return None
 
 

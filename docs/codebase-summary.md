@@ -253,7 +253,7 @@ src/
     │   └── ...                          # Subscription, MealPlan, Chat repositories
     ├── services/                        # External services
     │   ├── firebase_service.py         # FCM push notifications
-    │   ├── pinecone_service.py         # Vector search (1024-dim)
+    │   ├── (deprecated) pinecone_service.py
     │   └── ai/                          # AI integrations
     │       └── gemini_chat_service.py  # Chat with streaming
     ├── adapters/                        # Service implementations
@@ -335,7 +335,7 @@ src/
 | `src/api/main.py` | FastAPI app initialization |
 | `src/infra/database/config.py` | Database connection setup |
 | `src/infra/services/ai/gemini_service.py` | Meal image analysis |
-| `src/infra/services/pinecone_service.py` | Vector search (1024-dim vectors) |
+| (deprecated) `src/infra/services/pinecone_service.py` | Removed (Pinecone deprecated) |
 | `src/domain/services/meal_service.py` | Meal business logic |
 | `src/infra/event_bus/event_bus.py` | CQRS event dispatcher |
 
