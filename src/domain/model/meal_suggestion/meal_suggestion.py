@@ -91,5 +91,6 @@ class MealSuggestion:
     origin_country: Optional[str] = None
     cuisine_type: Optional[str] = None
     emoji: Optional[str] = None
+    english_name: Optional[str] = None  # Original English name for image search
     status: SuggestionStatus = SuggestionStatus.PENDING
     generated_at: datetime = field(default_factory=utc_now)

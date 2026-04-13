@@ -164,6 +164,42 @@ RULES:
 """
 
     @classmethod
+    def build_discovery_prompt(
+        cls,
+        meal_type: str,
+        target_calories: int,
+        count: int = 6,
+        ingredients: Optional[List[str]] = None,
+        cuisine_region: Optional[str] = None,
+        exclude_meal_names: Optional[List[str]] = None,
+        protein_target: Optional[float] = None,
+        carbs_target: Optional[float] = None,
+        fat_target: Optional[float] = None,
+    ) -> str:
+        """Build prompt for lightweight discovery: names + macros in a single call.
+        ~200 token response for 6 meals."""
+        ing_str = ", ".join((ingredients or [])[:4]) or "common ingredients"
+
+        cuisine_str = f"\nCuisine: {cuisine_region}" if cuisine_region else ""
+
+        exclude_str = ""
+        if exclude_meal_names:
+            exclude_str = f"\nDO NOT suggest: {', '.join(exclude_meal_names[:10])}"
+
+        macro_str = ""
+        if protein_target and carbs_target and fat_target:
+            macro_str = f"\nMacro targets per meal: ~{int(protein_target)}g P, ~{int(carbs_target)}g C, ~{int(fat_target)}g F"
+
+        return f"""Generate {count} different {meal_type} meals, each ~{target_calories} cal.
+MUST USE these ingredients (translate to English if not already): {ing_str}{cuisine_str}{macro_str}
+
+Rules:
+- Names: ENGLISH ONLY (no Vietnamese/foreign words like "Gà", "Cơm", "Sốt" — use "Chicken", "Rice", "Sauce")
+- Names: natural, concise (max 5 words), VERY DIFFERENT styles
+- Macros: realistic, calories ≈ protein*4 + carbs*4 + fat*9 (±10%)
+- Fat must be ≥3g (real meals always have some fat){exclude_str}"""
+
+    @classmethod
     def build_meal_names_prompt(
         cls,
         meal_type: str,
@@ -176,6 +212,7 @@ RULES:
         servings: int = 1,
         cooking_equipment: Optional[List[str]] = None,
         cuisine_region: Optional[str] = None,
+        names_count: int = 4,
     ) -> str:
         """
         Build prompt for Phase 1 meal name generation.
@@ -211,13 +248,13 @@ RULES:
 
         # Add cuisine region constraint
         if cuisine_region:
-            cuisine_str = f"\nCuisine: {cuisine_region} (4 different dishes from this region)"
+            cuisine_str = f"\nCuisine: {cuisine_region} ({names_count} different dishes from this region)"
         else:
-            cuisine_str = "\nCuisines: 4 distinct (Asian, Mediterranean, Latin, American)"
+            cuisine_str = f"\nCuisines: {names_count} distinct (Asian, Mediterranean, Latin, American)"
 
         time_str = f", ≤{cooking_time_minutes}min" if cooking_time_minutes else ""
 
-        return f"""Generate 4 different {meal_type} names, ~{target_calories}cal{servings_str}{time_str}.
+        return f"""Generate {names_count} different {meal_type} names, ~{target_calories}cal{servings_str}{time_str}.
 MUST USE these ingredients as main components: {ing_str}{constraints_str}{equipment_str}{cuisine_str}
 Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}."""
 
@@ -292,8 +329,8 @@ Target:{servings_str} — derived calories MUST be between {cal_min} and {cal_ma
 
 CRITICAL: Size all quantities for {servings} serving only — no batch scaling.
 
-PORTION for {target_calories} cal:
-- {'Small: 100-120g protein, 60-80g carbs, minimal fat' if target_calories < 600 else 'Standard: 130-160g protein, 90-120g carbs, 10-15g fat' if target_calories < 1000 else 'Large: 180-220g protein, 130-160g carbs, 15-25g fat'}
+PORTION for {target_calories} cal (use macros formula: P*4 + C*4 + F*9 = total cal):
+- {'Light meal: ~25-30g protein, ~30-40g carbs, ~8-12g fat' if target_calories < 400 else 'Small meal: ~30-40g protein, ~40-55g carbs, ~10-15g fat' if target_calories < 600 else 'Standard meal: ~35-50g protein, ~55-80g carbs, ~15-22g fat' if target_calories < 1000 else 'Large meal: ~50-70g protein, ~80-120g carbs, ~22-35g fat'}
 
 REQUIREMENTS:
 - Match name "{meal_name}" exactly

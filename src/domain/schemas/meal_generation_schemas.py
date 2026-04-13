@@ -29,6 +29,26 @@ class MealNamesResponse(BaseModel):
                 self.meal_names[i] = name[:57] + "..."  # Truncate if too long
 
 
+class DiscoveryMealItem(BaseModel):
+    """Single meal in lightweight discovery response — name + macros only."""
+
+    name: str = Field(description="Concise meal name in English (max 60 chars)", max_length=60)
+    calories: float = Field(description="Total calories (kcal)", ge=50, le=3000)
+    protein: float = Field(description="Protein grams", ge=0, le=300)
+    carbs: float = Field(description="Carbohydrate grams", ge=0, le=500)
+    fat: float = Field(description="Fat grams", ge=3, le=200)
+
+
+class DiscoveryMealsResponse(BaseModel):
+    """Lightweight discovery: names + macros for 6-10 meals in a single AI call."""
+
+    meals: List[DiscoveryMealItem] = Field(
+        description="List of meal suggestions with names and macros",
+        min_length=1,
+        max_length=12,
+    )
+
+
 class IngredientItem(BaseModel):
     """Single ingredient with amount and unit."""
     

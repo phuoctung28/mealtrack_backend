@@ -145,6 +145,14 @@ class TranslationService:
         )
         return translated_suggestions
 
+    async def translate_names(
+        self, names: List[str], target_language: str
+    ) -> List[str]:
+        """Translate a list of short meal names. Public wrapper for lightweight discovery."""
+        if target_language == "en" or not names:
+            return names
+        return await self._batch_translate(names, target_language)
+
     async def _batch_translate(
         self, strings: List[str], target_language: str
     ) -> List[str]:
