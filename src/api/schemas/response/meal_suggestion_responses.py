@@ -48,7 +48,11 @@ class MealSuggestionResponse(BaseModel):
     """
 
     id: str = Field(..., description="Unique identifier for this suggestion")
-    meal_name: str = Field(..., description="Name of the meal")
+    meal_name: str = Field(..., description="Name of the meal (possibly translated)")
+    english_name: Optional[str] = Field(
+        None,
+        description="Original English name — stable reconciliation key across locales",
+    )
     emoji: Optional[str] = Field(None, description="AI-assigned food emoji")
     description: str = Field(..., description="Brief description of the meal")
     macros: MacroEstimateResponse = Field(
