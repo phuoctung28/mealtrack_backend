@@ -35,6 +35,7 @@ class ScheduledNotificationService:
         self._tdee_service = TdeeCalculationService()
         self._running = False
         self._tasks: List[asyncio.Task] = []
+        self._cleanup_counter = 0  # Clean sent logs every ~60 loop ticks (~1h)
     
     async def start(self):
         """Start the scheduled notification service."""
@@ -78,6 +79,12 @@ class ScheduledNotificationService:
             try:
                 current_time = datetime.now(timezone.utc)
                 await self._check_and_send_notifications(current_time)
+
+                # Periodically clean old dedup logs (~every hour)
+                self._cleanup_counter += 1
+                if self._cleanup_counter >= 60:
+                    self._cleanup_counter = 0
+                    self.notification_service.cleanup_old_sent_logs()
 
                 # Wait for next check
                 await asyncio.sleep(self.SCHEDULING_LOOP_INTERVAL_SECONDS)

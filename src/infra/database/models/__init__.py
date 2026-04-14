@@ -24,7 +24,7 @@ from .meal.meal_image import MealImage
 from .meal.meal_translation_model import MealTranslation
 from .meal.food_item_translation_model import FoodItemTranslation
 # Notification models
-from .notification import NotificationPreferences, UserFcmToken
+from .notification import NotificationPreferences, NotificationSentLog, UserFcmToken
 from .nutrition.food_item import FoodItem
 # Nutrition models
 from .nutrition.nutrition import Nutrition
@@ -86,6 +86,7 @@ __all__ = [
     
     # Notification models
     "NotificationPreferences",
+    "NotificationSentLog",
     "UserFcmToken",
 
     # Feature flags
