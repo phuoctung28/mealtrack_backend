@@ -199,3 +199,219 @@ class TestGetWeeklyBudgetQueryHandlerCache:
             await handler._create_weekly_budget(mock_uow, "u1", date(2024, 1, 1), date(2024, 1, 1))
 
         MockTdeeClass.assert_called_once_with(cache_service=cache_service)
+
+
+class TestGetStreakQueryHandlerCache:
+    """Cache behaviour for GetStreakQueryHandler."""
+
+    @pytest.mark.asyncio
+    async def test_returns_cached_value_on_hit(self):
+        from src.app.handlers.query_handlers.get_streak_query_handler import GetStreakQueryHandler
+        from src.app.queries.meal.get_streak_query import GetStreakQuery
+
+        cached = {"current_streak": 5, "best_streak": 10}
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value=cached)
+        cache_service.set_json = AsyncMock()
+
+        handler = GetStreakQueryHandler(cache_service=cache_service)
+        query = GetStreakQuery(user_id="u1")
+        result = await handler.handle(query)
+
+        assert result == cached
+        cache_service.set_json.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_stores_result_in_cache_on_miss(self):
+        from src.app.handlers.query_handlers.get_streak_query_handler import GetStreakQueryHandler
+        from src.app.queries.meal.get_streak_query import GetStreakQuery
+
+        db_result = {"current_streak": 3, "best_streak": 7}
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value=None)
+        cache_service.set_json = AsyncMock()
+
+        handler = GetStreakQueryHandler(cache_service=cache_service)
+        query = GetStreakQuery(user_id="u1")
+
+        with patch.object(handler, "_compute", AsyncMock(return_value=db_result)):
+            result = await handler.handle(query)
+
+        assert result == db_result
+        cache_service.set_json.assert_awaited_once()
+        expected_key, _ = CacheKeys.user_streak("u1")
+        assert cache_service.set_json.call_args[0][0] == expected_key
+
+
+class TestGetSavedSuggestionsQueryHandlerCache:
+    """Cache behaviour for GetSavedSuggestionsQueryHandler."""
+
+    @pytest.mark.asyncio
+    async def test_returns_cached_value_on_hit(self):
+        from src.app.handlers.query_handlers.get_saved_suggestions_query_handler import GetSavedSuggestionsQueryHandler
+        from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
+
+        cached = {"items": [], "count": 0}
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value=cached)
+        cache_service.set_json = AsyncMock()
+
+        handler = GetSavedSuggestionsQueryHandler(cache_service=cache_service)
+        query = GetSavedSuggestionsQuery(user_id="u1")
+        result = await handler.handle(query)
+
+        assert result == cached
+        cache_service.set_json.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_stores_result_in_cache_on_miss(self):
+        from src.app.handlers.query_handlers.get_saved_suggestions_query_handler import GetSavedSuggestionsQueryHandler
+        from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
+
+        db_result = {"items": [{"id": 1}], "count": 1}
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value=None)
+        cache_service.set_json = AsyncMock()
+
+        handler = GetSavedSuggestionsQueryHandler(cache_service=cache_service)
+        query = GetSavedSuggestionsQuery(user_id="u1")
+
+        with patch.object(handler, "_compute", AsyncMock(return_value=db_result)):
+            result = await handler.handle(query)
+
+        assert result == db_result
+        cache_service.set_json.assert_awaited_once()
+        expected_key, _ = CacheKeys.saved_suggestions("u1")
+        assert cache_service.set_json.call_args[0][0] == expected_key
+
+
+class TestGetNotificationPreferencesQueryHandlerCache:
+    """Cache behaviour for GetNotificationPreferencesQueryHandler."""
+
+    @pytest.mark.asyncio
+    async def test_returns_cached_value_on_hit(self):
+        from src.app.handlers.query_handlers.get_notification_preferences_query_handler import GetNotificationPreferencesQueryHandler
+        from src.app.queries.notification import GetNotificationPreferencesQuery
+
+        cached = {"push_enabled": True}
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value=cached)
+        cache_service.set_json = AsyncMock()
+
+        handler = GetNotificationPreferencesQueryHandler(cache_service=cache_service)
+        query = GetNotificationPreferencesQuery(user_id="u1")
+        result = await handler.handle(query)
+
+        assert result == cached
+        cache_service.set_json.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_stores_result_in_cache_on_miss(self):
+        from src.app.handlers.query_handlers.get_notification_preferences_query_handler import GetNotificationPreferencesQueryHandler
+        from src.app.queries.notification import GetNotificationPreferencesQuery
+
+        db_result = {"push_enabled": False}
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value=None)
+        cache_service.set_json = AsyncMock()
+
+        handler = GetNotificationPreferencesQueryHandler(cache_service=cache_service)
+        query = GetNotificationPreferencesQuery(user_id="u1")
+
+        with patch.object(handler, "_compute", AsyncMock(return_value=db_result)):
+            result = await handler.handle(query)
+
+        assert result == db_result
+        cache_service.set_json.assert_awaited_once()
+        expected_key, _ = CacheKeys.notification_prefs("u1")
+        assert cache_service.set_json.call_args[0][0] == expected_key
+
+
+class TestGetUserMetricsQueryHandlerCache:
+    """Cache behaviour for GetUserMetricsQueryHandler."""
+
+    @pytest.mark.asyncio
+    async def test_returns_cached_value_on_hit(self):
+        from src.app.handlers.query_handlers.get_user_metrics_query_handler import GetUserMetricsQueryHandler
+        from src.app.queries.user import GetUserMetricsQuery
+
+        cached = {"user_id": "u1", "weight_kg": 75.0}
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value=cached)
+        cache_service.set_json = AsyncMock()
+
+        handler = GetUserMetricsQueryHandler(cache_service=cache_service)
+        query = GetUserMetricsQuery(user_id="u1")
+        result = await handler.handle(query)
+
+        assert result == cached
+        cache_service.set_json.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_stores_result_in_cache_on_miss(self):
+        from src.app.handlers.query_handlers.get_user_metrics_query_handler import GetUserMetricsQueryHandler
+        from src.app.queries.user import GetUserMetricsQuery
+
+        db_result = {"user_id": "u1", "weight_kg": 80.0}
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value=None)
+        cache_service.set_json = AsyncMock()
+
+        handler = GetUserMetricsQueryHandler(cache_service=cache_service)
+        query = GetUserMetricsQuery(user_id="u1")
+
+        with patch.object(handler, "_compute", AsyncMock(return_value=db_result)):
+            result = await handler.handle(query)
+
+        assert result == db_result
+        cache_service.set_json.assert_awaited_once()
+        expected_key, _ = CacheKeys.user_profile("u1")
+        assert cache_service.set_json.call_args[0][0] == expected_key
+
+
+class TestGetDailyActivitiesQueryHandlerCache:
+    """Cache behaviour for GetDailyActivitiesQueryHandler."""
+
+    @pytest.mark.asyncio
+    async def test_returns_cached_value_on_hit(self):
+        from datetime import datetime, date
+        from src.app.handlers.query_handlers.get_daily_activities_query_handler import GetDailyActivitiesQueryHandler
+        from src.app.queries.activity import GetDailyActivitiesQuery
+
+        cached = [{"id": "m1", "type": "meal"}]
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value=cached)
+        cache_service.set_json = AsyncMock()
+
+        handler = GetDailyActivitiesQueryHandler(cache_service=cache_service)
+        query = GetDailyActivitiesQuery(
+            user_id="u1",
+            target_date=datetime(2024, 1, 15, 12, 0),
+        )
+        result = await handler.handle(query)
+
+        assert result == cached
+        cache_service.set_json.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_stores_result_in_cache_on_miss(self):
+        from datetime import datetime, date
+        from src.app.handlers.query_handlers.get_daily_activities_query_handler import GetDailyActivitiesQueryHandler
+        from src.app.queries.activity import GetDailyActivitiesQuery
+
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value=None)
+        cache_service.set_json = AsyncMock()
+
+        handler = GetDailyActivitiesQueryHandler(cache_service=cache_service)
+        target_dt = datetime(2024, 1, 15, 12, 0)
+        query = GetDailyActivitiesQuery(user_id="u1", target_date=target_dt)
+
+        expected_key, _ = CacheKeys.daily_activities("u1", target_dt.date())
+
+        with patch.object(handler, "_get_meal_activities", return_value=[]), \
+             patch.object(handler, "_get_workout_activities", return_value=[]):
+            await handler.handle(query)
+
+        cache_service.set_json.assert_awaited_once()
+        assert cache_service.set_json.call_args[0][0] == expected_key

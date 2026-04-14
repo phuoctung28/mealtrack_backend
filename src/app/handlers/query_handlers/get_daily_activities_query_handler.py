@@ -4,12 +4,14 @@ Auto-extracted for better maintainability.
 """
 import logging
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.activity import GetDailyActivitiesQuery
+from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.utils.timezone_utils import format_iso_utc, get_zone_info, resolve_user_timezone
+from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -19,11 +21,18 @@ logger = logging.getLogger(__name__)
 class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[Dict[str, Any]]]):
     """Handler for getting daily activities (meals and workouts)."""
 
-    def __init__(self):
-        pass
+    def __init__(self, cache_service: Optional[CacheService] = None):
+        self.cache_service = cache_service
 
     async def handle(self, query: GetDailyActivitiesQuery) -> List[Dict[str, Any]]:
         """Get all activities for the specified date."""
+        target_date = query.target_date.date() if hasattr(query.target_date, "date") else query.target_date
+        cache_key, ttl = CacheKeys.daily_activities(query.user_id, target_date)
+        if self.cache_service:
+            cached = await self.cache_service.get_json(cache_key)
+            if cached is not None:
+                return cached
+
         activities = []
 
         # Get meal activities using fresh UnitOfWork
@@ -43,6 +52,8 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         activities.sort(key=lambda x: x['timestamp'], reverse=True)
 
         logger.info(f"Retrieved {len(activities)} total activities")
+        if self.cache_service:
+            await self.cache_service.set_json(cache_key, activities, ttl)
         return activities
 
     def _get_meal_activities(
