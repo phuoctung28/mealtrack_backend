@@ -24,7 +24,7 @@ class GetUserMetricsQueryHandler(EventHandler[GetUserMetricsQuery, Dict[str, Any
 
     async def handle(self, query: GetUserMetricsQuery) -> Dict[str, Any]:
         """Get user's current metrics."""
-        cache_key, ttl = CacheKeys.user_profile(query.user_id)
+        cache_key, ttl = CacheKeys.user_metrics(query.user_id)
         if self.cache_service:
             cached = await self.cache_service.get_json(cache_key)
             if cached is not None:

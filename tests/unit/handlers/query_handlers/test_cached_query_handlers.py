@@ -365,7 +365,7 @@ class TestGetUserMetricsQueryHandlerCache:
 
         assert result == db_result
         cache_service.set_json.assert_awaited_once()
-        expected_key, _ = CacheKeys.user_profile("u1")
+        expected_key, _ = CacheKeys.user_metrics("u1")
         assert cache_service.set_json.call_args[0][0] == expected_key
 
 

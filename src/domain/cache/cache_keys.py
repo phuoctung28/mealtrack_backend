@@ -78,6 +78,11 @@ class CacheKeys:
         return (f"user:{user_id}:notification_prefs", CacheKeys.TTL_1_DAY)
 
     @staticmethod
+    def user_metrics(user_id: str) -> tuple[str, int]:
+        """Cache key for user metrics (age, weight, height, goals). 24h TTL."""
+        return (f"user:{user_id}:metrics", CacheKeys.TTL_1_DAY)
+
+    @staticmethod
     def pattern_for_user(user_id: str) -> str:
         return f"user:{user_id}:*"
 
