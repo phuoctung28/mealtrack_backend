@@ -191,3 +191,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
         week_start = meal_date - timedelta(days=meal_date.weekday())
         weekly_key, _ = CacheKeys.weekly_budget(meal.user_id, week_start)
         await self.cache_service.invalidate(weekly_key)
+
+        # Invalidate streak and daily activities so feed reflects the edit
+        streak_key, _ = CacheKeys.user_streak(meal.user_id)
+        await self.cache_service.invalidate(streak_key)
+        activities_key, _ = CacheKeys.daily_activities(meal.user_id, meal_date)
+        await self.cache_service.invalidate(activities_key)

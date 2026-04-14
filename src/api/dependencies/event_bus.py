@@ -359,11 +359,11 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         GetWeeklyBudgetQuery,
-        GetWeeklyBudgetQueryHandler(),
+        GetWeeklyBudgetQueryHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
         GetStreakQuery,
-        GetStreakQueryHandler(),
+        GetStreakQueryHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
         GetDailyBreakdownQuery,
@@ -372,7 +372,7 @@ def get_configured_event_bus() -> EventBus:
 
     # Register activity query handlers
     event_bus.register_handler(
-        GetDailyActivitiesQuery, GetDailyActivitiesQueryHandler()
+        GetDailyActivitiesQuery, GetDailyActivitiesQueryHandler(cache_service=cache_service)
     )
 
     # Register daily meal handlers
@@ -438,7 +438,7 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         UpdateCustomMacrosCommand,
-        UpdateCustomMacrosCommandHandler(),
+        UpdateCustomMacrosCommandHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
         GetUserProfileQuery,
@@ -451,9 +451,9 @@ def get_configured_event_bus() -> EventBus:
         GetUserOnboardingStatusQuery, GetUserOnboardingStatusQueryHandler()
     )
     event_bus.register_handler(
-        GetUserMetricsQuery, GetUserMetricsQueryHandler()
+        GetUserMetricsQuery, GetUserMetricsQueryHandler(cache_service=cache_service)
     )
-    event_bus.register_handler(GetUserTdeeQuery, GetUserTdeeQueryHandler())
+    event_bus.register_handler(GetUserTdeeQuery, GetUserTdeeQueryHandler(cache_service=cache_service))
     event_bus.register_handler(PreviewTdeeQuery, PreviewTdeeQueryHandler())
 
     # Register notification handlers
@@ -467,11 +467,11 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         UpdateNotificationPreferencesCommand,
-        UpdateNotificationPreferencesCommandHandler()
+        UpdateNotificationPreferencesCommandHandler(cache_service=cache_service)
     )
     event_bus.register_handler(
         GetNotificationPreferencesQuery,
-        GetNotificationPreferencesQueryHandler()
+        GetNotificationPreferencesQueryHandler(cache_service=cache_service)
     )
 
     # Register ingredient recognition handler
@@ -492,13 +492,13 @@ def get_configured_event_bus() -> EventBus:
 
     # Register saved suggestion handlers
     event_bus.register_handler(
-        SaveSuggestionCommand, SaveSuggestionCommandHandler()
+        SaveSuggestionCommand, SaveSuggestionCommandHandler(cache_service=cache_service)
     )
     event_bus.register_handler(
-        DeleteSavedSuggestionCommand, DeleteSavedSuggestionCommandHandler()
+        DeleteSavedSuggestionCommand, DeleteSavedSuggestionCommandHandler(cache_service=cache_service)
     )
     event_bus.register_handler(
-        GetSavedSuggestionsQuery, GetSavedSuggestionsQueryHandler()
+        GetSavedSuggestionsQuery, GetSavedSuggestionsQueryHandler(cache_service=cache_service)
     )
 
     # Register domain event subscribers
