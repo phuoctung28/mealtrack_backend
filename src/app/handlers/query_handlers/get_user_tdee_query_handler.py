@@ -10,7 +10,8 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.user import TdeeRequest, Sex, JobType, Goal, UnitSystem, TrainingLevel
+from src.domain.constants import NutritionConstants, TDEEConstants
+from src.domain.model.user import TdeeRequest, Sex, JobType, Goal, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.user.profile import UserProfile
@@ -84,7 +85,6 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
             result = self.tdee_service.calculate_tdee(tdee_request)
 
             # Calculate total multiplier for response
-            from src.domain.constants import TDEEConstants
             base_multiplier = TDEEConstants.JOB_TYPE_MULTIPLIERS.get(profile.job_type, 1.2)
             weekly_hours = (profile.training_days_per_week * profile.training_minutes_per_session) / 60.0
             exercise_add = weekly_hours * TDEEConstants.EXERCISE_MULTIPLIER_PER_HOUR
@@ -119,8 +119,6 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
 
     def _build_custom_macros_response(self, query: GetUserTdeeQuery, profile) -> Dict[str, Any]:
         """Build response using custom macro overrides, still calculating BMR/TDEE for reference."""
-        from src.domain.constants import NutritionConstants, TDEEConstants
-
         custom_calories = (
             profile.custom_protein_g * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
             + profile.custom_carbs_g * NutritionConstants.CALORIES_PER_GRAM_CARBS
