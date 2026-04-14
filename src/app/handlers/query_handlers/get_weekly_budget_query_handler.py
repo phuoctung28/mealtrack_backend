@@ -8,11 +8,13 @@ from typing import Dict, Any, Optional
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
+from src.domain.cache.cache_keys import CacheKeys
 from src.domain.constants import WeeklyBudgetConstants
 from src.domain.services.weekly_budget_service import AdjustedDailyTargets, WeeklyBudgetService
 from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import get_user_monday, get_zone_info, resolve_user_timezone
+from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -22,8 +24,9 @@ logger = logging.getLogger(__name__)
 class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, Any]]):
     """Handler for getting weekly macro budget status."""
 
-    def __init__(self, uow: Optional[UnitOfWorkPort] = None):
+    def __init__(self, uow: Optional[UnitOfWorkPort] = None, cache_service: Optional[CacheService] = None):
         self.uow = uow
+        self.cache_service = cache_service
 
     async def handle(self, query: GetWeeklyBudgetQuery) -> Dict[str, Any]:
         """Handle getting weekly budget status."""
@@ -45,6 +48,13 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
 
                 # target_date is already a local date — no timezone re-lookup needed
                 week_start = get_user_monday(target_date, query.user_id)
+
+                # Cache check (requires week_start, computed above)
+                cache_key, ttl = CacheKeys.weekly_budget(query.user_id, week_start)
+                if self.cache_service:
+                    cached = await self.cache_service.get_json(cache_key)
+                    if cached is not None:
+                        return cached
 
                 # Find or create weekly budget
                 weekly_budget = uow.weekly_budgets.find_by_user_and_week(query.user_id, week_start)
@@ -176,7 +186,7 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                 # Derive remaining calories directly from target - consumed (negatives flow through)
                 derived_remaining_cal = weekly_budget.target_calories - weekly_budget.consumed_calories
 
-                return {
+                result = {
                     "week_start_date": week_start.isoformat(),
                     "target_calories": weekly_budget.target_calories,
                     "target_protein": weekly_budget.target_protein,
@@ -201,6 +211,11 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     "show_logging_prompt": show_logging_prompt,
                     **preview_data,
                 }
+
+                if self.cache_service:
+                    await self.cache_service.set_json(cache_key, result, ttl)
+
+                return result
 
             except Exception as e:
                 logger.error(f"Error getting weekly budget: {str(e)}")
@@ -230,7 +245,7 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
             from src.app.handlers.query_handlers.get_user_tdee_query_handler import GetUserTdeeQueryHandler
             from src.app.queries.tdee import GetUserTdeeQuery
 
-            tdee_handler = GetUserTdeeQueryHandler()
+            tdee_handler = GetUserTdeeQueryHandler(cache_service=self.cache_service)
             tdee_query = GetUserTdeeQuery(user_id=user_id)
             tdee_result = await tdee_handler.handle(tdee_query)
 
@@ -278,7 +293,7 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
             from src.app.handlers.query_handlers.get_user_tdee_query_handler import GetUserTdeeQueryHandler
             from src.app.queries.tdee import GetUserTdeeQuery
 
-            tdee_handler = GetUserTdeeQueryHandler()
+            tdee_handler = GetUserTdeeQueryHandler(cache_service=self.cache_service)
             tdee_result = await tdee_handler.handle(
                 GetUserTdeeQuery(user_id=user_id)
             )
