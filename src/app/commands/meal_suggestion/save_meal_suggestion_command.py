@@ -46,6 +46,7 @@ class SaveMealSuggestionCommand(Command):
     cuisine_type: Optional[str] = None
     origin_country: Optional[str] = None
     emoji: Optional[str] = None
+    image_url: Optional[str] = None
 
     def __post_init__(self):
         """Validate command data."""

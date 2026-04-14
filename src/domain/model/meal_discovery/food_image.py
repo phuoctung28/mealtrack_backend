@@ -14,3 +14,4 @@ class FoodImageResult:
     photographer_url: Optional[str] = None   # Profile URL with UTM params
     download_location: Optional[str] = None  # Unsplash download trigger URL
     alt_text: Optional[str] = None           # Image description for relevance validation
+    confidence: float = 0.5                  # 0.0-1.0 how well image matches query

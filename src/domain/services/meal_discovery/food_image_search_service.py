@@ -2,12 +2,13 @@
 Food image search service with in-memory LRU cache.
 Search chain: adapter list (injected) → first hit wins.
 Cache: 7-day TTL, max 5000 entries with LRU eviction.
-Validation: reject images whose alt text has zero food-keyword overlap with query.
+Confidence scoring: measures how well the image describes the meal name.
 """
 import logging
 import re
 import time
 from collections import OrderedDict
+from dataclasses import dataclass
 from typing import List, Optional
 
 from src.domain.model.meal_discovery.food_image import FoodImageResult
@@ -17,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 CACHE_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 CACHE_MAX_ENTRIES = 5_000
+
+# Minimum confidence to accept an image (below this → emoji fallback)
+MIN_ACCEPT_CONFIDENCE = 0.3
 
 # Words too generic to be useful for matching
 _STOP_WORDS = frozenset({
@@ -34,6 +38,20 @@ _FOOD_SIGNALS = frozenset({
     "vegetable", "tomato", "potato", "onion", "garlic", "pepper",
     "cheese", "egg", "butter", "cream", "sauce", "curry",
     "caesar", "mediterranean", "thai", "mexican", "italian",
+    "tofu", "lamb", "duck", "crab", "lobster", "oyster", "sushi",
+    "ramen", "pho", "taco", "burrito", "pizza", "burger",
+    "pancake", "waffle", "omelette", "sandwich", "wrap",
+    "smoothie", "juice", "yogurt", "granola", "cereal",
+    "avocado", "broccoli", "spinach", "kale", "mushroom",
+    "lentil", "bean", "chickpea", "hummus", "falafel",
+})
+
+# Non-food visual signals — strong indicator the image is wrong
+_NEGATIVE_SIGNALS = frozenset({
+    "building", "architecture", "skyline", "city", "street",
+    "car", "vehicle", "mountain", "landscape", "sunset",
+    "portrait", "selfie", "office", "computer", "phone",
+    "abstract", "pattern", "texture", "wallpaper",
 })
 
 
@@ -41,22 +59,28 @@ class FoodImageSearchService:
     """
     Orchestrates food image search with adapter fallback chain.
     Uses an LRU in-memory cache keyed by normalized query.
+    Scores each image on how well it describes the queried meal name.
     """
 
-    def __init__(self, adapters: List[FoodImageSearchPort]):
+    def __init__(
+        self,
+        adapters: List[FoodImageSearchPort],
+        web_validator: Optional["WebSearchImageValidator"] = None,
+    ):
         self._adapters = adapters
         self._cache: OrderedDict = OrderedDict()
+        self._web_validator = web_validator
 
     async def search_food_image(
         self,
         query: str,
         ingredients: Optional[List[str]] = None,
     ) -> Optional[FoodImageResult]:
-        """Return a validated food image, or None (mobile falls back to emoji).
+        """Return a scored food image, or None (mobile falls back to emoji).
 
-        Args:
-            query: Food name in English for best search results.
-            ingredients: English ingredient names for fallback search.
+        The returned FoodImageResult.confidence indicates how well the
+        image describes the meal name (0.0–1.0). Mobile uses this to
+        decide whether to show the image (>=0.8) or fall back to emoji.
         """
         key = self._normalize(query)
 
@@ -69,7 +93,7 @@ class FoodImageSearchService:
             else:
                 del self._cache[key]
 
-        result = await self._search_with_validation(query)
+        result = await self._search_with_scoring(query)
 
         self._evict_if_needed()
         self._cache[key] = (result, time.time() + CACHE_TTL_SECONDS)
@@ -77,9 +101,9 @@ class FoodImageSearchService:
 
         return result
 
-    async def _search_with_validation(self, query: str) -> Optional[FoodImageResult]:
-        """Search adapters with validation. Returns None if no confident match."""
-        result = await self._try_adapters_validated(query)
+    async def _search_with_scoring(self, query: str) -> Optional[FoodImageResult]:
+        """Search adapters, score each candidate, return best above threshold."""
+        result = await self._try_adapters_scored(query)
         if result:
             return result
 
@@ -87,23 +111,51 @@ class FoodImageSearchService:
         simple = _simplify_food_query(query)
         if simple and simple != query.lower():
             logger.info(f"Image fallback: '{query}' → '{simple}'")
-            result = await self._try_adapters_validated(simple)
+            result = await self._try_adapters_scored(simple)
             if result:
                 return result
 
         logger.info(f"No confident image for '{query}', falling back to emoji")
         return None
 
-    async def _try_adapters_validated(self, query: str) -> Optional[FoodImageResult]:
-        """Try each adapter, return first result that passes validation."""
+    async def _try_adapters_scored(self, query: str) -> Optional[FoodImageResult]:
+        """Try each adapter, score results, return best above threshold."""
+        best: Optional[FoodImageResult] = None
+        best_score = 0.0
+
         for adapter in self._adapters:
             try:
                 result = await adapter.search(query)
-                if result is not None and _validate_food_image(query, result):
-                    return result
+                if result is None:
+                    continue
+
+                score = _score_image_match(query, result)
+                if score < MIN_ACCEPT_CONFIDENCE:
+                    continue
+
+                # Web search can boost or penalize the score
+                if self._web_validator:
+                    web_score = await self._web_validator.score(query, result)
+                    # Blend: 60% keyword score + 40% web score
+                    score = score * 0.6 + web_score * 0.4
+
+                result.confidence = round(score, 2)
+
+                if score > best_score:
+                    best = result
+                    best_score = score
+
+                # Early exit if we already have a strong match
+                if best_score >= 0.9:
+                    break
             except Exception as e:
                 logger.warning(f"Image adapter {adapter.__class__.__name__} error: {e}")
-        return None
+
+        if best:
+            logger.debug(
+                f"Image selected: query='{query}' | confidence={best.confidence}"
+            )
+        return best
 
     @staticmethod
     def _normalize(query: str) -> str:
@@ -114,41 +166,63 @@ class FoodImageSearchService:
             self._cache.popitem(last=False)
 
 
-def _validate_food_image(query: str, result: FoodImageResult) -> bool:
-    """Validate image is food-related and relevant to the query.
+def _score_image_match(query: str, result: FoodImageResult) -> float:
+    """Score how well the image describes the meal name (0.0–1.0).
 
-    Strategy: check that alt text contains at least one food keyword
-    from either the query or the global food signals list.
-    This catches obvious mismatches (buildings, landscapes) while
-    trusting the search API's relevance for food-on-food matches.
+    Scoring tiers:
+    - 0.0: Non-food image (buildings, cars, etc.)
+    - 0.3: No alt text — trust the search API blindly
+    - 0.5: Alt text has generic food words but no query overlap
+    - 0.7: Alt text has some query keywords (partial match)
+    - 0.9: Alt text has most query keywords (strong match)
+    - 1.0: Alt text contains all meaningful query words (exact match)
     """
     alt = result.alt_text or ""
     if not alt:
-        # No alt text — trust the search API
-        return True
+        # No alt text — moderate trust in the search API
+        return 0.3
 
     alt_words = _extract_words(alt)
-    query_words = _extract_words(query)
+    query_words = _extract_words(query) - _STOP_WORDS
 
-    # Must have at least one query keyword in alt text
-    query_overlap = query_words & alt_words
-    if query_overlap:
-        return True
+    if not query_words:
+        return 0.3
 
-    # Or: alt text must mention food-related words (it's at least a food photo)
-    food_overlap = alt_words & _FOOD_SIGNALS
-    if food_overlap:
-        logger.debug(
-            f"Image accepted via food signals: query='{query}' | "
-            f"signals={food_overlap}"
+    # Hard reject: non-food signals with no food words
+    negative_overlap = alt_words & _NEGATIVE_SIGNALS
+    if negative_overlap and not (alt_words & _FOOD_SIGNALS):
+        logger.info(
+            f"Image scored 0.0: non-food signals={negative_overlap} | query='{query}'"
         )
-        return True
+        return 0.0
 
-    logger.info(
-        f"Image rejected: no food overlap | "
-        f"query_words={query_words} | alt_words={alt_words}"
+    # Measure direct overlap: how many meal name words appear in alt text
+    query_overlap = query_words & alt_words
+    overlap_ratio = len(query_overlap) / len(query_words)
+
+    if overlap_ratio >= 0.8:
+        # Almost all meal name words found in image description
+        score = 0.9 + (overlap_ratio - 0.8) * 0.5  # 0.9–1.0
+    elif overlap_ratio >= 0.5:
+        # Majority of meal name words found
+        score = 0.7 + (overlap_ratio - 0.5) * 0.67  # 0.7–0.9
+    elif overlap_ratio > 0:
+        # Some meal name words found
+        score = 0.5 + overlap_ratio * 0.4  # 0.5–0.7
+    else:
+        # No direct overlap — check for generic food signals
+        food_overlap = alt_words & _FOOD_SIGNALS
+        if food_overlap:
+            # It's a food photo, just not specifically this meal
+            score = 0.4 + min(len(food_overlap), 3) * 0.03  # 0.43–0.49
+        else:
+            score = 0.1
+
+    logger.debug(
+        f"Image score={score:.2f}: query='{query}' | "
+        f"overlap={query_overlap} ({overlap_ratio:.0%}) | alt='{alt[:80]}'"
     )
-    return False
+    return min(score, 1.0)
 
 
 def _simplify_food_query(query: str) -> str:
