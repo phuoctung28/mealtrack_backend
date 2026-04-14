@@ -10,6 +10,7 @@ class CacheKeys:
     """Centralized cache key generator with TTL policies."""
 
     TTL_10_MIN = 600
+    TTL_5_MIN = 300
     TTL_1_HOUR = 3600
     TTL_1_DAY = 86400
     TTL_7_DAYS = 604_800
@@ -64,7 +65,7 @@ class CacheKeys:
     @staticmethod
     def daily_activities(user_id: str, target_date: date) -> tuple[str, int]:
         """Cache key for daily activities list. 5min TTL."""
-        return (f"user:{user_id}:activities:{target_date.isoformat()}", 300)
+        return (f"user:{user_id}:activities:{target_date.isoformat()}", CacheKeys.TTL_5_MIN)
 
     @staticmethod
     def saved_suggestions(user_id: str) -> tuple[str, int]:
