@@ -1,9 +1,12 @@
 """Handler for updating custom macro targets."""
 import logging
+from typing import Optional
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_custom_macros_command import UpdateCustomMacrosCommand
 from src.app.events.base import EventHandler, handles
+from src.domain.cache.cache_keys import CacheKeys
+from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow import UnitOfWork
 
@@ -13,6 +16,9 @@ logger = logging.getLogger(__name__)
 @handles(UpdateCustomMacrosCommand)
 class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, None]):
     """Set or clear custom macro overrides on user profile."""
+
+    def __init__(self, cache_service: Optional[CacheService] = None):
+        self.cache_service = cache_service
 
     async def handle(self, command: UpdateCustomMacrosCommand) -> None:
         with UnitOfWork() as uow:
@@ -45,3 +51,12 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
 
             action = "cleared" if non_null_count == 0 else "set"
             logger.info(f"Custom macros {action} for user {command.user_id}")
+
+        if self.cache_service:
+            tdee_key, _ = CacheKeys.user_tdee(command.user_id)
+            await self.cache_service.invalidate(tdee_key)
+            from datetime import date, timedelta
+            today = date.today()
+            week_start = today - timedelta(days=today.weekday())
+            weekly_key, _ = CacheKeys.weekly_budget(command.user_id, week_start)
+            await self.cache_service.invalidate(weekly_key)

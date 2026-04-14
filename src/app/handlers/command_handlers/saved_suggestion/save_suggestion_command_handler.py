@@ -1,10 +1,12 @@
 """Handler for saving a meal suggestion to user's bookmarks."""
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from src.app.commands.saved_suggestion import SaveSuggestionCommand
 from src.app.events.base import EventHandler, handles
+from src.domain.cache.cache_keys import CacheKeys
+from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.saved_suggestion import SavedSuggestionModel
 from src.infra.database.uow import UnitOfWork
 
@@ -14,6 +16,9 @@ logger = logging.getLogger(__name__)
 @handles(SaveSuggestionCommand)
 class SaveSuggestionCommandHandler(EventHandler[SaveSuggestionCommand, Dict[str, Any]]):
     """Save a meal suggestion. Returns existing if already saved (idempotent)."""
+
+    def __init__(self, cache_service: Optional[CacheService] = None):
+        self.cache_service = cache_service
 
     async def handle(self, command: SaveSuggestionCommand) -> Dict[str, Any]:
         with UnitOfWork() as uow:
@@ -36,7 +41,13 @@ class SaveSuggestionCommandHandler(EventHandler[SaveSuggestionCommand, Dict[str,
             )
             saved = uow.saved_suggestions_db.create(model)
             logger.info(f"Saved suggestion {command.suggestion_id} for user {command.user_id}")
-            return self._to_response(saved)
+            result = self._to_response(saved)
+
+        if self.cache_service:
+            cache_key, _ = CacheKeys.saved_suggestions(command.user_id)
+            await self.cache_service.invalidate(cache_key)
+
+        return result
 
     def _to_response(self, model: SavedSuggestionModel) -> Dict[str, Any]:
         return {

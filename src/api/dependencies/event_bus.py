@@ -438,7 +438,7 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         UpdateCustomMacrosCommand,
-        UpdateCustomMacrosCommandHandler(),
+        UpdateCustomMacrosCommandHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
         GetUserProfileQuery,
@@ -467,7 +467,7 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         UpdateNotificationPreferencesCommand,
-        UpdateNotificationPreferencesCommandHandler()
+        UpdateNotificationPreferencesCommandHandler(cache_service=cache_service)
     )
     event_bus.register_handler(
         GetNotificationPreferencesQuery,
@@ -492,10 +492,10 @@ def get_configured_event_bus() -> EventBus:
 
     # Register saved suggestion handlers
     event_bus.register_handler(
-        SaveSuggestionCommand, SaveSuggestionCommandHandler()
+        SaveSuggestionCommand, SaveSuggestionCommandHandler(cache_service=cache_service)
     )
     event_bus.register_handler(
-        DeleteSavedSuggestionCommand, DeleteSavedSuggestionCommandHandler()
+        DeleteSavedSuggestionCommand, DeleteSavedSuggestionCommandHandler(cache_service=cache_service)
     )
     event_bus.register_handler(
         GetSavedSuggestionsQuery, GetSavedSuggestionsQueryHandler(cache_service=cache_service)
