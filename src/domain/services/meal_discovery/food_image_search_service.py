@@ -5,14 +5,13 @@ Cache: 7-day TTL, max 5000 entries with LRU eviction.
 Confidence scoring: measures how well the image describes the meal name.
 """
 import logging
-import re
 import time
 from collections import OrderedDict
-from dataclasses import dataclass
 from typing import List, Optional
 
 from src.domain.model.meal_discovery.food_image import FoodImageResult
 from src.domain.ports.food_image_search_port import FoodImageSearchPort
+from src.domain.services.meal_discovery import extract_words
 
 logger = logging.getLogger(__name__)
 
@@ -182,8 +181,8 @@ def _score_image_match(query: str, result: FoodImageResult) -> float:
         # No alt text — moderate trust in the search API
         return 0.3
 
-    alt_words = _extract_words(alt)
-    query_words = _extract_words(query) - _STOP_WORDS
+    alt_words = extract_words(alt)
+    query_words = extract_words(query) - _STOP_WORDS
 
     if not query_words:
         return 0.3
@@ -230,7 +229,7 @@ def _simplify_food_query(query: str) -> str:
 
     E.g. 'Honey Garlic Glazed Chicken Breast' → 'honey garlic chicken'
     """
-    words = _extract_words(query)
+    words = extract_words(query)
     food_words = words & _FOOD_SIGNALS
     remaining = words - _STOP_WORDS - _FOOD_SIGNALS
     # Keep food signals + up to 2 descriptive words
@@ -238,6 +237,4 @@ def _simplify_food_query(query: str) -> str:
     return " ".join(sorted(result_words)) if result_words else query.lower()
 
 
-def _extract_words(text: str) -> set:
-    """Extract lowercase words, strip punctuation."""
-    return set(re.findall(r'[a-zA-Z]{2,}', text.lower()))
+extract_words = extract_words

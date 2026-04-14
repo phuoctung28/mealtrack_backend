@@ -5,12 +5,12 @@ alt text matches web descriptions of that meal.
 Gracefully degrades: returns 0.5 (neutral) on any error.
 """
 import logging
-import re
 from typing import Optional, Set
 
 import httpx
 
 from src.domain.model.meal_discovery.food_image import FoodImageResult
+from src.domain.services.meal_discovery import extract_words
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class WebSearchImageValidator:
             if not web_keywords:
                 return 0.5  # Web search unavailable — neutral
 
-            alt_words = _extract_words(alt_text)
+            alt_words = extract_words(alt_text)
             overlap = alt_words & web_keywords
 
             if not overlap:
@@ -116,7 +116,7 @@ class WebSearchImageValidator:
                 text_parts.append(r.get("description", ""))
 
             combined = " ".join(text_parts)
-            keywords = _extract_words(combined)
+            keywords = extract_words(combined)
 
             # Remove overly generic words
             generic = {
@@ -136,8 +136,3 @@ class WebSearchImageValidator:
         except Exception as e:
             logger.warning(f"Brave search for meal keywords failed: {e}")
             return set()
-
-
-def _extract_words(text: str) -> set:
-    """Extract lowercase words (2+ chars), strip punctuation."""
-    return set(re.findall(r'[a-zA-Z]{2,}', text.lower()))
