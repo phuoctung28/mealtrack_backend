@@ -3,14 +3,16 @@ GetUserTdeeQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.tdee import GetUserTdeeQuery
+from src.domain.cache.cache_keys import CacheKeys
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.model.user import TdeeRequest, Sex, JobType, Goal, UnitSystem, TrainingLevel
 from src.domain.services.tdee_service import TdeeCalculationService
+from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow import UnitOfWork
 
@@ -21,10 +23,22 @@ logger = logging.getLogger(__name__)
 class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
     """Handler for getting user's TDEE calculation."""
 
-    def __init__(self, tdee_service: TdeeCalculationService = None):
+    def __init__(self, tdee_service: TdeeCalculationService = None, cache_service: Optional[CacheService] = None):
         self.tdee_service = tdee_service or TdeeCalculationService()
+        self.cache_service = cache_service
 
     async def handle(self, query: GetUserTdeeQuery) -> Dict[str, Any]:
+        cache_key, ttl = CacheKeys.user_tdee(query.user_id)
+        if self.cache_service:
+            cached = await self.cache_service.get_json(cache_key)
+            if cached is not None:
+                return cached
+        result = await self._compute_tdee(query)
+        if self.cache_service:
+            await self.cache_service.set_json(cache_key, result, ttl)
+        return result
+
+    async def _compute_tdee(self, query: GetUserTdeeQuery) -> Dict[str, Any]:
         """Get user's TDEE calculation based on current profile."""
         with UnitOfWork() as uow:
             # Get current user profile using the UnitOfWork session
