@@ -43,6 +43,8 @@ _FOOD_SIGNALS = frozenset({
     "smoothie", "juice", "yogurt", "granola", "cereal",
     "avocado", "broccoli", "spinach", "kale", "mushroom",
     "lentil", "bean", "chickpea", "hummus", "falafel",
+    "risotto", "biryani", "paella", "gnocchi", "lasagna",
+    "kebab", "satay", "tempeh", "miso", "teriyaki",
 })
 
 # Non-food visual signals — strong indicator the image is wrong
@@ -168,17 +170,20 @@ class FoodImageSearchService:
 def _score_image_match(query: str, result: FoodImageResult) -> float:
     """Score how well the image describes the meal name (0.0–1.0).
 
-    Scoring tiers:
+    Strategy: prioritize core food word matches over full-name overlap.
+    Pexels/Unsplash alt text is short ("salmon on plate") while meal names
+    are long ("Honey Garlic Glazed Salmon"). Matching the core food word
+    ("salmon") is a strong signal — modifiers are cooking style, not visual.
+
+    Scoring:
     - 0.0: Non-food image (buildings, cars, etc.)
-    - 0.3: No alt text — trust the search API blindly
-    - 0.5: Alt text has generic food words but no query overlap
-    - 0.7: Alt text has some query keywords (partial match)
-    - 0.9: Alt text has most query keywords (strong match)
-    - 1.0: Alt text contains all meaningful query words (exact match)
+    - 0.3: No alt text — moderate trust in search API
+    - 0.5: Generic food photo (food signals but no query match)
+    - 0.85: Core food word from meal name found in alt text
+    - 0.9+: Multiple query words match (strong match)
     """
     alt = result.alt_text or ""
     if not alt:
-        # No alt text — moderate trust in the search API
         return 0.3
 
     alt_words = extract_words(alt)
@@ -195,31 +200,32 @@ def _score_image_match(query: str, result: FoodImageResult) -> float:
         )
         return 0.0
 
-    # Measure direct overlap: how many meal name words appear in alt text
     query_overlap = query_words & alt_words
-    overlap_ratio = len(query_overlap) / len(query_words)
 
-    if overlap_ratio >= 0.8:
-        # Almost all meal name words found in image description
-        score = 0.9 + (overlap_ratio - 0.8) * 0.5  # 0.9–1.0
-    elif overlap_ratio >= 0.5:
-        # Majority of meal name words found
-        score = 0.7 + (overlap_ratio - 0.5) * 0.67  # 0.7–0.9
-    elif overlap_ratio > 0:
-        # Some meal name words found
-        score = 0.5 + overlap_ratio * 0.4  # 0.5–0.7
-    else:
-        # No direct overlap — check for generic food signals
+    # Core food word match: the primary ingredient/dish type from meal name
+    # e.g. "salmon" in "Honey Garlic Glazed Salmon"
+    core_food_words = query_words & _FOOD_SIGNALS
+    core_match = bool(core_food_words & alt_words)
+
+    if not query_overlap:
+        # No direct overlap — check for generic food signals in alt text
         food_overlap = alt_words & _FOOD_SIGNALS
         if food_overlap:
-            # It's a food photo, just not specifically this meal
-            score = 0.4 + min(len(food_overlap), 3) * 0.03  # 0.43–0.49
+            score = 0.5
         else:
             score = 0.1
+    elif core_match:
+        # Core food word found — strong signal regardless of modifier overlap
+        # Bonus for additional word matches
+        extra = len(query_overlap) - 1  # beyond the first match
+        score = 0.85 + min(extra, 3) * 0.05  # 0.85–1.0
+    else:
+        # Non-core words match (modifiers like "grilled", "honey")
+        score = 0.6 + min(len(query_overlap), 3) * 0.08  # 0.68–0.84
 
     logger.debug(
         f"Image score={score:.2f}: query='{query}' | "
-        f"overlap={query_overlap} ({overlap_ratio:.0%}) | alt='{alt[:80]}'"
+        f"overlap={query_overlap} | core_match={core_match} | alt='{alt[:80]}'"
     )
     return min(score, 1.0)
 
