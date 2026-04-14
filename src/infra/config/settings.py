@@ -43,9 +43,12 @@ class Settings(BaseSettings):
     POOL_ECHO: bool = Field(default=False)
 
     # Redis configuration (optimized for low-memory)
+    # Prefer setting REDIS_URL directly for hosted providers (e.g., Upstash)
+    REDIS_URL: str | None = Field(default=None)
     REDIS_HOST: str = Field(default="localhost")
     REDIS_PORT: int = Field(default=6379)
     REDIS_DB: int = Field(default=0)
+    REDIS_USERNAME: str | None = Field(default=None)
     REDIS_PASSWORD: str | None = Field(default=None)
     REDIS_SSL: bool = Field(default=False)
     REDIS_MAX_CONNECTIONS: int = Field(
@@ -133,9 +136,21 @@ class Settings(BaseSettings):
 
     @property
     def redis_url(self) -> str:
-        """Construct a Redis URL from the configured components."""
+        """Return Redis connection URL.
+
+        If REDIS_URL is set, it is used verbatim (supports username/password URLs).
+        Otherwise, a URL is constructed from the component settings.
+        """
+        if self.REDIS_URL:
+            return self.REDIS_URL
+
         protocol = "rediss" if self.REDIS_SSL else "redis"
-        auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
+        if self.REDIS_USERNAME and self.REDIS_PASSWORD:
+            auth = f"{self.REDIS_USERNAME}:{self.REDIS_PASSWORD}@"
+        elif self.REDIS_PASSWORD:
+            auth = f":{self.REDIS_PASSWORD}@"
+        else:
+            auth = ""
         return f"{protocol}://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
 
