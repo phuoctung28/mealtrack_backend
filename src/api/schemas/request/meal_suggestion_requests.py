@@ -297,6 +297,9 @@ class SaveMealSuggestionRequest(BaseModel):
     cuisine_type: Optional[str] = Field(None, description="Cuisine type (e.g., Asian, Vietnamese)")
     origin_country: Optional[str] = Field(None, description="Country of origin")
     emoji: Optional[str] = Field(None, description="AI-assigned food emoji")
+    image_url: Optional[str] = Field(
+        None, description="Food image URL from discovery (Pexels/Unsplash hotlink)"
+    )
     unsplash_download_location: Optional[str] = Field(
         None, description="Unsplash download_location URL — triggers download event per API guidelines"
     )
