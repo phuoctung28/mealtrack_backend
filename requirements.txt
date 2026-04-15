@@ -53,3 +53,5 @@ pgvector>=0.3.0
 sentence-transformers>=2.7.0
 torch>=2.2.0
 Pillow>=10.0.0
+# Error monitoring
+sentry-sdk[fastapi]>=2.18.0

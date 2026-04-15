@@ -112,6 +112,12 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: str = Field(default="", description="Comma-separated list of allowed CORS origins")
 
+    # Sentry error monitoring
+    SENTRY_DSN: str | None = Field(default=None, description="Sentry DSN; disables Sentry when unset")
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(default=0.1, description="Performance trace sample rate (0.0-1.0)")
+    SENTRY_PROFILES_SAMPLE_RATE: float = Field(default=0.0, description="Profile sample rate (0.0-1.0)")
+    SENTRY_SEND_PII: bool = Field(default=False, description="Send user IP/headers to Sentry")
+
     # Feature flags / development toggles
     USE_MOCK_STORAGE: int = Field(default=0)
     DEV_USER_FIREBASE_UID: str = Field(default="dev_firebase_uid")
