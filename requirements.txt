@@ -47,3 +47,9 @@ fatsecret
 
 # Rate limiting
 slowapi>=0.1.9
+
+# Vector embeddings & cache
+pgvector>=0.3.0
+sentence-transformers>=2.7.0
+torch>=2.2.0
+Pillow>=10.0.0
