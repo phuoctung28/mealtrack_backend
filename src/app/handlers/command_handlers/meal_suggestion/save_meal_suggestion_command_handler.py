@@ -73,12 +73,12 @@ class SaveMealSuggestionCommandHandler(
             confidence_score=1.0,
         )
 
-        # Image reference: use discovery image URL if provided, else placeholder
+        # Create a dummy image reference (no actual upload)
         image = MealImage(
             image_id=str(uuid4()),
             format="jpeg",
             size_bytes=1,
-            url=command.image_url,
+            url=None,
         )
 
         meal = Meal(

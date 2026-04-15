@@ -189,7 +189,6 @@ async def discover_meals(
                 photographer=img.photographer if img else None,
                 photographer_url=img.photographer_url if img else None,
                 unsplash_download_location=img.download_location if img else None,
-                image_confidence=img.confidence if img else 0.0,
             ))
 
         shown_count = len(session.shown_meal_names)
@@ -333,7 +332,6 @@ async def save_meal_suggestion(
             cuisine_type=request.cuisine_type,
             origin_country=request.origin_country,
             emoji=request.emoji,
-            image_url=request.image_url,
         )
 
         meal_id = await event_bus.send(command)
