@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import logging
 import os
 import sys
@@ -39,6 +40,17 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load_module(rel_path: str, module_name: str):
+    """Import a .py file directly, bypassing package __init__ chains."""
+    path = os.path.join(_ROOT, rel_path)
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def _parse_csv(path: str) -> list[dict]:
@@ -73,23 +85,12 @@ def _parse_inline(names: list[str]) -> list[dict]:
     ]
 
 
-def _load_slug():
-    """Load slug() without triggering package __init__ chains."""
-    import importlib.util as _ilu
-    _path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "src", "domain", "services", "meal_image_cache", "name_canonicalizer.py",
-    )
-    _spec = _ilu.spec_from_file_location("name_canonicalizer", _path)
-    _mod = _ilu.module_from_spec(_spec)
-    _spec.loader.exec_module(_mod)
-    return _mod.slug
-
-
 def seed(rows: list[dict], dry_run: bool = False) -> None:
-    slug = _load_slug()
+    slug = _load_module(
+        "src/domain/services/meal_image_cache/name_canonicalizer.py",
+        "name_canonicalizer",
+    ).slug
 
-    # Normalise + slug each row first (no DB imports needed yet)
     validated: list[dict] = []
     for row in rows:
         try:
@@ -109,30 +110,45 @@ def seed(rows: list[dict], dry_run: bool = False) -> None:
             logger.info("  %-40s  image=%s", row["meal_name"], row["image_url"] or "(none)")
         return
 
-    # Only import heavy DB/model stack when actually writing
-    import asyncio
-    from src.domain.model.meal_image_cache import PendingItem
-    from src.infra.database.config import SessionLocal
-    from src.infra.repositories.pending_meal_image_repository import (
-        PendingMealImageRepository,
-    )
+    # Use psycopg2 directly — avoids importing the ORM model stack entirely
+    import psycopg2
 
-    items = [
-        PendingItem(
-            meal_name=row["meal_name"],
-            name_slug=row["name_slug"],
-            candidate_image_url=row["image_url"],
-            candidate_thumbnail_url=row["thumbnail_url"],
-            candidate_source=row["source"],
+    db_url = os.getenv("DATABASE_URL", "")
+    # Strip SQLAlchemy driver prefix if present
+    db_url = db_url.replace("postgresql+psycopg2://", "postgresql://")
+
+    conn = psycopg2.connect(db_url)
+    conn.autocommit = False
+    cur = conn.cursor()
+
+    inserted = 0
+    skipped = 0
+    for row in validated:
+        cur.execute(
+            """
+            INSERT INTO pending_meal_image_resolution
+              (name_slug, meal_name, candidate_image_url, candidate_thumbnail_url, candidate_source)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (name_slug) DO NOTHING
+            """,
+            (
+                row["name_slug"],
+                row["meal_name"],
+                row["image_url"],
+                row["thumbnail_url"],
+                row["source"],
+            ),
         )
-        for row in validated
-    ]
+        if cur.rowcount:
+            inserted += 1
+        else:
+            skipped += 1
 
-    with SessionLocal() as session:
-        repo = PendingMealImageRepository(session)
-        asyncio.run(repo.enqueue_many(items))
+    conn.commit()
+    cur.close()
+    conn.close()
 
-    logger.info("Enqueued %d item(s) into pending_meal_image_resolution.", len(items))
+    logger.info("Done: %d inserted, %d already existed.", inserted, skipped)
     logger.info("Run `python scripts/resolve_pending_images.py` to process them.")
 
 
