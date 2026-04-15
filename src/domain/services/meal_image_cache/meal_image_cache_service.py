@@ -1,11 +1,17 @@
-"""Embed-and-query hot path + the store helper used by the job."""
+"""Vector-based hot-path cache lookup + the store helper used by the pipeline job.
+
+API read path: lookup_batch() embeds query text via Gemini API (no torch) then
+does a pgvector ANN nearest-neighbour search — semantically robust to name variants.
+
+Pipeline write path: store() receives pre-computed text_embedding from the job.
+"""
 
 from __future__ import annotations
 
 from typing import Optional
 
 from src.domain.model.meal_image_cache import CachedImage, CachedImageUpsert
-from src.domain.ports.embedding_service_port import EmbeddingService
+from src.domain.ports.embedding_service_port import TextEmbeddingService
 from src.domain.ports.vector_cache_port import VectorCachePort
 from src.domain.services.meal_image_cache.name_canonicalizer import slug
 
@@ -14,7 +20,7 @@ class MealImageCacheService:
     def __init__(
         self,
         cache: VectorCachePort,
-        embedder: EmbeddingService,
+        embedder: TextEmbeddingService,
         dedup_threshold: float,
     ):
         self._cache = cache
@@ -22,6 +28,7 @@ class MealImageCacheService:
         self._threshold = dedup_threshold
 
     async def lookup_batch(self, names: list[str]) -> list[Optional[CachedImage]]:
+        """Embed names via Gemini API → pgvector ANN search. No torch required."""
         if not names:
             return []
 
