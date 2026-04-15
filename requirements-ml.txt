@@ -1,0 +1,13 @@
+# ML dependencies for the nightly pipeline only.
+# DO NOT install this in the API container — torch alone is ~2 GB and
+# would cause OOM on 512 MB deployments.
+#
+# Used by: scripts/resolve_pending_images.py
+# Installed by: .github/workflows/meal-image-resolver.yml
+-r requirements.txt
+
+# Embeddings — SigLIP google/siglip-base-patch16-224 (768-d)
+transformers>=4.39.0
+sentencepiece>=0.2.0
+torch>=2.2.0
+Pillow>=10.0.0

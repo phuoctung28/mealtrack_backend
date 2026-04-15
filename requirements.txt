@@ -49,11 +49,7 @@ fatsecret
 # Rate limiting
 slowapi>=0.1.9
 
-# Vector embeddings & cache
+# Vector embeddings & cache (pgvector only — ML model deps are in requirements-ml.txt)
 pgvector>=0.3.0
-transformers>=4.39.0
-sentencepiece>=0.2.0
-torch>=2.2.0
-Pillow>=10.0.0
 # Error monitoring
 sentry-sdk[fastapi]>=2.18.0
