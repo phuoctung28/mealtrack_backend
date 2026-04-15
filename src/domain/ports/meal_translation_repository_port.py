@@ -1,6 +1,7 @@
 """
 Meal translation repository port interface.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -24,7 +25,9 @@ class MealTranslationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def get_by_meal_and_language(self, meal_id: str, language: str) -> Optional[MealTranslation]:
+    def get_by_meal_and_language(
+        self, meal_id: str, language: str
+    ) -> Optional[MealTranslation]:
         """
         Get translation for a specific meal and language.
 
