@@ -1,8 +1,11 @@
-"""FastAPI DI for the meal image cache services."""
+"""FastAPI DI for the meal image cache services.
+
+The API uses GeminiTextEmbeddingAdapter for vector search — no torch, no local model.
+SigLIP/torch is only used by the nightly pipeline (scripts/resolve_pending_images.py)
+for image-text scoring, which requires vision encoding.
+"""
 
 from __future__ import annotations
-
-from functools import lru_cache
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
@@ -10,7 +13,7 @@ from sqlalchemy.orm import Session
 from src.domain.services.meal_image_cache.meal_image_cache_service import (
     MealImageCacheService,
 )
-from src.infra.adapters.clip_embedding_adapter import ClipEmbeddingAdapter
+from src.infra.adapters.gemini_text_embedding_adapter import get_gemini_text_embedder
 from src.infra.config.settings import get_settings
 from src.infra.repositories.pending_meal_image_repository import (
     PendingMealImageRepository,
@@ -21,23 +24,13 @@ from src.infra.repositories.pgvector_meal_image_cache_repository import (
 from src.api.base_dependencies import get_db
 
 
-@lru_cache(maxsize=1)
-def _singleton_embedder():
-    settings = get_settings()
-    return ClipEmbeddingAdapter.from_settings(
-        model_name=settings.CLIP_MODEL_NAME,
-        device=settings.CLIP_DEVICE,
-        dim=settings.CLIP_EMBEDDING_DIM,
-    )
-
-
 async def get_meal_image_cache_service(
     session: Session = Depends(get_db),
 ) -> MealImageCacheService:
     settings = get_settings()
     return MealImageCacheService(
         cache=PgvectorMealImageCacheRepository(session),
-        embedder=_singleton_embedder(),
+        embedder=get_gemini_text_embedder(settings.GOOGLE_API_KEY),
         dedup_threshold=settings.TEXT_DEDUP_THRESHOLD,
     )
 

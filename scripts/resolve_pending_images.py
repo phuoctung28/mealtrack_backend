@@ -29,7 +29,8 @@ async def drain(
     *,
     pending_repo,
     cache_repo,
-    embedder,
+    text_embedder,
+    image_scorer,
     image_search,
     http,
     cloudinary,
@@ -57,7 +58,8 @@ async def drain(
 
     job = ResolveMealImageJob(
         cache=cache_repo,
-        embedder=embedder,
+        text_embedder=text_embedder,
+        image_scorer=image_scorer,
         image_search=image_search,
         http=http,
         cloudinary=cloudinary,
@@ -107,6 +109,7 @@ async def _main() -> int:
     from src.infra.config.settings import get_settings
     from src.infra.database.config import SQLALCHEMY_DATABASE_URL
     from src.infra.adapters.clip_embedding_adapter import ClipEmbeddingAdapter
+    from src.infra.adapters.gemini_text_embedding_adapter import GeminiTextEmbeddingAdapter
     from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
     from src.infra.adapters.pollinations_image_generator import (
         PollinationsImageGenerator,
@@ -149,7 +152,11 @@ async def _main() -> int:
                 }
             ]
 
-    embedder = ClipEmbeddingAdapter.from_settings(
+    # Gemini: text embedding for storing/querying pgvector (consistent with API)
+    text_embedder = GeminiTextEmbeddingAdapter(api_key=settings.GOOGLE_API_KEY)
+
+    # SigLIP: image-text scoring only (validates candidate images, requires torch)
+    image_scorer = ClipEmbeddingAdapter.from_settings(
         model_name=settings.CLIP_MODEL_NAME,
         device=settings.CLIP_DEVICE,
         dim=settings.CLIP_EMBEDDING_DIM,
@@ -159,7 +166,8 @@ async def _main() -> int:
         summary = await drain(
             pending_repo=PendingMealImageRepository(session),
             cache_repo=PgvectorMealImageCacheRepository(session),
-            embedder=embedder,
+            text_embedder=text_embedder,
+            image_scorer=image_scorer,
             image_search=_ImageSearchWrapper(get_food_image_service()),
             http=_HttpDownloader(),
             cloudinary=CloudinaryImageStore(),
