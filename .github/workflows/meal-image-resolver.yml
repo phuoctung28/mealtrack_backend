@@ -14,9 +14,6 @@ jobs:
   drain:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: mealtrack_backend
     steps:
       - uses: actions/checkout@v4
 
@@ -28,13 +25,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('mealtrack_backend/requirements.txt') }}
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
 
-      - name: Cache sentence-transformers model
+      - name: Cache SigLIP model
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
-          key: hf-clip-multilingual-v1
+          key: hf-siglip-base-patch16-224
 
       - name: Install dependencies
         run: pip install -r requirements.txt
