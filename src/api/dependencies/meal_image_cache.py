@@ -1,4 +1,5 @@
 """FastAPI DI for the meal image cache services."""
+
 from __future__ import annotations
 
 from functools import lru_cache

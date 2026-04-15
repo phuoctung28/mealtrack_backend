@@ -5,6 +5,7 @@ running ResolveMealImageJob per row.
 Invoked by .github/workflows/meal-image-resolver.yml as:
     python scripts/resolve_pending_images.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,7 +17,9 @@ from src.domain.services.meal_image_cache.resolve_meal_image_job import (
 )
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
+)
 
 
 async def drain(
@@ -39,7 +42,13 @@ async def drain(
     items = await pending_repo.claim_batch(max_jobs)
     if not items:
         logger.info("drain: no pending items")
-        return {"processed": 0, "matched": 0, "ai_generated": 0, "failed": 0, "skipped": 0}
+        return {
+            "processed": 0,
+            "matched": 0,
+            "ai_generated": 0,
+            "failed": 0,
+            "skipped": 0,
+        }
 
     logger.info("drain: %d items to process", len(items))
 
@@ -55,7 +64,13 @@ async def drain(
         image_threshold=image_threshold,
     )
 
-    summary = {"processed": 0, "matched": 0, "ai_generated": 0, "failed": 0, "skipped": 0}
+    summary = {
+        "processed": 0,
+        "matched": 0,
+        "ai_generated": 0,
+        "failed": 0,
+        "skipped": 0,
+    }
     for i, item in enumerate(items):
         if item.attempts >= max_attempts:
             logger.warning("skipping %s — exceeded max_attempts", item.name_slug)
@@ -90,7 +105,9 @@ async def _main() -> int:
     from src.infra.database.config import SQLALCHEMY_DATABASE_URL
     from src.infra.adapters.clip_embedding_adapter import ClipEmbeddingAdapter
     from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
-    from src.infra.adapters.pollinations_image_generator import PollinationsImageGenerator
+    from src.infra.adapters.pollinations_image_generator import (
+        PollinationsImageGenerator,
+    )
     from src.infra.adapters.imagen_image_generator import ImagenImageGenerator
     from src.infra.repositories.pending_meal_image_repository import (
         PendingMealImageRepository,
@@ -121,11 +138,13 @@ async def _main() -> int:
             result = await self._svc.search_food_image(name)
             if result is None:
                 return []
-            return [{
-                "url": result.url,
-                "thumbnail_url": result.thumbnail_url,
-                "source": result.source,
-            }]
+            return [
+                {
+                    "url": result.url,
+                    "thumbnail_url": result.thumbnail_url,
+                    "source": result.source,
+                }
+            ]
 
     embedder = ClipEmbeddingAdapter.from_settings(
         model_name=settings.CLIP_MODEL_NAME,

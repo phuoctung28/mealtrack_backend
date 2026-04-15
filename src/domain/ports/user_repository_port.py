@@ -2,6 +2,7 @@
 This module defines the abstract port for the user repository, ensuring a clean
 separation between the domain and infrastructure layers.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional, List
 from uuid import UUID
@@ -31,7 +32,9 @@ class UserRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def find_deleted_by_firebase_uid(self, firebase_uid: str) -> Optional[UserDomainModel]:
+    def find_deleted_by_firebase_uid(
+        self, firebase_uid: str
+    ) -> Optional[UserDomainModel]:
         """Find a deleted user by Firebase UID (inactive users only)."""
         pass
 

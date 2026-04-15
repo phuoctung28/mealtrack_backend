@@ -1,23 +1,20 @@
 """pgvector-backed VectorCachePort (synchronous SQLAlchemy session)."""
+
 from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select, text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from src.domain.model.meal_image_cache import CachedImage, CachedImageUpsert
-from src.infra.database.models.meal_image_cache import MealImageCacheModel
 
 
 class PgvectorMealImageCacheRepository:
     def __init__(self, session: Session):
         self._session = session
 
-    async def query_nearest(
-        self, text_embedding: list[float]
-    ) -> Optional[CachedImage]:
+    async def query_nearest(self, text_embedding: list[float]) -> Optional[CachedImage]:
         # Use pgvector cosine distance operator (<=>)
         emb_literal = str(text_embedding)
         stmt = text(
@@ -29,7 +26,16 @@ class PgvectorMealImageCacheRepository:
         row = self._session.execute(stmt, {"emb": emb_literal}).first()
         if row is None:
             return None
-        _, meal_name, name_slug, image_url, thumbnail_url, source, confidence, distance = row
+        (
+            _,
+            meal_name,
+            name_slug,
+            image_url,
+            thumbnail_url,
+            source,
+            confidence,
+            distance,
+        ) = row
         return CachedImage(
             meal_name=meal_name,
             name_slug=name_slug,
@@ -55,13 +61,16 @@ class PgvectorMealImageCacheRepository:
             "  confidence = EXCLUDED.confidence, "
             "  meal_name = EXCLUDED.meal_name"
         )
-        self._session.execute(stmt, {
-            "meal_name": record.meal_name,
-            "name_slug": record.name_slug,
-            "emb": emb_literal,
-            "image_url": record.image_url,
-            "thumbnail_url": record.thumbnail_url,
-            "source": record.source,
-            "confidence": record.confidence,
-        })
+        self._session.execute(
+            stmt,
+            {
+                "meal_name": record.meal_name,
+                "name_slug": record.name_slug,
+                "emb": emb_literal,
+                "image_url": record.image_url,
+                "thumbnail_url": record.thumbnail_url,
+                "source": record.source,
+                "confidence": record.confidence,
+            },
+        )
         self._session.commit()

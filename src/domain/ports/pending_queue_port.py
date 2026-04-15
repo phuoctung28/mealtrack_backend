@@ -1,4 +1,5 @@
 """Port for the pending-resolution queue."""
+
 from __future__ import annotations
 
 from typing import Protocol

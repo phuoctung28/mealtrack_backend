@@ -2,6 +2,7 @@
 Deterministic fake: hash(text) seeds a random generator → unit-norm 512-d vector.
 Used in tests so we don't need torch/CLIP.
 """
+
 from __future__ import annotations
 
 import hashlib

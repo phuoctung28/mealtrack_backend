@@ -1,4 +1,5 @@
 """Port for AI image generators (Pollinations, Imagen)."""
+
 from __future__ import annotations
 
 from typing import Protocol

@@ -1,4 +1,5 @@
 """Pollinations.ai free image generator."""
+
 from __future__ import annotations
 
 import urllib.parse
@@ -23,7 +24,9 @@ class PollinationsImageGenerator:
     async def generate(self, prompt: str) -> bytes:
         encoded = urllib.parse.quote(prompt, safe="")
         url = f"{self._base_url}/{encoded}?nologo=true"
-        async with httpx.AsyncClient(timeout=self._timeout, transport=self._transport) as client:
+        async with httpx.AsyncClient(
+            timeout=self._timeout, transport=self._transport
+        ) as client:
             resp = await client.get(url)
         if resp.status_code != 200:
             raise RuntimeError(

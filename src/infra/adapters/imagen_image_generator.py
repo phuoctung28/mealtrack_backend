@@ -1,4 +1,5 @@
 """Google Imagen 3 via AI Studio REST API. Fallback after Pollinations."""
+
 from __future__ import annotations
 
 import base64
@@ -28,7 +29,9 @@ class ImagenImageGenerator:
             f"{self._model}:predict?key={self._api_key}"
         )
         payload = {"instances": [{"prompt": prompt}], "parameters": {"sampleCount": 1}}
-        async with httpx.AsyncClient(timeout=self._timeout, transport=self._transport) as client:
+        async with httpx.AsyncClient(
+            timeout=self._timeout, transport=self._transport
+        ) as client:
             resp = await client.post(url, json=payload)
         if resp.status_code != 200:
             raise RuntimeError(f"Imagen returned {resp.status_code}: {resp.text[:200]}")

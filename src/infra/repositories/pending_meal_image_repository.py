@@ -1,4 +1,5 @@
 """Postgres-backed PendingQueuePort (synchronous SQLAlchemy session)."""
+
 from __future__ import annotations
 
 from sqlalchemy import delete, select, text, update
@@ -25,13 +26,16 @@ class PendingMealImageRepository:
                 "        :candidate_thumbnail_url, :candidate_source) "
                 "ON CONFLICT (name_slug) DO NOTHING"
             )
-            self._session.execute(stmt, {
-                "name_slug": item.name_slug,
-                "meal_name": item.meal_name,
-                "candidate_image_url": item.candidate_image_url,
-                "candidate_thumbnail_url": item.candidate_thumbnail_url,
-                "candidate_source": item.candidate_source,
-            })
+            self._session.execute(
+                stmt,
+                {
+                    "name_slug": item.name_slug,
+                    "meal_name": item.meal_name,
+                    "candidate_image_url": item.candidate_image_url,
+                    "candidate_thumbnail_url": item.candidate_thumbnail_url,
+                    "candidate_source": item.candidate_source,
+                },
+            )
         self._session.commit()
 
     async def claim_batch(self, limit: int) -> list[PendingItem]:
@@ -55,8 +59,9 @@ class PendingMealImageRepository:
 
     async def mark_resolved(self, name_slug: str) -> None:
         self._session.execute(
-            delete(PendingMealImageResolutionModel)
-            .where(PendingMealImageResolutionModel.name_slug == name_slug)
+            delete(PendingMealImageResolutionModel).where(
+                PendingMealImageResolutionModel.name_slug == name_slug
+            )
         )
         self._session.commit()
 

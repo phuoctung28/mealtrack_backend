@@ -1,4 +1,5 @@
 """Canonicalize meal names into a stable, ASCII-only, lowercase slug."""
+
 from __future__ import annotations
 
 import re

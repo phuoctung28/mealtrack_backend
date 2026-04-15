@@ -1,4 +1,5 @@
 """Embed-and-query hot path + the store helper used by the job."""
+
 from __future__ import annotations
 
 from typing import Optional
@@ -45,12 +46,14 @@ class MealImageCacheService:
         source: str,
         confidence: Optional[float],
     ) -> None:
-        await self._cache.upsert(CachedImageUpsert(
-            meal_name=meal_name,
-            name_slug=slug(meal_name),
-            text_embedding=text_embedding,
-            image_url=image_url,
-            thumbnail_url=thumbnail_url,
-            source=source,
-            confidence=confidence,
-        ))
+        await self._cache.upsert(
+            CachedImageUpsert(
+                meal_name=meal_name,
+                name_slug=slug(meal_name),
+                text_embedding=text_embedding,
+                image_url=image_url,
+                thumbnail_url=thumbnail_url,
+                source=source,
+                confidence=confidence,
+            )
+        )

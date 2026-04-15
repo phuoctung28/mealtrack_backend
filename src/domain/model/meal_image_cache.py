@@ -1,4 +1,5 @@
 """Domain dataclasses for the meal image cache and pending queue."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

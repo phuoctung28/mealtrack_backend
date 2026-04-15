@@ -1,4 +1,5 @@
 """Resolve the best image for a single meal name, upsert to cache, emit event."""
+
 from __future__ import annotations
 
 import logging
@@ -35,9 +36,9 @@ class ResolveMealImageJob:
         *,
         cache,
         embedder,
-        image_search,      # object with `fetch_candidates(name) -> list[dict]`
-        http,              # object with `download(url) -> bytes`
-        cloudinary,        # object with `save(bytes, content_type) -> url`
+        image_search,  # object with `fetch_candidates(name) -> list[dict]`
+        http,  # object with `download(url) -> bytes`
+        cloudinary,  # object with `save(bytes, content_type) -> url`
         ai_primary,
         ai_fallback,
         event_bus,
@@ -60,16 +61,20 @@ class ResolveMealImageJob:
         existing = await self._cache.query_nearest(text_emb)
         if existing is not None and existing.cosine >= 0.999:
             logger.info("already cached: %s", meal_name)
-            return ResolveResult(existing.image_url, existing.source, existing.confidence)
+            return ResolveResult(
+                existing.image_url, existing.source, existing.confidence
+            )
 
         # Prefer the candidate URL the API already picked on miss.
         # Only call FoodImageSearchService when no URL was recorded.
         if item.candidate_image_url:
-            candidates = [{
-                "url": item.candidate_image_url,
-                "thumbnail_url": item.candidate_thumbnail_url,
-                "source": item.candidate_source or "external",
-            }]
+            candidates = [
+                {
+                    "url": item.candidate_image_url,
+                    "thumbnail_url": item.candidate_thumbnail_url,
+                    "source": item.candidate_source or "external",
+                }
+            ]
         else:
             candidates = await self._image_search.fetch_candidates(meal_name)
 
@@ -102,7 +107,9 @@ class ResolveMealImageJob:
                 last_error = e
 
         if ai_bytes is None:
-            raise RuntimeError(f"all image generators failed for {meal_name}: {last_error}")
+            raise RuntimeError(
+                f"all image generators failed for {meal_name}: {last_error}"
+            )
 
         final_url = self._cloudinary.save(ai_bytes, "image/png")
         result = ResolveResult(final_url, "ai_generated", None)
@@ -110,19 +117,23 @@ class ResolveMealImageJob:
         return result
 
     async def _store(self, meal_name, text_emb, result, thumbnail_url):
-        await self._cache.upsert(CachedImageUpsert(
-            meal_name=meal_name,
-            name_slug=slug(meal_name),
-            text_embedding=text_emb,
-            image_url=result.image_url,
-            thumbnail_url=thumbnail_url,
-            source=result.source,
-            confidence=result.confidence,
-        ))
-        await self._event_bus.publish(MealImageResolvedEvent(
-            aggregate_id=slug(meal_name),
-            meal_name=meal_name,
-            image_url=result.image_url,
-            source=result.source,
-            confidence=result.confidence,
-        ))
+        await self._cache.upsert(
+            CachedImageUpsert(
+                meal_name=meal_name,
+                name_slug=slug(meal_name),
+                text_embedding=text_emb,
+                image_url=result.image_url,
+                thumbnail_url=thumbnail_url,
+                source=result.source,
+                confidence=result.confidence,
+            )
+        )
+        await self._event_bus.publish(
+            MealImageResolvedEvent(
+                aggregate_id=slug(meal_name),
+                meal_name=meal_name,
+                image_url=result.image_url,
+                source=result.source,
+                confidence=result.confidence,
+            )
+        )
