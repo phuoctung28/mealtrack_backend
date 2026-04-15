@@ -138,7 +138,6 @@ class DiscoveryMealResponse(BaseModel):
     photographer: Optional[str] = Field(None, description="Photographer name for attribution")
     photographer_url: Optional[str] = Field(None, description="Photographer profile URL with UTM params")
     unsplash_download_location: Optional[str] = Field(None, description="Unsplash download trigger URL (pass back on save)")
-    image_confidence: float = Field(default=0.0, description="0.0–1.0 how well the image matches the meal name")
 
 
 class DiscoveryBatchResponse(BaseModel):

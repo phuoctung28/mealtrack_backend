@@ -53,12 +53,8 @@ from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.infra.config.settings import settings
 from src.infra.database.config import engine
-from src.infra.monitoring.sentry import initialize_sentry
 
 load_dotenv()
-
-# Initialize Sentry before creating the FastAPI app so integrations can patch middleware
-initialize_sentry()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
