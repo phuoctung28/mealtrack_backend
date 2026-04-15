@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.domain.services.meal_image_cache.resolve_meal_image_job import (
     ResolveMealImageJob,
@@ -115,7 +118,7 @@ async def _main() -> int:
     from src.infra.repositories.pgvector_meal_image_cache_repository import (
         PgvectorMealImageCacheRepository,
     )
-    from src.api.base_dependencies import get_food_image_service
+    from src.api.dependencies.food_image import get_food_image_service
     from src.infra.event_bus import PyMediatorEventBus
 
     settings = get_settings()

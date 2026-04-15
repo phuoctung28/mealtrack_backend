@@ -15,7 +15,7 @@ class ImagenImageGenerator:
         self,
         api_key: str,
         timeout: int,
-        model: str = "imagen-3.0-generate-002",
+        model: str = "imagen-3.0-generate-001",
         transport: Optional[httpx.AsyncBaseTransport] = None,
     ):
         self._api_key = api_key
