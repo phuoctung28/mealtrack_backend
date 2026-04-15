@@ -2,6 +2,7 @@
 Port for subscription services following clean architecture.
 Enables subscription checking without depending on specific implementations.
 """
+
 from abc import ABC, abstractmethod
 from typing import Optional, Dict
 
