@@ -3,8 +3,7 @@ name: Build and Push to GitHub Container Registry
 on:
   push:
     branches:
-      - main
-      - develop
+      - delivery
   workflow_dispatch:
     inputs:
       tag:
