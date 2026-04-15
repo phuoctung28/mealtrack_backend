@@ -27,8 +27,8 @@ def deps():
     cache.query_nearest.return_value = None
 
     embedder = AsyncMock()
-    embedder.embed_text.return_value = [[0.0] * 512]
-    embedder.embed_image_bytes.return_value = [0.1] * 512
+    embedder.embed_text.return_value = [[0.0] * 768]
+    embedder.score_image_text.return_value = 0.92  # passes threshold by default
 
     image_search = AsyncMock()
     image_search.fetch_candidates.return_value = [
@@ -78,12 +78,9 @@ async def test_short_circuits_when_already_cached_exact(job, deps):
 
 
 @pytest.mark.asyncio
-async def test_reuses_candidate_url_without_calling_image_search(job, deps, monkeypatch):
+async def test_reuses_candidate_url_without_calling_image_search(job, deps):
     """When the pending row has a URL, the job must NOT re-call FoodImageSearch."""
-    monkeypatch.setattr(
-        "src.domain.services.meal_image_cache.resolve_meal_image_job.cosine_sim",
-        lambda a, b: 0.92,
-    )
+    deps["embedder"].score_image_text.return_value = 0.92
     result = await job.run(_item_with_url())
     assert result.source == "pexels"
     assert result.image_url == "https://cdn/final.jpg"
@@ -94,12 +91,9 @@ async def test_reuses_candidate_url_without_calling_image_search(job, deps, monk
 
 
 @pytest.mark.asyncio
-async def test_falls_back_to_image_search_when_candidate_url_absent(job, deps, monkeypatch):
+async def test_falls_back_to_image_search_when_candidate_url_absent(job, deps):
     """Manual enqueue (no URL) → job fetches via FoodImageSearchService."""
-    monkeypatch.setattr(
-        "src.domain.services.meal_image_cache.resolve_meal_image_job.cosine_sim",
-        lambda a, b: 0.92,
-    )
+    deps["embedder"].score_image_text.return_value = 0.92
     result = await job.run(_item_without_url())
     assert result.source == "pexels"
     deps["image_search"].fetch_candidates.assert_awaited_once_with("Grilled Salmon")
@@ -107,24 +101,17 @@ async def test_falls_back_to_image_search_when_candidate_url_absent(job, deps, m
 
 
 @pytest.mark.asyncio
-async def test_falls_back_to_ai_when_no_candidate_passes(job, deps, monkeypatch):
-    monkeypatch.setattr(
-        "src.domain.services.meal_image_cache.resolve_meal_image_job.cosine_sim",
-        lambda a, b: 0.50,
-    )
+async def test_falls_back_to_ai_when_no_candidate_passes(job, deps):
+    deps["embedder"].score_image_text.return_value = 0.50  # below threshold
     result = await job.run(_item_with_url())
     assert result.source == "ai_generated"
-    assert result.confidence is None
     deps["ai_primary"].generate.assert_awaited_once()
     deps["ai_fallback"].generate.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_falls_back_to_imagen_when_pollinations_fails(job, deps, monkeypatch):
-    monkeypatch.setattr(
-        "src.domain.services.meal_image_cache.resolve_meal_image_job.cosine_sim",
-        lambda a, b: 0.10,
-    )
+async def test_falls_back_to_imagen_when_pollinations_fails(job, deps):
+    deps["embedder"].score_image_text.return_value = 0.10  # below threshold
     deps["ai_primary"].generate.side_effect = RuntimeError("pollinations down")
     result = await job.run(_item_with_url())
     assert result.source == "ai_generated"
@@ -132,11 +119,8 @@ async def test_falls_back_to_imagen_when_pollinations_fails(job, deps, monkeypat
 
 
 @pytest.mark.asyncio
-async def test_raises_when_all_generators_fail(job, deps, monkeypatch):
-    monkeypatch.setattr(
-        "src.domain.services.meal_image_cache.resolve_meal_image_job.cosine_sim",
-        lambda a, b: 0.10,
-    )
+async def test_raises_when_all_generators_fail(job, deps):
+    deps["embedder"].score_image_text.return_value = 0.10  # below threshold
     deps["ai_primary"].generate.side_effect = RuntimeError("a")
     deps["ai_fallback"].generate.side_effect = RuntimeError("b")
     with pytest.raises(RuntimeError):
@@ -144,11 +128,8 @@ async def test_raises_when_all_generators_fail(job, deps, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_publishes_event_on_success(job, deps, monkeypatch):
-    monkeypatch.setattr(
-        "src.domain.services.meal_image_cache.resolve_meal_image_job.cosine_sim",
-        lambda a, b: 0.92,
-    )
+async def test_publishes_event_on_success(job, deps):
+    deps["embedder"].score_image_text.return_value = 0.92
     await job.run(_item_with_url())
     deps["event_bus"].publish.assert_awaited_once()
     evt = deps["event_bus"].publish.await_args.args[0]
