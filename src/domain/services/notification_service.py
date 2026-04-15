@@ -15,6 +15,7 @@ from src.domain.model.notification import (
     NotificationPreferences,
 )
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
+from src.domain.ports.notification_dedup_port import NotificationDedupPort
 from src.domain.services.notification_messages import get_messages
 from src.domain.utils.timezone_utils import utc_now
 
@@ -35,10 +36,14 @@ class NotificationService:
     """Service for sending push notifications."""
 
     def __init__(
-        self, notification_repository: NotificationRepositoryPort, firebase_service
+        self,
+        notification_repository: NotificationRepositoryPort,
+        firebase_service,
+        dedup_store: NotificationDedupPort | None = None,
     ):
         self.notification_repository = notification_repository
         self.firebase_service = firebase_service
+        self._dedup_store = dedup_store
 
     async def send_notification(
         self,
@@ -290,55 +295,21 @@ class NotificationService:
         Uses INSERT with duplicate-key ignore so only the first worker
         to reach this point records the row; all others get False.
         """
-        from src.infra.database.config import ScopedSession
-        from src.infra.database.models.notification.notification_sent_log import (
-            NotificationSentLog,
-        )
-        from sqlalchemy.exc import IntegrityError
-
         minute_key = self._minute_key()
-        db = ScopedSession()
-        try:
-            db.add(NotificationSentLog(
-                user_id=user_id,
-                notification_type=str(notification_type),
-                sent_minute=minute_key,
-            ))
-            db.commit()
-            return False  # We claimed it — proceed to send
-        except IntegrityError:
-            db.rollback()
-            return True  # Another worker already claimed it
-        except Exception as e:
-            db.rollback()
-            logger.warning(f"Dedup check failed, allowing send: {e}")
-            return False  # Fail-open: send rather than silently drop
-        finally:
-            db.close()
+        if self._dedup_store is None:
+            # If no store is wired (e.g., tests), fail-open: don't block sends.
+            return False
+        return self._dedup_store.try_claim_sent(
+            user_id=user_id,
+            notification_type=str(notification_type),
+            minute_key=minute_key,
+        )
 
     def cleanup_old_sent_logs(self, older_than_hours: int = 24) -> int:
         """Delete sent-log rows older than N hours to prevent table bloat."""
-        from src.infra.database.config import ScopedSession
-        from src.infra.database.models.notification.notification_sent_log import (
-            NotificationSentLog,
-        )
-        from datetime import timedelta
-
-        cutoff = utc_now() - timedelta(hours=older_than_hours)
-        db = ScopedSession()
-        try:
-            deleted = db.query(NotificationSentLog).filter(
-                NotificationSentLog.sent_at < cutoff
-            ).delete()
-            db.commit()
-            logger.info(f"Cleaned up {deleted} old notification sent logs")
-            return deleted
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error cleaning up sent logs: {e}")
+        if self._dedup_store is None:
             return 0
-        finally:
-            db.close()
+        return self._dedup_store.cleanup_old_sent_logs(older_than_hours=older_than_hours)
 
     def get_notification_preferences(
         self, user_id: str

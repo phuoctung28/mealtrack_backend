@@ -26,9 +26,11 @@ def deps():
     cache = AsyncMock()
     cache.query_nearest.return_value = None
 
-    embedder = AsyncMock()
-    embedder.embed_text.return_value = [[0.0] * 768]
-    embedder.score_image_text.return_value = 0.92  # passes threshold by default
+    text_embedder = AsyncMock()
+    text_embedder.embed_text.return_value = [[0.0] * 768]
+
+    image_scorer = AsyncMock()
+    image_scorer.score_image_text.return_value = 0.92  # passes threshold by default
 
     image_search = AsyncMock()
     image_search.fetch_candidates.return_value = [
@@ -53,7 +55,11 @@ def deps():
     event_bus = AsyncMock()
 
     return dict(
-        cache=cache, embedder=embedder, image_search=image_search, http=http,
+        cache=cache,
+        text_embedder=text_embedder,
+        image_scorer=image_scorer,
+        image_search=image_search,
+        http=http,
         cloudinary=cloudinary, ai_primary=ai_primary, ai_fallback=ai_fallback,
         event_bus=event_bus, image_threshold=0.85,
     )
@@ -80,7 +86,7 @@ async def test_short_circuits_when_already_cached_exact(job, deps):
 @pytest.mark.asyncio
 async def test_reuses_candidate_url_without_calling_image_search(job, deps):
     """When the pending row has a URL, the job must NOT re-call FoodImageSearch."""
-    deps["embedder"].score_image_text.return_value = 0.92
+    deps["image_scorer"].score_image_text.return_value = 0.92
     result = await job.run(_item_with_url())
     assert result.source == "pexels"
     assert result.image_url == "https://cdn/final.jpg"
@@ -93,7 +99,7 @@ async def test_reuses_candidate_url_without_calling_image_search(job, deps):
 @pytest.mark.asyncio
 async def test_falls_back_to_image_search_when_candidate_url_absent(job, deps):
     """Manual enqueue (no URL) → job fetches via FoodImageSearchService."""
-    deps["embedder"].score_image_text.return_value = 0.92
+    deps["image_scorer"].score_image_text.return_value = 0.92
     result = await job.run(_item_without_url())
     assert result.source == "pexels"
     deps["image_search"].fetch_candidates.assert_awaited_once_with("Grilled Salmon")
@@ -102,7 +108,7 @@ async def test_falls_back_to_image_search_when_candidate_url_absent(job, deps):
 
 @pytest.mark.asyncio
 async def test_falls_back_to_ai_when_no_candidate_passes(job, deps):
-    deps["embedder"].score_image_text.return_value = 0.50  # below threshold
+    deps["image_scorer"].score_image_text.return_value = 0.50  # below threshold
     result = await job.run(_item_with_url())
     assert result.source == "ai_generated"
     deps["ai_primary"].generate.assert_awaited_once()
@@ -111,7 +117,7 @@ async def test_falls_back_to_ai_when_no_candidate_passes(job, deps):
 
 @pytest.mark.asyncio
 async def test_falls_back_to_imagen_when_pollinations_fails(job, deps):
-    deps["embedder"].score_image_text.return_value = 0.10  # below threshold
+    deps["image_scorer"].score_image_text.return_value = 0.10  # below threshold
     deps["ai_primary"].generate.side_effect = RuntimeError("pollinations down")
     result = await job.run(_item_with_url())
     assert result.source == "ai_generated"
@@ -120,7 +126,7 @@ async def test_falls_back_to_imagen_when_pollinations_fails(job, deps):
 
 @pytest.mark.asyncio
 async def test_raises_when_all_generators_fail(job, deps):
-    deps["embedder"].score_image_text.return_value = 0.10  # below threshold
+    deps["image_scorer"].score_image_text.return_value = 0.10  # below threshold
     deps["ai_primary"].generate.side_effect = RuntimeError("a")
     deps["ai_fallback"].generate.side_effect = RuntimeError("b")
     with pytest.raises(RuntimeError):
@@ -129,7 +135,7 @@ async def test_raises_when_all_generators_fail(job, deps):
 
 @pytest.mark.asyncio
 async def test_publishes_event_on_success(job, deps):
-    deps["embedder"].score_image_text.return_value = 0.92
+    deps["image_scorer"].score_image_text.return_value = 0.92
     await job.run(_item_with_url())
     deps["event_bus"].publish.assert_awaited_once()
     evt = deps["event_bus"].publish.await_args.args[0]
