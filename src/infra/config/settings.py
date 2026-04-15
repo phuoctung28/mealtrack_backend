@@ -134,6 +134,25 @@ class Settings(BaseSettings):
     EMAIL_FROM_ADDRESS: str | None = Field(default=None)
     EMAIL_FROM_NAME: str | None = Field(default=None)
 
+    # --- Meal image cache (nightly-fill vector cache) ---
+    MEAL_IMAGE_CACHE_ENABLED: bool = Field(default=False)
+    TEXT_DEDUP_THRESHOLD: float = Field(default=0.95)
+    IMAGE_MATCH_THRESHOLD: float = Field(default=0.65)
+
+    # Embeddings — SigLIP google/siglip-base-patch16-224 (768-d)
+    CLIP_MODEL_NAME: str = Field(default="google/siglip-base-patch16-224")
+    CLIP_DEVICE: str = Field(default="cpu")
+    CLIP_EMBEDDING_DIM: int = Field(default=768)
+
+    # AI image generators
+    POLLINATIONS_BASE_URL: str = Field(default="https://image.pollinations.ai/prompt")
+    AI_IMAGE_TIMEOUT_SECONDS: int = Field(default=30)
+
+    # Nightly cron drain
+    MAX_JOBS_PER_CRON: int = Field(default=50)
+    CRON_EXTERNAL_CALL_DELAY_SECONDS: float = Field(default=2.0)
+    MAX_RESOLUTION_ATTEMPTS: int = Field(default=5)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

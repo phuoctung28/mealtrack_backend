@@ -142,14 +142,51 @@ async def discover_meals(
             count=body.batch_size,
         )
 
-        # Fetch images in parallel using English names (best-effort)
+        # --- meal-image-cache integration ---
         from src.api.dependencies.food_image import get_food_image_service
+        from src.api.dependencies.meal_image_cache import (
+            get_meal_image_cache_service, get_pending_queue,
+        )
+        from src.domain.model.meal_image_cache import PendingItem
+        from src.domain.services.meal_image_cache.name_canonicalizer import slug as _slug
+        from src.infra.config.settings import get_settings as _get_settings
+
         image_service = get_food_image_service()
-        image_tasks = [
-            image_service.search_food_image(m["english_name"])
-            for m in meals
-        ]
-        images = await asyncio.gather(*image_tasks, return_exceptions=True)
+        cfg = _get_settings()
+
+        if cfg.MEAL_IMAGE_CACHE_ENABLED:
+            from src.api.base_dependencies import get_db as _get_db
+            _db = next(_get_db())
+            cache_svc = await get_meal_image_cache_service(session=_db)
+            pending_repo = await get_pending_queue(session=_db)
+            english_names = [m["english_name"] for m in meals]
+            cache_hits = await cache_svc.lookup_batch(english_names)
+        else:
+            cache_hits = [None] * len(meals)
+            pending_repo = None
+
+        images_list: list = []
+        misses: list[PendingItem] = []
+        for i, m in enumerate(meals):
+            hit = cache_hits[i]
+            if hit is not None:
+                images_list.append(hit)
+                continue
+            img_result = await image_service.search_food_image(m["english_name"])
+            images_list.append(img_result)
+            misses.append(PendingItem(
+                meal_name=m["english_name"],
+                name_slug=_slug(m["english_name"]),
+                candidate_image_url=(img_result.url if img_result else None),
+                candidate_thumbnail_url=(img_result.thumbnail_url if img_result else None),
+                candidate_source=(img_result.source if img_result else None),
+            ))
+
+        if cfg.MEAL_IMAGE_CACHE_ENABLED and pending_repo and misses:
+            await pending_repo.enqueue_many(misses)
+
+        images = images_list
+        # --- end integration ---
 
         # Translate names if non-English
         translated_names = [m["name"] for m in meals]
@@ -164,6 +201,22 @@ async def discover_meals(
                     translated_names = translated
             except Exception as e:
                 logger.warning(f"Name translation failed, using English: {e}")
+
+        def _as_image_fields(x):
+            """Accepts CachedImage (image_url attr) or FoodImageResult (url attr)."""
+            if x is None:
+                return dict(image_url=None, thumbnail_url=None, image_source=None,
+                            photographer=None, photographer_url=None,
+                            unsplash_download_location=None, image_confidence=0.0)
+            return dict(
+                image_url=getattr(x, "image_url", None) or getattr(x, "url", None),
+                thumbnail_url=getattr(x, "thumbnail_url", None),
+                image_source=getattr(x, "source", None),
+                photographer=getattr(x, "photographer", None),
+                photographer_url=getattr(x, "photographer_url", None),
+                unsplash_download_location=getattr(x, "download_location", None),
+                image_confidence=float(getattr(x, "confidence", 0.0) or 0.0),
+            )
 
         # Build response
         from src.api.schemas.response.meal_suggestion_responses import (
