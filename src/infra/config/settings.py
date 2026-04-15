@@ -137,12 +137,12 @@ class Settings(BaseSettings):
     # --- Meal image cache (nightly-fill vector cache) ---
     MEAL_IMAGE_CACHE_ENABLED: bool = Field(default=False)
     TEXT_DEDUP_THRESHOLD: float = Field(default=0.95)
-    IMAGE_MATCH_THRESHOLD: float = Field(default=0.85)
+    IMAGE_MATCH_THRESHOLD: float = Field(default=0.65)
 
-    # Embeddings
-    CLIP_MODEL_NAME: str = Field(default="sentence-transformers/clip-ViT-B-32")
+    # Embeddings — SigLIP google/siglip-base-patch16-224 (768-d)
+    CLIP_MODEL_NAME: str = Field(default="google/siglip-base-patch16-224")
     CLIP_DEVICE: str = Field(default="cpu")
-    CLIP_EMBEDDING_DIM: int = Field(default=512)
+    CLIP_EMBEDDING_DIM: int = Field(default=768)
 
     # AI image generators
     POLLINATIONS_BASE_URL: str = Field(default="https://image.pollinations.ai/prompt")

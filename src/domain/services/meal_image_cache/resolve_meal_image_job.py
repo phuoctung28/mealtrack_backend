@@ -82,8 +82,7 @@ class ResolveMealImageJob:
         for cand in candidates:
             try:
                 data = await self._http.download(cand["url"])
-                img_emb = await self._embedder.embed_image_bytes(data)
-                score = cosine_sim(text_emb, img_emb)
+                score = await self._embedder.score_image_text(data, meal_name)
                 logger.info(
                     "candidate score for %s: %.3f  url=%s",
                     meal_name, score, cand.get("url"),
@@ -118,8 +117,7 @@ class ResolveMealImageJob:
         # Validate the AI-generated image with CLIP before storing.
         ai_score: Optional[float] = None
         try:
-            ai_img_emb = await self._embedder.embed_image_bytes(ai_bytes)
-            ai_score = cosine_sim(text_emb, ai_img_emb)
+            ai_score = await self._embedder.score_image_text(ai_bytes, meal_name)
             logger.info("ai_generated image score for %s: %.3f", meal_name, ai_score)
         except Exception as e:  # noqa: BLE001
             logger.warning("could not score ai_generated image for %s: %s", meal_name, e)

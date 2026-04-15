@@ -1,6 +1,6 @@
 """add_meal_image_cache_tables
 
-Revision ID: d6d83eb06474
+Revision ID: 048
 Revises: 047
 Create Date: 2026-04-15
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from pgvector.sqlalchemy import Vector
 
 # revision identifiers, used by Alembic.
-revision: str = 'd6d83eb06474'
+revision: str = '048'
 down_revision: Union[str, None] = '047'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -27,7 +27,7 @@ def upgrade() -> None:
                   server_default=sa.text("gen_random_uuid()"), primary_key=True),
         sa.Column("meal_name", sa.Text, nullable=False),
         sa.Column("name_slug", sa.Text, nullable=False, unique=True),
-        sa.Column("text_embedding", Vector(512), nullable=False),
+        sa.Column("text_embedding", Vector(768), nullable=False),
         sa.Column("image_url", sa.Text, nullable=False),
         sa.Column("thumbnail_url", sa.Text, nullable=True),
         sa.Column("source", sa.Text, nullable=False),
