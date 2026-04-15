@@ -35,17 +35,19 @@ class ResolveMealImageJob:
         self,
         *,
         cache,
-        embedder,
-        image_search,  # object with `fetch_candidates(name) -> list[dict]`
-        http,  # object with `download(url) -> bytes`
-        cloudinary,  # object with `save(bytes, content_type) -> url`
+        text_embedder,   # TextEmbeddingService — Gemini API, no torch
+        image_scorer,    # EmbeddingService — SigLIP, score_image_text only
+        image_search,    # object with `fetch_candidates(name) -> list[dict]`
+        http,            # object with `download(url) -> bytes`
+        cloudinary,      # object with `save(bytes, content_type) -> url`
         ai_primary,
         ai_fallback,
         event_bus,
         image_threshold: float,
     ):
         self._cache = cache
-        self._embedder = embedder
+        self._text_embedder = text_embedder
+        self._image_scorer = image_scorer
         self._image_search = image_search
         self._http = http
         self._cloudinary = cloudinary
@@ -56,7 +58,8 @@ class ResolveMealImageJob:
 
     async def run(self, item: PendingItem) -> ResolveResult:
         meal_name = item.meal_name
-        text_emb = (await self._embedder.embed_text([meal_name]))[0]
+        # Embed with Gemini (text_embedder) — consistent with API query space
+        text_emb = (await self._text_embedder.embed_text([meal_name]))[0]
 
         existing = await self._cache.query_nearest(text_emb)
         if existing is not None and existing.cosine >= 0.999:
@@ -82,7 +85,8 @@ class ResolveMealImageJob:
         for cand in candidates:
             try:
                 data = await self._http.download(cand["url"])
-                score = await self._embedder.score_image_text(data, meal_name)
+                # Score image-text similarity with SigLIP (image_scorer) — vision required
+                score = await self._image_scorer.score_image_text(data, meal_name)
                 logger.info(
                     "candidate score for %s: %.3f  url=%s",
                     meal_name, score, cand.get("url"),
@@ -117,7 +121,7 @@ class ResolveMealImageJob:
         # Validate the AI-generated image with CLIP before storing.
         ai_score: Optional[float] = None
         try:
-            ai_score = await self._embedder.score_image_text(ai_bytes, meal_name)
+            ai_score = await self._image_scorer.score_image_text(ai_bytes, meal_name)
             logger.info("ai_generated image score for %s: %.3f", meal_name, ai_score)
         except Exception as e:  # noqa: BLE001
             logger.warning("could not score ai_generated image for %s: %s", meal_name, e)
