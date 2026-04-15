@@ -137,7 +137,7 @@ class Settings(BaseSettings):
     # --- Meal image cache (nightly-fill vector cache) ---
     MEAL_IMAGE_CACHE_ENABLED: bool = Field(default=False)
     TEXT_DEDUP_THRESHOLD: float = Field(default=0.95)
-    IMAGE_MATCH_THRESHOLD: float = Field(default=0.85)
+    IMAGE_MATCH_THRESHOLD: float = Field(default=0.22)
 
     # Embeddings
     CLIP_MODEL_NAME: str = Field(default="sentence-transformers/clip-ViT-B-32-multilingual-v1")
