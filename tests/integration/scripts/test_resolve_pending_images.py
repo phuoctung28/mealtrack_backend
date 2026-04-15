@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import AsyncMock
 
 from src.domain.model.meal_image_cache import PendingItem
-from src.infra.adapters.fake_embedding_adapter import FakeEmbeddingAdapter
+from tests.fakes.fake_embedding_adapter import FakeEmbeddingAdapter
 from src.infra.repositories.pending_meal_image_repository import (
     PendingMealImageRepository,
 )
