@@ -47,3 +47,6 @@ fatsecret
 
 # Rate limiting
 slowapi>=0.1.9
+
+# Error monitoring
+sentry-sdk[fastapi]>=2.18.0
