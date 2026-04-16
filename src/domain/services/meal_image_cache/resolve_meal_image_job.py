@@ -1,7 +1,7 @@
 """Resolve the best image for a single meal name, upsert to cache, emit event.
 
 Flow:
-  1. Already cached (cosine ≥ 0.999)  → return early, no work.
+  1. Already cached (cosine ≥ cache_hit_threshold)  → return early, no work.
   2. candidate_image_url present       → download + SigLIP score.
                                          Score ≥ threshold → store & return.
                                          Score < threshold → fall through to AI.
@@ -36,13 +36,14 @@ class ResolveMealImageJob:
         self,
         *,
         cache,
-        text_embedder,   # Gemini API — produces embeddings stored in pgvector
-        image_scorer,    # SigLIP — scores image/text relevance via sigmoid logits
-        http,            # object with `download(url) -> bytes`
-        cloudinary,      # object with `save(bytes, content_type) -> url`
-        ai_generator,    # Cloudflare Workers AI FLUX — fallback when no web candidate passes
+        text_embedder,      # Gemini API — produces embeddings stored in pgvector
+        image_scorer,       # SigLIP — scores image/text relevance via sigmoid logits
+        http,               # object with `download(url) -> bytes`
+        cloudinary,         # object with `save(bytes, content_type) -> url`
+        ai_generator,       # Cloudflare Workers AI FLUX — fallback when no web candidate passes
         event_bus,
         image_threshold: float,
+        cache_hit_threshold: float,  # cosine similarity to consider a cache hit (e.g. 0.80)
     ):
         self._cache = cache
         self._text_embedder = text_embedder
@@ -52,13 +53,14 @@ class ResolveMealImageJob:
         self._ai_generator = ai_generator
         self._event_bus = event_bus
         self._threshold = image_threshold
+        self._cache_hit_threshold = cache_hit_threshold
 
     async def run(self, item: PendingItem) -> ResolveResult:
         meal_name = item.meal_name
         text_emb = (await self._text_embedder.embed_text([meal_name]))[0]
 
         existing = await self._cache.query_nearest(text_emb)
-        if existing is not None and existing.cosine >= 0.999:
+        if existing is not None and existing.cosine >= self._cache_hit_threshold:
             logger.info("already cached: %s", meal_name)
             return ResolveResult(existing.image_url, existing.source, existing.confidence)
 

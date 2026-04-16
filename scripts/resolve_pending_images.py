@@ -36,6 +36,7 @@ async def drain(
     ai_generator,
     event_bus,
     image_threshold: float,
+    cache_hit_threshold: float,
     max_jobs: int,
     inter_call_delay: float,
     max_attempts: int,
@@ -57,6 +58,7 @@ async def drain(
         ai_generator=ai_generator,
         event_bus=event_bus,
         image_threshold=image_threshold,
+        cache_hit_threshold=cache_hit_threshold,
     )
 
     summary = {"processed": 0, "matched": 0, "ai_generated": 0, "failed": 0, "skipped": 0}
@@ -139,6 +141,7 @@ async def _main() -> int:
             ),
             event_bus=PyMediatorEventBus(),
             image_threshold=settings.IMAGE_MATCH_THRESHOLD,
+            cache_hit_threshold=settings.MEAL_IMAGE_COSINE_HIT_THRESHOLD,
             max_jobs=settings.MAX_JOBS_PER_CRON,
             inter_call_delay=settings.CRON_EXTERNAL_CALL_DELAY_SECONDS,
             max_attempts=settings.MAX_RESOLUTION_ATTEMPTS,

@@ -53,6 +53,7 @@ def deps():
         ai_generator=ai_generator,
         event_bus=event_bus,
         image_threshold=0.85,
+        cache_hit_threshold=0.80,
     )
 
 
