@@ -214,10 +214,14 @@ async def discover_meals(
                             unsplash_download_location=None, image_confidence=0.0)
             image_url = getattr(x, "image_url", None) or getattr(x, "url", None)
             thumbnail_url = getattr(x, "thumbnail_url", None) or image_url  # fallback to full URL
+            raw_source = getattr(x, "source", None)
+            # TODO: remove once mobile handles "ai_generated" source — app currently
+            # only renders images for "pexels"/"unsplash", so normalise unknown sources.
+            image_source = raw_source if raw_source in ("pexels", "unsplash") else "pexels"
             return dict(
                 image_url=image_url,
                 thumbnail_url=thumbnail_url,
-                image_source=getattr(x, "source", None),
+                image_source=image_source,
                 photographer=getattr(x, "photographer", None),
                 photographer_url=getattr(x, "photographer_url", None),
                 unsplash_download_location=getattr(x, "download_location", None),
