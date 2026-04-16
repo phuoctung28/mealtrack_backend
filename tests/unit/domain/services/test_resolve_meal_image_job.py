@@ -44,13 +44,9 @@ def deps():
     cloudinary = MagicMock()
     cloudinary.save.return_value = "https://cdn/final.jpg"
 
-    ai_primary = AsyncMock()
-    ai_primary.name = "pollinations"
-    ai_primary.generate.return_value = b"aibytes"
-
-    ai_fallback = AsyncMock()
-    ai_fallback.name = "imagen"
-    ai_fallback.generate.return_value = b"imagenbytes"
+    ai_generator = AsyncMock()
+    ai_generator.name = "huggingface"
+    ai_generator.generate.return_value = b"aibytes"
 
     event_bus = AsyncMock()
 
@@ -60,8 +56,10 @@ def deps():
         image_scorer=image_scorer,
         image_search=image_search,
         http=http,
-        cloudinary=cloudinary, ai_primary=ai_primary, ai_fallback=ai_fallback,
-        event_bus=event_bus, image_threshold=0.85,
+        cloudinary=cloudinary,
+        ai_generator=ai_generator,
+        event_bus=event_bus,
+        image_threshold=0.85,
     )
 
 
@@ -92,7 +90,7 @@ async def test_reuses_candidate_url_without_calling_image_search(job, deps):
     assert result.image_url == "https://cdn/final.jpg"
     deps["image_search"].fetch_candidates.assert_not_called()
     deps["http"].download.assert_awaited_once_with("https://pexels/a.jpg")
-    deps["ai_primary"].generate.assert_not_called()
+    deps["ai_generator"].generate.assert_not_called()
     deps["cache"].upsert.assert_awaited_once()
 
 
@@ -111,24 +109,13 @@ async def test_falls_back_to_ai_when_no_candidate_passes(job, deps):
     deps["image_scorer"].score_image_text.return_value = 0.50  # below threshold
     result = await job.run(_item_with_url())
     assert result.source == "ai_generated"
-    deps["ai_primary"].generate.assert_awaited_once()
-    deps["ai_fallback"].generate.assert_not_called()
+    deps["ai_generator"].generate.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_falls_back_to_imagen_when_pollinations_fails(job, deps):
+async def test_raises_when_generator_fails(job, deps):
     deps["image_scorer"].score_image_text.return_value = 0.10  # below threshold
-    deps["ai_primary"].generate.side_effect = RuntimeError("pollinations down")
-    result = await job.run(_item_with_url())
-    assert result.source == "ai_generated"
-    deps["ai_fallback"].generate.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_raises_when_all_generators_fail(job, deps):
-    deps["image_scorer"].score_image_text.return_value = 0.10  # below threshold
-    deps["ai_primary"].generate.side_effect = RuntimeError("a")
-    deps["ai_fallback"].generate.side_effect = RuntimeError("b")
+    deps["ai_generator"].generate.side_effect = RuntimeError("sdxl down")
     with pytest.raises(RuntimeError):
         await job.run(_item_with_url())
 

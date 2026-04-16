@@ -34,8 +34,7 @@ async def drain(
     image_search,
     http,
     cloudinary,
-    ai_primary,
-    ai_fallback,
+    ai_generator,
     event_bus,
     image_threshold: float,
     max_jobs: int,
@@ -63,8 +62,7 @@ async def drain(
         image_search=image_search,
         http=http,
         cloudinary=cloudinary,
-        ai_primary=ai_primary,
-        ai_fallback=ai_fallback,
+        ai_generator=ai_generator,
         event_bus=event_bus,
         image_threshold=image_threshold,
     )
@@ -111,10 +109,7 @@ async def _main() -> int:
     from src.infra.adapters.clip_embedding_adapter import ClipEmbeddingAdapter
     from src.infra.adapters.gemini_text_embedding_adapter import GeminiTextEmbeddingAdapter
     from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
-    from src.infra.adapters.pollinations_image_generator import (
-        PollinationsImageGenerator,
-    )
-    from src.infra.adapters.imagen_image_generator import ImagenImageGenerator
+    from src.infra.adapters.huggingface_image_generator import HuggingFaceImageGenerator
     from src.infra.repositories.pending_meal_image_repository import (
         PendingMealImageRepository,
     )
@@ -171,12 +166,9 @@ async def _main() -> int:
             image_search=_ImageSearchWrapper(get_food_image_service()),
             http=_HttpDownloader(),
             cloudinary=CloudinaryImageStore(),
-            ai_primary=PollinationsImageGenerator(
-                base_url=settings.POLLINATIONS_BASE_URL,
-                timeout=settings.AI_IMAGE_TIMEOUT_SECONDS,
-            ),
-            ai_fallback=ImagenImageGenerator(
-                api_key=settings.GOOGLE_API_KEY or "",
+            ai_generator=HuggingFaceImageGenerator(
+                api_key=settings.HUGGINGFACE_API_KEY or "",
+                model=settings.HF_IMAGE_MODEL,
                 timeout=settings.AI_IMAGE_TIMEOUT_SECONDS,
             ),
             event_bus=PyMediatorEventBus(),

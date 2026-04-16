@@ -145,8 +145,9 @@ class Settings(BaseSettings):
     CLIP_EMBEDDING_DIM: int = Field(default=768)
 
     # AI image generators
-    POLLINATIONS_BASE_URL: str = Field(default="https://image.pollinations.ai/prompt")
-    AI_IMAGE_TIMEOUT_SECONDS: int = Field(default=30)
+    HUGGINGFACE_API_KEY: str | None = Field(default=None, description="HuggingFace token for Inference API (free tier)")
+    HF_IMAGE_MODEL: str = Field(default="stabilityai/stable-diffusion-xl-base-1.0", description="HF Inference API model for AI image generation")
+    AI_IMAGE_TIMEOUT_SECONDS: int = Field(default=60)
 
     # Nightly cron drain
     MAX_JOBS_PER_CRON: int = Field(default=50)

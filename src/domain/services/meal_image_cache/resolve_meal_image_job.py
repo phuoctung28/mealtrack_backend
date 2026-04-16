@@ -40,8 +40,7 @@ class ResolveMealImageJob:
         image_search,    # object with `fetch_candidates(name) -> list[dict]`
         http,            # object with `download(url) -> bytes`
         cloudinary,      # object with `save(bytes, content_type) -> url`
-        ai_primary,
-        ai_fallback,
+        ai_generator,
         event_bus,
         image_threshold: float,
     ):
@@ -51,8 +50,7 @@ class ResolveMealImageJob:
         self._image_search = image_search
         self._http = http
         self._cloudinary = cloudinary
-        self._ai_primary = ai_primary
-        self._ai_fallback = ai_fallback
+        self._ai_generator = ai_generator
         self._event_bus = event_bus
         self._threshold = image_threshold
 
@@ -103,20 +101,12 @@ class ResolveMealImageJob:
             return result
 
         prompt = f"High quality food photograph of {meal_name}, overhead shot, natural lighting"
-        ai_bytes: Optional[bytes] = None
-        last_error: Optional[Exception] = None
-        for gen in (self._ai_primary, self._ai_fallback):
-            try:
-                ai_bytes = await gen.generate(prompt)
-                break
-            except Exception as e:  # noqa: BLE001
-                logger.warning("%s failed: %s", gen.name, e)
-                last_error = e
-
-        if ai_bytes is None:
+        try:
+            ai_bytes = await self._ai_generator.generate(prompt)
+        except Exception as e:  # noqa: BLE001
             raise RuntimeError(
-                f"all image generators failed for {meal_name}: {last_error}"
-            )
+                f"AI image generation failed for {meal_name}: {e}"
+            ) from e
 
         # Validate the AI-generated image with CLIP before storing.
         ai_score: Optional[float] = None
