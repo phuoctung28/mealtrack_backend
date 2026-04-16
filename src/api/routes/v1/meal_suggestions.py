@@ -170,6 +170,10 @@ async def discover_meals(
         for i, m in enumerate(meals):
             hit = cache_hits[i]
             if hit is not None:
+                logger.info(
+                    "image cache hit: meal=%r source=%s cosine=%.3f url=%s",
+                    m["english_name"], hit.source, hit.cosine, hit.image_url,
+                )
                 images_list.append(hit)
                 continue
             img_result = await image_service.search_food_image(m["english_name"])
