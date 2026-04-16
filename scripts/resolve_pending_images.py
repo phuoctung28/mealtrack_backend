@@ -31,13 +31,12 @@ async def drain(
     cache_repo,
     text_embedder,
     image_scorer,
-    image_search,
     http,
     cloudinary,
-    ai_primary,
-    ai_fallback,
+    ai_generator,
     event_bus,
     image_threshold: float,
+    cache_hit_threshold: float,
     max_jobs: int,
     inter_call_delay: float,
     max_attempts: int,
@@ -46,13 +45,7 @@ async def drain(
     items = await pending_repo.claim_batch(max_jobs)
     if not items:
         logger.info("drain: no pending items")
-        return {
-            "processed": 0,
-            "matched": 0,
-            "ai_generated": 0,
-            "failed": 0,
-            "skipped": 0,
-        }
+        return {"processed": 0, "matched": 0, "ai_generated": 0, "failed": 0, "skipped": 0}
 
     logger.info("drain: %d items to process", len(items))
 
@@ -60,22 +53,15 @@ async def drain(
         cache=cache_repo,
         text_embedder=text_embedder,
         image_scorer=image_scorer,
-        image_search=image_search,
         http=http,
         cloudinary=cloudinary,
-        ai_primary=ai_primary,
-        ai_fallback=ai_fallback,
+        ai_generator=ai_generator,
         event_bus=event_bus,
         image_threshold=image_threshold,
+        cache_hit_threshold=cache_hit_threshold,
     )
 
-    summary = {
-        "processed": 0,
-        "matched": 0,
-        "ai_generated": 0,
-        "failed": 0,
-        "skipped": 0,
-    }
+    summary = {"processed": 0, "matched": 0, "ai_generated": 0, "failed": 0, "skipped": 0}
     for i, item in enumerate(items):
         if item.attempts >= max_attempts:
             logger.warning("skipping %s — exceeded max_attempts", item.name_slug)
@@ -111,17 +97,13 @@ async def _main() -> int:
     from src.infra.adapters.clip_embedding_adapter import ClipEmbeddingAdapter
     from src.infra.adapters.gemini_text_embedding_adapter import GeminiTextEmbeddingAdapter
     from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
-    from src.infra.adapters.pollinations_image_generator import (
-        PollinationsImageGenerator,
-    )
-    from src.infra.adapters.imagen_image_generator import ImagenImageGenerator
+    from src.infra.adapters.cloudflare_image_generator import CloudflareImageGenerator
     from src.infra.repositories.pending_meal_image_repository import (
         PendingMealImageRepository,
     )
     from src.infra.repositories.pgvector_meal_image_cache_repository import (
         PgvectorMealImageCacheRepository,
     )
-    from src.api.dependencies.food_image import get_food_image_service
     from src.infra.event_bus import PyMediatorEventBus
 
     settings = get_settings()
@@ -136,26 +118,7 @@ async def _main() -> int:
                 r.raise_for_status()
                 return r.content
 
-    class _ImageSearchWrapper:
-        def __init__(self, svc):
-            self._svc = svc
-
-        async def fetch_candidates(self, name):
-            result = await self._svc.search_food_image(name)
-            if result is None:
-                return []
-            return [
-                {
-                    "url": result.url,
-                    "thumbnail_url": result.thumbnail_url,
-                    "source": result.source,
-                }
-            ]
-
-    # Gemini: text embedding for storing/querying pgvector (consistent with API)
     text_embedder = GeminiTextEmbeddingAdapter(api_key=settings.GOOGLE_API_KEY)
-
-    # SigLIP: image-text scoring only (validates candidate images, requires torch)
     image_scorer = ClipEmbeddingAdapter.from_settings(
         model_name=settings.CLIP_MODEL_NAME,
         device=settings.CLIP_DEVICE,
@@ -168,19 +131,17 @@ async def _main() -> int:
             cache_repo=PgvectorMealImageCacheRepository(session),
             text_embedder=text_embedder,
             image_scorer=image_scorer,
-            image_search=_ImageSearchWrapper(get_food_image_service()),
             http=_HttpDownloader(),
             cloudinary=CloudinaryImageStore(),
-            ai_primary=PollinationsImageGenerator(
-                base_url=settings.POLLINATIONS_BASE_URL,
-                timeout=settings.AI_IMAGE_TIMEOUT_SECONDS,
-            ),
-            ai_fallback=ImagenImageGenerator(
-                api_key=settings.GOOGLE_API_KEY or "",
+            ai_generator=CloudflareImageGenerator(
+                account_id=settings.CF_ACCOUNT_ID or "",
+                api_token=settings.CF_API_TOKEN or "",
+                model=settings.CF_IMAGE_MODEL,
                 timeout=settings.AI_IMAGE_TIMEOUT_SECONDS,
             ),
             event_bus=PyMediatorEventBus(),
             image_threshold=settings.IMAGE_MATCH_THRESHOLD,
+            cache_hit_threshold=settings.MEAL_IMAGE_COSINE_HIT_THRESHOLD,
             max_jobs=settings.MAX_JOBS_PER_CRON,
             inter_call_delay=settings.CRON_EXTERNAL_CALL_DELAY_SECONDS,
             max_attempts=settings.MAX_RESOLUTION_ATTEMPTS,
