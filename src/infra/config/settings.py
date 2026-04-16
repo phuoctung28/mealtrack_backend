@@ -146,7 +146,7 @@ class Settings(BaseSettings):
 
     # AI image generators
     HUGGINGFACE_API_KEY: str | None = Field(default=None, description="HuggingFace token for Inference API (free tier)")
-    HF_IMAGE_MODEL: str = Field(default="stabilityai/stable-diffusion-xl-base-1.0", description="HF Inference API model for AI image generation")
+    HF_IMAGE_MODEL: str = Field(default="black-forest-labs/FLUX.1-schnell", description="HF Inference API model for AI image generation")
     AI_IMAGE_TIMEOUT_SECONDS: int = Field(default=60)
 
     # Nightly cron drain
