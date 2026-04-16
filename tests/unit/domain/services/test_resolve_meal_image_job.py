@@ -39,7 +39,7 @@ def deps():
     cloudinary.save.return_value = "https://cdn/final.jpg"
 
     ai_generator = AsyncMock()
-    ai_generator.name = "huggingface"
+    ai_generator.name = "cloudflare"
     ai_generator.generate.return_value = b"aibytes"
 
     event_bus = AsyncMock()

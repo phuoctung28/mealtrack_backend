@@ -40,7 +40,7 @@ class ResolveMealImageJob:
         image_scorer,    # SigLIP — scores image/text relevance via sigmoid logits
         http,            # object with `download(url) -> bytes`
         cloudinary,      # object with `save(bytes, content_type) -> url`
-        ai_generator,    # HuggingFace FLUX — fallback when no web candidate passes
+        ai_generator,    # Cloudflare Workers AI FLUX — fallback when no web candidate passes
         event_bus,
         image_threshold: float,
     ):

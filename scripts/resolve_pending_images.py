@@ -95,7 +95,7 @@ async def _main() -> int:
     from src.infra.adapters.clip_embedding_adapter import ClipEmbeddingAdapter
     from src.infra.adapters.gemini_text_embedding_adapter import GeminiTextEmbeddingAdapter
     from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
-    from src.infra.adapters.huggingface_image_generator import HuggingFaceImageGenerator
+    from src.infra.adapters.cloudflare_image_generator import CloudflareImageGenerator
     from src.infra.repositories.pending_meal_image_repository import (
         PendingMealImageRepository,
     )
@@ -131,9 +131,10 @@ async def _main() -> int:
             image_scorer=image_scorer,
             http=_HttpDownloader(),
             cloudinary=CloudinaryImageStore(),
-            ai_generator=HuggingFaceImageGenerator(
-                api_key=settings.HUGGINGFACE_API_KEY or "",
-                model=settings.HF_IMAGE_MODEL,
+            ai_generator=CloudflareImageGenerator(
+                account_id=settings.CF_ACCOUNT_ID or "",
+                api_token=settings.CF_API_TOKEN or "",
+                model=settings.CF_IMAGE_MODEL,
                 timeout=settings.AI_IMAGE_TIMEOUT_SECONDS,
             ),
             event_bus=PyMediatorEventBus(),

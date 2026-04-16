@@ -144,9 +144,10 @@ class Settings(BaseSettings):
     CLIP_DEVICE: str = Field(default="cpu")
     CLIP_EMBEDDING_DIM: int = Field(default=768)
 
-    # AI image generators
-    HUGGINGFACE_API_KEY: str | None = Field(default=None, description="HuggingFace token for Inference API (free tier)")
-    HF_IMAGE_MODEL: str = Field(default="black-forest-labs/FLUX.1-schnell", description="HF Inference API model for AI image generation")
+    # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)
+    CF_ACCOUNT_ID: str | None = Field(default=None, description="Cloudflare account ID (dash.cloudflare.com → right sidebar)")
+    CF_API_TOKEN: str | None = Field(default=None, description="Cloudflare API token with Workers AI permission")
+    CF_IMAGE_MODEL: str = Field(default="@cf/black-forest-labs/flux-1-schnell", description="CF Workers AI model for image generation")
     AI_IMAGE_TIMEOUT_SECONDS: int = Field(default=60)
 
     # Nightly cron drain
