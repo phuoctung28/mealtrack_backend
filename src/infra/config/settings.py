@@ -136,11 +136,11 @@ class Settings(BaseSettings):
 
     # --- Meal image cache (nightly-fill vector cache) ---
     MEAL_IMAGE_CACHE_ENABLED: bool = Field(default=False)
-    TEXT_DEDUP_THRESHOLD: float = Field(default=0.80)
+    TEXT_DEDUP_THRESHOLD: float = Field(default=0.70)
     IMAGE_MATCH_THRESHOLD: float = Field(default=0.65)
     MEAL_IMAGE_COSINE_HIT_THRESHOLD: float = Field(
-        default=0.80,
-        description="Cosine similarity above which a cached image is reused (0.75–0.90 recommended)",
+        default=0.70,
+        description="Cosine similarity above which a cached image is reused (0.65–0.80 recommended)",
     )
 
     # Embeddings — SigLIP google/siglip-base-patch16-224 (768-d)
