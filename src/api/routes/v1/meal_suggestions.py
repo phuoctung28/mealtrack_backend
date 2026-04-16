@@ -236,13 +236,7 @@ async def discover_meals(
                     carbs=m["carbs"],
                     fat=m["fat"],
                 ),
-                image_url=img.url if img else None,
-                thumbnail_url=img.thumbnail_url if img else None,
-                image_source=img.source if img else None,
-                photographer=img.photographer if img else None,
-                photographer_url=img.photographer_url if img else None,
-                unsplash_download_location=img.download_location if img else None,
-                image_confidence=img.confidence if img else 0.0,
+                **_as_image_fields(img),
             ))
 
         shown_count = len(session.shown_meal_names)
