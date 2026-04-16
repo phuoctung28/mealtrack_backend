@@ -8,11 +8,12 @@ API endpoint:
   POST https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}
   Authorization: Bearer {api_token}
   Body: {"prompt": "..."}
-  Response: raw image bytes (content-type: image/png)
+  Response: application/json → {"result": {"image": "<base64-jpeg>"}, "success": true, ...}
 """
 
 from __future__ import annotations
 
+import base64
 import logging
 from typing import Optional
 
@@ -81,13 +82,28 @@ class CloudflareImageGenerator:
             )
 
         content_type = resp.headers.get("content-type", "")
-        if "image" not in content_type:
+
+        if "image" in content_type:
+            # Direct binary response (some CF endpoints / future models)
+            image_bytes = resp.content
+        elif "json" in content_type:
+            # Standard CF Workers AI REST response:
+            # {"result": {"image": "<base64-jpeg>"}, "success": true, ...}
+            try:
+                data = resp.json()
+                b64 = data["result"]["image"]
+                image_bytes = base64.b64decode(b64)
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RuntimeError(
+                    f"Cloudflare returned JSON but could not extract image: {resp.text[:300]}"
+                ) from exc
+        else:
             raise RuntimeError(
                 f"Cloudflare returned unexpected content-type '{content_type}': "
                 f"{resp.content[:200]!r}"
             )
 
         logger.info(
-            "CF image generated: model=%s size=%d bytes", self._model, len(resp.content)
+            "CF image generated: model=%s size=%d bytes", self._model, len(image_bytes)
         )
-        return resp.content
+        return image_bytes
