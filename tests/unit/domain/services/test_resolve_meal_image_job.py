@@ -32,12 +32,6 @@ def deps():
     image_scorer = AsyncMock()
     image_scorer.score_image_text.return_value = 0.92  # passes threshold by default
 
-    image_search = AsyncMock()
-    image_search.fetch_candidates.return_value = [
-        {"url": "https://pexels/fallback.jpg", "thumbnail_url": None,
-         "source": "pexels"},
-    ]
-
     http = AsyncMock()
     http.download.return_value = b"imgbytes"
 
@@ -54,7 +48,6 @@ def deps():
         cache=cache,
         text_embedder=text_embedder,
         image_scorer=image_scorer,
-        image_search=image_search,
         http=http,
         cloudinary=cloudinary,
         ai_generator=ai_generator,
@@ -69,54 +62,52 @@ def job(deps):
 
 
 @pytest.mark.asyncio
-async def test_short_circuits_when_already_cached_exact(job, deps):
+async def test_short_circuits_when_already_cached(job, deps):
     deps["cache"].query_nearest.return_value = CachedImage(
         meal_name="x", name_slug="x", image_url="u",
         thumbnail_url=None, source="pexels", confidence=0.9, cosine=0.999,
     )
     result = await job.run(_item_with_url())
     assert result.source == "pexels"
-    deps["image_search"].fetch_candidates.assert_not_called()
     deps["http"].download.assert_not_called()
     deps["cloudinary"].save.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_reuses_candidate_url_without_calling_image_search(job, deps):
-    """When the pending row has a URL, the job must NOT re-call FoodImageSearch."""
+async def test_uses_candidate_url_when_score_passes(job, deps):
+    """Candidate URL passes threshold → stored, no AI call."""
     deps["image_scorer"].score_image_text.return_value = 0.92
     result = await job.run(_item_with_url())
     assert result.source == "pexels"
     assert result.image_url == "https://cdn/final.jpg"
-    deps["image_search"].fetch_candidates.assert_not_called()
     deps["http"].download.assert_awaited_once_with("https://pexels/a.jpg")
     deps["ai_generator"].generate.assert_not_called()
     deps["cache"].upsert.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_falls_back_to_image_search_when_candidate_url_absent(job, deps):
-    """Manual enqueue (no URL) → job fetches via FoodImageSearchService."""
-    deps["image_scorer"].score_image_text.return_value = 0.92
-    result = await job.run(_item_without_url())
-    assert result.source == "pexels"
-    deps["image_search"].fetch_candidates.assert_awaited_once_with("Grilled Salmon")
-    deps["http"].download.assert_awaited_once_with("https://pexels/fallback.jpg")
-
-
-@pytest.mark.asyncio
-async def test_falls_back_to_ai_when_no_candidate_passes(job, deps):
-    deps["image_scorer"].score_image_text.return_value = 0.50  # below threshold
+async def test_falls_back_to_ai_when_candidate_score_too_low(job, deps):
+    """Candidate URL fails threshold → AI generation."""
+    deps["image_scorer"].score_image_text.return_value = 0.50
     result = await job.run(_item_with_url())
     assert result.source == "ai_generated"
     deps["ai_generator"].generate.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_raises_when_generator_fails(job, deps):
-    deps["image_scorer"].score_image_text.return_value = 0.10  # below threshold
-    deps["ai_generator"].generate.side_effect = RuntimeError("sdxl down")
-    with pytest.raises(RuntimeError):
+async def test_goes_straight_to_ai_when_no_candidate_url(job, deps):
+    """No candidate URL → web search already failed, skip to AI immediately."""
+    result = await job.run(_item_without_url())
+    assert result.source == "ai_generated"
+    deps["http"].download.assert_not_called()
+    deps["ai_generator"].generate.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_raises_when_ai_generator_fails(job, deps):
+    deps["image_scorer"].score_image_text.return_value = 0.10
+    deps["ai_generator"].generate.side_effect = RuntimeError("flux down")
+    with pytest.raises(RuntimeError, match="AI image generation failed"):
         await job.run(_item_with_url())
 
 

@@ -31,7 +31,6 @@ async def drain(
     cache_repo,
     text_embedder,
     image_scorer,
-    image_search,
     http,
     cloudinary,
     ai_generator,
@@ -45,13 +44,7 @@ async def drain(
     items = await pending_repo.claim_batch(max_jobs)
     if not items:
         logger.info("drain: no pending items")
-        return {
-            "processed": 0,
-            "matched": 0,
-            "ai_generated": 0,
-            "failed": 0,
-            "skipped": 0,
-        }
+        return {"processed": 0, "matched": 0, "ai_generated": 0, "failed": 0, "skipped": 0}
 
     logger.info("drain: %d items to process", len(items))
 
@@ -59,7 +52,6 @@ async def drain(
         cache=cache_repo,
         text_embedder=text_embedder,
         image_scorer=image_scorer,
-        image_search=image_search,
         http=http,
         cloudinary=cloudinary,
         ai_generator=ai_generator,
@@ -67,13 +59,7 @@ async def drain(
         image_threshold=image_threshold,
     )
 
-    summary = {
-        "processed": 0,
-        "matched": 0,
-        "ai_generated": 0,
-        "failed": 0,
-        "skipped": 0,
-    }
+    summary = {"processed": 0, "matched": 0, "ai_generated": 0, "failed": 0, "skipped": 0}
     for i, item in enumerate(items):
         if item.attempts >= max_attempts:
             logger.warning("skipping %s — exceeded max_attempts", item.name_slug)
@@ -116,7 +102,6 @@ async def _main() -> int:
     from src.infra.repositories.pgvector_meal_image_cache_repository import (
         PgvectorMealImageCacheRepository,
     )
-    from src.api.dependencies.food_image import get_food_image_service
     from src.infra.event_bus import PyMediatorEventBus
 
     settings = get_settings()
@@ -131,26 +116,7 @@ async def _main() -> int:
                 r.raise_for_status()
                 return r.content
 
-    class _ImageSearchWrapper:
-        def __init__(self, svc):
-            self._svc = svc
-
-        async def fetch_candidates(self, name):
-            result = await self._svc.search_food_image(name)
-            if result is None:
-                return []
-            return [
-                {
-                    "url": result.url,
-                    "thumbnail_url": result.thumbnail_url,
-                    "source": result.source,
-                }
-            ]
-
-    # Gemini: text embedding for storing/querying pgvector (consistent with API)
     text_embedder = GeminiTextEmbeddingAdapter(api_key=settings.GOOGLE_API_KEY)
-
-    # SigLIP: image-text scoring only (validates candidate images, requires torch)
     image_scorer = ClipEmbeddingAdapter.from_settings(
         model_name=settings.CLIP_MODEL_NAME,
         device=settings.CLIP_DEVICE,
@@ -163,7 +129,6 @@ async def _main() -> int:
             cache_repo=PgvectorMealImageCacheRepository(session),
             text_embedder=text_embedder,
             image_scorer=image_scorer,
-            image_search=_ImageSearchWrapper(get_food_image_service()),
             http=_HttpDownloader(),
             cloudinary=CloudinaryImageStore(),
             ai_generator=HuggingFaceImageGenerator(
