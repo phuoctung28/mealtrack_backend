@@ -170,6 +170,10 @@ async def discover_meals(
         for i, m in enumerate(meals):
             hit = cache_hits[i]
             if hit is not None:
+                logger.info(
+                    "image cache hit: meal=%r source=%s cosine=%.3f url=%s",
+                    m["english_name"], hit.source, hit.cosine, hit.image_url,
+                )
                 images_list.append(hit)
                 continue
             img_result = await image_service.search_food_image(m["english_name"])
@@ -208,9 +212,11 @@ async def discover_meals(
                 return dict(image_url=None, thumbnail_url=None, image_source=None,
                             photographer=None, photographer_url=None,
                             unsplash_download_location=None, image_confidence=0.0)
+            image_url = getattr(x, "image_url", None) or getattr(x, "url", None)
+            thumbnail_url = getattr(x, "thumbnail_url", None) or image_url  # fallback to full URL
             return dict(
-                image_url=getattr(x, "image_url", None) or getattr(x, "url", None),
-                thumbnail_url=getattr(x, "thumbnail_url", None),
+                image_url=image_url,
+                thumbnail_url=thumbnail_url,
                 image_source=getattr(x, "source", None),
                 photographer=getattr(x, "photographer", None),
                 photographer_url=getattr(x, "photographer_url", None),
@@ -236,13 +242,7 @@ async def discover_meals(
                     carbs=m["carbs"],
                     fat=m["fat"],
                 ),
-                image_url=img.url if img else None,
-                thumbnail_url=img.thumbnail_url if img else None,
-                image_source=img.source if img else None,
-                photographer=img.photographer if img else None,
-                photographer_url=img.photographer_url if img else None,
-                unsplash_download_location=img.download_location if img else None,
-                image_confidence=img.confidence if img else 0.0,
+                **_as_image_fields(img),
             ))
 
         shown_count = len(session.shown_meal_names)
