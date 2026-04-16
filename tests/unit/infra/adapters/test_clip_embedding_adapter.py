@@ -1,5 +1,4 @@
 import pytest
-import torch
 
 from src.infra.adapters.clip_embedding_adapter import ClipEmbeddingAdapter
 
@@ -10,6 +9,7 @@ class _FakeProcessor:
     """Minimal processor stub — returns tensors the fake model can consume."""
 
     def __call__(self, **kwargs):
+        torch = pytest.importorskip("torch")
         batch = 1
         if "text" in kwargs and kwargs["text"] is not None:
             batch = len(kwargs["text"])
@@ -21,13 +21,16 @@ class _FakeModel:
         return self
 
     def get_text_features(self, **kwargs):
+        torch = pytest.importorskip("torch")
         batch = kwargs["input_ids"].shape[0]
         return torch.randn(batch, DIM)
 
     def get_image_features(self, **kwargs):
+        torch = pytest.importorskip("torch")
         return torch.randn(1, DIM)
 
     def __call__(self, **kwargs):
+        torch = pytest.importorskip("torch")
         class _Out:
             logits_per_image = torch.tensor([[2.0]])  # sigmoid(2.0) ≈ 0.88
         return _Out()
@@ -35,6 +38,7 @@ class _FakeModel:
 
 @pytest.mark.asyncio
 async def test_embed_text_returns_vector_per_input():
+    pytest.importorskip("torch")
     adapter = ClipEmbeddingAdapter(
         processor=_FakeProcessor(), model=_FakeModel(), dim=DIM
     )
@@ -45,6 +49,7 @@ async def test_embed_text_returns_vector_per_input():
 
 @pytest.mark.asyncio
 async def test_embed_image_bytes_returns_single_vector():
+    pytest.importorskip("torch")
     adapter = ClipEmbeddingAdapter(
         processor=_FakeProcessor(), model=_FakeModel(), dim=DIM
     )
@@ -59,6 +64,7 @@ async def test_embed_image_bytes_returns_single_vector():
 
 @pytest.mark.asyncio
 async def test_score_image_text_returns_float_in_unit_interval():
+    pytest.importorskip("torch")
     adapter = ClipEmbeddingAdapter(
         processor=_FakeProcessor(), model=_FakeModel(), dim=DIM
     )

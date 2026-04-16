@@ -136,17 +136,23 @@ class Settings(BaseSettings):
 
     # --- Meal image cache (nightly-fill vector cache) ---
     MEAL_IMAGE_CACHE_ENABLED: bool = Field(default=False)
-    TEXT_DEDUP_THRESHOLD: float = Field(default=0.95)
+    TEXT_DEDUP_THRESHOLD: float = Field(default=0.65)
     IMAGE_MATCH_THRESHOLD: float = Field(default=0.65)
+    MEAL_IMAGE_COSINE_HIT_THRESHOLD: float = Field(
+        default=0.65,
+        description="Cosine similarity above which a cached image is reused (0.65–0.80 recommended)",
+    )
 
     # Embeddings — SigLIP google/siglip-base-patch16-224 (768-d)
     CLIP_MODEL_NAME: str = Field(default="google/siglip-base-patch16-224")
     CLIP_DEVICE: str = Field(default="cpu")
     CLIP_EMBEDDING_DIM: int = Field(default=768)
 
-    # AI image generators
-    POLLINATIONS_BASE_URL: str = Field(default="https://image.pollinations.ai/prompt")
-    AI_IMAGE_TIMEOUT_SECONDS: int = Field(default=30)
+    # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)
+    CF_ACCOUNT_ID: str | None = Field(default=None, description="Cloudflare account ID (dash.cloudflare.com → right sidebar)")
+    CF_API_TOKEN: str | None = Field(default=None, description="Cloudflare API token with Workers AI permission")
+    CF_IMAGE_MODEL: str = Field(default="@cf/black-forest-labs/flux-1-schnell", description="CF Workers AI model for image generation")
+    AI_IMAGE_TIMEOUT_SECONDS: int = Field(default=60)
 
     # Nightly cron drain
     MAX_JOBS_PER_CRON: int = Field(default=50)
