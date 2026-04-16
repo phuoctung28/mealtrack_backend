@@ -212,9 +212,11 @@ async def discover_meals(
                 return dict(image_url=None, thumbnail_url=None, image_source=None,
                             photographer=None, photographer_url=None,
                             unsplash_download_location=None, image_confidence=0.0)
+            image_url = getattr(x, "image_url", None) or getattr(x, "url", None)
+            thumbnail_url = getattr(x, "thumbnail_url", None) or image_url  # fallback to full URL
             return dict(
-                image_url=getattr(x, "image_url", None) or getattr(x, "url", None),
-                thumbnail_url=getattr(x, "thumbnail_url", None),
+                image_url=image_url,
+                thumbnail_url=thumbnail_url,
                 image_source=getattr(x, "source", None),
                 photographer=getattr(x, "photographer", None),
                 photographer_url=getattr(x, "photographer_url", None),
