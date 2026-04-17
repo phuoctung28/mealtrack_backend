@@ -1,13 +1,22 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.5.0
-**Last Updated:** February 3, 2026
+**Version:** 0.6.1
+**Last Updated:** April 17, 2026
 **Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 681+ tests, 70%+ coverage.
-**Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry.
+**Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
 
 ## Completed Phases
+
+### April 2026: Sentry Monitoring, Meal Discovery, Onboarding Redesign
+- [x] Sentry SDK integration for error tracking and performance monitoring
+- [x] Meal discovery endpoint with image search (Unsplash, Pexels)
+- [x] Notification deduplication via notification_sent_log table (migration 047)
+- [x] Onboarding redesign fields: challenge_duration, training_types (migration 045)
+- [x] Food reference name normalization (migration 046)
+- [x] Progress tracking endpoints: streak, daily-breakdown
+- [x] Documentation updates: system-architecture, code-standards, project-overview, roadmap
 
 ### February 2026: Documentation Refresh v0.5.0
 - [x] Updated all documentation with latest scout-verified statistics (430 files, ~38K LOC).
@@ -65,34 +74,43 @@
 
 ---
 
-## Current Priorities (Q1 2026)
+## Current Priorities (Q2 2026)
 1. **Performance**: Optimize suggestion generation (target <10s from ~45s).
-2. **Monitoring**: Implement observability (request tracing, performance metrics, error tracking).
-3. **Rate Limiting**: Add rate limits to AI-heavy endpoints (meal analysis, suggestions).
-4. **Security**: Restrict CORS in production, implement request body logging with PII redaction.
+2. **Rate Limiting**: Tune rate limits on meal_suggestions endpoints (discover, generate).
+3. **Security**: Restrict CORS in production, implement request body logging with PII redaction.
+4. **Testing**: Increase coverage for new meal discovery and notification dedup logic.
 
 ---
 
 ## Future Roadmap
 
-### Q2 2026
+### Q3 2026
 - [ ] Apple HealthKit & Google Fit sync.
 - [ ] Receipt scanning and parsing.
 - [ ] Personalized variety optimization algorithms.
-
-### Q3 2026
-- [ ] Social sharing & community meal libraries.
 - [ ] Voice-based meal logging.
+
+### Q4 2026+
+- [ ] Social sharing & community meal libraries.
 - [ ] Multi-region deployment.
+- [ ] Advanced analytics dashboard (consumption trends, goal adherence).
 
 ---
 
 ## Technical Debt & Maintenance
-- [ ] Fix CORS wide open (allow_origins=["*"]) - security risk in production.
-- [ ] Enable `daily_meals_router` (currently commented out in main.py).
-- [ ] Apply `require_premium` dependency to premium-only features.
-- [ ] Refactor hardcoded values (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) to config.
-- [ ] Implement API versioning strategy beyond v1.
-- [ ] Add monitoring for Gemini API quota and Cloudinary storage limits.
-- [ ] Review dev meal seeding to prevent DB clutter in long-running environments.
-- [ ] Consider using DI for CloudinaryImageStore instead of direct instantiation in routes.
+
+### High Priority
+- [ ] Fix CORS wide open (allow_origins=["*"]) - security risk in production
+- [ ] Implement API versioning strategy beyond v1
+- [ ] Apply `require_premium` dependency to premium-only features
+- [ ] Refactor hardcoded values (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) to config
+
+### Medium Priority
+- [ ] Enable `daily_meals_router` (currently commented out in main.py) or deprecate
+- [ ] Add monitoring for Gemini API quota and Cloudinary storage limits
+- [ ] Consider using DI for CloudinaryImageStore instead of direct instantiation in routes
+- [ ] Tune rate limiting thresholds for meal_suggestions endpoints based on usage patterns
+
+### Low Priority
+- [ ] Review dev meal seeding to prevent DB clutter in long-running environments
+- [ ] Document meal discovery image search quality thresholds

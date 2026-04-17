@@ -1,10 +1,11 @@
 # MealTrack Backend - System Architecture
 
-**Last Updated:** March 14, 2026
-**Version:** 0.6.0
+**Last Updated:** April 17, 2026
+**Version:** 0.6.1
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
 **Event Bus**: PyMediator with singleton registry pattern
-**Source**: Repomix-generated analysis of 430 files (~38.5K LOC), 591,646 tokens
+**Monitoring**: Sentry integration for error tracking and performance monitoring
+**Source**: Verified against live codebase (430 files, ~38.5K LOC)
 
 ---
 
@@ -84,7 +85,8 @@
 - `GET /v1/meals/{id}` - Fetch meal details
 - `GET /v1/user-profiles/tdee` - TDEE calculation
 - `POST /v1/meal-plans/weekly/ingredient-based` - Generate weekly plan
-- `GET /v1/meal-suggestions` - Get personalized suggestions
+- `POST /v1/meal-suggestions/generate` - Generate 3 personalized suggestions (session-based)
+- `POST /v1/meal-suggestions/discover` - Meal discovery endpoint (6 meals/batch)
 - `POST /v1/chat/threads/{id}/messages` - Send chat message
 - `WS /v1/chat/ws` - Real-time chat with ConnectionManager
 
@@ -109,7 +111,7 @@ Client → Authorization: Bearer <token>
 - **30 Commands**: Write operations across 11 domains (Chat, Meal, Daily Meal, Meal Plan, Meal Suggestion, User, Notification, Ingredient, TDEE, Activity, Food)
 - **31 Queries**: Read operations
 - **19 Domain Events**: Historical facts
-- **54 Handlers**: Command (28), query (24), and event (1) handlers with @handles decorator
+- **51+ Handlers**: Command (28+), query (24+), and event (1) handlers with @handles decorator
 - **3 Application Services** (556 LOC): MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService
 - **UnitOfWork**: Transaction management with cache invalidation after writes
 
@@ -195,12 +197,13 @@ Client → Authorization: Bearer <token>
 ### Infrastructure Layer (`src/infra/`) - 80 files, ~8,895 LOC
 
 **Components**:
-- **11+ Database Tables**: User, UserProfile, Subscription, Meal, MealImage, Nutrition, FoodItem, MealPlan, NotificationPreferences, UserFcmToken, Thread, Message, FeatureFlag, Activity.
+- **13+ Database Tables**: User, UserProfile, Subscription, Meal, MealImage, Nutrition, FoodItem, MealPlan, NotificationPreferences, UserFcmToken, Thread, Message, notification_sent_log (dedup).
 - **10+ Repositories**: Smart sync with diff-based updates, eager loading, request-scoped sessions.
-- **External Services**: Firebase (FCM), Cloudinary (images), Gemini (multi-model AI), Pinecone (1024-dim vector search), RevenueCat (subscriptions).
+- **External Services**: Firebase (FCM), Cloudinary (images), Gemini (multi-model AI), Pinecone (1024-dim vector search), RevenueCat (subscriptions), Sentry (monitoring).
 - **Redis Cache**: Cache-aside pattern with graceful degradation, JSON serialization, 50 connections, 1h default TTL.
 - **PyMediator Event Bus**: Singleton registry pattern, async event handling with @handles decorator.
 - **WebSocket**: ConnectionManager for real-time chat connections.
+- **Sentry Monitoring**: Error tracking, performance profiling (traces, profiles), FastAPI/Starlette/SQLAlchemy integrations.
 
 **Database Architecture**:
 - **Engine**: MySQL 8.0 + SQLAlchemy 2.0
@@ -535,13 +538,12 @@ Display: Mobile rounds for UI (1 or 0 decimals based on value)
 ## Known Issues & Technical Debt
 
 1. **CORS Wide Open**: `allow_origins=["*"]` in production (security risk)
-2. **Daily Meals Router Commented Out**: Line 207 in main.py
+2. **Daily Meals Router Commented Out**: Line 207 in main.py (deprecated, use meal_suggestions)
 3. **Premium Features Not Restricted**: No routes use `require_premium` dependency
 4. **Hardcoded Values**: MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD not in config
-5. **No Rate Limiting**: AI-heavy endpoints lack rate limits
-6. **No API Versioning Strategy**: Only v1 exists, no migration plan
-7. **CloudinaryImageStore Instantiation**: Created directly in routes instead of DI
-8. **Dev Meal Seeding**: May clutter DB in long-running dev environments
+5. **No API Versioning Strategy**: Only v1 exists, no migration plan
+6. **CloudinaryImageStore Instantiation**: Created directly in routes instead of DI
+7. **Dev Meal Seeding**: May clutter DB in long-running dev environments
 
 ## WebSocket Architecture
 
@@ -566,6 +568,15 @@ Display: Mobile rounds for UI (1 or 0 decimals based on value)
 - **AIResponseCoordinator**: Streaming AI responses with Gemini
 - **ChatNotificationService**: FCM broadcasting for chat messages
 
+## Monitoring Architecture (NEW - Apr 2026)
+
+**Sentry Integration**:
+- **Initialization**: `initialize_sentry()` called before FastAPI app instantiation
+- **Configuration**: DSN, environment, trace/profile sample rates via settings
+- **Integrations**: FastAPI, Starlette, SQLAlchemy, Logging
+- **Features**: Error tracking, performance monitoring (traces), profiling (profiles), PII handling
+- **Conditional**: Gracefully disabled if SENTRY_DSN not set
+
 ---
 
-**Source**: Scout analysis of 417 files (~37K LOC) conducted January 16, 2026.
+**Source**: Live codebase verification April 17, 2026 (430 files, ~38.5K LOC).

@@ -1,6 +1,6 @@
 # MealTrack Backend - Codebase Summary
 
-**Generated:** March 14, 2026
+**Generated:** April 17, 2026
 **Codebase Stats**: 430 Python files, ~38.5K LOC (src/), 681+ tests in 92 test files
 **Source Files**: 430 Python files across 4 architecture layers (API: 76, App: 140, Domain: 133, Infra: 80)
 **Test Files**: 92 files with 681+ test cases, 70%+ coverage
@@ -8,7 +8,7 @@
 **Framework**: FastAPI 0.115+, SQLAlchemy 2.0
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
 **Event Bus**: PyMediator with singleton registry pattern
-**Status**: Production-ready. Repomix-generated metrics from Mar 14, 2026 (591,646 tokens).
+**Status**: Production-ready. Verified against codebase Apr 17, 2026 (recent: Sentry monitoring, meal discovery, barcode cascade, notification dedup, onboarding redesign).
 
 ---
 
@@ -45,7 +45,7 @@ mealtrack_backend/
 │   │   ├── commands/                    # 30 command definitions across 11 domains
 │   │   ├── queries/                     # 31 query definitions
 │   │   ├── events/                      # 19 domain events
-│   │   ├── handlers/                    # 54 handlers total (28 cmd, 24 query, 1 event, 1 more)
+│   │   ├── handlers/                    # 51+ handlers total (28+ cmd, 24+ query, 1 event)
 │   │   │   ├── command_handlers/        # Command handlers
 │   │   │   ├── query_handlers/          # Query handlers
 │   │   │   └── event_handlers/          # Event handlers
@@ -100,15 +100,15 @@ mealtrack_backend/
 | CQRS Commands | 30 commands across 11 domains |
 | CQRS Queries | 31 query definitions |
 | Domain Events | 19 event definitions |
-| Handlers | 54 handlers with @handles decorator (28 cmd, 24 query, 1 event, 1 more) |
+| Handlers | 51 handlers with @handles decorator (28+ cmd, 24+ query, 1 event) |
 | Application Services | 3 (MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService) |
 | Domain Services | 50+ service files |
 | Bounded Contexts | 8 contexts (Meal, Nutrition, User, Planning, Conversation, Notification, AI, Chat) |
 | Analysis Strategies | 6 strategies (basic, portion, ingredient, weight, user-context, combined) |
-| Database Tables | 11+ core tables + feature_flag, subscription, activity |
+| Database Tables | 13+ (core + notification_sent_log for dedup) |
 | Repositories | 10+ with smart sync and eager loading |
 | Port Interfaces | 17 port interfaces for dependency inversion |
-| External Integrations | 7 (Gemini, Pinecone, Firebase, Cloudinary, RevenueCat, Redis, MySQL) |
+| External Integrations | 8 (Gemini, Pinecone, Firebase, Cloudinary, RevenueCat, Redis, MySQL, Sentry) |
 
 ---
 
@@ -187,7 +187,7 @@ src/
 │   │   ├── daily_meal/                 # Daily meal events (1 event)
 │   │   ├── tdee/                        # TDEE events (1 event)
 │   │   └── chat/                        # Chat events (MessageSentEvent, ThreadCreated, etc.)
-│   ├── handlers/                        # 54 handlers (4,008 LOC)
+│   ├── handlers/                        # 51+ handlers (4,008 LOC)
 │   │   ├── command_handlers/           # 28 command handlers (~2,500 LOC)
 │   │   ├── query_handlers/             # 24 query handlers (~1,000 LOC)
 │   │   └── event_handlers/             # 1 event handler (126 LOC)
@@ -265,6 +265,8 @@ src/
     │   ├── cache_service.py            # Cache-aside pattern, JSON serialization
     │   ├── decorators.py               # Function-level caching
     │   └── metrics.py                  # Cache monitoring
+    ├── monitoring/                      # Observability (NEW Apr 2026)
+    │   └── sentry.py                   # Sentry SDK initialization
     ├── event_bus/                       # CQRS event bus
     │   ├── event_bus.py                # EventBus interface
     │   └── pymediator_event_bus.py     # PyMediator implementation with singleton

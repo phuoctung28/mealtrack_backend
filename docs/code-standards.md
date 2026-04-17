@@ -1,7 +1,7 @@
 # MealTrack Backend - Code Standards
 
-**Last Updated:** March 14, 2026
-**Version:** 0.6.0
+**Last Updated:** April 17, 2026
+**Version:** 0.6.1
 **Applies To:** All code in `src/` (430 files, ~38.5K LOC: API 76, App 140, Domain 133, Infra 80)
 
 ---
@@ -192,13 +192,14 @@ class VisionAIService(VisionAIServicePort):
 ```
 
 **Key Files**:
-- `database/models/*`: 11+ core database tables with connection pooling (20 connections + 10 overflow)
+- `database/models/*`: 13+ core database tables with connection pooling (20 connections + 10 overflow)
 - `repositories/*`: 10+ repository implementations with smart sync and eager loading
-- `adapters/*`: Vision AI, Meal Generation (multi-model Gemini), Cloudinary
+- `adapters/*`: Vision AI, Meal Generation (multi-model Gemini), Cloudinary, Unsplash/Pexels (meal discovery)
 - `services/*`: Firebase (FCM), Pinecone (1024-dim vector search)
 - `cache/*`: Redis cache-aside pattern (50 connections, 1h default TTL, graceful degradation)
 - `event_bus/*`: PyMediator with singleton registry and async execution
 - `websocket/*`: ConnectionManager for real-time chat
+- `monitoring/*`: Sentry SDK integration (error tracking, performance monitoring)
 
 ---
 
@@ -619,8 +620,9 @@ MIN_CALORIES_FOR_SNACK = 1800
 ### AI & External Integration
 - `meal_generation_service.py` - Multi-model Gemini for meal generation
 - `translation_service.py` - Multi-language support (7 languages)
-- `notification_service.py` - FCM push notifications
+- `notification_service.py` - FCM push notifications with deduplication (migration 047)
 - `conversation_service.py` - Conversation state management
+- `meal_discovery/` - Meal discovery service with image search (Unsplash, Pexels adapters)
 
 ---
 
@@ -628,24 +630,50 @@ MIN_CALORIES_FOR_SNACK = 1800
 
 | Version | Changes |
 |---------|---------|
+| 047 | Add notification_sent_log table for cross-worker deduplication (Apr 2026) |
+| 046 | Add name_normalized to food_reference (Apr 2026) |
+| 045 | Add challenge_duration, training_types to user_profiles — onboarding redesign (Apr 2026) |
+| 044 | Widen firebase_uid to 128 chars (Mar 2026) |
+| 043 | Add language_code to users (Mar 2026) |
 | 037 | Add custom_protein_g, custom_carbs_g, custom_fat_g to user_profiles |
 | 036 | Add date_of_birth to user_profiles |
 | 035 | Evolve barcode_products → food_reference (food data evolution) |
 | 034 | Add fiber, sugar columns to food_item and nutrition tables |
-| 033 | Drop calories columns (now derived from macros) |
-| 032 | Replace cheat_meal with cheat_day |
 
 ---
+
+## New Features (Apr 2026)
+
+### Sentry Monitoring
+- Error tracking and performance monitoring integration
+- FastAPI, Starlette, SQLAlchemy middleware integrations
+- Configurable via `SENTRY_DSN`, traces/profile sample rates
+- Gracefully disabled if DSN not set
+
+### Meal Discovery
+- Endpoint: `POST /v1/meal-suggestions/discover` — 6 meals per batch
+- Integrates image search (Unsplash, Pexels adapters)
+- Food image validation for quality control
+- Returns meal options with images for visual selection
+
+### Notification Deduplication
+- Migration 047: `notification_sent_log` table with composite key (user_id, notification_type, sent_minute)
+- Prevents duplicate FCM sends across worker processes
+- Indexed on sent_at for efficient cleanup
+
+### Onboarding Redesign (Migration 045)
+- New fields: `challenge_duration` (string), `training_types` (JSON)
+- Enables more granular fitness goal tracking
+- Backward compatible (nullable fields)
 
 ## Unresolved Questions
 
 1. Should we enforce stricter file size limits (<200 LOC)?
 2. Premium feature restrictions not applied - intentional?
 3. API versioning strategy needed for v2+?
-4. Rate limiting thresholds for AI endpoints?
-5. CORS production configuration - when to restrict?
-6. Food reference table evolution - timeline for deprecating dual lookup?
-7. Custom macro override persistence - persist across profile updates?
+4. CORS production configuration - when to restrict?
+5. Food reference table evolution - timeline for deprecating dual lookup?
+6. Rate limit tuning for meal_suggestions endpoints?
 
 ## WebSocket Standards
 
