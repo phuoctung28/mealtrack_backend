@@ -114,7 +114,7 @@ def test_structured_path_sets_model_attribute():
                 schema=FakeSchema,
             )
 
-    calls = {c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list}
+    calls = {c.args[0]: c.args[1] for c in mock_span.set_data.call_args_list}
     assert calls.get("gen_ai.request.model") == "gemini-2.5-flash"
 
 
@@ -145,7 +145,7 @@ def test_structured_path_sets_token_attributes():
                 schema=FakeSchema,
             )
 
-    calls = {c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list}
+    calls = {c.args[0]: c.args[1] for c in mock_span.set_data.call_args_list}
     assert calls.get("gen_ai.usage.input_tokens") == 300
     assert calls.get("gen_ai.usage.output_tokens") == 100
 
@@ -171,6 +171,6 @@ def test_legacy_json_path_sets_token_attributes():
                 response_type="json",
             )
 
-    calls = {c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list}
+    calls = {c.args[0]: c.args[1] for c in mock_span.set_data.call_args_list}
     assert calls.get("gen_ai.usage.input_tokens") == 150
     assert calls.get("gen_ai.usage.output_tokens") == 50

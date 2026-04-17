@@ -76,7 +76,7 @@ async def test_handle_sets_model_attribute():
         cmd = ParseMealTextCommand(user_id="u1", text="apple", language="en")
         await handler.handle(cmd)
 
-    calls = {c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list}
+    calls = {c.args[0]: c.args[1] for c in mock_span.set_data.call_args_list}
     assert calls.get("gen_ai.request.model") == "gemini-2.5-flash"
 
 
@@ -96,7 +96,7 @@ async def test_handle_sets_token_attributes():
         cmd = ParseMealTextCommand(user_id="u1", text="apple", language="en")
         await handler.handle(cmd)
 
-    calls = {c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list}
+    calls = {c.args[0]: c.args[1] for c in mock_span.set_data.call_args_list}
     assert calls.get("gen_ai.usage.input_tokens") == 150
     assert calls.get("gen_ai.usage.output_tokens") == 60
 

@@ -53,15 +53,15 @@ class VisionAIService(VisionAIServicePort):
 
             model_name = getattr(self.model, "model", "gemini-unknown")
             with sentry_sdk.start_span(op="gen_ai.request", name="vision_analysis") as span:
-                span.set_attribute("gen_ai.request.model", model_name)
+                span.set_data("gen_ai.request.model", model_name)
                 response = self.model.invoke(messages)
                 content = response.content
                 usage = getattr(response, "usage_metadata", None) or {}
                 if isinstance(usage, dict):
                     if usage.get("input_tokens") is not None:
-                        span.set_attribute("gen_ai.usage.input_tokens", usage["input_tokens"])
+                        span.set_data("gen_ai.usage.input_tokens", usage["input_tokens"])
                     if usage.get("output_tokens") is not None:
-                        span.set_attribute("gen_ai.usage.output_tokens", usage["output_tokens"])
+                        span.set_data("gen_ai.usage.output_tokens", usage["output_tokens"])
 
             if not content or (isinstance(content, str) and not content.strip()):
                 response_metadata = getattr(response, "response_metadata", {})

@@ -28,7 +28,7 @@ class TestTraceAiCall:
         with patch("sentry_sdk.start_span", return_value=mock_span):
             async with trace_ai_call(model="gemini-2.5-flash", operation="test_op"):
                 pass
-        mock_span.set_attribute.assert_any_call("gen_ai.request.model", "gemini-2.5-flash")
+        mock_span.set_data.assert_any_call("gen_ai.request.model", "gemini-2.5-flash")
 
     @pytest.mark.asyncio
     async def test_sets_token_attributes_when_provided(self):
@@ -43,8 +43,8 @@ class TestTraceAiCall:
                 output_tokens=50,
             ):
                 pass
-        mock_span.set_attribute.assert_any_call("gen_ai.usage.input_tokens", 100)
-        mock_span.set_attribute.assert_any_call("gen_ai.usage.output_tokens", 50)
+        mock_span.set_data.assert_any_call("gen_ai.usage.input_tokens", 100)
+        mock_span.set_data.assert_any_call("gen_ai.usage.output_tokens", 50)
 
 
 class TestTraceAiPhase:
@@ -69,4 +69,4 @@ class TestTraceAiPhase:
         with patch("sentry_sdk.start_span", return_value=mock_span):
             with trace_ai_phase(phase="meal_names", description="Phase 1: Generate meal names"):
                 pass
-        mock_span.set_attribute.assert_any_call("gen_ai.agent.name", "meal_names")
+        mock_span.set_data.assert_any_call("gen_ai.agent.name", "meal_names")

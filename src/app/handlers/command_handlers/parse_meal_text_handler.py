@@ -68,15 +68,15 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         # Call Gemini
         model_name = getattr(model, "model", "gemini-unknown")
         with sentry_sdk.start_span(op="gen_ai.request", name="parse_meal_text") as span:
-            span.set_attribute("gen_ai.request.model", model_name)
+            span.set_data("gen_ai.request.model", model_name)
             response = await model.ainvoke(messages)
             content = response.content
             usage = getattr(response, "usage_metadata", None) or {}
             if isinstance(usage, dict):
                 if usage.get("input_tokens") is not None:
-                    span.set_attribute("gen_ai.usage.input_tokens", usage["input_tokens"])
+                    span.set_data("gen_ai.usage.input_tokens", usage["input_tokens"])
                 if usage.get("output_tokens") is not None:
-                    span.set_attribute("gen_ai.usage.output_tokens", usage["output_tokens"])
+                    span.set_data("gen_ai.usage.output_tokens", usage["output_tokens"])
 
         # Extract JSON from response — may be {emoji, items: [...]} or plain [...]
         emoji = None
@@ -237,14 +237,14 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
             )
             trans_model_name = getattr(model, "model", "gemini-unknown")
             with sentry_sdk.start_span(op="gen_ai.request", name="translate_meal_names") as span:
-                span.set_attribute("gen_ai.request.model", trans_model_name)
+                span.set_data("gen_ai.request.model", trans_model_name)
                 response = await model.ainvoke([HumanMessage(content=prompt)])
                 trans_usage = getattr(response, "usage_metadata", None) or {}
                 if isinstance(trans_usage, dict):
                     if trans_usage.get("input_tokens") is not None:
-                        span.set_attribute("gen_ai.usage.input_tokens", trans_usage["input_tokens"])
+                        span.set_data("gen_ai.usage.input_tokens", trans_usage["input_tokens"])
                     if trans_usage.get("output_tokens") is not None:
-                        span.set_attribute("gen_ai.usage.output_tokens", trans_usage["output_tokens"])
+                        span.set_data("gen_ai.usage.output_tokens", trans_usage["output_tokens"])
             translated = json.loads(response.content)
 
             if isinstance(translated, list) and len(translated) == len(english_indices):

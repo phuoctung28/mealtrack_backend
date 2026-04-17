@@ -79,13 +79,13 @@ def test_analyze_sets_model_attribute():
         svc._analyze_image_reference("https://example.com/food.jpg", strategy)
 
     # Verify gen_ai.request.model was set
-    set_attribute_calls = mock_span.set_attribute.call_args_list
-    attribute_names = [call.args[0] for call in set_attribute_calls]
+    set_data_calls = mock_span.set_data.call_args_list
+    attribute_names = [call.args[0] for call in set_data_calls]
     assert "gen_ai.request.model" in attribute_names, \
-        f"Expected 'gen_ai.request.model' to be set. Actual calls: {set_attribute_calls}"
+        f"Expected 'gen_ai.request.model' to be set. Actual calls: {set_data_calls}"
 
     # Verify the value matches the model name
-    for call in set_attribute_calls:
+    for call in set_data_calls:
         if call.args[0] == "gen_ai.request.model":
             assert call.args[1] == "gemini-2.5-flash", \
                 f"Expected model name 'gemini-2.5-flash', got: {call.args[1]}"
@@ -108,6 +108,6 @@ def test_analyze_sets_token_attributes():
     with patch("sentry_sdk.start_span", return_value=mock_span):
         svc._analyze_image_reference("https://example.com/food.jpg", strategy)
 
-    calls = {c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list}
+    calls = {c.args[0]: c.args[1] for c in mock_span.set_data.call_args_list}
     assert calls.get("gen_ai.usage.input_tokens") == 200
     assert calls.get("gen_ai.usage.output_tokens") == 80

@@ -15,11 +15,11 @@ async def trace_ai_call(
 ) -> AsyncGenerator[None, None]:
     """Async context manager that wraps a single LLM invocation in a gen_ai.request span."""
     with sentry_sdk.start_span(op="gen_ai.request", name=operation) as span:
-        span.set_attribute("gen_ai.request.model", model)
+        span.set_data("gen_ai.request.model", model)
         if input_tokens is not None:
-            span.set_attribute("gen_ai.usage.input_tokens", input_tokens)
+            span.set_data("gen_ai.usage.input_tokens", input_tokens)
         if output_tokens is not None:
-            span.set_attribute("gen_ai.usage.output_tokens", output_tokens)
+            span.set_data("gen_ai.usage.output_tokens", output_tokens)
         yield
 
 
@@ -31,5 +31,5 @@ def trace_ai_phase(
 ) -> Generator[None, None, None]:
     """Sync context manager that wraps a pipeline phase in a gen_ai.invoke_agent span."""
     with sentry_sdk.start_span(op="gen_ai.invoke_agent", name=description) as span:
-        span.set_attribute("gen_ai.agent.name", phase)
+        span.set_data("gen_ai.agent.name", phase)
         yield

@@ -126,16 +126,16 @@ class MealGenerationService(MealGenerationServicePort):
 
                 # Generate structured response (returns dict with 'raw' and 'parsed')
                 with sentry_sdk.start_span(op="gen_ai.request", name="meal_generation_structured") as span:
-                    span.set_attribute("gen_ai.request.model", model_name)
+                    span.set_data("gen_ai.request.model", model_name)
                     result = llm_with_structure.invoke(messages)
                     raw_msg = result.get("raw") if isinstance(result, dict) else None
                     if raw_msg is not None:
                         usage = getattr(raw_msg, "usage_metadata", None) or {}
                         if isinstance(usage, dict):
                             if usage.get("input_tokens") is not None:
-                                span.set_attribute("gen_ai.usage.input_tokens", usage["input_tokens"])
+                                span.set_data("gen_ai.usage.input_tokens", usage["input_tokens"])
                             if usage.get("output_tokens") is not None:
-                                span.set_attribute("gen_ai.usage.output_tokens", usage["output_tokens"])
+                                span.set_data("gen_ai.usage.output_tokens", usage["output_tokens"])
                 elapsed = time.time() - start_time
 
                 # Extract parsed response (or None if parsing failed)
@@ -188,15 +188,15 @@ class MealGenerationService(MealGenerationServicePort):
 
                         # Retry with same prompt but legacy mode
                         with sentry_sdk.start_span(op="gen_ai.request", name="meal_generation_legacy_fallback") as span:
-                            span.set_attribute("gen_ai.request.model", getattr(legacy_llm, "model", model_name))
+                            span.set_data("gen_ai.request.model", getattr(legacy_llm, "model", model_name))
                             legacy_response = legacy_llm.invoke(messages)
                             legacy_content = legacy_response.content
                             legacy_usage = getattr(legacy_response, "usage_metadata", None) or {}
                             if isinstance(legacy_usage, dict):
                                 if legacy_usage.get("input_tokens") is not None:
-                                    span.set_attribute("gen_ai.usage.input_tokens", legacy_usage["input_tokens"])
+                                    span.set_data("gen_ai.usage.input_tokens", legacy_usage["input_tokens"])
                                 if legacy_usage.get("output_tokens") is not None:
-                                    span.set_attribute("gen_ai.usage.output_tokens", legacy_usage["output_tokens"])
+                                    span.set_data("gen_ai.usage.output_tokens", legacy_usage["output_tokens"])
                         legacy_elapsed = time.time() - start_time
 
                         logger.info(
@@ -237,15 +237,15 @@ class MealGenerationService(MealGenerationServicePort):
 
             # Generate response
             with sentry_sdk.start_span(op="gen_ai.request", name="meal_generation_legacy_json") as span:
-                span.set_attribute("gen_ai.request.model", model_name)
+                span.set_data("gen_ai.request.model", model_name)
                 response = llm.invoke(messages)
                 content = response.content
                 legacy_json_usage = getattr(response, "usage_metadata", None) or {}
                 if isinstance(legacy_json_usage, dict):
                     if legacy_json_usage.get("input_tokens") is not None:
-                        span.set_attribute("gen_ai.usage.input_tokens", legacy_json_usage["input_tokens"])
+                        span.set_data("gen_ai.usage.input_tokens", legacy_json_usage["input_tokens"])
                     if legacy_json_usage.get("output_tokens") is not None:
-                        span.set_attribute("gen_ai.usage.output_tokens", legacy_json_usage["output_tokens"])
+                        span.set_data("gen_ai.usage.output_tokens", legacy_json_usage["output_tokens"])
             elapsed = time.time() - start_time
 
             # Log response details
