@@ -190,6 +190,7 @@ class MealGenerationService(MealGenerationServicePort):
                         with sentry_sdk.start_span(op="gen_ai.request", name="meal_generation_legacy_fallback") as span:
                             span.set_attribute("gen_ai.request.model", getattr(legacy_llm, "model", model_name))
                             legacy_response = legacy_llm.invoke(messages)
+                            legacy_content = legacy_response.content
                             legacy_usage = getattr(legacy_response, "usage_metadata", None) or {}
                             if isinstance(legacy_usage, dict):
                                 if legacy_usage.get("input_tokens") is not None:
@@ -200,11 +201,11 @@ class MealGenerationService(MealGenerationServicePort):
 
                         logger.info(
                             f"[E2-LEGACY-RESPONSE] elapsed={legacy_elapsed:.2f}s | "
-                            f"content_len={len(legacy_response.content)}"
+                            f"content_len={len(legacy_content)}"
                         )
 
                         # Parse legacy JSON response
-                        legacy_data = extract_json(legacy_response.content)
+                        legacy_data = extract_json(legacy_content)
                         logger.info(
                             "[E2-LEGACY-SUCCESS] Successfully parsed legacy JSON response"
                         )
