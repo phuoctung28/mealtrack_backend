@@ -12,6 +12,7 @@ from sqlalchemy import pool
 from alembic import context
 
 # Import our database configuration
+from alembic.script import ScriptDirectory
 from src.infra.database.config import Base, SQLALCHEMY_DATABASE_URL, engine
 
 # this is the Alembic Config object, which provides
@@ -21,16 +22,22 @@ config = context.config
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
 target_metadata = Base.metadata
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+
+def _next_sequential_rev_id(context, revision, directives):
+    """Auto-assign sequential numeric revision IDs (048, 049, ...)."""
+    if not directives:
+        return
+    script = directives[0]
+    head = ScriptDirectory.from_config(config).get_current_head()
+    next_id = str(int(head) + 1).zfill(3) if head and head.isdigit() else None
+    if next_id:
+        script.rev_id = next_id
 
 
 def run_migrations_offline() -> None:
@@ -51,6 +58,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        process_revision_directives=_next_sequential_rev_id,
     )
 
     with context.begin_transaction():
@@ -74,7 +82,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            process_revision_directives=_next_sequential_rev_id,
         )
 
         with context.begin_transaction():
