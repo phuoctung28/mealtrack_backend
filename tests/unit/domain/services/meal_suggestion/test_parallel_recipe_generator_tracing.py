@@ -1,5 +1,4 @@
 """Tests that parallel_recipe_generator emits phase spans during generation."""
-import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
@@ -84,3 +83,36 @@ async def test_generate_emits_phase3_span_for_non_english():
                     result = await gen.generate(session=session, exclude_meal_names=[])
 
     assert ("gen_ai.invoke_agent", "Phase 3: Translate") in span_calls
+
+
+@pytest.mark.asyncio
+async def test_generate_discovery_emits_discovery_span():
+    """generate_discovery() emits a Discovery span."""
+    gen = _make_generator()
+    session = _make_session(language="en")
+    session.ingredients = []
+    session.cuisine_region = None
+    session.protein_target = None
+    session.carbs_target = None
+    session.fat_target = None
+
+    mock_span = _mock_span()
+    span_calls = []
+
+    def track_span(op=None, name=None, **kwargs):
+        span_calls.append((op, name))
+        return mock_span
+
+    # generate_discovery calls asyncio.to_thread(self._generation.generate_meal_plan, ...)
+    # Return a valid DiscoveryMealsResponse dict with one meal so it doesn't raise
+    gen._generation.generate_meal_plan.return_value = {
+        "meals": [{"name": "Salad", "calories": 300, "protein": 10, "carbs": 30, "fat": 10}]
+    }
+    gen._macro_validator.validate_and_correct.return_value = {
+        "calories": 300, "protein": 10, "carbs": 30, "fat": 10
+    }
+
+    with patch("sentry_sdk.start_span", side_effect=track_span):
+        result = await gen.generate_discovery(session=session, exclude_meal_names=[])
+
+    assert ("gen_ai.invoke_agent", "Discovery: Generate meal plan") in span_calls
