@@ -3,15 +3,16 @@ GetUserProfileQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.user import GetUserProfileQuery
+from src.domain.cache.cache_keys import CacheKeys
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.user import Sex
-from src.domain.model.user import TdeeRequest, UnitSystem
+from src.domain.model.user import Sex, TdeeRequest, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
+from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow import UnitOfWork
 
@@ -22,13 +23,33 @@ logger = logging.getLogger(__name__)
 class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any]]):
     """Handler for getting user profile with TDEE calculation."""
 
-    def __init__(self, tdee_service: TdeeCalculationService = None):
+    def __init__(
+        self,
+        tdee_service: TdeeCalculationService = None,
+        cache_service: Optional[CacheService] = None,
+    ):
         self.tdee_service = tdee_service or TdeeCalculationService()
+        self.cache_service = cache_service
 
     async def handle(self, query: GetUserProfileQuery) -> Dict[str, Any]:
-        """Get user profile with calculated TDEE."""
+        """Get user profile with calculated TDEE. Reads/writes Redis cache."""
+        cache_key, ttl = CacheKeys.user_profile(query.user_id)
+
+        if self.cache_service:
+            cached = await self.cache_service.get_json(cache_key)
+            if cached is not None:
+                return cached
+
+        result = await self._fetch_from_db(query)
+
+        if self.cache_service:
+            await self.cache_service.set_json(cache_key, result, ttl)
+
+        return result
+
+    async def _fetch_from_db(self, query: GetUserProfileQuery) -> Dict[str, Any]:
+        """Fetch profile from DB and compute TDEE."""
         with UnitOfWork() as uow:
-            # Get user profile using the UnitOfWork session
             profile = (
                 uow.session.query(UserProfile)
                 .filter(UserProfile.user_id == query.user_id)
@@ -38,7 +59,6 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
             if not profile:
                 raise ResourceNotFoundException(f"Profile for user {query.user_id} not found")
 
-            # Map profile data to TDEE request using centralized mapper
             sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
 
             tdee_request = TdeeRequest(
@@ -80,5 +100,5 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
                     "created_at": profile.created_at.isoformat() if profile.created_at else None,
                     "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
                 },
-                "tdee": tdee_result,
+                "tdee": tdee_result.to_dict(),
             }
