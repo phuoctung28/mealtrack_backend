@@ -75,4 +75,4 @@ firebase-service-account.json
 
 # ClaudeKit
 plans/
-.claude/.worktrees/
+.claude/
