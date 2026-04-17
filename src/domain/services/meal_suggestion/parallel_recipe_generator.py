@@ -8,6 +8,8 @@ import logging
 import time
 from typing import List, Optional, Tuple
 
+import sentry_sdk
+
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
@@ -69,18 +71,24 @@ class ParallelRecipeGenerator:
         start_time = time.time()
         target_lang = get_language_name(session.language)
 
-        meal_names = await self._phase1_generate_names(session, exclude_meal_names, target_lang, count)
+        with sentry_sdk.start_span(op="gen_ai.invoke_agent", name="Phase 1: Generate meal names") as span:
+            span.set_data("gen_ai.agent.name", "meal_names")
+            meal_names = await self._phase1_generate_names(session, exclude_meal_names, target_lang, count)
         phase1_elapsed = time.time() - start_time
 
         # Discovery flow: more names than needed (headroom), use as_completed for early-stop benefit.
-        suggestions = await self._phase2_generate_recipes(
-            session, meal_names, target_lang, count, preserve_order=False
-        )
+        with sentry_sdk.start_span(op="gen_ai.invoke_agent", name="Phase 2: Generate recipes") as span:
+            span.set_data("gen_ai.agent.name", "recipe_generation")
+            suggestions = await self._phase2_generate_recipes(
+                session, meal_names, target_lang, count, preserve_order=False
+            )
         phase2_elapsed = time.time() - start_time - phase1_elapsed
 
         phase3_elapsed = 0.0
         if session.language and session.language != "en":
-            suggestions, phase3_elapsed = await self._phase3_translate(session, suggestions, target_lang)
+            with sentry_sdk.start_span(op="gen_ai.invoke_agent", name="Phase 3: Translate") as span:
+                span.set_data("gen_ai.agent.name", "translation")
+                suggestions, phase3_elapsed = await self._phase3_translate(session, suggestions, target_lang)
 
         total_elapsed = time.time() - start_time
         logger.info(
@@ -126,13 +134,15 @@ class ParallelRecipeGenerator:
         )
 
         try:
-            raw = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._generation.generate_meal_plan,
-                    prompt, system, "json", 1000, DiscoveryMealsResponse, "meal_names",
-                ),
-                timeout=self.DISCOVERY_TIMEOUT,
-            )
+            with sentry_sdk.start_span(op="gen_ai.invoke_agent", name="Discovery: Generate meal plan") as span:
+                span.set_data("gen_ai.agent.name", "discovery_generation")
+                raw = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self._generation.generate_meal_plan,
+                        prompt, system, "json", 1000, DiscoveryMealsResponse, "meal_names",
+                    ),
+                    timeout=self.DISCOVERY_TIMEOUT,
+                )
         except Exception as e:
             logger.error(f"[DISCOVERY-FAILED] session={session.id} | {type(e).__name__}: {e}")
             raise RuntimeError(f"Discovery generation failed: {e}") from e
