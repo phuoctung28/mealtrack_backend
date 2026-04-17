@@ -1,5 +1,4 @@
 """Unit tests for AI tracing helpers."""
-from contextlib import asynccontextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
