@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
+import sentry_sdk
+
 from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
@@ -127,20 +129,22 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
 
             # PHASE 1: AI Vision Analysis (generates content in English)
             phase1_start = time.time()
-            if command.user_description:
-                from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
-                logger.info(
-                    f"[PHASE-1-START] meal={saved_meal.meal_id} | "
-                    f"vision analysis with user context"
-                )
-                strategy = AnalysisStrategyFactory.create_user_context_strategy(command.user_description)
-                vision_result = self.vision_service.analyze_with_strategy(command.file_contents, strategy)
-            else:
-                logger.info(
-                    f"[PHASE-1-START] meal={saved_meal.meal_id} | "
-                    f"vision analysis"
-                )
-                vision_result = self.vision_service.analyze(command.file_contents)
+            with sentry_sdk.start_span(op="gen_ai.invoke_agent", name="PHASE-1: Vision Analysis") as span:
+                span.set_data("gen_ai.agent.name", "vision_analysis")
+                if command.user_description:
+                    from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+                    logger.info(
+                        f"[PHASE-1-START] meal={saved_meal.meal_id} | "
+                        f"vision analysis with user context"
+                    )
+                    strategy = AnalysisStrategyFactory.create_user_context_strategy(command.user_description)
+                    vision_result = self.vision_service.analyze_with_strategy(command.file_contents, strategy)
+                else:
+                    logger.info(
+                        f"[PHASE-1-START] meal={saved_meal.meal_id} | "
+                        f"vision analysis"
+                    )
+                    vision_result = self.vision_service.analyze(command.file_contents)
             phase1_elapsed = time.time() - phase1_start
             logger.info(
                 f"[PHASE-1-COMPLETE] meal={saved_meal.meal_id} | "
@@ -180,28 +184,30 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             phase2_elapsed = 0.0
             if command.language and command.language != "en" and self.meal_translation_service:
                 phase2_start = time.time()
-                logger.info(
-                    f"[PHASE-2-START] meal={saved_meal.meal_id} | "
-                    f"translating to {command.language}"
-                )
-                if nutrition and nutrition.food_items:
-                    try:
-                        translation = await self.meal_translation_service.translate_meal(
-                            meal=saved_meal,
-                            dish_name=meal.dish_name,
-                            food_items=nutrition.food_items,
-                            target_language=command.language
-                        )
-                        if translation:
-                            logger.info(
-                                f"[PHASE-2] translation saved for meal={saved_meal.meal_id}, "
-                                f"language={command.language}"
+                with sentry_sdk.start_span(op="gen_ai.invoke_agent", name="PHASE-2: Translation") as span:
+                    span.set_data("gen_ai.agent.name", "translation")
+                    logger.info(
+                        f"[PHASE-2-START] meal={saved_meal.meal_id} | "
+                        f"translating to {command.language}"
+                    )
+                    if nutrition and nutrition.food_items:
+                        try:
+                            translation = await self.meal_translation_service.translate_meal(
+                                meal=saved_meal,
+                                dish_name=meal.dish_name,
+                                food_items=nutrition.food_items,
+                                target_language=command.language
                             )
-                    except Exception as e:
-                        logger.warning(
-                            f"[PHASE-2] translation failed for meal={saved_meal.meal_id}: {e}"
-                        )
-                        # Don't fail the whole analysis if translation fails
+                            if translation:
+                                logger.info(
+                                    f"[PHASE-2] translation saved for meal={saved_meal.meal_id}, "
+                                    f"language={command.language}"
+                                )
+                        except Exception as e:
+                            logger.warning(
+                                f"[PHASE-2] translation failed for meal={saved_meal.meal_id}: {e}"
+                            )
+                            # Don't fail the whole analysis if translation fails
                 phase2_elapsed = time.time() - phase2_start
                 logger.info(
                     f"[PHASE-2-COMPLETE] meal={saved_meal.meal_id} | "
