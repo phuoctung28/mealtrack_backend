@@ -442,7 +442,7 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         GetUserProfileQuery,
-        GetUserProfileQueryHandler(),
+        GetUserProfileQueryHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
         GetUserByFirebaseUidQuery, GetUserByFirebaseUidQueryHandler()

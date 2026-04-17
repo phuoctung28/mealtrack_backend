@@ -55,6 +55,8 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
         if self.cache_service:
             tdee_key, _ = CacheKeys.user_tdee(command.user_id)
             await self.cache_service.invalidate(tdee_key)
+            profile_key, _ = CacheKeys.user_profile(command.user_id)
+            await self.cache_service.invalidate(profile_key)
             # Invalidate both the server's current week and adjacent week to cover
             # timezone skew: server UTC date may differ from user's local date.
             from datetime import date, timedelta
