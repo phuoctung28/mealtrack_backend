@@ -3,8 +3,6 @@ Tests for Sentry gen_ai span instrumentation in VisionAIService.
 """
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from src.infra.adapters.vision_ai_service import VisionAIService
 
 
@@ -91,3 +89,25 @@ def test_analyze_sets_model_attribute():
         if call.args[0] == "gen_ai.request.model":
             assert call.args[1] == "gemini-2.5-flash", \
                 f"Expected model name 'gemini-2.5-flash', got: {call.args[1]}"
+
+
+def test_analyze_sets_token_attributes():
+    """VisionAIService._analyze_image_reference must record gen_ai.usage.input_tokens and output_tokens."""
+    svc, mock_model = _make_service_and_model()
+    mock_model.invoke.return_value = _make_mock_response()
+
+    mock_span = MagicMock()
+    mock_span.__enter__ = MagicMock(return_value=mock_span)
+    mock_span.__exit__ = MagicMock(return_value=False)
+
+    strategy = MagicMock()
+    strategy.get_analysis_prompt.return_value = "Analyze this food."
+    strategy.get_user_message.return_value = "What is this?"
+    strategy.get_strategy_name.return_value = "basic"
+
+    with patch("sentry_sdk.start_span", return_value=mock_span):
+        svc._analyze_image_reference("https://example.com/food.jpg", strategy)
+
+    calls = {c.args[0]: c.args[1] for c in mock_span.set_attribute.call_args_list}
+    assert calls.get("gen_ai.usage.input_tokens") == 200
+    assert calls.get("gen_ai.usage.output_tokens") == 80
