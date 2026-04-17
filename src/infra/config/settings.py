@@ -115,7 +115,7 @@ class Settings(BaseSettings):
     # Sentry error monitoring
     SENTRY_DSN: str | None = Field(default=None, description="Sentry DSN; disables Sentry when unset")
     SENTRY_TRACES_SAMPLE_RATE: float = Field(default=0.1, description="Performance trace sample rate (0.0-1.0)")
-    SENTRY_PROFILES_SAMPLE_RATE: float = Field(default=0.0, description="Profile sample rate (0.0-1.0)")
+    SENTRY_PROFILES_SAMPLE_RATE: float = Field(default=0.05, description="Profile sample rate (0.0-1.0)")
     SENTRY_SEND_PII: bool = Field(default=False, description="Send user IP/headers to Sentry")
 
     # Feature flags / development toggles
