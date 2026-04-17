@@ -1,30 +1,13 @@
-# MealTrack Backend - System Architecture
+# Backend System Architecture Overview
 
-**Last Updated:** April 17, 2026
-**Version:** 0.6.1
-**Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven
-**Event Bus**: PyMediator with singleton registry pattern
-**Monitoring**: Sentry integration for error tracking and performance monitoring
-**Source**: Verified against live codebase (430 files, ~38.5K LOC)
-
----
-
-## Table of Contents
-
-1. [Architecture Overview](#architecture-overview)
-2. [Layer Details](#layer-details)
-3. [CQRS & Event Bus](#cqrs--event-bus)
-4. [Database Architecture](#database-architecture)
-5. [External Integrations](#external-integrations)
-6. [Security Architecture](#security-architecture)
-7. [Performance & Scalability](#performance--scalability)
-8. [Deployment Architecture](#deployment-architecture)
+**Last Updated:** April 17, 2026  
+**Architecture:** 4-Layer Clean + CQRS + Event-Driven  
+**Event Bus:** PyMediator (singleton registry pattern)  
+**Codebase:** 430 files, ~38.5K LOC across 4 layers
 
 ---
 
 ## Architecture Overview
-
-### High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -48,535 +31,178 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Layer Statistics
+---
+
+## Layer Statistics & Responsibilities
 
 | Layer | Files | LOC | Purpose |
 |-------|-------|-----|---------|
-| API | 76 | ~8,605 | HTTP presentation |
-| Application | 140 | ~6,229 | CQRS orchestration |
-| Domain | 133 | ~14,556 | Business logic |
-| Infrastructure | 80 | ~8,895 | Technical implementation |
+| API | 76 | ~8,605 | HTTP presentation + routing |
+| App | 140 | ~6,229 | CQRS orchestration (commands/queries/events) |
+| Domain | 133 | ~14,556 | Business logic (ZERO external dependencies) |
+| Infra | 80 | ~8,895 | DB, cache, external services, event bus |
 | **Total** | **430** | **~38,300** | |
 
 ---
 
-## Layer Details
+## Layer Responsibilities
 
-### API Layer (`src/api/`) - 76 files, ~8,605 LOC
+### 1. API Layer (`src/api/`)
+**Responsibility:** HTTP request/response handling
 
-**Components**:
-- **12 Route Modules** (50+ endpoints): Health, Meals, Users, Profiles, Chat (modular: thread_routes, message_routes), Chat WebSocket, Notifications, Meal Plans, Suggestions, Activities, Ingredients, Webhooks, Monitoring, Feature Flags, Foods
-- **34 Pydantic Schemas** (2,530 LOC): Request/response DTOs with validation
-- **8 Mappers** (1,026 LOC): API ↔ Domain transformations
-- **3 Middleware Layers** (530 LOC): CORS, Request Logging (ID + timing), Dev Auth Bypass
-- **2 DI Providers** (706 LOC): Auth (Firebase JWT), Event Bus (PyMediator singleton)
-- **7 Custom Exception Types**: MealTrackException hierarchy
+- **12 Route Modules**: 50+ REST endpoints (health, meals, users, profiles, chat, notifications, etc.)
+- **34 Pydantic Schemas**: Request/response DTOs with validation
+- **8 Mappers**: API ↔ Domain transformations
+- **3 Middleware Layers**: CORS, request logging, dev auth bypass
+- **Firebase JWT Auth**: Token verification with dev bypass
+- **WebSocket Support**: ConnectionManager for real-time chat
 
-**Responsibilities**:
-1. Receive HTTP requests
-2. Validate via Pydantic schemas
-3. Dispatch commands/queries to event bus
-4. Map domain models to response DTOs
-5. Handle authentication/authorization
+**Flow:**
+1. Receive HTTP request
+2. Validate via Pydantic
+3. Create command/query
+4. Dispatch to event bus
+5. Map result to response DTO
+6. Return response
 
-**Key Endpoints** (50+ total):
-- `POST /v1/meals/image/analyze` - Immediate meal analysis
-- `POST /v1/meals/manual` - Create meal from USDA foods
-- `GET /v1/meals/{id}` - Fetch meal details
-- `GET /v1/user-profiles/tdee` - TDEE calculation
-- `POST /v1/meal-plans/weekly/ingredient-based` - Generate weekly plan
-- `POST /v1/meal-suggestions/generate` - Generate 3 personalized suggestions (session-based)
-- `POST /v1/meal-suggestions/discover` - Meal discovery endpoint (6 meals/batch)
-- `POST /v1/chat/threads/{id}/messages` - Send chat message
-- `WS /v1/chat/ws` - Real-time chat with ConnectionManager
+### 2. Application Layer (`src/app/`)
+**Responsibility:** CQRS command/query/event orchestration
 
-**Middleware Chain**:
-1. **CORSMiddleware** - Allow all origins (TODO: restrict in prod)
-2. **RequestLoggerMiddleware** - Request ID, timing, slow request detection (>1s)
-3. **DevAuthBypassMiddleware** - Inject dev user in development mode
-
-**Authentication Flow**:
-```
-Client → Authorization: Bearer <token>
-       → verify_firebase_token()
-       → Firebase Admin SDK
-       → get_current_user_id()
-       → Database user lookup
-       → UUID user_id
-```
-
-### Application Layer (`src/app/`) - 140 files, ~6,229 LOC
-
-**Components**:
-- **30 Commands**: Write operations across 11 domains (Chat, Meal, Daily Meal, Meal Plan, Meal Suggestion, User, Notification, Ingredient, TDEE, Activity, Food)
+- **30 Commands**: Write operations across 11 domains
 - **31 Queries**: Read operations
 - **19 Domain Events**: Historical facts
-- **51+ Handlers**: Command (28+), query (24+), and event (1) handlers with @handles decorator
-- **3 Application Services** (556 LOC): MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService
-- **UnitOfWork**: Transaction management with cache invalidation after writes
+- **51+ Handlers**: Command, query, event handlers with @handles decorator
+- **3 App Services**: MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService
+- **UnitOfWork**: Transaction management
 
-**CQRS Breakdown**:
+**Key Concept:** Handlers are dependency-injected with repositories and domain services, never directly manipulate DB.
 
-**Commands** (user intent to change state):
-- User: SyncUser, UpdateUserMetrics, SaveUserOnboarding, DeleteUser
-- Meal: CreateManualMeal, EditMeal, DeleteMeal, UploadMealImageImmediately
-- Planning: GenerateWeeklyIngredientBasedMealPlan, GenerateDailyMealSuggestions, GenerateSingleMeal
-- Chat: CreateThread, SendMessage, DeleteThread
-- Notifications: RegisterFcmToken, DeleteFcmToken, UpdateNotificationPreferences
+### 3. Domain Layer (`src/domain/`)
+**Responsibility:** Pure business logic (ZERO infrastructure dependencies)
 
-**Queries** (read-only data retrieval):
-- User: GetUserByFirebaseUid, GetUserProfile, GetUserMetrics, GetUserTdee
-- Meal: GetMealById, GetDailyMacros
-- Planning: GetMealPlan, GetMealsByDate, GetMealsFromPlanByDate
-- Food: SearchFoods, GetFoodDetails
-- Chat: GetThread, GetThreads, GetMessages
+- **8 Bounded Contexts**: Meal, Nutrition, User, Meal Planning, Conversation, Notification, AI, Chat
+- **30+ Domain Entities**: Rich models with validation
+- **50+ Domain Services**: TDEE, nutrition, meal planning, suggestions, translation, notifications
+- **6 Analysis Strategies**: Strategy Pattern for flexible meal analysis
+- **17 Port Interfaces**: Dependency inversion for repositories and services
 
-**Domain Events** (things that happened):
-- Meal: MealImageUploadedEvent, MealAnalysisStartedEvent, MealNutritionUpdatedEvent, MealEditedEvent
-- Planning: MealPlanGeneratedEvent, MealReplacedEvent
-- User: UserOnboardedEvent, UserProfileUpdatedEvent
-- Chat: MessageSentEvent, ThreadCreatedEvent, ThreadDeletedEvent
+**Key Concept:** Domain layer knows nothing about HTTP, databases, or external APIs. It only knows business rules.
 
-**Event Flow Example**:
-```
-1. API receives POST /v1/meals/image/analyze
-2. Route creates UploadMealImageImmediatelyCommand
-3. EventBus.send() → UploadMealImageImmediatelyCommandHandler
-4. Handler:
-   - Uploads image to Cloudinary
-   - Creates Meal with PROCESSING status
-   - Publishes MealImageUploadedEvent
-5. EventBus.publish() → MealAnalysisEventHandler (background)
-6. Background handler:
-   - Updates status to ANALYZING
-   - Calls VisionAIService (Gemini)
-   - Parses nutrition with GPTResponseParser
-   - Updates meal to READY
-7. Returns Meal to API layer immediately (step 4)
-```
+### 4. Infrastructure Layer (`src/infra/`)
+**Responsibility:** Technical implementation details
 
-### Domain Layer (`src/domain/`) - 133 files, ~14,556 LOC
-
-**8 Bounded Contexts**:
-1. **Meal**: Meal aggregate with state machine (PROCESSING → ANALYZING → ENRICHING → READY/FAILED/INACTIVE), MealImage, Ingredient
-2. **Nutrition**: Nutrition, FoodItem, Macros, Micros, Food
-3. **User**: Activity, TdeeRequest, TdeeResponse, MacroTargets, Sex, ActivityLevel, Goal
-4. **Meal Planning**: MealPlan, PlannedMeal, DayPlan, UserPreferences, DietaryPreference
-5. **Conversation**: Conversation, Message, ConversationState, PromptContext
-6. **Notification**: UserFcmToken, NotificationPreferences, PushNotification, DeviceType
-7. **AI**: GPTAnalysisResponse, GPTFoodItem, GPTResponseError hierarchy
-8. **Chat**: Thread, Message, ThreadStatus, MessageRole
-
-**50+ Domain Services**:
-- **MealCoreService**: Meal lifecycle via state machine, nutrition calculation, time-based meal type determination
-- **TdeeCalculationService**: BMR (Mifflin-St Jeor, Katch-McArdle) + TDEE + macro calculations with auto-formula selection
-- **NutritionCalculationService**: Nutrition from USDA FDC, Pinecone, or None (priority-based)
-- **PlanOrchestrator**: Generate, save, update, delete meal plans
-- **SuggestionOrchestrationService**: Session-based suggestions with Redis 4h TTL, 7-language support
-- **TranslationService**: Multi-language support (en, vi, es, fr, de, ja, zh with ISO 639-1)
-- **NotificationService**: FCM push notifications
-
-**6 Analysis Strategies** (Strategy Pattern):
-1. **BasicAnalysisStrategy**: No context
-2. **PortionAwareAnalysisStrategy**: Adjusts for portion size (e.g., 200g, 1 cup)
-3. **IngredientAwareAnalysisStrategy**: Uses known ingredient list
-4. **WeightAwareAnalysisStrategy**: Adjusts for total weight in grams
-5. **IngredientIdentificationStrategy**: Identifies single ingredient from photo
-6. **UserContextAwareAnalysisStrategy**: Incorporates user description
-
-**17 Port Interfaces** (Dependency Inversion):
-- **Repository Ports** (7): MealRepositoryPort, UserRepositoryPort, MealPlanRepositoryPort, etc.
-- **Service Ports** (10): VisionAIServicePort, MealGenerationServicePort, FoodDataServicePort, ImageStorePort, etc.
-
-**Business Rules**:
-- **TDEE Calculation**: Auto-select Katch-McArdle (if body_fat%) else Mifflin-St Jeor
-- **Meal Type Determination**: Time-based (5-10:30 breakfast, 11-14:30 lunch, 17-21 dinner, else snack)
-- **Calorie Distribution**: Breakfast 25%, Lunch 35%, Dinner 30%, Snack 10%
-- **Meal Planning**: Use ONLY available ingredients, min 3 days before repeat, max 2 same-cuisine per week
-
-### Infrastructure Layer (`src/infra/`) - 80 files, ~8,895 LOC
-
-**Components**:
-- **13+ Database Tables**: User, UserProfile, Subscription, Meal, MealImage, Nutrition, FoodItem, MealPlan, NotificationPreferences, UserFcmToken, Thread, Message, notification_sent_log (dedup).
-- **10+ Repositories**: Smart sync with diff-based updates, eager loading, request-scoped sessions.
-- **External Services**: Firebase (FCM), Cloudinary (images), Gemini (multi-model AI), Pinecone (1024-dim vector search), RevenueCat (subscriptions), Sentry (monitoring).
-- **Redis Cache**: Cache-aside pattern with graceful degradation, JSON serialization, 50 connections, 1h default TTL.
-- **PyMediator Event Bus**: Singleton registry pattern, async event handling with @handles decorator.
-- **WebSocket**: ConnectionManager for real-time chat connections.
-- **Sentry Monitoring**: Error tracking, performance profiling (traces, profiles), FastAPI/Starlette/SQLAlchemy integrations.
-
-**Database Architecture**:
-- **Engine**: MySQL 8.0 + SQLAlchemy 2.0
-- **Session Management**: Request-scoped sessions via ContextVar (singleton-safe)
-- **Connection Pool**: 20 connections with 10 overflow capacity
-- **Migrations**: Alembic with auto-migration on startup
-
-**Repository Pattern**:
-```python
-class MealRepository(MealRepositoryPort):
-    def save(self, meal: Meal) -> Meal:
-        # Smart sync: update existing or create new
-        # Diff-based updates for nested entities (food items)
-        # Preserve IDs, update/add/remove as needed
-        pass
-
-    def find_by_id(self, meal_id: str) -> Optional[Meal]:
-        # Eager loading with joinedload
-        # Convert DB model to domain entity
-        pass
-```
-
-**Cache Strategy**:
-- **Pattern**: Cache-aside (check cache → miss → fetch from DB → populate cache)
-- **Serialization**: JSON with Pydantic support
-- **TTL**: Based on volatility (user profile 1h, suggestions 4h)
-- **Connection Pool**: 50 connections
-- **Default TTL**: 1 hour
-- **Error Handling**: Graceful degradation (continue on cache failure)
+- **MySQL + SQLAlchemy 2.0**: 13+ tables, connection pooling (20 + 10 overflow)
+- **Alembic Migrations**: Database version control
+- **10+ Repositories**: Smart sync, eager loading, request-scoped sessions
+- **Redis Cache**: Cache-aside pattern, graceful degradation
+- **PyMediator Event Bus**: Singleton registry, async handler execution
+- **External Services**: Firebase FCM, Cloudinary, Gemini, Pinecone, RevenueCat, Sentry
+- **WebSocket**: ConnectionManager for real-time connections
 
 ---
 
-## CQRS & Event Bus
+## Key Architectural Patterns
 
-### PyMediator Event Bus
+### Dependency Inversion
 
-**Architecture**:
-- **Singleton Registry Pattern**: Prevents memory leaks from dynamic class generation by reusing the same event bus instance
-- **Request-Scoped Sessions**: Handlers receive fresh DB sessions per request
-- **Async Execution**: Direct async handler invocation for commands/queries, background tasks for domain events
+Domain layer defines ports (interfaces); infrastructure implements them.
 
-**Two Event Buses**:
-1. **Food Search Bus**: Lightweight, food queries only (no heavy services)
-2. **Configured Bus**: Full CQRS with 40+ handlers registered
+```
+Domain (defines interface)
+    ↓
+Infrastructure (implements interface)
+    ↓
+Handler (depends on abstraction, not concrete impl)
+```
 
-**Usage**:
+### CQRS (Command Query Responsibility Segregation)
+
+Separates write (commands) from read (queries) operations:
+
+- **Commands**: CreateMealCommand, UpdateUserMetricsCommand (execute business logic, publish events)
+- **Queries**: GetMealByIdQuery, SearchFoodsQuery (read-only, return immediately)
+- **Events**: MealCreatedEvent, UserOnboardedEvent (fire-and-forget, processed async)
+
+See `docs/cqrs-guide.md` for detailed patterns.
+
+### Event Bus (PyMediator)
+
+Singleton registry pattern prevents memory leaks:
+
 ```python
-# Commands/Queries (synchronous, returns result)
+# Commands/Queries (synchronous)
 result = await event_bus.send(CreateMealCommand(...))
 
-# Domain Events (asynchronous, fire-and-forget)
+# Events (asynchronous, fire-and-forget)
 await event_bus.publish(MealCreatedEvent(...))
 ```
 
-**Handler Registration**:
+### Repository Pattern
+
+Repositories encapsulate data access with smart sync and eager loading:
+
 ```python
-@handles(CreateMealCommand)
-class CreateMealCommandHandler(EventHandler):
-    async def handle(self, command: CreateMealCommand) -> Meal:
-        # Execute business logic with dependency injection
-        pass
-```
+def save(self, meal: Meal) -> Meal:
+    # Smart sync: update existing or create new
+    # Diff-based updates for nested entities
+    pass
 
-**Handler Pattern**:
-- 29 commands across 11 domains
-- 23 queries
-- 10+ domain events
-- UnitOfWork for transaction management
-- Cache invalidation after writes
-
----
-
-## Database Architecture
-
-### Schema Design
-
-**Core Tables** (11+ active, 3 recent additions via migrations 034-037):
-- **users**: Firebase UID mapping, OAuth provider, timezone, onboarding status
-- **user_profiles**: Physical attributes (age, gender, height, weight, body fat), goals (activity level, fitness goal, target weight), preferences (dietary, allergies, health conditions). NEW (Mar 2026): date_of_birth, custom_protein_g, custom_carbs_g, custom_fat_g
-- **subscriptions**: RevenueCat integration cache (product_id, platform, status, timestamps)
-- **meal**: Primary meal record (status state machine, dish_name, ready_at, error_message, edit tracking)
-- **mealimage**: Cloudinary references (url, format, size, width, height)
-- **nutrition**: Macros + confidence score (calories, protein, carbs, fat, confidence_score). NEW (Mar 2026): fiber, sugar (enables fiber-aware calorie derivation)
-- **food_item**: Ingredient details (name, quantity, unit, macros, fdc_id, is_custom). NEW (Mar 2026): fiber, sugar
-- **meal_plans**: User preferences for plan generation (dietary, allergies, cooking time, fitness goal)
-- **notification_preferences**: User notification settings (toggles, timing, intervals)
-- **user_fcm_tokens**: Firebase Cloud Messaging tokens (multi-device support)
-- **chat_threads**, **chat_messages**: Conversation storage
-
-**Model Mixins**:
-- **PrimaryEntityMixin**: GUID primary key (String(36)), created_at, updated_at
-- **SecondaryEntityMixin**: Auto-increment integer ID, timestamps
-- **TimestampMixin**: Only timestamps (no ID)
-
-**Relationships**:
-- User (1:N) UserProfile, Subscription, Meal, NotificationPreferences, UserFcmToken
-- Meal (1:1) MealImage, Nutrition
-- Nutrition (1:N) FoodItem
-- MealPlan (1:N) MealPlanDay (1:N) PlannedMeal
-
-**State Machine** (Meal Status):
-```
-PROCESSING → ANALYZING → ENRICHING → READY
-                                    ↓
-                                  FAILED
-                                    ↓
-                                 INACTIVE
+def find_by_id(self, meal_id: str) -> Optional[Meal]:
+    # Eager loading with joinedload
+    # Convert DB model to domain entity
+    pass
 ```
 
 ---
 
-## Nutrition Accuracy Architecture (NEW - Mar 2026)
+## Bounded Contexts (Domain)
 
-### Overview
-Five-phase implementation ensures macro integrity and accuracy throughout the system:
-
-### Phase 1: AI Macro Validation
-- **Service**: `MacroValidationService` (post-generation validation)
-- **Threshold**: 10% divergence tolerance between formula-derived and reported calories
-- **Formula**: `P×4 + (C-fiber)×4 + fiber×2 + F×9` (fiber-aware)
-- **Correction**: If >10% off, trusts macros over reported calories, logs warning
-- **Integration**: Applied in `SuggestionOrchestrationService`, meal suggestion pipeline
-
-### Phase 2: Density-Aware Conversion
-- **Service**: `food_density.py` constants + `NutritionCalculationService.convert_quantity_to_grams()`
-- **Data**: 30+ density constants (honey 1.42, oil 0.92, milk 1.03, water 1.0, etc.)
-- **Use Case**: Converts volume (ml) → mass (g) for non-aqueous liquids
-- **Default**: 1.0 (water) for unknown substances
-- **Applied**: Meal analysis strategies, food item processing
-
-### Phase 3: Fiber-Aware Calories
-- **Migration**: 034_add_fiber_sugar_columns
-- **Tables Updated**: `food_item`, `nutrition` (both + fiber, sugar columns)
-- **Formula**: Net carbs = carbs - fiber; Calories = P×4 + net_carbs×4 + fiber×2 + F×9
-- **Backend Precision**: 1 decimal place (preserved)
-- **Mobile Display**: Rounded for presentation (no re-derivation)
-- **Consistency**: All calorie values derived from macros, never reported separately
-
-### Phase 4: Food Reference Evolution
-- **Migration**: 035_evolve_barcode_to_food_reference
-- **Pattern**: Dual lookup during transition (barcode_products + food_reference)
-- **Goal**: Migrate from barcode-only to evolving food reference database
-- **Backward Compat**: Maintains fdc_id fallback for transition period
-- **New Fields**: food_reference_id (nullable during evolution)
-
-### Phase 5: Meal Decomposition
-- **Requirement**: All AI meal parsing must decompose compound dishes into atomic ingredients
-- **Enforcement**: System prompts require ingredient breakdown
-- **Validation**: `meal_analysis_strategy.py` validates decomposition rules
-- **Examples**: "pasta carbonara" → pasta, eggs, guanciale, cheese (not as single dish)
-
-### Single Source of Truth (Macros)
-```
-Input: Macros from AI or user
-↓
-Validation: MacroValidationService checks formula consistency
-↓
-Storage: fiber, carbs, protein, fat stored in DB
-↓
-Derivation: Backend derives calories = P×4 + (C-fiber)×4 + fiber×2 + F×9
-↓
-Output: Mobile receives calories from backend (no re-derivation)
-↓
-Display: Mobile rounds for UI (1 or 0 decimals based on value)
-```
+| Context | Purpose | Key Entities |
+|---------|---------|--------------|
+| Meal | Core meal operations | Meal (state machine), MealImage, Ingredient |
+| Nutrition | Macro/micro data | Nutrition, FoodItem, Macros, Micros |
+| User | User profiles & metrics | User, UserProfile, Activity, TdeeRequest |
+| Meal Planning | Weekly/daily plans | MealPlan, PlannedMeal, DayPlan, UserPreferences |
+| Conversation | Chat state | Conversation, Message, ConversationState |
+| Notification | Push notifications | UserFcmToken, NotificationPreferences, PushNotification |
+| AI | AI response models | GPTAnalysisResponse, GPTFoodItem, GPTResponseError |
+| Chat | Real-time messaging | Thread, Message, ThreadStatus, MessageRole |
 
 ---
 
-## External Integrations
+## Data Flow Example: Meal Analysis
 
-### Firebase
-**Purpose**: Authentication + Push Notifications
+1. API POST `/v1/meals/image/analyze` receives image
+2. Route creates `UploadMealImageImmediatelyCommand`
+3. EventBus.send() → `UploadMealImageImmediatelyCommandHandler`
+4. Handler uploads image to Cloudinary, creates Meal with PROCESSING status, publishes `MealImageUploadedEvent`
+5. EventBus.publish() → `MealAnalysisEventHandler` (background)
+6. Background handler calls `VisionAIService` (Gemini), parses nutrition, updates Meal to READY
+7. Handler returns Meal to API layer immediately (step 4)
 
-**Auth**:
-- Firebase Admin SDK for JWT verification
-- Dev bypass middleware for local development
-- Token expiration and revocation checks
-
-**FCM**:
-- Platform-specific configs (Android high priority, APNS alert/badge/sound)
-- Multi-device support via user_fcm_tokens table
-- Failed token tracking with error codes
-
-### Cloudinary
-**Purpose**: Image Storage
-
-**Features**:
-- Folder organization ("mealtrack")
-- Secure URL generation
-- Format support (JPEG, PNG)
-- Resource API with fallback to direct URL construction
-
-### Google Gemini
-**Purpose**: AI Meal Analysis + Chat
-
-**Multi-Model Strategy** (Rate Distribution):
-- **MEAL_NAMES**: gemini-2.5-flash-lite (10 RPM)
-- **RECIPE_PRIMARY**: gemini-2.5-flash (5 RPM)
-- **RECIPE_SECONDARY**: gemini-3-flash (load distribution)
-- **GENERAL**: Default fallback
-
-**Vision AI**:
-- 6 analysis strategies (basic, portion, ingredient, weight, user-context, combined)
-- JSON parsing with multiple fallbacks (direct, markdown extraction, regex, truncation recovery)
-- Safety detection (blocked responses)
-
-**Token Optimization**:
-- Weekly plans: 8000 tokens
-- Meal suggestions: 1500 * count (max 8000)
-- Daily multi-meal: 3000 tokens
-- Single meal: 1500 tokens
-
-### Pinecone
-**Purpose**: Vector Search for Ingredient Nutrition
-
-**Configuration**:
-- **Embedding Model**: llama-text-embed-v2 (1024 dimensions)
-- **Indexes**: "ingredients", "usda"
-- **Similarity Threshold**: 0.35
-
-**Features**:
-- Semantic ingredient search
-- Nutrition scaling by portion
-- Unit conversion (g, kg, oz, lb, ml, cup, tbsp, tsp, etc.)
-- Aggregate nutrition calculation
-
-### RevenueCat
-**Purpose**: Subscription Management
-
-**Features**:
-- Webhook sync to local DB (subscriptions table)
-- Premium status check with cache fallback
-- Signature verification for webhooks
-
----
-
-## Security Architecture
-
-### Authentication Flow
-```
-1. Client sends Firebase ID token in Authorization header
-2. verify_firebase_token() validates via Firebase Admin SDK
-3. get_current_user_id() maps Firebase UID to database UUID
-4. Checks user.is_active (blocks inactive/deleted users)
-5. Returns UUID user_id for use in handlers
-```
-
-### Authorization
-- **User Ownership**: All queries/commands verify user_id matching
-- **Premium Features**: `require_subscription()` dependency (TODO: apply to routes)
-- **Webhook Auth**: RevenueCat signature verification
-
-### Input Validation
-- **Pydantic Schemas**: Type validation, required fields, constraints
-- **File Uploads**: Max 10MB, content type validation (image/jpeg, image/png)
-- **User Input Sanitization**: Prevent prompt injection in descriptions
-
-### Data Protection
-- **Soft Deletes**: Meals marked INACTIVE instead of deleted
-- **Request Isolation**: Request-scoped DB sessions prevent data leaks
-- **Secrets Management**: Environment variables via .env
-
----
-
-## Performance & Scalability
-
-### Database Optimization
-- **Eager Loading**: Pre-defined load options for consistent performance
-- **Connection Pooling**: Dynamic sizing based on worker count
-- **Indexes**: Firebase UID, status, dates, user_id foreign keys
-
-### Caching Strategy
-- **Cache-Aside Pattern**: Check cache → miss → fetch from DB → populate cache
-- **TTL by Volatility**: User profile 1h, suggestions 4h, TDEE calculations 1h
-- **Graceful Degradation**: Continue on cache failure
-
-### Event Bus
-- **Singleton Pattern**: Reuse event bus instance across requests
-- **Request-Scoped Sessions**: Handlers get fresh DB sessions per request
-- **Background Events**: Non-blocking async processing
-
-### API Performance
-- **Request ID Tracking**: X-Request-ID header for tracing
-- **Slow Request Detection**: Warns on >1s requests
-- **Response Time Header**: X-Response-Time for monitoring
-
----
-
-## Deployment Architecture
-
-### Environment Configuration
-- **Development**: Dev auth bypass, mock storage, verbose logging
-- **Production**: Firebase JWT required, external storage, structured logging
-
-### Lifecycle Management
-**Startup**:
-1. Initialize Firebase Admin SDK (3 methods: file path, JSON string, default credentials)
-2. Run Alembic database migrations (with retry logic)
-3. Start scheduled notification service
-4. Initialize Redis cache layer
-
-**Shutdown**:
-1. Stop scheduled notification service
-2. Disconnect Redis cache
-
-**Error Handling**:
-- `FAIL_ON_MIGRATION_ERROR=true` → Exit if migrations fail
-- `FAIL_ON_CACHE_ERROR=true` → Exit if cache init fails
-- Otherwise: Log errors and continue (degraded mode)
-
-### Health Checks
-- `/health` - Basic health check
-- `/health/db-pool` - DB pool metrics
-- `/health/mysql-connections` - MySQL connection stats
-- `/health/notifications` - FCM health
+**Result:** Synchronous response to client, async analysis in background.
 
 ---
 
 ## Architectural Strengths
 
-1. **Clear Separation of Concerns**: 4 distinct layers with well-defined responsibilities
-2. **CQRS Flexibility**: Independent scaling of read/write operations
-3. **Event-Driven Scalability**: Async background processing for long-running tasks
-4. **Dependency Inversion**: Domain layer has zero infrastructure dependencies
-5. **Testability**: Isolated handlers with injected dependencies (681+ tests, 70%+ coverage)
-6. **Strategy Pattern**: Flexible meal analysis with pluggable strategies
-7. **Multi-Model AI**: Rate limit distribution across Gemini models
-8. **Graceful Degradation**: Cache and external service failures handled gracefully
+1. **Clear Separation of Concerns**: 4 distinct layers
+2. **CQRS Flexibility**: Independent scaling of reads/writes
+3. **Event-Driven Scalability**: Async background processing
+4. **Dependency Inversion**: Domain has zero infrastructure dependencies
+5. **Testability**: 681+ tests, 70%+ coverage (isolated handlers, injected deps)
+6. **Graceful Degradation**: Cache/service failures handled gracefully
 
 ---
 
-## Known Issues & Technical Debt
+## Known Issues
 
-1. **CORS Wide Open**: `allow_origins=["*"]` in production (security risk)
-2. **Daily Meals Router Commented Out**: Line 207 in main.py (deprecated, use meal_suggestions)
-3. **Premium Features Not Restricted**: No routes use `require_premium` dependency
-4. **Hardcoded Values**: MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD not in config
-5. **No API Versioning Strategy**: Only v1 exists, no migration plan
-6. **CloudinaryImageStore Instantiation**: Created directly in routes instead of DI
-7. **Dev Meal Seeding**: May clutter DB in long-running dev environments
-
-## WebSocket Architecture
-
-### Real-Time Chat
-
-**ConnectionManager**:
-- Manages WebSocket connections for real-time chat
-- Stores active connections per user_id
-- Handles connect, disconnect, and message broadcasting
-
-**Chat Flow**:
-1. Client connects to `WS /v1/chat/ws`
-2. ConnectionManager accepts and stores connection
-3. User sends message via WebSocket or REST
-4. MessageOrchestrationService coordinates message flow
-5. AIResponseCoordinator handles streaming AI responses
-6. ChatNotificationService broadcasts FCM notifications to offline users
-7. ConnectionManager sends real-time updates to connected clients
-
-**Application Services**:
-- **MessageOrchestrationService**: Message flow coordination
-- **AIResponseCoordinator**: Streaming AI responses with Gemini
-- **ChatNotificationService**: FCM broadcasting for chat messages
-
-## Monitoring Architecture (NEW - Apr 2026)
-
-**Sentry Integration**:
-- **Initialization**: `initialize_sentry()` called before FastAPI app instantiation
-- **Configuration**: DSN, environment, trace/profile sample rates via settings
-- **Integrations**: FastAPI, Starlette, SQLAlchemy, Logging
-- **Features**: Error tracking, performance monitoring (traces), profiling (profiles), PII handling
-- **Conditional**: Gracefully disabled if SENTRY_DSN not set
+1. CORS wide open in production (`allow_origins=["*"]`)
+2. Premium features not restricted on routes
+3. No API versioning strategy (only v1)
+4. Hardcoded constants not in config
+5. CloudinaryImageStore created directly in routes (not DI)
 
 ---
 
-**Source**: Live codebase verification April 17, 2026 (430 files, ~38.5K LOC).
+See related: `cqrs-guide.md`, `database-guide.md`, `external-services.md`, `code-standards.md`
