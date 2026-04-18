@@ -20,6 +20,7 @@ from src.domain.services.meal_type_determination_service import determine_meal_t
 from src.domain.utils.timezone_utils import utc_now, get_zone_info, is_valid_timezone, noon_utc_for_date
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
+from src.infra.repositories.meal_repository import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +218,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"language={command.language} | "
                     f"status={final_meal.status}"
                 )
-                final_meal = uow.meals.find_by_id(meal.meal_id)
+                final_meal = uow.meals.find_by_id(meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS)
 
             await self._invalidate_daily_macros(command.user_id, meal_date)
 

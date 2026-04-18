@@ -15,6 +15,7 @@ from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import get_user_monday, get_zone_info, resolve_user_timezone
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
+from src.infra.repositories.meal_repository import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
 
             meals = uow.meals.find_by_date(
                 target_date, user_id=query.user_id, user_timezone=user_tz_str,
+                projection=MealProjection.MACROS_ONLY,
             )
 
             total_protein = 0.0
