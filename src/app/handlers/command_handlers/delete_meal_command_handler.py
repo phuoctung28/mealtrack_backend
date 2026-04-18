@@ -11,23 +11,21 @@ This handler performs:
 MealImage records are kept as orphans (images stay in storage).
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from sqlalchemy import update
 
 from src.api.exceptions import ResourceNotFoundException, AuthorizationException
 from src.app.commands.meal import DeleteMealCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.cache.cache_service import CacheService
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
 from src.infra.database.models.meal.food_item_translation_model import FoodItemTranslationORM
 from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.database.models.nutrition.food_item import FoodItemORM
-from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +34,13 @@ logger = logging.getLogger(__name__)
 class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
     """Handler for hard-deleting a meal with data preservation."""
 
-    def __init__(self, uow: Optional[UnitOfWorkPort] = None, cache_service: Optional[CacheService] = None):
+    def __init__(self, uow: UnitOfWorkPort, event_bus: Any):
         self.uow = uow
-        self.cache_service = cache_service
+        self.event_bus = event_bus
 
     async def handle(self, command: DeleteMealCommand) -> Dict[str, Any]:
         """Handle meal deletion with data preservation."""
-        uow = self.uow or UnitOfWork()
-
-        with uow:
+        with self.uow as uow:
             try:
                 # Get meal
                 meal = uow.meals.find_by_id(command.meal_id)
@@ -115,7 +111,12 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
 
                 uow.commit()
 
-                await self._invalidate_daily_macros(meal)
+                meal_date = (meal.created_at or utc_now()).date()
+                await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
+                    aggregate_id=meal.user_id,
+                    user_id=meal.user_id,
+                    meal_date=meal_date,
+                ))
 
                 return {
                     "meal_id": meal_id,
@@ -125,23 +126,3 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
                 uow.rollback()
                 logger.error(f"Error deleting meal: {str(e)}")
                 raise
-
-    async def _invalidate_daily_macros(self, meal):
-        if not self.cache_service or not meal:
-            return
-        created_at = meal.created_at or utc_now()
-        meal_date = created_at.date()
-        cache_key, _ = CacheKeys.daily_macros(meal.user_id, meal_date)
-        await self.cache_service.invalidate(cache_key)
-
-        # Invalidate weekly budget cache so wallet updates after meal deletion
-        from datetime import timedelta
-        week_start = meal_date - timedelta(days=meal_date.weekday())
-        weekly_key, _ = CacheKeys.weekly_budget(meal.user_id, week_start)
-        await self.cache_service.invalidate(weekly_key)
-
-        # Invalidate streak and daily activities caches
-        streak_key, _ = CacheKeys.user_streak(meal.user_id)
-        await self.cache_service.invalidate(streak_key)
-        activities_key, _ = CacheKeys.daily_activities(meal.user_id, meal_date)
-        await self.cache_service.invalidate(activities_key)

@@ -3,16 +3,15 @@ SaveMealSuggestionCommandHandler - Handler for saving meal suggestions as regula
 """
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import uuid4
 
 from src.app.commands.meal_suggestion import IngredientItem, SaveMealSuggestionCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
 from src.domain.model import FoodItem, Meal, MealImage, MealStatus, Nutrition, Macros
+from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now, noon_utc_for_date, resolve_user_timezone
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +29,9 @@ class SaveMealSuggestionCommandHandler(
     meal-level Nutrition carries the accurate aggregated values.
     """
 
-    def __init__(self, cache_service: Optional[CacheService] = None):
-        self.cache_service = cache_service
+    def __init__(self, uow: UnitOfWorkPort, event_bus: Any):
+        self.uow = uow
+        self.event_bus = event_bus
 
     async def handle(self, command: SaveMealSuggestionCommand) -> str:
         """
@@ -48,7 +48,7 @@ class SaveMealSuggestionCommandHandler(
         meal_date = datetime.strptime(command.meal_date, "%Y-%m-%d").date()
         if meal_date != now.date():
             # Past/future date: use noon to avoid date-boundary issues
-            with UnitOfWork() as uow:
+            with self.uow as uow:
                 user_tz = resolve_user_timezone(command.user_id, uow)
             meal_datetime = noon_utc_for_date(meal_date, user_tz)
         else:
@@ -107,11 +107,14 @@ class SaveMealSuggestionCommandHandler(
             emoji=command.emoji,
         )
 
-        with UnitOfWork() as uow:
+        with self.uow as uow:
             saved_meal = uow.meals.save(meal)
 
-            # Invalidate daily macros cache for this user/date if cache is configured
-            await self._invalidate_daily_macros(command.user_id, meal_date)
+            await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
+                aggregate_id=command.user_id,
+                user_id=command.user_id,
+                meal_date=meal_date,
+            ))
 
             logger.info(
                 f"Saved meal suggestion {command.suggestion_id} as meal {saved_meal.meal_id} "
@@ -209,10 +212,4 @@ class SaveMealSuggestionCommandHandler(
                 is_custom=True,
             ))
         return distributed
-
-    async def _invalidate_daily_macros(self, user_id: str, target_date) -> None:
-        if not self.cache_service:
-            return
-        cache_key, _ = CacheKeys.daily_macros(user_id, target_date)
-        await self.cache_service.invalidate(cache_key)
 
