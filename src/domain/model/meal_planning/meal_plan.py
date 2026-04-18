@@ -3,12 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Dict
 
-
-class MealType(str, Enum):
-    BREAKFAST = "breakfast"
-    LUNCH = "lunch"
-    DINNER = "dinner"
-    SNACK = "snack"
+from src.domain.model.common.enums import MealType  # noqa: F401 — re-exported for backwards compat
 
 
 @dataclass
