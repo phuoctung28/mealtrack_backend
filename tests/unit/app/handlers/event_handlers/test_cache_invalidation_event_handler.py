@@ -21,6 +21,7 @@ def handler(cache_mock):
 @pytest.mark.asyncio
 async def test_invalidates_daily_macros(handler, cache_mock):
     event = MealCacheInvalidationRequiredEvent(
+        aggregate_id="user-123",
         user_id="user-123",
         meal_date=date(2026, 4, 18),
     )
@@ -32,6 +33,7 @@ async def test_invalidates_daily_macros(handler, cache_mock):
 @pytest.mark.asyncio
 async def test_invalidates_weekly_budget(handler, cache_mock):
     event = MealCacheInvalidationRequiredEvent(
+        aggregate_id="user-123",
         user_id="user-123",
         meal_date=date(2026, 4, 18),
     )
@@ -45,6 +47,7 @@ async def test_invalidates_weekly_budget(handler, cache_mock):
 @pytest.mark.asyncio
 async def test_invalidates_streak_and_activities(handler, cache_mock):
     event = MealCacheInvalidationRequiredEvent(
+        aggregate_id="user-123",
         user_id="user-123",
         meal_date=date(2026, 4, 18),
     )
