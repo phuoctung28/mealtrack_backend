@@ -95,8 +95,8 @@ class MealRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def delete(self, meal_id: str) -> bool:
-        """Delete a meal by ID."""
+    def delete(self, meal_id: str) -> None:
+        """Delete a meal by ID with data preservation."""
         pass
 
     def get_daily_meal_counts(

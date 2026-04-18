@@ -38,6 +38,7 @@ class UnitOfWork(UnitOfWorkPort):
         self.meal_suggestions = MealSuggestionRepository(session)
         self.weekly_budgets = WeeklyBudgetRepository(session)
         self.saved_suggestions_db = SavedSuggestionDbRepository(session)
+        self.saved_suggestions = self.saved_suggestions_db
         self.cheat_days = CheatDayRepository(session)
         
     def __enter__(self) -> 'UnitOfWork':

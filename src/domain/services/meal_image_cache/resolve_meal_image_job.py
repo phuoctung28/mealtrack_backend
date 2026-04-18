@@ -15,9 +15,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
-from src.app.events.meal_suggestion.meal_image_resolved_event import (
-    MealImageResolvedEvent,
-)
+from src.domain.events.meal_image_resolved_event import MealImageResolvedEvent
 from src.domain.model.meal_image_cache import CachedImageUpsert, PendingItem
 from src.domain.services.meal_image_cache.name_canonicalizer import slug
 

@@ -9,7 +9,7 @@ from sqlalchemy.orm import relationship
 from src.infra.database.config import Base
 
 
-class FoodItemTranslation(Base):
+class FoodItemTranslationORM(Base):
     """
     Database model for food item translations.
 
@@ -32,24 +32,4 @@ class FoodItemTranslation(Base):
     is_deleted = Column(Boolean, default=False, nullable=False, server_default='false')
 
     # Relationship back to meal translation
-    meal_translation = relationship("MealTranslation", back_populates="food_items")
-
-    def to_domain(self):
-        """Convert DB model to domain model."""
-        from src.domain.model.meal import FoodItemTranslation as DomainFoodItemTranslation
-
-        return DomainFoodItemTranslation(
-            food_item_id=self.food_item_id,
-            name=self.name,
-            description=self.description
-        )
-
-    @classmethod
-    def from_domain(cls, domain_model, meal_translation_id: int):
-        """Create DB model from domain model."""
-        return cls(
-            meal_translation_id=meal_translation_id,
-            food_item_id=domain_model.food_item_id,
-            name=domain_model.name,
-            description=domain_model.description
-        )
+    meal_translation = relationship("MealTranslationORM", back_populates="food_items")

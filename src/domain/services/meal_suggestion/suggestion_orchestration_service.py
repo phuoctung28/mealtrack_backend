@@ -36,6 +36,8 @@ class SuggestionOrchestrationService:
         generation_service: MealGenerationServicePort,
         suggestion_repo: MealSuggestionRepositoryPort,
         nutrition_lookup: NutritionLookupService,
+        meal_names_schema_class: type,
+        discovery_meals_schema_class: type,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
         profile_provider: Optional[Callable[[str], Any]] = None,
@@ -53,6 +55,8 @@ class SuggestionOrchestrationService:
             translation_service=TranslationService(generation_service),
             macro_validator=MacroValidationService(),
             nutrition_lookup=nutrition_lookup,
+            meal_names_schema_class=meal_names_schema_class,
+            discovery_meals_schema_class=discovery_meals_schema_class,
         )
 
     async def generate_suggestions(

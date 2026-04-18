@@ -9,9 +9,9 @@ from fastapi import FastAPI, Request
 
 from src.infra.database.config import SessionLocal
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.meal.meal import Meal as DBMeal
-from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
-from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
+from src.infra.database.models.meal.meal import MealORM
+from src.infra.database.models.meal.meal_image import MealImageORM
+from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
 
@@ -145,21 +145,21 @@ def _seed_dev_meals(user_id: str) -> None:
         end_dt = start_dt + timedelta(days=1)
 
         existing = (
-            session.query(DBMeal)
-            .filter(DBMeal.user_id == user_id)
-            .filter(DBMeal.created_at >= start_dt)
-            .filter(DBMeal.created_at < end_dt)
+            session.query(MealORM)
+            .filter(MealORM.user_id == user_id)
+            .filter(MealORM.created_at >= start_dt)
+            .filter(MealORM.created_at < end_dt)
             .count()
         )
         if existing > 0:
             # Backfill missing ready_at for READY meals created earlier without it
             meals_missing_ready = (
-                session.query(DBMeal)
-                .filter(DBMeal.user_id == user_id)
-                .filter(DBMeal.created_at >= start_dt)
-                .filter(DBMeal.created_at < end_dt)
-                .filter(DBMeal.status == MealStatusEnum.READY)
-                .filter(DBMeal.ready_at.is_(None))
+                session.query(MealORM)
+                .filter(MealORM.user_id == user_id)
+                .filter(MealORM.created_at >= start_dt)
+                .filter(MealORM.created_at < end_dt)
+                .filter(MealORM.status == MealStatusEnum.READY)
+                .filter(MealORM.ready_at.is_(None))
                 .all()
             )
             if meals_missing_ready:
@@ -174,7 +174,7 @@ def _seed_dev_meals(user_id: str) -> None:
             meal_id = str(uuid.uuid4())
             image_id = str(uuid.uuid4())
             # Minimal image row (FK is required)
-            db_image = DBMealImage(
+            db_image = MealImageORM(
                 image_id=image_id,
                 format="jpeg",
                 size_bytes=12345,
@@ -185,7 +185,7 @@ def _seed_dev_meals(user_id: str) -> None:
             session.add(db_image)
 
             now = datetime.now(timezone.utc)
-            db_meal = DBMeal(
+            db_meal = MealORM(
                 meal_id=meal_id,
                 user_id=user_id,
                 status=MealStatusEnum.READY,
@@ -197,7 +197,7 @@ def _seed_dev_meals(user_id: str) -> None:
             )
             session.add(db_meal)
 
-            db_nutrition = DBNutrition(
+            db_nutrition = NutritionORM(
                 protein=p,
                 carbs=c,
                 fat=f,

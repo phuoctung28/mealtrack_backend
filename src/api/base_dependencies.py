@@ -362,7 +362,7 @@ def get_meal_suggestion_repository():
 def get_suggestion_orchestration_service():
     """
     Get suggestion orchestration service (singleton-safe).
-    
+
     This service uses ScopedSession internally to access the current request's
     database session, making it safe to use as a singleton in the event bus.
     """
@@ -370,6 +370,7 @@ def get_suggestion_orchestration_service():
     from src.infra.adapters.meal_generation_service import MealGenerationService
     from src.infra.database.config import SessionLocal
     from src.infra.repositories.user_repository import UserRepository
+    from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
 
     meal_gen_service = MealGenerationService()
     suggestion_repo = get_meal_suggestion_repository()
@@ -391,6 +392,8 @@ def get_suggestion_orchestration_service():
         nutrition_lookup=get_nutrition_lookup_service(),
         profile_provider=profile_provider,
         uow_factory=UnitOfWork,
+        meal_names_schema_class=MealNamesResponse,
+        discovery_meals_schema_class=DiscoveryMealsResponse,
     )
 
 

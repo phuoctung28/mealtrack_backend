@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Type, TypeVar, Callable, Awaitable
 
-from src.app.events.base import Event, DomainEvent, EventHandler
+from src.domain.events.base import Event, DomainEvent, EventHandler
 
 logger = logging.getLogger(__name__)
 

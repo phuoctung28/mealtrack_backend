@@ -5,7 +5,8 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from src.domain.model.notification import NotificationPreferences
-from src.infra.database.models.notification import NotificationPreferences as DBNotificationPreferences
+from src.infra.database.models.notification import NotificationPreferencesORM
+from src.infra.mappers.notification_mapper import notification_prefs_orm_to_domain
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +18,8 @@ class NotificationPreferencesOperations:
     def save_notification_preferences(db: Session, preferences: NotificationPreferences) -> NotificationPreferences:
         """Save notification preferences to the database."""
         try:
-            existing_prefs = db.query(DBNotificationPreferences).filter(
-                DBNotificationPreferences.user_id == preferences.user_id
+            existing_prefs = db.query(NotificationPreferencesORM).filter(
+                NotificationPreferencesORM.user_id == preferences.user_id
             ).first()
 
             if existing_prefs:
@@ -31,9 +32,9 @@ class NotificationPreferencesOperations:
                 existing_prefs.language = preferences.language
                 existing_prefs.updated_at = preferences.updated_at
                 db.commit()
-                return existing_prefs.to_domain()
+                return notification_prefs_orm_to_domain(existing_prefs)
             else:
-                db_prefs = DBNotificationPreferences(
+                db_prefs = NotificationPreferencesORM(
                     id=preferences.preferences_id,
                     user_id=preferences.user_id,
                     meal_reminders_enabled=preferences.meal_reminders_enabled,
@@ -48,7 +49,7 @@ class NotificationPreferencesOperations:
                 )
                 db.add(db_prefs)
                 db.commit()
-                return db_prefs.to_domain()
+                return notification_prefs_orm_to_domain(db_prefs)
         except Exception as e:
             db.rollback()
             logger.error(f"Error saving notification preferences: {e}")
@@ -57,17 +58,17 @@ class NotificationPreferencesOperations:
     @staticmethod
     def find_notification_preferences_by_user(db: Session, user_id: str) -> Optional[NotificationPreferences]:
         """Find notification preferences by user ID."""
-        db_prefs = db.query(DBNotificationPreferences).filter(
-            DBNotificationPreferences.user_id == user_id
+        db_prefs = db.query(NotificationPreferencesORM).filter(
+            NotificationPreferencesORM.user_id == user_id
         ).first()
-        return db_prefs.to_domain() if db_prefs else None
+        return notification_prefs_orm_to_domain(db_prefs) if db_prefs else None
 
     @staticmethod
     def delete_notification_preferences(db: Session, user_id: str) -> bool:
         """Delete notification preferences for a user."""
         try:
-            db_prefs = db.query(DBNotificationPreferences).filter(
-                DBNotificationPreferences.user_id == user_id
+            db_prefs = db.query(NotificationPreferencesORM).filter(
+                NotificationPreferencesORM.user_id == user_id
             ).first()
 
             if db_prefs:

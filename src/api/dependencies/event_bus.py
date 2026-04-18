@@ -271,27 +271,31 @@ def get_configured_event_bus() -> EventBus:
     cache_service = get_cache_service()
     suggestion_service = get_suggestion_orchestration_service()
     
+    from src.infra.database.uow import UnitOfWork
+
     event_bus = PyMediatorEventBus()
 
     # Register meal command handlers
-    # Note: Handlers now use UnitOfWork internally for fresh sessions per request
+    # Handlers receive UnitOfWork (concrete) and event_bus at the composition root
     meal_translation_service = get_meal_translation_service()
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
+            uow=UnitOfWork(),
+            event_bus=event_bus,
             image_store=image_store,
             vision_service=vision_service,
             gpt_parser=gpt_parser,
-            cache_service=cache_service,
             meal_translation_service=meal_translation_service,
         ),
     )
     event_bus.register_handler(
         AnalyzeMealImageByUrlCommand,
         AnalyzeMealImageByUrlHandler(
+            uow=UnitOfWork(),
+            event_bus=event_bus,
             vision_service=vision_service,
             gpt_parser=gpt_parser,
-            cache_service=cache_service,
             meal_translation_service=meal_translation_service,
         ),
     )
@@ -300,28 +304,32 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         EditMealCommand,
         EditMealCommandHandler(
-            cache_service=cache_service,
+            uow=UnitOfWork(),
+            event_bus=event_bus,
         ),
     )
 
     event_bus.register_handler(
         AddCustomIngredientCommand,
         AddCustomIngredientCommandHandler(
-            cache_service=cache_service,
+            uow=UnitOfWork(),
+            event_bus=event_bus,
         ),
     )
 
     event_bus.register_handler(
         DeleteMealCommand,
         DeleteMealCommandHandler(
-            cache_service=cache_service,
+            uow=UnitOfWork(),
+            event_bus=event_bus,
         ),
     )
 
     event_bus.register_handler(
         CreateManualMealCommand,
         CreateManualMealCommandHandler(
-            cache_service=cache_service,
+            uow=UnitOfWork(),
+            event_bus=event_bus,
         ),
     )
 
@@ -405,7 +413,7 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         SaveMealSuggestionCommand,
-        SaveMealSuggestionCommandHandler(cache_service=cache_service),
+        SaveMealSuggestionCommandHandler(uow=UnitOfWork(), event_bus=event_bus),
     )
 
     # Register user handlers
@@ -426,7 +434,7 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         UpdateUserMetricsCommand,
-        UpdateUserMetricsCommandHandler(cache_service=cache_service),
+        UpdateUserMetricsCommandHandler(uow=UnitOfWork(), cache_service=cache_service),
     )
     event_bus.register_handler(
         UpdateTimezoneCommand,
@@ -492,7 +500,7 @@ def get_configured_event_bus() -> EventBus:
 
     # Register saved suggestion handlers
     event_bus.register_handler(
-        SaveSuggestionCommand, SaveSuggestionCommandHandler(cache_service=cache_service)
+        SaveSuggestionCommand, SaveSuggestionCommandHandler(uow=UnitOfWork(), cache_service=cache_service)
     )
     event_bus.register_handler(
         DeleteSavedSuggestionCommand, DeleteSavedSuggestionCommandHandler(cache_service=cache_service)
@@ -511,6 +519,15 @@ def get_configured_event_bus() -> EventBus:
     event_bus.subscribe(
         MealImageUploadedEvent, meal_analysis_handler
     )
+
+    # Subscribe cache invalidation handler to meal mutation events
+    from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
+    from src.app.handlers.event_handlers.cache_invalidation_event_handler import CacheInvalidationEventHandler
+    if cache_service is not None:
+        cache_invalidation_handler = CacheInvalidationEventHandler(cache=cache_service)
+        event_bus.subscribe(
+            MealCacheInvalidationRequiredEvent, cache_invalidation_handler.handle
+        )
 
     _configured_event_bus = event_bus
     return _configured_event_bus

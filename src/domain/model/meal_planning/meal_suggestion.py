@@ -7,14 +7,7 @@ from enum import Enum
 from typing import List, Optional
 
 from src.domain.utils.timezone_utils import utc_now
-
-
-class MealType(str, Enum):
-    """Types of meals."""
-    BREAKFAST = "breakfast"
-    LUNCH = "lunch"
-    DINNER = "dinner"
-    SNACK = "snack"
+from src.domain.model.common.enums import MealType  # noqa: F401
 
 
 class MealSize(str, Enum):

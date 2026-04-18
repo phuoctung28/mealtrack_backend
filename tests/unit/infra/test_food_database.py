@@ -119,11 +119,20 @@ async def test_get_food_details_query_handler_maps_nutrients():
 @pytest.mark.asyncio
 async def test_create_manual_meal_command_handler_aggregates_items(monkeypatch):
     # Arrange
+    from unittest.mock import AsyncMock, MagicMock
     from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand, ManualMealItem, CustomNutrition
     from src.app.handlers.command_handlers.create_manual_meal_command_handler import CreateManualMealCommandHandler
     from src.domain.model import MealStatus
 
+    mock_uow = MagicMock()
+    mock_uow.__enter__ = MagicMock(return_value=mock_uow)
+    mock_uow.__exit__ = MagicMock(return_value=False)
+    mock_event_bus = MagicMock()
+    mock_event_bus.publish = AsyncMock()
+
     handler = CreateManualMealCommandHandler(
+        uow=mock_uow,
+        event_bus=mock_event_bus,
         meal_repository=InMemoryMealRepository(),
     )
 

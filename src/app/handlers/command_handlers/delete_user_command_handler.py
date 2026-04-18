@@ -15,10 +15,10 @@ from src.infra.database.uow import UnitOfWork
 from src.infra.services.firebase_auth_service import FirebaseAuthService
 
 # Models for soft-delete operations
-from src.infra.database.models.meal.meal import Meal
+from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.notification.user_fcm_token import UserFcmToken
-from src.infra.database.models.notification.notification_preferences import NotificationPreferences
+from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM as UserFcmToken
+from src.infra.database.models.notification.notification_preferences import NotificationPreferencesORM as NotificationPreferences
 
 logger = logging.getLogger(__name__)
 
@@ -127,9 +127,9 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
         """
         try:
             # 1. Soft-delete meals (set status=INACTIVE)
-            meals_count = uow.session.query(Meal).filter(
-                Meal.user_id == user_id
-            ).update({Meal.status: MealStatusEnum.INACTIVE})
+            meals_count = uow.session.query(MealORM).filter(
+                MealORM.user_id == user_id
+            ).update({MealORM.status: MealStatusEnum.INACTIVE})
 
             # 2. Soft-delete meal plans - no longer applicable (feature removed)
             meal_plans_count = 0

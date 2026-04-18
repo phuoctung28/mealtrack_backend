@@ -7,10 +7,10 @@ from typing import Optional, List
 
 from sqlalchemy.orm import Session
 
-from src.infra.database.models.meal.meal import Meal
-from src.infra.database.models.meal.meal_image import MealImage
-from src.infra.database.models.nutrition.nutrition import Nutrition
-from src.infra.database.models.nutrition.food_item import FoodItem
+from src.infra.database.models.meal.meal import MealORM
+from src.infra.database.models.meal.meal_image import MealImageORM
+from src.infra.database.models.nutrition.nutrition import NutritionORM
+from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.database.models.enums import MealStatusEnum
 from tests.fixtures.factories.nutrition_factory import NutritionFactory
 
@@ -19,7 +19,7 @@ class MealFactory:
     """Factory for creating test meals."""
 
     @staticmethod
-    def create_meal(session: Session, user_id: str, **overrides) -> Meal:
+    def create_meal(session: Session, user_id: str, **overrides) -> MealORM:
         """
         Create a meal with nutrition data.
 
@@ -29,12 +29,12 @@ class MealFactory:
             **overrides: Override any default meal attributes
 
         Returns:
-            Meal: Created meal instance
+            MealORM: Created meal instance
         """
         meal_id = str(uuid4())
         image_id = str(uuid4())
 
-        image = MealImage(
+        image = MealImageORM(
             image_id=image_id,
             format="jpeg",
             size_bytes=102400,
@@ -59,12 +59,12 @@ class MealFactory:
         }
         meal_defaults.update(overrides)
 
-        meal = Meal(**meal_defaults)
+        meal = MealORM(**meal_defaults)
         session.add(meal)
         session.flush()
 
         # Create nutrition — calories derived from macros (P*4 + C*4 + F*9)
-        nutrition = Nutrition(
+        nutrition = NutritionORM(
             meal_id=meal_id,
             protein=45.0,
             carbs=50.0,
@@ -83,7 +83,7 @@ class MealFactory:
         ]
 
         for item_data in food_items_data:
-            food_item = FoodItem(
+            food_item = FoodItemORM(
                 id=str(uuid4()),
                 name=item_data["name"],
                 quantity=item_data["quantity"],
@@ -108,7 +108,7 @@ class MealFactory:
         user_id: str,
         foods: List[dict],
         **overrides
-    ) -> Meal:
+    ) -> MealORM:
         """
         Create manual meal from food list.
 
@@ -119,12 +119,12 @@ class MealFactory:
             **overrides: Override any default meal attributes
 
         Returns:
-            Meal: Created meal instance
+            MealORM: Created meal instance
         """
         meal_id = str(uuid4())
         image_id = str(uuid4())
 
-        image = MealImage(
+        image = MealImageORM(
             image_id=image_id,
             format="jpeg",
             size_bytes=0,
@@ -147,7 +147,7 @@ class MealFactory:
         }
         meal_defaults.update(overrides)
 
-        meal = Meal(**meal_defaults)
+        meal = MealORM(**meal_defaults)
         session.add(meal)
         session.flush()
 
@@ -156,7 +156,7 @@ class MealFactory:
         total_carbs = sum(food.get("carbs", 0) for food in foods)
         total_fat = sum(food.get("fat", 0) for food in foods)
 
-        nutrition = Nutrition(
+        nutrition = NutritionORM(
             meal_id=meal_id,
             protein=total_protein,
             carbs=total_carbs,
@@ -169,7 +169,7 @@ class MealFactory:
         session.flush()
 
         for food_data in foods:
-            food_item = FoodItem(
+            food_item = FoodItemORM(
                 id=str(uuid4()),
                 name=food_data.get("name", "Unknown Food"),
                 quantity=food_data.get("quantity", 100.0),
