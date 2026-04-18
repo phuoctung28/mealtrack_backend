@@ -77,17 +77,10 @@ class MealRepository(MealRepositoryPort):
                 # Handle nutrition sync
                 if meal.nutrition:
                     if not existing_meal.nutrition:
-                        # Create new nutrition
+                        # Create new nutrition (food_items are already included
+                        # by nutrition_domain_to_orm via the ORM relationship)
                         db_nutrition = nutrition_domain_to_orm(meal.nutrition, meal_id=meal.meal_id)
                         existing_meal.nutrition = db_nutrition
-                        # Flush to get nutrition ID before creating food_items
-                        self.db.flush()
-                        # Add food items with order preserved
-                        if meal.nutrition.food_items:
-                            for idx, item in enumerate(meal.nutrition.food_items):
-                                db_item = food_item_domain_to_orm(item, nutrition_id=db_nutrition.id)
-                                db_item.order_index = idx
-                                self.db.add(db_item)
                     else:
                         # Update existing nutrition
                         self._update_nutrition(existing_meal.nutrition, meal.nutrition)
