@@ -9,7 +9,7 @@ from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import handles, EventHandler
 from src.app.queries.user import GetUserMetricsQuery
 from src.domain.cache.cache_keys import CacheKeys
-from src.infra.cache.cache_service import CacheService
+from src.domain.ports.cache_port import CachePort
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow import UnitOfWork
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class GetUserMetricsQueryHandler(EventHandler[GetUserMetricsQuery, Dict[str, Any]]):
     """Handler for getting user's current metrics for settings display."""
 
-    def __init__(self, cache_service: Optional[CacheService] = None):
+    def __init__(self, cache_service: Optional[CachePort] = None):
         self.cache_service = cache_service
 
     async def handle(self, query: GetUserMetricsQuery) -> Dict[str, Any]:

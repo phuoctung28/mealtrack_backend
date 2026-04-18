@@ -21,6 +21,8 @@ from .meal_plan import (
     DietaryPreference,
     FitnessGoal,
     MealType,
+    PlanDuration,
+    UserPreferences,
 )
 from .meal_suggestion import (
     MealSuggestion,
@@ -37,6 +39,8 @@ __all__ = [
     'DietaryPreference',
     'FitnessGoal',
     'MealType',
+    'PlanDuration',
+    'UserPreferences',
     'MealGenerationRequest',
     'MealGenerationType',
     'MealGenerationContext',
