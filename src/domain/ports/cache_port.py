@@ -15,9 +15,9 @@ class CachePort(ABC):
         """Store value under key with TTL."""
 
     @abstractmethod
-    async def invalidate(self, key: str) -> None:
-        """Delete a single cache entry."""
+    async def invalidate(self, key: str) -> bool:
+        """Delete a single cache entry. Returns True if the key existed."""
 
     @abstractmethod
-    async def invalidate_pattern(self, pattern: str) -> None:
-        """Delete all keys matching a glob pattern."""
+    async def invalidate_pattern(self, pattern: str) -> int:
+        """Delete all keys matching a glob pattern. Returns count of deleted keys."""
