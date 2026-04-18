@@ -17,8 +17,8 @@ from src.infra.services.firebase_auth_service import FirebaseAuthService
 # Models for soft-delete operations
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.notification.user_fcm_token import UserFcmToken
-from src.infra.database.models.notification.notification_preferences import NotificationPreferences
+from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM as UserFcmToken
+from src.infra.database.models.notification.notification_preferences import NotificationPreferencesORM as NotificationPreferences
 
 logger = logging.getLogger(__name__)
 

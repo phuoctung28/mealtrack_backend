@@ -229,7 +229,6 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
         target_date: date
     ) -> tuple[WeeklyMacroBudget, float]:
         """Create a new weekly budget for the user. Returns (budget, bmr)."""
-        from src.infra.database.models.weekly import WeeklyMacroBudget as DBWeeklyMacroBudget
         import uuid
 
         # Get user profile to find fitness goal
@@ -277,7 +276,6 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
         )
 
         # Save to DB
-        db_budget = DBWeeklyMacroBudget.from_domain(budget)
         uow.weekly_budgets.create(budget)
 
         return budget, bmr
