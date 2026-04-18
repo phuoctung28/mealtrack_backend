@@ -63,13 +63,19 @@ class RequestLoggerMiddleware:
                 headers = MutableHeaders(scope=message)
                 headers.append("X-Request-ID", request_id)
                 headers.append("X-Response-Time", f"{elapsed:.3f}s")
+                await send(message)
+                # Log after delivery so elapsed reflects actual time-to-first-byte
                 self._log_response(request, message["status"], request_id, elapsed)
-            await send(message)
+            else:
+                await send(message)
 
         try:
             await self.app(scope, receive, send_with_headers)
         except Exception as e:
             elapsed = time.time() - start_time
+            # Ensure every request gets a [RES-...] line even when the app raises
+            # before sending http.response.start (e.g., unhandled 500 exceptions).
+            self._log_response(request, 500, request_id, elapsed)
             self._log_error(request, request_id, elapsed, e)
             raise
 
