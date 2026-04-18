@@ -3,12 +3,12 @@ Consolidated suggestion service.
 Merges daily_meal_suggestion_service.py and meal_suggestion_service.py.
 """
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, time
 from typing import List, Optional, Dict, Any
 
 from src.domain.model.meal_planning import MealType
 from src.domain.model.meal_suggestion import MealSuggestion
-from src.domain.services.meal.meal_core_service import MealCoreService
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -16,28 +16,36 @@ logger = logging.getLogger(__name__)
 class SuggestionService:
     """
     Unified suggestion service for meal recommendations.
-    
+
     Consolidates:
     - daily_meal_suggestion_service.py
     - meal_suggestion_service.py
-    
+
     Responsibilities:
     - Generate meal type recommendations based on time
     - Calculate portion sizes
     - Filter suggestions based on user preferences
     """
 
-    def __init__(
-        self,
-        meal_core_service: Optional[MealCoreService] = None,
-    ):
-        """
-        Initialize suggestion service.
-        
-        Args:
-            meal_core_service: Optional meal core service for meal type determination
-        """
-        self._meal_service = meal_core_service or MealCoreService()
+    # Meal type time boundaries (from former MealCoreService)
+    BREAKFAST_START = time(5, 0)
+    BREAKFAST_END = time(10, 30)
+    LUNCH_START = time(11, 0)
+    LUNCH_END = time(14, 30)
+    DINNER_START = time(17, 0)
+    DINNER_END = time(21, 0)
+
+    # Default calorie distributions by meal type (from former MealCoreService)
+    DEFAULT_DISTRIBUTIONS = {
+        MealType.BREAKFAST: 0.25,
+        MealType.LUNCH: 0.35,
+        MealType.DINNER: 0.30,
+        MealType.SNACK: 0.10,
+    }
+
+    def __init__(self):
+        """Initialize suggestion service."""
+        pass
 
     def get_recommended_meal_type(
         self,
@@ -45,14 +53,41 @@ class SuggestionService:
     ) -> MealType:
         """
         Get recommended meal type based on current time.
-        
+
         Args:
             current_time: Current datetime (defaults to now)
-            
+
         Returns:
             Recommended MealType
         """
-        return self._meal_service.determine_meal_type(current_time)
+        return self._determine_meal_type(current_time)
+
+    def _determine_meal_type(
+        self,
+        meal_time: Optional[datetime] = None,
+    ) -> MealType:
+        """
+        Determine meal type based on time of day.
+
+        Args:
+            meal_time: Datetime of the meal (defaults to now)
+
+        Returns:
+            Appropriate MealType enum
+        """
+        if meal_time is None:
+            meal_time = utc_now()
+
+        t = meal_time.time()
+
+        if self.BREAKFAST_START <= t <= self.BREAKFAST_END:
+            return MealType.BREAKFAST
+        elif self.LUNCH_START <= t <= self.LUNCH_END:
+            return MealType.LUNCH
+        elif self.DINNER_START <= t <= self.DINNER_END:
+            return MealType.DINNER
+        else:
+            return MealType.SNACK
 
     def get_daily_suggestion_context(
         self,
@@ -77,16 +112,16 @@ class SuggestionService:
         
         # Determine current meal type based on time
         current_type = self.get_recommended_meal_type()
-        
+
         # Calculate remaining meals for the day
         remaining_meals = self._get_remaining_meals(current_type)
-        
+
         # Distribute remaining calories
         distributions = {}
         remaining_calories = daily_calories
-        
+
         for meal_type in remaining_meals:
-            target = self._meal_service.get_calorie_target_for_meal(
+            target = self._get_calorie_target_for_meal(
                 meal_type, daily_calories
             )
             distributions[meal_type] = min(target, remaining_calories)
@@ -104,7 +139,7 @@ class SuggestionService:
     def _get_remaining_meals(self, current_type: MealType) -> List[MealType]:
         """Get remaining meal types for the day."""
         all_meals = [MealType.BREAKFAST, MealType.LUNCH, MealType.DINNER]
-        
+
         if current_type == MealType.BREAKFAST:
             return all_meals
         elif current_type == MealType.LUNCH:
@@ -113,6 +148,27 @@ class SuggestionService:
             return [MealType.DINNER]
         else:
             return [MealType.SNACK]
+
+    def _get_calorie_target_for_meal(
+        self,
+        meal_type: MealType,
+        daily_calories: int,
+        custom_distribution: Optional[Dict[MealType, float]] = None,
+    ) -> int:
+        """
+        Get calorie target for a specific meal type.
+
+        Args:
+            meal_type: Type of meal
+            daily_calories: Total daily calorie target
+            custom_distribution: Optional custom distribution percentages
+
+        Returns:
+            Calorie target for the meal
+        """
+        distribution = custom_distribution or self.DEFAULT_DISTRIBUTIONS
+        percentage = distribution.get(meal_type, 0.25)
+        return int(daily_calories * percentage)
 
     def filter_suggestions_by_preferences(
         self,
