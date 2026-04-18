@@ -63,7 +63,7 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
 
                 # 1a. Soft-delete food_items + nullify nutrition FK
                 # Get nutrition first
-                nutrition = uow.session.query(Nutrition).filter(
+                nutrition = uow.session.query(NutritionORM).filter(
                     NutritionORM.meal_id == meal_id
                 ).first()
 
@@ -71,7 +71,7 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
                     nutrition_id = nutrition.id
                     # Soft-delete food_items and nullify FK
                     uow.session.execute(
-                        update(FoodItem)
+                        update(FoodItemORM)
                         .where(FoodItemORM.nutrition_id == nutrition_id)
                         .values(is_deleted=True, nutrition_id=None)
                     )
@@ -86,7 +86,7 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
 
                 # Now nullify meal_id to prevent cascade
                 uow.session.execute(
-                    update(MealTranslation)
+                    update(MealTranslationORM)
                     .where(MealTranslationORM.meal_id == meal_id)
                     .values(is_deleted=True, meal_id=None)
                 )
@@ -96,7 +96,7 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
 
                 if meal_translation_ids:
                     uow.session.execute(
-                        update(FoodItemTranslation)
+                        update(FoodItemTranslationORM)
                         .where(FoodItemTranslationORM.meal_translation_id.in_(meal_translation_ids))
                         .values(is_deleted=True)
                     )
