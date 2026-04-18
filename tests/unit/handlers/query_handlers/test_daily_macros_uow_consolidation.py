@@ -36,7 +36,11 @@ async def test_cache_miss_opens_uow_once():
         mock_uow.weekly_budgets.find_by_user_and_week.return_value = None
         mock_cls.return_value = mock_uow
 
-        # Patch TDEE handler so it doesn't open its own UoW
+        # Patch TDEE handler so it doesn't open its own UoW.
+        # We patch the definition module (not the handler module) because the
+        # handler imports GetUserTdeeQueryHandler lazily inside handle(); Python's
+        # module cache ensures the patched class is returned when the deferred
+        # import executes.
         with patch(
             "src.app.handlers.query_handlers.get_user_tdee_query_handler.GetUserTdeeQueryHandler"
         ) as mock_tdee_cls:
@@ -79,6 +83,7 @@ async def test_weekly_budget_fetched_in_shared_uow():
         "src.app.handlers.query_handlers.get_daily_macros_query_handler.UnitOfWork",
         TrackingUow,
     ):
+        # Same patch strategy: target definition module for deferred import.
         with patch(
             "src.app.handlers.query_handlers.get_user_tdee_query_handler.GetUserTdeeQueryHandler"
         ) as mock_tdee_cls:

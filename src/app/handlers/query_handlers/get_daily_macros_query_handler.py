@@ -73,7 +73,9 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 fiber=total_fiber,
             ).total_calories
 
-            # Pre-fetch weekly budget in the same UoW (avoids a separate connection later)
+            # Pre-fetch weekly budget eagerly here (must be inside this UoW — fetching it
+            # later would require a second connection open). Only consumed when target_calories
+            # is available; cheap indexed lookup so the overhead is negligible.
             week_start = get_user_monday(target_date, query.user_id)
             weekly_budget = uow.weekly_budgets.find_by_user_and_week(query.user_id, week_start)
 
