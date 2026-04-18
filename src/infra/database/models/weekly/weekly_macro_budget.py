@@ -1,8 +1,7 @@
 """
 Weekly macro budget database model.
 """
-from sqlalchemy import Column, String, Date, Float, Integer, ForeignKey, DateTime, UniqueConstraint, Index
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Date, Float, UniqueConstraint, Index
 
 from src.infra.database.config import Base
 from src.infra.database.models.base import TimestampMixin
