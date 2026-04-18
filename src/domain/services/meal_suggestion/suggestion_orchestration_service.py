@@ -36,12 +36,12 @@ class SuggestionOrchestrationService:
         generation_service: MealGenerationServicePort,
         suggestion_repo: MealSuggestionRepositoryPort,
         nutrition_lookup: NutritionLookupService,
+        meal_names_schema_class: type,
+        discovery_meals_schema_class: type,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
         profile_provider: Optional[Callable[[str], Any]] = None,
         uow_factory: Optional[Callable[[], Any]] = None,
-        meal_names_schema_class: type = None,
-        discovery_meals_schema_class: type = None,
     ):
         self._generation = generation_service
         self._repo = suggestion_repo

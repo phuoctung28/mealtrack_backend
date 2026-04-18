@@ -52,8 +52,8 @@ class ParallelRecipeGenerator:
         translation_service: TranslationService,
         macro_validator: MacroValidationService,
         nutrition_lookup: NutritionLookupService,
-        meal_names_schema_class: type = None,
-        discovery_meals_schema_class: type = None,
+        meal_names_schema_class: type,
+        discovery_meals_schema_class: type,
     ) -> None:
         self._generation = generation_service
         self._translation_service = translation_service
