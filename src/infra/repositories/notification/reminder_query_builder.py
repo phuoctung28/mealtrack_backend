@@ -8,8 +8,8 @@ from src.domain.utils.timezone_utils import (
     utc_to_local_minutes,
     DEFAULT_TIMEZONE
 )
-from src.infra.database.models.notification import NotificationPreferences as DBNotificationPreferences
-from src.infra.database.models.notification.user_fcm_token import UserFcmToken as DBUserFcmToken
+from src.infra.database.models.notification import NotificationPreferencesORM as DBNotificationPreferences
+from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM as DBUserFcmToken
 from src.infra.database.models.user.user import User
 
 

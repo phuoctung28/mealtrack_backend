@@ -9,13 +9,14 @@ from typing import Any, Awaitable, Callable, Optional, TypeVar
 
 from pydantic import BaseModel
 
+from src.domain.ports.cache_port import CachePort
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
 
 T = TypeVar("T")
 
 
-class CacheService:
+class CacheService(CachePort):
     """Cache service implementing the cache-aside pattern."""
 
     def __init__(
@@ -29,6 +30,14 @@ class CacheService:
         self.default_ttl = default_ttl
         self.monitor = monitor
         self.enabled = enabled
+
+    async def get(self, key: str) -> Optional[Any]:
+        """Implement CachePort.get — delegates to get_json."""
+        return await self.get_json(key)
+
+    async def set(self, key: str, value: Any, ttl_seconds: int) -> None:
+        """Implement CachePort.set — delegates to set_json."""
+        await self.set_json(key, value, ttl_seconds)
 
     async def get_json(self, key: str) -> Optional[Any]:
         """Retrieve and deserialize a cached JSON payload."""

@@ -9,18 +9,23 @@ from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.models.enums import FitnessGoalEnum, JobTypeEnum
-from src.infra.database.uow import UnitOfWork
+from src.domain.model.common.enums import JobType, FitnessGoal, TrainingLevel
+from src.domain.ports.cache_port import CachePort
+from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 
 logger = logging.getLogger(__name__)
+
+_VALID_JOB_TYPES = {e.value for e in JobType}
+_VALID_FITNESS_GOALS = {e.value for e in FitnessGoal}
+_VALID_TRAINING_LEVELS = {e.value for e in TrainingLevel}
 
 
 @handles(UpdateUserMetricsCommand)
 class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, None]):
     """Handle updating user metrics (weight, job type, training, body fat)."""
 
-    def __init__(self, cache_service: Optional[CacheService] = None):
+    def __init__(self, uow: UnitOfWorkPort, cache_service: Optional[CachePort] = None):
+        self.uow = uow
         self.cache_service = cache_service
 
     async def handle(self, command: UpdateUserMetricsCommand) -> None:
@@ -30,12 +35,8 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     command.training_level]):
             raise ValidationException("At least one metric must be provided")
 
-        with UnitOfWork() as uow:
-            # Find existing profile - using raw SQL query temporarily until we add get_profile_by_user_id to port
-            from src.infra.database.models.user.profile import UserProfile
-            profile = uow.session.query(UserProfile).filter(
-                UserProfile.user_id == command.user_id
-            ).first()
+        with self.uow as uow:
+            profile = uow.users.get_profile(command.user_id)
 
             if not profile:
                 raise ResourceNotFoundException(f"User {command.user_id} not found. Profile required to update metrics.")
@@ -47,9 +48,8 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 profile.weight_kg = command.weight_kg
 
             if command.job_type is not None:
-                valid_types = [e.value for e in JobTypeEnum]
-                if command.job_type not in valid_types:
-                    raise ValidationException(f"Job type must be one of: {', '.join(valid_types)}")
+                if command.job_type not in _VALID_JOB_TYPES:
+                    raise ValidationException(f"Job type must be one of: {', '.join(sorted(_VALID_JOB_TYPES))}")
                 profile.job_type = command.job_type
 
             if command.training_days_per_week is not None:
@@ -69,9 +69,8 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
 
             # Handle fitness goal update with logging
             if command.fitness_goal is not None:
-                valid_goals = [e.value for e in FitnessGoalEnum]
-                if command.fitness_goal not in valid_goals:
-                    raise ValidationException(f"Fitness goal must be one of: {', '.join(valid_goals)}")
+                if command.fitness_goal not in _VALID_FITNESS_GOALS:
+                    raise ValidationException(f"Fitness goal must be one of: {', '.join(sorted(_VALID_FITNESS_GOALS))}")
 
                 # Log goal changes for analytics
                 if profile.fitness_goal != command.fitness_goal:
@@ -85,16 +84,14 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
 
             # Handle training level update
             if command.training_level is not None:
-                valid_levels = ['beginner', 'intermediate', 'advanced']
-                if command.training_level not in valid_levels:
-                    raise ValidationException(f"Training level must be one of: {valid_levels}")
+                if command.training_level not in _VALID_TRAINING_LEVELS:
+                    raise ValidationException(f"Training level must be one of: {sorted(_VALID_TRAINING_LEVELS)}")
                 profile.training_level = command.training_level
 
             # Ensure this profile is marked as current
             profile.is_current = True
 
-            uow.session.add(profile)
-            # UoW auto-commits on exit
+            uow.users.update_profile(profile)
 
         await self._invalidate_user_profile(command.user_id)
 
@@ -114,4 +111,3 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
         # Invalidate today's daily macros (contains target goals from TDEE)
         daily_macros_key, _ = CacheKeys.daily_macros(user_id, date.today())
         await self.cache_service.invalidate(daily_macros_key)
-

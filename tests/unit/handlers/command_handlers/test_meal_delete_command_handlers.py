@@ -1,11 +1,9 @@
 """
 Unit tests for DeleteMeal (hard delete) command handler.
 """
-from unittest.mock import patch
 import pytest
 
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
-from src.infra.database.uow import UnitOfWork
 
 
 @pytest.mark.unit
@@ -22,12 +20,8 @@ class TestDeleteMealCommandHandler:
 
         command = DeleteMealCommand(meal_id=meal_id, user_id=user_id)
 
-        # Act - patch UnitOfWork to use test_session
-        def make_uow(*args, **kwargs):
-            return UnitOfWork(session=test_session)
-
-        with patch('src.app.handlers.command_handlers.delete_meal_command_handler.UnitOfWork', side_effect=make_uow):
-            result = await event_bus.send(command)
+        # Act - handler now receives UoW via constructor injection (test_uow in event_bus fixture)
+        result = await event_bus.send(command)
 
         # Assert response
         assert result["meal_id"] == meal_id
@@ -43,13 +37,7 @@ class TestDeleteMealCommandHandler:
         user_id = "123e4567-e89b-12d3-a456-426614174000"  # Sample user ID
         command = DeleteMealCommand(meal_id="00000000-0000-0000-0000-000000000000", user_id=user_id)
 
-        # Act / Assert - patch UnitOfWork to use test_session
-        def make_uow(*args, **kwargs):
-            return UnitOfWork(session=test_session)
-        
+        # Act / Assert - handler now receives UoW via constructor injection
         from src.api.exceptions import ResourceNotFoundException
-        with patch('src.app.handlers.command_handlers.delete_meal_command_handler.UnitOfWork', side_effect=make_uow):
-            with pytest.raises(ResourceNotFoundException):
-                await event_bus.send(command)
-
-
+        with pytest.raises(ResourceNotFoundException):
+            await event_bus.send(command)

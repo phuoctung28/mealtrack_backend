@@ -1,2 +1,2 @@
-from .cheat_day import CheatDay
-__all__ = ["CheatDay"]
+from .cheat_day import CheatDayORM
+__all__ = ["CheatDayORM"]

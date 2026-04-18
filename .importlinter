@@ -1,19 +1,89 @@
 [importlinter]
-root_packages = 
+root_packages =
     src
+include_external_packages = True
 
 [importlinter:contract:domain-isolation]
-name = Domain layer must not import from infra
+name = Domain has no external I/O dependencies
 type = forbidden
-source_modules = 
+source_modules =
     src.domain
-forbidden_modules = 
+forbidden_modules =
+    src.infra
+    src.app
+    src.api
+    httpx
+    sqlalchemy
+    redis
+    firebase_admin
+
+[importlinter:contract:app-no-infra]
+name = App layer does not import infra directly
+type = forbidden
+source_modules =
+    src.app
+forbidden_modules =
     src.infra
 
-[importlinter:contract:domain-app-isolation]
-name = Domain layer must not import from app
+[importlinter:contract:infra-no-app-api]
+name = Infra does not import app or api
 type = forbidden
-source_modules = 
-    src.domain
-forbidden_modules = 
+source_modules =
+    src.infra
+forbidden_modules =
     src.app
+    src.api
+
+[importlinter:contract:api-no-infra]
+name = API does not import infra directly
+type = forbidden
+source_modules =
+    src.api
+forbidden_modules =
+    src.infra
+unmatched_ignore_imports_alerting = none
+ignore_imports =
+    src.api.dependencies.auth -> src.infra.database.config
+    src.api.dependencies.auth -> src.infra.database.models.user.user
+    src.api.dependencies.meal_image_cache -> src.infra.adapters.gemini_text_embedding_adapter
+    src.api.dependencies.meal_image_cache -> src.infra.config.settings
+    src.api.dependencies.meal_image_cache -> src.infra.repositories.pending_meal_image_repository
+    src.api.dependencies.meal_image_cache -> src.infra.repositories.pgvector_meal_image_cache_repository
+    src.api.dependencies.event_bus -> src.infra.event_bus
+    src.api.dependencies.event_bus -> src.infra.adapters.meal_generation_service
+    src.api.dependencies.event_bus -> src.infra.adapters.nutritionix_service
+    src.api.dependencies.event_bus -> src.infra.adapters.brave_search_nutrition_service
+    src.api.dependencies.event_bus -> src.infra.database.uow
+    src.api.dependencies.food_image -> src.infra.adapters.pexels_image_adapter
+    src.api.dependencies.food_image -> src.infra.adapters.unsplash_image_adapter
+    src.api.dependencies.food_image -> src.infra.config.settings
+    src.api.dependencies.food_image -> src.infra.adapters.web_search_image_validator
+    src.api.main -> src.infra.config.settings
+    src.api.main -> src.infra.database.config
+    src.api.main -> src.infra.monitoring.sentry
+    src.api.base_dependencies -> src.infra.adapters.cloudinary_image_store
+    src.api.base_dependencies -> src.infra.adapters.food_cache_service
+    src.api.base_dependencies -> src.infra.adapters.food_data_service
+    src.api.base_dependencies -> src.infra.adapters.open_food_facts_service
+    src.api.base_dependencies -> src.infra.adapters.vision_ai_service
+    src.api.base_dependencies -> src.infra.cache.cache_service
+    src.api.base_dependencies -> src.infra.cache.metrics
+    src.api.base_dependencies -> src.infra.cache.redis_client
+    src.api.base_dependencies -> src.infra.config.settings
+    src.api.base_dependencies -> src.infra.database.config
+    src.api.base_dependencies -> src.infra.repositories.meal_repository
+    src.api.base_dependencies -> src.infra.repositories.notification_repository
+    src.api.base_dependencies -> src.infra.services.firebase_service
+    src.api.base_dependencies -> src.infra.services.scheduled_notification_service
+    src.api.base_dependencies -> src.infra.adapters.fat_secret_service
+    src.api.base_dependencies -> src.infra.adapters.nutritionix_service
+    src.api.base_dependencies -> src.infra.adapters.brave_search_nutrition_service
+    src.api.base_dependencies -> src.infra.adapters.meal_generation_service
+    src.api.base_dependencies -> src.infra.repositories.food_reference_repository
+    src.api.base_dependencies -> src.infra.adapters.notification_sent_log_dedup_store
+    src.api.base_dependencies -> src.infra.repositories.meal_suggestion_repository
+    src.api.base_dependencies -> src.infra.database.uow
+    src.api.base_dependencies -> src.infra.repositories.meal_translation_repository
+    src.api.base_dependencies -> src.infra.adapters.revenuecat_adapter
+    src.api.base_dependencies -> src.infra.repositories.user_repository
+    src.api.base_dependencies -> src.infra.services.ai.schemas
