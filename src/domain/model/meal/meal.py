@@ -149,7 +149,9 @@ class Meal:
             **self._recipe_fields()
         )
 
-    def mark_ready(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
+    def mark_ready(self, nutrition: Nutrition, dish_name: str,
+                   raw_gpt_json: Optional[str] = None,
+                   emoji: Optional[str] = None) -> 'Meal':
         """Transition to READY state with final nutrition data."""
         return Meal(
             meal_id=self.meal_id,
@@ -161,7 +163,7 @@ class Meal:
             nutrition=nutrition,
             ready_at=utc_now(),
             error_message=self.error_message,
-            raw_gpt_json=self.raw_gpt_json,
+            raw_gpt_json=raw_gpt_json if raw_gpt_json is not None else self.raw_gpt_json,
             updated_at=self.updated_at,
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
@@ -169,7 +171,13 @@ class Meal:
             meal_type=self.meal_type,
             translations=self.translations,
             source=self.source,
-            **self._recipe_fields()
+            description=self.description,
+            instructions=self.instructions,
+            prep_time_min=self.prep_time_min,
+            cook_time_min=self.cook_time_min,
+            cuisine_type=self.cuisine_type,
+            origin_country=self.origin_country,
+            emoji=emoji if emoji is not None else self.emoji,
         )
 
     def mark_failed(self, error_message: str) -> 'Meal':
