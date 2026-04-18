@@ -82,8 +82,9 @@ class TestMealsAPI:
         self, authenticated_client, test_user, test_session
     ):
         """Test immediate meal image analysis by URL."""
+        from src.infra.mappers.meal_mapper import meal_orm_to_domain
         meal = MealFactory.create_meal(test_session, test_user.id)
-        domain_meal = meal.to_domain()
+        domain_meal = meal_orm_to_domain(meal)
         image_id = domain_meal.image.image_id if domain_meal.image else str(uuid4())
         payload = {
             "image_url": f"https://res.cloudinary.com/mock-cloud/image/upload/v1/mealtrack/{image_id}.jpg",
@@ -334,7 +335,8 @@ class TestMealsAPI:
         # Mock the event bus response
         with patch('src.api.dependencies.event_bus.get_configured_event_bus') as mock_get_bus:
             # Get domain meal from DB meal - ensure nutrition is loaded
-            domain_meal = meal.to_domain()
+            from src.infra.mappers.meal_mapper import meal_orm_to_domain
+            domain_meal = meal_orm_to_domain(meal)
             
             # Ensure nutrition exists
             assert domain_meal.nutrition is not None, "Meal should have nutrition"
@@ -381,10 +383,10 @@ class TestMealsAPI:
         target_date = date(2024, 12, 25)
         
         # Create meals for the target date with nutrition data
-        from src.infra.database.models.meal.meal import Meal as DBMeal
-        from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
-        from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
-        from src.infra.database.models.nutrition.food_item import FoodItem as DBFoodItem
+        from src.infra.database.models.meal.meal import MealORM
+        from src.infra.database.models.meal.meal_image import MealImageORM
+        from src.infra.database.models.nutrition.nutrition import NutritionORM
+        from src.infra.database.models.nutrition.food_item import FoodItemORM
         from src.infra.database.models.enums import MealStatusEnum
         from datetime import datetime
         from uuid import uuid4
@@ -395,7 +397,7 @@ class TestMealsAPI:
             image_id = str(uuid4())
             
             # Create image
-            db_image = DBMealImage(
+            db_image = MealImageORM(
                 image_id=image_id,
                 format="jpeg",
                 size_bytes=102400,
@@ -406,7 +408,7 @@ class TestMealsAPI:
             
             # Create meal
             meal_datetime = datetime.combine(target_date, datetime.min.time())
-            db_meal = DBMeal(
+            db_meal = MealORM(
                 meal_id=meal_id,
                 user_id=user.id,
                 status=MealStatusEnum.READY,
@@ -419,7 +421,7 @@ class TestMealsAPI:
             test_session.flush()
             
             # Create nutrition
-            db_nutrition = DBNutrition(
+            db_nutrition = NutritionORM(
                 meal_id=meal_id,
                 calories=560.0,  # 1120 total for 2 meals
                 protein=45.0,

@@ -12,8 +12,9 @@ from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition, Foo
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.infra.database.config import Base
 # Import all models to ensure they're registered with Base metadata
-from src.infra.database.models.meal.meal import Meal as MealModel
-from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
+from src.infra.database.models.meal.meal import MealORM
+from src.infra.database.models.meal.meal_image import MealImageORM
+from src.infra.mappers.meal_mapper import meal_domain_to_orm, meal_image_domain_to_orm
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
 from src.infra.event_bus import PyMediatorEventBus, EventBus
@@ -584,15 +585,15 @@ def sample_meal_domain() -> Meal:
 
 
 @pytest.fixture
-def sample_meal_db(test_session, sample_meal_domain) -> MealModel:
+def sample_meal_db(test_session, sample_meal_domain) -> MealORM:
     """Create a sample meal in the database."""
     # First create the meal image
-    meal_image = MealImageModel.from_domain(sample_meal_domain.image)
+    meal_image = meal_image_domain_to_orm(sample_meal_domain.image)
     test_session.add(meal_image)
     test_session.flush()
-    
-    # Create meal using from_domain method
-    meal_model = MealModel.from_domain(sample_meal_domain)
+
+    # Create meal using mapper
+    meal_model = meal_domain_to_orm(sample_meal_domain)
     test_session.add(meal_model)
     test_session.commit()
     return meal_model
@@ -681,14 +682,14 @@ def sample_meal_with_nutrition(test_session, sample_user) -> Meal:
     )
     
     # Store in database
-    meal_image_model = MealImageModel.from_domain(meal.image)
+    meal_image_model = meal_image_domain_to_orm(meal.image)
     test_session.add(meal_image_model)
     test_session.flush()
-    
-    meal_model = MealModel.from_domain(meal)
+
+    meal_model = meal_domain_to_orm(meal)
     test_session.add(meal_model)
     test_session.commit()
-    
+
     return meal
 
 
@@ -696,7 +697,7 @@ def sample_meal_with_nutrition(test_session, sample_user) -> Meal:
 def sample_meal_processing(test_session, sample_user) -> Meal:
     """Create a sample meal in PROCESSING status for testing."""
     import uuid
-    
+
     meal = Meal(
         meal_id=str(uuid.uuid4()),
         user_id=sample_user.id,
@@ -709,16 +710,16 @@ def sample_meal_processing(test_session, sample_user) -> Meal:
             url="https://example.com/processing.jpg"
         )
     )
-    
+
     # Store in database
-    meal_image_model = MealImageModel.from_domain(meal.image)
+    meal_image_model = meal_image_domain_to_orm(meal.image)
     test_session.add(meal_image_model)
     test_session.flush()
-    
-    meal_model = MealModel.from_domain(meal)
+
+    meal_model = meal_domain_to_orm(meal)
     test_session.add(meal_model)
     test_session.commit()
-    
+
     return meal
 
 

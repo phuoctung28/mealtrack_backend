@@ -18,16 +18,16 @@ from .enums import (
     GoalEnum,
 )
 # Meal models
-from .meal.meal import Meal
-from .meal.meal_image import MealImage
+from .meal.meal import MealORM
+from .meal.meal_image import MealImageORM
 # Translation models (meals + food items)
-from .meal.meal_translation_model import MealTranslation
-from .meal.food_item_translation_model import FoodItemTranslation
+from .meal.meal_translation_model import MealTranslationORM
+from .meal.food_item_translation_model import FoodItemTranslationORM
 # Notification models
 from .notification import NotificationPreferences, NotificationSentLog, UserFcmToken
-from .nutrition.food_item import FoodItem
+from .nutrition.food_item import FoodItemORM
 # Nutrition models
-from .nutrition.nutrition import Nutrition
+from .nutrition.nutrition import NutritionORM
 from .subscription import Subscription
 from .user.profile import UserProfile
 # User models
@@ -73,14 +73,14 @@ __all__ = [
     "Subscription",
     
     # Nutrition models
-    "Nutrition",
-    "FoodItem",
-    
+    "NutritionORM",
+    "FoodItemORM",
+
     # Meal models
-    "Meal",
-    "MealImage",
-    "MealTranslation",
-    "FoodItemTranslation",
+    "MealORM",
+    "MealImageORM",
+    "MealTranslationORM",
+    "FoodItemTranslationORM",
     
     # Test models
     
