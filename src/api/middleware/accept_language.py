@@ -51,8 +51,11 @@ def _parse_accept_language(headers: Headers) -> str:
     if not header:
         return DEFAULT_LANGUAGE
 
+    # 'en-US,en;q=0.9' → 'en-US'
     primary = header.split(",")[0].strip()
+    # 'en-US;q=0.9' → 'en-US'
     primary = primary.split(";")[0].strip()
+    # 'en-US' → 'en'
     language = primary.split("-")[0].lower()
 
     if language in SUPPORTED_LANGUAGES:
