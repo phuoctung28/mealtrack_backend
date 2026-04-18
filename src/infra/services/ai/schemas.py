@@ -50,7 +50,11 @@ class DiscoveryMealsResponse(BaseModel):
 
 
 class IngredientItem(BaseModel):
-    """Single ingredient with amount and unit."""
+    """Single ingredient with amount and unit.
+
+    # Used by: RecipeDetailsResponse (below) — not injected into production pipeline.
+    # Recipe details are parsed from raw JSON dicts in recipe_attempt_builder.py.
+    """
 
     name: str = Field(description="Ingredient name (e.g., 'chicken breast', 'broccoli')")
     amount: float = Field(description="Quantity amount (e.g., 200, 1.5)", gt=0)
@@ -70,6 +74,10 @@ class RecipeDetailsResponse(BaseModel):
 
     Macros are optional — AI no longer required to calculate them.
     Deterministic macros are calculated from ingredients via NutritionLookupService.
+
+    # Used by: tests/unit/infra/services/ai/test_schemas.py (validation tests only).
+    # NOT injected into the production pipeline — recipe_attempt_builder.py parses
+    # raw JSON dicts directly.  Wire through injection if structured output is needed.
     """
 
     ingredients: List[IngredientItem] = Field(

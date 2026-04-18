@@ -259,10 +259,13 @@ class TestSessionCreationInvariants:
         nutrition_lookup.calculate_meal_macros = AsyncMock(return_value=None)
         nutrition_lookup.scale_to_target = Mock(return_value=None)
 
+        from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
         service = SuggestionOrchestrationService(
             generation_service=mock_generation_service,
             suggestion_repo=mock_suggestion_repo,
             nutrition_lookup=nutrition_lookup,
+            meal_names_schema_class=MealNamesResponse,
+            discovery_meals_schema_class=DiscoveryMealsResponse,
             tdee_service=tdee_stub,
             portion_service=portion_stub,
             profile_provider=lambda uid: mock_user_repo.get_profile(uid),
