@@ -3,9 +3,7 @@ Command handler for creating manual meals from selected foods with nutrition dat
 All items must provide their own nutrition (via custom_nutrition).
 """
 import logging
-import uuid
-from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, Optional
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -15,19 +13,18 @@ from src.app.events.base import EventHandler
 from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal import MealImage
-from src.domain.model.nutrition import Macros
-from src.domain.model.nutrition import Nutrition, FoodItem as DomainFoodItem
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now, noon_utc_for_date, resolve_user_timezone
-from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
+from src.domain.services.nutrition_calculation_service import NutritionCalculationService
 
 
 class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any]):
-    def __init__(self, uow: UnitOfWorkPort, event_bus: Any, meal_repository: Optional[MealRepositoryPort] = None):
+    def __init__(self, uow: UnitOfWorkPort, event_bus: Any, meal_repository: Optional[MealRepositoryPort] = None, nutrition_service: Optional[NutritionCalculationService] = None):
         self.uow = uow
         self.event_bus = event_bus
         self.meal_repository = meal_repository
+        self.nutrition_service = nutrition_service or NutritionCalculationService()
 
     async def handle(self, event: CreateManualMealCommand):
         # Use provided meal_repository or create UnitOfWork with context manager
@@ -38,55 +35,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
                 return await self._process_meal(event, uow.meals, uow=uow)
 
     async def _process_meal(self, event: CreateManualMealCommand, meal_repo, uow=None):
-        # All items must carry their own nutrition (custom_nutrition)
-        total_protein = 0.0
-        total_carbs = 0.0
-        total_fat = 0.0
-        food_items: List[DomainFoodItem] = []
-
-        for item in event.items:
-            if not item.custom_nutrition:
-                # Skip items without nutrition data
-                continue
-
-            nutrition = item.custom_nutrition
-            quantity = item.quantity
-            factor = quantity / 100.0
-
-            protein = nutrition.protein_per_100g * factor
-            carbs = nutrition.carbs_per_100g * factor
-            fat = nutrition.fat_per_100g * factor
-
-            total_protein += protein
-            total_carbs += carbs
-            total_fat += fat
-
-            food_items.append(
-                DomainFoodItem(
-                    id=uuid.uuid4(),
-                    name=item.name or "Food Item",
-                    quantity=quantity,
-                    unit=item.unit,
-                    macros=Macros(
-                        protein=protein,
-                        carbs=carbs,
-                        fat=fat,
-                    ),
-                    micros=None,
-                    confidence=1.0,
-                    fdc_id=item.fdc_id,  # Keep for backward compat
-                )
-            )
-
-        nutrition = Nutrition(
-            macros=Macros(
-                protein=round(total_protein, 1),
-                carbs=round(total_carbs, 1),
-                fat=round(total_fat, 1),
-            ),
-            food_items=food_items,
-            confidence_score=1.0,
-        )
+        nutrition, _ = self.nutrition_service.aggregate_from_command_items(event.items)
 
         # Determine the meal date and datetime
         now = utc_now()
