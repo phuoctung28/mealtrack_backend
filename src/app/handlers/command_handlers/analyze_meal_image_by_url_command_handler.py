@@ -27,6 +27,7 @@ from src.domain.utils.timezone_utils import (
 )
 from src.infra.cache.cache_service import CacheService
 from src.infra.database.uow import UnitOfWork
+from src.infra.repositories.meal_repository import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +174,7 @@ class AnalyzeMealImageByUrlHandler(
                 )
 
             with UnitOfWork() as uow:
-                final_meal = uow.meals.find_by_id(meal.meal_id)
+                final_meal = uow.meals.find_by_id(meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS)
 
             await self._invalidate_daily_macros(command.user_id, meal_date)
             return final_meal

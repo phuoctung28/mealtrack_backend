@@ -13,6 +13,7 @@ from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition.macros import Macros
 from src.domain.utils.timezone_utils import get_user_monday, get_zone_info, resolve_user_timezone
 from src.infra.database.uow import UnitOfWork
+from src.infra.repositories.meal_repository import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,8 @@ class GetDailyBreakdownQueryHandler(EventHandler[GetDailyBreakdownQuery, Dict[st
             entries: List[Dict[str, Any]] = []
             for day in days:
                 meals = uow.meals.find_by_date(
-                    day, user_id=query.user_id, user_timezone=user_tz_str
+                    day, user_id=query.user_id, user_timezone=user_tz_str,
+                    projection=MealProjection.MACROS_ONLY,
                 )
 
                 total_protein = 0.0
