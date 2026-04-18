@@ -73,54 +73,49 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     # Get the last part and remove file extension
                     image_id = parts[-1].split(".")[0]
             
-            # Get user timezone from DB for meal type detection and date handling
+            # ---- MERGED UoW 1+2: get timezone + create initial meal record ----
             with UnitOfWork() as uow:
                 user_timezone = uow.users.get_user_timezone(command.user_id)
 
-            # Fallback to UTC if not set
-            if not user_timezone or not is_valid_timezone(user_timezone):
-                user_timezone = "UTC"
-                logger.info("Using UTC fallback for meal type detection")
+                # Fallback to UTC if not set
+                if not user_timezone or not is_valid_timezone(user_timezone):
+                    user_timezone = "UTC"
+                    logger.info("Using UTC fallback for meal type detection")
 
-            # Determine the meal date and datetime
-            now = utc_now()
-            meal_date = command.target_date if command.target_date else now.date()
-            if command.target_date and command.target_date != now.date():
-                # Past/future date: use noon in user's local timezone to avoid
-                # created_at falling into the wrong date after UTC conversion
-                meal_datetime = noon_utc_for_date(meal_date, user_timezone)
-            else:
-                # Today or no date — use actual current time
-                meal_datetime = now
+                # Determine the meal date and datetime
+                now = utc_now()
+                meal_date = command.target_date if command.target_date else now.date()
+                if command.target_date and command.target_date != now.date():
+                    meal_datetime = noon_utc_for_date(meal_date, user_timezone)
+                else:
+                    meal_datetime = now
 
-            logger.info(f"Creating meal record for date: {meal_date}")
+                logger.info(f"Creating meal record for date: {meal_date}")
 
-            # 4. Convert UTC to local time for meal type detection
-            zone_info = get_zone_info(user_timezone)
-            local_datetime = meal_datetime.astimezone(zone_info)
-            logger.info(f"Meal type detection: UTC={meal_datetime.isoformat()} → Local={local_datetime.isoformat()} (timezone={user_timezone})")
+                zone_info = get_zone_info(user_timezone)
+                local_datetime = meal_datetime.astimezone(zone_info)
+                logger.info(
+                    f"Meal type detection: UTC={meal_datetime.isoformat()} → "
+                    f"Local={local_datetime.isoformat()} (timezone={user_timezone})"
+                )
 
-            # Determine meal type from local time
-            meal_type = determine_meal_type_from_timestamp(local_datetime)
+                meal_type = determine_meal_type_from_timestamp(local_datetime)
 
-            # Create meal record with ANALYZING status
-            meal = Meal(
-                meal_id=str(uuid4()),
-                user_id=command.user_id,
-                status=MealStatus.ANALYZING,
-                created_at=meal_datetime,
-                meal_type=meal_type,
-                image=MealImage(
-                    image_id=image_id,
-                    format="jpeg" if "jpeg" in command.content_type else "png",
-                    size_bytes=len(command.file_contents),
-                    url=image_url
-                ),
-                source="scanner",
-            )
-            
-            # Save initial meal record using UoW
-            with UnitOfWork() as uow:
+                meal = Meal(
+                    meal_id=str(uuid4()),
+                    user_id=command.user_id,
+                    status=MealStatus.ANALYZING,
+                    created_at=meal_datetime,
+                    meal_type=meal_type,
+                    image=MealImage(
+                        image_id=image_id,
+                        format="jpeg" if "jpeg" in command.content_type else "png",
+                        size_bytes=len(command.file_contents),
+                        url=image_url,
+                    ),
+                    source="scanner",
+                )
+
                 saved_meal = uow.meals.save(meal)
                 uow.commit()
                 logger.info(f"Created meal record {saved_meal.meal_id} with ANALYZING status")
@@ -209,7 +204,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"language={command.language}"
                 )
 
-            # Save the fully analyzed meal using UoW
+            # ---- MERGED UoW 3+4: save final meal + reload with translations ----
             with UnitOfWork() as uow:
                 final_meal = uow.meals.save(meal)
                 uow.commit()
@@ -222,9 +217,6 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"language={command.language} | "
                     f"status={final_meal.status}"
                 )
-
-            # Reload meal with translations for response
-            with UnitOfWork() as uow:
                 final_meal = uow.meals.find_by_id(meal.meal_id)
 
             await self._invalidate_daily_macros(command.user_id, meal_date)
