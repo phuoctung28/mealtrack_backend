@@ -51,7 +51,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
         if self.fat_secret_service:
             if is_non_english:
                 processed_raw = await self._search_localized(
-                    event.query, event.limit, language
+                    event.query, event.limit, language, cache_key
                 )
             else:
                 try:
@@ -68,13 +68,12 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
         return {"results": mapped, "query": event.query, "total": len(mapped)}
 
     async def _search_localized(
-        self, query: str, limit: int, language: str
+        self, query: str, limit: int, language: str, cache_key: str
     ) -> List[Dict[str, Any]]:
         """Search with localization: try native region first, fallback only if empty."""
         from src.infra.adapters.fat_secret_service import LANGUAGE_TO_REGION
 
         region = LANGUAGE_TO_REGION.get(language, "US")
-        cache_key = f"{language}:{query}"
 
         # Step 1: Try FatSecret with localized region — cache and return immediately if anything found
         try:
