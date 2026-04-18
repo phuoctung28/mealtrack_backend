@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 from enum import Enum, auto
 from typing import Dict, List, Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus
@@ -14,6 +14,9 @@ from src.infra.database.utils.datetime_helper import local_date_expr
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.meal.meal_image import MealImageORM
+from src.infra.database.models.meal.food_item_translation_model import FoodItemTranslationORM
+from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
+from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.mappers import MealStatusMapper
 from src.infra.mappers.meal_mapper import (
@@ -154,18 +157,59 @@ class MealRepository(MealRepositoryPort):
         )
         return [meal_orm_to_domain(m) for m in db_meals]
     
-    def delete(self, meal_id: str) -> bool:
-        """Delete a meal by ID."""
-        try:
-            db_meal = self.db.query(MealORM).filter(MealORM.meal_id == meal_id).first()
-            if db_meal:
-                self.db.delete(db_meal)
-                self.db.commit()
-                return True
-            return False
-        except Exception as e:
-            self.db.rollback()
-            raise e
+    def delete(self, meal_id: str) -> None:
+        """Delete a meal with data preservation.
+
+        Performs:
+        1. Soft-delete food_items (is_deleted=True, nutrition_id=NULL)
+        2. Soft-delete meal_translations (is_deleted=True, meal_id=NULL)
+        3. Soft-delete food_item_translations (is_deleted=True)
+        4. Hard-delete nutrition
+        5. Hard-delete meal
+        """
+        # Step 1a: Soft-delete food_items + nullify nutrition FK
+        nutrition = self.db.query(NutritionORM).filter(
+            NutritionORM.meal_id == meal_id
+        ).first()
+
+        if nutrition:
+            nutrition_id = nutrition.id
+            self.db.execute(
+                update(FoodItemORM)
+                .where(FoodItemORM.nutrition_id == nutrition_id)
+                .values(is_deleted=True, nutrition_id=None)
+            )
+
+        # Step 1b: Soft-delete meal_translations + nullify meal FK
+        meal_translation_ids = [
+            mt.id for mt in self.db.query(MealTranslationORM.id).filter(
+                MealTranslationORM.meal_id == meal_id
+            ).all()
+        ]
+
+        self.db.execute(
+            update(MealTranslationORM)
+            .where(MealTranslationORM.meal_id == meal_id)
+            .values(is_deleted=True, meal_id=None)
+        )
+
+        # Step 1c: Soft-delete food_item_translations
+        if meal_translation_ids:
+            self.db.execute(
+                update(FoodItemTranslationORM)
+                .where(FoodItemTranslationORM.meal_translation_id.in_(meal_translation_ids))
+                .values(is_deleted=True)
+            )
+
+        # Step 2a: Hard-delete nutrition
+        self.db.execute(
+            NutritionORM.__table__.delete().where(NutritionORM.meal_id == meal_id)
+        )
+
+        # Step 2b: Hard-delete meal
+        self.db.execute(
+            MealORM.__table__.delete().where(MealORM.meal_id == meal_id)
+        )
     
     def find_all_paginated(self, offset: int = 0, limit: int = 20) -> List[Meal]:
         """Retrieves all meals with pagination."""
