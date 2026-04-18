@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from src.domain.model.meal import Meal, MealStatus
 
@@ -22,12 +22,14 @@ class MealRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def find_by_id(self, meal_id: str) -> Optional[Meal]:
+    def find_by_id(self, meal_id: str, projection: Any = None) -> Optional[Meal]:
         """
         Finds a meal by its ID.
 
         Args:
             meal_id: The ID of the meal to find
+            projection: Optional projection hint (e.g. MealProjection from infra layer)
+                        to control which relationships are loaded.
 
         Returns:
             The meal if found, None otherwise
@@ -74,7 +76,8 @@ class MealRepositoryPort(ABC):
 
     @abstractmethod
     def find_by_date(
-        self, date_obj: date, user_id: str = None, limit: int = 50
+        self, date_obj: date, user_id: str = None, limit: int = 50,
+        projection: Any = None,
     ) -> List[Meal]:
         """
         Finds meals created on a specific date, optionally filtered by user.
@@ -83,6 +86,8 @@ class MealRepositoryPort(ABC):
             date_obj: The date to filter by (date object)
             user_id: Optional user ID to filter meals by specific user
             limit: Maximum number of results
+            projection: Optional projection hint (e.g. MealProjection from infra layer)
+                        to control which relationships are loaded.
 
         Returns:
             List of meals created on the specified date
