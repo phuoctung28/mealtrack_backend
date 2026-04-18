@@ -1,5 +1,6 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
+from enum import Enum, auto
 from typing import Dict, List, Optional
 
 from sqlalchemy import func
@@ -18,11 +19,25 @@ from src.infra.mappers.meal_mapper import MealMapper, MealImageMapper, Nutrition
 
 logger = logging.getLogger(__name__)
 
-_MEAL_LOAD_OPTIONS = (
-    joinedload(DBMeal.image),
-    selectinload(DBMeal.nutrition).selectinload(DBNutrition.food_items),
-    selectinload(DBMeal.translations),
-)
+class MealProjection(Enum):
+    MACROS_ONLY = auto()             # nutrition + food_items only
+    FULL = auto()                    # image + nutrition + food_items (default)
+    FULL_WITH_TRANSLATIONS = auto()  # everything, including translations
+
+_PROJECTION_OPTS: dict = {
+    MealProjection.MACROS_ONLY: (
+        selectinload(DBMeal.nutrition).selectinload(DBNutrition.food_items),
+    ),
+    MealProjection.FULL: (
+        joinedload(DBMeal.image),
+        selectinload(DBMeal.nutrition).selectinload(DBNutrition.food_items),
+    ),
+    MealProjection.FULL_WITH_TRANSLATIONS: (
+        joinedload(DBMeal.image),
+        selectinload(DBMeal.nutrition).selectinload(DBNutrition.food_items),
+        joinedload(DBMeal.translations),
+    ),
+}
 
 
 class MealRepository(MealRepositoryPort):
@@ -115,11 +130,13 @@ class MealRepository(MealRepositoryPort):
             self.db.rollback()
             raise e
     
-    def find_by_id(self, meal_id: str) -> Optional[Meal]:
+    def find_by_id(
+        self, meal_id: str, projection: MealProjection = MealProjection.FULL
+    ) -> Optional[Meal]:
         """Find a meal by ID."""
         db_meal = (
             self.db.query(DBMeal)
-            .options(*_MEAL_LOAD_OPTIONS)
+            .options(*_PROJECTION_OPTS[projection])
             .filter(DBMeal.meal_id == meal_id)
             .first()
         )
@@ -129,7 +146,7 @@ class MealRepository(MealRepositoryPort):
         """Find meals by status."""
         db_meals = (
             self.db.query(DBMeal)
-            .options(*_MEAL_LOAD_OPTIONS)
+            .options(*_PROJECTION_OPTS[MealProjection.FULL])
             .filter(DBMeal.status == MealStatusMapper.to_db(status))
             .order_by(DBMeal.created_at)
             .limit(limit)
@@ -154,7 +171,7 @@ class MealRepository(MealRepositoryPort):
         """Retrieves all meals with pagination."""
         db_meals = (
             self.db.query(DBMeal)
-            .options(*_MEAL_LOAD_OPTIONS)
+            .options(*_PROJECTION_OPTS[MealProjection.FULL])
             .order_by(DBMeal.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -177,6 +194,7 @@ class MealRepository(MealRepositoryPort):
     def find_by_date(
         self, date_obj: date, user_id: str = None, limit: int = 50,
         user_timezone: Optional[str] = None,
+        projection: MealProjection = MealProjection.FULL,
     ) -> List[Meal]:
         """Find meals created on a specific date.
 
@@ -184,6 +202,7 @@ class MealRepository(MealRepositoryPort):
             user_timezone: IANA timezone (e.g. 'Asia/Saigon'). When provided,
                 date_obj is treated as a user-local date and boundaries are
                 converted to UTC for correct filtering.
+            projection: Controls which relationships are loaded.
         """
         tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
         start_datetime = datetime.combine(date_obj, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
@@ -191,7 +210,7 @@ class MealRepository(MealRepositoryPort):
 
         query = (
             self.db.query(DBMeal)
-            .options(*_MEAL_LOAD_OPTIONS)
+            .options(*_PROJECTION_OPTS[projection])
             .filter(DBMeal.created_at >= start_datetime)
             .filter(DBMeal.created_at < end_datetime)
         )
@@ -231,7 +250,7 @@ class MealRepository(MealRepositoryPort):
 
         query = (
             self.db.query(DBMeal)
-            .options(*_MEAL_LOAD_OPTIONS)
+            .options(*_PROJECTION_OPTS[MealProjection.FULL])
             .filter(DBMeal.created_at >= start_datetime)
             .filter(DBMeal.created_at < end_datetime)
             .filter(DBMeal.user_id == user_id)

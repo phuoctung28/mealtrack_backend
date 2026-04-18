@@ -1,13 +1,14 @@
 """
 Accept-Language header parsing middleware.
 Extracts language preference and stores in request.state for route handlers.
+Pure ASGI implementation — does not subclass BaseHTTPMiddleware, so it never
+buffers the request or response body.
 """
-
 import logging
-from typing import Callable
 
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import Request
+from starlette.datastructures import Headers
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
 
@@ -16,54 +17,55 @@ SUPPORTED_LANGUAGES = {"en", "vi", "es", "fr", "de", "ja", "zh"}
 DEFAULT_LANGUAGE = "en"
 
 
-class AcceptLanguageMiddleware(BaseHTTPMiddleware):
+class AcceptLanguageMiddleware:
     """
-    Middleware for parsing Accept-Language header.
+    Pure ASGI middleware for parsing Accept-Language header.
 
     Stores validated language code in request.state.language
     for access in route handlers.
     """
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        language = self._parse_accept_language(request)
-        request.state.language = language
-        return await call_next(request)
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
 
-    def _parse_accept_language(self, request: Request) -> str:
-        """
-        Parse Accept-Language header and return validated language code.
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            headers = Headers(scope=scope)
+            language = _parse_accept_language(headers)
+            scope.setdefault("state", {})
+            scope["state"]["language"] = language
+        await self.app(scope, receive, send)
 
-        Handles formats:
-        - 'en'
-        - 'en-US'
-        - 'en-US,en;q=0.9,vi;q=0.8'
-        """
-        header = request.headers.get("Accept-Language", "")
 
-        if not header:
-            return DEFAULT_LANGUAGE
+def _parse_accept_language(headers: Headers) -> str:
+    """
+    Parse Accept-Language header and return validated language code.
 
-        # Split by comma and take first language
-        # 'en-US,en;q=0.9' -> 'en-US'
-        primary = header.split(",")[0].strip()
+    Handles formats:
+    - 'en'
+    - 'en-US'
+    - 'en-US,en;q=0.9,vi;q=0.8'
+    """
+    header = headers.get("Accept-Language", "")
 
-        # Remove quality factor if present
-        # 'en;q=0.9' -> 'en'
-        primary = primary.split(";")[0].strip()
-
-        # Extract language code (ignore region)
-        # 'en-US' -> 'en'
-        language = primary.split("-")[0].lower()
-
-        # Validate against supported languages
-        if language in SUPPORTED_LANGUAGES:
-            return language
-
-        logger.debug(
-            f"Unsupported language '{language}' from Accept-Language, "
-            f"falling back to '{DEFAULT_LANGUAGE}'"
-        )
+    if not header:
         return DEFAULT_LANGUAGE
+
+    # 'en-US,en;q=0.9' → 'en-US'
+    primary = header.split(",")[0].strip()
+    # 'en-US;q=0.9' → 'en-US'
+    primary = primary.split(";")[0].strip()
+    # 'en-US' → 'en'
+    language = primary.split("-")[0].lower()
+
+    if language in SUPPORTED_LANGUAGES:
+        return language
+
+    logger.debug(
+        f"Unsupported language '{language}' from Accept-Language, "
+        f"falling back to '{DEFAULT_LANGUAGE}'"
+    )
+    return DEFAULT_LANGUAGE
 
 
 def get_request_language(request: Request) -> str:

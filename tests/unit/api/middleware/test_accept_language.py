@@ -86,6 +86,14 @@ class TestAcceptLanguageMiddleware:
         # Should take first language (en-US -> en after stripping region)
         assert response.json()["language"] == "en"
 
+    def test_middleware_is_not_base_http_middleware(self):
+        """AcceptLanguageMiddleware must be a pure ASGI callable, not BaseHTTPMiddleware."""
+        from starlette.middleware.base import BaseHTTPMiddleware
+        assert not issubclass(AcceptLanguageMiddleware, BaseHTTPMiddleware), (
+            "AcceptLanguageMiddleware must not subclass BaseHTTPMiddleware — "
+            "it buffers the full request body which breaks large file uploads."
+        )
+
 
 class TestGetRequestLanguage:
     """Tests for get_request_language helper."""
