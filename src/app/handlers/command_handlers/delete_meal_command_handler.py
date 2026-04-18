@@ -22,11 +22,11 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
-from src.infra.database.models.meal.meal import Meal as MealModel
-from src.infra.database.models.meal.meal_translation_model import MealTranslation
-from src.infra.database.models.meal.food_item_translation_model import FoodItemTranslation
-from src.infra.database.models.nutrition.nutrition import Nutrition
-from src.infra.database.models.nutrition.food_item import FoodItem
+from src.infra.database.models.meal.meal import MealORM
+from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
+from src.infra.database.models.meal.food_item_translation_model import FoodItemTranslationORM
+from src.infra.database.models.nutrition.nutrition import NutritionORM
+from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
                 # 1a. Soft-delete food_items + nullify nutrition FK
                 # Get nutrition first
                 nutrition = uow.session.query(Nutrition).filter(
-                    Nutrition.meal_id == meal_id
+                    NutritionORM.meal_id == meal_id
                 ).first()
 
                 if nutrition:
@@ -72,22 +72,22 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
                     # Soft-delete food_items and nullify FK
                     uow.session.execute(
                         update(FoodItem)
-                        .where(FoodItem.nutrition_id == nutrition_id)
+                        .where(FoodItemORM.nutrition_id == nutrition_id)
                         .values(is_deleted=True, nutrition_id=None)
                     )
 
                 # 1b. Soft-delete meal_translations + nullify meal FK (prevents DB cascade)
                 # Get meal_translation IDs BEFORE nullifying
                 meal_translation_ids = [
-                    mt.id for mt in uow.session.query(MealTranslation.id).filter(
-                        MealTranslation.meal_id == meal_id
+                    mt.id for mt in uow.session.query(MealTranslationORM.id).filter(
+                        MealTranslationORM.meal_id == meal_id
                     ).all()
                 ]
 
                 # Now nullify meal_id to prevent cascade
                 uow.session.execute(
                     update(MealTranslation)
-                    .where(MealTranslation.meal_id == meal_id)
+                    .where(MealTranslationORM.meal_id == meal_id)
                     .values(is_deleted=True, meal_id=None)
                 )
 
@@ -97,7 +97,7 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
                 if meal_translation_ids:
                     uow.session.execute(
                         update(FoodItemTranslation)
-                        .where(FoodItemTranslation.meal_translation_id.in_(meal_translation_ids))
+                        .where(FoodItemTranslationORM.meal_translation_id.in_(meal_translation_ids))
                         .values(is_deleted=True)
                     )
 
@@ -105,12 +105,12 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
 
                 # 2a. Hard-delete nutrition (food_items already detached)
                 uow.session.execute(
-                    Nutrition.__table__.delete().where(Nutrition.meal_id == meal_id)
+                    NutritionORM.__table__.delete().where(NutritionORM.meal_id == meal_id)
                 )
 
                 # 2b. Hard-delete meal (translations already detached)
                 uow.session.execute(
-                    MealModel.__table__.delete().where(MealModel.meal_id == meal_id)
+                    MealORM.__table__.delete().where(MealORM.meal_id == meal_id)
                 )
 
                 uow.commit()

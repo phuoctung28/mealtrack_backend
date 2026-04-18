@@ -4,16 +4,13 @@ Meal translation database models.
 Stores translated content separately from original English to support
 multiple languages.
 """
-from datetime import datetime
-
 from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
-from src.domain.utils.timezone_utils import utc_now
 
 
-class MealTranslation(Base):
+class MealTranslationORM(Base):
     """
     Database model for meal translations.
 
@@ -34,58 +31,11 @@ class MealTranslation(Base):
 
     # Relationship to food item translations
     food_items = relationship(
-        "FoodItemTranslation",
+        "FoodItemTranslationORM",
         back_populates="meal_translation",
         cascade="all, delete-orphan",
         lazy="selectin"
     )
 
     # Relationship back to meal
-    meal = relationship("Meal", back_populates="translations")
-
-    def to_domain(self):
-        """Convert DB model to domain model."""
-        from src.domain.model.meal import MealTranslation as DomainMealTranslation
-        from src.domain.model.meal import FoodItemTranslation as DomainFoodItemTranslation
-
-        return DomainMealTranslation(
-            meal_id=self.meal_id,
-            language=self.language,
-            dish_name=self.dish_name,
-            food_items=[
-                DomainFoodItemTranslation(
-                    food_item_id=fi.food_item_id,
-                    name=fi.name,
-                    description=fi.description
-                )
-                for fi in self.food_items
-            ],
-            translated_at=self.translated_at
-        )
-
-    @classmethod
-    def from_domain(cls, domain_model):
-        """Create DB model from domain model."""
-        from src.infra.database.models.meal.food_item_translation_model import FoodItemTranslation
-
-        now = utc_now()
-
-        translation = cls(
-            meal_id=domain_model.meal_id,
-            language=domain_model.language,
-            dish_name=domain_model.dish_name,
-            translated_at=domain_model.translated_at or now,
-            created_at=now
-        )
-
-        # Add food item translations
-        for fi in domain_model.food_items:
-            translation.food_items.append(
-                FoodItemTranslation(
-                    food_item_id=str(fi.food_item_id),
-                    name=fi.name,
-                    description=fi.description
-                )
-            )
-
-        return translation
+    meal = relationship("MealORM", back_populates="translations")

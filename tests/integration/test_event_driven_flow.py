@@ -253,8 +253,8 @@ class TestEventBusIntegration:
     ):
         """Test that handlers are properly isolated with rollback."""
         # Get initial meal count
-        from src.infra.database.models.meal import Meal as MealModel
-        initial_count = test_session.query(MealModel).count()
+        from src.infra.database.models.meal import MealORM
+        initial_count = test_session.query(MealORM).count()
         
         # Upload a meal
         command = UploadMealImageImmediatelyCommand(
@@ -265,7 +265,7 @@ class TestEventBusIntegration:
         result = await event_bus.send(command)
         
         # Verify meal was created
-        current_count = test_session.query(MealModel).count()
+        current_count = test_session.query(MealORM).count()
         assert current_count == initial_count + 1
         
         # The session rollback in conftest.py will undo this change
