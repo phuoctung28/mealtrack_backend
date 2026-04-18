@@ -1,5 +1,5 @@
-"""Tests that upload_meal_image handler opens UnitOfWork at most twice on happy path."""
-from unittest.mock import MagicMock, patch
+"""Tests that upload_meal_image handler uses the injected UoW (no direct UnitOfWork() instantiation)."""
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -26,8 +26,15 @@ _FAKE_IMAGE_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 _FAKE_USER_UUID = "00000000-0000-0000-0000-000000000001"
 
 
-def _make_handler():
-    handler = UploadMealImageImmediatelyHandler()
+def _make_handler(mock_uow, mock_event_bus=None):
+    if mock_event_bus is None:
+        mock_event_bus = MagicMock()
+        mock_event_bus.publish = AsyncMock()
+
+    handler = UploadMealImageImmediatelyHandler(
+        uow=mock_uow,
+        event_bus=mock_event_bus,
+    )
     handler.image_store = MagicMock()
     handler.image_store.save.return_value = f"mock://images/{_FAKE_IMAGE_UUID}"
     handler.vision_service = MagicMock()
@@ -37,82 +44,54 @@ def _make_handler():
         food_items=[MagicMock()], calories=400
     )
     handler.gpt_parser.parse_dish_name.return_value = "Salad"
-    handler.gpt_parser.parse_emoji.return_value = "🥗"
+    handler.gpt_parser.parse_emoji.return_value = "\U0001f957"
     handler.gpt_parser.extract_raw_json.return_value = "{}"
-    handler.cache_service = None
     handler.meal_translation_service = None
     return handler
 
 
 @pytest.mark.asyncio
-async def test_happy_path_opens_uow_twice():
-    """Happy path: UnitOfWork is opened exactly twice (merged 1+2 and merged 3+4)."""
-    handler = _make_handler()
+async def test_happy_path_uses_injected_uow():
+    """Happy path: handler uses self.uow context manager (no direct UnitOfWork() instantiation)."""
+    mock_meal = _make_meal_mock()
+    mock_uow = MagicMock()
+    mock_uow.__enter__ = MagicMock(return_value=mock_uow)
+    mock_uow.__exit__ = MagicMock(return_value=False)
+    mock_uow.users.get_user_timezone.return_value = "UTC"
+    mock_uow.meals.save.return_value = mock_meal
+    mock_uow.meals.find_by_id.return_value = mock_meal
+
+    handler = _make_handler(mock_uow)
     cmd = UploadMealImageImmediatelyCommand(
         user_id=_FAKE_USER_UUID, file_contents=b"img", content_type="image/jpeg"
     )
-    mock_meal = _make_meal_mock()
 
-    with patch(
-        "src.app.handlers.command_handlers"
-        ".upload_meal_image_immediately_command_handler.UnitOfWork"
-    ) as mock_cls:
-        mock_uow = MagicMock()
-        mock_uow.__enter__ = MagicMock(return_value=mock_uow)
-        mock_uow.__exit__ = MagicMock(return_value=False)
-        mock_uow.users.get_user_timezone.return_value = "UTC"
-        mock_uow.meals.save.return_value = mock_meal
-        mock_uow.meals.find_by_id.return_value = mock_meal
-        mock_cls.return_value = mock_uow
+    await handler.handle(cmd)
 
-        await handler.handle(cmd)
-
-    assert mock_cls.call_count == 2, (
-        f"Expected 2 UoW opens on happy path, got {mock_cls.call_count}"
-    )
+    # Verify the injected UoW was used (entered as context manager)
+    mock_uow.__enter__.assert_called()
+    mock_uow.meals.save.assert_called()
 
 
 @pytest.mark.asyncio
-async def test_timezone_and_initial_save_in_same_uow():
-    """get_user_timezone and meals.save are called on the same UoW instance."""
-    handler = _make_handler()
+async def test_timezone_and_initial_save_use_injected_uow():
+    """get_user_timezone and meals.save are called on the injected UoW instance."""
+    mock_meal = _make_meal_mock()
+    mock_uow = MagicMock()
+    mock_uow.__enter__ = MagicMock(return_value=mock_uow)
+    mock_uow.__exit__ = MagicMock(return_value=False)
+    mock_uow.users.get_user_timezone.return_value = "UTC"
+    mock_uow.meals.save.return_value = mock_meal
+    mock_uow.meals.find_by_id.return_value = mock_meal
+
+    handler = _make_handler(mock_uow)
     cmd = UploadMealImageImmediatelyCommand(
         user_id=_FAKE_USER_UUID, file_contents=b"img", content_type="image/jpeg"
     )
-    mock_meal = _make_meal_mock()
-    uow_instances = []
 
-    class TrackingUow:
-        def __init__(self):
-            self.users = MagicMock()
-            self.users.get_user_timezone.return_value = "UTC"
-            self.meals = MagicMock()
-            self.meals.save.return_value = mock_meal
-            self.meals.find_by_id.return_value = mock_meal
-            uow_instances.append(self)
+    await handler.handle(cmd)
 
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-        def commit(self):
-            pass
-
-    with patch(
-        "src.app.handlers.command_handlers"
-        ".upload_meal_image_immediately_command_handler.UnitOfWork",
-        TrackingUow,
-    ):
-        await handler.handle(cmd)
-
-    # First UoW instance must have both get_user_timezone and meals.save called
-    first_uow = uow_instances[0]
-    first_uow.users.get_user_timezone.assert_called_once()
-    first_uow.meals.save.assert_called()
-
-    # Second UoW instance must have both the final save and the find_by_id reload
-    second_uow = uow_instances[1]
-    second_uow.meals.save.assert_called()
-    second_uow.meals.find_by_id.assert_called_once()
+    # Both operations should be on the same injected UoW
+    mock_uow.users.get_user_timezone.assert_called_once()
+    mock_uow.meals.save.assert_called()
+    mock_uow.meals.find_by_id.assert_called_once()

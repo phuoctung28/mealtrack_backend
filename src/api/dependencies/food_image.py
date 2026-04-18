@@ -20,7 +20,7 @@ def get_food_image_service() -> FoodImageSearchService:
 
         web_validator = None
         if settings.BRAVE_SEARCH_API_KEY:
-            from src.domain.services.meal_discovery.web_search_image_validator import (
+            from src.infra.adapters.web_search_image_validator import (
                 WebSearchImageValidator,
             )
             web_validator = WebSearchImageValidator(settings.BRAVE_SEARCH_API_KEY)

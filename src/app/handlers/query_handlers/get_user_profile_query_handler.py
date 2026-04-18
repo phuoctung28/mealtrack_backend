@@ -12,7 +12,7 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.model.user import Sex, TdeeRequest, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.infra.cache.cache_service import CacheService
+from src.domain.ports.cache_port import CachePort
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow import UnitOfWork
 
@@ -26,7 +26,7 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
     def __init__(
         self,
         tdee_service: TdeeCalculationService = None,
-        cache_service: Optional[CacheService] = None,
+        cache_service: Optional[CachePort] = None,
     ):
         self.tdee_service = tdee_service or TdeeCalculationService()
         self.cache_service = cache_service

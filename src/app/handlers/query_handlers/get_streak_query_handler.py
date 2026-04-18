@@ -11,7 +11,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.meal.get_streak_query import GetStreakQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.utils.timezone_utils import get_zone_info, resolve_user_timezone
-from src.infra.cache.cache_service import CacheService
+from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class GetStreakQueryHandler(EventHandler[GetStreakQuery, Dict[str, Any]]):
     """Handler that calculates current + best logging streak for a user."""
 
-    def __init__(self, cache_service: Optional[CacheService] = None):
+    def __init__(self, cache_service: Optional[CachePort] = None):
         self.cache_service = cache_service
 
     async def handle(self, query: GetStreakQuery) -> Dict[str, Any]:

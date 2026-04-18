@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from src.app.commands.saved_suggestion import DeleteSavedSuggestionCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
-from src.infra.cache.cache_service import CacheService
+from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class DeleteSavedSuggestionCommandHandler(EventHandler[DeleteSavedSuggestionCommand, Dict[str, Any]]):
     """Delete a saved suggestion by suggestion_id for a user."""
 
-    def __init__(self, cache_service: Optional[CacheService] = None):
+    def __init__(self, cache_service: Optional[CachePort] = None):
         self.cache_service = cache_service
 
     async def handle(self, command: DeleteSavedSuggestionCommand) -> Dict[str, Any]:

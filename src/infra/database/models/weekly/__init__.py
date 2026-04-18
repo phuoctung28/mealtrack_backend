@@ -1,3 +1,3 @@
-from .weekly_macro_budget import WeeklyMacroBudget
+from .weekly_macro_budget import WeeklyMacroBudgetORM
 
-__all__ = ['WeeklyMacroBudget']
+__all__ = ['WeeklyMacroBudgetORM']

@@ -13,7 +13,7 @@ from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.constants import NutritionConstants, TDEEConstants
 from src.domain.model.user import TdeeRequest, Sex, JobType, Goal, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
-from src.infra.cache.cache_service import CacheService
+from src.domain.ports.cache_port import CachePort
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow import UnitOfWork
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
     """Handler for getting user's TDEE calculation."""
 
-    def __init__(self, tdee_service: TdeeCalculationService = None, cache_service: Optional[CacheService] = None):
+    def __init__(self, tdee_service: TdeeCalculationService = None, cache_service: Optional[CachePort] = None):
         self.tdee_service = tdee_service or TdeeCalculationService()
         self.cache_service = cache_service
 

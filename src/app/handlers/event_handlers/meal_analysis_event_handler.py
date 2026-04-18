@@ -12,7 +12,6 @@ from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
-from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.database.uow import UnitOfWork
@@ -69,7 +68,7 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
                     return
                 
                 # Update status to ANALYZING
-                meal.status = MealStatus.ANALYZING
+                meal = meal.mark_analyzing()
                 uow.meals.save(meal)
                 uow.commit()
                 logger.info(f"Updated meal {event.meal_id} status to ANALYZING")
@@ -107,11 +106,12 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             dish_name = self.gpt_parser.parse_dish_name(vision_result)
 
             # Update meal with analysis results (same as UploadMealImageImmediatelyHandler)
-            meal.dish_name = dish_name or "Unknown dish"
-            meal.status = MealStatus.READY
-            meal.ready_at = utc_now()
-            meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)
-            meal.nutrition = nutrition
+            meal = meal.mark_ready(
+                nutrition=nutrition,
+                dish_name=dish_name or "Unknown dish",
+                raw_gpt_json=self.gpt_parser.extract_raw_json(vision_result),
+                emoji=self.gpt_parser.parse_emoji(vision_result),
+            )
 
             # Translation (if non-English)
             if language and language != "en" and self.meal_translation_service and nutrition and nutrition.food_items:
@@ -147,8 +147,7 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             try:
                 meal = uow.meals.find_by_id(meal_id)
                 if meal:
-                    meal.status = MealStatus.FAILED
-                    meal.error_message = error_message
+                    meal = meal.mark_failed(error_message=error_message)
                     uow.meals.save(meal)
                     uow.commit()
                     logger.info(f"Marked meal {meal_id} as failed")
