@@ -35,8 +35,8 @@ class AddCustomIngredientCommandHandler(EventHandler[AddCustomIngredientCommand,
         # Use provided UoW or create default
         uow = self.uow or UnitOfWork()
 
-        with uow:
-            try:
+        try:
+            with uow:
                 meal = uow.meals.find_by_id(command.meal_id)
                 if not meal:
                     raise ValueError(f"Meal {command.meal_id} not found")
@@ -52,19 +52,17 @@ class AddCustomIngredientCommandHandler(EventHandler[AddCustomIngredientCommand,
                 meal_service = MealService()
                 updated_meal = meal_service.apply_food_item_changes(meal, [change])
                 saved_meal = uow.meals.save(updated_meal)
-                uow.commit()
 
-                await self._invalidate_daily_macros(saved_meal)
+            await self._invalidate_daily_macros(saved_meal)
 
-                return {
-                    "success": True,
-                    "meal_id": saved_meal.meal_id,
-                    "message": f"Added custom ingredient: {command.name}"
-                }
-            except Exception as e:
-                uow.rollback()
-                logger.error(f"Error adding custom ingredient: {str(e)}")
-                raise
+            return {
+                "success": True,
+                "meal_id": saved_meal.meal_id,
+                "message": f"Added custom ingredient: {command.name}"
+            }
+        except Exception as e:
+            logger.error(f"Error adding custom ingredient: {str(e)}")
+            raise
 
     async def _invalidate_daily_macros(self, meal):
         if not self.cache_service or not meal:
