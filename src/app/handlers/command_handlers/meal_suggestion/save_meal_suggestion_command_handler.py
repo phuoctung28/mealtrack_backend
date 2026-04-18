@@ -110,19 +110,19 @@ class SaveMealSuggestionCommandHandler(
         with self.uow as uow:
             saved_meal = uow.meals.save(meal)
 
-            await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
-                aggregate_id=command.user_id,
-                user_id=command.user_id,
-                meal_date=meal_date,
-            ))
+        await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
+            aggregate_id=command.user_id,
+            user_id=command.user_id,
+            meal_date=meal_date,
+        ))
 
-            logger.info(
-                f"Saved meal suggestion {command.suggestion_id} as meal {saved_meal.meal_id} "
-                f"for user {command.user_id} on {meal_date} "
-                f"({command.portion_multiplier}x servings, {command.calories} cal)"
-            )
+        logger.info(
+            f"Saved meal suggestion {command.suggestion_id} as meal {saved_meal.meal_id} "
+            f"for user {command.user_id} on {meal_date} "
+            f"({command.portion_multiplier}x servings, {command.calories} cal)"
+        )
 
-            return saved_meal.meal_id
+        return saved_meal.meal_id
 
     def _build_food_items(
         self,
