@@ -111,3 +111,8 @@ async def test_timezone_and_initial_save_in_same_uow():
     first_uow = uow_instances[0]
     first_uow.users.get_user_timezone.assert_called_once()
     first_uow.meals.save.assert_called()
+
+    # Second UoW instance must have both the final save and the find_by_id reload
+    second_uow = uow_instances[1]
+    second_uow.meals.save.assert_called()
+    second_uow.meals.find_by_id.assert_called_once()
