@@ -24,7 +24,7 @@ from .meal.meal_image import MealImageORM
 from .meal.meal_translation_model import MealTranslationORM
 from .meal.food_item_translation_model import FoodItemTranslationORM
 # Notification models
-from .notification import NotificationPreferences, NotificationSentLog, UserFcmToken
+from .notification import NotificationPreferencesORM, NotificationSentLog, UserFcmTokenORM
 from .nutrition.food_item import FoodItemORM
 # Nutrition models
 from .nutrition.nutrition import NutritionORM
@@ -40,10 +40,10 @@ from .feature_flag import FeatureFlag
 from .saved_suggestion import SavedSuggestionModel
 
 # Weekly budgets
-from .weekly.weekly_macro_budget import WeeklyMacroBudget
+from .weekly.weekly_macro_budget import WeeklyMacroBudgetORM
 
 # Cheat days
-from .cheat_day.cheat_day import CheatDay
+from .cheat_day.cheat_day import CheatDayORM
 
 # Food reference (evolved from barcode_products)
 from .food_reference_model import FoodReferenceModel
@@ -85,9 +85,9 @@ __all__ = [
     # Test models
     
     # Notification models
-    "NotificationPreferences",
+    "NotificationPreferencesORM",
     "NotificationSentLog",
-    "UserFcmToken",
+    "UserFcmTokenORM",
 
     # Feature flags
     "FeatureFlag",
@@ -96,10 +96,10 @@ __all__ = [
     "SavedSuggestionModel",
 
     # Weekly budgets
-    "WeeklyMacroBudget",
+    "WeeklyMacroBudgetORM",
 
     # Cheat days
-    "CheatDay",
+    "CheatDayORM",
 
     # Food reference (evolved from barcode_products)
     "FoodReferenceModel",

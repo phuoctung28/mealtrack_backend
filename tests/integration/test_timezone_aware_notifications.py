@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 
 from src.domain.model.notification import NotificationPreferences as DomainNotificationPreferences
-from src.infra.database.models.notification.notification_preferences import NotificationPreferences
+from src.infra.database.models.notification.notification_preferences import NotificationPreferencesORM as NotificationPreferences
 from src.infra.database.models.user.user import User
 from src.infra.repositories.notification_repository import NotificationRepository
 
