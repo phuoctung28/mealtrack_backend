@@ -14,7 +14,7 @@ from src.domain.services.weekly_budget_service import AdjustedDailyTargets, Week
 from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import get_user_monday, get_zone_info, resolve_user_timezone
-from src.infra.cache.cache_service import CacheService
+from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, Any]]):
     """Handler for getting weekly macro budget status."""
 
-    def __init__(self, uow: Optional[UnitOfWorkPort] = None, cache_service: Optional[CacheService] = None):
+    def __init__(self, uow: Optional[UnitOfWorkPort] = None, cache_service: Optional[CachePort] = None):
         self.uow = uow
         self.cache_service = cache_service
 

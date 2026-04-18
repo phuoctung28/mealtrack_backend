@@ -6,7 +6,7 @@ from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_custom_macros_command import UpdateCustomMacrosCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
-from src.infra.cache.cache_service import CacheService
+from src.domain.ports.cache_port import CachePort
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow import UnitOfWork
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, None]):
     """Set or clear custom macro overrides on user profile."""
 
-    def __init__(self, cache_service: Optional[CacheService] = None):
+    def __init__(self, cache_service: Optional[CachePort] = None):
         self.cache_service = cache_service
 
     async def handle(self, command: UpdateCustomMacrosCommand) -> None:

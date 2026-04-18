@@ -89,3 +89,23 @@ class FitnessGoal(str, Enum):
     CUT = "cut"
     BULK = "bulk"
     RECOMP = "recomp"
+
+
+class PlanDuration(str, Enum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+
+
+@dataclass
+class UserPreferences:
+    """User dietary and lifestyle preferences for meal planning."""
+    dietary_preferences: List[DietaryPreference]
+    allergies: List[str]
+    fitness_goal: FitnessGoal
+    meals_per_day: int
+    snacks_per_day: int
+    cooking_time_weekday: int  # minutes
+    cooking_time_weekend: int  # minutes
+    favorite_cuisines: List[str]
+    disliked_ingredients: List[str]
+    plan_duration: PlanDuration = PlanDuration.DAILY

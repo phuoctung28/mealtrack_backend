@@ -13,7 +13,7 @@ from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition.macros import Macros
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import get_user_monday, get_zone_info, resolve_user_timezone
-from src.infra.cache.cache_service import CacheService
+from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow import UnitOfWork
 from src.infra.repositories.meal_repository import MealProjection
 
@@ -26,7 +26,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
 
     def __init__(
         self,
-        cache_service: Optional[CacheService] = None,
+        cache_service: Optional[CachePort] = None,
     ):
         self.cache_service = cache_service
 
