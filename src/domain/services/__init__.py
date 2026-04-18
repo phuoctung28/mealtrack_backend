@@ -23,4 +23,4 @@ __all__ = [
     "SuggestionOrchestrationService",
     # Backward compatibility (deprecated)
     "MealSuggestionService",
-] 
+]

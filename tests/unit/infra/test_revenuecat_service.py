@@ -11,7 +11,7 @@ from src.infra.adapters.revenuecat_adapter import RevenueCatAdapter
 
 
 @pytest.mark.asyncio
-class TestRevenueCatService:
+class TestRevenueCatAdapter:
     """Test suite for RevenueCat adapter."""
 
     @pytest.fixture

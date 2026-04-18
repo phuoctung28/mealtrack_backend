@@ -43,10 +43,6 @@ class SuggestionService:
         MealType.SNACK: 0.10,
     }
 
-    def __init__(self):
-        """Initialize suggestion service."""
-        pass
-
     def get_recommended_meal_type(
         self,
         current_time: Optional[datetime] = None,
@@ -64,21 +60,21 @@ class SuggestionService:
 
     def _determine_meal_type(
         self,
-        meal_time: Optional[datetime] = None,
+        current_time: Optional[datetime] = None,
     ) -> MealType:
         """
         Determine meal type based on time of day.
 
         Args:
-            meal_time: Datetime of the meal (defaults to now)
+            current_time: Datetime of the meal (defaults to now)
 
         Returns:
             Appropriate MealType enum
         """
-        if meal_time is None:
-            meal_time = utc_now()
+        if current_time is None:
+            current_time = utc_now()
 
-        t = meal_time.time()
+        t = current_time.time()
 
         if self.BREAKFAST_START <= t <= self.BREAKFAST_END:
             return MealType.BREAKFAST
