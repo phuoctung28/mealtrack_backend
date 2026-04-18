@@ -9,15 +9,15 @@ from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
+from src.domain.model.common.enums import JobType, FitnessGoal, TrainingLevel
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 
 logger = logging.getLogger(__name__)
 
-# Valid domain values for enum-like fields
-_VALID_JOB_TYPES = {"desk", "on_feet", "physical"}
-_VALID_FITNESS_GOALS = {"cut", "bulk", "recomp"}
-_VALID_TRAINING_LEVELS = {"beginner", "intermediate", "advanced"}
+_VALID_JOB_TYPES = {e.value for e in JobType}
+_VALID_FITNESS_GOALS = {e.value for e in FitnessGoal}
+_VALID_TRAINING_LEVELS = {e.value for e in TrainingLevel}
 
 
 @handles(UpdateUserMetricsCommand)
