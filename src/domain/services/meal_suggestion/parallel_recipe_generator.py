@@ -6,7 +6,7 @@ Per-recipe attempt logic lives in recipe_attempt_builder.py.
 import asyncio
 import logging
 import time
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
@@ -72,15 +72,18 @@ class ParallelRecipeGenerator:
         meal_names = await self._phase1_generate_names(session, exclude_meal_names, target_lang, count)
         phase1_elapsed = time.time() - start_time
 
-        # Discovery flow: more names than needed (headroom), use as_completed for early-stop benefit.
-        suggestions = await self._phase2_generate_recipes(
-            session, meal_names, target_lang, count, preserve_order=False
-        )
-        phase2_elapsed = time.time() - start_time - phase1_elapsed
-
-        phase3_elapsed = 0.0
         if session.language and session.language != "en":
-            suggestions, phase3_elapsed = await self._phase3_translate(session, suggestions, target_lang)
+            suggestions = await self._phase2_and_translate(
+                session, meal_names, target_lang, count
+            )
+            phase2_elapsed = time.time() - start_time - phase1_elapsed
+            phase3_elapsed = 0.0  # pipelined — no separate phase
+        else:
+            suggestions = await self._phase2_generate_recipes(
+                session, meal_names, target_lang, count, preserve_order=False
+            )
+            phase2_elapsed = time.time() - start_time - phase1_elapsed
+            phase3_elapsed = 0.0
 
         total_elapsed = time.time() - start_time
         logger.info(
@@ -317,20 +320,86 @@ class ParallelRecipeGenerator:
             is_retry=True,
         )
 
-    async def _phase3_translate(
-        self, session: SuggestionSession, suggestions: List[MealSuggestion], target_lang: str
-    ) -> Tuple[List[MealSuggestion], float]:
-        """Translate to target language. Returns (suggestions, elapsed_seconds)."""
-        start = time.time()
-        logger.info(f"[PHASE-3-START] session={session.id} | translating {len(suggestions)} meals to {target_lang}")
+    async def _translate_single(
+        self, suggestion: MealSuggestion, language: str
+    ) -> MealSuggestion:
+        """Translate a single suggestion; return original on failure."""
         try:
-            translated = await self._translation_service.translate_meal_suggestions_batch(
-                suggestions, session.language
+            results = await self._translation_service.translate_meal_suggestions_batch(
+                [suggestion], language
             )
-            elapsed = time.time() - start
-            logger.info(f"[PHASE-3-COMPLETE] session={session.id} | elapsed={elapsed:.2f}s | {len(translated)} meals")
-            return translated, elapsed
+            return results[0] if results else suggestion
         except Exception as e:
-            elapsed = time.time() - start
-            logger.error(f"[PHASE-3-FAILED] session={session.id} | {type(e).__name__}: {e} | using English fallback")
-            return suggestions, elapsed
+            logger.warning(
+                f"[TRANSLATE-SINGLE-FAILED] meal={suggestion.meal_name} | "
+                f"{type(e).__name__}: {e} | using English"
+            )
+            return suggestion
+
+    async def _phase2_and_translate(
+        self,
+        session: SuggestionSession,
+        meal_names: List[str],
+        target_lang: str,
+        suggestion_count: int,
+    ) -> List[MealSuggestion]:
+        """Pipeline Phase 2 + translation: translate each recipe as it completes."""
+        from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_recipe_details_prompt
+
+        recipe_system = (
+            "You are a professional chef. Return ONLY this exact JSON structure:\n"
+            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
+            '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
+            '"prep_time_minutes":0}}\n'
+            "All ingredient amounts MUST be in GRAMS.\n"
+            "CRITICAL: ALL text (ingredient names, instructions) MUST be in ENGLISH ONLY. "
+            "Do NOT include Vietnamese, Japanese, or any non-English text (no 'gà', 'cơm', 'trứng' — "
+            "use 'chicken', 'rice', 'egg'). No parenthetical translations. JSON keys in English only."
+        )
+        prompts = [build_recipe_details_prompt(n, session) for n in meal_names]
+        gen_tasks = [
+            asyncio.create_task(
+                self._generate_with_retry(prompts[i], meal_names[i], i, recipe_system, session)
+            )
+            for i in range(len(meal_names))
+        ]
+
+        translate_tasks: List[asyncio.Task] = []
+        gen_successes = 0
+        min_acceptable = max(suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS)
+
+        logger.info(f"[PHASE-2-PIPELINE-START] session={session.id} | recipes={meal_names}")
+        gen_start = time.time()
+
+        for coro in asyncio.as_completed(gen_tasks):
+            try:
+                result = await coro
+                if result is not None:
+                    gen_successes += 1
+                    translate_tasks.append(
+                        asyncio.create_task(
+                            self._translate_single(result, session.language)
+                        )
+                    )
+                    if gen_successes >= suggestion_count:
+                        cancelled = sum(1 for t in gen_tasks if not t.done() and t.cancel())
+                        logger.info(
+                            f"[EARLY-STOP] Got {suggestion_count} recipes, "
+                            f"cancelled {cancelled} gen tasks"
+                        )
+                        break
+            except Exception as e:
+                logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
+
+        logger.info(
+            f"[PHASE-2-PIPELINE-COMPLETE] session={session.id} | "
+            f"success={gen_successes}/{len(meal_names)} | elapsed={time.time()-gen_start:.2f}s"
+        )
+
+        if gen_successes < min_acceptable:
+            if not gen_successes:
+                raise RuntimeError(f"Failed to generate any recipes from {len(meal_names)} attempts")
+            raise RuntimeError(f"Insufficient recipes: {gen_successes}/{min_acceptable} minimum")
+
+        suggestions = await asyncio.gather(*translate_tasks)
+        return list(suggestions)
