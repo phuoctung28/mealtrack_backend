@@ -397,6 +397,8 @@ class ParallelRecipeGenerator:
         )
 
         if gen_successes < min_acceptable:
+            for t in translate_tasks:
+                t.cancel()
             if not gen_successes:
                 raise RuntimeError(f"Failed to generate any recipes from {len(meal_names)} attempts")
             raise RuntimeError(f"Insufficient recipes: {gen_successes}/{min_acceptable} minimum")
