@@ -32,12 +32,12 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
     async def handle(self, event: CreateManualMealCommand):
         # Use provided meal_repository or create UnitOfWork with context manager
         if self.meal_repository:
-            return await self._process_meal(event, self.meal_repository)
+            return await self._process_meal(event, self.meal_repository, uow=None)
         else:
             with self.uow as uow:
-                return await self._process_meal(event, uow.meals)
+                return await self._process_meal(event, uow.meals, uow=uow)
 
-    async def _process_meal(self, event: CreateManualMealCommand, meal_repo):
+    async def _process_meal(self, event: CreateManualMealCommand, meal_repo, uow=None):
         # All items must carry their own nutrition (custom_nutrition)
         total_protein = 0.0
         total_carbs = 0.0
@@ -94,8 +94,11 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         if event.target_date and event.target_date != now.date():
             # Past/future date: use noon in user's local timezone to avoid
             # created_at falling into the wrong date after UTC conversion
-            with self.uow as uow:
+            if uow is not None:
                 user_tz = resolve_user_timezone(event.user_id, uow)
+            else:
+                with self.uow as _uow:
+                    user_tz = resolve_user_timezone(event.user_id, _uow)
             meal_datetime = noon_utc_for_date(meal_date, user_tz)
         else:
             # Today or no date — use actual current time
