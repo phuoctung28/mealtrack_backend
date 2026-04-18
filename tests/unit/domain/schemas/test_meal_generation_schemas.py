@@ -5,7 +5,7 @@ Tests validate 6-name generation and removal of description field.
 import pytest
 from pydantic import ValidationError
 
-from src.domain.schemas.meal_generation_schemas import (
+from src.infra.services.ai.schemas import (
     MealNamesResponse,
     RecipeDetailsResponse,
     IngredientItem,

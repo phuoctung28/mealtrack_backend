@@ -12,7 +12,6 @@ from unittest.mock import Mock, AsyncMock, call
 import pytest
 
 from src.domain.model.meal_suggestion import SuggestionSession, MealSuggestion, MealType, MacroEstimate, Ingredient, RecipeStep
-from src.domain.schemas.meal_generation_schemas import MealNamesResponse, RecipeDetailsResponse
 from src.domain.services.meal_suggestion.parallel_recipe_generator import ParallelRecipeGenerator
 from src.domain.services.meal_suggestion.nutrition_lookup_service import (
     NutritionLookupService,
@@ -79,6 +78,7 @@ def recipe_generator(mock_generation_service):
     """Create ParallelRecipeGenerator with mocked dependencies."""
     from src.domain.services.meal_suggestion.translation_service import TranslationService
     from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+    from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
     meal_macros = _make_meal_macros()
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
     nutrition_lookup.calculate_meal_macros = AsyncMock(return_value=meal_macros)
@@ -88,6 +88,8 @@ def recipe_generator(mock_generation_service):
         translation_service=TranslationService(mock_generation_service),
         macro_validator=MacroValidationService(),
         nutrition_lookup=nutrition_lookup,
+        meal_names_schema_class=MealNamesResponse,
+        discovery_meals_schema_class=DiscoveryMealsResponse,
     )
 
 # Fixtures for test data

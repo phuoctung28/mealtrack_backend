@@ -15,12 +15,12 @@ class MealNamesResponse(BaseModel):
         min_length=4,
         max_length=4
     )
-    
+
     # B2 FIX: Validate each meal name is reasonably short
     @classmethod
     def __init_subclass__(cls):
         super().__init_subclass__()
-    
+
     def __init__(self, **data):
         super().__init__(**data)
         # Validate individual meal name lengths
@@ -51,7 +51,7 @@ class DiscoveryMealsResponse(BaseModel):
 
 class IngredientItem(BaseModel):
     """Single ingredient with amount and unit."""
-    
+
     name: str = Field(description="Ingredient name (e.g., 'chicken breast', 'broccoli')")
     amount: float = Field(description="Quantity amount (e.g., 200, 1.5)", gt=0)
     unit: str = Field(description="Unit of measurement (e.g., 'g', 'ml', 'tbsp', 'tsp', 'cup')")
@@ -59,7 +59,7 @@ class IngredientItem(BaseModel):
 
 class RecipeStepItem(BaseModel):
     """Single recipe step with instruction and duration."""
-    
+
     step: int = Field(description="Step number (1, 2, 3, ...)", ge=1)
     instruction: str = Field(description="Clear, actionable instruction")
     duration_minutes: int = Field(description="Time in minutes for this step", ge=0)

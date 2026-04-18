@@ -52,11 +52,15 @@ class ParallelRecipeGenerator:
         translation_service: TranslationService,
         macro_validator: MacroValidationService,
         nutrition_lookup: NutritionLookupService,
+        meal_names_schema_class: type = None,
+        discovery_meals_schema_class: type = None,
     ) -> None:
         self._generation = generation_service
         self._translation_service = translation_service
         self._macro_validator = macro_validator
         self._nutrition_lookup = nutrition_lookup
+        self._meal_names_schema = meal_names_schema_class
+        self._discovery_meals_schema = discovery_meals_schema_class
 
     async def generate(
         self,
@@ -105,7 +109,13 @@ class ParallelRecipeGenerator:
         Returns list of dicts with validated macros. ~200 tokens total.
         """
         from src.domain.services.prompts.prompt_template_manager import PromptTemplateManager
-        from src.domain.schemas.meal_generation_schemas import DiscoveryMealsResponse
+
+        discovery_schema = self._discovery_meals_schema
+        if not discovery_schema:
+            raise RuntimeError(
+                "DiscoveryMealsResponse schema not provided to ParallelRecipeGenerator. "
+                "Must be injected at initialization."
+            )
 
         start = time.time()
         # Request extra for dedup headroom
@@ -132,7 +142,7 @@ class ParallelRecipeGenerator:
             raw = await asyncio.wait_for(
                 asyncio.to_thread(
                     self._generation.generate_meal_plan,
-                    prompt, system, "json", 1000, DiscoveryMealsResponse, "meal_names",
+                    prompt, system, "json", 1000, discovery_schema, "meal_names",
                 ),
                 timeout=self.DISCOVERY_TIMEOUT,
             )
@@ -185,7 +195,13 @@ class ParallelRecipeGenerator:
         suggestion_count: int = 3,
     ) -> List[str]:
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_meal_names_prompt
-        from src.domain.schemas.meal_generation_schemas import MealNamesResponse
+
+        meal_names_schema = self._meal_names_schema
+        if not meal_names_schema:
+            raise RuntimeError(
+                "MealNamesResponse schema not provided to ParallelRecipeGenerator. "
+                "Must be injected at initialization."
+            )
 
         # Request extra names for headroom (failures, dedup); retry once on shortage
         names_to_generate = suggestion_count + 4
@@ -209,7 +225,7 @@ class ParallelRecipeGenerator:
                     asyncio.to_thread(
                         self._generation.generate_meal_plan,
                         build_meal_names_prompt(session, exclude_meal_names, names_to_generate),
-                        names_system, "json", 1000, MealNamesResponse, "meal_names",
+                        names_system, "json", 1000, meal_names_schema, "meal_names",
                     ),
                     timeout=self.PHASE1_TIMEOUT,
                 )
