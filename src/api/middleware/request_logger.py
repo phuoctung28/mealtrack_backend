@@ -57,7 +57,10 @@ class RequestLoggerMiddleware:
         start_time = time.time()
         self._log_request(request, request_id)
 
+        response_logged = False
+
         async def send_with_headers(message: Message) -> None:
+            nonlocal response_logged
             if message["type"] == "http.response.start":
                 elapsed = time.time() - start_time
                 headers = MutableHeaders(scope=message)
@@ -66,6 +69,7 @@ class RequestLoggerMiddleware:
                 await send(message)
                 # Log after delivery so elapsed reflects actual time-to-first-byte
                 self._log_response(request, message["status"], request_id, elapsed)
+                response_logged = True
             else:
                 await send(message)
 
@@ -73,9 +77,10 @@ class RequestLoggerMiddleware:
             await self.app(scope, receive, send_with_headers)
         except Exception as e:
             elapsed = time.time() - start_time
-            # Ensure every request gets a [RES-...] line even when the app raises
-            # before sending http.response.start (e.g., unhandled 500 exceptions).
-            self._log_response(request, 500, request_id, elapsed)
+            # Only log [RES-...] if http.response.start was never sent — avoids a
+            # duplicate log line when the app raises mid-stream after headers went out.
+            if not response_logged:
+                self._log_response(request, 500, request_id, elapsed)
             self._log_error(request, request_id, elapsed, e)
             raise
 
