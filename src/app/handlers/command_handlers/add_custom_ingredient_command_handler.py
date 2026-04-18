@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 from src.app.commands.meal import AddCustomIngredientCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
+from src.domain.model.meal.food_item_change import FoodItemChange
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.services.meal_service import MealService
 from src.domain.utils.timezone_utils import utc_now
@@ -36,21 +37,28 @@ class AddCustomIngredientCommandHandler(EventHandler[AddCustomIngredientCommand,
 
         with uow:
             try:
-                meal_service = MealService(uow.meals)
-                updated_meal = meal_service.add_custom_ingredient(
-                    meal_id=command.meal_id,
+                meal = uow.meals.find_by_id(command.meal_id)
+                if not meal:
+                    raise ValueError(f"Meal {command.meal_id} not found")
+
+                change = FoodItemChange(
+                    action="add",
                     name=command.name,
                     quantity=command.quantity,
                     unit=command.unit,
-                    nutrition=command.nutrition
+                    custom_nutrition=command.nutrition
                 )
+
+                meal_service = MealService()
+                updated_meal = meal_service.apply_food_item_changes(meal, [change])
+                saved_meal = uow.meals.save(updated_meal)
                 uow.commit()
 
-                await self._invalidate_daily_macros(updated_meal)
+                await self._invalidate_daily_macros(saved_meal)
 
                 return {
                     "success": True,
-                    "meal_id": updated_meal.meal_id,
+                    "meal_id": saved_meal.meal_id,
                     "message": f"Added custom ingredient: {command.name}"
                 }
             except Exception as e:
