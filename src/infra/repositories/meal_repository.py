@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus
+from src.domain.model.nutrition import Nutrition
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.utils.timezone_utils import get_zone_info, utc_now
 from src.infra.database.utils.datetime_helper import local_date_expr
@@ -329,7 +330,7 @@ class MealRepository(MealRepositoryPort):
                 result.append(day_val)
         return result
 
-    def _update_nutrition(self, db_nutrition: NutritionORM, domain_nutrition: Meal.nutrition):
+    def _update_nutrition(self, db_nutrition: NutritionORM, domain_nutrition: Nutrition) -> None:
         """Helper to sync nutrition data."""
         # Update scalar fields (calories derived from macros: P*4 + C*4 + F*9)
         db_nutrition.protein = domain_nutrition.macros.protein
@@ -337,21 +338,9 @@ class MealRepository(MealRepositoryPort):
         db_nutrition.fat = domain_nutrition.macros.fat
         db_nutrition.confidence_score = domain_nutrition.confidence_score
         
-        # Sync food items (Simplified: Delete all and re-create is easier/safer if IDs not persistent)
-        # But we want to preserve IDs if possible.
-        
-        # Get existing items
-        existing_items = {item.id: item for item in db_nutrition.food_items} if db_nutrition.food_items else {}
-        
-        # Domain items don't strictly match DB items by ID unless we enforce it.
-        # But domain `FoodItem` doesn't seem to have `id` in `to_domain`?
-        # Let's check `FoodItemMapper`.
-        
-        # In `MealMapper.py`, `FoodItemMapper.to_domain` does NOT map ID!
-        # Because `FoodItem` domain model might not have an ID?
-        # Let's check `src/domain/model/nutrition/nutrition.py`.
-        
-        # If FoodItem has no ID in domain, we can't reliably update. We must replace.
+        # Sync food items: Delete all and re-create since food items are immutable in the domain.
+        # The domain FoodItem has an ID, but we don't maintain the mapping during updates,
+        # so replacing all items is simpler and ensures consistency.
         
         # Delete old items
         for item in db_nutrition.food_items:
