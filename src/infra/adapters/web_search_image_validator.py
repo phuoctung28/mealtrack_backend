@@ -10,6 +10,7 @@ from typing import Optional, Set
 import httpx
 
 from src.domain.model.meal_discovery.food_image import FoodImageResult
+from src.domain.ports.web_search_validator_port import WebSearchValidatorPort
 from src.domain.services.meal_discovery import extract_words
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 _SEARCH_TIMEOUT = 3.0  # seconds — fast timeout to avoid blocking image pipeline
 
 
-class WebSearchImageValidator:
+class WebSearchImageValidator(WebSearchValidatorPort):
     """
     Scores food images against web search results for the meal name.
 
@@ -34,6 +35,15 @@ class WebSearchImageValidator:
     def __init__(self, api_key: str):
         self._api_key = api_key
         self._keyword_cache: dict[str, Set[str]] = {}
+
+    async def is_valid_image_url(self, url: str) -> bool:
+        """Return True if the URL serves a valid, accessible image."""
+        try:
+            async with httpx.AsyncClient(timeout=_SEARCH_TIMEOUT) as client:
+                response = await client.head(url)
+                return response.status_code == 200
+        except Exception:
+            return False
 
     async def score(
         self, meal_name: str, image: FoodImageResult

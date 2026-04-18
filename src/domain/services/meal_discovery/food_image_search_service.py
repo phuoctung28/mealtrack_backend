@@ -11,6 +11,7 @@ from typing import List, Optional
 
 from src.domain.model.meal_discovery.food_image import FoodImageResult
 from src.domain.ports.food_image_search_port import FoodImageSearchPort
+from src.domain.ports.web_search_validator_port import WebSearchValidatorPort
 from src.domain.services.meal_discovery import extract_words
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ class FoodImageSearchService:
     def __init__(
         self,
         adapters: List[FoodImageSearchPort],
-        web_validator: Optional["WebSearchImageValidator"] = None,
+        web_validator: Optional[WebSearchValidatorPort] = None,
     ):
         self._adapters = adapters
         self._cache: OrderedDict = OrderedDict()
