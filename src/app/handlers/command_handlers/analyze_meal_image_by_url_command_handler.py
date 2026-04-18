@@ -130,12 +130,12 @@ class AnalyzeMealImageByUrlHandler(
                     "Please take a photo of food and try again."
                 )
 
-            meal.dish_name = dish_name or "Unknown dish"
-            meal.emoji = self.gpt_parser.parse_emoji(vision_result)
-            meal.status = MealStatus.READY
-            meal.ready_at = utc_now()
-            meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)
-            meal.nutrition = nutrition
+            meal = meal.mark_ready(
+                nutrition=nutrition,
+                dish_name=dish_name or "Unknown dish",
+                raw_gpt_json=self.gpt_parser.extract_raw_json(vision_result),
+                emoji=self.gpt_parser.parse_emoji(vision_result),
+            )
 
             phase2_elapsed = 0.0
             if (
@@ -185,8 +185,7 @@ class AnalyzeMealImageByUrlHandler(
         except Exception as e:
             logger.error("Failed to analyze meal by URL: %s", str(e))
             if "meal" in locals() and meal.meal_id:
-                meal.status = MealStatus.FAILED
-                meal.error_message = str(e)
+                meal = meal.mark_failed(error_message=str(e))
                 with self.uow as uow:
                     uow.meals.save(meal)
                     uow.commit()
