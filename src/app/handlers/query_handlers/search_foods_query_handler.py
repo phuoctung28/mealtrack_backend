@@ -59,48 +59,46 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
                         event.query, max_results=event.limit
                     )
                     processed_raw.extend(fs_results)
+                    if processed_raw:
+                        await self.cache_service.cache_search(cache_key, processed_raw)
                 except Exception:
                     logger.warning("FatSecret search failed", exc_info=True)
 
-        # Only cache non-empty results to avoid persisting API failures
-        if processed_raw:
-            await self.cache_service.cache_search(cache_key, processed_raw)
         mapped = [self.mapping_service.map_search_item(i) for i in processed_raw]
         return {"results": mapped, "query": event.query, "total": len(mapped)}
 
     async def _search_localized(
         self, query: str, limit: int, language: str
     ) -> List[Dict[str, Any]]:
-        """Search with localization: try native region, fallback to translation."""
+        """Search with localization: try native region first, fallback only if empty."""
         from src.infra.adapters.fat_secret_service import LANGUAGE_TO_REGION
 
         region = LANGUAGE_TO_REGION.get(language, "US")
+        cache_key = f"{language}:{query}"
 
-        # Step 1: Try FatSecret with localized region/language
+        # Step 1: Try FatSecret with localized region — cache and return immediately if anything found
         try:
             results = await self.fat_secret_service.search_foods(
                 query, max_results=limit, region=region, language=language,
             )
             if results:
-                logger.debug(
-                    f"FatSecret region={region} returned {len(results)} results"
-                )
+                logger.debug(f"FatSecret region={region} returned {len(results)} results")
+                await self.cache_service.cache_search(cache_key, results)
                 return results
         except Exception:
             logger.warning(f"FatSecret region={region} failed", exc_info=True)
 
-        # Step 2: Translation fallback
+        # Step 2: Translation fallback — only on true empty response from localized search
         if not self.translation_service:
             try:
-                return await self.fat_secret_service.search_foods(
-                    query, max_results=limit
-                )
+                results = await self.fat_secret_service.search_foods(query, max_results=limit)
+                if results:
+                    await self.cache_service.cache_search(cache_key, results)
+                return results
             except Exception:
                 return []
 
-        translated_query = await self.translation_service.translate_query(
-            query, language
-        )
+        translated_query = await self.translation_service.translate_query(query, language)
         if not translated_query:
             translated_query = query
 
@@ -117,10 +115,8 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
         if not results:
             return []
 
-        # Translate food names back to user's language
-        results = await self.translation_service.translate_food_names(
-            results, language
-        )
+        results = await self.translation_service.translate_food_names(results, language)
+        await self.cache_service.cache_search(cache_key, results)
         return results
 
     def _process_search_results(self, raw_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
