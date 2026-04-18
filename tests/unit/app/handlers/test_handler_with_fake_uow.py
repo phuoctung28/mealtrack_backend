@@ -17,7 +17,7 @@ class TestDeleteMealWithFakeUoW:
 
     @pytest.mark.asyncio
     async def test_delete_meal_marks_as_inactive(self):
-        """Test that deleting a meal performs hard-delete via session queries."""
+        """Test that deleting a meal delegates to repository delete."""
         # Arrange
         user_id = str(uuid4())
 
@@ -40,11 +40,10 @@ class TestDeleteMealWithFakeUoW:
             dish_name="Test Meal"
         )
 
-        # Build a mock UoW with session support
+        # Build a mock UoW — handler now delegates deletion to uow.meals.delete()
         mock_uow = MagicMock()
         mock_uow.meals.find_by_id.return_value = meal
-        mock_uow.session.query.return_value.filter.return_value.first.return_value = None
-        mock_uow.session.query.return_value.filter.return_value.all.return_value = []
+        mock_uow.meals.delete.return_value = None
         mock_uow.__enter__ = Mock(return_value=mock_uow)
         mock_uow.__exit__ = Mock(return_value=False)
 
@@ -59,7 +58,7 @@ class TestDeleteMealWithFakeUoW:
         # Assert
         assert result["meal_id"] == meal.meal_id
         assert "deleted" in result["message"].lower()
-        mock_uow.commit.assert_called_once()
+        mock_uow.meals.delete.assert_called_once_with(meal.meal_id)
 
 # Removed TestSyncUserWithFakeUoW - SyncUserCommand not in scope for this demo
 
