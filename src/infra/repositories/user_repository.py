@@ -42,7 +42,6 @@ class UserRepository(UserRepositoryPort):
             user_entity = self.db.merge(user_entity)
         try:
             self.db.commit()
-            self.db.refresh(user_entity)
             # Re-fetch with eager-loaded relationships so mapper can access profiles/subscriptions
             user_id_str = str(user_entity.id)
             user_entity = (
