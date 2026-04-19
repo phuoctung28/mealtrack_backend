@@ -76,7 +76,11 @@ class MealRepositoryPort(ABC):
 
     @abstractmethod
     def find_by_date(
-        self, date_obj: date, user_id: str = None, limit: int = 50,
+        self,
+        date_obj: date,
+        user_id: str = None,
+        limit: int = 50,
+        user_timezone: Optional[str] = None,
         projection: Any = None,
     ) -> List[Meal]:
         """
@@ -93,6 +97,18 @@ class MealRepositoryPort(ABC):
             List of meals created on the specified date
         """
         pass
+
+    def find_by_date_range(
+        self,
+        user_id: str,
+        start_date: date,
+        end_date: date,
+        limit: int = 500,
+        user_timezone: Optional[str] = None,
+        projection: Any = None,
+    ) -> List[Meal]:
+        """Find meals created within a local date range, inclusive."""
+        return []
 
     @abstractmethod
     def delete(self, meal_id: str) -> None:
