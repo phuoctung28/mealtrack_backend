@@ -410,9 +410,11 @@ class TestNotificationRepository:
         Verifies the optimized query that includes time_field in initial query
         to avoid N+1 queries (no secondary query in loop).
         """
-        # Arrange - patch subquery to return a real SQLAlchemy select
+        # Arrange - patch subquery to return a real SQLAlchemy subquery with user_id
         from sqlalchemy import select, literal_column
-        mock_subquery_method.return_value = select(literal_column("'dummy'")).subquery()
+        mock_subquery_method.return_value = (
+            select(literal_column("'dummy'").label("user_id")).subquery()
+        )
 
         # Main query mock returns tuples of (user_id, timezone, pref_minutes)
         mock_query = Mock()

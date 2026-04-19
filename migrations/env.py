@@ -14,6 +14,7 @@ from alembic import context
 # Import our database configuration
 from alembic.script import ScriptDirectory
 from src.infra.database.config import Base, SQLALCHEMY_DATABASE_URL, engine
+from sqlalchemy import text
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -29,6 +30,28 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _migration_timeout_ms(env_name: str, default_ms: int) -> int:
+    """Read a positive migration timeout in milliseconds."""
+    raw = os.getenv(env_name)
+    if raw is None:
+        return default_ms
+    try:
+        value = int(raw)
+        return max(value, 0)
+    except ValueError:
+        return default_ms
+
+
+def _apply_migration_timeouts(connection) -> None:
+    """Avoid silent deploy hangs when a migration waits on locks too long."""
+    lock_timeout_ms = _migration_timeout_ms("MIGRATION_LOCK_TIMEOUT_MS", 10_000)
+    statement_timeout_ms = _migration_timeout_ms(
+        "MIGRATION_STATEMENT_TIMEOUT_MS",
+        240_000,
+    )
+
+    connection.execute(text(f"SET lock_timeout = {lock_timeout_ms}"))
+    connection.execute(text(f"SET statement_timeout = {statement_timeout_ms}"))
 def _next_sequential_rev_id(context, revision, directives):
     """Auto-assign sequential numeric revision IDs (048, 049, ...)."""
     if not directives:
@@ -75,12 +98,13 @@ def run_migrations_online() -> None:
     # Override the sqlalchemy.url with our database URL if available
     configuration = config.get_section(config.config_ini_section, {})
     if SQLALCHEMY_DATABASE_URL:
-        configuration['sqlalchemy.url'] = SQLALCHEMY_DATABASE_URL
-    
+        configuration["sqlalchemy.url"] = SQLALCHEMY_DATABASE_URL
+
     # Use our pre-configured engine with SSL support instead of creating a new one
     connectable = engine
 
     with connectable.connect() as connection:
+        _apply_migration_timeouts(connection)
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
