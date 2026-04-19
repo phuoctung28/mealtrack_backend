@@ -19,6 +19,7 @@ class AsyncCheatDayRepository:
     async def add(self, cheat_day: CheatDay) -> None:
         db = cheat_day_domain_to_orm(cheat_day)
         self.session.add(db)
+        await self.session.flush()
 
     async def find_by_user_and_date(self, user_id: str, target_date: date) -> Optional[CheatDay]:
         result = await self.session.execute(
