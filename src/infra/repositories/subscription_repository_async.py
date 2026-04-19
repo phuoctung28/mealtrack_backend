@@ -17,7 +17,7 @@ class AsyncSubscriptionRepository:
 
     async def save(self, subscription: Subscription) -> Subscription:
         """Save or update a subscription."""
-        if subscription.subscription_id:
+        if subscription.id:
             return await self.update(subscription)
         return await self.add(subscription)
 
