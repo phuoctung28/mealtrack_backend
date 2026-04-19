@@ -9,7 +9,7 @@ from typing import Dict, Any
 from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.user.get_user_by_firebase_uid_query import GetUserByFirebaseUidQuery
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,9 @@ class GetUserByFirebaseUidQueryHandler(EventHandler[GetUserByFirebaseUidQuery, D
 
     async def handle(self, query: GetUserByFirebaseUidQuery) -> Dict[str, Any]:
         """Get user by Firebase UID."""
-        with UnitOfWork() as uow:
+        async with AsyncUnitOfWork() as uow:
             # Get user by firebase_uid
-            user = uow.users.find_by_firebase_uid(query.firebase_uid)
+            user = await uow.users.find_by_firebase_uid(query.firebase_uid)
 
             if not user:
                 raise ResourceNotFoundException(f"User with Firebase UID {query.firebase_uid} not found")
