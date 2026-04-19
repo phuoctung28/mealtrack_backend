@@ -14,7 +14,9 @@ from src.infra.database.utils.datetime_helper import local_date_expr
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.meal.meal_image import MealImageORM
-from src.infra.database.models.meal.food_item_translation_model import FoodItemTranslationORM
+from src.infra.database.models.meal.food_item_translation_model import (
+    FoodItemTranslationORM,
+)
 from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
 from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.database.models.nutrition.nutrition import NutritionORM
@@ -29,10 +31,12 @@ from src.infra.mappers.meal_mapper import (
 
 logger = logging.getLogger(__name__)
 
+
 class MealProjection(Enum):
-    MACROS_ONLY = auto()             # nutrition + food_items only
-    FULL = auto()                    # image + nutrition + food_items (default)
+    MACROS_ONLY = auto()  # nutrition + food_items only
+    FULL = auto()  # image + nutrition + food_items (default)
     FULL_WITH_TRANSLATIONS = auto()  # everything, including translations
+
 
 _PROJECTION_OPTS: dict = {
     MealProjection.MACROS_ONLY: (
@@ -52,17 +56,19 @@ _PROJECTION_OPTS: dict = {
 
 class MealRepository(MealRepositoryPort):
     """Implementation of the meal repository using SQLAlchemy."""
-    
+
     def __init__(self, db: Session):
         """Initialize with session dependency."""
         self.db = db
-    
+
     def save(self, meal: Meal) -> Meal:
         """Save a meal to the database."""
         try:
             # Check if meal already exists
-            existing_meal = self.db.query(MealORM).filter(MealORM.meal_id == meal.meal_id).first()
-            
+            existing_meal = (
+                self.db.query(MealORM).filter(MealORM.meal_id == meal.meal_id).first()
+            )
+
             if existing_meal:
                 # Update existing meal
                 # Update scalar fields
@@ -83,7 +89,9 @@ class MealRepository(MealRepositoryPort):
                     if not existing_meal.nutrition:
                         # Create new nutrition (food_items are already included
                         # by nutrition_domain_to_orm via the ORM relationship)
-                        db_nutrition = nutrition_domain_to_orm(meal.nutrition, meal_id=meal.meal_id)
+                        db_nutrition = nutrition_domain_to_orm(
+                            meal.nutrition, meal_id=meal.meal_id
+                        )
                         existing_meal.nutrition = db_nutrition
                     else:
                         # Update existing nutrition
@@ -98,18 +106,20 @@ class MealRepository(MealRepositoryPort):
 
                 # Handle Image - must be done before adding meal
                 if meal.image:
-                    existing_image = self.db.query(MealImageORM).filter(
-                        MealImageORM.image_id == meal.image.image_id
-                    ).first()
+                    existing_image = (
+                        self.db.query(MealImageORM)
+                        .filter(MealImageORM.image_id == meal.image.image_id)
+                        .first()
+                    )
 
                     if not existing_image:
                         db_image = meal_image_domain_to_orm(meal.image)
                         self.db.add(db_image)
                         self.db.flush()  # Flush to ensure image exists before linking
-                    
+
                     # Set image_id on meal before adding to session
                     db_meal.image_id = str(meal.image.image_id)
-                
+
                 self.db.add(db_meal)
 
                 self.db.commit()
@@ -119,7 +129,7 @@ class MealRepository(MealRepositoryPort):
         except Exception as e:
             self.db.rollback()
             raise e
-    
+
     def find_by_id(
         self, meal_id: str, projection: MealProjection = MealProjection.FULL
     ) -> Optional[Meal]:
@@ -131,7 +141,7 @@ class MealRepository(MealRepositoryPort):
             .first()
         )
         return meal_orm_to_domain(db_meal) if db_meal else None
-    
+
     def find_by_status(self, status: MealStatus, limit: int = 10) -> List[Meal]:
         """Find meals by status."""
         db_meals = (
@@ -143,7 +153,7 @@ class MealRepository(MealRepositoryPort):
             .all()
         )
         return [meal_orm_to_domain(m) for m in db_meals]
-    
+
     def delete(self, meal_id: str) -> None:
         """Delete a meal with data preservation.
 
@@ -155,9 +165,9 @@ class MealRepository(MealRepositoryPort):
         5. Hard-delete meal
         """
         # Step 1a: Soft-delete food_items + nullify nutrition FK
-        nutrition = self.db.query(NutritionORM).filter(
-            NutritionORM.meal_id == meal_id
-        ).first()
+        nutrition = (
+            self.db.query(NutritionORM).filter(NutritionORM.meal_id == meal_id).first()
+        )
 
         if nutrition:
             nutrition_id = nutrition.id
@@ -169,9 +179,10 @@ class MealRepository(MealRepositoryPort):
 
         # Step 1b: Soft-delete meal_translations + nullify meal FK
         meal_translation_ids = [
-            mt.id for mt in self.db.query(MealTranslationORM.id).filter(
-                MealTranslationORM.meal_id == meal_id
-            ).all()
+            mt.id
+            for mt in self.db.query(MealTranslationORM.id)
+            .filter(MealTranslationORM.meal_id == meal_id)
+            .all()
         ]
 
         self.db.execute(
@@ -184,7 +195,9 @@ class MealRepository(MealRepositoryPort):
         if meal_translation_ids:
             self.db.execute(
                 update(FoodItemTranslationORM)
-                .where(FoodItemTranslationORM.meal_translation_id.in_(meal_translation_ids))
+                .where(
+                    FoodItemTranslationORM.meal_translation_id.in_(meal_translation_ids)
+                )
                 .values(is_deleted=True)
             )
 
@@ -194,10 +207,8 @@ class MealRepository(MealRepositoryPort):
         )
 
         # Step 2b: Hard-delete meal
-        self.db.execute(
-            MealORM.__table__.delete().where(MealORM.meal_id == meal_id)
-        )
-    
+        self.db.execute(MealORM.__table__.delete().where(MealORM.meal_id == meal_id))
+
     def find_all_paginated(self, offset: int = 0, limit: int = 20) -> List[Meal]:
         """Retrieves all meals with pagination."""
         db_meals = (
@@ -209,7 +220,7 @@ class MealRepository(MealRepositoryPort):
             .all()
         )
         return [meal_orm_to_domain(m) for m in db_meals]
-    
+
     def count(self) -> int:
         """Counts the total number of meals."""
         return self.db.query(MealORM).count()
@@ -221,9 +232,12 @@ class MealRepository(MealRepositoryPort):
             .filter(MealORM.user_id == user_id, MealORM.source == source)
             .count()
         )
-    
+
     def find_by_date(
-        self, date_obj: date, user_id: str = None, limit: int = 50,
+        self,
+        date_obj: date,
+        user_id: str = None,
+        limit: int = 50,
         user_timezone: Optional[str] = None,
         projection: MealProjection = MealProjection.FULL,
     ) -> List[Meal]:
@@ -236,7 +250,9 @@ class MealRepository(MealRepositoryPort):
             projection: Controls which relationships are loaded.
         """
         tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
-        start_datetime = datetime.combine(date_obj, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        start_datetime = datetime.combine(
+            date_obj, datetime.min.time(), tzinfo=tz
+        ).astimezone(timezone.utc)
         end_datetime = start_datetime + timedelta(days=1)
 
         query = (
@@ -250,8 +266,7 @@ class MealRepository(MealRepositoryPort):
             query = query.filter(MealORM.user_id == user_id)
 
         db_meals = (
-            query
-            .filter(MealORM.status != MealStatusEnum.INACTIVE)
+            query.filter(MealORM.status != MealStatusEnum.INACTIVE)
             .order_by(MealORM.created_at.desc())
             .limit(limit)
             .all()
@@ -263,8 +278,9 @@ class MealRepository(MealRepositoryPort):
         user_id: str,
         start_date: date,
         end_date: date,
-        limit: int = 100,
+        limit: int = 500,
         user_timezone: Optional[str] = None,
+        projection: MealProjection = MealProjection.FULL,
     ) -> List[Meal]:
         """Find meals created within a date range (inclusive).
 
@@ -274,22 +290,24 @@ class MealRepository(MealRepositoryPort):
                 UTC for correct filtering against UTC-stored created_at.
         """
         tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
-        start_datetime = datetime.combine(start_date, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        start_datetime = datetime.combine(
+            start_date, datetime.min.time(), tzinfo=tz
+        ).astimezone(timezone.utc)
         end_datetime = (
-            datetime.combine(end_date, datetime.min.time(), tzinfo=tz) + timedelta(days=1)
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
+            + timedelta(days=1)
         ).astimezone(timezone.utc)
 
         query = (
             self.db.query(MealORM)
-            .options(*_PROJECTION_OPTS[MealProjection.FULL])
+            .options(*_PROJECTION_OPTS[projection])
             .filter(MealORM.created_at >= start_datetime)
             .filter(MealORM.created_at < end_datetime)
             .filter(MealORM.user_id == user_id)
         )
 
         db_meals = (
-            query
-            .filter(MealORM.status != MealStatusEnum.INACTIVE)
+            query.filter(MealORM.status != MealStatusEnum.INACTIVE)
             .order_by(MealORM.created_at.asc())
             .limit(limit)
             .all()
@@ -297,7 +315,10 @@ class MealRepository(MealRepositoryPort):
         return [meal_orm_to_domain(m) for m in db_meals]
 
     def get_daily_meal_counts(
-        self, user_id: str, start_date: date, end_date: date,
+        self,
+        user_id: str,
+        start_date: date,
+        end_date: date,
         user_timezone: Optional[str] = None,
     ) -> Dict[date, int]:
         """Return {date: meal_count} for each day in range with at least 1 meal.
@@ -305,9 +326,12 @@ class MealRepository(MealRepositoryPort):
         Uses a single GROUP BY query for efficiency.
         """
         tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
-        start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        start_dt = datetime.combine(
+            start_date, datetime.min.time(), tzinfo=tz
+        ).astimezone(timezone.utc)
         end_dt = (
-            datetime.combine(end_date, datetime.min.time(), tzinfo=tz) + timedelta(days=1)
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
+            + timedelta(days=1)
         ).astimezone(timezone.utc)
 
         date_expr = local_date_expr(self.db, MealORM.created_at, user_timezone)
@@ -361,18 +385,20 @@ class MealRepository(MealRepositoryPort):
                 result.append(day_val)
         return result
 
-    def _update_nutrition(self, db_nutrition: NutritionORM, domain_nutrition: Nutrition) -> None:
+    def _update_nutrition(
+        self, db_nutrition: NutritionORM, domain_nutrition: Nutrition
+    ) -> None:
         """Helper to sync nutrition data."""
         # Update scalar fields (calories derived from macros: P*4 + C*4 + F*9)
         db_nutrition.protein = domain_nutrition.macros.protein
         db_nutrition.carbs = domain_nutrition.macros.carbs
         db_nutrition.fat = domain_nutrition.macros.fat
         db_nutrition.confidence_score = domain_nutrition.confidence_score
-        
+
         # Sync food items: Delete all and re-create since food items are immutable in the domain.
         # The domain FoodItem has an ID, but we don't maintain the mapping during updates,
         # so replacing all items is simpler and ensures consistency.
-        
+
         # Delete old items
         for item in db_nutrition.food_items:
             self.db.delete(item)
