@@ -1,5 +1,9 @@
 """
 Scheduled notification service for sending push notifications at specific times.
+
+Only one worker per process host runs the scheduler loop (see SchedulerLeaderLock).
+Horizontal scaling across multiple containers still runs one scheduler per instance;
+use Redis/DB leader election or a dedicated worker if exactly-once cluster-wide is required.
 """
 import asyncio
 import logging
@@ -14,12 +18,17 @@ from src.domain.services.meal_suggestion.suggestion_tdee_helpers import build_td
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import utc_now, timezone
 from src.infra.database.uow import UnitOfWork
+from src.infra.services.scheduler_leader_lock import SchedulerLeaderLock
 
 logger = logging.getLogger(__name__)
 
 
 class ScheduledNotificationService:
-    """Service for scheduling and sending notifications at specific times."""
+    """Service for scheduling and sending notifications at specific times.
+
+    Leader election is per host (flock); multi-container deployments need a separate
+    coordination strategy if a single cluster-wide scheduler is required.
+    """
 
     # Scheduling constants
     SCHEDULING_LOOP_INTERVAL_SECONDS = 60
@@ -36,15 +45,25 @@ class ScheduledNotificationService:
         self._running = False
         self._tasks: List[asyncio.Task] = []
         self._cleanup_counter = 0  # Clean sent logs every ~60 loop ticks (~1h)
-    
+        self._leader_lock = SchedulerLeaderLock()
+        self._leader_acquired = False
+
     async def start(self):
         """Start the scheduled notification service."""
         if self._running:
             logger.warning("Scheduled notification service is already running")
             return
-        
+
+        if not self._leader_lock.try_acquire():
+            logger.info(
+                "Scheduled notification service skipped: another worker holds the "
+                "scheduler lock (see scheduler_leader_lock)"
+            )
+            return
+
+        self._leader_acquired = True
         self._running = True
-        logger.info("Starting scheduled notification service")
+        logger.info("Starting scheduled notification service (scheduler leader)")
         
         # Start the main scheduling loop
         task = asyncio.create_task(self._scheduling_loop())
@@ -54,10 +73,9 @@ class ScheduledNotificationService:
     
     async def stop(self):
         """Stop the scheduled notification service."""
-        if not self._running:
-            logger.warning("Scheduled notification service is not running")
+        if not self._leader_acquired:
             return
-        
+
         self._running = False
         logger.info("Stopping scheduled notification service")
         
@@ -71,6 +89,8 @@ class ScheduledNotificationService:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         
         self._tasks.clear()
+        self._leader_lock.release()
+        self._leader_acquired = False
         logger.info("Scheduled notification service stopped")
     
     async def _scheduling_loop(self):

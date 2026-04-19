@@ -20,7 +20,8 @@ fi
 
 # Start the application
 log "🚀 Starting FastAPI application on port ${PORT}..."
-WORKERS="${WEB_CONCURRENCY:-${RENDER_WEB_CONCURRENCY:-${UVICORN_WORKERS:-1}}}"
+WORKERS="${UVICORN_WORKERS:-4}"
+log "Uvicorn workers: ${WORKERS}"
 exec uvicorn src.api.main:app \
     --host 0.0.0.0 \
     --port "$PORT" \
