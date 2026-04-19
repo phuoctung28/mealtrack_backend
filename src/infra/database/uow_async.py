@@ -21,7 +21,6 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
 
     async def __aenter__(self) -> "AsyncUnitOfWork":
         self.session = AsyncSessionLocal()
-        await self.session.__aenter__()
         self._init_repositories()
         return self
 
