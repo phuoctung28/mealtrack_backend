@@ -31,7 +31,7 @@ class AsyncUserRepository(UserRepositoryPort):
     async def save(self, user_domain: UserDomainModel) -> UserDomainModel:
         user_entity = UserMapper.to_persistence(user_domain)
         user_entity.profiles = [UserProfileMapper.to_persistence(p) for p in user_domain.profiles]
-        if not user_entity.id:
+        if user_entity.id is None:
             self.session.add(user_entity)
         else:
             user_entity = await self.session.merge(user_entity)
@@ -123,9 +123,11 @@ class AsyncUserRepository(UserRepositoryPort):
             entity = UserProfileMapper.to_persistence(profile_domain)
             self.session.add(entity)
         else:
-            for key, value in profile_domain.__dict__.items():
-                if hasattr(entity, key) and key != "_sa_instance_state":
-                    setattr(entity, key, value)
+            updated = UserProfileMapper.to_persistence(profile_domain)
+            for col in UserProfile.__table__.columns:
+                col_name = col.key
+                if col_name != "_sa_instance_state":
+                    setattr(entity, col_name, getattr(updated, col_name, None))
         await self.session.flush()
         await self.session.refresh(entity)
         return UserProfileMapper.to_domain(entity)
