@@ -160,6 +160,10 @@ from src.app.queries.user.get_user_onboarding_status_query import (
     GetUserOnboardingStatusQuery,
 )
 from src.infra.event_bus import PyMediatorEventBus, EventBus
+import os
+
+# Set USE_ASYNC_UOW=true to activate async handler variants (Tasks 10-12)
+USE_ASYNC_UOW = os.getenv("USE_ASYNC_UOW", "false").lower() == "true"
 
 # Singleton event buses
 _food_search_event_bus: Optional[EventBus] = None
