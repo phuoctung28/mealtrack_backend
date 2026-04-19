@@ -24,7 +24,9 @@ class FoodCacheServicePort(ABC):
         pass
 
     @abstractmethod
-    async def cache_search(self, query: str, results: List[Dict[str, Any]], ttl: int = 3600):
+    async def cache_search(
+        self, query: str, results: List[Dict[str, Any]], ttl: int = 3600
+    ):
         """
         Store search results for a given query with a time-to-live.
 
@@ -49,7 +51,9 @@ class FoodCacheServicePort(ABC):
         pass
 
     @abstractmethod
-    async def cache_food(self, fdc_id: int, food_data: Dict[str, Any], ttl: int = 86400):
+    async def cache_food(
+        self, fdc_id: int, food_data: Dict[str, Any], ttl: int = 86400
+    ):
         """
         Store food details payload for a given ID with a time-to-live.
 

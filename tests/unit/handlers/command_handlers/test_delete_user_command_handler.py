@@ -14,10 +14,10 @@ from src.app.handlers.command_handlers.delete_user_command_handler import (
 )
 from src.infra.database.config import Base
 from src.infra.database.models.user import User
-from src.infra.database.models.meal.meal import Meal
+from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.notification.notification_preferences import NotificationPreferences
-from src.infra.database.models.notification.user_fcm_token import UserFcmToken
+from src.infra.database.models.notification.notification_preferences import NotificationPreferencesORM as NotificationPreferences
+from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM as UserFcmToken
 from src.infra.repositories.user_repository import UserRepository
 
 

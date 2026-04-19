@@ -7,7 +7,7 @@ from src.infra.database.config import Base
 from src.infra.database.models.base import BaseMixin
 
 
-class NotificationPreferences(Base, BaseMixin):
+class NotificationPreferencesORM(Base, BaseMixin):
     """Notification preferences table for user notification settings."""
     __tablename__ = 'notification_preferences'
 
@@ -39,21 +39,3 @@ class NotificationPreferences(Base, BaseMixin):
         CheckConstraint('dinner_time_minutes >= 0 AND dinner_time_minutes < 1440', name='check_dinner_time'),
         CheckConstraint('daily_summary_time_minutes >= 0 AND daily_summary_time_minutes < 1440', name='check_daily_summary_time'),
     )
-
-    def to_domain(self):
-        """Convert database model to domain model."""
-        from src.domain.model.notification import NotificationPreferences as DomainNotificationPreferences
-
-        return DomainNotificationPreferences(
-            preferences_id=self.id,
-            user_id=self.user_id,
-            meal_reminders_enabled=self.meal_reminders_enabled,
-            daily_summary_enabled=self.daily_summary_enabled,
-            breakfast_time_minutes=self.breakfast_time_minutes,
-            lunch_time_minutes=self.lunch_time_minutes,
-            dinner_time_minutes=self.dinner_time_minutes,
-            daily_summary_time_minutes=self.daily_summary_time_minutes,
-            language=self.language,
-            created_at=self.created_at,
-            updated_at=self.updated_at
-        )

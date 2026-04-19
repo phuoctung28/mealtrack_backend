@@ -10,7 +10,7 @@ This test verifies that:
 import pytest
 from sqlalchemy import inspect
 
-from src.infra.database.models.notification.notification_preferences import NotificationPreferences
+from src.infra.database.models.notification.notification_preferences import NotificationPreferencesORM as NotificationPreferences
 from src.infra.database.models.user.user import User
 
 

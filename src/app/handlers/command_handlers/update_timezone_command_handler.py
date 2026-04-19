@@ -15,7 +15,7 @@ class UpdateTimezoneCommandHandler(EventHandler[UpdateTimezoneCommand, Dict[str,
     """Handler for updating user timezone."""
 
     async def handle(self, command: UpdateTimezoneCommand) -> Dict[str, Any]:
-        """Handle timezone update command."""
+        """Handle timezone update command. Skips DB write if timezone is unchanged."""
         logger.info(
             f"Timezone update request: user={command.user_id}, "
             f"timezone={command.timezone!r}"
@@ -29,6 +29,17 @@ class UpdateTimezoneCommandHandler(EventHandler[UpdateTimezoneCommand, Dict[str,
 
         canonical_tz = normalize_timezone(command.timezone)
 
+        # Read: open a UoW just to check the current timezone
+        with UnitOfWork() as uow:
+            current_tz = uow.users.get_user_timezone(command.user_id)
+
+        if current_tz == canonical_tz:
+            logger.debug(
+                f"Timezone unchanged for user {command.user_id}: {canonical_tz!r} — skipping write"
+            )
+            return {"success": True, "timezone": canonical_tz}
+
+        # Write: only open a UoW when we actually need to write
         with UnitOfWork() as uow:
             uow.users.update_user_timezone(command.user_id, canonical_tz)
             uow.commit()

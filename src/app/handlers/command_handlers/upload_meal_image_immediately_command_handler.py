@@ -4,22 +4,22 @@ Handler for immediate meal image upload and analysis.
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 from uuid import uuid4
 
 from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal import MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
+from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.domain.services.meal_type_determination_service import determine_meal_type_from_timestamp
 from src.domain.utils.timezone_utils import utc_now, get_zone_info, is_valid_timezone, noon_utc_for_date
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.uow import UnitOfWork
+from src.infra.repositories.meal_repository import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -30,25 +30,19 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
 
     def __init__(
         self,
+        uow: UnitOfWorkPort,
+        event_bus: Any,
         image_store: ImageStorePort = None,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
-        cache_service: Optional[CacheService] = None,
         meal_translation_service: Optional[MealAnalysisTranslationService] = None,
     ):
+        self.uow = uow
+        self.event_bus = event_bus
         self.image_store = image_store
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
-        self.cache_service = cache_service
         self.meal_translation_service = meal_translation_service
-
-    def set_dependencies(self, **kwargs):
-        """Set dependencies for dependency injection."""
-        self.image_store = kwargs.get('image_store', self.image_store)
-        self.vision_service = kwargs.get('vision_service', self.vision_service)
-        self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
-        self.cache_service = kwargs.get('cache_service', self.cache_service)
-        self.meal_translation_service = kwargs.get('meal_translation_service', self.meal_translation_service)
     
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
@@ -73,54 +67,49 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     # Get the last part and remove file extension
                     image_id = parts[-1].split(".")[0]
             
-            # Get user timezone from DB for meal type detection and date handling
-            with UnitOfWork() as uow:
+            # ---- MERGED UoW 1+2: get timezone + create initial meal record ----
+            with self.uow as uow:
                 user_timezone = uow.users.get_user_timezone(command.user_id)
 
-            # Fallback to UTC if not set
-            if not user_timezone or not is_valid_timezone(user_timezone):
-                user_timezone = "UTC"
-                logger.info("Using UTC fallback for meal type detection")
+                # Fallback to UTC if not set
+                if not user_timezone or not is_valid_timezone(user_timezone):
+                    user_timezone = "UTC"
+                    logger.info("Using UTC fallback for meal type detection")
 
-            # Determine the meal date and datetime
-            now = utc_now()
-            meal_date = command.target_date if command.target_date else now.date()
-            if command.target_date and command.target_date != now.date():
-                # Past/future date: use noon in user's local timezone to avoid
-                # created_at falling into the wrong date after UTC conversion
-                meal_datetime = noon_utc_for_date(meal_date, user_timezone)
-            else:
-                # Today or no date — use actual current time
-                meal_datetime = now
+                # Determine the meal date and datetime
+                now = utc_now()
+                meal_date = command.target_date if command.target_date else now.date()
+                if command.target_date and command.target_date != now.date():
+                    meal_datetime = noon_utc_for_date(meal_date, user_timezone)
+                else:
+                    meal_datetime = now
 
-            logger.info(f"Creating meal record for date: {meal_date}")
+                logger.info(f"Creating meal record for date: {meal_date}")
 
-            # 4. Convert UTC to local time for meal type detection
-            zone_info = get_zone_info(user_timezone)
-            local_datetime = meal_datetime.astimezone(zone_info)
-            logger.info(f"Meal type detection: UTC={meal_datetime.isoformat()} → Local={local_datetime.isoformat()} (timezone={user_timezone})")
+                zone_info = get_zone_info(user_timezone)
+                local_datetime = meal_datetime.astimezone(zone_info)
+                logger.info(
+                    f"Meal type detection: UTC={meal_datetime.isoformat()} → "
+                    f"Local={local_datetime.isoformat()} (timezone={user_timezone})"
+                )
 
-            # Determine meal type from local time
-            meal_type = determine_meal_type_from_timestamp(local_datetime)
+                meal_type = determine_meal_type_from_timestamp(local_datetime)
 
-            # Create meal record with ANALYZING status
-            meal = Meal(
-                meal_id=str(uuid4()),
-                user_id=command.user_id,
-                status=MealStatus.ANALYZING,
-                created_at=meal_datetime,
-                meal_type=meal_type,
-                image=MealImage(
-                    image_id=image_id,
-                    format="jpeg" if "jpeg" in command.content_type else "png",
-                    size_bytes=len(command.file_contents),
-                    url=image_url
-                ),
-                source="scanner",
-            )
-            
-            # Save initial meal record using UoW
-            with UnitOfWork() as uow:
+                meal = Meal(
+                    meal_id=str(uuid4()),
+                    user_id=command.user_id,
+                    status=MealStatus.ANALYZING,
+                    created_at=meal_datetime,
+                    meal_type=meal_type,
+                    image=MealImage(
+                        image_id=image_id,
+                        format="jpeg" if "jpeg" in command.content_type else "png",
+                        size_bytes=len(command.file_contents),
+                        url=image_url,
+                    ),
+                    source="scanner",
+                )
+
                 saved_meal = uow.meals.save(meal)
                 uow.commit()
                 logger.info(f"Created meal record {saved_meal.meal_id} with ANALYZING status")
@@ -209,8 +198,8 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"language={command.language}"
                 )
 
-            # Save the fully analyzed meal using UoW
-            with UnitOfWork() as uow:
+            # ---- MERGED UoW 3+4: save final meal + reload with translations ----
+            with self.uow as uow:
                 final_meal = uow.meals.save(meal)
                 uow.commit()
                 total_elapsed = phase1_elapsed + phase2_elapsed
@@ -222,40 +211,23 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"language={command.language} | "
                     f"status={final_meal.status}"
                 )
+                final_meal = uow.meals.find_by_id(meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS)
 
-            # Reload meal with translations for response
-            with UnitOfWork() as uow:
-                final_meal = uow.meals.find_by_id(meal.meal_id)
-
-            await self._invalidate_daily_macros(command.user_id, meal_date)
+            await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
+                aggregate_id=command.user_id,
+                user_id=command.user_id,
+                meal_date=meal_date,
+            ))
 
             return final_meal
-            
+
         except Exception as e:
             logger.error(f"Failed to upload and analyze meal immediately: {str(e)}")
             # If meal was created, update it to failed status
             if 'meal' in locals() and meal.meal_id:
                 meal.status = MealStatus.FAILED
                 meal.error_message = str(e)
-                with UnitOfWork() as uow:
+                with self.uow as uow:
                     uow.meals.save(meal)
                     uow.commit()
             raise
-
-    async def _invalidate_daily_macros(self, user_id, target_date):
-        if not self.cache_service:
-            return
-        cache_key, _ = CacheKeys.daily_macros(user_id, target_date)
-        await self.cache_service.invalidate(cache_key)
-
-        # Invalidate weekly budget cache so wallet updates after image meal
-        from datetime import timedelta
-        week_start = target_date - timedelta(days=target_date.weekday())
-        weekly_key, _ = CacheKeys.weekly_budget(user_id, week_start)
-        await self.cache_service.invalidate(weekly_key)
-
-        # Invalidate streak and daily activities caches
-        streak_key, _ = CacheKeys.user_streak(user_id)
-        await self.cache_service.invalidate(streak_key)
-        activities_key, _ = CacheKeys.daily_activities(user_id, target_date)
-        await self.cache_service.invalidate(activities_key)

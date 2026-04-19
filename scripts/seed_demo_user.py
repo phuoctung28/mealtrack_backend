@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from src.infra.database.models.user.user import User
 from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.models.meal.meal import Meal
+from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.weekly.weekly_macro_budget import WeeklyMacroBudget
 from src.infra.database.models.cheat_day.cheat_day import CheatDay
 from src.infra.database.models.enums import MealStatusEnum  # noqa: F401 — referenced by callers
@@ -34,7 +34,7 @@ def find_demo_user(db: Session) -> str | None:
 
 def reset_demo_data(db: Session, user_id: str) -> None:
     """Delete all demo data for user_id and commit."""
-    for meal in db.query(Meal).filter(Meal.user_id == user_id).all():
+    for meal in db.query(MealORM).filter(MealORM.user_id == user_id).all():
         db.delete(meal)
     db.query(WeeklyMacroBudget).filter(WeeklyMacroBudget.user_id == user_id).delete()
     db.query(CheatDay).filter(CheatDay.user_id == user_id).delete()

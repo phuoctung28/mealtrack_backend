@@ -360,6 +360,48 @@ class NutritionCalculationService:
             confidence_score=avg_confidence
         )
 
+    def aggregate_from_command_items(self, items) -> tuple:
+        """
+        Aggregate nutrition from command items with custom_nutrition.
+        Returns (Nutrition, list[FoodItem]). Items without custom_nutrition are skipped.
+        """
+        from uuid import uuid4
+
+        food_items = []
+        total_protein = total_carbs = total_fat = 0.0
+
+        for item in items:
+            if not item.custom_nutrition:
+                continue
+            factor = item.quantity / 100.0
+            protein = item.custom_nutrition.protein_per_100g * factor
+            carbs = item.custom_nutrition.carbs_per_100g * factor
+            fat = item.custom_nutrition.fat_per_100g * factor
+            total_protein += protein
+            total_carbs += carbs
+            total_fat += fat
+            food_items.append(FoodItem(
+                id=uuid4(),
+                name=item.name or "Food Item",
+                quantity=item.quantity,
+                unit=item.unit,
+                macros=Macros(protein=protein, carbs=carbs, fat=fat),
+                micros=None,
+                confidence=1.0,
+                fdc_id=getattr(item, 'fdc_id', None),
+            ))
+
+        nutrition = Nutrition(
+            macros=Macros(
+                protein=round(total_protein, 1),
+                carbs=round(total_carbs, 1),
+                fat=round(total_fat, 1),
+            ),
+            food_items=food_items,
+            confidence_score=1.0,
+        )
+        return nutrition, food_items
+
     def scale_nutrition(
         self,
         original_nutrition: ScaledNutritionResult,

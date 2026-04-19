@@ -12,7 +12,7 @@ from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.user import UserProfileDomainModel
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.infra.cache.cache_service import CacheService
+from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, None]):
     """Handler for saving user onboarding data."""
 
-    def __init__(self, uow: Optional[UnitOfWorkPort] = None, cache_service: Optional[CacheService] = None):
+    def __init__(self, uow: Optional[UnitOfWorkPort] = None, cache_service: Optional[CachePort] = None):
         self.uow = uow
         self.cache_service = cache_service
 

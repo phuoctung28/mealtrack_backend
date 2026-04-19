@@ -25,12 +25,20 @@ def _safe_redis_log_label(url: str) -> str:
 class RedisClient:
     """Wrapper around redis.asyncio client that manages a shared pool."""
 
-    def __init__(self, redis_url: str, max_connections: int = 50):
+    def __init__(
+        self,
+        redis_url: str,
+        max_connections: int = 50,
+        socket_timeout: float = 5.0,
+        socket_connect_timeout: float = 5.0,
+    ):
         self._redis_url = redis_url
         self.pool = redis.ConnectionPool.from_url(
             redis_url,
             max_connections=max_connections,
             decode_responses=True,
+            socket_timeout=socket_timeout,
+            socket_connect_timeout=socket_connect_timeout,
         )
         self.client: Optional[redis.Redis] = None
 

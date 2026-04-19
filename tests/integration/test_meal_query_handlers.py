@@ -12,18 +12,18 @@ from src.app.queries.meal import (
 )
 from src.domain.model import MealStatus
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.meal.meal import Meal as MealModel
-from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
+from src.infra.database.models.meal.meal import MealORM
+from src.infra.database.models.meal.meal_image import MealImageORM
 
 
 def create_test_meal_in_db(session, meal_id, dish_name, user_id="550e8400-e29b-41d4-a716-446655440001", created_at=None, 
                           calories=500, protein=30, carbs=50, fat=20):
     """Helper to create a test meal with proper structure."""
     import uuid
-    from src.infra.database.models.nutrition.nutrition import Nutrition as NutritionModel
-    
+    from src.infra.database.models.nutrition.nutrition import NutritionORM
+
     # Create image
-    image = MealImageModel(
+    image = MealImageORM(
         image_id=str(uuid.uuid4()),
         format="jpeg",
         size_bytes=100000,
@@ -33,7 +33,7 @@ def create_test_meal_in_db(session, meal_id, dish_name, user_id="550e8400-e29b-4
     session.flush()
     
     # Create meal
-    meal = MealModel(
+    meal = MealORM(
         meal_id=meal_id,
         user_id=user_id,
         status=MealStatusEnum.READY,
@@ -46,7 +46,7 @@ def create_test_meal_in_db(session, meal_id, dish_name, user_id="550e8400-e29b-4
     session.flush()
     
     # Add nutrition
-    nutrition = NutritionModel(
+    nutrition = NutritionORM(
         meal_id=meal_id,
         calories=calories,
         protein=protein,
@@ -95,12 +95,12 @@ class TestGetMealByIdQueryHandler:
     ):
         """Test meal retrieval includes food items."""
         # Arrange - Create meal with food items
-        from src.infra.database.models.nutrition.food_item import FoodItem
-        from src.infra.database.models.nutrition.nutrition import Nutrition
+        from src.infra.database.models.nutrition.food_item import FoodItemORM
+        from src.infra.database.models.nutrition.nutrition import NutritionORM
         
         # First create the meal image
         import uuid
-        meal_image = MealImageModel(
+        meal_image = MealImageORM(
             image_id=str(uuid.uuid4()),
             url="https://example.com/image.jpg",
             format="jpeg",
@@ -114,7 +114,7 @@ class TestGetMealByIdQueryHandler:
         
         # Create meal
         meal_id = str(uuid.uuid4())
-        meal_model = MealModel(
+        meal_model = MealORM(
             meal_id=meal_id,
             user_id="550e8400-e29b-41d4-a716-446655440001",
             status=MealStatusEnum.READY,
@@ -127,7 +127,7 @@ class TestGetMealByIdQueryHandler:
         test_session.flush()
         
         # Create nutrition
-        nutrition = Nutrition(
+        nutrition = NutritionORM(
             meal_id=meal_id,
             calories=500,
             protein=30,
@@ -139,7 +139,7 @@ class TestGetMealByIdQueryHandler:
         test_session.flush()
         
         # Add food items
-        food_item1 = FoodItem(
+        food_item1 = FoodItemORM(
             id="test-food-item-1",
             nutrition_id=nutrition.id,
             name="Rice",
@@ -151,7 +151,7 @@ class TestGetMealByIdQueryHandler:
             fat=2,
             confidence=0.95
         )
-        food_item2 = FoodItem(
+        food_item2 = FoodItemORM(
             id="test-food-item-2",
             nutrition_id=nutrition.id,
             name="Chicken",

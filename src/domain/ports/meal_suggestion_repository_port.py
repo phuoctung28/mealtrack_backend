@@ -1,4 +1,5 @@
 """Repository port for meal suggestion domain."""
+
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
@@ -42,4 +43,3 @@ class MealSuggestionRepositoryPort(ABC):
     async def update_suggestion(self, suggestion: MealSuggestion) -> None:
         """Update suggestion (e.g., status change)."""
         pass
-

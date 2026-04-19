@@ -4,17 +4,16 @@ Meal model for the main meal entity.
 from sqlalchemy import Column, String, Text, Enum, ForeignKey, DateTime, Integer, Boolean, JSON
 from sqlalchemy.orm import relationship
 
-from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.config import Base
 from src.infra.database.models.base import TimestampMixin
 from src.infra.database.models.enums import MealStatusEnum
 
 
-class Meal(Base, TimestampMixin):
+class MealORM(Base, TimestampMixin):
     """Database model for meals."""
-    
+
     __tablename__ = 'meal'
-    
+
     # Primary key
     meal_id = Column(String(36), primary_key=True)
     user_id = Column(String(36), nullable=False, index=True)  # User who created this meal
@@ -24,7 +23,7 @@ class Meal(Base, TimestampMixin):
     ready_at = Column(DateTime, nullable=True)  # When meal analysis was completed
     error_message = Column(Text, nullable=True)
     raw_ai_response = Column(Text, nullable=True)
-    
+
     # Edit tracking fields
     last_edited_at = Column(DateTime, nullable=True)  # When meal was last edited
     edit_count = Column(Integer, default=0, nullable=False)  # Number of times edited
@@ -44,97 +43,11 @@ class Meal(Base, TimestampMixin):
 
     # Relationships
     image_id = Column(String(36), ForeignKey("mealimage.image_id"), nullable=False)
-    image = relationship("MealImage", uselist=False, lazy="joined")
-    nutrition = relationship("Nutrition", uselist=False, back_populates="meal", cascade="all, delete-orphan")
+    image = relationship("MealImageORM", uselist=False, lazy="joined")
+    nutrition = relationship("NutritionORM", uselist=False, back_populates="meal", cascade="all, delete-orphan")
     translations = relationship(
-        "MealTranslation",
+        "MealTranslationORM",
         back_populates="meal",
         cascade="all, delete-orphan",
         lazy="selectin"
     )
-    
-    def to_domain(self):
-        """Convert DB model to domain model."""
-        from src.domain.model.meal import Meal as DomainMeal
-        from src.infra.mappers import MealStatusMapper
-
-        # Build translations dict keyed by language code
-        translations_dict = None
-        if self.translations:
-            translations_dict = {}
-            for t in self.translations:
-                translations_dict[t.language] = t.to_domain()
-
-        return DomainMeal(
-            meal_id=self.meal_id,
-            user_id=self.user_id,
-            status=MealStatusMapper.to_domain(self.status),
-            created_at=self.created_at,
-            image=self.image.to_domain() if self.image else None,
-            dish_name=self.dish_name,
-            meal_type=self.meal_type,
-            nutrition=self.nutrition.to_domain() if self.nutrition else None,
-            ready_at=self.ready_at,
-            error_message=self.error_message,
-            raw_gpt_json=self.raw_ai_response,
-            updated_at=self.updated_at,
-            last_edited_at=self.last_edited_at,
-            edit_count=self.edit_count,
-            is_manually_edited=self.is_manually_edited,
-            translations=translations_dict,
-            source=self.source,
-            description=self.description,
-            instructions=self.instructions,
-            prep_time_min=self.prep_time_min,
-            cook_time_min=self.cook_time_min,
-            cuisine_type=self.cuisine_type,
-            origin_country=self.origin_country,
-            emoji=self.emoji
-        )
-    
-    @classmethod
-    def from_domain(cls, domain_model):
-        """Create DB model from domain model."""
-        from src.infra.mappers import MealStatusMapper
-
-        # Convert UUID objects to strings for DB storage
-        meal_id = str(domain_model.meal_id) if domain_model.meal_id else None
-        user_id = getattr(domain_model, "user_id", None)
-        if user_id:
-            user_id = str(user_id)
-
-        # Create meal
-        meal = cls(
-            meal_id=meal_id,
-            user_id=user_id,
-            status=MealStatusMapper.to_db(domain_model.status),
-            created_at=domain_model.created_at,
-            updated_at=getattr(domain_model, "updated_at", None) or utc_now(),
-            dish_name=getattr(domain_model, "dish_name", None),
-            meal_type=getattr(domain_model, "meal_type", None),
-            ready_at=getattr(domain_model, "ready_at", None),
-            error_message=getattr(domain_model, "error_message", None),
-            raw_ai_response=getattr(domain_model, "raw_gpt_json", None),
-            last_edited_at=getattr(domain_model, "last_edited_at", None),
-            edit_count=getattr(domain_model, "edit_count", 0),
-            is_manually_edited=getattr(domain_model, "is_manually_edited", False),
-            source=getattr(domain_model, "source", None),
-            description=getattr(domain_model, "description", None),
-            instructions=getattr(domain_model, "instructions", None),
-            prep_time_min=getattr(domain_model, "prep_time_min", None),
-            cook_time_min=getattr(domain_model, "cook_time_min", None),
-            cuisine_type=getattr(domain_model, "cuisine_type", None),
-            origin_country=getattr(domain_model, "origin_country", None),
-            emoji=getattr(domain_model, "emoji", None)
-        )
-
-        # Add image reference - convert UUID to string
-        if domain_model.image:
-            meal.image_id = str(domain_model.image.image_id)
-
-        # Add nutrition if it exists
-        if domain_model.nutrition:
-            from src.infra.database.models.nutrition.nutrition import Nutrition
-            meal.nutrition = Nutrition.from_domain(domain_model.nutrition, meal_id=meal_id)
-
-        return meal

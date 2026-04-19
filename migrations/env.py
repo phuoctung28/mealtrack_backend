@@ -12,6 +12,7 @@ from sqlalchemy import pool
 from alembic import context
 
 # Import our database configuration
+from alembic.script import ScriptDirectory
 from src.infra.database.config import Base, SQLALCHEMY_DATABASE_URL, engine
 from sqlalchemy import text
 
@@ -22,7 +23,7 @@ config = context.config
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
@@ -51,8 +52,6 @@ def _apply_migration_timeouts(connection) -> None:
 
     connection.execute(text(f"SET lock_timeout = {lock_timeout_ms}"))
     connection.execute(text(f"SET statement_timeout = {statement_timeout_ms}"))
-
-
 def _next_sequential_rev_id(context, revision, directives):
     """Auto-assign sequential numeric revision IDs (048, 049, ...)."""
     if not directives:
@@ -82,6 +81,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        process_revision_directives=_next_sequential_rev_id,
     )
 
     with context.begin_transaction():
@@ -106,7 +106,9 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         _apply_migration_timeouts(connection)
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            process_revision_directives=_next_sequential_rev_id,
         )
 
         with context.begin_transaction():

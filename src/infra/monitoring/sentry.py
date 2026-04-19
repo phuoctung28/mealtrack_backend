@@ -2,11 +2,14 @@
 
 import logging
 
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
-from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-from sentry_sdk.integrations.starlette import StarletteIntegration
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+except ModuleNotFoundError:  # pragma: no cover
+    sentry_sdk = None
 
 from src.infra.config.settings import settings
 
@@ -19,6 +22,10 @@ def initialize_sentry() -> None:
     Must be called BEFORE the FastAPI app is instantiated so integrations
     can patch Starlette/FastAPI middleware.
     """
+    if sentry_sdk is None:
+        logger.info("Sentry disabled (sentry_sdk not installed)")
+        return
+
     if not settings.SENTRY_DSN:
         logger.info("Sentry disabled (SENTRY_DSN not set)")
         return

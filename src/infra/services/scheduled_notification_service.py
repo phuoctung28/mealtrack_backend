@@ -263,7 +263,7 @@ class ScheduledNotificationService:
         Returns dict with calories_consumed, calorie_goal, meals_logged, gender.
         Uses shared WeeklyBudgetService for consistent values with the app API.
         """
-        from src.infra.repositories.meal_repository import MealRepository
+        from src.infra.repositories.meal_repository import MealRepository, MealProjection
         from src.domain.utils.timezone_utils import (
             resolve_user_timezone, user_today, get_user_monday,
         )
@@ -281,7 +281,8 @@ class ScheduledNotificationService:
             # meals_logged count still needs find_by_date (for count only)
             meal_repo = MealRepository(uow.session)
             meals = meal_repo.find_by_date(
-                local_date, user_id=user_id, user_timezone=user_tz
+                local_date, user_id=user_id, user_timezone=user_tz,
+                projection=MealProjection.MACROS_ONLY,
             )
             meals_logged = len(meals)
 

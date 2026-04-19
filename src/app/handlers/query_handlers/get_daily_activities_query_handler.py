@@ -11,7 +11,7 @@ from src.app.queries.activity import GetDailyActivitiesQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.utils.timezone_utils import format_iso_utc, get_zone_info, resolve_user_timezone
-from src.infra.cache.cache_service import CacheService
+from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[Dict[str, Any]]]):
     """Handler for getting daily activities (meals and workouts)."""
 
-    def __init__(self, cache_service: Optional[CacheService] = None):
+    def __init__(self, cache_service: Optional[CachePort] = None):
         self.cache_service = cache_service
 
     async def handle(self, query: GetDailyActivitiesQuery) -> List[Dict[str, Any]]:

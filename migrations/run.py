@@ -210,7 +210,6 @@ def run_migrations() -> bool:
 
     except Exception as e:
         import traceback
-
         traceback.print_exc()
         print(f"❌ Migration failed: {e}", file=sys.stderr, flush=True)
         logger.error(f"❌ Migration failed: {e}", exc_info=True)
@@ -225,6 +224,7 @@ if __name__ == "__main__":
         if success:
             logger.info("🎉 Migration process completed successfully")
         else:
+            print("💥 Migration process failed", file=sys.stderr, flush=True)
             logger.error("💥 Migration process failed")
 
         sys.exit(exit_code)
@@ -234,7 +234,6 @@ if __name__ == "__main__":
         sys.exit(130)  # Standard exit code for SIGINT
     except Exception as e:
         import traceback
-
         traceback.print_exc()
         print(f"💥 Unexpected error: {e}", file=sys.stderr, flush=True)
         logger.error(f"💥 Unexpected error: {e}", exc_info=True)

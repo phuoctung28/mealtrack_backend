@@ -49,6 +49,14 @@ def client(app):
 class TestRequestLogging:
     """Test request logging functionality."""
 
+    def test_middleware_is_not_base_http_middleware(self):
+        """RequestLoggerMiddleware must be a pure ASGI callable, not BaseHTTPMiddleware."""
+        from starlette.middleware.base import BaseHTTPMiddleware
+        assert not issubclass(RequestLoggerMiddleware, BaseHTTPMiddleware), (
+            "RequestLoggerMiddleware must not subclass BaseHTTPMiddleware — "
+            "it buffers the full request body which penalises large file uploads."
+        )
+
     def test_adds_request_id_header(self, client):
         """Response should include X-Request-ID header."""
         response = client.get("/test")
