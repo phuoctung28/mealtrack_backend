@@ -11,7 +11,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
 from src.domain.model import FoodItem, Meal, MealImage, MealStatus, Nutrition, Macros
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.domain.utils.timezone_utils import utc_now, noon_utc_for_date, resolve_user_timezone
+from src.domain.utils.timezone_utils import utc_now, noon_utc_for_date, resolve_user_timezone_async
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +48,8 @@ class SaveMealSuggestionCommandHandler(
         meal_date = datetime.strptime(command.meal_date, "%Y-%m-%d").date()
         if meal_date != now.date():
             # Past/future date: use noon to avoid date-boundary issues
-            with self.uow as uow:
-                user_tz = resolve_user_timezone(command.user_id, uow)
+            async with self.uow as uow:
+                user_tz = await resolve_user_timezone_async(command.user_id, uow)
             meal_datetime = noon_utc_for_date(meal_date, user_tz)
         else:
             # Today — use actual current time
@@ -107,8 +107,8 @@ class SaveMealSuggestionCommandHandler(
             emoji=command.emoji,
         )
 
-        with self.uow as uow:
-            saved_meal = uow.meals.save(meal)
+        async with self.uow as uow:
+            saved_meal = await uow.meals.save(meal)
 
         await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
             aggregate_id=command.user_id,

@@ -15,7 +15,7 @@ from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal import MealImage
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.domain.utils.timezone_utils import utc_now, noon_utc_for_date, resolve_user_timezone
+from src.domain.utils.timezone_utils import utc_now, noon_utc_for_date, resolve_user_timezone_async
 from src.domain.services.nutrition_calculation_service import NutritionCalculationService
 
 
@@ -31,7 +31,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         if self.meal_repository:
             return await self._process_meal(event, self.meal_repository, uow=None)
         else:
-            with self.uow as uow:
+            async with self.uow as uow:
                 return await self._process_meal(event, uow.meals, uow=uow)
 
     async def _process_meal(self, event: CreateManualMealCommand, meal_repo, uow=None):
@@ -44,10 +44,10 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             # Past/future date: use noon in user's local timezone to avoid
             # created_at falling into the wrong date after UTC conversion
             if uow is not None:
-                user_tz = resolve_user_timezone(event.user_id, uow)
+                user_tz = await resolve_user_timezone_async(event.user_id, uow)
             else:
-                with self.uow as _uow:
-                    user_tz = resolve_user_timezone(event.user_id, _uow)
+                async with self.uow as _uow:
+                    user_tz = await resolve_user_timezone_async(event.user_id, _uow)
             meal_datetime = noon_utc_for_date(meal_date, user_tz)
         else:
             # Today or no date — use actual current time
@@ -81,7 +81,7 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             source=source,
         )
 
-        saved_meal = meal_repo.save(meal)
+        saved_meal = await meal_repo.save(meal)
         await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
             aggregate_id=event.user_id,
             user_id=event.user_id,

@@ -58,11 +58,11 @@ class InMemoryMealRepository:
     def __init__(self):
         self._store: Dict[str, Any] = {}
 
-    def save(self, meal):
+    async def save(self, meal):
         self._store[meal.meal_id] = meal
         return meal
 
-    def find_by_id(self, meal_id: str):
+    async def find_by_id(self, meal_id: str):
         return self._store.get(meal_id)
 
 
@@ -125,8 +125,11 @@ async def test_create_manual_meal_command_handler_aggregates_items(monkeypatch):
     from src.domain.model import MealStatus
 
     mock_uow = MagicMock()
-    mock_uow.__enter__ = MagicMock(return_value=mock_uow)
-    mock_uow.__exit__ = MagicMock(return_value=False)
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users = MagicMock()
+    mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
+    mock_uow.commit = AsyncMock()
     mock_event_bus = MagicMock()
     mock_event_bus.publish = AsyncMock()
 

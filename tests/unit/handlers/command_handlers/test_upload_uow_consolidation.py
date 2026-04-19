@@ -55,11 +55,12 @@ async def test_happy_path_uses_injected_uow():
     """Happy path: handler uses self.uow context manager (no direct UnitOfWork() instantiation)."""
     mock_meal = _make_meal_mock()
     mock_uow = MagicMock()
-    mock_uow.__enter__ = MagicMock(return_value=mock_uow)
-    mock_uow.__exit__ = MagicMock(return_value=False)
-    mock_uow.users.get_user_timezone.return_value = "UTC"
-    mock_uow.meals.save.return_value = mock_meal
-    mock_uow.meals.find_by_id.return_value = mock_meal
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
+    mock_uow.meals.save = AsyncMock(return_value=mock_meal)
+    mock_uow.meals.find_by_id = AsyncMock(return_value=mock_meal)
+    mock_uow.commit = AsyncMock()
 
     handler = _make_handler(mock_uow)
     cmd = UploadMealImageImmediatelyCommand(
@@ -68,8 +69,8 @@ async def test_happy_path_uses_injected_uow():
 
     await handler.handle(cmd)
 
-    # Verify the injected UoW was used (entered as context manager)
-    mock_uow.__enter__.assert_called()
+    # Verify the injected UoW was used (entered as async context manager)
+    mock_uow.__aenter__.assert_called()
     mock_uow.meals.save.assert_called()
 
 
@@ -78,11 +79,12 @@ async def test_timezone_and_initial_save_use_injected_uow():
     """get_user_timezone and meals.save are called on the injected UoW instance."""
     mock_meal = _make_meal_mock()
     mock_uow = MagicMock()
-    mock_uow.__enter__ = MagicMock(return_value=mock_uow)
-    mock_uow.__exit__ = MagicMock(return_value=False)
-    mock_uow.users.get_user_timezone.return_value = "UTC"
-    mock_uow.meals.save.return_value = mock_meal
-    mock_uow.meals.find_by_id.return_value = mock_meal
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
+    mock_uow.meals.save = AsyncMock(return_value=mock_meal)
+    mock_uow.meals.find_by_id = AsyncMock(return_value=mock_meal)
+    mock_uow.commit = AsyncMock()
 
     handler = _make_handler(mock_uow)
     cmd = UploadMealImageImmediatelyCommand(

@@ -3,7 +3,7 @@ Unit tests for update user metrics endpoint and handler.
 """
 from dataclasses import dataclass, field
 from typing import List, Optional
-from unittest.mock import Mock, MagicMock
+from unittest.mock import AsyncMock, Mock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -39,10 +39,10 @@ def _make_profile(**overrides) -> UserProfileDomainModel:
 def _make_mock_uow(profile=None):
     """Create a mock UoW that returns the given profile from users.get_profile()."""
     mock_uow = MagicMock()
-    mock_uow.users.get_profile.return_value = profile
-    mock_uow.users.update_profile.side_effect = lambda p: p
-    mock_uow.__enter__ = Mock(return_value=mock_uow)
-    mock_uow.__exit__ = Mock(return_value=False)
+    mock_uow.users.get_profile = AsyncMock(return_value=profile)
+    mock_uow.users.update_profile = AsyncMock(side_effect=lambda p: p)
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
     return mock_uow
 
 

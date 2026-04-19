@@ -27,15 +27,34 @@ from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIServ
 from tests.fixtures.mock_image_store import MockImageStore
 
 
+class AsyncSyncRepoWrapper:
+    """Wraps a sync repository so every method is also awaitable."""
+
+    def __init__(self, sync_repo):
+        self._sync = sync_repo
+
+    def __getattr__(self, name):
+        attr = getattr(self._sync, name)
+        if callable(attr):
+            async def _async_wrapper(*args, **kwargs):
+                return attr(*args, **kwargs)
+            return _async_wrapper
+        return attr
+
+
 class TestUnitOfWork:
-    """Test-friendly UoW that doesn't close the session on exit."""
+    """Test-friendly UoW that doesn't close the session on exit.
+
+    Supports both sync (``with``) and async (``async with``) context managers
+    so it works with both legacy sync tests and the new async command handlers.
+    """
 
     def __init__(self, session: Session):
         from src.infra.repositories.meal_repository import MealRepository
         from src.infra.repositories.user_repository import UserRepository
         self.session = session
-        self.meals = MealRepository(session)
-        self.users = UserRepository(session)
+        self.meals = AsyncSyncRepoWrapper(MealRepository(session))
+        self.users = AsyncSyncRepoWrapper(UserRepository(session))
 
     def __enter__(self):
         return self
@@ -46,11 +65,20 @@ class TestUnitOfWork:
             self.session.rollback()
         # Don't commit here - tests manage their own commits
 
-    def commit(self):
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        # Don't close session - let the test fixture manage it
+        if exc_type:
+            self.session.rollback()
+        # Don't commit here - tests manage their own commits
+
+    async def commit(self):
         # No-op for tests - session already has the data
         pass
 
-    def rollback(self):
+    async def rollback(self):
         self.session.rollback()
 
 

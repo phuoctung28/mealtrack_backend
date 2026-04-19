@@ -9,7 +9,7 @@ import pytest
 
 from src.api.exceptions import ValidationException
 from src.app.commands.user import SaveUserOnboardingCommand
-from src.infra.database.uow import UnitOfWork
+from tests.conftest import TestUnitOfWork
 
 
 @pytest.mark.unit
@@ -75,7 +75,7 @@ class TestSaveUserOnboardingCommandHandler:
         if handler:
             original_uow = handler.uow
             # Create UoW with test_session - repository verified it can find user
-            test_uow = UnitOfWork(session=test_session)
+            test_uow = TestUnitOfWork(session=test_session)
             handler.uow = test_uow
             try:
                 result = await event_bus.send(command)
@@ -83,7 +83,7 @@ class TestSaveUserOnboardingCommandHandler:
                 handler.uow = original_uow
         else:
             # Fallback: patch UnitOfWork  
-            with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.UnitOfWork', side_effect=lambda *args, **kwargs: UnitOfWork(session=test_session)):
+            with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.AsyncUnitOfWork', side_effect=lambda *args, **kwargs: TestUnitOfWork(session=test_session)):
                 result = await event_bus.send(command)
         
         # Assert - SaveUserOnboardingCommand should return None
@@ -218,7 +218,7 @@ class TestSaveUserOnboardingCommandHandler:
         handler = event_bus._async_handlers.get(CmdType)
         if handler:
             original_uow = handler.uow
-            test_uow = UnitOfWork(session=test_session)
+            test_uow = TestUnitOfWork(session=test_session)
             handler.uow = test_uow
             try:
                 result = await event_bus.send(command)
@@ -226,7 +226,7 @@ class TestSaveUserOnboardingCommandHandler:
                 handler.uow = original_uow
         else:
             # Fallback: patch UnitOfWork
-            with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.UnitOfWork', side_effect=lambda *args, **kwargs: UnitOfWork(session=test_session)):
+            with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.AsyncUnitOfWork', side_effect=lambda *args, **kwargs: TestUnitOfWork(session=test_session)):
                 result = await event_bus.send(command)
         
         # Assert - SaveUserOnboardingCommand should return None

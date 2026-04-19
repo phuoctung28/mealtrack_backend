@@ -160,10 +160,6 @@ from src.app.queries.user.get_user_onboarding_status_query import (
     GetUserOnboardingStatusQuery,
 )
 from src.infra.event_bus import PyMediatorEventBus, EventBus
-import os
-
-# Set USE_ASYNC_UOW=true to activate async handler variants (Tasks 10-12)
-USE_ASYNC_UOW = os.getenv("USE_ASYNC_UOW", "false").lower() == "true"
 
 # Singleton event buses
 _food_search_event_bus: Optional[EventBus] = None
@@ -302,17 +298,17 @@ def get_configured_event_bus() -> EventBus:
     cache_service = get_cache_service()
     suggestion_service = get_suggestion_orchestration_service()
 
-    from src.infra.database.uow import UnitOfWork
+    from src.infra.database.uow_async import AsyncUnitOfWork
 
     event_bus = PyMediatorEventBus()
 
     # Register meal command handlers
-    # Handlers receive UnitOfWork (concrete) and event_bus at the composition root
+    # Handlers receive AsyncUnitOfWork (concrete) and event_bus at the composition root
     meal_translation_service = get_meal_translation_service()
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
-            uow=UnitOfWork(),
+            uow=AsyncUnitOfWork(),
             event_bus=event_bus,
             image_store=image_store,
             vision_service=vision_service,
@@ -323,7 +319,7 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         AnalyzeMealImageByUrlCommand,
         AnalyzeMealImageByUrlHandler(
-            uow=UnitOfWork(),
+            uow=AsyncUnitOfWork(),
             event_bus=event_bus,
             vision_service=vision_service,
             gpt_parser=gpt_parser,
@@ -335,7 +331,7 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         EditMealCommand,
         EditMealCommandHandler(
-            uow=UnitOfWork(),
+            uow=AsyncUnitOfWork(),
             event_bus=event_bus,
         ),
     )
@@ -343,7 +339,7 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         AddCustomIngredientCommand,
         AddCustomIngredientCommandHandler(
-            uow=UnitOfWork(),
+            uow=AsyncUnitOfWork(),
             event_bus=event_bus,
         ),
     )
@@ -351,7 +347,7 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         DeleteMealCommand,
         DeleteMealCommandHandler(
-            uow=UnitOfWork(),
+            uow=AsyncUnitOfWork(),
             event_bus=event_bus,
         ),
     )
@@ -359,7 +355,7 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         CreateManualMealCommand,
         CreateManualMealCommandHandler(
-            uow=UnitOfWork(),
+            uow=AsyncUnitOfWork(),
             event_bus=event_bus,
         ),
     )
@@ -442,7 +438,7 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         SaveMealSuggestionCommand,
-        SaveMealSuggestionCommandHandler(uow=UnitOfWork(), event_bus=event_bus),
+        SaveMealSuggestionCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus),
     )
 
     # Register user handlers
@@ -463,7 +459,7 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         UpdateUserMetricsCommand,
-        UpdateUserMetricsCommandHandler(uow=UnitOfWork(), cache_service=cache_service),
+        UpdateUserMetricsCommandHandler(uow=AsyncUnitOfWork(), cache_service=cache_service),
     )
     event_bus.register_handler(
         UpdateTimezoneCommand,
@@ -529,7 +525,7 @@ def get_configured_event_bus() -> EventBus:
     # Register saved suggestion handlers
     event_bus.register_handler(
         SaveSuggestionCommand,
-        SaveSuggestionCommandHandler(uow=UnitOfWork(), cache_service=cache_service),
+        SaveSuggestionCommandHandler(uow=AsyncUnitOfWork(), cache_service=cache_service),
     )
     event_bus.register_handler(
         DeleteSavedSuggestionCommand,
