@@ -10,6 +10,7 @@ langchain-core>=0.1.0
 langchain-google-genai
 
 # Vector search and embeddings
+pgvector>=0.3.6
 
 # Cloud storage
 cloudinary==1.37.0
