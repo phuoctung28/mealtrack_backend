@@ -66,7 +66,12 @@ class MealRepository(MealRepositoryPort):
         try:
             # Check if meal already exists
             existing_meal = (
-                self.db.query(MealORM).filter(MealORM.meal_id == meal.meal_id).first()
+                self.db.query(MealORM)
+                .options(
+                    selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items)
+                )
+                .filter(MealORM.meal_id == meal.meal_id)
+                .first()
             )
 
             if existing_meal:
@@ -98,7 +103,15 @@ class MealRepository(MealRepositoryPort):
                         self._update_nutrition(existing_meal.nutrition, meal.nutrition)
 
                 self.db.commit()
-                # Return refreshed domain object
+                # Re-fetch with eager-loaded relationships after commit to avoid lazy='raise'
+                existing_meal = (
+                    self.db.query(MealORM)
+                    .options(
+                        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items)
+                    )
+                    .filter(MealORM.meal_id == meal.meal_id)
+                    .first()
+                )
                 return meal_orm_to_domain(existing_meal)
             else:
                 # Create new meal
@@ -124,6 +137,15 @@ class MealRepository(MealRepositoryPort):
 
                 self.db.commit()
                 self.db.refresh(db_meal)
+                # Re-fetch with eager-loaded relationships to avoid lazy='raise' on nutrition
+                db_meal = (
+                    self.db.query(MealORM)
+                    .options(
+                        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items)
+                    )
+                    .filter(MealORM.meal_id == db_meal.meal_id)
+                    .first()
+                )
                 return meal_orm_to_domain(db_meal)
 
         except Exception as e:
