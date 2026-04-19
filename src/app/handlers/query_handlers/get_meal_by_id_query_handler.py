@@ -8,7 +8,7 @@ from src.api.exceptions import ResourceNotFoundException, AuthorizationException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetMealByIdQuery
 from src.domain.model.meal import Meal
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +22,9 @@ class GetMealByIdQueryHandler(EventHandler[GetMealByIdQuery, Meal]):
 
     async def handle(self, query: GetMealByIdQuery) -> Meal:
         """Get meal by ID."""
-        # Use fresh UnitOfWork to get current data
-        with UnitOfWork() as uow:
-            meal = uow.meals.find_by_id(query.meal_id)
+        # Use fresh AsyncUnitOfWork to get current data
+        async with AsyncUnitOfWork() as uow:
+            meal = await uow.meals.find_by_id(query.meal_id)
 
             if not meal:
                 raise ResourceNotFoundException(f"Meal with ID {query.meal_id} not found")

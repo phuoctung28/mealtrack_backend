@@ -40,36 +40,47 @@ _UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
 _ASYNC_POOL_SIZE = int(os.getenv("ASYNC_POOL_SIZE_PER_WORKER", "2"))
 _ASYNC_POOL_OVERFLOW = int(os.getenv("ASYNC_POOL_MAX_OVERFLOW", "1"))
 
-if _IS_NEON_POOLER:
-    async_engine = create_async_engine(
-        ASYNC_DATABASE_URL,
-        echo=False,
-        poolclass=NullPool,
-    )
-    logger.info("Async engine: NullPool (Neon pooler detected)")
-else:
-    async_engine = create_async_engine(
-        ASYNC_DATABASE_URL,
-        echo=False,
-        poolclass=AsyncAdaptedQueuePool,
-        pool_size=_UVICORN_WORKERS * _ASYNC_POOL_SIZE,
-        max_overflow=_ASYNC_POOL_OVERFLOW,
-        pool_recycle=120,
-        pool_timeout=30,
-    )
-    logger.info(
-        "Async engine: AsyncAdaptedQueuePool pool_size=%s max_overflow=%s",
-        _UVICORN_WORKERS * _ASYNC_POOL_SIZE,
-        _ASYNC_POOL_OVERFLOW,
-    )
+try:
+    if _IS_NEON_POOLER:
+        async_engine = create_async_engine(
+            ASYNC_DATABASE_URL,
+            echo=False,
+            poolclass=NullPool,
+        )
+        logger.info("Async engine: NullPool (Neon pooler detected)")
+    else:
+        async_engine = create_async_engine(
+            ASYNC_DATABASE_URL,
+            echo=False,
+            poolclass=AsyncAdaptedQueuePool,
+            pool_size=_UVICORN_WORKERS * _ASYNC_POOL_SIZE,
+            max_overflow=_ASYNC_POOL_OVERFLOW,
+            pool_recycle=120,
+            pool_timeout=30,
+        )
+        logger.info(
+            "Async engine: AsyncAdaptedQueuePool pool_size=%s max_overflow=%s",
+            _UVICORN_WORKERS * _ASYNC_POOL_SIZE,
+            _ASYNC_POOL_OVERFLOW,
+        )
 
-AsyncSessionLocal = async_sessionmaker(
-    bind=async_engine,
-    class_=AsyncSession,
-    autocommit=False,
-    autoflush=False,
-    expire_on_commit=False,
-)
+    AsyncSessionLocal = async_sessionmaker(
+        bind=async_engine,
+        class_=AsyncSession,
+        autocommit=False,
+        autoflush=False,
+        expire_on_commit=False,
+    )
+except Exception as _engine_init_error:  # noqa: BLE001
+    # asyncpg not installed (e.g. unit-test environment without the driver).
+    # Defer the error to first actual database use so imports succeed.
+    logger.warning(
+        "Async engine could not be initialised at import time (%s); "
+        "any attempt to open an AsyncUnitOfWork will raise.",
+        _engine_init_error,
+    )
+    async_engine = None  # type: ignore[assignment]
+    AsyncSessionLocal = None  # type: ignore[assignment]
 
 
 async def get_async_db():

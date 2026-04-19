@@ -10,9 +10,9 @@ from typing import Any, Dict, Optional
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal.get_streak_query import GetStreakQuery
 from src.domain.cache.cache_keys import CacheKeys
-from src.domain.utils.timezone_utils import get_zone_info, resolve_user_timezone
+from src.domain.utils.timezone_utils import get_zone_info, resolve_user_timezone_async
 from src.domain.ports.cache_port import CachePort
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -38,17 +38,17 @@ class GetStreakQueryHandler(EventHandler[GetStreakQuery, Dict[str, Any]]):
 
     async def _compute(self, query: GetStreakQuery) -> Dict[str, Any]:
         """Compute streak from DB."""
-        with UnitOfWork() as uow:
-            user_tz_str = resolve_user_timezone(
+        async with AsyncUnitOfWork() as uow:
+            user_tz_str = await resolve_user_timezone_async(
                 query.user_id, uow, query.header_timezone
             )
             user_tz = get_zone_info(user_tz_str)
             today = datetime.now(user_tz).date()
 
-            dates = uow.meals.get_dates_with_meals(
+            dates = await uow.meals.get_dates_with_meals(
                 query.user_id, user_timezone=user_tz_str
             )
-            scan_count = uow.meals.count_by_source(query.user_id, "scanner")
+            scan_count = await uow.meals.count_by_source(query.user_id, "scanner")
 
         if not dates:
             return {"current_streak": 0, "best_streak": 0, "last_logged_date": None, "scan_count": scan_count}
