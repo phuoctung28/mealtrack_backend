@@ -4,7 +4,8 @@ Unit tests for authentication dependencies.
 Tests cover Firebase token verification, user ID extraction,
 email extraction, and optional authentication.
 """
-from unittest.mock import Mock, patch
+
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi import HTTPException, status
@@ -28,21 +29,23 @@ class TestVerifyFirebaseToken:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "valid_firebase_token"
-        
+
         expected_decoded_token = {
             "uid": "test_firebase_uid_123",
             "email": "test@example.com",
             "email_verified": True,
         }
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.return_value = expected_decoded_token
-            
+
             # Act
             mock_request = Mock()
             mock_request.state = Mock()
             result = await verify_firebase_token(mock_request, mock_credentials)
-            
+
             # Assert
             assert result == expected_decoded_token
             assert result["uid"] == "test_firebase_uid_123"
@@ -55,16 +58,20 @@ class TestVerifyFirebaseToken:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "expired_token"
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
-            mock_verify.side_effect = firebase_auth.ExpiredIdTokenError("Token expired", cause=Exception("Expired"))
-            
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
+            mock_verify.side_effect = firebase_auth.ExpiredIdTokenError(
+                "Token expired", cause=Exception("Expired")
+            )
+
             # Act & Assert
             mock_request = Mock()
             mock_request.state = Mock()
             with pytest.raises(HTTPException) as exc_info:
                 await verify_firebase_token(mock_request, mock_credentials)
-            
+
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             assert "expired" in exc_info.value.detail.lower()
             assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
@@ -75,16 +82,18 @@ class TestVerifyFirebaseToken:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "revoked_token"
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.side_effect = firebase_auth.RevokedIdTokenError("Token revoked")
-            
+
             # Act & Assert
             mock_request = Mock()
             mock_request.state = Mock()
             with pytest.raises(HTTPException) as exc_info:
                 await verify_firebase_token(mock_request, mock_credentials)
-            
+
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             assert "revoked" in exc_info.value.detail.lower()
             assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
@@ -95,16 +104,18 @@ class TestVerifyFirebaseToken:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "invalid_token"
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.side_effect = firebase_auth.InvalidIdTokenError("Invalid token")
-            
+
             # Act & Assert
             mock_request = Mock()
             mock_request.state = Mock()
             with pytest.raises(HTTPException) as exc_info:
                 await verify_firebase_token(mock_request, mock_credentials)
-            
+
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             assert "invalid" in exc_info.value.detail.lower()
             assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
@@ -115,16 +126,20 @@ class TestVerifyFirebaseToken:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "some_token"
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
-            mock_verify.side_effect = firebase_auth.CertificateFetchError("Cannot fetch certificates", cause=Exception("Network error"))
-            
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
+            mock_verify.side_effect = firebase_auth.CertificateFetchError(
+                "Cannot fetch certificates", cause=Exception("Network error")
+            )
+
             # Act & Assert
             mock_request = Mock()
             mock_request.state = Mock()
             with pytest.raises(HTTPException) as exc_info:
                 await verify_firebase_token(mock_request, mock_credentials)
-            
+
             assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
             assert "unavailable" in exc_info.value.detail.lower()
 
@@ -134,16 +149,18 @@ class TestVerifyFirebaseToken:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "some_token"
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.side_effect = Exception("Unexpected error")
-            
+
             # Act & Assert
             mock_request = Mock()
             mock_request.state = Mock()
             with pytest.raises(HTTPException) as exc_info:
                 await verify_firebase_token(mock_request, mock_credentials)
-            
+
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             assert "failed to verify" in exc_info.value.detail.lower()
             assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
@@ -154,23 +171,25 @@ class TestVerifyFirebaseToken:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "token_with_claims"
-        
+
         expected_decoded_token = {
             "uid": "user_123",
             "email": "premium@example.com",
             "email_verified": True,
             "premium": True,
-            "role": "admin"
+            "role": "admin",
         }
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.return_value = expected_decoded_token
-            
+
             # Act
             mock_request = Mock()
             mock_request.state = Mock()
             result = await verify_firebase_token(mock_request, mock_credentials)
-            
+
             # Assert
             assert result == expected_decoded_token
             assert result["premium"] is True
@@ -205,7 +224,7 @@ class TestGetCurrentUserId:
 
             # Act
             result = await get_current_user_id(mock_token)
-        
+
         # Assert
         assert result == "user_db_id_123"
 
@@ -217,11 +236,11 @@ class TestGetCurrentUserId:
             "email": "test@example.com",
             # Missing 'uid' field
         }
-        
+
         # Act & Assert
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user_id(mock_token)
-        
+
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert "missing user identifier" in exc_info.value.detail.lower()
 
@@ -233,11 +252,11 @@ class TestGetCurrentUserId:
             "uid": "",  # Empty uid
             "email": "test@example.com",
         }
-        
+
         # Act & Assert
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user_id(mock_token)
-        
+
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
 
     @pytest.mark.asyncio
@@ -280,7 +299,7 @@ class TestGetCurrentUserId:
         mock_user1.firebase_uid = "duplicate_firebase_uid"
 
         mock_token = {"uid": "duplicate_firebase_uid"}
-        
+
         # Act
         with patch("src.infra.database.config.SessionLocal") as mock_session_local:
             mock_db = Mock()
@@ -292,10 +311,55 @@ class TestGetCurrentUserId:
             mock_session_local.return_value = mock_db
 
             result = await get_current_user_id(mock_token)
-        
+
         # Assert
         # Should return the first user's ID
         assert result == "user1_id"
+
+    @pytest.mark.asyncio
+    async def test_get_user_id_returns_cached_active_user(self):
+        """Test cached Firebase UID mapping avoids a database lookup."""
+        mock_cache = Mock()
+        mock_cache.get = AsyncMock(
+            return_value={"user_id": "cached_user_id", "is_active": True}
+        )
+        mock_cache.set = AsyncMock()
+
+        mock_db = Mock()
+        mock_token = {"uid": "firebase_uid_123"}
+
+        result = await get_current_user_id(
+            mock_token, db=mock_db, cache_service=mock_cache
+        )
+
+        assert result == "cached_user_id"
+        mock_db.query.assert_not_called()
+        mock_cache.set.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_get_user_id_caches_database_result_on_miss(self):
+        """Test DB lookup result is cached for the next authenticated request."""
+        mock_user = Mock()
+        mock_user.id = "user_db_id_123"
+        mock_user.firebase_uid = "firebase_uid_123"
+
+        mock_db = Mock()
+        mock_query = Mock()
+        mock_filter = Mock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_filter
+        mock_filter.first.return_value = mock_user
+
+        mock_cache = Mock()
+        mock_cache.get = AsyncMock(return_value=None)
+        mock_cache.set = AsyncMock()
+
+        result = await get_current_user_id(
+            {"uid": "firebase_uid_123"}, db=mock_db, cache_service=mock_cache
+        )
+
+        assert result == "user_db_id_123"
+        mock_cache.set.assert_awaited_once()
 
 
 class TestGetCurrentUserEmail:
@@ -309,10 +373,10 @@ class TestGetCurrentUserEmail:
             "uid": "user_123",
             "email": "test@example.com",
         }
-        
+
         # Act
         result = await get_current_user_email(mock_token)
-        
+
         # Assert
         assert result == "test@example.com"
 
@@ -324,10 +388,10 @@ class TestGetCurrentUserEmail:
             "uid": "user_123",
             # Missing 'email' field
         }
-        
+
         # Act
         result = await get_current_user_email(mock_token)
-        
+
         # Assert
         assert result is None
 
@@ -339,10 +403,10 @@ class TestGetCurrentUserEmail:
             "uid": "user_123",
             "email": "",
         }
-        
+
         # Act
         result = await get_current_user_email(mock_token)
-        
+
         # Assert
         assert result == ""
 
@@ -354,10 +418,10 @@ class TestGetCurrentUserEmail:
             "uid": "user_123",
             "email": None,
         }
-        
+
         # Act
         result = await get_current_user_email(mock_token)
-        
+
         # Assert
         assert result is None
 
@@ -370,10 +434,10 @@ class TestOptionalAuthentication:
         """Test optional authentication returns None when no credentials provided."""
         # Arrange
         credentials = None
-        
+
         # Act
         result = await optional_authentication(credentials)
-        
+
         # Assert
         assert result is None
 
@@ -383,18 +447,20 @@ class TestOptionalAuthentication:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "valid_token"
-        
+
         expected_decoded_token = {
             "uid": "user_123",
             "email": "test@example.com",
         }
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.return_value = expected_decoded_token
-            
+
             # Act
             result = await optional_authentication(mock_credentials)
-            
+
             # Assert
             assert result == expected_decoded_token
             assert result["uid"] == "user_123"
@@ -406,13 +472,15 @@ class TestOptionalAuthentication:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "invalid_token"
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.side_effect = firebase_auth.InvalidIdTokenError("Invalid token")
-            
+
             # Act
             result = await optional_authentication(mock_credentials)
-            
+
             # Assert
             assert result is None
 
@@ -422,13 +490,17 @@ class TestOptionalAuthentication:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "expired_token"
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
-            mock_verify.side_effect = firebase_auth.ExpiredIdTokenError("Token expired", cause=Exception("Expired"))
-            
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
+            mock_verify.side_effect = firebase_auth.ExpiredIdTokenError(
+                "Token expired", cause=Exception("Expired")
+            )
+
             # Act
             result = await optional_authentication(mock_credentials)
-            
+
             # Assert
             assert result is None
 
@@ -438,13 +510,15 @@ class TestOptionalAuthentication:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "revoked_token"
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.side_effect = firebase_auth.RevokedIdTokenError("Token revoked")
-            
+
             # Act
             result = await optional_authentication(mock_credentials)
-            
+
             # Assert
             assert result is None
 
@@ -454,13 +528,15 @@ class TestOptionalAuthentication:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "some_token"
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.side_effect = Exception("Unexpected error")
-            
+
             # Act
             result = await optional_authentication(mock_credentials)
-            
+
             # Assert
             assert result is None
 
@@ -474,45 +550,47 @@ class TestAuthenticationIntegration:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "valid_firebase_token"
-        
+
         mock_decoded_token = {
             "uid": "firebase_uid_123",
             "email": "test@example.com",
             "email_verified": True,
         }
-        
+
         mock_db = Mock()
         mock_query = Mock()
         mock_filter = Mock()
         mock_user = Mock()
         mock_user.id = "user_db_id_123"
-        
+
         mock_db.query.return_value = mock_query
         mock_query.filter.return_value = mock_filter
         mock_filter.first.return_value = mock_user
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.return_value = mock_decoded_token
-            
+
             # Act - Step 1: Verify token
             mock_request = Mock()
             token = await verify_firebase_token(mock_request, mock_credentials)
-            
+
             # Assert - Token verified
             assert token["uid"] == "firebase_uid_123"
             assert token["email"] == "test@example.com"
-            
+
             # Act - Step 2: Get user ID
             with patch("src.infra.database.config.SessionLocal") as mock_session_local:
                 mock_session_local.return_value = mock_db
                 user_id = await get_current_user_id(token)
-            
+
             # Assert - User ID extracted
             assert user_id == "user_db_id_123"
-            
+
             # Act - Step 3: Get email
             email = await get_current_user_email(token)
-            
+
             # Assert - Email extracted
             assert email == "test@example.com"
 
@@ -523,26 +601,28 @@ class TestAuthenticationIntegration:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "token_unverified_email"
-        
+
         mock_decoded_token = {
             "uid": "firebase_uid_123",
             "email": "test@example.com",
             "email_verified": False,  # Unverified
         }
-        
+
         mock_db = Mock()
         mock_query = Mock()
         mock_filter = Mock()
         mock_user = Mock()
         mock_user.id = "user_db_id_123"
-        
+
         mock_db.query.return_value = mock_query
         mock_query.filter.return_value = mock_filter
         mock_filter.first.return_value = mock_user
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.return_value = mock_decoded_token
-            
+
             # Act
             mock_request = Mock()
             mock_request.state = Mock()
@@ -550,7 +630,7 @@ class TestAuthenticationIntegration:
             with patch("src.infra.database.config.SessionLocal") as mock_session_local:
                 mock_session_local.return_value = mock_db
                 user_id = await get_current_user_id(token)
-            
+
             # Assert - Should still work
             assert token["email_verified"] is False
             assert user_id == "user_db_id_123"
@@ -562,25 +642,27 @@ class TestAuthenticationIntegration:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "token_no_email"
-        
+
         mock_decoded_token = {
             "uid": "firebase_uid_123",
             # No email field
         }
-        
+
         mock_db = Mock()
         mock_query = Mock()
         mock_filter = Mock()
         mock_user = Mock()
         mock_user.id = "user_db_id_123"
-        
+
         mock_db.query.return_value = mock_query
         mock_query.filter.return_value = mock_filter
         mock_filter.first.return_value = mock_user
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.return_value = mock_decoded_token
-            
+
             # Act
             mock_request = Mock()
             mock_request.state = Mock()
@@ -589,7 +671,7 @@ class TestAuthenticationIntegration:
                 mock_session_local.return_value = mock_db
                 user_id = await get_current_user_id(token)
             email = await get_current_user_email(token)
-            
+
             # Assert
             assert user_id == "user_db_id_123"
             assert email is None
@@ -603,25 +685,25 @@ class TestAuthenticationEdgeCases:
         """Test handling of Firebase UID with special characters."""
         # Arrange
         special_firebase_uid = "user@special_123-456.xyz"
-        
+
         mock_db = Mock()
         mock_query = Mock()
         mock_filter = Mock()
         mock_user = Mock()
         mock_user.id = "special_user_id"
         mock_user.firebase_uid = special_firebase_uid
-        
+
         mock_db.query.return_value = mock_query
         mock_query.filter.return_value = mock_filter
         mock_filter.first.return_value = mock_user
-        
+
         mock_token = {"uid": special_firebase_uid}
-        
+
         # Act
         with patch("src.infra.database.config.SessionLocal") as mock_session_local:
             mock_session_local.return_value = mock_db
             result = await get_current_user_id(mock_token)
-        
+
         # Assert
         assert result == "special_user_id"
 
@@ -630,25 +712,25 @@ class TestAuthenticationEdgeCases:
         """Test handling of Firebase UID that exceeds typical length."""
         # Arrange
         long_firebase_uid = "a" * 200  # Very long UID
-        
+
         mock_db = Mock()
         mock_query = Mock()
         mock_filter = Mock()
         mock_user = Mock()
         mock_user.id = "long_user_id"
         mock_user.firebase_uid = long_firebase_uid
-        
+
         mock_db.query.return_value = mock_query
         mock_query.filter.return_value = mock_filter
         mock_filter.first.return_value = mock_user
-        
+
         mock_token = {"uid": long_firebase_uid}
-        
+
         # Act
         with patch("src.infra.database.config.SessionLocal") as mock_session_local:
             mock_session_local.return_value = mock_db
             result = await get_current_user_id(mock_token)
-        
+
         # Assert
         assert result == "long_user_id"
 
@@ -658,7 +740,7 @@ class TestAuthenticationEdgeCases:
         # Arrange
         mock_credentials = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials.credentials = "complex_token"
-        
+
         complex_decoded_token = {
             "uid": "user_123",
             "email": "user@example.com",
@@ -673,23 +755,23 @@ class TestAuthenticationEdgeCases:
             "iat": 1609459200,
             "exp": 1609462800,
             "firebase": {
-                "identities": {
-                    "email": ["user@example.com"]
-                },
-                "sign_in_provider": "password"
+                "identities": {"email": ["user@example.com"]},
+                "sign_in_provider": "password",
             },
             "custom_claim_1": "value1",
             "custom_claim_2": 42,
         }
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.return_value = complex_decoded_token
-            
+
             # Act
             mock_request = Mock()
             mock_request.state = Mock()
             result = await verify_firebase_token(mock_request, mock_credentials)
-            
+
             # Assert - All claims preserved
             assert result == complex_decoded_token
             assert result["custom_claim_1"] == "value1"
@@ -701,16 +783,16 @@ class TestAuthenticationEdgeCases:
         """Test that multiple concurrent token verifications work correctly."""
         # Arrange
         import asyncio
-        
+
         mock_credentials1 = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials1.credentials = "token1"
-        
+
         mock_credentials2 = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials2.credentials = "token2"
-        
+
         mock_credentials3 = Mock(spec=HTTPAuthorizationCredentials)
         mock_credentials3.credentials = "token3"
-        
+
         def mock_verify_side_effect(token):
             if token == "token1":
                 return {"uid": "user1", "email": "user1@example.com"}
@@ -718,10 +800,12 @@ class TestAuthenticationEdgeCases:
                 return {"uid": "user2", "email": "user2@example.com"}
             elif token == "token3":
                 return {"uid": "user3", "email": "user3@example.com"}
-        
-        with patch('src.api.dependencies.auth.firebase_auth.verify_id_token') as mock_verify:
+
+        with patch(
+            "src.api.dependencies.auth.firebase_auth.verify_id_token"
+        ) as mock_verify:
             mock_verify.side_effect = mock_verify_side_effect
-            
+
             # Act - Verify multiple tokens concurrently
             mock_request1 = Mock()
             mock_request1.state = Mock()
@@ -729,17 +813,16 @@ class TestAuthenticationEdgeCases:
             mock_request2.state = Mock()
             mock_request3 = Mock()
             mock_request3.state = Mock()
-            
+
             results = await asyncio.gather(
                 verify_firebase_token(mock_request1, mock_credentials1),
                 verify_firebase_token(mock_request2, mock_credentials2),
                 verify_firebase_token(mock_request3, mock_credentials3),
             )
-            
+
             # Assert
             assert len(results) == 3
             assert results[0]["uid"] == "user1"
             assert results[1]["uid"] == "user2"
             assert results[2]["uid"] == "user3"
             assert mock_verify.call_count == 3
-

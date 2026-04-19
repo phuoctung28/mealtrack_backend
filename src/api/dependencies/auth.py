@@ -4,13 +4,20 @@ Authentication dependencies for FastAPI.
 Provides Firebase token verification and user extraction.
 """
 
+import asyncio
 import logging
 import os
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
+from fastapi.params import Depends as DependsMarker
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth as firebase_auth
+from sqlalchemy.orm import Session
+
+from src.api.base_dependencies import get_cache_service, get_db
+from src.api.dependencies.auth_cache import get_cached_user_id, set_cached_user_id
+from src.domain.ports.cache_port import CachePort
 
 logger = logging.getLogger(__name__)
 
@@ -51,18 +58,22 @@ async def verify_firebase_token(
             return {"message": f"Hello {user_id}"}
     """
     # Dev mode bypass: check if dev middleware injected a user
-    if (os.getenv("ENVIRONMENT") == "development" and 
-        hasattr(request.state, "user") and
-        hasattr(request.state.user, "firebase_uid") and
-        hasattr(request.state.user, "id")):
+    if (
+        os.getenv("ENVIRONMENT") == "development"
+        and hasattr(request.state, "user")
+        and hasattr(request.state.user, "firebase_uid")
+        and hasattr(request.state.user, "id")
+    ):
         dev_user = request.state.user
         # Additional check: make sure it's not a Mock object
         if type(dev_user).__name__ != "Mock":
-            logger.debug("Dev mode: bypassing Firebase auth, using dev user: %s", dev_user.id)
+            logger.debug(
+                "Dev mode: bypassing Firebase auth, using dev user: %s", dev_user.id
+            )
             return {
                 "uid": dev_user.firebase_uid,
                 "email": dev_user.email,
-                "sub": dev_user.firebase_uid
+                "sub": dev_user.firebase_uid,
             }
 
     # Production mode: require Firebase token
@@ -76,8 +87,9 @@ async def verify_firebase_token(
     token = credentials.credentials
 
     try:
-        # Verify the Firebase ID token
-        decoded_token = firebase_auth.verify_id_token(token)
+        # Firebase Admin verification is synchronous and may fetch public certs.
+        # Keep it off the event loop so unrelated requests do not stall.
+        decoded_token = await asyncio.to_thread(firebase_auth.verify_id_token, token)
         logger.debug(
             "Successfully verified token for user: %s", decoded_token.get("uid")
         )
@@ -134,7 +146,9 @@ async def verify_firebase_uid_ownership(
 
 
 async def get_current_user_id(
-    token: dict = Depends(verify_firebase_token)
+    token: dict = Depends(verify_firebase_token),
+    db: Optional[Session] = Depends(get_db),
+    cache_service: Optional[CachePort] = Depends(get_cache_service),
 ) -> str:
     """
     Extract the authenticated user's database ID from the verified Firebase token.
@@ -145,9 +159,9 @@ async def get_current_user_id(
     3. Returns the database user.id (UUID primary key)
 
     This ensures that the user_id matches what's expected by all database queries.
-    
-    Note: Uses SessionLocal() instead of Depends(get_db) to avoid ContextVar issues
-    with FastAPI's async threading model.
+
+    Uses FastAPI's request-scoped DB session when injected. Direct unit-test calls
+    still fall back to SessionLocal for backwards compatibility.
 
     Args:
         token: Verified Firebase token (injected by verify_firebase_token)
@@ -172,18 +186,39 @@ async def get_current_user_id(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token: missing user identifier",
         )
-    
-    # Create a new database session for this operation
-    from src.infra.database.config import SessionLocal
+
+    active_cache = (
+        cache_service
+        if cache_service is not None
+        and not isinstance(cache_service, DependsMarker)
+        and hasattr(cache_service, "get")
+        else None
+    )
+
+    cached_user_id = await get_cached_user_id(active_cache, firebase_uid)
+    if cached_user_id:
+        return cached_user_id
+
     from src.infra.database.models.user.user import User
-    
-    db = SessionLocal()
+
+    owns_session = False
+    if db is None or isinstance(db, DependsMarker) or not hasattr(db, "query"):
+        from src.infra.database.config import SessionLocal
+
+        db = SessionLocal()
+        owns_session = True
+
     try:
         # Look up user in database by firebase_uid (only active users)
-        user = db.query(User).filter(
-            User.firebase_uid == firebase_uid,
-            User.is_active == True  # CRITICAL: Block deleted/inactive users from authenticating
-        ).first()
+        user = (
+            db.query(User)
+            .filter(
+                User.firebase_uid == firebase_uid,
+                User.is_active
+                == True,  # CRITICAL: Block deleted/inactive users from authenticating
+            )
+            .first()
+        )
 
         if not user:
             logger.warning("Active user with Firebase UID not found in database")
@@ -194,13 +229,14 @@ async def get_current_user_id(
                     "message": "User not found or account has been deleted.",
                     "details": {
                         "hint": "If your account was deleted, you cannot log in. If you're a new user, call POST /v1/users/sync to create your account."
-                    }
-                }
+                    },
+                },
             )
-        
+        await set_cached_user_id(active_cache, firebase_uid, str(user.id), True)
         return user.id
     finally:
-        db.close()
+        if owns_session:
+            db.close()
 
 
 async def get_current_user_email(
@@ -248,7 +284,9 @@ async def optional_authentication(
         return None
 
     try:
-        decoded_token = firebase_auth.verify_id_token(credentials.credentials)
+        decoded_token = await asyncio.to_thread(
+            firebase_auth.verify_id_token, credentials.credentials
+        )
         return decoded_token
     except Exception as e:
         logger.debug("Optional auth failed: %s", str(e))
