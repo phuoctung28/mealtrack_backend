@@ -31,8 +31,9 @@ def _make_async_pg_url() -> str:
     return url
 
 
-@pytest_asyncio.fixture(scope="module")
+@pytest_asyncio.fixture()
 async def async_pg_engine():
+    """Function-scoped engine — avoids event-loop mismatch in asyncio_mode=strict."""
     engine = create_async_engine(_make_async_pg_url(), echo=False)
     yield engine
     await engine.dispose()
@@ -43,15 +44,20 @@ async def async_db_session(async_pg_engine) -> AsyncSession:
     """Real Postgres async session — rolled back after each test."""
     async with async_pg_engine.connect() as conn:
         await conn.begin()
+        await conn.begin_nested()  # savepoint — absorbs session.commit() calls
         factory = async_sessionmaker(
             bind=conn,
             autocommit=False,
             autoflush=False,
             expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
         )
         session = factory()
         try:
             yield session
         finally:
             await session.close()
-            await conn.rollback()
+            try:
+                await conn.rollback()
+            except Exception:
+                pass
