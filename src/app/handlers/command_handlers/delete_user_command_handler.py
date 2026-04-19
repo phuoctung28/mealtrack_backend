@@ -2,13 +2,16 @@
 DeleteUserCommandHandler - Handler for deleting user accounts.
 Performs soft delete in database and hard delete in Firebase Auth.
 """
+
 import asyncio
 import logging
 from typing import Dict, Any, Optional
 
+from src.api.dependencies.auth_cache import invalidate_cached_user_id
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user import DeleteUserCommand
 from src.app.events.base import EventHandler, handles
+from src.domain.ports.cache_port import CachePort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.uow import UnitOfWork
@@ -17,8 +20,12 @@ from src.infra.services.firebase_auth_service import FirebaseAuthService
 # Models for soft-delete operations
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM as UserFcmToken
-from src.infra.database.models.notification.notification_preferences import NotificationPreferencesORM as NotificationPreferences
+from src.infra.database.models.notification.user_fcm_token import (
+    UserFcmTokenORM as UserFcmToken,
+)
+from src.infra.database.models.notification.notification_preferences import (
+    NotificationPreferencesORM as NotificationPreferences,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +34,13 @@ logger = logging.getLogger(__name__)
 class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
     """Handler for deleting user accounts."""
 
-    def __init__(self, uow: Optional[UnitOfWorkPort] = None):
+    def __init__(
+        self,
+        uow: Optional[UnitOfWorkPort] = None,
+        cache_service: Optional[CachePort] = None,
+    ):
         self.uow = uow
+        self.cache_service = cache_service
         self.firebase_auth_service = FirebaseAuthService()
 
     async def handle(self, command: DeleteUserCommand) -> Dict[str, Any]:
@@ -75,6 +87,9 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                 # Save changes
                 uow.users.save(user)
                 uow.commit()
+                await invalidate_cached_user_id(
+                    self.cache_service, command.firebase_uid
+                )
                 logger.info(f"Successfully soft deleted user in database")
 
                 # Step 4: Revoke refresh tokens to invalidate all active sessions
@@ -83,7 +98,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                 try:
                     await asyncio.to_thread(
                         self.firebase_auth_service.revoke_refresh_tokens,
-                        command.firebase_uid
+                        command.firebase_uid,
                     )
                     logger.info(f"Successfully revoked Firebase refresh tokens")
                 except Exception as revoke_error:
@@ -95,7 +110,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                 try:
                     firebase_deleted = await asyncio.to_thread(
                         self.firebase_auth_service.delete_firebase_user,
-                        command.firebase_uid
+                        command.firebase_uid,
                     )
                     if firebase_deleted:
                         logger.info(f"Successfully deleted user from Firebase")
@@ -109,7 +124,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                 return {
                     "firebase_uid": command.firebase_uid,
                     "deleted": True,
-                    "message": "Account successfully deleted"
+                    "message": "Account successfully deleted",
                 }
 
             except ResourceNotFoundException:
@@ -127,22 +142,28 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
         """
         try:
             # 1. Soft-delete meals (set status=INACTIVE)
-            meals_count = uow.session.query(MealORM).filter(
-                MealORM.user_id == user_id
-            ).update({MealORM.status: MealStatusEnum.INACTIVE})
+            meals_count = (
+                uow.session.query(MealORM)
+                .filter(MealORM.user_id == user_id)
+                .update({MealORM.status: MealStatusEnum.INACTIVE})
+            )
 
             # 2. Soft-delete meal plans - no longer applicable (feature removed)
             meal_plans_count = 0
 
             # 3. Deactivate FCM tokens (set is_active=False)
-            fcm_tokens_count = uow.session.query(UserFcmToken).filter(
-                UserFcmToken.user_id == user_id
-            ).update({UserFcmToken.is_active: False})
+            fcm_tokens_count = (
+                uow.session.query(UserFcmToken)
+                .filter(UserFcmToken.user_id == user_id)
+                .update({UserFcmToken.is_active: False})
+            )
 
             # 4. Mark notification preferences as deleted (set is_deleted=True)
-            notif_prefs_count = uow.session.query(NotificationPreferences).filter(
-                NotificationPreferences.user_id == user_id
-            ).update({NotificationPreferences.is_deleted: True})
+            notif_prefs_count = (
+                uow.session.query(NotificationPreferences)
+                .filter(NotificationPreferences.user_id == user_id)
+                .update({NotificationPreferences.is_deleted: True})
+            )
 
             # Flush to ensure all changes are pending in the transaction
             uow.session.flush()

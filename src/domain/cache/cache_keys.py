@@ -1,6 +1,7 @@
 """
 Shared cache key definitions and TTL helpers.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -21,6 +22,11 @@ class CacheKeys:
         return (f"user:profile:{user_id}", CacheKeys.TTL_30_DAYS)
 
     @staticmethod
+    def auth_uid_to_user(firebase_uid: str) -> tuple[str, int]:
+        """Cache key for Firebase UID -> active database user mapping."""
+        return (f"auth:uid:{firebase_uid}", CacheKeys.TTL_10_MIN)
+
+    @staticmethod
     def user_tdee(user_id: str) -> tuple[str, int]:
         """Cache key for user TDEE calculation. 24h TTL."""
         return (f"user:tdee:{user_id}", CacheKeys.TTL_1_DAY)
@@ -30,6 +36,13 @@ class CacheKeys:
         return (
             f"user:{user_id}:macros:{target_date.isoformat()}",
             CacheKeys.TTL_1_DAY,
+        )
+
+    @staticmethod
+    def daily_breakdown(user_id: str, week_start_date: date) -> tuple[str, int]:
+        return (
+            f"user:{user_id}:daily_breakdown:{week_start_date.isoformat()}",
+            CacheKeys.TTL_5_MIN,
         )
 
     @staticmethod
@@ -65,7 +78,10 @@ class CacheKeys:
     @staticmethod
     def daily_activities(user_id: str, target_date: date) -> tuple[str, int]:
         """Cache key for daily activities list. 5min TTL."""
-        return (f"user:{user_id}:activities:{target_date.isoformat()}", CacheKeys.TTL_5_MIN)
+        return (
+            f"user:{user_id}:activities:{target_date.isoformat()}",
+            CacheKeys.TTL_5_MIN,
+        )
 
     @staticmethod
     def saved_suggestions(user_id: str) -> tuple[str, int]:
@@ -85,4 +101,3 @@ class CacheKeys:
     @staticmethod
     def pattern_for_user(user_id: str) -> str:
         return f"user:{user_id}:*"
-
