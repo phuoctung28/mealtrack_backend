@@ -1,10 +1,13 @@
 """Tests that MealRepository projection parameter controls relationship loading."""
 from unittest.mock import MagicMock
 from datetime import date
+from datetime import datetime
+import uuid
 
 import pytest
 
 from src.infra.repositories.meal_repository import MealRepository, MealProjection
+from src.domain.model import Meal, MealStatus, MealImage, Nutrition, Macros, FoodItem
 
 
 def _make_repo():
@@ -53,3 +56,56 @@ def test_projection_opt_counts():
     assert len(_PROJECTION_OPTS[MealProjection.FULL_WITH_TRANSLATIONS]) == 3, (
         "FULL_WITH_TRANSLATIONS must have 3 load options (image, nutrition chain, translations)"
     )
+
+
+def test_save_new_meal_inserts_food_items_once(test_session):
+    """Saving a new meal should not duplicate nested nutrition/food_items inserts."""
+    repository = MealRepository(test_session)
+
+    meal = Meal(
+        meal_id=str(uuid.uuid4()),
+        user_id=str(uuid.uuid4()),
+        status=MealStatus.READY,
+        created_at=datetime.now(),
+        image=MealImage(
+            image_id=str(uuid.uuid4()),
+            format="jpeg",
+            size_bytes=1,
+            url="https://example.com/test.jpg",
+        ),
+        dish_name="Empanadas",
+        nutrition=Nutrition(
+            macros=Macros(protein=20.0, carbs=30.0, fat=10.0),
+            food_items=[
+                FoodItem(
+                    id=str(uuid.uuid4()),
+                    name="Flour",
+                    quantity=100.0,
+                    unit="g",
+                    macros=Macros(protein=10.0, carbs=20.0, fat=2.0),
+                    is_custom=True,
+                ),
+                FoodItem(
+                    id=str(uuid.uuid4()),
+                    name="Beef",
+                    quantity=120.0,
+                    unit="g",
+                    macros=Macros(protein=10.0, carbs=10.0, fat=8.0),
+                    is_custom=True,
+                ),
+            ],
+            confidence_score=0.9,
+        ),
+        ready_at=datetime.now(),
+    )
+
+    repository.save(meal)
+
+    from src.infra.database.models.nutrition.food_item import FoodItemORM
+
+    inserted_items = (
+        test_session.query(FoodItemORM)
+        .filter(FoodItemORM.nutrition_id.isnot(None))
+        .all()
+    )
+    assert len(inserted_items) == 2
