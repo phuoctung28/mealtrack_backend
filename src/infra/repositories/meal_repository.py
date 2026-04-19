@@ -111,19 +111,6 @@ class MealRepository(MealRepositoryPort):
                     db_meal.image_id = str(meal.image.image_id)
                 
                 self.db.add(db_meal)
-                
-                # Handle Nutrition if present
-                if meal.nutrition:
-                    db_nutrition = nutrition_domain_to_orm(meal.nutrition, meal_id=meal.meal_id)
-                    self.db.add(db_nutrition)
-                    # Flush to get nutrition ID before creating food_items
-                    self.db.flush()
-                    # Add food items with order preserved
-                    if meal.nutrition.food_items:
-                        for idx, item in enumerate(meal.nutrition.food_items):
-                            db_item = food_item_domain_to_orm(item, nutrition_id=db_nutrition.id)
-                            db_item.order_index = idx
-                            self.db.add(db_item)
 
                 self.db.commit()
                 self.db.refresh(db_meal)
