@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import List
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.domain.utils.timezone_utils import (
@@ -61,7 +62,9 @@ class ReminderQueryBuilder:
             .filter(
                 DBNotificationPreferences.meal_reminders_enabled == True,
                 time_field.isnot(None),
-                DBNotificationPreferences.user_id.in_(active_token_users)
+                DBNotificationPreferences.user_id.in_(
+                    select(active_token_users.c.user_id)
+                )
             )
             .all()
         )
@@ -101,7 +104,9 @@ class ReminderQueryBuilder:
             .join(User, DBNotificationPreferences.user_id == User.id)
             .filter(
                 DBNotificationPreferences.daily_summary_enabled == True,
-                DBNotificationPreferences.user_id.in_(active_token_users)
+                DBNotificationPreferences.user_id.in_(
+                    select(active_token_users.c.user_id)
+                )
             )
             .all()
         )
