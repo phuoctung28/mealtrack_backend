@@ -86,41 +86,23 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
     """
 
     def get_analysis_prompt(self) -> str:
-        return """
-        You are a nutrition analysis assistant that can analyze food in images.
-        Examine the image carefully and provide detailed nutritional information.
-
-        Return your analysis in the following JSON format:
-        {
-          "dish_name": "Overall dish name or comma-separated food items if complex",
-          "emoji": "single food emoji that best represents this dish (e.g. 🍜 for noodle soup, 🍚 for rice, 🥗 for salad)",
-          "foods": [
-            {
-              "name": "Food name",
-              "quantity": 1.0,
-              "unit": "serving/g/oz/cup/etc",
-              "calories": 100,
-              "macros": {
-                "protein": 10,
-                "carbs": 20,
-                "fat": 5,
-              }
-            }
-          ],
-          "total_calories": 100,
-          "confidence": 0.8
-        }
-
-        - Include a dish_name field with the overall dish name (e.g., "Chicken Caesar Salad", "Spaghetti Bolognese")
-        - Keep dish_name concise
-        - If the foods are difficult to describe as a single dish, list them as comma-separated items (e.g., "grilled chicken, rice, broccoli")
-        - Each food item should include name, estimated quantity, unit of measurement, calories, and macros
-        - For quantities, estimate as precisely as possible based on visual cues
-        - All macros should be in grams
-        - Confidence should be between 0 (low) and 1 (high) based on how certain you are of your analysis
-        - Return ONLY valid JSON with no commentary text
-        - Max 8 food items
-        """ + SCAN_DECOMPOSITION_RULES
+        return (
+            "You are a nutrition analysis assistant. Return ONLY valid JSON with no commentary text:\n"
+            "{\n"
+            '  "dish_name": "Overall dish name or comma-separated items",\n'
+            '  "emoji": "single emoji for the overall dish",\n'
+            '  "foods": [\n'
+            '    {"name": "Food name", "quantity": 1.0, "unit": "g", "calories": 100,\n'
+            '     "macros": {"protein": 10, "carbs": 20, "fat": 5}}\n'
+            "  ],\n"
+            '  "total_calories": 100,\n'
+            '  "confidence": 0.8\n'
+            "}\n"
+            "- Keep dish_name concise; if multiple items, use comma-separated names.\n"
+            "- Each food item includes name, quantity, unit, calories, macros (grams).\n"
+            "- Confidence between 0 and 1.\n"
+            "- Max 8 food items.\n"
+        ) + SCAN_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         return "Analyze this food image and provide nutritional information:"

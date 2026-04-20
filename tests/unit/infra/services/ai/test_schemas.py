@@ -11,6 +11,7 @@ from src.infra.services.ai.schemas import (
     IngredientItem,
     RecipeStepItem,
 )
+from src.domain.model.ai.gpt_response import GPTAnalysisResponse
 
 
 class TestMealNamesResponse:
@@ -336,3 +337,28 @@ class TestRecipeStepItem:
         ]
         assert len(steps) == 3
         assert [s.step for s in steps] == [1, 2, 3]
+
+
+class TestGPTAnalysisResponse:
+    """Test GPT analysis response validation."""
+
+    def test_rejects_more_than_8_foods(self):
+        """Invalid: more than 8 foods should fail."""
+        foods = [
+            {
+                "name": f"Food {i}",
+                "quantity": 1,
+                "unit": "g",
+                "calories": 10,
+                "macros": {"protein": 1, "carbs": 1, "fat": 1},
+            }
+            for i in range(9)
+        ]
+
+        with pytest.raises(ValidationError):
+            GPTAnalysisResponse(
+                dish_name="Test Dish",
+                foods=foods,
+                total_calories=90,
+                confidence=0.9,
+            )

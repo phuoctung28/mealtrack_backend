@@ -100,3 +100,9 @@ class TestBasicAnalysisPromptConstraints:
         assert "no commentary text" in prompt
         assert "max 8 food items" in prompt
         assert "keep dish_name concise" in prompt
+
+    def test_basic_analysis_prompt_is_compact(self):
+        """Ensure the basic analysis prompt is materially compressed."""
+        prompt = BasicAnalysisStrategy().get_analysis_prompt()
+
+        assert len(prompt) <= 2600
