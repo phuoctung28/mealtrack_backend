@@ -4,10 +4,8 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_get_async_db_raises_clear_error_when_session_factory_missing(monkeypatch):
-    import importlib
     import src.infra.database.config_async as cfg
 
-    importlib.reload(cfg)
     monkeypatch.setattr(cfg, "AsyncSessionLocal", None)
 
     with pytest.raises(RuntimeError, match="AsyncSessionLocal is not initialized"):

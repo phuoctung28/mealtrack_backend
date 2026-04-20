@@ -2,6 +2,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 
+import src.infra.database.uow_async as uow_async
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 
@@ -53,7 +54,7 @@ async def test_async_uow_exposes_repos():
 
 @pytest.mark.asyncio
 async def test_async_uow_raises_clear_error_when_session_factory_missing():
-    with patch("src.infra.database.uow_async.AsyncSessionLocal", None):
+    with patch.object(uow_async, "AsyncSessionLocal", None):
         with pytest.raises(RuntimeError, match="AsyncSessionLocal is not initialized"):
             async with AsyncUnitOfWork():
                 pass
