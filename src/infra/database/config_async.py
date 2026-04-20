@@ -12,31 +12,41 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-def _extract_sslmode(url: str) -> Tuple[str, Optional[str]]:
+def _sanitize_asyncpg_url_and_connect_args(url: str) -> Tuple[str, dict]:
     """
-    asyncpg does not accept `sslmode` as a connect() kwarg.
+    Remove libpq-only URL params that asyncpg cannot accept as connect kwargs.
 
     SQLAlchemy's URL query params are forwarded as driver kwargs, so we strip
-    `sslmode` and return it so the caller can translate it into asyncpg's `ssl`.
+    unsupported options and translate compatible ones into asyncpg connect_args.
     """
     try:
         parts = urlsplit(url)
         query_pairs = parse_qsl(parts.query, keep_blank_values=True)
         sslmode: Optional[str] = None
         filtered: list[tuple[str, str]] = []
+        connect_args: dict = {}
         for k, v in query_pairs:
             if k == "sslmode":
                 sslmode = v
                 continue
+            if k == "channel_binding":
+                # libpq option; asyncpg.connect() doesn't accept it.
+                continue
             filtered.append((k, v))
-        if sslmode is None:
-            return url, None
+
+        if sslmode and sslmode.lower() not in {"disable", "allow", "prefer"}:
+            # asyncpg expects `ssl` instead of `sslmode`.
+            connect_args["ssl"] = True
+
+        if sslmode is None and len(filtered) == len(query_pairs):
+            return url, connect_args
+
         new_query = urlencode(filtered)
         sanitized = urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
-        return sanitized, sslmode
+        return sanitized, connect_args
     except Exception:  # noqa: BLE001
         # If parsing fails, keep original URL; engine init will surface any issues.
-        return url, None
+        return url, {}
 
 _raw_url = (
     os.getenv("DATABASE_URL_DIRECT")
@@ -60,12 +70,9 @@ elif _raw_url.startswith("postgresql+psycopg2://"):
 else:
     ASYNC_DATABASE_URL = _raw_url
 
-# Render/Neon style URLs may include `?sslmode=require`, which breaks asyncpg.
-ASYNC_DATABASE_URL, _sslmode = _extract_sslmode(ASYNC_DATABASE_URL)
-_connect_args: dict = {}
-if _sslmode and _sslmode.lower() not in {"disable", "allow", "prefer"}:
-    # asyncpg expects `ssl` instead of `sslmode`. `True` lets asyncpg create a default SSL context.
-    _connect_args["ssl"] = True
+# Render/Neon style URLs may include libpq params (sslmode/channel_binding),
+# which must be translated/removed for asyncpg.
+ASYNC_DATABASE_URL, _connect_args = _sanitize_asyncpg_url_and_connect_args(ASYNC_DATABASE_URL)
 
 # Detect Neon pooler — use NullPool (PgBouncer manages connections)
 _IS_NEON_POOLER = "-pooler" in ASYNC_DATABASE_URL and os.getenv("DATABASE_URL_DIRECT") is None
