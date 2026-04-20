@@ -74,6 +74,19 @@ def test_missing_foods_is_allowed():
     assert result.confidence == pytest.approx(0.8)
 
 
+def test_empty_foods_is_allowed():
+    payload = {
+        "dish_name": "Mystery Meal",
+        "foods": [],
+        "confidence": 0.8,
+    }
+
+    result = VisionAnalyzeResponse.model_validate(payload)
+
+    assert result.foods == []
+    assert result.confidence == pytest.approx(0.8)
+
+
 def test_missing_confidence_defaults():
     payload = {
         "foods": [
@@ -89,3 +102,21 @@ def test_missing_confidence_defaults():
     result = VisionAnalyzeResponse.model_validate(payload)
 
     assert result.confidence == pytest.approx(0.5)
+
+
+def test_out_of_range_confidence_is_allowed_for_parser_clamping():
+    payload = {
+        "foods": [
+            {
+                "name": "Lettuce",
+                "quantity": 50,
+                "unit": "g",
+                "macros": {"protein": 1, "carbs": 2, "fat": 0},
+            }
+        ],
+        "confidence": 1.2,
+    }
+
+    result = VisionAnalyzeResponse.model_validate(payload)
+
+    assert result.confidence == pytest.approx(1.2)
