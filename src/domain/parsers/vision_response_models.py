@@ -1,5 +1,5 @@
 """Pydantic models for vision response validation."""
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -21,7 +21,7 @@ class FoodItemResponse(BaseModel):
 
 class VisionAnalyzeResponse(BaseModel):
     """Structured response for vision analysis."""
-    dish_name: str = Field(..., description="Dish name")
+    dish_name: Optional[str] = Field(None, description="Dish name")
     foods: List[FoodItemResponse] = Field(
         ..., min_items=1, max_items=8, description="List of foods"
     )

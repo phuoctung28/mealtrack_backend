@@ -41,17 +41,18 @@ class GPTResponseParser:
             data = gpt_response.get("structured_data")
             if not data:
                 raise GPTResponseParsingError("No structured data found in GPT response")
-            
-            VisionAnalyzeResponse.model_validate(data)
+
+            normalized_data = self._normalize_structured_data(data)
+            VisionAnalyzeResponse.model_validate(normalized_data)
 
             # Parse food items
-            food_items = self._parse_food_items(data)
+            food_items = self._parse_food_items(normalized_data)
             
             # Get total macros
-            total_macros = self._calculate_total_macros(data, food_items)
+            total_macros = self._calculate_total_macros(normalized_data, food_items)
             
             # Get confidence score
-            confidence_score = float(data.get("confidence", 0.5))
+            confidence_score = float(normalized_data.get("confidence", 0.5))
             confidence_score = min(max(0.0, confidence_score), 1.0)
 
             # Create Nutrition object — calories derived from macros
@@ -66,6 +67,14 @@ class GPTResponseParser:
             
         except (KeyError, ValueError, TypeError, ValidationError) as e:
             raise GPTResponseParsingError(f"Failed to parse GPT response: {str(e)}")
+
+    def _normalize_structured_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize structured data before validation."""
+        normalized_data = dict(data)
+        foods = normalized_data.get("foods")
+        if isinstance(foods, list) and len(foods) > self.MAX_FOOD_ITEMS:
+            normalized_data["foods"] = foods[: self.MAX_FOOD_ITEMS]
+        return normalized_data
     
     def _parse_food_items(self, data: Dict[str, Any]) -> List[FoodItem]:
         """Parse food items from GPT response data."""
