@@ -30,10 +30,10 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
 
     async def handle(self, command: EditMealCommand) -> Dict[str, Any]:
         """Handle meal editing operations."""
-        with self.uow as uow:
+        async with self.uow as uow:
             try:
                 # 1. Validate meal exists
-                meal = uow.meals.find_by_id(command.meal_id)
+                meal = await uow.meals.find_by_id(command.meal_id)
                 if not meal:
                     raise ResourceNotFoundException("Meal not found")
 
@@ -60,8 +60,8 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 )
 
                 # 5. Persist changes
-                saved_meal = uow.meals.save(updated_meal)
-                uow.commit()
+                saved_meal = await uow.meals.save(updated_meal)
+                await uow.commit()
 
                 meal_date = (saved_meal.created_at or utc_now()).date()
                 await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
@@ -106,7 +106,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                     ]
                 }
             except Exception as e:
-                uow.rollback()
+                await uow.rollback()
                 logger.error(f"Error editing meal: {str(e)}")
                 raise
 

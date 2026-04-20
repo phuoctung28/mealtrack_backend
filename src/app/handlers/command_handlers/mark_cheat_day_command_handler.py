@@ -9,8 +9,8 @@ from src.app.commands.cheat_day import MarkCheatDayCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.cheat_day import CheatDay
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.domain.utils.timezone_utils import utc_now, resolve_user_timezone, user_today
-from src.infra.database.uow import UnitOfWork
+from src.domain.utils.timezone_utils import utc_now, resolve_user_timezone_async, user_today
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +22,11 @@ class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, Dict[str, Any
         self.uow = uow
 
     async def handle(self, command: MarkCheatDayCommand) -> Dict[str, Any]:
-        uow = self.uow or UnitOfWork()
-        with uow:
+        uow = self.uow or AsyncUnitOfWork()
+        async with uow:
             try:
                 target_date = command.date
-                user_tz = resolve_user_timezone(command.user_id, uow)
+                user_tz = await resolve_user_timezone_async(command.user_id, uow)
                 today = user_today(user_tz)
 
                 if target_date < today:
@@ -35,7 +35,7 @@ class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, Dict[str, Any
                         error_code="PAST_DATE_NOT_ALLOWED",
                     )
 
-                existing = uow.cheat_days.find_by_user_and_date(command.user_id, target_date)
+                existing = await uow.cheat_days.find_by_user_and_date(command.user_id, target_date)
                 if existing:
                     raise ValidationException(
                         message=f"Date {target_date} is already marked as cheat day",
@@ -49,8 +49,8 @@ class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, Dict[str, Any
                     marked_at=utc_now(),
                 )
 
-                uow.cheat_days.add(cheat_day)
-                uow.commit()
+                await uow.cheat_days.add(cheat_day)
+                await uow.commit()
 
                 return {
                     "cheat_day_id": cheat_day.cheat_day_id,
@@ -58,9 +58,9 @@ class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, Dict[str, Any
                     "message": "Date marked as cheat day",
                 }
             except ValidationException:
-                uow.rollback()
+                await uow.rollback()
                 raise
             except Exception as e:
-                uow.rollback()
+                await uow.rollback()
                 logger.error(f"Error marking cheat day: {e}")
                 raise

@@ -1,26 +1,22 @@
 version: '3.8'
 
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: mealtrack_mysql
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: mealtrack_postgres
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword123
-      MYSQL_DATABASE: mealtrack
-      MYSQL_USER: mealtrack_user
-      MYSQL_PASSWORD: mealtrack_pass123
+      POSTGRES_DB: nutree
+      POSTGRES_USER: nutree
+      POSTGRES_PASSWORD: nutree
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
-    command: 
-      - --default-authentication-plugin=mysql_native_password
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword123"]
-      timeout: 20s
+      test: ["CMD-SHELL", "pg_isready -U nutree -d nutree"]
+      interval: 10s
+      timeout: 5s
       retries: 10
 
   redis:
@@ -39,7 +35,7 @@ services:
       retries: 5
 
 volumes:
-  mysql_data:
-    name: mealtrack_mysql_data
+  postgres_data:
+    name: mealtrack_postgres_data
   redis_data:
     name: mealtrack_redis_data

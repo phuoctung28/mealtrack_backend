@@ -14,8 +14,9 @@ from src.domain.constants import NutritionConstants, TDEEConstants
 from src.domain.model.user import TdeeRequest, Sex, JobType, Goal, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.ports.cache_port import CachePort
+from sqlalchemy import select
 from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -41,16 +42,15 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
 
     async def _compute_tdee(self, query: GetUserTdeeQuery) -> Dict[str, Any]:
         """Get user's TDEE calculation based on current profile."""
-        with UnitOfWork() as uow:
+        async with AsyncUnitOfWork() as uow:
             # Get current user profile using the UnitOfWork session
-            profile = (
-                uow.session.query(UserProfile)
-                .filter(
+            result = await uow.session.execute(
+                select(UserProfile).where(
                     UserProfile.user_id == query.user_id,
                     UserProfile.is_current.is_(True),
                 )
-                .first()
             )
+            profile = result.scalars().first()
 
             if not profile:
                 raise ResourceNotFoundException(f"Current profile for user {query.user_id} not found")

@@ -12,9 +12,9 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition.macros import Macros
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
-from src.domain.utils.timezone_utils import get_user_monday, get_zone_info, resolve_user_timezone
+from src.domain.utils.timezone_utils import get_user_monday, get_zone_info, resolve_user_timezone_async
 from src.domain.ports.cache_port import CachePort
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.repositories.meal_repository import MealProjection
 
 logger = logging.getLogger(__name__)
@@ -33,8 +33,8 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
     async def handle(self, query: GetDailyMacrosQuery) -> Dict[str, Any]:
         """Calculate daily macros for a given date with user targets."""
         # One UoW for all DB reads: timezone, meals, weekly budget
-        with UnitOfWork() as uow:
-            user_tz_str = resolve_user_timezone(
+        async with AsyncUnitOfWork() as uow:
+            user_tz_str = await resolve_user_timezone_async(
                 query.user_id, uow, query.header_timezone
             )
             user_tz = get_zone_info(user_tz_str)
@@ -44,7 +44,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             if cached_result is not None:
                 return cached_result
 
-            meals = uow.meals.find_by_date(
+            meals = await uow.meals.find_by_date(
                 target_date, user_id=query.user_id, user_timezone=user_tz_str,
                 projection=MealProjection.MACROS_ONLY,
             )
@@ -79,7 +79,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             # later would require a second connection open). Only consumed when target_calories
             # is available; cheap indexed lookup so the overhead is negligible.
             week_start = get_user_monday(target_date, query.user_id)
-            weekly_budget = uow.weekly_budgets.find_by_user_and_week(query.user_id, week_start)
+            weekly_budget = await uow.weekly_budgets.find_by_user_and_week(query.user_id, week_start)
 
         # TDEE lookup — behind Redis cache, rarely opens DB
         target_calories = None
