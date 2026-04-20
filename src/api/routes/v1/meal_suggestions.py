@@ -325,8 +325,15 @@ async def save_meal_suggestion(
         if body.unsplash_download_location:
             import asyncio
             from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
-            asyncio.create_task(
+            task = asyncio.create_task(
                 UnsplashImageAdapter.trigger_download(body.unsplash_download_location)
+            )
+            task.add_done_callback(
+                lambda t: logger.warning(
+                    "Unsplash download trigger failed: %s", t.exception()
+                )
+                if t.exception()
+                else None
             )
 
         return SaveMealSuggestionResponse(
