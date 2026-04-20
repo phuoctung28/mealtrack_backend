@@ -2,8 +2,11 @@ import json
 import uuid
 from typing import Dict, Any, List, Optional
 
+from pydantic import ValidationError
+
 from src.domain.model.nutrition import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem
+from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
 from src.domain.services.emoji_validator import validate_emoji
 
 
@@ -39,6 +42,8 @@ class GPTResponseParser:
             if not data:
                 raise GPTResponseParsingError("No structured data found in GPT response")
             
+            VisionAnalyzeResponse.model_validate(data)
+
             # Parse food items
             food_items = self._parse_food_items(data)
             
@@ -59,7 +64,7 @@ class GPTResponseParser:
             
             return nutrition
             
-        except (KeyError, ValueError, TypeError) as e:
+        except (KeyError, ValueError, TypeError, ValidationError) as e:
             raise GPTResponseParsingError(f"Failed to parse GPT response: {str(e)}")
     
     def _parse_food_items(self, data: Dict[str, Any]) -> List[FoodItem]:
