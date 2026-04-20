@@ -202,6 +202,28 @@ def get_user_monday(
     return monday
 
 
+async def resolve_user_timezone_async(
+    user_id: str,
+    uow,  # AsyncUnitOfWorkPort
+    header_timezone: Optional[str] = None,
+) -> str:
+    """Async version of resolve_user_timezone for use with AsyncUnitOfWork."""
+    db_tz = "UTC"
+    try:
+        user = await uow.users.find_by_id(user_id)
+        if user and user.timezone and user.timezone != "UTC":
+            return user.timezone
+        if user and user.timezone:
+            db_tz = user.timezone
+    except Exception:
+        pass
+
+    if header_timezone and header_timezone != "UTC" and is_valid_timezone(header_timezone):
+        return normalize_timezone(header_timezone)
+
+    return db_tz
+
+
 def resolve_user_timezone(
     user_id: str,
     uow: "UnitOfWorkPort",

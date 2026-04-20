@@ -10,9 +10,9 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
-from src.domain.utils.timezone_utils import format_iso_utc, get_zone_info, resolve_user_timezone
+from src.domain.utils.timezone_utils import format_iso_utc, get_zone_info, resolve_user_timezone_async
 from src.domain.ports.cache_port import CachePort
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
         activities = []
 
         # Get meal activities using fresh UnitOfWork
-        meal_activities = self._get_meal_activities(
+        meal_activities = await self._get_meal_activities(
             query.target_date, query.user_id, query.language,
             header_timezone=query.header_timezone,
         )
@@ -56,16 +56,16 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
             await self.cache_service.set_json(cache_key, activities, ttl)
         return activities
 
-    def _get_meal_activities(
+    async def _get_meal_activities(
         self, target_date: datetime, user_id: str, language: str = "en",
         header_timezone: str = None,
     ) -> List[Dict[str, Any]]:
         """Get meal activities for a specific date and user."""
         try:
-            # Use fresh UnitOfWork to get current data
-            with UnitOfWork() as uow:
+            # Use fresh AsyncUnitOfWork to get current data
+            async with AsyncUnitOfWork() as uow:
                 # Resolve user timezone (DB → X-Timezone header → UTC)
-                user_tz_str = resolve_user_timezone(
+                user_tz_str = await resolve_user_timezone_async(
                     user_id, uow, header_timezone
                 )
 
@@ -77,7 +77,7 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
                 else:
                     date_obj = target_date.astimezone(tz).date()
 
-                meals = uow.meals.find_by_date(
+                meals = await uow.meals.find_by_date(
                     date_obj, user_id=user_id, user_timezone=user_tz_str,
                 )
 

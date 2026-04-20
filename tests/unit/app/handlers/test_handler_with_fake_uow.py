@@ -42,10 +42,10 @@ class TestDeleteMealWithFakeUoW:
 
         # Build a mock UoW — handler now delegates deletion to uow.meals.delete()
         mock_uow = MagicMock()
-        mock_uow.meals.find_by_id.return_value = meal
-        mock_uow.meals.delete.return_value = None
-        mock_uow.__enter__ = Mock(return_value=mock_uow)
-        mock_uow.__exit__ = Mock(return_value=False)
+        mock_uow.meals.find_by_id = AsyncMock(return_value=meal)
+        mock_uow.meals.delete = AsyncMock(return_value=None)
+        mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+        mock_uow.__aexit__ = AsyncMock(return_value=False)
 
         mock_event_bus = MagicMock()
         mock_event_bus.publish = AsyncMock()
@@ -64,44 +64,44 @@ class TestDeleteMealWithFakeUoW:
 
 class TestFakeUoWTransactionBehavior:
     """Test FakeUnitOfWork transaction behavior."""
-    
+
     def test_commit_sets_flag(self):
         """Test that commit sets the committed flag."""
         fake_uow = FakeUnitOfWork()
-        
+
         with fake_uow:
-            fake_uow.commit()
-        
+            fake_uow._sync_commit()
+
         assert fake_uow.committed is True
         assert fake_uow.rolled_back is False
-    
+
     def test_rollback_sets_flag(self):
         """Test that rollback sets the rolled_back flag."""
         fake_uow = FakeUnitOfWork()
-        
+
         with fake_uow:
-            fake_uow.rollback()
-        
+            fake_uow._sync_rollback()
+
         assert fake_uow.rolled_back is True
-    
+
     def test_context_manager_commits_on_success(self):
         """Test that context manager commits on successful execution."""
         fake_uow = FakeUnitOfWork()
-        
+
         with fake_uow:
             # Simulate successful operation
             pass
-        
+
         assert fake_uow.committed is True
-    
+
     def test_context_manager_rollsback_on_exception(self):
         """Test that context manager rolls back on exception."""
         fake_uow = FakeUnitOfWork()
-        
+
         try:
             with fake_uow:
                 raise ValueError("Test error")
         except ValueError:
             pass
-        
+
         assert fake_uow.rolled_back is True

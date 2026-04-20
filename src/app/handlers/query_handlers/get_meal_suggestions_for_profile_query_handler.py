@@ -11,7 +11,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.daily_meal import GetMealSuggestionsForProfileQuery
 from src.domain.services.daily_meal_suggestion_service import DailyMealSuggestionService
 from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +25,13 @@ class GetMealSuggestionsForProfileQueryHandler(EventHandler[GetMealSuggestionsFo
 
     async def handle(self, query: GetMealSuggestionsForProfileQuery) -> Dict[str, Any]:
         """Get meal suggestions for a user profile."""
-        with UnitOfWork() as uow:
-            # Get user profile using the UnitOfWork session
-            profile = (
-                uow.session.query(UserProfile)
-                .filter(UserProfile.id == query.user_profile_id)
-                .first()
+        from sqlalchemy import select
+
+        async with AsyncUnitOfWork() as uow:
+            result = await uow.session.execute(
+                select(UserProfile).where(UserProfile.id == query.user_profile_id)
             )
+            profile = result.scalars().first()
 
             if not profile:
                 raise ResourceNotFoundException(

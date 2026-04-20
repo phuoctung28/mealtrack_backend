@@ -35,8 +35,8 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                     command.training_level]):
             raise ValidationException("At least one metric must be provided")
 
-        with self.uow as uow:
-            profile = uow.users.get_profile(command.user_id)
+        async with self.uow as uow:
+            profile = await uow.users.get_profile(command.user_id)
 
             if not profile:
                 raise ResourceNotFoundException(f"User {command.user_id} not found. Profile required to update metrics.")
@@ -91,7 +91,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
             # Ensure this profile is marked as current
             profile.is_current = True
 
-            uow.users.update_profile(profile)
+            await uow.users.update_profile(profile)
 
         await self._invalidate_user_profile(command.user_id)
 

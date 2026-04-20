@@ -14,7 +14,7 @@ from src.domain.model.user import Sex, TdeeRequest, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.ports.cache_port import CachePort
 from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +49,13 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
 
     async def _fetch_from_db(self, query: GetUserProfileQuery) -> Dict[str, Any]:
         """Fetch profile from DB and compute TDEE."""
-        with UnitOfWork() as uow:
-            profile = (
-                uow.session.query(UserProfile)
-                .filter(UserProfile.user_id == query.user_id)
-                .first()
+        from sqlalchemy import select
+
+        async with AsyncUnitOfWork() as uow:
+            result = await uow.session.execute(
+                select(UserProfile).where(UserProfile.user_id == query.user_id)
             )
+            profile = result.scalars().first()
 
             if not profile:
                 raise ResourceNotFoundException(f"Profile for user {query.user_id} not found")

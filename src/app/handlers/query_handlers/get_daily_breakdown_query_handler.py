@@ -17,9 +17,9 @@ from src.domain.ports.cache_port import CachePort
 from src.domain.utils.timezone_utils import (
     get_user_monday,
     get_zone_info,
-    resolve_user_timezone,
+    resolve_user_timezone_async,
 )
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.repositories.meal_repository import MealProjection
 
 logger = logging.getLogger(__name__)
@@ -36,8 +36,8 @@ class GetDailyBreakdownQueryHandler(
 
     async def handle(self, query: GetDailyBreakdownQuery) -> Dict[str, Any]:
         """Return 7 DailyBreakdownEntry dicts for Mon–Sun of the requested week."""
-        with UnitOfWork() as uow:
-            user_tz_str = resolve_user_timezone(
+        async with AsyncUnitOfWork() as uow:
+            user_tz_str = await resolve_user_timezone_async(
                 query.user_id, uow, query.header_timezone
             )
             user_tz = get_zone_info(user_tz_str)
@@ -46,14 +46,14 @@ class GetDailyBreakdownQueryHandler(
             if query.week_start:
                 week_start = query.week_start
             else:
-                week_start = get_user_monday(today, query.user_id, uow)
+                week_start = get_user_monday(today, query.user_id)
 
             cached = await self._try_get_cached_result(query.user_id, week_start)
             if cached is not None:
                 return cached
 
             days = [week_start + timedelta(days=i) for i in range(7)]
-            meals = uow.meals.find_by_date_range(
+            meals = await uow.meals.find_by_date_range(
                 user_id=query.user_id,
                 start_date=week_start,
                 end_date=week_start + timedelta(days=6),

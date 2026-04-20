@@ -68,8 +68,8 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     image_id = parts[-1].split(".")[0]
             
             # ---- MERGED UoW 1+2: get timezone + create initial meal record ----
-            with self.uow as uow:
-                user_timezone = uow.users.get_user_timezone(command.user_id)
+            async with self.uow as uow:
+                user_timezone = await uow.users.get_user_timezone(command.user_id)
 
                 # Fallback to UTC if not set
                 if not user_timezone or not is_valid_timezone(user_timezone):
@@ -110,8 +110,8 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     source="scanner",
                 )
 
-                saved_meal = uow.meals.save(meal)
-                uow.commit()
+                saved_meal = await uow.meals.save(meal)
+                await uow.commit()
                 logger.info(f"Created meal record {saved_meal.meal_id} with ANALYZING status")
 
             # PHASE 1: AI Vision Analysis (generates content in English)
@@ -199,9 +199,9 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                 )
 
             # ---- MERGED UoW 3+4: save final meal + reload with translations ----
-            with self.uow as uow:
-                final_meal = uow.meals.save(meal)
-                uow.commit()
+            async with self.uow as uow:
+                final_meal = await uow.meals.save(meal)
+                await uow.commit()
                 total_elapsed = phase1_elapsed + phase2_elapsed
                 logger.info(
                     f"[ANALYSIS-COMPLETE] meal={final_meal.meal_id} | "
@@ -211,7 +211,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     f"language={command.language} | "
                     f"status={final_meal.status}"
                 )
-                final_meal = uow.meals.find_by_id(meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS)
+                final_meal = await uow.meals.find_by_id(meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS)
 
             await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
                 aggregate_id=command.user_id,
@@ -227,7 +227,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             if 'meal' in locals() and meal.meal_id:
                 meal.status = MealStatus.FAILED
                 meal.error_message = str(e)
-                with self.uow as uow:
-                    uow.meals.save(meal)
-                    uow.commit()
+                async with self.uow as uow:
+                    await uow.meals.save(meal)
+                    await uow.commit()
             raise

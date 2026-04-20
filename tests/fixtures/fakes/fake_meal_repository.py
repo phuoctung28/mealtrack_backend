@@ -13,29 +13,29 @@ class FakeMealRepository(MealRepositoryPort):
     def __init__(self):
         self._meals: dict[str, Meal] = {}
 
-    def save(self, meal: Meal) -> Meal:
+    async def save(self, meal: Meal) -> Meal:
         """Save a meal to in-memory storage."""
         self._meals[meal.meal_id] = meal
         return meal
 
-    def find_by_id(self, meal_id: str) -> Optional[Meal]:
+    async def find_by_id(self, meal_id: str, projection: Any = None) -> Optional[Meal]:
         """Find a meal by ID."""
         return self._meals.get(meal_id)
 
-    def find_by_status(self, status: MealStatus, limit: int = 10) -> List[Meal]:
+    async def find_by_status(self, status: MealStatus, limit: int = 10) -> List[Meal]:
         """Find meals by status."""
         return [meal for meal in self._meals.values() if meal.status == status][:limit]
 
-    def find_all_paginated(self, offset: int = 0, limit: int = 20) -> List[Meal]:
+    async def find_all_paginated(self, offset: int = 0, limit: int = 20) -> List[Meal]:
         """Retrieve all meals with pagination."""
         meals = list(self._meals.values())
         return meals[offset : offset + limit]
 
-    def count(self) -> int:
+    async def count(self) -> int:
         """Count total number of meals."""
         return len(self._meals)
 
-    def find_by_date(
+    async def find_by_date(
         self,
         date_obj: date,
         user_id: str = None,
@@ -53,7 +53,7 @@ class FakeMealRepository(MealRepositoryPort):
 
         return meals[:limit]
 
-    def find_by_date_range(
+    async def find_by_date_range(
         self,
         user_id: str,
         start_date: date,
@@ -71,7 +71,7 @@ class FakeMealRepository(MealRepositoryPort):
         ]
         return meals[:limit]
 
-    def delete(self, meal_id: str) -> bool:
+    async def delete(self, meal_id: str) -> bool:
         """Delete a meal by ID."""
         if meal_id in self._meals:
             del self._meals[meal_id]

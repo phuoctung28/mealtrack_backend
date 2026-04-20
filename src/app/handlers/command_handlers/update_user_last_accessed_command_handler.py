@@ -9,7 +9,7 @@ from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user.sync_user_command import UpdateUserLastAccessedCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,9 @@ class UpdateUserLastAccessedCommandHandler(EventHandler[UpdateUserLastAccessedCo
 
     async def handle(self, command: UpdateUserLastAccessedCommand) -> Dict[str, Any]:
         """Update user's last accessed timestamp."""
-        with UnitOfWork() as uow:
+        async with AsyncUnitOfWork() as uow:
             # Find user by firebase_uid
-            user = uow.users.find_by_firebase_uid(command.firebase_uid)
+            user = await uow.users.find_by_firebase_uid(command.firebase_uid)
 
             if not user:
                 raise ResourceNotFoundException(f"User with Firebase UID {command.firebase_uid} not found")
@@ -30,8 +30,8 @@ class UpdateUserLastAccessedCommandHandler(EventHandler[UpdateUserLastAccessedCo
             # Update last_accessed timestamp
             last_accessed = command.last_accessed or utc_now()
             user.last_accessed = last_accessed
-            
-            uow.users.save(user)
+
+            await uow.users.save(user)
             # UoW auto-commits on exit
 
         return {

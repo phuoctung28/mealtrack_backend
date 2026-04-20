@@ -8,7 +8,7 @@ from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.ports.cache_port import CachePort
 from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +21,15 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
         self.cache_service = cache_service
 
     async def handle(self, command: UpdateCustomMacrosCommand) -> None:
-        with UnitOfWork() as uow:
-            profile = (
-                uow.session.query(UserProfile)
-                .filter(
+        async with AsyncUnitOfWork() as uow:
+            from sqlalchemy import select
+            result = await uow.session.execute(
+                select(UserProfile).where(
                     UserProfile.user_id == command.user_id,
                     UserProfile.is_current.is_(True),
                 )
-                .first()
             )
+            profile = result.scalars().first()
 
             if not profile:
                 raise ResourceNotFoundException(
@@ -47,7 +47,7 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
             profile.custom_protein_g = command.protein_g
             profile.custom_carbs_g = command.carbs_g
             profile.custom_fat_g = command.fat_g
-            uow.session.commit()
+            await uow.session.commit()
 
             action = "cleared" if non_null_count == 0 else "set"
             logger.info(f"Custom macros {action} for user {command.user_id}")

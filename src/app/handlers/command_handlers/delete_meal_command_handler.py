@@ -28,8 +28,8 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
 
     async def handle(self, command: DeleteMealCommand) -> Dict[str, Any]:
         """Handle meal deletion with data preservation."""
-        with self.uow as uow:
-            meal = uow.meals.find_by_id(command.meal_id)
+        async with self.uow as uow:
+            meal = await uow.meals.find_by_id(command.meal_id)
             if not meal:
                 raise ResourceNotFoundException(f"Meal with ID {command.meal_id} not found")
 
@@ -38,7 +38,7 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
                     "You do not have permission to delete this meal"
                 )
 
-            uow.meals.delete(command.meal_id)
+            await uow.meals.delete(command.meal_id)
 
         meal_date = (meal.created_at or utc_now()).date()
         await self.event_bus.publish(MealCacheInvalidationRequiredEvent(

@@ -22,7 +22,9 @@ async def test_returns_cached_value_on_hit():
     handler = GetUserProfileQueryHandler(cache_service=cache_service)
     query = GetUserProfileQuery(user_id="u1")
 
-    with patch("src.app.handlers.query_handlers.get_user_profile_query_handler.UnitOfWork") as mock_uow:
+    with patch(
+        "src.app.handlers.query_handlers.get_user_profile_query_handler.AsyncUnitOfWork"
+    ) as mock_uow:
         result = await handler.handle(query)
 
     assert result == cached_payload
