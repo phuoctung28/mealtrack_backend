@@ -1,6 +1,8 @@
 """Async database engine, session factory, and FastAPI dependency."""
 import logging
 import os
+from typing import Optional, Tuple
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -9,6 +11,42 @@ from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+def _sanitize_asyncpg_url_and_connect_args(url: str) -> Tuple[str, dict]:
+    """
+    Remove libpq-only URL params that asyncpg cannot accept as connect kwargs.
+
+    SQLAlchemy's URL query params are forwarded as driver kwargs, so we strip
+    unsupported options and translate compatible ones into asyncpg connect_args.
+    """
+    try:
+        parts = urlsplit(url)
+        query_pairs = parse_qsl(parts.query, keep_blank_values=True)
+        sslmode: Optional[str] = None
+        filtered: list[tuple[str, str]] = []
+        connect_args: dict = {}
+        for k, v in query_pairs:
+            if k == "sslmode":
+                sslmode = v
+                continue
+            if k == "channel_binding":
+                # libpq option; asyncpg.connect() doesn't accept it.
+                continue
+            filtered.append((k, v))
+
+        if sslmode and sslmode.lower() not in {"disable", "allow", "prefer"}:
+            # asyncpg expects `ssl` instead of `sslmode`.
+            connect_args["ssl"] = True
+
+        if sslmode is None and len(filtered) == len(query_pairs):
+            return url, connect_args
+
+        new_query = urlencode(filtered)
+        sanitized = urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+        return sanitized, connect_args
+    except Exception:  # noqa: BLE001
+        # If parsing fails, keep original URL; engine init will surface any issues.
+        return url, {}
 
 _raw_url = (
     os.getenv("DATABASE_URL_DIRECT")
@@ -32,6 +70,10 @@ elif _raw_url.startswith("postgresql+psycopg2://"):
 else:
     ASYNC_DATABASE_URL = _raw_url
 
+# Render/Neon style URLs may include libpq params (sslmode/channel_binding),
+# which must be translated/removed for asyncpg.
+ASYNC_DATABASE_URL, _connect_args = _sanitize_asyncpg_url_and_connect_args(ASYNC_DATABASE_URL)
+
 # Detect Neon pooler — use NullPool (PgBouncer manages connections)
 _IS_NEON_POOLER = "-pooler" in ASYNC_DATABASE_URL and os.getenv("DATABASE_URL_DIRECT") is None
 
@@ -45,6 +87,7 @@ try:
             ASYNC_DATABASE_URL,
             echo=False,
             poolclass=NullPool,
+            connect_args=_connect_args,
         )
         logger.info("Async engine: NullPool (Neon pooler detected)")
     else:
@@ -56,6 +99,7 @@ try:
             max_overflow=_ASYNC_POOL_OVERFLOW,
             pool_recycle=120,
             pool_timeout=30,
+            connect_args=_connect_args,
         )
         logger.info(
             "Async engine: AsyncAdaptedQueuePool pool_size=%s max_overflow=%s",
