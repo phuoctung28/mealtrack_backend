@@ -76,3 +76,7 @@ firebase-service-account.json
 # ClaudeKit
 plans/
 .claude/
+
+# Local profiling artifacts
+profile*.txt
+profile*.svg
