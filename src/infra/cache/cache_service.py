@@ -107,6 +107,8 @@ def _json_serializer(value: Any) -> Any:
     if isinstance(value, BaseModel):
         return value.model_dump()
     if isinstance(value, datetime):
-        return value.isoformat() + 'Z'
+        # isoformat() already includes timezone offset for aware datetimes
+        # Don't append 'Z' - it creates invalid "+00:00Z" format
+        return value.isoformat()
     raise TypeError(f"Object of type {value.__class__.__name__} is not JSON serializable")
 
