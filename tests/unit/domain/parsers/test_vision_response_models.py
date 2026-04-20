@@ -60,3 +60,32 @@ def test_missing_dish_name_is_allowed():
 
     assert result.dish_name is None
     assert result.foods[0].name == "Lettuce"
+
+
+def test_missing_foods_is_allowed():
+    payload = {
+        "dish_name": "Mystery Meal",
+        "confidence": 0.8,
+    }
+
+    result = VisionAnalyzeResponse.model_validate(payload)
+
+    assert result.foods is None
+    assert result.confidence == pytest.approx(0.8)
+
+
+def test_missing_confidence_defaults():
+    payload = {
+        "foods": [
+            {
+                "name": "Lettuce",
+                "quantity": 50,
+                "unit": "g",
+                "macros": {"protein": 1, "carbs": 2, "fat": 0},
+            }
+        ]
+    }
+
+    result = VisionAnalyzeResponse.model_validate(payload)
+
+    assert result.confidence == pytest.approx(0.5)

@@ -79,38 +79,41 @@ class GPTResponseParser:
     def _parse_food_items(self, data: Dict[str, Any]) -> List[FoodItem]:
         """Parse food items from GPT response data."""
         food_items = []
-        if "foods" in data:
-            for food_data in data["foods"][:self.MAX_FOOD_ITEMS]:
-                # Validate required fields
-                required_fields = ["name", "quantity", "unit", "macros"]
-                for field in required_fields:
-                    if field not in food_data:
-                        raise GPTResponseParsingError(f"Missing required field '{field}' in food item")
-                
-                # Create Macros object
-                macros_data = food_data["macros"]
-                macros = Macros(
-                    protein=float(macros_data.get("protein", 0)),
-                    carbs=float(macros_data.get("carbs", 0)),
-                    fat=float(macros_data.get("fat", 0)),
-                )
-                
-                # Create FoodItem with confidence score
-                confidence = 1.0  # Default confidence
-                if "confidence" in food_data:
-                    confidence = min(max(0.0, float(food_data["confidence"])), 1.0)
-                
-                food_item = FoodItem(
-                    id=uuid.uuid4(),  # Generate UUID for editing support
-                    name=food_data["name"],
-                    quantity=float(food_data["quantity"]),
-                    unit=food_data["unit"],
-                    macros=macros,
-                    micros=None,  # GPT doesn't provide micros yet
-                    confidence=confidence
-                )
-                
-                food_items.append(food_item)
+        foods = data.get("foods")
+        if not isinstance(foods, list):
+            return food_items
+
+        for food_data in foods[:self.MAX_FOOD_ITEMS]:
+            # Validate required fields
+            required_fields = ["name", "quantity", "unit", "macros"]
+            for field in required_fields:
+                if field not in food_data:
+                    raise GPTResponseParsingError(f"Missing required field '{field}' in food item")
+
+            # Create Macros object
+            macros_data = food_data["macros"]
+            macros = Macros(
+                protein=float(macros_data.get("protein", 0)),
+                carbs=float(macros_data.get("carbs", 0)),
+                fat=float(macros_data.get("fat", 0)),
+            )
+
+            # Create FoodItem with confidence score
+            confidence = 1.0  # Default confidence
+            if "confidence" in food_data:
+                confidence = min(max(0.0, float(food_data["confidence"])), 1.0)
+
+            food_item = FoodItem(
+                id=uuid.uuid4(),  # Generate UUID for editing support
+                name=food_data["name"],
+                quantity=float(food_data["quantity"]),
+                unit=food_data["unit"],
+                macros=macros,
+                micros=None,  # GPT doesn't provide micros yet
+                confidence=confidence
+            )
+
+            food_items.append(food_item)
         
         return food_items
     

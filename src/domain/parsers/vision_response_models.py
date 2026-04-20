@@ -22,9 +22,9 @@ class FoodItemResponse(BaseModel):
 class VisionAnalyzeResponse(BaseModel):
     """Structured response for vision analysis."""
     dish_name: Optional[str] = Field(None, description="Dish name")
-    foods: List[FoodItemResponse] = Field(
-        ..., min_items=1, max_items=8, description="List of foods"
+    foods: Optional[List[FoodItemResponse]] = Field(
+        None, min_items=1, max_items=8, description="List of foods"
     )
     confidence: float = Field(
-        ..., ge=0, le=1, description="Overall confidence score"
+        0.5, ge=0, le=1, description="Overall confidence score"
     )

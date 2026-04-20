@@ -60,3 +60,21 @@ class TestGPTResponseParserDishNameCompatibility:
         assert nutrition.macros.protein == pytest.approx(1.0)
         assert nutrition.macros.carbs == pytest.approx(2.0)
         assert nutrition.macros.fat == pytest.approx(3.0)
+
+
+class TestGPTResponseParserOptionalFoods:
+    def test_parse_to_nutrition_allows_missing_foods_with_macros(self, gpt_parser):
+        gpt_response = {
+            "structured_data": {
+                "dish_name": "Macro Meal",
+                "macros": {"protein": 20, "carbs": 40, "fat": 10},
+            }
+        }
+
+        nutrition = gpt_parser.parse_to_nutrition(gpt_response)
+
+        assert nutrition.food_items is None
+        assert nutrition.macros.protein == pytest.approx(20.0)
+        assert nutrition.macros.carbs == pytest.approx(40.0)
+        assert nutrition.macros.fat == pytest.approx(10.0)
+        assert nutrition.confidence_score == pytest.approx(0.5)
