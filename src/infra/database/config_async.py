@@ -78,8 +78,10 @@ ASYNC_DATABASE_URL, _connect_args = _sanitize_asyncpg_url_and_connect_args(ASYNC
 _IS_NEON_POOLER = "-pooler" in ASYNC_DATABASE_URL and os.getenv("DATABASE_URL_DIRECT") is None
 
 _UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
-_ASYNC_POOL_SIZE = int(os.getenv("ASYNC_POOL_SIZE_PER_WORKER", "3"))
-_ASYNC_POOL_OVERFLOW = int(os.getenv("ASYNC_POOL_MAX_OVERFLOW", "2"))
+_ASYNC_POOL_SIZE = int(os.getenv("ASYNC_POOL_SIZE_PER_WORKER", "8"))
+_ASYNC_POOL_OVERFLOW = int(os.getenv("ASYNC_POOL_MAX_OVERFLOW", "12"))
+_ASYNC_POOL_TIMEOUT = int(os.getenv("ASYNC_POOL_TIMEOUT_SECONDS", "60"))
+_ASYNC_POOL_RECYCLE = int(os.getenv("ASYNC_POOL_RECYCLE_SECONDS", "120"))
 
 try:
     if _IS_NEON_POOLER:
@@ -97,14 +99,16 @@ try:
             poolclass=AsyncAdaptedQueuePool,
             pool_size=_UVICORN_WORKERS * _ASYNC_POOL_SIZE,
             max_overflow=_ASYNC_POOL_OVERFLOW,
-            pool_recycle=120,
-            pool_timeout=30,
+            pool_recycle=_ASYNC_POOL_RECYCLE,
+            pool_timeout=_ASYNC_POOL_TIMEOUT,
             connect_args=_connect_args,
         )
         logger.info(
-            "Async engine: AsyncAdaptedQueuePool pool_size=%s max_overflow=%s",
+            "Async engine: AsyncAdaptedQueuePool pool_size=%s max_overflow=%s timeout=%ss recycle=%ss",
             _UVICORN_WORKERS * _ASYNC_POOL_SIZE,
             _ASYNC_POOL_OVERFLOW,
+            _ASYNC_POOL_TIMEOUT,
+            _ASYNC_POOL_RECYCLE,
         )
 
     AsyncSessionLocal = async_sessionmaker(
