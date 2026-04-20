@@ -1,7 +1,7 @@
 # Meal Image Analyze Performance Design
 
 Date: 2026-04-20  
-Scope: `/v1/meals/image` latency-first optimization (p95 <= 6s)
+Scope: `/v1/meals/image` latency-first optimization (p95 <= 6s) with concrete runtime reductions
 
 ## 1. Goal
 
@@ -42,6 +42,31 @@ Keep synchronous endpoint contract, but enforce a bounded and deterministic crit
 3. Strict stage budgets (timeout + token budget + fallback policy).
 4. Structured observability for each stage.
 
+## 4.1 Concrete phase-1 optimizations (not just monitoring)
+
+These are required implementation actions for phase 1:
+
+1. **Prompt compression for scan**  
+   Replace verbose scan prompt with a compact, strict-output prompt that only asks for fields used by parser/output contract.
+
+2. **Output-size reduction**  
+   Cap returned `foods` list (e.g., top-N most relevant ingredients), trim unnecessary prose fields, and enforce concise dish naming.
+
+3. **Hard AI budget profile**  
+   Apply strict per-request limits in `VisionAIService` for scan:
+   - low output token cap,
+   - hard timeout,
+   - deterministic generation settings for lower variance.
+
+4. **Single retry policy**  
+   At most one retry only for transient failures, with reduced budget on retry.
+
+5. **Translation off critical path**  
+   Keep non-English translation out of p95 path in phase 1; if needed, perform asynchronously after successful meal save.
+
+6. **Fail-fast non-food path**  
+   Return controlled non-food failure quickly when parse signal is below threshold; do not spend extra retry budget on likely non-food input.
+
 ## 5. Component-level design
 
 ## 5.1 `upload_meal_image_immediately_command_handler.py`
@@ -61,6 +86,12 @@ Add low-latency invocation profile for meal analyze:
 - explicit timeout handling surface,
 - consistent response contract for parser layer.
 
+Latency profile target (initial):
+- normal attempt timeout: 2.5s
+- retry timeout: 1.5s
+- max attempts: 2 total
+- token budget tuned for compact JSON-only output
+
 ## 5.3 Parser layer (phase 2)
 
 Move from permissive dict parsing to Pydantic output models:
@@ -74,7 +105,7 @@ Validation constraints:
 - explicit schema violation errors,
 - explicit distinction between schema failure and non-food detection.
 
-## 5.4 Metrics envelope
+## 5.4 Minimal metrics envelope (supporting, not primary work)
 
 For each request/stage, log:
 - `flow_type=meal_image_analyze`
@@ -113,11 +144,11 @@ Add benchmark runner and fixtures for `/v1/meals/image`:
 
 Track:
 - p50/p95 latency,
-- failure-rate by typed category,
-- retry/fallback rate.
+- fallback/retry rate,
+- parse success rate.
 
 Gate:
-- reject changes that regress p95 above target or increase failure-rate beyond defined threshold.
+- reject changes that regress p95 above target or reduce parse success below threshold.
 
 ## 7.2 Functional guardrails
 
