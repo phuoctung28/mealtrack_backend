@@ -9,11 +9,21 @@ from src.domain.utils.timezone_utils import (
     DEFAULT_TIMEZONE
 )
 from src.infra.database.models.notification import NotificationPreferences as DBNotificationPreferences
+from src.infra.database.models.notification.user_fcm_token import UserFcmToken as DBUserFcmToken
 from src.infra.database.models.user.user import User
 
 
 class ReminderQueryBuilder:
     """Builds queries for finding users due for reminders."""
+
+    @staticmethod
+    def _active_token_users_subquery(db: Session):
+        """Subquery returning user_ids with at least one active FCM token."""
+        return (
+            db.query(DBUserFcmToken.user_id)
+            .filter(DBUserFcmToken.is_active == True)
+            .subquery()
+        )
 
     @staticmethod
     def find_users_for_meal_reminder(db: Session, meal_type: str, current_utc: datetime) -> List[str]:
@@ -39,6 +49,8 @@ class ReminderQueryBuilder:
         else:
             return []
 
+        active_token_users = ReminderQueryBuilder._active_token_users_subquery(db)
+
         results = (
             db.query(
                 DBNotificationPreferences.user_id,
@@ -48,7 +60,8 @@ class ReminderQueryBuilder:
             .join(User, DBNotificationPreferences.user_id == User.id)
             .filter(
                 DBNotificationPreferences.meal_reminders_enabled == True,
-                time_field.isnot(None)
+                time_field.isnot(None),
+                DBNotificationPreferences.user_id.in_(active_token_users)
             )
             .all()
         )
@@ -77,6 +90,8 @@ class ReminderQueryBuilder:
         Returns:
             List of user IDs who should receive daily summary at their configured time
         """
+        active_token_users = ReminderQueryBuilder._active_token_users_subquery(db)
+
         results = (
             db.query(
                 DBNotificationPreferences.user_id,
@@ -84,7 +99,10 @@ class ReminderQueryBuilder:
                 User.timezone
             )
             .join(User, DBNotificationPreferences.user_id == User.id)
-            .filter(DBNotificationPreferences.daily_summary_enabled == True)
+            .filter(
+                DBNotificationPreferences.daily_summary_enabled == True,
+                DBNotificationPreferences.user_id.in_(active_token_users)
+            )
             .all()
         )
 

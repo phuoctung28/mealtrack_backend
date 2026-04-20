@@ -23,8 +23,9 @@ fi
 PORT="${PORT:-8000}"
 # Start the application
 log "🚀 Starting FastAPI application on port ${PORT}..."
+WORKERS="${UVICORN_WORKERS:-4}"
 exec uvicorn src.api.main:app \
     --host 0.0.0.0 \
     --port "$PORT" \
-    --workers 1 \
+    --workers "$WORKERS" \
     --loop uvloop

@@ -14,7 +14,31 @@ import pytest
 from src.domain.model.meal_suggestion import SuggestionSession, MealSuggestion, MealType, MacroEstimate, Ingredient, RecipeStep
 from src.domain.schemas.meal_generation_schemas import MealNamesResponse, RecipeDetailsResponse
 from src.domain.services.meal_suggestion.parallel_recipe_generator import ParallelRecipeGenerator
+from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+    NutritionLookupService,
+    MealMacros,
+    IngredientMacros,
+)
 from src.domain.services.meal_suggestion.recipe_attempt_builder import PARALLEL_SINGLE_MEAL_TIMEOUT
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _make_meal_macros() -> MealMacros:
+    """Minimal but realistic MealMacros for tests that exercise the nutrition path."""
+    ingredient = IngredientMacros(
+        name="eggs", quantity_g=100.0, calories=155.0,
+        protein=13.0, carbs=1.1, fat=11.0, fiber=0.0, sugar=0.0,
+        source_tier="T1_food_reference",
+    )
+    return MealMacros(
+        calories=450.0, protein=40.0, carbs=30.0, fat=15.0,
+        fiber=2.0, sugar=1.0,
+        ingredients=[ingredient],
+        t1_count=1, t2_count=0, t3_count=0,
+    )
+
 
 # Fixtures for mocked dependencies
 @pytest.fixture
@@ -54,9 +78,14 @@ def mock_user_repo():
 def recipe_generator(mock_generation_service):
     """Create ParallelRecipeGenerator with mocked dependencies."""
     from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+    meal_macros = _make_meal_macros()
+    nutrition_lookup = AsyncMock(spec=NutritionLookupService)
+    nutrition_lookup.calculate_meal_macros = AsyncMock(return_value=meal_macros)
+    nutrition_lookup.scale_to_target = Mock(return_value=meal_macros)
     return ParallelRecipeGenerator(
         generation_service=mock_generation_service,
         macro_validator=MacroValidationService(),
+        nutrition_lookup=nutrition_lookup,
     )
 
 # Fixtures for test data
@@ -155,14 +184,15 @@ class TestSuggestionGenerationPipeline:
                 exclude_meal_names=[]
             )
 
-    async def test_generation_always_uses_english_prompts(self, recipe_generator, mock_generation_service, mock_session, mock_recipe_response):
+    async def test_english_only_generation_prompts(self, recipe_generator, mock_generation_service, mock_session, mock_recipe_response):
         """
-        Tests that generation always uses English prompts regardless of session language.
-        Translation is removed — all AI output is in English.
+        Tests that generation prompts enforce English-only output regardless of session language.
+        Translation to the target language happens in Phase 3 (post-generation), not during
+        generation — this keeps prompts stable and avoids LLM mixing languages mid-response.
         """
         mock_session.language = "vi"
 
-        mock_names = {"meal_names": ["Oat porridge", "Tofu scramble", "Green smoothie", "Avocado toast"]}
+        mock_names = {"meal_names": ["Oatmeal Porridge", "Tofu Scramble", "Green Smoothie", "Avocado Toast"]}
         mock_generation_service.generate_meal_plan.side_effect = [
             mock_names,
             mock_recipe_response, mock_recipe_response, mock_recipe_response, mock_recipe_response
@@ -175,18 +205,166 @@ class TestSuggestionGenerationPipeline:
 
         all_calls = mock_generation_service.generate_meal_plan.call_args_list
 
-        # Name generation always uses English
+        # Name generation: English-only enforcement
         name_gen_system_prompt = all_calls[0].args[1]
-        assert "Output content in English" in name_gen_system_prompt
-        assert "Keep all JSON keys (like 'meal_names') in English" in name_gen_system_prompt
+        assert "Output meal names in ENGLISH" in name_gen_system_prompt
+        assert "JSON keys in English" in name_gen_system_prompt
 
-        # Recipe generation always uses English
+        # Recipe generation: English-only enforcement for all text
         recipe_gen_system_prompt = all_calls[1].args[1]
-        assert "Output string values in English" in recipe_gen_system_prompt
+        assert "MUST be in ENGLISH ONLY" in recipe_gen_system_prompt
         assert "JSON keys in English only" in recipe_gen_system_prompt
 
     def test_constants_are_set_correctly(self, recipe_generator):
         """Ensures performance-related constants are set to their expected optimized values."""
-        assert recipe_generator.SUGGESTIONS_COUNT == 3
+        assert recipe_generator.DEFAULT_SUGGESTIONS_COUNT == 3
         assert recipe_generator.MIN_ACCEPTABLE_RESULTS == 2
         assert PARALLEL_SINGLE_MEAL_TIMEOUT == 35
+
+
+# -----------------------------------------------------------------------------
+# Regression guards for the "strictly 1 serving + skip dietary_preferences" fix.
+# See PR: fix(suggestions): strictly 1 serving & skip user dietary preferences.
+# -----------------------------------------------------------------------------
+@pytest.mark.asyncio
+class TestSessionCreationInvariants:
+    """Verify `_create_new_session` enforces the post-fix invariants.
+
+    Locks in two behaviors a future refactor might silently revert:
+      1. `dietary_preferences` is ALWAYS empty on new sessions — even when
+         the profile has preferences. Onboarding prefs were over-filtering
+         AI output, so we skip them while still applying `allergies`.
+      2. `allergies` still flow through from the profile — stripping diet
+         prefs must NEVER weaken allergen avoidance.
+    """
+
+    @pytest.fixture
+    def orchestration_service(self, mock_generation_service, mock_suggestion_repo, mock_user_repo):
+        from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
+            SuggestionOrchestrationService,
+        )
+        # Stub TDEE + portion services so _create_new_session doesn't depend
+        # on real TDEE math. The test only cares about field passthrough.
+        tdee_stub = Mock()
+        tdee_stub.calculate_tdee = Mock(return_value=2000)
+        portion_stub = Mock()
+        portion_stub.get_target_for_meal_type = Mock(
+            return_value=Mock(target_calories=600)
+        )
+        nutrition_lookup = AsyncMock(spec=NutritionLookupService)
+        nutrition_lookup.calculate_meal_macros = AsyncMock(return_value=None)
+        nutrition_lookup.scale_to_target = Mock(return_value=None)
+
+        service = SuggestionOrchestrationService(
+            generation_service=mock_generation_service,
+            suggestion_repo=mock_suggestion_repo,
+            nutrition_lookup=nutrition_lookup,
+            tdee_service=tdee_stub,
+            portion_service=portion_stub,
+            profile_provider=lambda uid: mock_user_repo.get_profile(uid),
+        )
+        return service
+
+    async def test_new_session_strips_profile_dietary_preferences(
+        self, orchestration_service, mock_user_repo, monkeypatch
+    ):
+        """Profile has dietary_preferences=['vegetarian'] → session must have []."""
+        # Stub the adjusted-daily helper so we don't need a UoW or DB.
+        from src.domain.services.meal_suggestion import suggestion_orchestration_service as mod
+        async def _fake_adjusted(*args, **kwargs):
+            return 2000
+        monkeypatch.setattr(mod, "get_adjusted_daily_target", _fake_adjusted)
+
+        # Profile fixture already sets dietary_preferences=["vegetarian"].
+        assert mock_user_repo.get_profile("user_456").dietary_preferences == ["vegetarian"]
+
+        session, _ = await orchestration_service._create_new_session(
+            user_id="user_456",
+            meal_type="lunch",
+            meal_portion_type="main",
+            ingredients=["chicken"],
+            cooking_time_minutes=20,
+            language="en",
+            servings=1,
+        )
+
+        assert session.dietary_preferences == [], (
+            "Session must strip profile dietary_preferences to avoid over-filtering"
+        )
+
+    async def test_new_session_preserves_profile_allergies(
+        self, orchestration_service, mock_user_repo, monkeypatch
+    ):
+        """Allergies must flow through unchanged — skipping diet prefs must
+        NEVER weaken allergen avoidance (food safety)."""
+        from src.domain.services.meal_suggestion import suggestion_orchestration_service as mod
+        async def _fake_adjusted(*args, **kwargs):
+            return 2000
+        monkeypatch.setattr(mod, "get_adjusted_daily_target", _fake_adjusted)
+
+        session, _ = await orchestration_service._create_new_session(
+            user_id="user_456",
+            meal_type="lunch",
+            meal_portion_type="main",
+            ingredients=["chicken"],
+            cooking_time_minutes=20,
+            language="en",
+            servings=1,
+        )
+
+        assert session.allergies == ["peanuts"], (
+            "Profile allergies must still be applied — food safety critical"
+        )
+
+    async def test_new_session_passes_servings_through(
+        self, orchestration_service, monkeypatch
+    ):
+        """_create_new_session receives `servings` from the caller.
+        Route handler hardcodes 1; this test locks the passthrough so the
+        route-level coercion is the single source of truth (no silent
+        default re-inflation inside the service)."""
+        from src.domain.services.meal_suggestion import suggestion_orchestration_service as mod
+        async def _fake_adjusted(*args, **kwargs):
+            return 2000
+        monkeypatch.setattr(mod, "get_adjusted_daily_target", _fake_adjusted)
+
+        session, _ = await orchestration_service._create_new_session(
+            user_id="user_456",
+            meal_type="lunch",
+            meal_portion_type="main",
+            ingredients=["chicken"],
+            cooking_time_minutes=20,
+            language="en",
+            servings=1,
+        )
+
+        assert session.servings == 1
+
+
+# -----------------------------------------------------------------------------
+# Route-layer guard: the `/generate` endpoint must ALWAYS dispatch the command
+# with servings=1, regardless of what the (deprecated) body field contains.
+# -----------------------------------------------------------------------------
+class TestRouteServingsCoercion:
+    """Lock the route-layer hardcoding of servings=1.
+
+    Older mobile clients may still POST `servings=3` via the deprecated
+    request field; the route must coerce to 1 before dispatching to the
+    event bus. This test asserts the line `servings=1` in meal_suggestions.py
+    never silently reverts to `body.servings`.
+    """
+
+    def test_route_hardcodes_servings_one(self):
+        """Static check: the route literal is `servings=1`, never body-derived."""
+        import inspect
+        from src.api.routes.v1 import meal_suggestions
+
+        source = inspect.getsource(meal_suggestions.generate_suggestions)
+        # The explicit literal must still be present.
+        assert "servings=1" in source, (
+            "Route must hardcode servings=1 — see PR: strict single-serving fix"
+        )
+        # And body.servings must NOT be the value being dispatched.
+        assert "servings=body.servings" not in source, (
+            "Route must not pass body.servings to the command"
+        )

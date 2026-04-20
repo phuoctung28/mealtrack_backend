@@ -24,7 +24,7 @@ class MealPortionTypeEnum(str, Enum):
 
     SNACK = "snack"  # Fixed ~150-300 kcal
     MAIN = "main"  # Calculated from TDEE / meals_per_day
-    OMAD = "omad"  # Full daily target
+    OMAD = "omad"  # DEPRECATED — kept for backward compatibility with older mobile versions
 
 
 def map_legacy_size_to_type(size: MealSizeEnum) -> MealPortionTypeEnum:
@@ -80,8 +80,9 @@ class MealSuggestionRequest(BaseModel):
     ingredient_image_url: Optional[str] = Field(
         None, description="Optional photo of ingredients for AI recognition"
     )
-    cooking_time_minutes: CookingTimeEnum = Field(
-        ..., description="Cooking time constraint (20/30/45/60 minutes)"
+    cooking_time_minutes: Optional[CookingTimeEnum] = Field(
+        None,
+        description="Cooking time constraint (20/30/45/60 minutes). If omitted, no time limit.",
     )
     dietary_preferences: List[str] = Field(
         default_factory=list,
@@ -100,7 +101,7 @@ class MealSuggestionRequest(BaseModel):
         default=1,
         ge=1,
         le=4,
-        description="Number of servings (1-4). Ingredient amounts and calories scale accordingly.",
+        description="DEPRECATED: Server now strictly generates 1 serving per suggestion. Field kept for backward compatibility with older clients.",
     )
     cooking_equipment: List[str] = Field(
         default_factory=list,
@@ -156,6 +157,65 @@ class MealSuggestionRequest(BaseModel):
                 "cooking_time_minutes": 30,
             }
         }
+
+
+class DiscoverMealsRequest(BaseModel):
+    """Request schema for discovery endpoint — generates 6 meals per batch."""
+
+    meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
+        ..., description="Type of meal"
+    )
+    meal_portion_type: Optional[MealPortionTypeEnum] = Field(
+        None, description="Portion type: snack, main, omad"
+    )
+    ingredients: List[str] = Field(
+        default_factory=list, max_length=20,
+        description="Optional available ingredients (max 20)",
+    )
+    cooking_time_minutes: Optional[CookingTimeEnum] = Field(
+        None, description="Cooking time constraint",
+    )
+    cuisine_region: Optional[str] = Field(
+        None, description="Preferred cuisine region",
+    )
+    calorie_target: Optional[int] = Field(
+        None, gt=0, description="Override calorie target",
+    )
+    protein_target: Optional[float] = Field(None, ge=0)
+    carbs_target: Optional[float] = Field(None, ge=0)
+    fat_target: Optional[float] = Field(None, ge=0)
+    session_id: Optional[str] = Field(
+        None, description="Session ID for load-more (auto-excludes shown meals)",
+    )
+    batch_size: int = Field(
+        default=10, ge=1, le=12, description="Meals per batch (default 10, max 12)",
+    )
+
+    def get_effective_portion_type(self) -> MealPortionTypeEnum:
+        if self.meal_portion_type is not None:
+            return self.meal_portion_type
+        if self.meal_type == "snack":
+            return MealPortionTypeEnum.SNACK
+        return MealPortionTypeEnum.MAIN
+
+
+class GenerateRecipesRequest(BaseModel):
+    """Request to generate full recipes for 1-3 selected discovery meals."""
+
+    meal_names: List[str] = Field(
+        ..., min_length=1, max_length=3,
+        description="English meal names from discovery grid (1-3)",
+    )
+    meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
+        ..., description="Type of meal"
+    )
+    calorie_target: Optional[int] = Field(None, gt=0)
+    cuisine_region: Optional[str] = None
+    ingredients: List[str] = Field(default_factory=list, max_length=20)
+    cooking_time_minutes: Optional[int] = Field(None, ge=5, le=120)
+    protein_target: Optional[float] = Field(None, ge=0)
+    carbs_target: Optional[float] = Field(None, ge=0)
+    fat_target: Optional[float] = Field(None, ge=0)
 
 
 class SaveInstructionItem(BaseModel):
@@ -237,6 +297,12 @@ class SaveMealSuggestionRequest(BaseModel):
     cuisine_type: Optional[str] = Field(None, description="Cuisine type (e.g., Asian, Vietnamese)")
     origin_country: Optional[str] = Field(None, description="Country of origin")
     emoji: Optional[str] = Field(None, description="AI-assigned food emoji")
+    image_url: Optional[str] = Field(
+        None, description="Food image URL from discovery (Pexels/Unsplash hotlink)"
+    )
+    unsplash_download_location: Optional[str] = Field(
+        None, description="Unsplash download_location URL — triggers download event per API guidelines"
+    )
 
     @field_validator("meal_date")
     @classmethod

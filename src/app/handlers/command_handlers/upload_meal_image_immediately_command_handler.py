@@ -244,3 +244,9 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         week_start = target_date - timedelta(days=target_date.weekday())
         weekly_key, _ = CacheKeys.weekly_budget(user_id, week_start)
         await self.cache_service.invalidate(weekly_key)
+
+        # Invalidate streak and daily activities caches
+        streak_key, _ = CacheKeys.user_streak(user_id)
+        await self.cache_service.invalidate(streak_key)
+        activities_key, _ = CacheKeys.daily_activities(user_id, target_date)
+        await self.cache_service.invalidate(activities_key)

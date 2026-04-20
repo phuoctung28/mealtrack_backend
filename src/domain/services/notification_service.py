@@ -1,8 +1,12 @@
 """
 Notification service for sending push notifications.
+
+Includes deduplication guard so multiple workers (uvicorn --workers N)
+don't send the same scheduled notification twice in the same minute.
 """
 
 import logging
+from datetime import datetime
 from typing import Dict, List, Optional, Any
 
 from src.domain.model.notification import (
@@ -12,6 +16,7 @@ from src.domain.model.notification import (
 )
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
 from src.domain.services.notification_messages import get_messages
+from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +86,14 @@ class NotificationService:
                 )
                 return {"success": False, "reason": "disabled"}
 
-            # 3. Send notification via Firebase
+            # 3. Dedup guard — prevent duplicate sends from multiple workers
+            if self._is_already_sent(user_id, notification_type):
+                logger.info(
+                    f"Skipping duplicate {notification_type} for user {user_id}"
+                )
+                return {"success": True, "reason": "deduplicated"}
+
+            # 4. Send notification via Firebase
             fcm_tokens = [token.fcm_token for token in tokens]
             for t in tokens:
                 logger.info(
@@ -100,7 +112,7 @@ class NotificationService:
                 tokens=fcm_tokens,
             )
 
-            # 4. Handle invalid tokens
+            # 5. Handle invalid tokens
             if result.get("success") and result.get("failed_tokens"):
                 await self._handle_failed_tokens(
                     result["failed_tokens"],
@@ -265,6 +277,68 @@ class NotificationService:
             logger.info(
                 f"Deactivated {deactivated_count} invalid FCM tokens ({context})"
             )
+
+    def _minute_key(self) -> str:
+        """Current UTC minute as string key for dedup window."""
+        return utc_now().strftime("%Y%m%d%H%M")
+
+    def _is_already_sent(
+        self, user_id: str, notification_type: NotificationType
+    ) -> bool:
+        """Atomically check-and-mark a notification as sent.
+
+        Uses INSERT with duplicate-key ignore so only the first worker
+        to reach this point records the row; all others get False.
+        """
+        from src.infra.database.config import ScopedSession
+        from src.infra.database.models.notification.notification_sent_log import (
+            NotificationSentLog,
+        )
+        from sqlalchemy.exc import IntegrityError
+
+        minute_key = self._minute_key()
+        db = ScopedSession()
+        try:
+            db.add(NotificationSentLog(
+                user_id=user_id,
+                notification_type=str(notification_type),
+                sent_minute=minute_key,
+            ))
+            db.commit()
+            return False  # We claimed it — proceed to send
+        except IntegrityError:
+            db.rollback()
+            return True  # Another worker already claimed it
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Dedup check failed, allowing send: {e}")
+            return False  # Fail-open: send rather than silently drop
+        finally:
+            db.close()
+
+    def cleanup_old_sent_logs(self, older_than_hours: int = 24) -> int:
+        """Delete sent-log rows older than N hours to prevent table bloat."""
+        from src.infra.database.config import ScopedSession
+        from src.infra.database.models.notification.notification_sent_log import (
+            NotificationSentLog,
+        )
+        from datetime import timedelta
+
+        cutoff = utc_now() - timedelta(hours=older_than_hours)
+        db = ScopedSession()
+        try:
+            deleted = db.query(NotificationSentLog).filter(
+                NotificationSentLog.sent_at < cutoff
+            ).delete()
+            db.commit()
+            logger.info(f"Cleaned up {deleted} old notification sent logs")
+            return deleted
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error cleaning up sent logs: {e}")
+            return 0
+        finally:
+            db.close()
 
     def get_notification_preferences(
         self, user_id: str

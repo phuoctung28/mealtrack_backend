@@ -18,6 +18,7 @@ class GeminiModelPurpose(str, Enum):
     MEAL_NAMES = "meal_names"  # High RPM (10/min) for fast name generation
     RECIPE_PRIMARY = "recipe_primary"  # Recipe gen pool 1 (5 RPM)
     RECIPE_SECONDARY = "recipe_secondary"  # Recipe gen pool 2 (5 RPM)
+    BARCODE = "barcode"  # Barcode nutrition extraction (no thinking needed)
 
 
 # Default cache settings
@@ -31,6 +32,7 @@ PURPOSE_MODEL_DEFAULTS = {
     GeminiModelPurpose.MEAL_NAMES: "gemini-2.5-flash-lite",
     GeminiModelPurpose.RECIPE_PRIMARY: "gemini-2.5-flash",
     GeminiModelPurpose.RECIPE_SECONDARY: "gemini-2.5-flash",
+    GeminiModelPurpose.BARCODE: "gemini-2.5-flash",
 }
 
 # Env var names per purpose
@@ -39,6 +41,7 @@ PURPOSE_ENV_VARS = {
     GeminiModelPurpose.MEAL_NAMES: "GEMINI_MODEL_NAMES",
     GeminiModelPurpose.RECIPE_PRIMARY: "GEMINI_MODEL_RECIPE_PRIMARY",
     GeminiModelPurpose.RECIPE_SECONDARY: "GEMINI_MODEL_RECIPE_SECONDARY",
+    GeminiModelPurpose.BARCODE: "GEMINI_MODEL",
 }
 
 

@@ -12,6 +12,7 @@ from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.ports.meal_suggestion_repository_port import MealSuggestionRepositoryPort
 from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+from src.domain.services.meal_suggestion.nutrition_lookup_service import NutritionLookupService
 from src.domain.services.meal_suggestion.parallel_recipe_generator import ParallelRecipeGenerator
 from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
     get_adjusted_daily_target,
@@ -32,7 +33,7 @@ class SuggestionOrchestrationService:
         self,
         generation_service: MealGenerationServicePort,
         suggestion_repo: MealSuggestionRepositoryPort,
-        translation_service=None,
+        nutrition_lookup: NutritionLookupService,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
         profile_provider: Optional[Callable[[str], Any]] = None,
@@ -40,7 +41,6 @@ class SuggestionOrchestrationService:
     ):
         self._generation = generation_service
         self._repo = suggestion_repo
-        self._translation = translation_service
         self._tdee_service = tdee_service or TdeeCalculationService()
         self._portion_service = portion_service or PortionCalculationService()
         self._profile_provider = profile_provider
@@ -49,6 +49,7 @@ class SuggestionOrchestrationService:
         self._recipe_generator = ParallelRecipeGenerator(
             generation_service=generation_service,
             macro_validator=MacroValidationService(),
+            nutrition_lookup=nutrition_lookup,
         )
 
     async def generate_suggestions(
@@ -57,7 +58,7 @@ class SuggestionOrchestrationService:
         meal_type: str,
         meal_portion_type: str,
         ingredients: List[str],
-        cooking_time_minutes: int,
+        cooking_time_minutes: Optional[int] = None,
         session_id: Optional[str] = None,
         language: str = "en",
         servings: int = 1,
@@ -67,6 +68,7 @@ class SuggestionOrchestrationService:
         protein_target: Optional[float] = None,
         carbs_target: Optional[float] = None,
         fat_target: Optional[float] = None,
+        suggestion_count: int = 3,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """Generate 3 suggestions, excluding meals shown in existing session if provided."""
         session, exclude_names = await self._get_or_create_session(
@@ -86,12 +88,9 @@ class SuggestionOrchestrationService:
             fat_target=fat_target,
         )
 
-        suggestions = await self._recipe_generator.generate(session=session, exclude_meal_names=exclude_names)
-
-        if self._translation and session.language != "en":
-            suggestions = await self._translation.translate_meal_suggestions_batch(
-                suggestions, target_language=session.language
-            )
+        suggestions = await self._recipe_generator.generate(
+            session=session, exclude_meal_names=exclude_names, suggestion_count=suggestion_count,
+        )
 
         await self._persist_generation_result(
             session=session,
@@ -142,11 +141,6 @@ class SuggestionOrchestrationService:
             if event.get("event") == "meal_detail":
                 suggestion = event.get("data", {}).get("suggestion")
                 if suggestion is not None:
-                    if self._translation and session.language != "en":
-                        suggestion = await self._translation.translate_meal_suggestion(
-                            suggestion, target_language=session.language
-                        )
-                        event["data"]["suggestion"] = suggestion
                     suggestions.append(suggestion)
             yield event
 
@@ -233,15 +227,15 @@ class SuggestionOrchestrationService:
         meal_type: str,
         meal_portion_type: str,
         ingredients: List[str],
-        cooking_time_minutes: int,
-        language: str,
-        servings: int,
-        cooking_equipment: Optional[List[str]],
-        cuisine_region: Optional[str],
-        calorie_target_override: Optional[int],
-        protein_target: Optional[float],
-        carbs_target: Optional[float],
-        fat_target: Optional[float],
+        cooking_time_minutes: Optional[int] = None,
+        language: str = "en",
+        servings: int = 1,
+        cooking_equipment: Optional[List[str]] = None,
+        cuisine_region: Optional[str] = None,
+        calorie_target_override: Optional[int] = None,
+        protein_target: Optional[float] = None,
+        carbs_target: Optional[float] = None,
+        fat_target: Optional[float] = None,
     ) -> Tuple[SuggestionSession, List[str]]:
         if not self._profile_provider:
             raise RuntimeError("Profile provider not configured for SuggestionOrchestrationService")
@@ -277,7 +271,9 @@ class SuggestionOrchestrationService:
             cooking_time_minutes=cooking_time_minutes,
             servings=servings,
             language=language,
-            dietary_preferences=getattr(profile, "dietary_preferences", None) or [],
+            # Skip user's dietary_preferences from onboarding for now.
+            # Allergies are still applied for safety.
+            dietary_preferences=[],
             allergies=getattr(profile, "allergies", None) or [],
             cooking_equipment=cooking_equipment or [],
             cuisine_region=cuisine_region,
@@ -287,3 +283,51 @@ class SuggestionOrchestrationService:
         )
         logger.info(f"Creating new session {session.id}")
         return session, []
+
+    async def generate_discovery(
+        self,
+        user_id: str,
+        meal_type: str,
+        meal_portion_type: str,
+        ingredients: List[str],
+        cooking_time_minutes: Optional[int] = None,
+        session_id: Optional[str] = None,
+        language: str = "en",
+        cuisine_region: Optional[str] = None,
+        calorie_target_override: Optional[int] = None,
+        protein_target: Optional[float] = None,
+        carbs_target: Optional[float] = None,
+        fat_target: Optional[float] = None,
+        count: int = 6,
+    ) -> Tuple[SuggestionSession, List[dict]]:
+        """Lightweight discovery: names + macros only. No recipes."""
+        is_existing = False
+        if session_id:
+            try:
+                session, exclude_names = await self._load_existing_session(session_id, user_id, language)
+                is_existing = True
+            except ValueError:
+                session, exclude_names = await self._create_new_session(
+                    user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
+                    language, 1, [], cuisine_region,
+                    calorie_target_override, protein_target, carbs_target, fat_target,
+                )
+        else:
+            session, exclude_names = await self._create_new_session(
+                user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
+                language, 1, [], cuisine_region,
+                calorie_target_override, protein_target, carbs_target, fat_target,
+            )
+
+        meals = await self._recipe_generator.generate_discovery(
+            session=session, exclude_meal_names=exclude_names, count=count,
+        )
+
+        # Track shown names for "load more" exclusion
+        session.add_shown_meals([m["name"] for m in meals])
+        if is_existing:
+            await self._repo.update_session(session)
+        else:
+            await self._repo.save_session(session)
+
+        return session, meals

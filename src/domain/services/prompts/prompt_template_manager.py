@@ -13,7 +13,6 @@ from .prompt_constants import (
     JSON_SCHEMAS,
     GOAL_GUIDANCE,
     SYSTEM_MESSAGES,
-    MACRO_ACCURACY_RULES,
     DECOMPOSITION_RULES,
     EMOJI_RULES,
 )
@@ -118,8 +117,8 @@ class PromptTemplateManager:
         cls,
         meal_type: str,
         target_calories: int,
-        cooking_time_minutes: int,
-        ingredients: List[str],
+        cooking_time_minutes: Optional[int] = None,
+        ingredients: Optional[List[str]] = None,
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
         protein_hint: str = "",
@@ -127,19 +126,8 @@ class PromptTemplateManager:
         """
         Build compressed meal suggestion prompt.
         Target: ~500 tokens (down from ~1000+).
-        
-        Args:
-            meal_type: Type of meal (breakfast, lunch, dinner)
-            target_calories: Target calories for the meal
-            cooking_time_minutes: Max cooking time
-            ingredients: Available ingredients
-            allergies: Allergies to avoid
-            dietary_preferences: Dietary preferences
-            protein_hint: Optional protein rotation hint
-            
-        Returns:
-            Compressed prompt string
         """
+        ingredients = ingredients or []
         # Build constraints
         constraints = []
         if allergies:
@@ -147,11 +135,13 @@ class PromptTemplateManager:
         if dietary_preferences:
             constraints.append(f"Diet: {', '.join(dietary_preferences)}")
         constraints_str = "\n".join(constraints) if constraints else ""
-        
+
         # Build ingredients string
         ing_str = ", ".join(ingredients[:8]) if ingredients else "common ingredients"
-        
-        return f"""Generate 1 {meal_type} meal (~{target_calories} cal, ≤{cooking_time_minutes}min).
+
+        time_str = f", ≤{cooking_time_minutes}min" if cooking_time_minutes else ""
+
+        return f"""Generate 1 {meal_type} meal (~{target_calories} cal{time_str}).
 
 INGREDIENTS: {ing_str}
 {constraints_str}
@@ -173,24 +163,62 @@ RULES:
 """
 
     @classmethod
+    def build_discovery_prompt(
+        cls,
+        meal_type: str,
+        target_calories: int,
+        count: int = 6,
+        ingredients: Optional[List[str]] = None,
+        cuisine_region: Optional[str] = None,
+        exclude_meal_names: Optional[List[str]] = None,
+        protein_target: Optional[float] = None,
+        carbs_target: Optional[float] = None,
+        fat_target: Optional[float] = None,
+    ) -> str:
+        """Build prompt for lightweight discovery: names + macros in a single call.
+        ~200 token response for 6 meals."""
+        ing_str = ", ".join((ingredients or [])[:4]) or "common ingredients"
+
+        cuisine_str = f"\nCuisine: {cuisine_region}" if cuisine_region else ""
+
+        exclude_str = ""
+        if exclude_meal_names:
+            exclude_str = f"\nDO NOT suggest: {', '.join(exclude_meal_names[:10])}"
+
+        macro_str = ""
+        if protein_target and carbs_target and fat_target:
+            macro_str = f"\nMacro targets per meal: ~{int(protein_target)}g P, ~{int(carbs_target)}g C, ~{int(fat_target)}g F"
+
+        return f"""Generate {count} different {meal_type} meals, each ~{target_calories} cal.
+MUST USE these ingredients (translate to English if not already): {ing_str}{cuisine_str}{macro_str}
+
+Rules:
+- Names: ENGLISH ONLY (no Vietnamese/foreign words like "Gà", "Cơm", "Sốt" — use "Chicken", "Rice", "Sauce")
+- Names: natural, concise (max 5 words), VERY DIFFERENT styles
+- Macros: realistic, calories ≈ protein*4 + carbs*4 + fat*9 (±10%)
+- Fat must be ≥3g (real meals always have some fat){exclude_str}"""
+
+    @classmethod
     def build_meal_names_prompt(
         cls,
         meal_type: str,
         target_calories: int,
-        cooking_time_minutes: int,
-        ingredients: List[str],
+        cooking_time_minutes: Optional[int] = None,
+        ingredients: Optional[List[str]] = None,
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
         exclude_meal_names: Optional[List[str]] = None,
         servings: int = 1,
         cooking_equipment: Optional[List[str]] = None,
         cuisine_region: Optional[str] = None,
+        names_count: int = 4,
     ) -> str:
         """
         Build prompt for Phase 1 meal name generation.
         Target: ~200 tokens.
         Always generates in English (translation happens in Phase 3).
         """
+        ingredients = ingredients or []
         ing_str = ", ".join(ingredients[:4]) if ingredients else "common ingredients"
 
         constraints = []
@@ -207,8 +235,10 @@ RULES:
         if exclude_meal_names:
             exclude_str = f"\nDO NOT suggest: {', '.join(exclude_meal_names[:10])}"  # Limit to 10 to keep prompt short
 
-        # Add servings instruction when > 1
-        servings_str = f" for {servings} servings" if servings > 1 else ""
+        # Always state serving count explicitly so the AI sizes the
+        # recipe correctly. Silence here was causing multi-serving
+        # recipes to slip through for single-serving requests.
+        servings_str = f" for {servings} serving{'s' if servings > 1 else ''}"
 
         # Add cooking equipment constraint
         equipment_str = ""
@@ -217,11 +247,13 @@ RULES:
 
         # Add cuisine region constraint
         if cuisine_region:
-            cuisine_str = f"\nCuisine: {cuisine_region} (4 different dishes from this region)"
+            cuisine_str = f"\nCuisine: {cuisine_region} ({names_count} different dishes from this region)"
         else:
-            cuisine_str = "\nCuisines: 4 distinct (Asian, Mediterranean, Latin, American)"
+            cuisine_str = f"\nCuisines: {names_count} distinct (Asian, Mediterranean, Latin, American)"
 
-        return f"""Generate 4 different {meal_type} names, ~{target_calories}cal{servings_str}, ≤{cooking_time_minutes}min.
+        time_str = f", ≤{cooking_time_minutes}min" if cooking_time_minutes else ""
+
+        return f"""Generate {names_count} different {meal_type} names, ~{target_calories}cal{servings_str}{time_str}.
 MUST USE these ingredients as main components: {ing_str}{constraints_str}{equipment_str}{cuisine_str}
 Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_str}."""
 
@@ -231,13 +263,13 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         meal_name: str,
         meal_type: str,
         target_calories: int,
-        cooking_time_minutes: int,
-        ingredients: List[str],
+        cooking_time_minutes: Optional[int] = None,
+        ingredients: Optional[List[str]] = None,
         allergies: Optional[List[str]] = None,
         dietary_preferences: Optional[List[str]] = None,
         servings: int = 1,
         cooking_equipment: Optional[List[str]] = None,
-        cuisine_region = None,
+        cuisine_region=None,
         protein_target: Optional[float] = None,
         carbs_target: Optional[float] = None,
         fat_target: Optional[float] = None,
@@ -247,6 +279,7 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         Target: ~400 tokens.
         Always generates in English (translation happens in Phase 3).
         """
+        ingredients = ingredients or []
         ing_str = ", ".join(ingredients[:6]) if ingredients else "any ingredients"
 
         constraints_parts = []
@@ -257,8 +290,9 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
 
         constraints_str = " | ".join(constraints_parts) if constraints_parts else ""
 
-        # Add servings instruction when > 1
-        servings_str = f" for {servings} servings" if servings > 1 else ""
+        # Always state serving count explicitly so the AI sizes the
+        # recipe correctly.
+        servings_str = f" for {servings} serving{'s' if servings > 1 else ''}"
 
         # Add cooking equipment constraint
         equipment_str = ""
@@ -275,23 +309,25 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         if protein_target is not None and carbs_target is not None and fat_target is not None:
             macro_target_str = f"\nMacro targets: ~{int(protein_target)}g protein, ~{int(carbs_target)}g carbs, ~{int(fat_target)}g fat"
 
+        time_str = f" | ≤{cooking_time_minutes} min" if cooking_time_minutes else ""
+        time_req_str = (
+            f"\n- 2-6 clear recipe steps with duration\n- Total prep_time ≤{cooking_time_minutes} min"
+            if cooking_time_minutes
+            else "\n- 2-6 clear recipe steps with duration"
+        )
+
         return f"""Generate complete recipe for: "{meal_name}"
 
 MUST USE these ingredients as main components: {ing_str}{' | ' + constraints_str if constraints_str else ''}
-Target: ~{target_calories} cal{servings_str} | ≤{cooking_time_minutes} min{equipment_str}{cuisine_str}{macro_target_str}
+Target:{servings_str} — ~{target_calories} cal{time_str}{equipment_str}{cuisine_str}{macro_target_str}
 
-PORTION SIZING for {target_calories} cal:
-- {'Small portions: 150g protein, 100g carbs' if target_calories < 600 else 'Standard: 200g protein, 150g carbs' if target_calories < 1000 else 'Large: 300g protein, 200g carbs'}
+CRITICAL: Size all quantities for {servings} serving only — no batch scaling.
 
 REQUIREMENTS:
 - Match name "{meal_name}" exactly
-- MUST include the user's specified ingredients ({ing_str}) — do NOT substitute them
-- 3-8 ingredients with amounts in GRAMS scaled for {servings} serving{'s' if servings > 1 else ''}
-- 2-6 clear recipe steps with duration
-- Total prep_time ≤{cooking_time_minutes} min
+- MUST include user's ingredients ({ing_str}) — no substitutions
+- 3-8 ingredients in GRAMS, scaled for {servings} serving{'s' if servings > 1 else ''}{time_req_str}
 - Include origin_country and cuisine_type in JSON
-
-{MACRO_ACCURACY_RULES}
 
 {DECOMPOSITION_RULES}
 

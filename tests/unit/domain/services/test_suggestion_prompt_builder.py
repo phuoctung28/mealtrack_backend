@@ -174,21 +174,20 @@ class TestBuildRecipeDetailsPrompt:
         assert "recipe" in prompt.lower() or "step" in prompt.lower()
         assert "prep" in prompt.lower() or "time" in prompt.lower()
 
-    def test_requests_macro_calculation(self, mock_session):
-        """Prompt should request macronutrient calculation from ingredients."""
+    def test_does_not_request_macro_calculation(self, mock_session):
+        """Prompt must NOT request macronutrient calculation from the AI.
+
+        Phase 4 (deterministic macros): NutritionLookupService derives all
+        macro values from the ingredient list via the food-reference DB.
+        Asking the AI to calculate macros is redundant and was removed to
+        keep prompts lean and avoid conflicting numbers.
+        """
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
-        # Should request macros calculation from ingredients
-        # Prompt now explicitly requests macro calculation from ingredients
-        # (backend validates but AI calculates from ingredient amounts)
-        assert any(phrase in prompt.lower() for phrase in [
-            "calculate",
-            "macros",
-            "calories",
-            "protein",
-            "carbs",
-            "fat"
-        ])
+        # Macro calculation must NOT be requested in the recipe prompt
+        assert "calculate" not in prompt.lower() or "macro" not in prompt.lower()
+        assert "protein" not in prompt.lower()
+        assert "macros" not in prompt.lower()
 
     def test_includes_portion_sizing_guidance(self, mock_session):
         """Prompt should include guidance on portion sizing."""
@@ -219,13 +218,17 @@ class TestBuildRecipeDetailsPrompt:
         assert "step" in prompt.lower()
         assert "duration" in prompt.lower() or "minute" in prompt.lower() or "time" in prompt.lower()
 
-    def test_requests_macros_in_prompt(self, mock_session):
-        """Prompt should request macronutrient data calculation."""
+    def test_does_not_include_macro_fields_in_prompt(self, mock_session):
+        """Prompt must not include macro field requests (protein/carbs/fat/macros).
+
+        Phase 4: macros are deterministic — NutritionLookupService owns all
+        calorie/macro values. The recipe prompt should only request ingredients
+        with amounts and recipe steps, not macro data the AI cannot accurately provide.
+        """
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
-        # Current implementation requests AI to calculate macros from ingredients
-        assert "protein" in prompt.lower() or "macros" in prompt.lower()
-        assert "carbs" in prompt.lower() or "calories" in prompt.lower()
+        assert "protein" not in prompt.lower()
+        assert "macros" not in prompt.lower()
 
     def test_meal_name_must_match(self, mock_session):
         """Prompt should emphasize that generated meal must match the provided name."""

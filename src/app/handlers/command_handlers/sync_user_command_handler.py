@@ -216,18 +216,26 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
 
         return first_name, last_name
     
-    def _create_default_notification_preferences(self, user_id: Any, uow: UnitOfWorkPort):
-        """Create default notification preferences using repository."""
+    def _create_default_notification_preferences(self, user_id, uow: UnitOfWorkPort):
+        """Create default notification preferences. Non-fatal: logs and skips on error."""
         if not user_id:
             logger.warning("Cannot create notification preferences: user_id is None")
             return
-        
-        # Create default preferences domain model
-        # Using string ID for user_id because domain model uses UUID but repo handles string conversion if needed?
-        # UserDomainModel.id is UUID. NotificationPreferences.user_id is str (from previous check).
-        # Let's ensure type compatibility.
+
         user_id_str = str(user_id)
-        
-        default_prefs = NotificationPreferences.create_default(user_id_str)
-        uow.notifications.save_notification_preferences(default_prefs)
-        logger.info(f"Added default notification preferences for user {user_id}")
+
+        # Validate UUID format before constructing domain model (NUTREE-44)
+        try:
+            import uuid
+            uuid.UUID(user_id_str)
+        except ValueError:
+            logger.error(f"Skipping notification prefs: invalid UUID {user_id_str!r}")
+            return
+
+        try:
+            default_prefs = NotificationPreferences.create_default(user_id_str)
+            uow.notifications.save_notification_preferences(default_prefs)
+            logger.info(f"Added default notification preferences for user {user_id}")
+        except Exception as e:
+            # Non-fatal: notification prefs failure should not crash user sync
+            logger.error(f"Failed to create notification preferences for {user_id}: {e}")

@@ -52,8 +52,12 @@ from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.infra.config.settings import settings
 from src.infra.database.config import engine
+from src.infra.monitoring.sentry import initialize_sentry
 
 load_dotenv()
+
+# Initialize Sentry before creating the FastAPI app so integrations can patch middleware
+initialize_sentry()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -143,6 +147,16 @@ async def lifespan(app: FastAPI):
     # This ensures migrations complete before any workers start, preventing race conditions
     # See: migrations/run.py and docker-entrypoint.sh
 
+    # Warm database connection — triggers Neon compute wakeup on cold start
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+            conn.commit()
+        logger.info("Database connection warmed successfully")
+    except Exception as e:
+        logger.warning("Database connection warming failed: %s", e)
+
     # Initialize and start scheduled notification service
     scheduled_service = None
     try:
@@ -215,8 +229,6 @@ add_dev_auth_bypass(app)
 
 # Include all routers
 app.include_router(health_router)
-# app.include_router(chat_router)
-# app.include_router(chat_ws_router)  # WebSocket router
 app.include_router(meals_router)
 app.include_router(activities_router)
 app.include_router(feature_flags_router)

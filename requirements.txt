@@ -10,8 +10,7 @@ langchain-core>=0.1.0
 langchain-google-genai
 
 # Vector search and embeddings
-pinecone>=7.0.0
-# sentence-transformers>=3.0.0  # Removed - using Pinecone Inference API
+pgvector>=0.3.6
 
 # Cloud storage
 cloudinary==1.37.0
@@ -25,9 +24,7 @@ pillow>=11.0.0
 
 # Database
 sqlalchemy==2.0.41
-pymysql==1.1.1
-mysql-connector-python>=8.0.0
-cryptography>=45.0.0
+psycopg2-binary>=2.9.9
 alembic==1.14.0
 
 # Environment management
@@ -54,3 +51,6 @@ deepl>=1.18.0
 
 # Rate limiting
 slowapi>=0.1.9
+
+# Error monitoring
+sentry-sdk[fastapi]>=2.18.0

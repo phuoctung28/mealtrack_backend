@@ -17,7 +17,7 @@ class SuggestionSession:
     meal_portion_type: str  # snack, main, omad
     target_calories: int
     ingredients: List[str]
-    cooking_time_minutes: int
+    cooking_time_minutes: Optional[int] = None
     servings: int = 1  # Number of servings (1-4), scales ingredient amounts
     language: str = "en"  # ISO 639-1 language code (en, vi, es, fr, de, ja, zh)
     shown_suggestion_ids: List[str] = field(default_factory=list)

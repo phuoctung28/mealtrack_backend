@@ -25,32 +25,30 @@ class Settings(BaseSettings):
     DB_USER: str = Field(default="nutree")
     DB_PASSWORD: str = Field(default="")
     DB_HOST: str = Field(default="localhost")
-    DB_PORT: int = Field(default=3306)
+    DB_PORT: int = Field(default=5432)
     DB_NAME: str = Field(default="nutree")
 
-    # SSL controls
-    DB_SSL_ENABLED: bool = Field(default=True)
-    DB_SSL_VERIFY_CERT: bool = Field(default=False)
-    DB_SSL_VERIFY_IDENTITY: bool = Field(default=False)
-
-    # Connection pool tuning (optimized for 512MB instances)
+    # Connection pool tuning
     UVICORN_WORKERS: int = Field(
-        default=1, description="Number of worker processes (1 for low-memory)"
+        default=4, description="Number of worker processes"
     )
     POOL_SIZE_PER_WORKER: int = Field(
-        default=2, description="DB connections per worker (reduced from 5)"
+        default=3, description="DB connections per worker"
     )
     POOL_MAX_OVERFLOW: int = Field(
-        default=3, description="Max overflow connections (reduced from 10)"
+        default=2, description="Max overflow connections"
     )
     POOL_TIMEOUT: int = Field(default=30)
-    POOL_RECYCLE: int = Field(default=300)
+    POOL_RECYCLE: int = Field(default=120)
     POOL_ECHO: bool = Field(default=False)
 
     # Redis configuration (optimized for low-memory)
+    # Prefer setting REDIS_URL directly for hosted providers (e.g., Upstash)
+    REDIS_URL: str | None = Field(default=None)
     REDIS_HOST: str = Field(default="localhost")
     REDIS_PORT: int = Field(default=6379)
     REDIS_DB: int = Field(default=0)
+    REDIS_USERNAME: str | None = Field(default=None)
     REDIS_PASSWORD: str | None = Field(default=None)
     REDIS_SSL: bool = Field(default=False)
     REDIS_MAX_CONNECTIONS: int = Field(
@@ -70,9 +68,11 @@ class Settings(BaseSettings):
     DEEPL_API_KEY: str | None = Field(default=None, description="DeepL API key for meal translation")
     GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
-    PINECONE_API_KEY: str | None = Field(default=None)
     FATSECRET_CLIENT_ID: str | None = Field(default=None, description="FatSecret OAuth 2.0 client ID")
     FATSECRET_CLIENT_SECRET: str | None = Field(default=None, description="FatSecret OAuth 2.0 client secret")
+    NUTRITIONIX_APP_ID: str | None = Field(default=None, description="Nutritionix API app ID")
+    NUTRITIONIX_API_KEY: str | None = Field(default=None, description="Nutritionix API key")
+    BRAVE_SEARCH_API_KEY: str | None = Field(default=None, description="Brave Search API key (free tier: 2K/mo)")
 
     # LLM Provider configuration
     LLM_PROVIDER: str | None = Field(
@@ -101,13 +101,9 @@ class Settings(BaseSettings):
         description="Secondary model for recipe generation (5 RPM, load distribution)",
     )
 
-    # Chat/AI configuration
-    CHAT_ENABLE_STRUCTURED_RESPONSES: bool = Field(
-        default=True, description="Enable structured JSON responses from chat AI"
-    )
-    CHAT_ENABLE_WELCOME_MESSAGE: bool = Field(
-        default=True, description="Auto-generate welcome message on thread creation"
-    )
+    # Image search (meal discovery photos)
+    PEXELS_API_KEY: str | None = Field(default=None, description="Pexels API key for food photos")
+    UNSPLASH_ACCESS_KEY: str | None = Field(default=None, description="Unsplash Client-ID access key")
     REVENUECAT_SECRET_API_KEY: str | None = Field(default=None)
     REVENUECAT_WEBHOOK_SECRET: str | None = Field(default=None)
     CLOUDINARY_CLOUD_NAME: str | None = Field(default=None)
@@ -116,6 +112,12 @@ class Settings(BaseSettings):
 
     # CORS
     ALLOWED_ORIGINS: str = Field(default="", description="Comma-separated list of allowed CORS origins")
+
+    # Sentry error monitoring
+    SENTRY_DSN: str | None = Field(default=None, description="Sentry DSN; disables Sentry when unset")
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(default=0.1, description="Performance trace sample rate (0.0-1.0)")
+    SENTRY_PROFILES_SAMPLE_RATE: float = Field(default=0.0, description="Profile sample rate (0.0-1.0)")
+    SENTRY_SEND_PII: bool = Field(default=False, description="Send user IP/headers to Sentry")
 
     # Feature flags / development toggles
     USE_MOCK_STORAGE: int = Field(default=0)
@@ -141,9 +143,21 @@ class Settings(BaseSettings):
 
     @property
     def redis_url(self) -> str:
-        """Construct a Redis URL from the configured components."""
+        """Return Redis connection URL.
+
+        If REDIS_URL is set, it is used verbatim (supports username/password URLs).
+        Otherwise, a URL is constructed from the component settings.
+        """
+        if self.REDIS_URL:
+            return self.REDIS_URL
+
         protocol = "rediss" if self.REDIS_SSL else "redis"
-        auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
+        if self.REDIS_USERNAME and self.REDIS_PASSWORD:
+            auth = f"{self.REDIS_USERNAME}:{self.REDIS_PASSWORD}@"
+        elif self.REDIS_PASSWORD:
+            auth = f":{self.REDIS_PASSWORD}@"
+        else:
+            auth = ""
         return f"{protocol}://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
 

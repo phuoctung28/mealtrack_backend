@@ -11,7 +11,6 @@ from .meal_constants import (
     GPTPromptConstants,
     MealPlanningConstants,
     TDEEConstants,
-    ConversationConstants,
     WeeklyBudgetConstants
 )
 
@@ -22,6 +21,5 @@ __all__ = [
     'GPTPromptConstants',
     'MealPlanningConstants',
     'TDEEConstants',
-    'ConversationConstants',
     'WeeklyBudgetConstants'
 ]

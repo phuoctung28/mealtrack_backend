@@ -50,4 +50,5 @@ class GenerateMealSuggestionsCommandHandler(
             protein_target=command.protein_target,
             carbs_target=command.carbs_target,
             fat_target=command.fat_target,
+            suggestion_count=command.suggestion_count,
         )

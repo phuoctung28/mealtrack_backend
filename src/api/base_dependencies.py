@@ -6,7 +6,6 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
-from src.domain.ports.ai_chat_service_port import AIChatServicePort
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
@@ -46,7 +45,6 @@ _cache_monitor = CacheMonitor()
 
 # Singleton service instances (initialized once, reused across requests)
 _image_store: Optional[ImageStorePort] = None
-_ai_chat_service: Optional[AIChatServicePort] = None
 _vision_service: Optional[VisionAIServicePort] = None
 
 async def initialize_cache_layer() -> None:
@@ -140,39 +138,6 @@ def get_vision_service() -> VisionAIServicePort:
     return _vision_service
 
 
-# AI Chat Service (singleton pattern)
-def get_ai_chat_service() -> AIChatServicePort:
-    """
-    Get the AI chat service instance (singleton).
-
-    Uses GeminiChatService which internally uses the GeminiModelManager singleton
-    to share model instances across all services.
-
-    Returns:
-        AIChatServicePort: The configured Gemini chat service
-
-    Raises:
-        ValueError: If GOOGLE_API_KEY is not configured
-    """
-    global _ai_chat_service
-    if _ai_chat_service is not None:
-        return _ai_chat_service
-
-    from src.infra.services.ai.gemini_chat_service import GeminiChatService
-
-    try:
-        # GeminiChatService uses the singleton model manager internally
-        _ai_chat_service = GeminiChatService()
-        logger.info("AI chat service initialized (using shared singleton model)")
-        return _ai_chat_service
-    except ValueError as e:
-        logger.error(f"Failed to create AI chat service: {e}")
-        raise ValueError(
-            "AI chat service is not available. "
-            "Please configure GOOGLE_API_KEY environment variable."
-        ) from e
-
-
 # GPT Parser
 def get_gpt_parser() -> GPTResponseParser:
     """
@@ -237,6 +202,34 @@ def get_fat_secret_service_instance():
     """Get the FatSecret service instance."""
     from src.infra.adapters.fat_secret_service import get_fat_secret_service
     return get_fat_secret_service()
+
+
+# Nutritionix Service
+def get_nutritionix_service_instance():
+    """Get the Nutritionix service instance, or None if not configured."""
+    from src.infra.adapters.nutritionix_service import get_nutritionix_service
+    return get_nutritionix_service()
+
+
+# BraveSearch Nutrition Service (singleton — None when API key not configured)
+_brave_search_nutrition_service = None
+
+
+def get_brave_search_nutrition_service_instance():
+    """Get the BraveSearch nutrition service singleton, or None if unconfigured."""
+    global _brave_search_nutrition_service
+    if _brave_search_nutrition_service is None:
+        from src.infra.adapters.brave_search_nutrition_service import get_brave_search_nutrition_service
+        from src.infra.adapters.meal_generation_service import MealGenerationService
+        from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+
+        meal_gen = MealGenerationService()
+        macro_validator = MacroValidationService()
+        _brave_search_nutrition_service = get_brave_search_nutrition_service(
+            meal_generation_service=meal_gen,
+            macro_validation_service=macro_validator,
+        )
+    return _brave_search_nutrition_service
 
 
 # Food Reference Repository (replaces barcode_product_repository)
@@ -397,7 +390,6 @@ def get_suggestion_orchestration_service():
 
     meal_gen_service = MealGenerationService()
     suggestion_repo = get_meal_suggestion_repository()
-    translation_service = get_deepl_suggestion_translation_service()
 
     # Profile provider keeps domain decoupled from infra while still using SessionLocal
     def profile_provider(user_id: str):
@@ -413,7 +405,7 @@ def get_suggestion_orchestration_service():
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
         suggestion_repo=suggestion_repo,
-        translation_service=translation_service,
+        nutrition_lookup=get_nutrition_lookup_service(),
         profile_provider=profile_provider,
         uow_factory=UnitOfWork,
     )
@@ -451,6 +443,44 @@ def get_deepl_meal_translation_service():
     )
     logger.info("DeepL meal translation service initialised")
     return _deepl_meal_translation_service
+
+
+# IngredientNutritionResolver (singleton — reuses FatSecret + FoodReferenceRepository singletons)
+_ingredient_nutrition_resolver = None
+
+
+def get_ingredient_nutrition_resolver():
+    """Get IngredientNutritionResolver singleton."""
+    global _ingredient_nutrition_resolver
+    if _ingredient_nutrition_resolver is None:
+        from src.domain.services.meal_suggestion.ingredient_nutrition_resolver import (
+            IngredientNutritionResolver,
+        )
+        _ingredient_nutrition_resolver = IngredientNutritionResolver(
+            fatsecret=get_fat_secret_service_instance(),
+            food_ref_repo=get_food_reference_repository(),
+        )
+    return _ingredient_nutrition_resolver
+
+
+# NutritionLookupService (singleton — depends on food_ref_repo, resolver, generation_service)
+_nutrition_lookup_service = None
+
+
+def get_nutrition_lookup_service():
+    """Get NutritionLookupService singleton."""
+    global _nutrition_lookup_service
+    if _nutrition_lookup_service is None:
+        from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+            NutritionLookupService,
+        )
+        from src.infra.adapters.meal_generation_service import MealGenerationService
+        _nutrition_lookup_service = NutritionLookupService(
+            food_ref_repo=get_food_reference_repository(),
+            ingredient_nutrition_resolver=get_ingredient_nutrition_resolver(),
+            generation_service=MealGenerationService(),
+        )
+    return _nutrition_lookup_service
 
 
 # Singleton subscription service instance

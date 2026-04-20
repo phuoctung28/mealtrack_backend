@@ -24,8 +24,6 @@ from src.infra.database.models.user.user import User
 from src.infra.database.models.user.profile import UserProfile
 # Removed models are now part of UserProfile
 from src.infra.database.models.meal_planning.meal_plan import MealPlan
-# TODO: Conversation table never created in database. See delete_user_command_handler.py for details.
-# from src.infra.database.models.conversation.conversation import Conversation
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.model import TdeeRequest, Sex, JobType, Goal, UnitSystem
 

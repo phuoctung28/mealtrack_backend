@@ -6,7 +6,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
-from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from src.infra.database.config import SessionLocal
@@ -109,11 +109,12 @@ class FoodReferenceRepository:
                 "density": data.get("density", 1.0),
                 "extra_nutrients": data.get("extra_nutrients"),
             }
-            stmt = mysql_insert(FoodReferenceModel).values(**values)
-            update_fields = {
-                k: v for k, v in values.items() if k != "barcode"
-            }
-            stmt = stmt.on_duplicate_key_update(**update_fields)
+            stmt = pg_insert(FoodReferenceModel).values(**values)
+            update_fields = {k: v for k, v in values.items() if k != "barcode"}
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[FoodReferenceModel.barcode],
+                set_=update_fields,
+            )
             session.execute(stmt)
             session.commit()
         except Exception as e:
@@ -171,6 +172,100 @@ class FoodReferenceRepository:
             logger.error(f"Error upserting seed '{data.get('name_vi', data.get('name'))}': {e}")
             session.rollback()
             return "skipped"
+        finally:
+            session.close()
+
+    def find_by_normalized_name(self, name_normalized: str) -> Optional[Dict[str, Any]]:
+        """Exact-match lookup by normalized ingredient name."""
+        session: Session = SessionLocal()
+        try:
+            stmt = select(FoodReferenceModel).where(
+                FoodReferenceModel.name_normalized == name_normalized
+            )
+            # .first() instead of scalar_one_or_none() — defensive against
+            # hypothetical duplicates that exist before the unique constraint was added.
+            result = session.execute(stmt).scalars().first()
+            return self._to_dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Error finding food by normalized name '{name_normalized}': {e}")
+            return None
+        finally:
+            session.close()
+
+    def upsert_by_normalized_name(
+        self,
+        name: str,
+        name_normalized: str,
+        protein_100g: float,
+        carbs_100g: float,
+        fat_100g: float,
+        fiber_100g: float,
+        sugar_100g: float,
+        source: str,
+        is_verified: bool,
+        external_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Insert or update food_reference matched on name_normalized.
+
+        Preservation rule: if an existing entry has is_verified=True and
+        incoming is_verified=False, the existing entry is returned unchanged
+        to protect curated data from being overwritten by automated lookups.
+
+        Uses a select-then-atomic-upsert pattern:
+        1. SELECT to check is_verified protection (cannot be expressed in SQL alone).
+        2. If not protected, issue INSERT ... ON DUPLICATE KEY UPDATE for atomicity
+           (race-safe on the unique index added by migration 046).
+        """
+        session: Session = SessionLocal()
+        try:
+            # Step 1: check is_verified protection
+            existing = session.execute(
+                select(FoodReferenceModel).where(
+                    FoodReferenceModel.name_normalized == name_normalized
+                )
+            ).scalars().first()
+
+            if existing is not None and existing.is_verified and not is_verified:
+                # Preserve curated entry — never overwrite with unverified data
+                return self._to_dict(existing)
+
+            # Step 2: atomic upsert — INSERT ... ON DUPLICATE KEY UPDATE
+            values = {
+                "name": name,
+                "name_normalized": name_normalized,
+                "protein_100g": protein_100g,
+                "carbs_100g": carbs_100g,
+                "fat_100g": fat_100g,
+                "fiber_100g": fiber_100g,
+                "sugar_100g": sugar_100g,
+                "source": source,
+                "is_verified": is_verified,
+                "region": "global",
+            }
+            update_fields = {
+                k: v for k, v in values.items() if k != "name_normalized"
+            }
+            stmt = pg_insert(FoodReferenceModel).values(**values)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["name_normalized"],
+                set_=update_fields,
+            )
+            session.execute(stmt)
+            session.commit()
+
+            # Re-fetch to return the authoritative persisted row
+            refreshed = session.execute(
+                select(FoodReferenceModel).where(
+                    FoodReferenceModel.name_normalized == name_normalized
+                )
+            ).scalars().first()
+            return self._to_dict(refreshed) if refreshed else None
+        except Exception as e:
+            logger.error(
+                f"Error upserting food_reference by normalized name '{name_normalized}': {e}"
+            )
+            session.rollback()
+            return None
         finally:
             session.close()
 

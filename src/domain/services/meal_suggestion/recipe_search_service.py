@@ -36,16 +36,9 @@ class RecipeSearchService:
         Returns:
             List of matching recipes, sorted by relevance
         """
-        # Use injected search port or get default
         if not self._search_port:
-            # Lazy import to avoid circular dependency
-            try:
-                from src.infra.services.pinecone_recipe_search_adapter import PineconeRecipeSearchAdapter
-                self._search_port = PineconeRecipeSearchAdapter()
-            except (ImportError, Exception) as e:
-                logger.warning(f"Failed to initialize recipe search adapter: {e}")
-                return []
-        
+            return []
+
         return self._search_port.search_recipes(criteria, limit)
     
     def get_recipe_by_id(self, recipe_id: str) -> Optional[RecipeSearchResult]:
@@ -58,14 +51,7 @@ class RecipeSearchService:
         Returns:
             Recipe if found, None otherwise
         """
-        # Use injected search port or get default
         if not self._search_port:
-            # Lazy import to avoid circular dependency
-            try:
-                from src.infra.services.pinecone_recipe_search_adapter import PineconeRecipeSearchAdapter
-                self._search_port = PineconeRecipeSearchAdapter()
-            except (ImportError, Exception) as e:
-                logger.warning(f"Failed to initialize recipe search adapter: {e}")
-                return None
-        
+            return None
+
         return self._search_port.get_recipe_by_id(recipe_id)

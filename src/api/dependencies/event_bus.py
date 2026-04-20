@@ -3,11 +3,6 @@ Event bus dependency for FastAPI with proper type registrations.
 """
 from typing import Optional
 
-from src.app.commands.chat import (
-    CreateThreadCommand,
-    SendMessageCommand,
-    DeleteThreadCommand,
-)
 from src.app.commands.daily_meal import (
     GenerateDailyMealSuggestionsCommand,
     GenerateSingleMealCommand,
@@ -36,6 +31,7 @@ from src.app.commands.user import (
     CompleteOnboardingCommand,
     DeleteUserCommand,
     UpdateCustomMacrosCommand,
+    UpdateLanguageCommand,
     UpdateTimezoneCommand,
 )
 from src.app.commands.user.sync_user_command import (
@@ -71,6 +67,7 @@ from src.app.handlers.command_handlers import (
 from src.app.handlers.command_handlers import (
     RegisterFcmTokenCommandHandler,
     DeleteFcmTokenCommandHandler,
+    UpdateLanguageCommandHandler,
     UpdateNotificationPreferencesCommandHandler,
     UpdateTimezoneCommandHandler,
 )
@@ -91,12 +88,6 @@ from src.app.handlers.command_handlers.mark_cheat_day_command_handler import Mar
 from src.app.handlers.command_handlers.unmark_cheat_day_command_handler import UnmarkCheatDayCommandHandler
 from src.app.handlers.query_handlers.get_cheat_days_query_handler import GetCheatDaysQueryHandler
 
-# Chat handlers
-from src.app.handlers.command_handlers.chat import (
-    CreateThreadCommandHandler,
-    SendMessageCommandHandler,
-    DeleteThreadCommandHandler,
-)
 # Import event handlers
 from src.app.handlers.event_handlers.meal_analysis_event_handler import (
     MealAnalysisEventHandler,
@@ -126,17 +117,7 @@ from src.app.handlers.query_handlers import (
     GetStreakQueryHandler,
     GetDailyBreakdownQueryHandler,
 )
-from src.app.handlers.query_handlers.chat import (
-    GetThreadsQueryHandler,
-    GetThreadQueryHandler,
-    GetMessagesQueryHandler,
-)
 from src.app.queries.activity import GetDailyActivitiesQuery
-from src.app.queries.chat import (
-    GetThreadsQuery,
-    GetThreadQuery,
-    GetMessagesQuery,
-)
 from src.app.queries.daily_meal import (
     GetMealSuggestionsForProfileQuery,
     GetSingleMealForProfileQuery,
@@ -191,6 +172,9 @@ def get_food_search_event_bus() -> EventBus:
 
     from src.infra.adapters.meal_generation_service import MealGenerationService
     from src.domain.services.food_search_translation_service import FoodSearchTranslationService
+    from src.infra.adapters.nutritionix_service import get_nutritionix_service
+    from src.infra.adapters.brave_search_nutrition_service import get_brave_search_nutrition_service
+    from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
 
     event_bus = PyMediatorEventBus()
 
@@ -203,7 +187,16 @@ def get_food_search_event_bus() -> EventBus:
     food_reference_repository = get_food_reference_repository()
 
     # Translation service for localized food search
-    food_translation_service = FoodSearchTranslationService(MealGenerationService())
+    meal_generation_service = MealGenerationService()
+    food_translation_service = FoodSearchTranslationService(meal_generation_service)
+
+    # Barcode cascade: Nutritionix + Brave Search (optional — None if keys not set)
+    nutritionix_service = get_nutritionix_service()
+    macro_validation_service = MacroValidationService()
+    brave_search_service = get_brave_search_nutrition_service(
+        meal_generation_service=meal_generation_service,
+        macro_validation_service=macro_validation_service,
+    )
 
     event_bus.register_handler(
         SearchFoodsQuery,
@@ -226,6 +219,10 @@ def get_food_search_event_bus() -> EventBus:
             fat_secret_service=fat_secret_service,
             food_reference_repository=food_reference_repository,
             translation_service=food_translation_service,
+            nutritionix_service=nutritionix_service,
+            brave_search_service=brave_search_service,
+            meal_generation_service=meal_generation_service,
+            macro_validation_service=macro_validation_service,
         ),
     )
 
@@ -261,7 +258,6 @@ def get_configured_event_bus() -> EventBus:
         get_food_mapping_service,
         get_fat_secret_service_instance,
         get_cache_service,
-        get_ai_chat_service,
         get_suggestion_orchestration_service,
         get_deepl_meal_translation_service,
     )
@@ -274,7 +270,6 @@ def get_configured_event_bus() -> EventBus:
     food_mapping_service = get_food_mapping_service()
     fat_secret_service = get_fat_secret_service_instance()
     cache_service = get_cache_service()
-    ai_chat_service = get_ai_chat_service()
     suggestion_service = get_suggestion_orchestration_service()
     deepl_translation_service = get_deepl_meal_translation_service()
     
@@ -355,11 +350,11 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         GetWeeklyBudgetQuery,
-        GetWeeklyBudgetQueryHandler(),
+        GetWeeklyBudgetQueryHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
         GetStreakQuery,
-        GetStreakQueryHandler(),
+        GetStreakQueryHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
         GetDailyBreakdownQuery,
@@ -368,7 +363,7 @@ def get_configured_event_bus() -> EventBus:
 
     # Register activity query handlers
     event_bus.register_handler(
-        GetDailyActivitiesQuery, GetDailyActivitiesQueryHandler()
+        GetDailyActivitiesQuery, GetDailyActivitiesQueryHandler(cache_service=cache_service)
     )
 
     # Register daily meal handlers
@@ -429,8 +424,12 @@ def get_configured_event_bus() -> EventBus:
         UpdateTimezoneCommandHandler(),
     )
     event_bus.register_handler(
+        UpdateLanguageCommand,
+        UpdateLanguageCommandHandler(),
+    )
+    event_bus.register_handler(
         UpdateCustomMacrosCommand,
-        UpdateCustomMacrosCommandHandler(),
+        UpdateCustomMacrosCommandHandler(cache_service=cache_service),
     )
     event_bus.register_handler(
         GetUserProfileQuery,
@@ -443,9 +442,9 @@ def get_configured_event_bus() -> EventBus:
         GetUserOnboardingStatusQuery, GetUserOnboardingStatusQueryHandler()
     )
     event_bus.register_handler(
-        GetUserMetricsQuery, GetUserMetricsQueryHandler()
+        GetUserMetricsQuery, GetUserMetricsQueryHandler(cache_service=cache_service)
     )
-    event_bus.register_handler(GetUserTdeeQuery, GetUserTdeeQueryHandler())
+    event_bus.register_handler(GetUserTdeeQuery, GetUserTdeeQueryHandler(cache_service=cache_service))
     event_bus.register_handler(PreviewTdeeQuery, PreviewTdeeQueryHandler())
 
     # Register notification handlers
@@ -459,11 +458,11 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         UpdateNotificationPreferencesCommand,
-        UpdateNotificationPreferencesCommandHandler()
+        UpdateNotificationPreferencesCommandHandler(cache_service=cache_service)
     )
     event_bus.register_handler(
         GetNotificationPreferencesQuery,
-        GetNotificationPreferencesQueryHandler()
+        GetNotificationPreferencesQueryHandler(cache_service=cache_service)
     )
 
     # Register ingredient recognition handler
@@ -474,33 +473,6 @@ def get_configured_event_bus() -> EventBus:
         )
     )
 
-    # Register chat handlers
-    # Chat handlers use ScopedSession internally
-    event_bus.register_handler(
-        CreateThreadCommand,
-        CreateThreadCommandHandler()
-    )
-    event_bus.register_handler(
-        SendMessageCommand,
-        SendMessageCommandHandler(ai_chat_service)
-    )
-    event_bus.register_handler(
-        DeleteThreadCommand,
-        DeleteThreadCommandHandler()
-    )
-    event_bus.register_handler(
-        GetThreadsQuery,
-        GetThreadsQueryHandler()
-    )
-    event_bus.register_handler(
-        GetThreadQuery,
-        GetThreadQueryHandler()
-    )
-    event_bus.register_handler(
-        GetMessagesQuery,
-        GetMessagesQueryHandler()
-    )
-
     # Register cheat day handlers
     event_bus.register_handler(MarkCheatDayCommand, MarkCheatDayCommandHandler())
     event_bus.register_handler(UnmarkCheatDayCommand, UnmarkCheatDayCommandHandler())
@@ -508,13 +480,13 @@ def get_configured_event_bus() -> EventBus:
 
     # Register saved suggestion handlers
     event_bus.register_handler(
-        SaveSuggestionCommand, SaveSuggestionCommandHandler()
+        SaveSuggestionCommand, SaveSuggestionCommandHandler(cache_service=cache_service)
     )
     event_bus.register_handler(
-        DeleteSavedSuggestionCommand, DeleteSavedSuggestionCommandHandler()
+        DeleteSavedSuggestionCommand, DeleteSavedSuggestionCommandHandler(cache_service=cache_service)
     )
     event_bus.register_handler(
-        GetSavedSuggestionsQuery, GetSavedSuggestionsQueryHandler()
+        GetSavedSuggestionsQuery, GetSavedSuggestionsQueryHandler(cache_service=cache_service)
     )
 
     # Register domain event subscribers
