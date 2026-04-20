@@ -1,6 +1,8 @@
 """Async database engine, session factory, and FastAPI dependency."""
 import logging
 import os
+from typing import Optional, Tuple
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -9,6 +11,32 @@ from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+def _extract_sslmode(url: str) -> Tuple[str, Optional[str]]:
+    """
+    asyncpg does not accept `sslmode` as a connect() kwarg.
+
+    SQLAlchemy's URL query params are forwarded as driver kwargs, so we strip
+    `sslmode` and return it so the caller can translate it into asyncpg's `ssl`.
+    """
+    try:
+        parts = urlsplit(url)
+        query_pairs = parse_qsl(parts.query, keep_blank_values=True)
+        sslmode: Optional[str] = None
+        filtered: list[tuple[str, str]] = []
+        for k, v in query_pairs:
+            if k == "sslmode":
+                sslmode = v
+                continue
+            filtered.append((k, v))
+        if sslmode is None:
+            return url, None
+        new_query = urlencode(filtered)
+        sanitized = urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+        return sanitized, sslmode
+    except Exception:  # noqa: BLE001
+        # If parsing fails, keep original URL; engine init will surface any issues.
+        return url, None
 
 _raw_url = (
     os.getenv("DATABASE_URL_DIRECT")
@@ -32,6 +60,13 @@ elif _raw_url.startswith("postgresql+psycopg2://"):
 else:
     ASYNC_DATABASE_URL = _raw_url
 
+# Render/Neon style URLs may include `?sslmode=require`, which breaks asyncpg.
+ASYNC_DATABASE_URL, _sslmode = _extract_sslmode(ASYNC_DATABASE_URL)
+_connect_args: dict = {}
+if _sslmode and _sslmode.lower() not in {"disable", "allow", "prefer"}:
+    # asyncpg expects `ssl` instead of `sslmode`. `True` lets asyncpg create a default SSL context.
+    _connect_args["ssl"] = True
+
 # Detect Neon pooler — use NullPool (PgBouncer manages connections)
 _IS_NEON_POOLER = "-pooler" in ASYNC_DATABASE_URL and os.getenv("DATABASE_URL_DIRECT") is None
 
@@ -45,6 +80,7 @@ try:
             ASYNC_DATABASE_URL,
             echo=False,
             poolclass=NullPool,
+            connect_args=_connect_args,
         )
         logger.info("Async engine: NullPool (Neon pooler detected)")
     else:
@@ -56,6 +92,7 @@ try:
             max_overflow=_ASYNC_POOL_OVERFLOW,
             pool_recycle=120,
             pool_timeout=30,
+            connect_args=_connect_args,
         )
         logger.info(
             "Async engine: AsyncAdaptedQueuePool pool_size=%s max_overflow=%s",
