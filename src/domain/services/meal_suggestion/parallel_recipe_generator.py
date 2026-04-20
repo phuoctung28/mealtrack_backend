@@ -1,38 +1,44 @@
 """
 Parallel recipe generation for meal suggestions.
-Implements 2-phase: name generation → parallel recipe generation.
+Implements 3-phase: name generation → parallel recipe generation → translation.
 Per-recipe attempt logic lives in recipe_attempt_builder.py.
 """
 import asyncio
 import logging
 import time
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import List, Optional
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
 from src.domain.services.meal_suggestion.nutrition_lookup_service import NutritionLookupService
 from src.domain.services.meal_suggestion.recipe_attempt_builder import attempt_recipe_generation
+from src.domain.services.meal_suggestion.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
 
-RECIPE_SYSTEM_PROMPT = (
-    "You are a professional chef and nutritionist. Return ONLY this exact JSON structure:\n"
-    '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
-    '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
-    '"prep_time_minutes":0,"calories":0,"protein":0.0,"carbs":0.0,"fat":0.0}}\n'
-    "All ingredient amounts MUST be in GRAMS. Verify: calories=protein*4+carbs*4+fat*9.\n"
-    "Output string values in English. JSON keys in English only."
-)
+LANGUAGE_NAMES = {
+    "en": "English", "vi": "Vietnamese", "fr": "French", "es": "Spanish",
+    "de": "German", "it": "Italian", "ja": "Japanese", "ko": "Korean",
+    "zh": "Chinese", "ru": "Russian", "pt": "Portuguese", "hi": "Hindi",
+    "ar": "Arabic", "tr": "Turkish", "nl": "Dutch", "pl": "Polish",
+    "sv": "Swedish", "da": "Danish", "fi": "Finnish", "no": "Norwegian",
+    "cs": "Czech", "el": "Greek", "he": "Hebrew", "id": "Indonesian",
+    "ms": "Malay", "th": "Thai",
+}
 
-NAMES_TO_GENERATE = 4
+
+def get_language_name(code: str) -> str:
+    """Map language code to full English name for prompt instructions."""
+    return LANGUAGE_NAMES.get(code.lower(), "English")
 
 
 class ParallelRecipeGenerator:
     """
-    2-phase parallel meal generation:
+    3-phase parallel meal generation:
       Phase 1 — 4 diverse meal names (1 AI call, ~1-2s)
       Phase 2 — 4 recipes in parallel, take first 3 successes (~6-8s)
+      Phase 3 — Translate to target language if non-English (~2-3s)
     """
 
     DEFAULT_SUGGESTIONS_COUNT = 3
@@ -43,12 +49,18 @@ class ParallelRecipeGenerator:
     def __init__(
         self,
         generation_service: MealGenerationServicePort,
+        translation_service: TranslationService,
         macro_validator: MacroValidationService,
         nutrition_lookup: NutritionLookupService,
+        meal_names_schema_class: type,
+        discovery_meals_schema_class: type,
     ) -> None:
         self._generation = generation_service
+        self._translation_service = translation_service
         self._macro_validator = macro_validator
         self._nutrition_lookup = nutrition_lookup
+        self._meal_names_schema = meal_names_schema_class
+        self._discovery_meals_schema = discovery_meals_schema_class
 
     async def generate(
         self,
@@ -56,90 +68,35 @@ class ParallelRecipeGenerator:
         exclude_meal_names: List[str],
         suggestion_count: Optional[int] = None,
     ) -> List[MealSuggestion]:
+        """Run 3-phase generation. Raises RuntimeError if < MIN_ACCEPTABLE_RESULTS succeed."""
         count = suggestion_count or self.DEFAULT_SUGGESTIONS_COUNT
-        """Run 2-phase generation. Raises RuntimeError if < MIN_ACCEPTABLE_RESULTS succeed."""
         start_time = time.time()
+        target_lang = get_language_name(session.language)
 
-        meal_names = await self._phase1_generate_names(
-            session, exclude_meal_names, "English", count
-        )
+        meal_names = await self._phase1_generate_names(session, exclude_meal_names, target_lang, count)
         phase1_elapsed = time.time() - start_time
 
-        suggestions = await self._phase2_generate_recipes(
-            session, meal_names, "English", count, preserve_order=False
-        )
-        phase2_elapsed = time.time() - start_time - phase1_elapsed
+        if session.language and session.language != "en":
+            suggestions = await self._phase2_and_translate(
+                session, meal_names, target_lang, count
+            )
+            phase2_elapsed = time.time() - start_time - phase1_elapsed
+            phase3_elapsed = 0.0  # pipelined — no separate phase
+        else:
+            suggestions = await self._phase2_generate_recipes(
+                session, meal_names, target_lang, count, preserve_order=False
+            )
+            phase2_elapsed = time.time() - start_time - phase1_elapsed
+            phase3_elapsed = 0.0
 
         total_elapsed = time.time() - start_time
         logger.info(
             f"[PIPELINE-COMPLETE] session={session.id} | total_elapsed={total_elapsed:.2f}s | "
             f"phase1={phase1_elapsed:.2f}s | phase2={phase2_elapsed:.2f}s | "
-            f"language={session.language} | "
+            f"phase3={phase3_elapsed:.2f}s | language={session.language} | "
             f"returned={len(suggestions)} | meals={[s.meal_name for s in suggestions]}"
         )
         return suggestions
-
-    async def generate_stream(
-        self,
-        session: SuggestionSession,
-        exclude_meal_names: List[str],
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Stream generation events for progressive UI updates."""
-        meal_names = await self._phase1_generate_names(
-            session, exclude_meal_names, "English", self.DEFAULT_SUGGESTIONS_COUNT
-        )
-
-        for idx, meal_name in enumerate(
-            meal_names[: self.DEFAULT_SUGGESTIONS_COUNT]
-        ):
-            yield {
-                "event": "meal_name",
-                "data": {
-                    "index": idx,
-                    "meal_name": meal_name,
-                },
-            }
-
-        from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_recipe_details_prompt
-
-        prompts = [build_recipe_details_prompt(name, session) for name in meal_names]
-        tasks = [
-            asyncio.create_task(
-                self._generate_with_retry(prompts[i], meal_names[i], i, RECIPE_SYSTEM_PROMPT, session)
-            )
-            for i in range(len(meal_names))
-        ]
-
-        successful: List[MealSuggestion] = []
-        for coro in asyncio.as_completed(tasks):
-            try:
-                result = await coro
-                if result is not None:
-                    successful.append(result)
-                    yield {
-                        "event": "meal_detail",
-                        "data": {
-                            "index": len(successful) - 1,
-                            "suggestion": result,
-                        },
-                    }
-                    if len(successful) >= self.DEFAULT_SUGGESTIONS_COUNT:
-                        for task in tasks:
-                            if not task.done():
-                                task.cancel()
-                        break
-            except Exception as e:
-                yield {
-                    "event": "error",
-                    "data": {"message": "Recipe generation failed"},
-                }
-
-        if len(successful) < self.MIN_ACCEPTABLE_RESULTS:
-            if not successful:
-                raise RuntimeError(f"Failed to generate any recipes from {len(meal_names)} attempts")
-            raise RuntimeError(
-                f"Insufficient recipes: {len(successful)}/{self.MIN_ACCEPTABLE_RESULTS} minimum"
-            )
 
     async def generate_discovery(
         self,
@@ -152,7 +109,13 @@ class ParallelRecipeGenerator:
         Returns list of dicts with validated macros. ~200 tokens total.
         """
         from src.domain.services.prompts.prompt_template_manager import PromptTemplateManager
-        from src.domain.schemas.meal_generation_schemas import DiscoveryMealsResponse
+
+        discovery_schema = self._discovery_meals_schema
+        if not discovery_schema:
+            raise RuntimeError(
+                "DiscoveryMealsResponse schema not provided to ParallelRecipeGenerator. "
+                "Must be injected at initialization."
+            )
 
         start = time.time()
         # Request extra for dedup headroom
@@ -179,7 +142,7 @@ class ParallelRecipeGenerator:
             raw = await asyncio.wait_for(
                 asyncio.to_thread(
                     self._generation.generate_meal_plan,
-                    prompt, system, "json", 1000, DiscoveryMealsResponse, "meal_names",
+                    prompt, system, "json", 1000, discovery_schema, "meal_names",
                 ),
                 timeout=self.DISCOVERY_TIMEOUT,
             )
@@ -232,7 +195,13 @@ class ParallelRecipeGenerator:
         suggestion_count: int = 3,
     ) -> List[str]:
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_meal_names_prompt
-        from src.domain.schemas.meal_generation_schemas import MealNamesResponse
+
+        meal_names_schema = self._meal_names_schema
+        if not meal_names_schema:
+            raise RuntimeError(
+                "MealNamesResponse schema not provided to ParallelRecipeGenerator. "
+                "Must be injected at initialization."
+            )
 
         # Request extra names for headroom (failures, dedup); retry once on shortage
         names_to_generate = suggestion_count + 4
@@ -256,7 +225,7 @@ class ParallelRecipeGenerator:
                     asyncio.to_thread(
                         self._generation.generate_meal_plan,
                         build_meal_names_prompt(session, exclude_meal_names, names_to_generate),
-                        names_system, "json", 1000, MealNamesResponse, "meal_names",
+                        names_system, "json", 1000, meal_names_schema, "meal_names",
                     ),
                     timeout=self.PHASE1_TIMEOUT,
                 )
@@ -366,3 +335,89 @@ class ParallelRecipeGenerator:
             prompt, meal_name, index, alternate, recipe_system, session,
             is_retry=True,
         )
+
+    async def _translate_single(
+        self, suggestion: MealSuggestion, language: str
+    ) -> MealSuggestion:
+        """Translate a single suggestion; return original on failure."""
+        try:
+            results = await self._translation_service.translate_meal_suggestions_batch(
+                [suggestion], language
+            )
+            return results[0] if results else suggestion
+        except Exception as e:
+            logger.warning(
+                f"[TRANSLATE-SINGLE-FAILED] meal={suggestion.meal_name} | "
+                f"{type(e).__name__}: {e} | using English"
+            )
+            return suggestion
+
+    async def _phase2_and_translate(
+        self,
+        session: SuggestionSession,
+        meal_names: List[str],
+        target_lang: str,
+        suggestion_count: int,
+    ) -> List[MealSuggestion]:
+        """Pipeline Phase 2 + translation: translate each recipe as it completes."""
+        from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_recipe_details_prompt
+
+        recipe_system = (
+            "You are a professional chef. Return ONLY this exact JSON structure:\n"
+            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
+            '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
+            '"prep_time_minutes":0}}\n'
+            "All ingredient amounts MUST be in GRAMS.\n"
+            "CRITICAL: ALL text (ingredient names, instructions) MUST be in ENGLISH ONLY. "
+            "Do NOT include Vietnamese, Japanese, or any non-English text (no 'gà', 'cơm', 'trứng' — "
+            "use 'chicken', 'rice', 'egg'). No parenthetical translations. JSON keys in English only."
+        )
+        prompts = [build_recipe_details_prompt(n, session) for n in meal_names]
+        gen_tasks = [
+            asyncio.create_task(
+                self._generate_with_retry(prompts[i], meal_names[i], i, recipe_system, session)
+            )
+            for i in range(len(meal_names))
+        ]
+
+        translate_tasks: List[asyncio.Task] = []
+        gen_successes = 0
+        min_acceptable = max(suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS)
+
+        logger.info(f"[PHASE-2-PIPELINE-START] session={session.id} | recipes={meal_names}")
+        gen_start = time.time()
+
+        for coro in asyncio.as_completed(gen_tasks):
+            try:
+                result = await coro
+                if result is not None:
+                    gen_successes += 1
+                    translate_tasks.append(
+                        asyncio.create_task(
+                            self._translate_single(result, session.language)
+                        )
+                    )
+                    if gen_successes >= suggestion_count:
+                        cancelled = sum(1 for t in gen_tasks if not t.done() and t.cancel())
+                        logger.info(
+                            f"[EARLY-STOP] Got {suggestion_count} recipes, "
+                            f"cancelled {cancelled} gen tasks"
+                        )
+                        break
+            except Exception as e:
+                logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
+
+        logger.info(
+            f"[PHASE-2-PIPELINE-COMPLETE] session={session.id} | "
+            f"success={gen_successes}/{len(meal_names)} | elapsed={time.time()-gen_start:.2f}s"
+        )
+
+        if gen_successes < min_acceptable:
+            for t in translate_tasks:
+                t.cancel()
+            if not gen_successes:
+                raise RuntimeError(f"Failed to generate any recipes from {len(meal_names)} attempts")
+            raise RuntimeError(f"Insufficient recipes: {gen_successes}/{min_acceptable} minimum")
+
+        suggestions = await asyncio.gather(*translate_tasks)
+        return list(suggestions)

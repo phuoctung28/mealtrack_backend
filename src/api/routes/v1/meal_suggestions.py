@@ -142,14 +142,87 @@ async def discover_meals(
             count=body.batch_size,
         )
 
-        # Fetch images in parallel using English names (best-effort)
+        # --- meal-image-cache integration ---
         from src.api.dependencies.food_image import get_food_image_service
+        from src.api.dependencies.meal_image_cache import (
+            get_meal_image_cache_service, get_pending_queue,
+        )
+        from src.domain.model.meal_image_cache import PendingItem
+        from src.domain.services.meal_image_cache.name_canonicalizer import slug as _slug
+        from src.infra.config.settings import get_settings as _get_settings
+
         image_service = get_food_image_service()
-        image_tasks = [
-            image_service.search_food_image(m["english_name"])
-            for m in meals
-        ]
-        images = await asyncio.gather(*image_tasks, return_exceptions=True)
+        cfg = _get_settings()
+
+        if cfg.MEAL_IMAGE_CACHE_ENABLED:
+            from src.api.base_dependencies import get_db as _get_db
+            _db = next(_get_db())
+            cache_svc = await get_meal_image_cache_service(session=_db)
+            pending_repo = await get_pending_queue(session=_db)
+            english_names = [m["english_name"] for m in meals]
+            cache_hits = await cache_svc.lookup_batch(english_names)
+        else:
+            cache_hits = [None] * len(meals)
+            pending_repo = None
+
+        images_list: list = []
+        misses: list[PendingItem] = []
+        for i, m in enumerate(meals):
+            hit = cache_hits[i]
+            if hit is not None:
+                logger.info(
+                    "image cache hit: meal=%r source=%s cosine=%.3f url=%s",
+                    m["english_name"], hit.source, hit.cosine, hit.image_url,
+                )
+                images_list.append(hit)
+                continue
+            img_result = await image_service.search_food_image(m["english_name"])
+            images_list.append(img_result)
+            misses.append(PendingItem(
+                meal_name=m["english_name"],
+                name_slug=_slug(m["english_name"]),
+                candidate_image_url=(img_result.url if img_result else None),
+                candidate_thumbnail_url=(img_result.thumbnail_url if img_result else None),
+                candidate_source=(img_result.source if img_result else None),
+            ))
+
+        if cfg.MEAL_IMAGE_CACHE_ENABLED and pending_repo and misses:
+            await pending_repo.enqueue_many(misses)
+
+        images = images_list
+        # --- end integration ---
+
+        # Translate names if non-English
+        translated_names = [m["name"] for m in meals]
+        if language != "en":
+            from src.api.base_dependencies import get_translation_service
+            try:
+                translation_svc = get_translation_service()
+                translated = await translation_svc.translate_names(
+                    [m["name"] for m in meals], language
+                )
+                if translated and len(translated) == len(meals):
+                    translated_names = translated
+            except Exception as e:
+                logger.warning(f"Name translation failed, using English: {e}")
+
+        def _as_image_fields(x):
+            """Accepts CachedImage (image_url attr) or FoodImageResult (url attr)."""
+            if x is None:
+                return dict(image_url=None, thumbnail_url=None, image_source=None,
+                            photographer=None, photographer_url=None,
+                            unsplash_download_location=None, image_confidence=0.0)
+            image_url = getattr(x, "image_url", None) or getattr(x, "url", None)
+            thumbnail_url = getattr(x, "thumbnail_url", None) or image_url  # fallback to full URL
+            return dict(
+                image_url=image_url,
+                thumbnail_url=thumbnail_url,
+                image_source=getattr(x, "source", None),
+                photographer=getattr(x, "photographer", None),
+                photographer_url=getattr(x, "photographer_url", None),
+                unsplash_download_location=getattr(x, "download_location", None),
+                image_confidence=float(getattr(x, "confidence", 0.0) or 0.0),
+            )
 
         # Build response
         from src.api.schemas.response.meal_suggestion_responses import (
@@ -161,7 +234,7 @@ async def discover_meals(
             meal_id = f"disc_{uuid.uuid4().hex[:12]}"
             response_meals.append(DiscoveryMealResponse(
                 id=meal_id,
-                meal_name=m["name"],
+                meal_name=translated_names[i],
                 english_name=m["english_name"],
                 macros=MacroEstimateResponse(
                     calories=m["calories"],
@@ -169,13 +242,7 @@ async def discover_meals(
                     carbs=m["carbs"],
                     fat=m["fat"],
                 ),
-                image_url=img.url if img else None,
-                thumbnail_url=img.thumbnail_url if img else None,
-                image_source=img.source if img else None,
-                photographer=img.photographer if img else None,
-                photographer_url=img.photographer_url if img else None,
-                unsplash_download_location=img.download_location if img else None,
-                image_confidence=img.confidence if img else 0.0,
+                **_as_image_fields(img),
             ))
 
         shown_count = len(session.shown_meal_names)
@@ -232,6 +299,13 @@ async def generate_recipes(
             min_acceptable_override=1,
         )
 
+        # Translate if non-English
+        if language != "en" and recipes:
+            from src.domain.services.meal_suggestion.parallel_recipe_generator import get_language_name
+            recipes, _ = await service._recipe_generator._phase3_translate(
+                session, recipes, get_language_name(language),
+            )
+
         # Map to response
         from src.api.mappers.meal_suggestion_mapper import to_meal_suggestion_response
         return RecipeBatchResponse(
@@ -266,10 +340,10 @@ async def get_food_image(
         logger.warning(f"Food image search failed for query '{q}': {e}")
         return Response(status_code=204)
 
+
 @router.post("/save", response_model=SaveMealSuggestionResponse)
 async def save_meal_suggestion(
-    http_request: Request,
-    body: SaveMealSuggestionRequest,
+    request: SaveMealSuggestionRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
@@ -278,22 +352,19 @@ async def save_meal_suggestion(
 
     This creates a Meal entity populated with the suggestion's nutrition data
     for the specified date so that it participates in daily macros and history.
-    Language preference from Accept-Language header is persisted to meal_translation.
     """
     try:
-        language = get_request_language(http_request)
-
         command = SaveMealSuggestionCommand(
             user_id=user_id,
-            suggestion_id=body.suggestion_id,
-            name=body.name,
-            meal_type=body.meal_type,
-            calories=body.calories or round(body.protein * 4 + body.carbs * 4 + body.fat * 9),
-            protein=body.protein,
-            carbs=body.carbs,
-            fat=body.fat,
-            description=body.description,
-            estimated_cook_time_minutes=body.estimated_cook_time_minutes,
+            suggestion_id=request.suggestion_id,
+            name=request.name,
+            meal_type=request.meal_type,
+            calories=request.calories or round(request.protein * 4 + request.carbs * 4 + request.fat * 9),
+            protein=request.protein,
+            carbs=request.carbs,
+            fat=request.fat,
+            description=request.description,
+            estimated_cook_time_minutes=request.estimated_cook_time_minutes,
             ingredients=[
                 IngredientItem(
                     name=i.name,
@@ -304,42 +375,34 @@ async def save_meal_suggestion(
                     carbs=i.carbs,
                     fat=i.fat,
                 )
-                for i in body.ingredients
+                for i in request.ingredients
             ],
             instructions=[
                 i.model_dump() if hasattr(i, 'model_dump') else i
-                for i in body.instructions
+                for i in request.instructions
             ],
-            portion_multiplier=body.portion_multiplier,
-            meal_date=body.meal_date,
-            cuisine_type=body.cuisine_type,
-            origin_country=body.origin_country,
-            emoji=body.emoji,
-            language=language,
-            image_url=body.image_url,
+            portion_multiplier=request.portion_multiplier,
+            meal_date=request.meal_date,
+            cuisine_type=request.cuisine_type,
+            origin_country=request.origin_country,
+            emoji=request.emoji,
+            image_url=request.image_url,
         )
 
         meal_id = await event_bus.send(command)
 
         # Unsplash API compliance: trigger download event (fire-and-forget)
-        if body.unsplash_download_location:
+        if request.unsplash_download_location:
             import asyncio
             from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
-            task = asyncio.create_task(
-                UnsplashImageAdapter.trigger_download(body.unsplash_download_location)
-            )
-            task.add_done_callback(
-                lambda t: logger.warning(
-                    "Unsplash download trigger failed: %s", t.exception()
-                )
-                if t.exception()
-                else None
+            asyncio.create_task(
+                UnsplashImageAdapter.trigger_download(request.unsplash_download_location)
             )
 
         return SaveMealSuggestionResponse(
             meal_id=meal_id,
             message="Meal suggestion saved successfully",
-            meal_date=body.meal_date,
+            meal_date=request.meal_date,
         )
 
     except Exception as e:
