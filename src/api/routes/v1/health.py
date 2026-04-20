@@ -153,7 +153,7 @@ async def notification_health_check():
     try:
         from src.infra.services.firebase_service import FirebaseService
         from src.infra.database.config import SessionLocal
-        from src.infra.database.models.notification import UserFcmToken as DBToken
+        from src.infra.database.models.notification import UserFcmTokenORM as DBToken
         from sqlalchemy import func
 
         firebase_service = FirebaseService()

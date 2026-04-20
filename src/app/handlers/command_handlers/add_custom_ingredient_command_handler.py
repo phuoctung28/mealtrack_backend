@@ -2,16 +2,15 @@
 Handler for adding custom ingredients to meals.
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from src.app.commands.meal import AddCustomIngredientCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
+from src.domain.model.meal.food_item_change import FoodItemChange
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.services.meal_service import MealService
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -20,57 +19,42 @@ logger = logging.getLogger(__name__)
 class AddCustomIngredientCommandHandler(EventHandler[AddCustomIngredientCommand, Dict[str, Any]]):
     """Handler for adding custom ingredients to meals."""
 
-    def __init__(self, uow: Optional[UnitOfWorkPort] = None, cache_service: Optional[CacheService] = None):
+    def __init__(self, uow: UnitOfWorkPort, event_bus: Any):
         self.uow = uow
-        self.cache_service = cache_service
-
-    def set_dependencies(self, **kwargs):
-        """Set dependencies for dependency injection."""
-        self.uow = kwargs.get('uow', self.uow)
-        self.cache_service = kwargs.get('cache_service', self.cache_service)
+        self.event_bus = event_bus
 
     async def handle(self, command: AddCustomIngredientCommand) -> Dict[str, Any]:
         """Handle adding custom ingredient to meal."""
-        # Use provided UoW or create default
-        uow = self.uow or UnitOfWork()
+        try:
+            async with self.uow as uow:
+                meal = await uow.meals.find_by_id(command.meal_id)
+                if not meal:
+                    raise ValueError(f"Meal {command.meal_id} not found")
 
-        with uow:
-            try:
-                meal_service = MealService(uow.meals)
-                updated_meal = meal_service.add_custom_ingredient(
-                    meal_id=command.meal_id,
+                change = FoodItemChange(
+                    action="add",
                     name=command.name,
                     quantity=command.quantity,
                     unit=command.unit,
-                    nutrition=command.nutrition
+                    custom_nutrition=command.nutrition
                 )
-                uow.commit()
 
-                await self._invalidate_daily_macros(updated_meal)
+                meal_service = MealService()
+                updated_meal = meal_service.apply_food_item_changes(meal, [change])
+                saved_meal = await uow.meals.save(updated_meal)
 
-                return {
-                    "success": True,
-                    "meal_id": updated_meal.meal_id,
-                    "message": f"Added custom ingredient: {command.name}"
-                }
-            except Exception as e:
-                uow.rollback()
-                logger.error(f"Error adding custom ingredient: {str(e)}")
-                raise
+            meal_date = (saved_meal.created_at or utc_now()).date()
+            await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
+                aggregate_id=saved_meal.user_id,
+                user_id=saved_meal.user_id,
+                meal_date=meal_date,
+            ))
 
-    async def _invalidate_daily_macros(self, meal):
-        if not self.cache_service or not meal:
-            return
-        created_at = meal.created_at or utc_now()
-        meal_date = created_at.date()
-        cache_key, _ = CacheKeys.daily_macros(meal.user_id, meal_date)
-        await self.cache_service.invalidate(cache_key)
-
-        from datetime import timedelta
-        week_start = meal_date - timedelta(days=meal_date.weekday())
-        weekly_key, _ = CacheKeys.weekly_budget(meal.user_id, week_start)
-        await self.cache_service.invalidate(weekly_key)
-        streak_key, _ = CacheKeys.user_streak(meal.user_id)
-        await self.cache_service.invalidate(streak_key)
-        activities_key, _ = CacheKeys.daily_activities(meal.user_id, meal_date)
-        await self.cache_service.invalidate(activities_key)
+            return {
+                "success": True,
+                "meal_id": saved_meal.meal_id,
+                "message": f"Added custom ingredient: {command.name}"
+            }
+        except Exception as e:
+            logger.error(f"Error adding custom ingredient: {str(e)}")
+            raise

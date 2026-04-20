@@ -10,8 +10,8 @@ from src.app.commands.user import CompleteOnboardingCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.uow import UnitOfWork
+from src.domain.ports.cache_port import CachePort
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +20,14 @@ logger = logging.getLogger(__name__)
 class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, Dict[str, Any]]):
     """Handler for marking user onboarding as completed."""
 
-    def __init__(self, cache_service: Optional[CacheService] = None):
+    def __init__(self, cache_service: Optional[CachePort] = None):
         self.cache_service = cache_service
 
     async def handle(self, command: CompleteOnboardingCommand) -> Dict[str, Any]:
         """Mark user onboarding as completed if not already completed."""
-        with UnitOfWork() as uow:
+        async with AsyncUnitOfWork() as uow:
             # Find user by firebase_uid
-            user = uow.users.find_by_firebase_uid(command.firebase_uid)
+            user = await uow.users.find_by_firebase_uid(command.firebase_uid)
 
             if not user:
                 raise ResourceNotFoundException(f"User with Firebase UID {command.firebase_uid} not found")
@@ -45,9 +45,9 @@ class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, D
             user.onboarding_completed = True
             user.last_accessed = utc_now()
 
-            uow.users.save(user)
+            await uow.users.save(user)
             # UoW auto-commits on exit
-            
+
             await self._invalidate_user_profile(user.id)
 
         return {

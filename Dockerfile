@@ -58,16 +58,18 @@ ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 ENV PYTHONUNBUFFERED=1
 
-# Set worker count and disable auto-migration (migrations run via entrypoint)
-ENV UVICORN_WORKERS=2
+# Default worker count. Override with WEB_CONCURRENCY on Render.
+ENV UVICORN_WORKERS=1
 ENV AUTO_MIGRATE=false
 
-# Health check (uses PORT at runtime; default 8000 in build)
+# Health check uses PORT at runtime. The entrypoint defaults to 8000 locally
+# and 10000 on Render when PORT is not explicitly set.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT', '8000')}/health\")" || exit 1
 
-# Expose port (Railway sets PORT at runtime)
+# Expose the local default. Render routes to the runtime PORT value.
 EXPOSE 8000
 
-# Start the application via entrypoint (runs migrations first, then starts workers)
+# Start the application. Database migrations must run separately as a
+# pre-deploy command, e.g. `python migrations/run.py`.
 CMD ["/app/docker-entrypoint.sh"]

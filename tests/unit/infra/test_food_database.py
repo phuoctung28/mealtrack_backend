@@ -58,11 +58,11 @@ class InMemoryMealRepository:
     def __init__(self):
         self._store: Dict[str, Any] = {}
 
-    def save(self, meal):
+    async def save(self, meal):
         self._store[meal.meal_id] = meal
         return meal
 
-    def find_by_id(self, meal_id: str):
+    async def find_by_id(self, meal_id: str):
         return self._store.get(meal_id)
 
 
@@ -119,11 +119,23 @@ async def test_get_food_details_query_handler_maps_nutrients():
 @pytest.mark.asyncio
 async def test_create_manual_meal_command_handler_aggregates_items(monkeypatch):
     # Arrange
+    from unittest.mock import AsyncMock, MagicMock
     from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand, ManualMealItem, CustomNutrition
     from src.app.handlers.command_handlers.create_manual_meal_command_handler import CreateManualMealCommandHandler
     from src.domain.model import MealStatus
 
+    mock_uow = MagicMock()
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users = MagicMock()
+    mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
+    mock_uow.commit = AsyncMock()
+    mock_event_bus = MagicMock()
+    mock_event_bus.publish = AsyncMock()
+
     handler = CreateManualMealCommandHandler(
+        uow=mock_uow,
+        event_bus=mock_event_bus,
         meal_repository=InMemoryMealRepository(),
     )
 

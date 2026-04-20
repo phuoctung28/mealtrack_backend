@@ -1,185 +1,281 @@
-"""
-Mappers for converting between Meal domain models and SQLAlchemy persistence models.
-"""
+"""Meal cluster ORM <-> domain mapping functions."""
+from datetime import datetime, timezone
+from typing import Dict, Optional
+
 from src.domain.model.meal.meal import Meal as DomainMeal
 from src.domain.model.meal.meal_image import MealImage as DomainMealImage
-from src.domain.model.nutrition import Nutrition as DomainNutrition, Macros, FoodItem
+from src.domain.model.meal.meal_translation_domain_models import (
+    MealTranslation as DomainMealTranslation,
+    FoodItemTranslation as DomainFoodItemTranslation,
+)
+from src.domain.model.nutrition import Nutrition as DomainNutrition, Macros, FoodItem as DomainFoodItem
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.database.models.meal.meal import Meal as DBMeal
-from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
-from src.infra.database.models.nutrition.food_item import FoodItem as DBFoodItem
-from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
-from src.infra.mappers import MealStatusMapper
+from src.infra.database.models.meal.meal import MealORM
+from src.infra.database.models.meal.meal_image import MealImageORM
+from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
+from src.infra.database.models.meal.food_item_translation_model import FoodItemTranslationORM
+from src.infra.database.models.nutrition.nutrition import NutritionORM
+from src.infra.database.models.nutrition.food_item import FoodItemORM
+from src.infra.mappers.status_mapper import MealStatusMapper
 
+
+def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Convert aware datetime to naive UTC for TIMESTAMP WITHOUT TIME ZONE columns."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+# ---------------------------------------------------------------------------
+# ORM -> Domain
+# ---------------------------------------------------------------------------
+
+def food_item_orm_to_domain(orm: FoodItemORM) -> DomainFoodItem:
+    return DomainFoodItem(
+        id=orm.id,
+        name=orm.name,
+        quantity=orm.quantity,
+        unit=orm.unit,
+        macros=Macros(
+            protein=orm.protein,
+            carbs=orm.carbs,
+            fat=orm.fat,
+            fiber=orm.fiber or 0.0,
+            sugar=orm.sugar or 0.0,
+        ),
+        micros=None,
+        confidence=orm.confidence,
+        fdc_id=orm.fdc_id,
+        is_custom=orm.is_custom,
+    )
+
+
+def nutrition_orm_to_domain(orm: NutritionORM) -> DomainNutrition:
+    food_items = [food_item_orm_to_domain(fi) for fi in orm.food_items] if orm.food_items else None
+    return DomainNutrition(
+        macros=Macros(
+            protein=orm.protein,
+            carbs=orm.carbs,
+            fat=orm.fat,
+            fiber=orm.fiber or 0.0,
+            sugar=orm.sugar or 0.0,
+        ),
+        micros=None,
+        food_items=food_items,
+        confidence_score=orm.confidence_score,
+    )
+
+
+def meal_image_orm_to_domain(orm: MealImageORM) -> DomainMealImage:
+    return DomainMealImage(
+        image_id=orm.image_id,
+        format=orm.format,
+        size_bytes=orm.size_bytes,
+        width=orm.width,
+        height=orm.height,
+        url=orm.url,
+    )
+
+
+def food_item_translation_orm_to_domain(orm: FoodItemTranslationORM) -> DomainFoodItemTranslation:
+    return DomainFoodItemTranslation(
+        food_item_id=orm.food_item_id,
+        name=orm.name,
+        description=orm.description,
+    )
+
+
+def meal_translation_orm_to_domain(orm: MealTranslationORM) -> DomainMealTranslation:
+    return DomainMealTranslation(
+        meal_id=orm.meal_id,
+        language=orm.language,
+        dish_name=orm.dish_name,
+        food_items=[
+            food_item_translation_orm_to_domain(fi)
+            for fi in orm.food_items
+        ],
+        translated_at=orm.translated_at,
+    )
+
+
+def meal_orm_to_domain(orm: MealORM) -> DomainMeal:
+    translations_dict: Optional[Dict[str, DomainMealTranslation]] = None
+    if orm.translations:
+        translations_dict = {t.language: meal_translation_orm_to_domain(t) for t in orm.translations}
+
+    return DomainMeal(
+        meal_id=orm.meal_id,
+        user_id=orm.user_id,
+        status=MealStatusMapper.to_domain(orm.status),
+        created_at=orm.created_at,
+        image=meal_image_orm_to_domain(orm.image) if orm.image else None,
+        dish_name=orm.dish_name,
+        meal_type=orm.meal_type,
+        nutrition=nutrition_orm_to_domain(orm.nutrition) if orm.nutrition else None,
+        ready_at=orm.ready_at,
+        error_message=orm.error_message,
+        raw_gpt_json=orm.raw_ai_response,
+        updated_at=orm.updated_at,
+        last_edited_at=orm.last_edited_at,
+        edit_count=orm.edit_count,
+        is_manually_edited=orm.is_manually_edited,
+        translations=translations_dict,
+        source=orm.source,
+        description=orm.description,
+        instructions=orm.instructions,
+        prep_time_min=orm.prep_time_min,
+        cook_time_min=orm.cook_time_min,
+        cuisine_type=orm.cuisine_type,
+        origin_country=orm.origin_country,
+        emoji=orm.emoji,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Domain -> ORM
+# ---------------------------------------------------------------------------
+
+def food_item_domain_to_orm(domain: DomainFoodItem, nutrition_id=None) -> FoodItemORM:
+    item = FoodItemORM(
+        name=domain.name,
+        quantity=domain.quantity,
+        unit=domain.unit,
+        confidence=domain.confidence,
+        nutrition_id=nutrition_id,
+        fdc_id=getattr(domain, "fdc_id", None),
+        is_custom=getattr(domain, "is_custom", False),
+    )
+    if hasattr(domain, "id") and domain.id:
+        item.id = str(domain.id)
+    if domain.macros:
+        item.protein = domain.macros.protein
+        item.carbs = domain.macros.carbs
+        item.fat = domain.macros.fat
+        item.fiber = domain.macros.fiber
+        item.sugar = domain.macros.sugar
+    return item
+
+
+def nutrition_domain_to_orm(domain: DomainNutrition, meal_id: str) -> NutritionORM:
+    meal_id_str = str(meal_id) if meal_id else None
+    orm = NutritionORM(confidence_score=domain.confidence_score, meal_id=meal_id_str)
+    if domain.macros:
+        orm.protein = domain.macros.protein
+        orm.carbs = domain.macros.carbs
+        orm.fat = domain.macros.fat
+        orm.fiber = domain.macros.fiber
+        orm.sugar = domain.macros.sugar
+    if domain.food_items:
+        orm.food_items = [food_item_domain_to_orm(fi) for fi in domain.food_items]
+        for idx, fi_orm in enumerate(orm.food_items):
+            fi_orm.order_index = idx
+    return orm
+
+
+def meal_image_domain_to_orm(domain: DomainMealImage) -> MealImageORM:
+    return MealImageORM(
+        image_id=str(domain.image_id),
+        url=domain.url,
+        format=domain.format,
+        size_bytes=domain.size_bytes,
+        width=domain.width,
+        height=domain.height,
+    )
+
+
+def food_item_translation_domain_to_orm(
+    domain: DomainFoodItemTranslation, meal_translation_id: int
+) -> FoodItemTranslationORM:
+    return FoodItemTranslationORM(
+        meal_translation_id=meal_translation_id,
+        food_item_id=str(domain.food_item_id),
+        name=domain.name,
+        description=domain.description,
+    )
+
+
+def meal_translation_domain_to_orm(domain: DomainMealTranslation) -> MealTranslationORM:
+    now = utc_now()
+    translation = MealTranslationORM(
+        meal_id=domain.meal_id,
+        language=domain.language,
+        dish_name=domain.dish_name,
+        translated_at=_to_naive_utc(domain.translated_at or now),
+        created_at=_to_naive_utc(now),
+    )
+    for fi in domain.food_items:
+        translation.food_items.append(
+            FoodItemTranslationORM(
+                food_item_id=str(fi.food_item_id),
+                name=fi.name,
+                description=fi.description,
+            )
+        )
+    return translation
+
+
+def meal_domain_to_orm(domain: DomainMeal) -> MealORM:
+    orm = MealORM(
+        meal_id=str(domain.meal_id),
+        user_id=str(domain.user_id),
+        status=MealStatusMapper.to_db(domain.status),
+        created_at=domain.created_at,
+        updated_at=getattr(domain, "updated_at", None) or utc_now(),
+        dish_name=getattr(domain, "dish_name", None),
+        meal_type=getattr(domain, "meal_type", None),
+        ready_at=_to_naive_utc(getattr(domain, "ready_at", None)),
+        error_message=getattr(domain, "error_message", None),
+        raw_ai_response=getattr(domain, "raw_gpt_json", None),
+        last_edited_at=_to_naive_utc(getattr(domain, "last_edited_at", None)),
+        edit_count=getattr(domain, "edit_count", 0),
+        is_manually_edited=getattr(domain, "is_manually_edited", False),
+        source=getattr(domain, "source", None),
+        description=getattr(domain, "description", None),
+        instructions=getattr(domain, "instructions", None),
+        prep_time_min=getattr(domain, "prep_time_min", None),
+        cook_time_min=getattr(domain, "cook_time_min", None),
+        cuisine_type=getattr(domain, "cuisine_type", None),
+        origin_country=getattr(domain, "origin_country", None),
+        emoji=getattr(domain, "emoji", None),
+    )
+    if domain.image:
+        orm.image_id = str(domain.image.image_id)
+    if domain.nutrition:
+        orm.nutrition = nutrition_domain_to_orm(domain.nutrition, meal_id=orm.meal_id)
+    return orm
+
+
+# ---------------------------------------------------------------------------
+# Legacy class-based API (kept for backward compatibility during migration)
+# ---------------------------------------------------------------------------
 
 class MealMapper:
     """Mapper for Meal entity."""
-
-    @staticmethod
-    def to_domain(db_meal: DBMeal) -> DomainMeal:
-        """Convert DB model to domain model."""
-        # Build translations dict keyed by language code
-        translations_dict = None
-        if hasattr(db_meal, 'translations') and db_meal.translations:
-            translations_dict = {}
-            for t in db_meal.translations:
-                translations_dict[t.language] = t.to_domain()
-
-        return DomainMeal(
-            meal_id=db_meal.meal_id,
-            user_id=db_meal.user_id,
-            status=MealStatusMapper.to_domain(db_meal.status),
-            created_at=db_meal.created_at,
-            image=MealImageMapper.to_domain(db_meal.image) if db_meal.image else None,
-            dish_name=db_meal.dish_name,
-            nutrition=NutritionMapper.to_domain(db_meal.nutrition) if db_meal.nutrition else None,
-            ready_at=db_meal.ready_at,
-            error_message=db_meal.error_message,
-            raw_gpt_json=db_meal.raw_ai_response,
-            updated_at=db_meal.updated_at,
-            last_edited_at=db_meal.last_edited_at,
-            edit_count=db_meal.edit_count,
-            is_manually_edited=db_meal.is_manually_edited,
-            meal_type=db_meal.meal_type,
-            translations=translations_dict,
-            source=db_meal.source if hasattr(db_meal, 'source') else None,
-            description=db_meal.description if hasattr(db_meal, 'description') else None,
-            instructions=db_meal.instructions if hasattr(db_meal, 'instructions') else None,
-            prep_time_min=db_meal.prep_time_min if hasattr(db_meal, 'prep_time_min') else None,
-            cook_time_min=db_meal.cook_time_min if hasattr(db_meal, 'cook_time_min') else None,
-            cuisine_type=db_meal.cuisine_type if hasattr(db_meal, 'cuisine_type') else None,
-            origin_country=db_meal.origin_country if hasattr(db_meal, 'origin_country') else None,
-            emoji=db_meal.emoji if hasattr(db_meal, 'emoji') else None
-        )
-
-    @staticmethod
-    def to_persistence(domain_meal: DomainMeal) -> DBMeal:
-        """Convert domain model to DB model."""
-        # Note: Relationships (image, nutrition) are typically handled separately 
-        # or require careful management in SQLAlchemy
-        
-        return DBMeal(
-            meal_id=str(domain_meal.meal_id),
-            user_id=str(domain_meal.user_id),
-            status=MealStatusMapper.to_db(domain_meal.status),
-            created_at=domain_meal.created_at,
-            updated_at=domain_meal.updated_at or utc_now(),
-            dish_name=domain_meal.dish_name,
-            meal_type=domain_meal.meal_type,
-            ready_at=domain_meal.ready_at,
-            error_message=domain_meal.error_message,
-            raw_ai_response=domain_meal.raw_gpt_json,
-            last_edited_at=domain_meal.last_edited_at,
-            edit_count=domain_meal.edit_count,
-            is_manually_edited=domain_meal.is_manually_edited,
-            source=domain_meal.source,
-            description=domain_meal.description,
-            instructions=domain_meal.instructions,
-            prep_time_min=domain_meal.prep_time_min,
-            cook_time_min=domain_meal.cook_time_min,
-            cuisine_type=domain_meal.cuisine_type,
-            origin_country=domain_meal.origin_country,
-            emoji=domain_meal.emoji,
-        )
+    to_domain = staticmethod(meal_orm_to_domain)
+    to_persistence = staticmethod(meal_domain_to_orm)
 
 
 class MealImageMapper:
     """Mapper for MealImage entity."""
-
-    @staticmethod
-    def to_domain(db_image: DBMealImage) -> DomainMealImage:
-        return DomainMealImage(
-            image_id=db_image.image_id,
-            url=db_image.url,
-            format=db_image.format,
-            size_bytes=db_image.size_bytes,
-            width=db_image.width,
-            height=db_image.height
-        )
-
-    @staticmethod
-    def to_persistence(domain_image: DomainMealImage) -> DBMealImage:
-        return DBMealImage(
-            image_id=str(domain_image.image_id),
-            url=domain_image.url,
-            format=domain_image.format,
-            size_bytes=domain_image.size_bytes,
-            width=domain_image.width,
-            height=domain_image.height
-        )
+    to_domain = staticmethod(meal_image_orm_to_domain)
+    to_persistence = staticmethod(meal_image_domain_to_orm)
 
 
 class NutritionMapper:
     """Mapper for Nutrition entity."""
-
-    @staticmethod
-    def to_domain(db_nutrition: DBNutrition) -> DomainNutrition:
-        food_items = []
-        if db_nutrition.food_items:
-            food_items = [FoodItemMapper.to_domain(item) for item in db_nutrition.food_items]
-
-        # Construct Macros from DB columns
-        macros = Macros(
-            protein=db_nutrition.protein,
-            carbs=db_nutrition.carbs,
-            fat=db_nutrition.fat
-        )
-        
-        # Construct Micros (assuming simple mapping or None for now)
-        micros = None # Populate if DB has micro columns or relationship
-
-        return DomainNutrition(
-            macros=macros,
-            micros=micros,
-            food_items=food_items,
-            confidence_score=db_nutrition.confidence_score
-        )
-
-    @staticmethod
-    def to_persistence(domain_nutrition: DomainNutrition, meal_id: str) -> DBNutrition:
-        return DBNutrition(
-            meal_id=meal_id,
-            protein=domain_nutrition.macros.protein,
-            carbs=domain_nutrition.macros.carbs,
-            fat=domain_nutrition.macros.fat,
-            confidence_score=domain_nutrition.confidence_score,
-            # food_items handled by repository
-        )
+    to_domain = staticmethod(nutrition_orm_to_domain)
+    to_persistence = staticmethod(lambda domain, meal_id: nutrition_domain_to_orm(domain, meal_id))
 
 
 class FoodItemMapper:
     """Mapper for FoodItem entity."""
+    to_domain = staticmethod(food_item_orm_to_domain)
+    to_persistence = staticmethod(lambda domain, nutrition_id: food_item_domain_to_orm(domain, nutrition_id))
 
-    @staticmethod
-    def to_domain(db_item: DBFoodItem) -> FoodItem:
-        macros = Macros(
-            protein=db_item.protein,
-            carbs=db_item.carbs,
-            fat=db_item.fat
-        )
-        return FoodItem(
-            id=str(db_item.id),
-            name=db_item.name,
-            quantity=db_item.quantity,
-            unit=db_item.unit,
-            macros=macros,
-            micros=None,  # Populate if needed
-            confidence=db_item.confidence,
-            fdc_id=db_item.fdc_id,
-            is_custom=bool(db_item.is_custom),
-        )
 
-    @staticmethod
-    def to_persistence(domain_item: FoodItem, nutrition_id: str) -> DBFoodItem:
-        return DBFoodItem(
-            nutrition_id=nutrition_id,
-            name=domain_item.name,
-            quantity=domain_item.quantity,
-            unit=domain_item.unit,
-            protein=domain_item.macros.protein,
-            carbs=domain_item.macros.carbs,
-            fat=domain_item.macros.fat,
-            confidence=domain_item.confidence,
-            fdc_id=getattr(domain_item, 'fdc_id', None),
-            is_custom=getattr(domain_item, 'is_custom', False)
-        )
+class MealTranslationMapper:
+    """Mapper for MealTranslation entity."""
+    to_domain = staticmethod(meal_translation_orm_to_domain)
+    to_persistence = staticmethod(meal_translation_domain_to_orm)

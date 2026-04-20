@@ -15,7 +15,7 @@ from fastapi import APIRouter, Request, HTTPException, Header
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 router = APIRouter(prefix="/v1/webhooks", tags=["Webhooks"])
 logger = logging.getLogger(__name__)
@@ -58,22 +58,32 @@ async def revenuecat_webhook(
     logger.error(f"RevenueCat webhook received: {event_type} for app_user_id={app_user_id}")
 
     # Get user
-    with UnitOfWork() as uow:
+    from sqlalchemy import select
+
+    async with AsyncUnitOfWork() as uow:
         # Try firebase_uid first (primary lookup path)
-        user = uow.session.query(User).filter_by(firebase_uid=app_user_id).first()
+        result = await uow.session.execute(
+            select(User).where(User.firebase_uid == app_user_id)
+        )
+        user = result.scalars().first()
 
         # Fallback: try matching by internal user ID (UUID)
         if not user:
-            user = uow.session.query(User).filter_by(id=app_user_id).first()
+            result = await uow.session.execute(select(User).where(User.id == app_user_id))
+            user = result.scalars().first()
 
         # Fallback: try aliases from event payload (RevenueCat may send anonymous ID)
         if not user:
             aliases = event.get("aliases", [])
             for alias in aliases:
                 if alias != app_user_id:
-                    user = uow.session.query(User).filter_by(firebase_uid=alias).first()
+                    result = await uow.session.execute(
+                        select(User).where(User.firebase_uid == alias)
+                    )
+                    user = result.scalars().first()
                     if not user:
-                        user = uow.session.query(User).filter_by(id=alias).first()
+                        result = await uow.session.execute(select(User).where(User.id == alias))
+                        user = result.scalars().first()
                     if user:
                         break
 
@@ -107,15 +117,15 @@ async def revenuecat_webhook(
             
             else:
                 logger.info(f"Unhandled event type: {event_type}")
-            
-            uow.commit()
+
+            await uow.commit()
             
         except Exception as e:
             logger.error(
                 f"RevenueCat webhook handler error — "
                 f"event_type={event_type}, user_id={user.id}, error={e}"
             )
-            uow.rollback()
+            await uow.rollback()
             raise
     
     return {"status": "success"}

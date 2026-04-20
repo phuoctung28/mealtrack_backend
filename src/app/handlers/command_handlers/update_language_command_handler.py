@@ -7,7 +7,7 @@ from src.app.commands.user.update_language_command import (
     SUPPORTED_LANGUAGES,
 )
 from src.app.events.base import EventHandler, handles
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +26,9 @@ class UpdateLanguageCommandHandler(EventHandler[UpdateLanguageCommand, Dict[str,
             )
             return {"success": False, "error": f"Unsupported language: {language}"}
 
-        with UnitOfWork() as uow:
-            uow.users.update_user_language(command.user_id, language)
-            uow.commit()
+        async with AsyncUnitOfWork() as uow:
+            await uow.users.update_user_language(command.user_id, language)
+            await uow.commit()
 
         logger.info(f"Updated language for user {command.user_id}: {language}")
         return {"success": True, "language_code": language}

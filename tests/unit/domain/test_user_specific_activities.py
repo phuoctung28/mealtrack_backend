@@ -2,7 +2,7 @@
 Test user-specific daily activities functionality.
 """
 from datetime import datetime, date
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -59,11 +59,11 @@ class TestUserSpecificActivities:
             ready_at=datetime(2024, 8, 15, 13, 5, 0)
         )
 
-        # Create mock repository
-        mock_meals_repo = Mock()
+        # Create mock repository (async)
+        mock_meals_repo = AsyncMock()
 
         # Configure repository to return different meals for different users
-        def mock_find_by_date(target_date, user_id=None, limit=50, user_timezone=None):
+        async def mock_find_by_date(target_date, user_id=None, limit=50, user_timezone=None):
             if user_id == "123e4567-e89b-12d3-a456-426614174100":
                 return [user1_meal]
             elif user_id == "123e4567-e89b-12d3-a456-426614174200":
@@ -73,20 +73,20 @@ class TestUserSpecificActivities:
 
         mock_meals_repo.find_by_date.side_effect = mock_find_by_date
 
-        # Create mock UnitOfWork with users repo for timezone lookup
-        mock_users_repo = Mock()
+        # Create mock UnitOfWork with users repo for timezone lookup (async)
+        mock_users_repo = AsyncMock()
         mock_users_repo.find_by_id.return_value = None  # No timezone stored
 
-        mock_uow = Mock()
+        mock_uow = AsyncMock()
         mock_uow.meals = mock_meals_repo
         mock_uow.users = mock_users_repo
-        mock_uow.__enter__ = Mock(return_value=mock_uow)
-        mock_uow.__exit__ = Mock(return_value=False)
+        mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+        mock_uow.__aexit__ = AsyncMock(return_value=False)
 
-        # Create handler and patch UnitOfWork
+        # Create handler and patch AsyncUnitOfWork
         handler = GetDailyActivitiesQueryHandler()
 
-        with patch('src.app.handlers.query_handlers.get_daily_activities_query_handler.UnitOfWork', return_value=mock_uow):
+        with patch('src.app.handlers.query_handlers.get_daily_activities_query_handler.AsyncUnitOfWork', return_value=mock_uow):
             # Test for user 1
             query_user1 = GetDailyActivitiesQuery(
                 user_id="123e4567-e89b-12d3-a456-426614174100",
@@ -123,24 +123,24 @@ class TestUserSpecificActivities:
 
     async def test_empty_activities_for_user_with_no_meals(self):
         """Test that users with no meals get empty activities list."""
-        # Create mock repository that returns no meals
-        mock_meals_repo = Mock()
+        # Create mock repository that returns no meals (async)
+        mock_meals_repo = AsyncMock()
         mock_meals_repo.find_by_date.return_value = []
 
-        # Create mock UnitOfWork with users repo for timezone lookup
-        mock_users_repo = Mock()
+        # Create mock UnitOfWork with users repo for timezone lookup (async)
+        mock_users_repo = AsyncMock()
         mock_users_repo.find_by_id.return_value = None
 
-        mock_uow = Mock()
+        mock_uow = AsyncMock()
         mock_uow.meals = mock_meals_repo
         mock_uow.users = mock_users_repo
-        mock_uow.__enter__ = Mock(return_value=mock_uow)
-        mock_uow.__exit__ = Mock(return_value=False)
+        mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+        mock_uow.__aexit__ = AsyncMock(return_value=False)
 
         # Create handler
         handler = GetDailyActivitiesQueryHandler()
 
-        with patch('src.app.handlers.query_handlers.get_daily_activities_query_handler.UnitOfWork', return_value=mock_uow):
+        with patch('src.app.handlers.query_handlers.get_daily_activities_query_handler.AsyncUnitOfWork', return_value=mock_uow):
             # Test query
             query = GetDailyActivitiesQuery(
                 user_id="123e4567-e89b-12d3-a456-426614174300",

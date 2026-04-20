@@ -58,6 +58,45 @@ exclude_lines = [
 show_missing = true
 precision = 2 
 
+[tool.importlinter]
+root_packages = ["src"]
+
+[[tool.importlinter.contracts]]
+name = "Domain has no external I/O dependencies"
+type = "forbidden"
+source_modules = ["src.domain"]
+forbidden_modules = [
+    "src.infra",
+    "src.app",
+    "src.api",
+    "httpx",
+    "sqlalchemy",
+    "redis",
+    "firebase_admin",
+]
+
+[[tool.importlinter.contracts]]
+name = "App layer does not import infra directly"
+type = "forbidden"
+source_modules = ["src.app"]
+forbidden_modules = ["src.infra"]
+
+[[tool.importlinter.contracts]]
+name = "Infra does not import app or api"
+type = "forbidden"
+source_modules = ["src.infra"]
+forbidden_modules = ["src.app", "src.api"]
+
+[[tool.importlinter.contracts]]
+name = "API does not import infra directly"
+type = "forbidden"
+source_modules = ["src.api"]
+forbidden_modules = ["src.infra"]
+ignore_imports = [
+    "src.api.dependencies -> src.infra",
+    "src.api.main -> src.infra",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3.5",

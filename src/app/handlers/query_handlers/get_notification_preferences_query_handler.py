@@ -8,8 +8,8 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.notification import GetNotificationPreferencesQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.notification import NotificationPreferences
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.uow import UnitOfWork
+from src.domain.ports.cache_port import CachePort
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class GetNotificationPreferencesQueryHandler(EventHandler[GetNotificationPreferencesQuery, Dict[str, Any]]):
     """Handler for getting notification preferences."""
     
-    def __init__(self, cache_service: Optional[CacheService] = None):
+    def __init__(self, cache_service: Optional[CachePort] = None):
         self.cache_service = cache_service
 
     def set_dependencies(self, **kwargs):
@@ -40,15 +40,19 @@ class GetNotificationPreferencesQueryHandler(EventHandler[GetNotificationPrefere
     async def _compute(self, query: GetNotificationPreferencesQuery) -> Dict[str, Any]:
         """Fetch notification preferences from DB."""
         try:
-            with UnitOfWork() as uow:
+            async with AsyncUnitOfWork() as uow:
                 # Get preferences for user
-                preferences = uow.notifications.find_notification_preferences_by_user(query.user_id)
+                preferences = await uow.notifications.find_notification_preferences_by_user(
+                    query.user_id
+                )
 
                 if not preferences:
                     # Create and return default preferences
                     default_prefs = NotificationPreferences.create_default(query.user_id)
-                    saved_prefs = uow.notifications.save_notification_preferences(default_prefs)
-                    uow.commit()
+                    saved_prefs = await uow.notifications.save_notification_preferences(
+                        default_prefs
+                    )
+                    await uow.commit()
 
                     logger.info(f"Created default notification preferences for user {query.user_id}")
                     return saved_prefs.to_dict()

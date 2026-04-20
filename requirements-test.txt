@@ -24,3 +24,6 @@ respx>=0.20.0  # For mocking httpx
 
 # Coverage
 coverage[toml]>=7.3.0
+
+# Architecture enforcement
+import-linter>=2.0

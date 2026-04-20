@@ -9,7 +9,7 @@ from factory.alchemy import SQLAlchemyModelFactory
 from src.infra.database.models.meal_food_item import MealFoodItem
 
 from src.domain.model import MealStatus
-from src.infra.database.models.meal import Meal as MealModel
+from src.infra.database.models.meal import MealORM
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
 
@@ -57,7 +57,7 @@ class MealFactory(SQLAlchemyModelFactory):
     """Factory for creating test meals."""
     
     class Meta:
-        model = MealModel
+        model = MealORM
         sqlalchemy_session_persistence = "commit"
     
     meal_id = factory.LazyFunction(lambda: str(uuid.uuid4()))

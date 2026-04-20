@@ -6,9 +6,9 @@ from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_custom_macros_command import UpdateCustomMacrosCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
-from src.infra.cache.cache_service import CacheService
+from src.domain.ports.cache_port import CachePort
 from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -17,19 +17,19 @@ logger = logging.getLogger(__name__)
 class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, None]):
     """Set or clear custom macro overrides on user profile."""
 
-    def __init__(self, cache_service: Optional[CacheService] = None):
+    def __init__(self, cache_service: Optional[CachePort] = None):
         self.cache_service = cache_service
 
     async def handle(self, command: UpdateCustomMacrosCommand) -> None:
-        with UnitOfWork() as uow:
-            profile = (
-                uow.session.query(UserProfile)
-                .filter(
+        async with AsyncUnitOfWork() as uow:
+            from sqlalchemy import select
+            result = await uow.session.execute(
+                select(UserProfile).where(
                     UserProfile.user_id == command.user_id,
                     UserProfile.is_current.is_(True),
                 )
-                .first()
             )
+            profile = result.scalars().first()
 
             if not profile:
                 raise ResourceNotFoundException(
@@ -47,7 +47,7 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
             profile.custom_protein_g = command.protein_g
             profile.custom_carbs_g = command.carbs_g
             profile.custom_fat_g = command.fat_g
-            uow.session.commit()
+            await uow.session.commit()
 
             action = "cleared" if non_null_count == 0 else "set"
             logger.info(f"Custom macros {action} for user {command.user_id}")
@@ -55,6 +55,8 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
         if self.cache_service:
             tdee_key, _ = CacheKeys.user_tdee(command.user_id)
             await self.cache_service.invalidate(tdee_key)
+            profile_key, _ = CacheKeys.user_profile(command.user_id)
+            await self.cache_service.invalidate(profile_key)
             # Invalidate both the server's current week and adjacent week to cover
             # timezone skew: server UTC date may differ from user's local date.
             from datetime import date, timedelta

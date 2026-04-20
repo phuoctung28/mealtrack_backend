@@ -2,14 +2,15 @@
 from datetime import datetime
 from typing import List
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.domain.utils.timezone_utils import (
     utc_to_local_minutes,
     DEFAULT_TIMEZONE
 )
-from src.infra.database.models.notification import NotificationPreferences as DBNotificationPreferences
-from src.infra.database.models.notification.user_fcm_token import UserFcmToken as DBUserFcmToken
+from src.infra.database.models.notification import NotificationPreferencesORM as DBNotificationPreferences
+from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM as DBUserFcmToken
 from src.infra.database.models.user.user import User
 
 
@@ -61,7 +62,9 @@ class ReminderQueryBuilder:
             .filter(
                 DBNotificationPreferences.meal_reminders_enabled == True,
                 time_field.isnot(None),
-                DBNotificationPreferences.user_id.in_(active_token_users)
+                DBNotificationPreferences.user_id.in_(
+                    select(active_token_users.c.user_id)
+                )
             )
             .all()
         )
@@ -101,7 +104,9 @@ class ReminderQueryBuilder:
             .join(User, DBNotificationPreferences.user_id == User.id)
             .filter(
                 DBNotificationPreferences.daily_summary_enabled == True,
-                DBNotificationPreferences.user_id.in_(active_token_users)
+                DBNotificationPreferences.user_id.in_(
+                    select(active_token_users.c.user_id)
+                )
             )
             .all()
         )

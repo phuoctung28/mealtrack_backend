@@ -1,7 +1,10 @@
 """
 Unit tests for update user metrics endpoint and handler.
 """
-from unittest.mock import Mock, patch, MagicMock
+from dataclasses import dataclass, field
+from typing import List, Optional
+from unittest.mock import AsyncMock, Mock, MagicMock
+from uuid import uuid4
 
 import pytest
 
@@ -10,44 +13,42 @@ from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsC
 from src.app.handlers.command_handlers.update_user_metrics_command_handler import (
     UpdateUserMetricsCommandHandler,
 )
-from src.infra.database.models.user.profile import UserProfile
+from src.domain.model.user.core_user import UserProfileDomainModel
 
 
-def setup_mock_db_with_profile(mock_profile):
-    """Helper to set up mock database with profile query chain."""
-    mock_db = Mock()
-    mock_query = Mock()
-    # Chain: db.query(UserProfile).filter(...).first()
-    # In SQLAlchemy, filter() returns the same query object for chaining
-    mock_query.filter.return_value = mock_query
-    mock_query.first.return_value = mock_profile
-    mock_db.query.return_value = mock_query
-    mock_db.add = Mock()
-    mock_db.commit = Mock()
-    mock_db.refresh = Mock()
-    mock_db.rollback = Mock()
-    return mock_db
+def _make_profile(**overrides) -> UserProfileDomainModel:
+    """Create a domain profile with sensible defaults."""
+    defaults = dict(
+        id=str(uuid4()),
+        user_id="test_user",
+        age=30,
+        gender="male",
+        height_cm=175.0,
+        weight_kg=70.0,
+        job_type="desk",
+        training_days_per_week=4,
+        training_minutes_per_session=60,
+        fitness_goal="recomp",
+        meals_per_day=3,
+        is_current=False,
+    )
+    defaults.update(overrides)
+    return UserProfileDomainModel(**defaults)
 
 
-def setup_mock_db_without_profile():
-    """Helper to set up mock database that returns None (no profile found)."""
-    mock_db = Mock()
-    mock_query = Mock()
-    # Chain: db.query(UserProfile).filter(...).first()
-    # In SQLAlchemy, filter() returns the same query object for chaining
-    mock_query.filter.return_value = mock_query
-    mock_query.first.return_value = None
-    mock_db.query.return_value = mock_query
-    mock_db.add = Mock()
-    mock_db.commit = Mock()
-    mock_db.refresh = Mock()
-    mock_db.rollback = Mock()
-    return mock_db
+def _make_mock_uow(profile=None):
+    """Create a mock UoW that returns the given profile from users.get_profile()."""
+    mock_uow = MagicMock()
+    mock_uow.users.get_profile = AsyncMock(return_value=profile)
+    mock_uow.users.update_profile = AsyncMock(side_effect=lambda p: p)
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    return mock_uow
 
 
 class TestUpdateUserMetricsCommand:
     """Test UpdateUserMetricsCommand data class."""
-    
+
     def test_create_command_with_all_fields(self):
         """Test creating command with all metrics."""
         command = UpdateUserMetricsCommand(
@@ -87,185 +88,62 @@ class TestUpdateUserMetricsCommand:
 @pytest.mark.asyncio
 class TestUpdateUserMetricsCommandHandler:
     """Test UpdateUserMetricsCommandHandler."""
-    
+
     async def test_update_weight_only(self):
         """Test updating only weight."""
-        # Setup
-        mock_profile = UserProfile(
-            id="profile_1",
-            user_id="test_user",
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=70.0,
-            job_type="desk",
-            training_days_per_week=4,
-            training_minutes_per_session=60,
-            fitness_goal="recomp",
-            is_current=False
-        )
-        mock_db = setup_mock_db_with_profile(mock_profile)
-        
-        handler = UpdateUserMetricsCommandHandler()
-        command = UpdateUserMetricsCommand(
-            user_id="test_user",
-            weight_kg=75.0
-        )
-        
-        # Execute - patch UnitOfWork in the handler module to use mock_db
-        class DummyUnitOfWork:
-            def __init__(self):
-                self.session = mock_db
+        profile = _make_profile()
+        mock_uow = _make_mock_uow(profile)
 
-            def __enter__(self):
-                return self
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(user_id="test_user", weight_kg=75.0)
 
-            def __exit__(self, exc_type, exc, tb):
-                if exc_type:
-                    self.session.rollback()
-                else:
-                    self.session.commit()
+        await handler.handle(command)
 
-            def refresh(self, obj):
-                self.session.refresh(obj)
+        # Verify profile was mutated and update_profile was called
+        assert profile.weight_kg == 75.0
+        assert profile.is_current is True
+        mock_uow.users.update_profile.assert_called_once_with(profile)
 
-        with patch(
-            "src.app.handlers.command_handlers.update_user_metrics_command_handler.UnitOfWork",
-            MagicMock(return_value=DummyUnitOfWork()),
-        ):
-            await handler.handle(command)
-        
-        # Verify
-        assert mock_profile.weight_kg == 75.0
-        assert mock_profile.is_current is True
-        mock_db.add.assert_called_once_with(mock_profile)
-        mock_db.commit.assert_called_once()
-    
     async def test_update_job_type_and_training_only(self):
         """Test updating only job type and training."""
-        # Setup
-        mock_profile = UserProfile(
-            id="profile_1",
-            user_id="test_user",
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=75.0,
-            job_type="desk",
-            training_days_per_week=4,
-            training_minutes_per_session=60,
-            fitness_goal="recomp",
-            is_current=False
-        )
-        mock_db = setup_mock_db_with_profile(mock_profile)
+        profile = _make_profile()
+        mock_uow = _make_mock_uow(profile)
 
-        handler = UpdateUserMetricsCommandHandler()
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             job_type="on_feet",
             training_days_per_week=5,
-            training_minutes_per_session=60
+            training_minutes_per_session=60,
         )
-        
-        class DummyUnitOfWork:
-            def __init__(self):
-                self.session = mock_db
 
-            def __enter__(self):
-                return self
+        await handler.handle(command)
 
-            def __exit__(self, exc_type, exc, tb):
-                if exc_type:
-                    self.session.rollback()
-                else:
-                    self.session.commit()
-
-            def refresh(self, obj):
-                self.session.refresh(obj)
-
-        with patch(
-            "src.app.handlers.command_handlers.update_user_metrics_command_handler.UnitOfWork",
-            MagicMock(return_value=DummyUnitOfWork()),
-        ):
-            await handler.handle(command)
-        
-        # Verify
-        assert mock_profile.job_type == "on_feet"
-        assert mock_profile.training_days_per_week == 5
-        assert mock_profile.training_minutes_per_session == 60
-        assert mock_profile.is_current is True
+        assert profile.job_type == "on_feet"
+        assert profile.training_days_per_week == 5
+        assert profile.training_minutes_per_session == 60
+        assert profile.is_current is True
 
     async def test_update_fitness_goal_unlimited(self):
         """Test updating fitness goal succeeds without cooldown."""
-        # Setup
-        mock_profile = UserProfile(
-            id="profile_1",
-            user_id="test_user",
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=75.0,
-            job_type="desk",
-            training_days_per_week=4,
-            training_minutes_per_session=60,
-            fitness_goal="recomp",
-            is_current=True,
-        )
-        mock_db = setup_mock_db_with_profile(mock_profile)
+        profile = _make_profile(fitness_goal="recomp", is_current=True)
+        mock_uow = _make_mock_uow(profile)
 
-        handler = UpdateUserMetricsCommandHandler()
-        command = UpdateUserMetricsCommand(
-            user_id="test_user",
-            fitness_goal="cut",
-        )
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(user_id="test_user", fitness_goal="cut")
 
-        class DummyUnitOfWork:
-            def __init__(self):
-                self.session = mock_db
+        await handler.handle(command)
 
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                if exc_type:
-                    self.session.rollback()
-                else:
-                    self.session.commit()
-
-            def refresh(self, obj):
-                self.session.refresh(obj)
-
-        with patch(
-            "src.app.handlers.command_handlers.update_user_metrics_command_handler.UnitOfWork",
-            MagicMock(return_value=DummyUnitOfWork()),
-        ):
-            await handler.handle(command)
-        
-        # Verify
-        assert mock_profile.fitness_goal == "cut"
-        assert mock_profile.is_current is True
-        mock_db.commit.assert_called_once()
+        assert profile.fitness_goal == "cut"
+        assert profile.is_current is True
+        mock_uow.users.update_profile.assert_called_once()
 
     async def test_update_all_metrics_together(self):
         """Test updating all metrics in one call."""
-        # Setup
-        mock_profile = UserProfile(
-            id="profile_1",
-            user_id="test_user",
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=70.0,
-            body_fat_percentage=20.0,
-            job_type="desk",
-            training_days_per_week=4,
-            training_minutes_per_session=60,
-            fitness_goal="recomp",
-            is_current=False,
-        )
-        mock_db = setup_mock_db_with_profile(mock_profile)
+        profile = _make_profile(body_fat_percentage=20.0)
+        mock_uow = _make_mock_uow(profile)
 
-        handler = UpdateUserMetricsCommandHandler()
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
         command = UpdateUserMetricsCommand(
             user_id="test_user",
             weight_kg=72.5,
@@ -273,281 +151,91 @@ class TestUpdateUserMetricsCommandHandler:
             training_days_per_week=5,
             training_minutes_per_session=60,
             body_fat_percent=15.0,
-            fitness_goal="cut"
+            fitness_goal="cut",
         )
-        
-        class DummyUnitOfWork:
-            def __init__(self):
-                self.session = mock_db
 
-            def __enter__(self):
-                return self
+        await handler.handle(command)
 
-            def __exit__(self, exc_type, exc, tb):
-                if exc_type:
-                    self.session.rollback()
-                else:
-                    self.session.commit()
+        assert profile.weight_kg == 72.5
+        assert profile.job_type == "on_feet"
+        assert profile.training_days_per_week == 5
+        assert profile.training_minutes_per_session == 60
+        assert profile.body_fat_percentage == 15.0
+        assert profile.fitness_goal == "cut"
+        assert profile.is_current is True
 
-            def refresh(self, obj):
-                self.session.refresh(obj)
-
-        with patch(
-            "src.app.handlers.command_handlers.update_user_metrics_command_handler.UnitOfWork",
-            MagicMock(return_value=DummyUnitOfWork()),
-        ):
-            await handler.handle(command)
-        
-        # Verify all fields updated
-        assert mock_profile.weight_kg == 72.5
-        assert mock_profile.job_type == "on_feet"
-        assert mock_profile.training_days_per_week == 5
-        assert mock_profile.training_minutes_per_session == 60
-        assert mock_profile.body_fat_percentage == 15.0
-        assert mock_profile.fitness_goal == "cut"
-        assert mock_profile.is_current is True
-    
     async def test_user_not_found(self):
         """Test error when user profile doesn't exist."""
-        # Setup
-        mock_db = setup_mock_db_without_profile()
-        
-        handler = UpdateUserMetricsCommandHandler()
-        command = UpdateUserMetricsCommand(
-            user_id="nonexistent_user",
-            weight_kg=75.0
-        )
-        
-        class DummyUnitOfWork:
-            def __init__(self):
-                self.session = mock_db
+        mock_uow = _make_mock_uow(profile=None)
 
-            def __enter__(self):
-                return self
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(user_id="nonexistent_user", weight_kg=75.0)
 
-            def __exit__(self, exc_type, exc, tb):
-                if exc_type:
-                    self.session.rollback()
-                else:
-                    self.session.commit()
+        with pytest.raises(ResourceNotFoundException) as exc_info:
+            await handler.handle(command)
 
-            def refresh(self, obj):
-                self.session.refresh(obj)
-
-        with patch(
-            "src.app.handlers.command_handlers.update_user_metrics_command_handler.UnitOfWork",
-            MagicMock(return_value=DummyUnitOfWork()),
-        ):
-            with pytest.raises(ResourceNotFoundException) as exc_info:
-                await handler.handle(command)
-
-        # Rollback should be called when profile is not found
-        mock_db.rollback.assert_called_once()
         assert "nonexistent_user" in str(exc_info.value)
-    
+
     async def test_no_metrics_provided(self):
         """Test error when no metrics are provided."""
-        # Setup
-        mock_db = setup_mock_db_without_profile()
-        handler = UpdateUserMetricsCommandHandler()
+        mock_uow = _make_mock_uow()
+
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
         command = UpdateUserMetricsCommand(user_id="test_user")
-        
-        # Execute & Verify (no DB interaction expected)
+
         with pytest.raises(ValidationException) as exc_info:
             await handler.handle(command)
-        
+
         assert "At least one metric must be provided" in str(exc_info.value)
-    
+
     async def test_invalid_weight(self):
         """Test validation for invalid weight."""
-        # Setup
-        mock_profile = UserProfile(
-            id="profile_1",
-            user_id="test_user",
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=70.0,
-            job_type="desk",
-            training_days_per_week=4,
-            training_minutes_per_session=60,
-            fitness_goal="recomp"
-        )
-        mock_db = setup_mock_db_with_profile(mock_profile)
+        profile = _make_profile()
+        mock_uow = _make_mock_uow(profile)
 
-        handler = UpdateUserMetricsCommandHandler()
-        command = UpdateUserMetricsCommand(
-            user_id="test_user",
-            weight_kg=-5.0  # Invalid
-        )
-        
-        class DummyUnitOfWork:
-            def __init__(self):
-                self.session = mock_db
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(user_id="test_user", weight_kg=-5.0)
 
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                if exc_type:
-                    self.session.rollback()
-                else:
-                    self.session.commit()
-
-            def refresh(self, obj):
-                self.session.refresh(obj)
-
-        with patch(
-            "src.app.handlers.command_handlers.update_user_metrics_command_handler.UnitOfWork",
-            MagicMock(return_value=DummyUnitOfWork()),
-        ):
-            with pytest.raises(ValidationException) as exc_info:
-                await handler.handle(command)
+        with pytest.raises(ValidationException) as exc_info:
+            await handler.handle(command)
 
         assert "Weight must be greater than 0" in str(exc_info.value)
-        mock_db.rollback.assert_called_once()
-    
+
     async def test_invalid_body_fat(self):
         """Test validation for body fat out of range."""
-        # Setup
-        mock_profile = UserProfile(
-            id="profile_1",
-            user_id="test_user",
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=70.0,
-            job_type="desk",
-            training_days_per_week=4,
-            training_minutes_per_session=60,
-            fitness_goal="recomp"
-        )
-        mock_db = setup_mock_db_with_profile(mock_profile)
+        profile = _make_profile()
+        mock_uow = _make_mock_uow(profile)
 
-        handler = UpdateUserMetricsCommandHandler()
-        command = UpdateUserMetricsCommand(
-            user_id="test_user",
-            body_fat_percent=75.0  # Too high
-        )
-        
-        class DummyUnitOfWork:
-            def __init__(self):
-                self.session = mock_db
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(user_id="test_user", body_fat_percent=75.0)
 
-            def __enter__(self):
-                return self
+        with pytest.raises(ValidationException) as exc_info:
+            await handler.handle(command)
 
-            def __exit__(self, exc_type, exc, tb):
-                if exc_type:
-                    self.session.rollback()
-                else:
-                    self.session.commit()
-
-            def refresh(self, obj):
-                self.session.refresh(obj)
-
-        with patch(
-            "src.app.handlers.command_handlers.update_user_metrics_command_handler.UnitOfWork",
-            MagicMock(return_value=DummyUnitOfWork()),
-        ):
-            with pytest.raises(ValidationException) as exc_info:
-                await handler.handle(command)
-        
         assert "Body fat percentage must be between 0 and 70" in str(exc_info.value)
-    
+
     async def test_invalid_job_type(self):
         """Test validation for invalid job type."""
-        # Setup
-        mock_profile = UserProfile(
-            id="profile_1",
-            user_id="test_user",
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=70.0,
-            job_type="desk",
-            training_days_per_week=4,
-            training_minutes_per_session=60,
-            fitness_goal="recomp"
-        )
-        mock_db = setup_mock_db_with_profile(mock_profile)
+        profile = _make_profile()
+        mock_uow = _make_mock_uow(profile)
 
-        handler = UpdateUserMetricsCommandHandler()
-        command = UpdateUserMetricsCommand(
-            user_id="test_user",
-            job_type="invalid_job"  # Invalid
-        )
-        
-        class DummyUnitOfWork:
-            def __init__(self):
-                self.session = mock_db
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(user_id="test_user", job_type="invalid_job")
 
-            def __enter__(self):
-                return self
+        with pytest.raises(ValidationException) as exc_info:
+            await handler.handle(command)
 
-            def __exit__(self, exc_type, exc, tb):
-                if exc_type:
-                    self.session.rollback()
-                else:
-                    self.session.commit()
-
-            def refresh(self, obj):
-                self.session.refresh(obj)
-
-        with patch(
-            "src.app.handlers.command_handlers.update_user_metrics_command_handler.UnitOfWork",
-            MagicMock(return_value=DummyUnitOfWork()),
-        ):
-            with pytest.raises(ValidationException) as exc_info:
-                await handler.handle(command)
-        
         assert "Job type must be one of" in str(exc_info.value)
-    
+
     async def test_invalid_fitness_goal(self):
         """Test validation for invalid fitness goal."""
-        # Setup
-        mock_profile = UserProfile(
-            id="profile_1",
-            user_id="test_user",
-            age=30,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=70.0,
-            job_type="desk",
-            training_days_per_week=4,
-            training_minutes_per_session=60,
-            fitness_goal="recomp"
-        )
-        mock_db = setup_mock_db_with_profile(mock_profile)
+        profile = _make_profile()
+        mock_uow = _make_mock_uow(profile)
 
-        handler = UpdateUserMetricsCommandHandler()
-        command = UpdateUserMetricsCommand(
-            user_id="test_user",
-            fitness_goal="super_shredded"  # Invalid
-        )
-        
-        class DummyUnitOfWork:
-            def __init__(self):
-                self.session = mock_db
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(user_id="test_user", fitness_goal="super_shredded")
 
-            def __enter__(self):
-                return self
+        with pytest.raises(ValidationException) as exc_info:
+            await handler.handle(command)
 
-            def __exit__(self, exc_type, exc, tb):
-                if exc_type:
-                    self.session.rollback()
-                else:
-                    self.session.commit()
-
-            def refresh(self, obj):
-                self.session.refresh(obj)
-
-        with patch(
-            "src.app.handlers.command_handlers.update_user_metrics_command_handler.UnitOfWork",
-            MagicMock(return_value=DummyUnitOfWork()),
-        ):
-            with pytest.raises(ValidationException) as exc_info:
-                await handler.handle(command)
-        
         assert "Fitness goal must be one of" in str(exc_info.value)
-

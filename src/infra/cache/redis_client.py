@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from typing import Optional
+from urllib.parse import urlparse
 
 import redis.asyncio as redis
 from redis.exceptions import RedisError
@@ -12,15 +13,32 @@ from redis.exceptions import RedisError
 logger = logging.getLogger(__name__)
 
 
+def _safe_redis_log_label(url: str) -> str:
+    """Return scheme + host + port for logs; never userinfo (password)."""
+    parsed = urlparse(url)
+    host = parsed.hostname or "unknown"
+    port = f":{parsed.port}" if parsed.port else ""
+    scheme = parsed.scheme or "redis"
+    return f"{scheme}://{host}{port}"
+
+
 class RedisClient:
     """Wrapper around redis.asyncio client that manages a shared pool."""
 
-    def __init__(self, redis_url: str, max_connections: int = 50):
+    def __init__(
+        self,
+        redis_url: str,
+        max_connections: int = 50,
+        socket_timeout: float = 5.0,
+        socket_connect_timeout: float = 5.0,
+    ):
         self._redis_url = redis_url
         self.pool = redis.ConnectionPool.from_url(
             redis_url,
             max_connections=max_connections,
             decode_responses=True,
+            socket_timeout=socket_timeout,
+            socket_connect_timeout=socket_connect_timeout,
         )
         self.client: Optional[redis.Redis] = None
 
@@ -32,9 +50,13 @@ class RedisClient:
         self.client = redis.Redis(connection_pool=self.pool)
         try:
             await self.client.ping()
-            logger.info("Redis connected (%s)", self._redis_url)
+            logger.info("Redis connected (%s)", _safe_redis_log_label(self._redis_url))
         except RedisError as exc:  # pragma: no cover - connection errors logged
-            logger.error("Failed to connect to Redis: %s", exc)
+            logger.error(
+                "Failed to connect to Redis (%s): %s",
+                _safe_redis_log_label(self._redis_url),
+                exc,
+            )
             raise
 
     async def disconnect(self) -> None:

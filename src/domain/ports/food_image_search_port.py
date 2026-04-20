@@ -1,4 +1,5 @@
 """Abstract port for food image search providers (Pexels, Unsplash, etc.)."""
+
 from abc import ABC, abstractmethod
 from typing import Optional
 

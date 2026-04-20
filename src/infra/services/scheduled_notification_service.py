@@ -1,5 +1,9 @@
 """
 Scheduled notification service for sending push notifications at specific times.
+
+Only one worker per process host runs the scheduler loop (see SchedulerLeaderLock).
+Horizontal scaling across multiple containers still runs one scheduler per instance;
+use Redis/DB leader election or a dedicated worker if exactly-once cluster-wide is required.
 """
 import asyncio
 import logging
@@ -14,12 +18,17 @@ from src.domain.services.meal_suggestion.suggestion_tdee_helpers import build_td
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import utc_now, timezone
 from src.infra.database.uow import UnitOfWork
+from src.infra.services.scheduler_leader_lock import SchedulerLeaderLock
 
 logger = logging.getLogger(__name__)
 
 
 class ScheduledNotificationService:
-    """Service for scheduling and sending notifications at specific times."""
+    """Service for scheduling and sending notifications at specific times.
+
+    Leader election is per host (flock); multi-container deployments need a separate
+    coordination strategy if a single cluster-wide scheduler is required.
+    """
 
     # Scheduling constants
     SCHEDULING_LOOP_INTERVAL_SECONDS = 60
@@ -36,15 +45,25 @@ class ScheduledNotificationService:
         self._running = False
         self._tasks: List[asyncio.Task] = []
         self._cleanup_counter = 0  # Clean sent logs every ~60 loop ticks (~1h)
-    
+        self._leader_lock = SchedulerLeaderLock()
+        self._leader_acquired = False
+
     async def start(self):
         """Start the scheduled notification service."""
         if self._running:
             logger.warning("Scheduled notification service is already running")
             return
-        
+
+        if not self._leader_lock.try_acquire():
+            logger.info(
+                "Scheduled notification service skipped: another worker holds the "
+                "scheduler lock (see scheduler_leader_lock)"
+            )
+            return
+
+        self._leader_acquired = True
         self._running = True
-        logger.info("Starting scheduled notification service")
+        logger.info("Starting scheduled notification service (scheduler leader)")
         
         # Start the main scheduling loop
         task = asyncio.create_task(self._scheduling_loop())
@@ -54,10 +73,9 @@ class ScheduledNotificationService:
     
     async def stop(self):
         """Stop the scheduled notification service."""
-        if not self._running:
-            logger.warning("Scheduled notification service is not running")
+        if not self._leader_acquired:
             return
-        
+
         self._running = False
         logger.info("Stopping scheduled notification service")
         
@@ -71,6 +89,8 @@ class ScheduledNotificationService:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         
         self._tasks.clear()
+        self._leader_lock.release()
+        self._leader_acquired = False
         logger.info("Scheduled notification service stopped")
     
     async def _scheduling_loop(self):
@@ -179,63 +199,64 @@ class ScheduledNotificationService:
         Returns (gender, remaining_calories, language) tuple.
         Uses shared WeeklyBudgetService for consistent values with the app API.
         """
-        from src.domain.utils.timezone_utils import (
-            resolve_user_timezone, user_today, get_user_monday,
-        )
-
-        with UnitOfWork() as uow:
-            user = uow.users.find_by_id(user_id)
-            language = getattr(user, 'language_code', 'en') if user else "en"
-
-            profile = uow.users.get_profile(user_id)
-            gender = profile.gender if profile else "male"
-
-            # Compute adjusted daily + consumed from shared service
-            calorie_goal = 2000
-            calories_consumed = 0.0
-            if profile:
-                try:
-                    tdee_result = self._tdee_service.calculate_tdee(
-                        build_tdee_request(profile)
-                    )
-                    user_tz = resolve_user_timezone(user_id, uow)
-                    today = user_today(user_tz)
-                    week_start = get_user_monday(today, user_id, uow)
-                    weekly_budget = uow.weekly_budgets.find_by_user_and_week(
-                        user_id, week_start
-                    )
-
-                    if weekly_budget:
-                        effective = WeeklyBudgetService.get_effective_adjusted_daily(
-                            uow=uow, user_id=user_id,
-                            week_start=week_start, target_date=today,
-                            weekly_budget=weekly_budget,
-                            base_daily_cal=tdee_result.macros.calories,
-                            base_daily_protein=tdee_result.macros.protein,
-                            base_daily_carbs=tdee_result.macros.carbs,
-                            base_daily_fat=tdee_result.macros.fat,
-                            bmr=tdee_result.bmr, user_timezone=user_tz,
-                        )
-                        calorie_goal = effective.adjusted.calories
-                        # consumed_today = total - before_today (same as app API)
-                        calories_consumed = (
-                            effective.consumed_total["calories"]
-                            - effective.consumed_before_today["calories"]
-                        )
-                    else:
-                        calorie_goal = tdee_result.macros.calories
-                except Exception as e:
-                    logger.warning(
-                        f"Adjusted daily target failed for {user_id}: {e}"
-                    )
-
-            remaining = max(0, int(calorie_goal - calories_consumed))
-            logger.info(
-                f"Notification context for {user_id}: "
-                f"goal={calorie_goal:.0f}, consumed={calories_consumed:.0f}, "
-                f"remaining={remaining}"
+        def _sync() -> tuple:
+            from src.domain.utils.timezone_utils import (
+                resolve_user_timezone, user_today, get_user_monday,
             )
-            return gender, remaining, language
+
+            with UnitOfWork() as uow:
+                user = uow.users.find_by_id(user_id)
+                language = getattr(user, 'language_code', 'en') if user else "en"
+
+                profile = uow.users.get_profile(user_id)
+                gender = profile.gender if profile else "male"
+
+                calorie_goal = 2000
+                calories_consumed = 0.0
+                if profile:
+                    try:
+                        tdee_result = self._tdee_service.calculate_tdee(
+                            build_tdee_request(profile)
+                        )
+                        user_tz = resolve_user_timezone(user_id, uow)
+                        today = user_today(user_tz)
+                        week_start = get_user_monday(today, user_id, uow)
+                        weekly_budget = uow.weekly_budgets.find_by_user_and_week(
+                            user_id, week_start
+                        )
+
+                        if weekly_budget:
+                            effective = WeeklyBudgetService.get_effective_adjusted_daily(
+                                uow=uow, user_id=user_id,
+                                week_start=week_start, target_date=today,
+                                weekly_budget=weekly_budget,
+                                base_daily_cal=tdee_result.macros.calories,
+                                base_daily_protein=tdee_result.macros.protein,
+                                base_daily_carbs=tdee_result.macros.carbs,
+                                base_daily_fat=tdee_result.macros.fat,
+                                bmr=tdee_result.bmr, user_timezone=user_tz,
+                            )
+                            calorie_goal = effective.adjusted.calories
+                            calories_consumed = (
+                                effective.consumed_total["calories"]
+                                - effective.consumed_before_today["calories"]
+                            )
+                        else:
+                            calorie_goal = tdee_result.macros.calories
+                    except Exception as e:
+                        logger.warning(
+                            f"Adjusted daily target failed for {user_id}: {e}"
+                        )
+
+                remaining = max(0, int(calorie_goal - calories_consumed))
+                logger.info(
+                    f"Notification context for {user_id}: "
+                    f"goal={calorie_goal:.0f}, consumed={calories_consumed:.0f}, "
+                    f"remaining={remaining}"
+                )
+                return gender, remaining, language
+
+        return await asyncio.to_thread(_sync)
 
     async def _get_user_daily_summary(self, user_id: str) -> dict:
         """Get user's daily nutrition summary for the given date.
@@ -243,77 +264,79 @@ class ScheduledNotificationService:
         Returns dict with calories_consumed, calorie_goal, meals_logged, gender.
         Uses shared WeeklyBudgetService for consistent values with the app API.
         """
-        from src.infra.repositories.meal_repository import MealRepository
-        from src.domain.utils.timezone_utils import (
-            resolve_user_timezone, user_today, get_user_monday,
-        )
-
-        with UnitOfWork() as uow:
-            user = uow.users.find_by_id(user_id)
-            language = getattr(user, 'language_code', 'en') if user else "en"
-
-            profile = uow.users.get_profile(user_id)
-            gender = profile.gender if profile else "male"
-
-            user_tz = resolve_user_timezone(user_id, uow)
-            local_date = user_today(user_tz)
-
-            # meals_logged count still needs find_by_date (for count only)
-            meal_repo = MealRepository(uow.session)
-            meals = meal_repo.find_by_date(
-                local_date, user_id=user_id, user_timezone=user_tz
+        def _sync() -> dict:
+            from src.infra.repositories.meal_repository import MealRepository, MealProjection
+            from src.domain.utils.timezone_utils import (
+                resolve_user_timezone, user_today, get_user_monday,
             )
-            meals_logged = len(meals)
 
-            # Use shared service for goal + consumed (consistent with app API)
-            calorie_goal = 2000
-            calories_consumed = 0.0
-            if profile:
-                try:
-                    tdee_result = self._tdee_service.calculate_tdee(
-                        build_tdee_request(profile)
-                    )
-                    today = local_date
-                    week_start = get_user_monday(today, user_id, uow)
-                    weekly_budget = uow.weekly_budgets.find_by_user_and_week(
-                        user_id, week_start
-                    )
+            with UnitOfWork() as uow:
+                user = uow.users.find_by_id(user_id)
+                language = getattr(user, 'language_code', 'en') if user else "en"
 
-                    if weekly_budget:
-                        effective = WeeklyBudgetService.get_effective_adjusted_daily(
-                            uow=uow, user_id=user_id,
-                            week_start=week_start, target_date=today,
-                            weekly_budget=weekly_budget,
-                            base_daily_cal=tdee_result.macros.calories,
-                            base_daily_protein=tdee_result.macros.protein,
-                            base_daily_carbs=tdee_result.macros.carbs,
-                            base_daily_fat=tdee_result.macros.fat,
-                            bmr=tdee_result.bmr, user_timezone=user_tz,
+                profile = uow.users.get_profile(user_id)
+                gender = profile.gender if profile else "male"
+
+                user_tz = resolve_user_timezone(user_id, uow)
+                local_date = user_today(user_tz)
+
+                meal_repo = MealRepository(uow.session)
+                meals = meal_repo.find_by_date(
+                    local_date, user_id=user_id, user_timezone=user_tz,
+                    projection=MealProjection.MACROS_ONLY,
+                )
+                meals_logged = len(meals)
+
+                calorie_goal = 2000
+                calories_consumed = 0.0
+                if profile:
+                    try:
+                        tdee_result = self._tdee_service.calculate_tdee(
+                            build_tdee_request(profile)
                         )
-                        calorie_goal = effective.adjusted.calories
-                        calories_consumed = (
-                            effective.consumed_total["calories"]
-                            - effective.consumed_before_today["calories"]
+                        today = local_date
+                        week_start = get_user_monday(today, user_id, uow)
+                        weekly_budget = uow.weekly_budgets.find_by_user_and_week(
+                            user_id, week_start
                         )
-                    else:
-                        calorie_goal = tdee_result.macros.calories
-                except Exception as e:
-                    logger.warning(
-                        f"Adjusted daily target failed for {user_id}: {e}"
-                    )
 
-            logger.info(
-                f"Daily summary for {user_id}: "
-                f"goal={calorie_goal:.0f}, consumed={calories_consumed:.0f}, "
-                f"meals={meals_logged}, tz={user_tz}, date={local_date}"
-            )
-            return {
-                "calories_consumed": calories_consumed,
-                "calorie_goal": calorie_goal,
-                "meals_logged": meals_logged,
-                "gender": gender,
-                "language": language,
-            }
+                        if weekly_budget:
+                            effective = WeeklyBudgetService.get_effective_adjusted_daily(
+                                uow=uow, user_id=user_id,
+                                week_start=week_start, target_date=today,
+                                weekly_budget=weekly_budget,
+                                base_daily_cal=tdee_result.macros.calories,
+                                base_daily_protein=tdee_result.macros.protein,
+                                base_daily_carbs=tdee_result.macros.carbs,
+                                base_daily_fat=tdee_result.macros.fat,
+                                bmr=tdee_result.bmr, user_timezone=user_tz,
+                            )
+                            calorie_goal = effective.adjusted.calories
+                            calories_consumed = (
+                                effective.consumed_total["calories"]
+                                - effective.consumed_before_today["calories"]
+                            )
+                        else:
+                            calorie_goal = tdee_result.macros.calories
+                    except Exception as e:
+                        logger.warning(
+                            f"Adjusted daily target failed for {user_id}: {e}"
+                        )
+
+                logger.info(
+                    f"Daily summary for {user_id}: "
+                    f"goal={calorie_goal:.0f}, consumed={calories_consumed:.0f}, "
+                    f"meals={meals_logged}, tz={user_tz}, date={local_date}"
+                )
+                return {
+                    "calories_consumed": calories_consumed,
+                    "calorie_goal": calorie_goal,
+                    "meals_logged": meals_logged,
+                    "gender": gender,
+                    "language": language,
+                }
+
+        return await asyncio.to_thread(_sync)
 
     async def send_test_notification(
         self,

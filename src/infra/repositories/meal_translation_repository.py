@@ -11,7 +11,12 @@ from sqlalchemy.orm import Session
 from src.domain.model.meal import MealTranslation
 from src.domain.ports.meal_translation_repository_port import MealTranslationRepositoryPort
 from src.infra.database.config import SessionLocal
-from src.infra.database.models.meal.meal_translation_model import MealTranslation as DBMealTranslation
+from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
+from src.infra.database.models.meal.food_item_translation_model import FoodItemTranslationORM
+from src.infra.mappers.meal_mapper import (
+    meal_translation_orm_to_domain,
+    meal_translation_domain_to_orm,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +34,9 @@ class MealTranslationRepository(MealTranslationRepositoryPort):
         try:
             # Check for existing translation
             existing = (
-                db.query(DBMealTranslation)
-                .filter(DBMealTranslation.meal_id == translation.meal_id)
-                .filter(DBMealTranslation.language == translation.language)
+                db.query(MealTranslationORM)
+                .filter(MealTranslationORM.meal_id == translation.meal_id)
+                .filter(MealTranslationORM.language == translation.language)
                 .first()
             )
 
@@ -47,25 +52,24 @@ class MealTranslationRepository(MealTranslationRepositoryPort):
                 db.flush()
 
                 for fi in translation.food_items:
-                    from src.infra.database.models.meal.food_item_translation_model import FoodItemTranslation
-                    db_fi = FoodItemTranslation(
+                    db_fi = FoodItemTranslationORM(
                         meal_translation_id=existing.id,
                         food_item_id=fi.food_item_id,
                         name=fi.name,
-                        description=fi.description
+                        description=fi.description,
                     )
                     db.add(db_fi)
 
                 db.commit()
                 db.refresh(existing)
-                return existing.to_domain()
+                return meal_translation_orm_to_domain(existing)
             else:
                 # Create new
-                db_translation = DBMealTranslation.from_domain(translation)
+                db_translation = meal_translation_domain_to_orm(translation)
                 db.add(db_translation)
                 db.commit()
                 db.refresh(db_translation)
-                return db_translation.to_domain()
+                return meal_translation_orm_to_domain(db_translation)
 
         except Exception as e:
             db.rollback()
@@ -79,12 +83,12 @@ class MealTranslationRepository(MealTranslationRepositoryPort):
         db = self._session_factory()
         try:
             db_translation = (
-                db.query(DBMealTranslation)
-                .filter(DBMealTranslation.meal_id == meal_id)
-                .filter(DBMealTranslation.language == language)
+                db.query(MealTranslationORM)
+                .filter(MealTranslationORM.meal_id == meal_id)
+                .filter(MealTranslationORM.language == language)
                 .first()
             )
-            return db_translation.to_domain() if db_translation else None
+            return meal_translation_orm_to_domain(db_translation) if db_translation else None
         finally:
             db.close()
 
@@ -93,8 +97,8 @@ class MealTranslationRepository(MealTranslationRepositoryPort):
         db = self._session_factory()
         try:
             count = (
-                db.query(DBMealTranslation)
-                .filter(DBMealTranslation.meal_id == meal_id)
+                db.query(MealTranslationORM)
+                .filter(MealTranslationORM.meal_id == meal_id)
                 .delete()
             )
             db.commit()

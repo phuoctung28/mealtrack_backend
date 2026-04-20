@@ -9,7 +9,7 @@ from src.api.exceptions import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboardingStatusQuery
 from src.infra.database.models.user import User
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +20,13 @@ class GetUserOnboardingStatusQueryHandler(EventHandler[GetUserOnboardingStatusQu
 
     async def handle(self, query: GetUserOnboardingStatusQuery) -> Dict[str, Any]:
         """Get user's onboarding status by Firebase UID."""
-        with UnitOfWork() as uow:
-            # Get user by firebase_uid using the UnitOfWork session
-            user = (
-                uow.session.query(User)
-                .filter(User.firebase_uid == query.firebase_uid)
-                .first()
+        from sqlalchemy import select
+
+        async with AsyncUnitOfWork() as uow:
+            result = await uow.session.execute(
+                select(User).where(User.firebase_uid == query.firebase_uid)
             )
+            user = result.scalars().first()
 
             if not user:
                 raise ResourceNotFoundException(f"User with Firebase UID {query.firebase_uid} not found")

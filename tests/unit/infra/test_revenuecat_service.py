@@ -1,5 +1,5 @@
 """
-Unit tests for RevenueCat service.
+Unit tests for RevenueCat adapter.
 """
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -7,17 +7,17 @@ from unittest.mock import AsyncMock, patch, MagicMock
 import httpx
 import pytest
 
-from src.domain.services.revenuecat_service import RevenueCatService
+from src.infra.adapters.revenuecat_adapter import RevenueCatAdapter
 
 
 @pytest.mark.asyncio
-class TestRevenueCatService:
-    """Test suite for RevenueCat service."""
-    
+class TestRevenueCatAdapter:
+    """Test suite for RevenueCat adapter."""
+
     @pytest.fixture
     def service(self):
-        """Create RevenueCat service instance."""
-        return RevenueCatService(api_key="test_api_key")
+        """Create RevenueCat adapter instance."""
+        return RevenueCatAdapter(api_key="test_api_key")
     
     @pytest.fixture
     def mock_subscriber_response(self):

@@ -1,8 +1,8 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Version:** 0.6.0
-**Last Updated:** March 14, 2026
-**Status:** Production-ready. 430 Python files, ~38.5K LOC across 4 layers. 681+ tests, 70%+ coverage. Latest: API (76 files, 8,605 LOC), App (140 files, 6,229 LOC), Domain (133 files, 14,556 LOC), Infra (80 files, 8,895 LOC). Recent: Nutrition accuracy (fiber-aware calories, food density, macro validation), custom macro targets, onboarding refinements.
+**Version:** 0.6.1
+**Last Updated:** April 17, 2026
+**Status:** Production-ready. 430 Python files, ~38.5K LOC across 4 layers. 681+ tests, 70%+ coverage. Latest: Sentry monitoring, meal discovery endpoint, notification deduplication, onboarding redesign (challenge_duration, training_types).
 
 ---
 
@@ -34,24 +34,25 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 - Returns results in <3 seconds through state machine (PROCESSING → ANALYZING → READY/FAILED).
 
 ### 2. RESTful API (50+ Endpoints across 12 Route Modules)
-- **Meals**: image/analyze (POST), manual (POST), /{id} (GET/DELETE), ingredients (PUT), daily/macros (GET).
+- **Meals**: image/analyze (POST), manual (POST), /{id} (GET/DELETE), ingredients (PUT), daily/macros (GET), streak, daily-breakdown.
 - **User Profiles**: POST/GET/PUT profiles, TDEE calculation.
 - **Meal Plans**: Weekly ingredient-based generation, meal retrieval by date.
-- **Meal Suggestions**: Session-based with 4h TTL, portion multipliers (1-4x), rejection feedback.
+- **Meal Suggestions**: Session-based with 4h TTL, portion multipliers (1-4x), rejection feedback, discovery endpoint (6 meals).
 - **Chat**: Threads + Messages (REST + WebSocket), streaming AI responses via MessageOrchestrationService and AIResponseCoordinator.
-- **Notifications**: FCM token management, preferences with timezone-aware scheduling, ChatNotificationService for broadcasts.
-- **Foods**: USDA FDC search and details.
+- **Notifications**: FCM token management, deduplication (notification_sent_log), preferences with timezone-aware scheduling.
+- **Foods**: USDA FDC search, barcode lookup with 6-step cascade (Nutritionix → Brave Search → AI fallback).
 - **Webhooks**: RevenueCat subscription sync.
 - **Activities**: Activity tracking and management.
 - **Ingredients**: Ingredient recognition and analysis.
-- **Monitoring**: Health checks and observability endpoints.
+- **Monitoring**: Health checks, Sentry error/performance tracking, observability endpoints.
 - **Feature Flags**: Feature toggle management.
 
-### 3. Session-Based Meal Suggestions
+### 3. Session-Based Meal Suggestions & Discovery
 - Generates 3 personalized suggestions per session with Redis 4h TTL.
 - Portion multipliers (1-4x) and rejection feedback loop.
 - Multi-language support (7 languages: en, vi, es, fr, de, ja, zh) with fallback.
 - Language-aware prompt generation with injected instructions.
+- Meal discovery endpoint: 6 meals/batch with image search (Unsplash, Pexels) for visual browsing.
 
 ### 4. Intelligent Meal Planning
 - AI-generated 7-day plans using available ingredients only.
@@ -82,15 +83,17 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 ## 3. Technical Stack
 - **Framework**: FastAPI 0.115+ (Python 3.11+)
-- **Database**: MySQL 8.0 with SQLAlchemy 2.0 (request-scoped sessions), 11 core tables
+- **Database**: MySQL 8.0 with SQLAlchemy 2.0 (request-scoped sessions), 13+ core tables
 - **Cache**: Redis 7.0 with graceful degradation, JSON serialization
 - **Vector DB**: Pinecone Inference API (1024-dim, llama-text-embed-v2)
 - **AI Services**: Google Gemini 2.5 Flash (multi-model for rate distribution)
 - **Storage**: Cloudinary (image storage with folder organization)
+- **Image Search**: Unsplash + Pexels adapters (meal discovery)
 - **Auth**: Firebase JWT with development bypass middleware
 - **Event Bus**: PyMediator with singleton registry pattern
-- **Notifications**: Firebase Cloud Messaging (FCM) with platform-specific configs
+- **Notifications**: Firebase Cloud Messaging (FCM) with platform-specific configs + deduplication
 - **Subscriptions**: RevenueCat webhook integration
+- **Monitoring**: Sentry SDK (error tracking, performance profiling)
 
 ---
 

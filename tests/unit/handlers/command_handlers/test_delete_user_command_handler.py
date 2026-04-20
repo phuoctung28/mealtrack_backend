@@ -1,7 +1,7 @@
 """
 Unit tests for DeleteUserCommandHandler.
 """
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 from sqlalchemy import create_engine
@@ -14,42 +14,99 @@ from src.app.handlers.command_handlers.delete_user_command_handler import (
 )
 from src.infra.database.config import Base
 from src.infra.database.models.user import User
-from src.infra.database.models.meal.meal import Meal
+from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.notification.notification_preferences import NotificationPreferences
-from src.infra.database.models.notification.user_fcm_token import UserFcmToken
+from src.infra.database.models.notification.notification_preferences import NotificationPreferencesORM as NotificationPreferences
+from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM as UserFcmToken
 from src.infra.repositories.user_repository import UserRepository
+
+
+class AsyncSessionWrapper:
+    """Wraps a sync SQLAlchemy session so execute() and flush() are awaitable."""
+
+    def __init__(self, sync_session):
+        self._sync = sync_session
+
+    async def execute(self, *args, **kwargs):
+        return self._sync.execute(*args, **kwargs)
+
+    async def flush(self, *args, **kwargs):
+        return self._sync.flush(*args, **kwargs)
+
+    def query(self, *args, **kwargs):
+        return self._sync.query(*args, **kwargs)
+
+    def add(self, *args, **kwargs):
+        return self._sync.add(*args, **kwargs)
+
+    def commit(self):
+        return self._sync.commit()
+
+    def rollback(self):
+        return self._sync.rollback()
+
+    def refresh(self, *args, **kwargs):
+        return self._sync.refresh(*args, **kwargs)
+
+
+class AsyncUserRepositoryWrapper:
+    """Wraps the sync UserRepository so each method is awaitable."""
+
+    def __init__(self, sync_repo):
+        self._sync = sync_repo
+
+    async def find_by_firebase_uid(self, *args, **kwargs):
+        return self._sync.find_by_firebase_uid(*args, **kwargs)
+
+    async def find_by_id(self, *args, **kwargs):
+        return self._sync.find_by_id(*args, **kwargs)
+
+    async def save(self, *args, **kwargs):
+        return self._sync.save(*args, **kwargs)
+
+    async def delete(self, *args, **kwargs):
+        return self._sync.delete(*args, **kwargs)
 
 
 class DummyUnitOfWork:
     """
     Lightweight UnitOfWork for tests that:
     - Uses the provided session (e.g., in-memory SQLite)
-    - Exposes a real UserRepository
+    - Exposes a real UserRepository wrapped for async access
     - Commits/rolls back but NEVER closes the session
     """
 
     def __init__(self, session):
-        self.session = session
-        self.users = UserRepository(session)
+        self.session = AsyncSessionWrapper(session)
+        self._raw_session = session
+        self.users = AsyncUserRepositoryWrapper(UserRepository(session))
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc, tb):
         if exc_type:
-            self.session.rollback()
+            self._raw_session.rollback()
         else:
             try:
-                self.session.commit()
+                self._raw_session.commit()
             except Exception:
                 raise
 
-    def commit(self):
-        self.session.commit()
+    async def __aenter__(self):
+        return self
 
-    def rollback(self):
-        self.session.rollback()
+    async def __aexit__(self, exc_type, exc, tb):
+        if exc_type:
+            await self.rollback()
+        else:
+            await self.commit()
+
+    async def commit(self):
+        self._raw_session.commit()
+
+    async def rollback(self):
+        self._raw_session.rollback()
 
 
 @pytest.fixture(scope="function")
@@ -118,7 +175,7 @@ class TestDeleteUserCommandHandler:
         command = DeleteUserCommand(firebase_uid=active_user.firebase_uid)
 
         with patch(
-            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
@@ -147,7 +204,7 @@ class TestDeleteUserCommandHandler:
         user_id = active_user.id
 
         with patch(
-            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
@@ -177,7 +234,7 @@ class TestDeleteUserCommandHandler:
 
         # Act & Assert
         with patch(
-            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
             with pytest.raises(ResourceNotFoundException):
@@ -191,7 +248,7 @@ class TestDeleteUserCommandHandler:
 
         # Act & Assert
         with patch(
-            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
             with pytest.raises(ResourceNotFoundException):
@@ -205,7 +262,7 @@ class TestDeleteUserCommandHandler:
         user_id = active_user.id
 
         with patch(
-            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
@@ -229,7 +286,7 @@ class TestDeleteUserCommandHandler:
 
         # Simulate failure to create UnitOfWork
         with patch(
-            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             side_effect=RuntimeError("DB unavailable"),
         ):
             with pytest.raises(RuntimeError, match="DB unavailable"):
@@ -243,7 +300,7 @@ class TestDeleteUserCommandHandler:
         user_id = active_user.id
 
         with patch(
-            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
@@ -271,11 +328,11 @@ class TestDeleteUserCommandHandler:
             
             # Patch UnitOfWork to raise during commit
             class FailingUnitOfWork(DummyUnitOfWork):
-                def commit(self):
+                async def commit(self):
                     raise Exception("DB Error")
 
             with patch(
-                "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+                "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
                 MagicMock(return_value=FailingUnitOfWork(db_session)),
             ):
                 with pytest.raises(Exception, match="Failed to delete user account"):
@@ -307,7 +364,7 @@ class TestDeleteUserCommandHandlerIntegration:
         command = DeleteUserCommand(firebase_uid=user.firebase_uid)
 
         with patch(
-            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
@@ -349,7 +406,7 @@ class TestDeleteUserCommandHandlerIntegration:
         handler = DeleteUserCommandHandler()
 
         with patch(
-            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
@@ -389,7 +446,7 @@ class TestDeleteUserCommandHandlerIntegration:
         handler = DeleteUserCommandHandler()
 
         with patch(
-            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
@@ -424,7 +481,7 @@ class TestDeleteUserCommandHandlerIntegration:
         handler = DeleteUserCommandHandler()
 
         with patch(
-            "src.app.handlers.command_handlers.delete_user_command_handler.UnitOfWork",
+            "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
             with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
