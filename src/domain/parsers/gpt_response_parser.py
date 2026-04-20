@@ -17,6 +17,8 @@ class GPTResponseParser:
     
     This class implements US-2.2 - Parse the GPT response to structured food list and macros.
     """
+
+    MAX_FOOD_ITEMS = 8
     
     def parse_to_nutrition(self, gpt_response: Dict[str, Any]) -> Nutrition:
         """
@@ -64,7 +66,7 @@ class GPTResponseParser:
         """Parse food items from GPT response data."""
         food_items = []
         if "foods" in data:
-            for food_data in data["foods"]:
+            for food_data in data["foods"][:self.MAX_FOOD_ITEMS]:
                 # Validate required fields
                 required_fields = ["name", "quantity", "unit", "macros"]
                 for field in required_fields:

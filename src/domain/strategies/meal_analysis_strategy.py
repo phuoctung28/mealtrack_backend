@@ -41,6 +41,16 @@ EMOJI SELECTION (for the "emoji" field):
 - NEVER return text or multiple emoji — exactly one emoji character
 """
 
+# Compact rules for basic strategy prompts to meet length constraints
+BASIC_SCAN_DECOMPOSITION_RULES = (
+    "DECOMPOSE: split compound dishes into ingredients (soup→broth/noodles/meat/veg; "
+    "sandwich→bread/meat/cheese/sauce). Single-ingredient foods may stay 1 item. "
+    "Quantities in grams; calories ≈ protein*4 + carbs*4 + fat*9. "
+    "EMOJI: return exactly one emoji for the overall dish by serving style "
+    "(🍜 soup noodles, 🍝 dry noodles, 🍚 rice, 🍛 curry, 🍲 stew, 🥗 salad, 🍖 grilled, "
+    "🥘 braised, 🥟 rolls, 🥪 sandwich, 🍳 egg, 🥣 porridge, 🍗 fried, 🥩 steak; fallback 🍽️)."
+)
+
 
 class MealAnalysisStrategy(ABC):
     """
@@ -102,7 +112,7 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
             "- Each food item includes name, quantity, unit, calories, macros (grams).\n"
             "- Confidence between 0 and 1.\n"
             "- Max 8 food items.\n"
-        ) + SCAN_DECOMPOSITION_RULES
+        ) + BASIC_SCAN_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         return "Analyze this food image and provide nutritional information:"
