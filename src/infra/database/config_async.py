@@ -35,10 +35,9 @@ else:
 # Detect Neon pooler — use NullPool (PgBouncer manages connections)
 _IS_NEON_POOLER = "-pooler" in ASYNC_DATABASE_URL and os.getenv("DATABASE_URL_DIRECT") is None
 
-# Smaller pool than sync during migration (both engines live simultaneously)
 _UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
-_ASYNC_POOL_SIZE = int(os.getenv("ASYNC_POOL_SIZE_PER_WORKER", "2"))
-_ASYNC_POOL_OVERFLOW = int(os.getenv("ASYNC_POOL_MAX_OVERFLOW", "1"))
+_ASYNC_POOL_SIZE = int(os.getenv("ASYNC_POOL_SIZE_PER_WORKER", "3"))
+_ASYNC_POOL_OVERFLOW = int(os.getenv("ASYNC_POOL_MAX_OVERFLOW", "2"))
 
 try:
     if _IS_NEON_POOLER:

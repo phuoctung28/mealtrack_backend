@@ -7,7 +7,7 @@ Monorepo submodule. 4-layer Clean + CQRS + PyMediator event bus.
 | Item | Value |
 |------|-------|
 | **Framework** | FastAPI 0.115+ / Python 3.11+ |
-| **Database** | MySQL 8.0 + SQLAlchemy 2.0 |
+| **Database** | PostgreSQL (Neon) + SQLAlchemy 2.0 async |
 | **Migrations** | Alembic |
 | **Event Bus** | PyMediator (singleton) |
 | **AI** | Google Gemini (multi-model) |
