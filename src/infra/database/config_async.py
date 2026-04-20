@@ -77,10 +77,12 @@ ASYNC_DATABASE_URL, _connect_args = _sanitize_asyncpg_url_and_connect_args(ASYNC
 # Detect Neon pooler — use NullPool (PgBouncer manages connections)
 _IS_NEON_POOLER = "-pooler" in ASYNC_DATABASE_URL and os.getenv("DATABASE_URL_DIRECT") is None
 
-_UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
-_ASYNC_POOL_SIZE = int(os.getenv("ASYNC_POOL_SIZE_PER_WORKER", "8"))
-_ASYNC_POOL_OVERFLOW = int(os.getenv("ASYNC_POOL_MAX_OVERFLOW", "12"))
-_ASYNC_POOL_TIMEOUT = int(os.getenv("ASYNC_POOL_TIMEOUT_SECONDS", "60"))
+_UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "1"))
+# Low-resource-safe defaults (e.g. staging 512MB/0.1 vCPU).
+# Larger environments should override via env vars.
+_ASYNC_POOL_SIZE = int(os.getenv("ASYNC_POOL_SIZE_PER_WORKER", "2"))
+_ASYNC_POOL_OVERFLOW = int(os.getenv("ASYNC_POOL_MAX_OVERFLOW", "2"))
+_ASYNC_POOL_TIMEOUT = int(os.getenv("ASYNC_POOL_TIMEOUT_SECONDS", "45"))
 _ASYNC_POOL_RECYCLE = int(os.getenv("ASYNC_POOL_RECYCLE_SECONDS", "120"))
 
 try:
