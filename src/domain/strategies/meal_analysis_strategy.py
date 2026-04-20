@@ -112,12 +112,14 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
         }
 
         - Include a dish_name field with the overall dish name (e.g., "Chicken Caesar Salad", "Spaghetti Bolognese")
+        - Keep dish_name concise
         - If the foods are difficult to describe as a single dish, list them as comma-separated items (e.g., "grilled chicken, rice, broccoli")
         - Each food item should include name, estimated quantity, unit of measurement, calories, and macros
         - For quantities, estimate as precisely as possible based on visual cues
         - All macros should be in grams
         - Confidence should be between 0 (low) and 1 (high) based on how certain you are of your analysis
-        - Always return well-formed JSON
+        - Return ONLY valid JSON with no commentary text
+        - Max 8 food items
         """ + SCAN_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
