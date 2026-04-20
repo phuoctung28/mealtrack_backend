@@ -12,6 +12,7 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.constants import WeeklyBudgetConstants
 from src.domain.services.weekly_budget_service import AdjustedDailyTargets, WeeklyBudgetService
 from src.domain.model.weekly import WeeklyMacroBudget
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.utils.timezone_utils import ensure_utc, get_user_monday, get_zone_info, resolve_user_timezone_async
 from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
@@ -23,13 +24,18 @@ logger = logging.getLogger(__name__)
 class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, Any]]):
     """Handler for getting weekly macro budget status."""
 
-    def __init__(self, uow=None, cache_service: Optional[CachePort] = None):
+    def __init__(
+        self,
+        uow: Optional[AsyncUnitOfWorkPort] = None,
+        cache_service: Optional[CachePort] = None,
+    ):
         self.uow = uow
         self.cache_service = cache_service
 
     async def handle(self, query: GetWeeklyBudgetQuery) -> Dict[str, Any]:
         """Handle getting weekly budget status."""
-        async with AsyncUnitOfWork() as uow:
+        uow = self.uow or AsyncUnitOfWork()
+        async with uow:
             try:
                 # Resolve user timezone (DB → X-Timezone header → UTC)
                 user_tz_str = await resolve_user_timezone_async(

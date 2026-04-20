@@ -73,6 +73,46 @@ class TestGetWeeklyBudgetQueryHandlerCache:
     """Cache behaviour for GetWeeklyBudgetQueryHandler."""
 
     @pytest.mark.asyncio
+    async def test_uses_injected_uow_on_cache_hit(self):
+        """When a UoW is injected, handler should use it instead of creating a new one."""
+        import zoneinfo
+        from datetime import date
+        from src.app.handlers.query_handlers.get_weekly_budget_query_handler import GetWeeklyBudgetQueryHandler
+        from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
+
+        cached_payload = {"week_start_date": "2024-01-01", "target_calories": 14000.0}
+        cache_service = MagicMock()
+        cache_service.get_json = AsyncMock(return_value=cached_payload)
+        cache_service.set_json = AsyncMock()
+
+        injected_uow = AsyncMock()
+        injected_uow.__aenter__ = AsyncMock(return_value=injected_uow)
+        injected_uow.__aexit__ = AsyncMock(return_value=False)
+
+        handler = GetWeeklyBudgetQueryHandler(uow=injected_uow, cache_service=cache_service)
+        query = GetWeeklyBudgetQuery(user_id="u1", target_date=date(2024, 1, 1), header_timezone="UTC")
+
+        with patch(
+            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.AsyncUnitOfWork"
+        ) as async_uow_cls, patch(
+            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.resolve_user_timezone_async",
+            new_callable=AsyncMock,
+            return_value="UTC",
+        ), patch(
+            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_zone_info",
+            return_value=zoneinfo.ZoneInfo("UTC"),
+        ), patch(
+            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_user_monday",
+            return_value=date(2024, 1, 1),
+        ):
+            result = await handler.handle(query)
+
+        assert result == cached_payload
+        async_uow_cls.assert_not_called()
+        injected_uow.__aenter__.assert_awaited_once()
+        injected_uow.__aexit__.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_returns_cached_value_on_hit(self):
         """On a Redis cache hit find_by_user_and_week is never called."""
         import zoneinfo
