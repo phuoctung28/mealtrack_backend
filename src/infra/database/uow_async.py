@@ -27,21 +27,30 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
         self.session: AsyncSession | None = None
 
     async def __aenter__(self) -> "AsyncUnitOfWork":
+        if AsyncSessionLocal is None:
+            raise RuntimeError(
+                "AsyncSessionLocal is not initialized. Async engine setup failed; "
+                "check async DB configuration."
+            )
         self.session = AsyncSessionLocal()
         self._init_repositories()
         return self
 
     def _init_repositories(self):
-        self.meals = AsyncMealRepository(self.session)
-        self.users = AsyncUserRepository(self.session)
-        self.weekly_budgets = AsyncWeeklyBudgetRepository(self.session)
-        self.cheat_days = AsyncCheatDayRepository(self.session)
-        self.subscriptions = AsyncSubscriptionRepository(self.session)
-        self.notifications = AsyncNotificationRepository(self.session)
-        self.saved_suggestions = AsyncSavedSuggestionDbRepository(self.session)
+        session = self._require_session()
+        self.meals = AsyncMealRepository(session)
+        self.users = AsyncUserRepository(session)
+        self.weekly_budgets = AsyncWeeklyBudgetRepository(session)
+        self.cheat_days = AsyncCheatDayRepository(session)
+        self.subscriptions = AsyncSubscriptionRepository(session)
+        self.notifications = AsyncNotificationRepository(session)
+        self.saved_suggestions = AsyncSavedSuggestionDbRepository(session)
         self.saved_suggestions_db = self.saved_suggestions  # alias for handlers using this name
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        session = self.session
+        if session is None:
+            return
         try:
             if exc_type:
                 await self.rollback()
@@ -52,13 +61,19 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
                     await self.rollback()
                     raise
         finally:
-            await self.session.close()
+            await session.close()
+            self.session = None
 
     async def commit(self) -> None:
-        await self.session.commit()
+        await self._require_session().commit()
 
     async def rollback(self) -> None:
-        await self.session.rollback()
+        await self._require_session().rollback()
 
     async def refresh(self, obj) -> None:
-        await self.session.refresh(obj)
+        await self._require_session().refresh(obj)
+
+    def _require_session(self) -> AsyncSession:
+        if self.session is None:
+            raise RuntimeError("AsyncUnitOfWork session is not initialized.")
+        return self.session

@@ -85,6 +85,12 @@ except Exception as _engine_init_error:  # noqa: BLE001
 
 async def get_async_db():
     """FastAPI dependency: yields an AsyncSession, closes after request."""
+    if AsyncSessionLocal is None:
+        raise RuntimeError(
+            "AsyncSessionLocal is not initialized. Async engine setup failed; "
+            "check async DB configuration."
+        )
+
     async with AsyncSessionLocal() as session:
         try:
             yield session
