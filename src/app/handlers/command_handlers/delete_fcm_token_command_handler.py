@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 from src.app.commands.notification import DeleteFcmTokenCommand
 from src.app.events.base import EventHandler, handles
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +25,8 @@ class DeleteFcmTokenCommandHandler(EventHandler[DeleteFcmTokenCommand, Dict[str,
     async def handle(self, command: DeleteFcmTokenCommand) -> Dict[str, Any]:
         """Handle FCM token deletion."""
         try:
-            with UnitOfWork() as uow:
-                existing_token = uow.notifications.find_fcm_token_by_token(command.fcm_token)
+            async with AsyncUnitOfWork() as uow:
+                existing_token = await uow.notifications.find_fcm_token_by_token(command.fcm_token)
 
                 if not existing_token:
                     return {
@@ -40,8 +40,8 @@ class DeleteFcmTokenCommandHandler(EventHandler[DeleteFcmTokenCommand, Dict[str,
                         "message": "Token does not belong to user"
                     }
 
-                deleted = uow.notifications.delete_fcm_token(command.fcm_token)
-                uow.commit()
+                deleted = await uow.notifications.delete_fcm_token(command.fcm_token)
+                await uow.commit()
 
                 if deleted:
                     logger.info(f"FCM token deleted for user {command.user_id}")

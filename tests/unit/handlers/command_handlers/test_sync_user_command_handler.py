@@ -2,7 +2,7 @@
 Unit tests for SyncUserCommandHandler.
 """
 from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import AsyncMock, Mock, patch, MagicMock
 
 import pytest
 
@@ -62,8 +62,8 @@ class TestSyncUserCommandHandler:
             password_hash="",
             provider=AuthProvider.GOOGLE
         )
-        fake_uow.users.save(existing_user)
-        
+        await fake_uow.users.save(existing_user)
+
         handler.uow = fake_uow
         
         command = SyncUserCommand(
@@ -100,8 +100,8 @@ class TestSyncUserCommandHandler:
             password_hash="",
             provider=AuthProvider.GOOGLE
         )
-        fake_uow.users.save(existing_user)
-        
+        await fake_uow.users.save(existing_user)
+
         handler.uow = fake_uow
         
         command = SyncUserCommand(
@@ -137,8 +137,8 @@ class TestSyncUserCommandHandler:
             password_hash="",
             provider=AuthProvider.GOOGLE
         )
-        fake_uow.users.save(existing_user)
-        
+        await fake_uow.users.save(existing_user)
+
         # Add standard subscription
         from src.domain.model.subscription import Subscription
         # Use future datetime that's definitely in the future
@@ -151,19 +151,19 @@ class TestSyncUserCommandHandler:
             expires_at=expires_at,
             platform="ios"
         )
-        saved_subscription = fake_uow.subscriptions.save(subscription)
-        
+        saved_subscription = await fake_uow.subscriptions.save(subscription)
+
         # Verify subscription is saved correctly
         assert saved_subscription.id is not None
         assert saved_subscription.user_id == str(user_id)
-        
+
         # Debug: Check all subscriptions
         all_subs = list(fake_uow.subscriptions._subscriptions.values())
         matching = [s for s in all_subs if s.user_id == str(user_id)]
         assert len(matching) > 0, f"Should have subscription for user {user_id}. All: {[(s.user_id, s.status) for s in all_subs]}"
-        
+
         # Verify subscription can be found before handler runs
-        found_before = fake_uow.subscriptions.find_active_by_user_id(str(user_id))
+        found_before = await fake_uow.subscriptions.find_active_by_user_id(str(user_id))
         if found_before is None:
             # Debug datetime comparison
             for sub in matching:
@@ -188,7 +188,7 @@ class TestSyncUserCommandHandler:
         assert str(result_user_id) == str(user_id), f"User ID mismatch: {result_user_id} != {user_id}"
         
         # Verify subscription can still be found after handler runs
-        found_after = fake_uow.subscriptions.find_active_by_user_id(str(result_user_id))
+        found_after = await fake_uow.subscriptions.find_active_by_user_id(str(result_user_id))
         assert found_after is not None, f"Subscription should still be findable for user {result_user_id} after handler runs"
 
         # The handler should have found the subscription and set has_subscription
@@ -202,7 +202,7 @@ class TestSyncUserCommandHandler:
         """Test handling database error during sync."""
         fake_uow = FakeUnitOfWork()
         # Make the UoW raise an error
-        fake_uow.users.find_by_firebase_uid = Mock(side_effect=Exception("Database error"))
+        fake_uow.users.find_by_firebase_uid = AsyncMock(side_effect=Exception("Database error"))
         handler.uow = fake_uow
         
         command = SyncUserCommand(
@@ -288,7 +288,7 @@ class TestSyncUserCommandHandler:
         # Handler should create UnitOfWork internally, but it will fail without real DB
         # This test verifies the handler doesn't crash when uow is None
         # In real usage, UnitOfWork() will be created
-        with patch('src.app.handlers.command_handlers.sync_user_command_handler.UnitOfWork') as mock_uow_class:
+        with patch('src.app.handlers.command_handlers.sync_user_command_handler.AsyncUnitOfWork') as mock_uow_class:
             mock_uow = FakeUnitOfWork()
             mock_uow_class.return_value = mock_uow
             result = await handler.handle(command)
@@ -324,7 +324,7 @@ class TestSyncUserReRegistration:
             is_active=False,  # Deleted user
             onboarding_completed=True,  # Had completed onboarding before
         )
-        fake_uow.users.save(deleted_user)
+        await fake_uow.users.save(deleted_user)
 
         handler.uow = fake_uow
 
@@ -376,7 +376,7 @@ class TestSyncUserReRegistration:
             is_active=False,
             onboarding_completed=True,
         )
-        fake_uow.users.save(deleted_user)
+        await fake_uow.users.save(deleted_user)
 
         handler.uow = fake_uow
 
@@ -422,7 +422,7 @@ class TestSyncUserReRegistration:
             is_active=False,
             onboarding_completed=True,  # Had completed before
         )
-        fake_uow.users.save(old_user)
+        await fake_uow.users.save(old_user)
 
         handler.uow = fake_uow
 
@@ -457,7 +457,7 @@ class TestSyncUserReRegistration:
             provider=AuthProvider.GOOGLE,
             is_active=False,
         )
-        fake_uow.users.save(old_user)
+        await fake_uow.users.save(old_user)
 
         handler.uow = fake_uow
 
@@ -474,6 +474,6 @@ class TestSyncUserReRegistration:
         new_user_id = str(result["user"]["id"])
 
         # Check notification preferences were created for new user
-        prefs = fake_uow.notifications.find_notification_preferences_by_user(new_user_id)
+        prefs = await fake_uow.notifications.find_notification_preferences_by_user(new_user_id)
         assert prefs is not None, "Notification preferences should be created for new user"
 

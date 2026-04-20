@@ -1,6 +1,6 @@
 """Unit tests: timezone update handler skips DB write when tz is unchanged."""
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.app.commands.user.update_timezone_command import UpdateTimezoneCommand
 from src.app.handlers.command_handlers.update_timezone_command_handler import (
@@ -15,12 +15,13 @@ async def test_skips_db_write_when_timezone_unchanged():
     command = UpdateTimezoneCommand(user_id="user-1", timezone="Asia/Ho_Chi_Minh")
 
     mock_uow = MagicMock()
-    mock_uow.__enter__ = MagicMock(return_value=mock_uow)
-    mock_uow.__exit__ = MagicMock(return_value=False)
-    mock_uow.users.get_user_timezone.return_value = "Asia/Ho_Chi_Minh"  # same
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users.get_user_timezone = AsyncMock(return_value="Asia/Ho_Chi_Minh")  # same
+    mock_uow.users.update_user_timezone = AsyncMock()
 
     with patch(
-        "src.app.handlers.command_handlers.update_timezone_command_handler.UnitOfWork",
+        "src.app.handlers.command_handlers.update_timezone_command_handler.AsyncUnitOfWork",
         return_value=mock_uow,
     ):
         result = await handler.handle(command)
@@ -37,12 +38,14 @@ async def test_writes_db_when_timezone_changed():
     command = UpdateTimezoneCommand(user_id="user-1", timezone="America/New_York")
 
     mock_uow = MagicMock()
-    mock_uow.__enter__ = MagicMock(return_value=mock_uow)
-    mock_uow.__exit__ = MagicMock(return_value=False)
-    mock_uow.users.get_user_timezone.return_value = "UTC"  # different
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")  # different
+    mock_uow.users.update_user_timezone = AsyncMock()
+    mock_uow.commit = AsyncMock()
 
     with patch(
-        "src.app.handlers.command_handlers.update_timezone_command_handler.UnitOfWork",
+        "src.app.handlers.command_handlers.update_timezone_command_handler.AsyncUnitOfWork",
         return_value=mock_uow,
     ):
         result = await handler.handle(command)
@@ -58,12 +61,14 @@ async def test_writes_db_when_no_stored_timezone():
     command = UpdateTimezoneCommand(user_id="user-1", timezone="Asia/Ho_Chi_Minh")
 
     mock_uow = MagicMock()
-    mock_uow.__enter__ = MagicMock(return_value=mock_uow)
-    mock_uow.__exit__ = MagicMock(return_value=False)
-    mock_uow.users.get_user_timezone.return_value = None
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users.get_user_timezone = AsyncMock(return_value=None)
+    mock_uow.users.update_user_timezone = AsyncMock()
+    mock_uow.commit = AsyncMock()
 
     with patch(
-        "src.app.handlers.command_handlers.update_timezone_command_handler.UnitOfWork",
+        "src.app.handlers.command_handlers.update_timezone_command_handler.AsyncUnitOfWork",
         return_value=mock_uow,
     ):
         result = await handler.handle(command)

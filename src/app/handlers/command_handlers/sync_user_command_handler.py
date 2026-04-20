@@ -13,7 +13,7 @@ from src.domain.model.notification import NotificationPreferences
 from src.domain.model.user import UserDomainModel
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -28,17 +28,17 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
     async def handle(self, command: SyncUserCommand) -> Dict[str, Any]:
         """Sync user data from Firebase authentication."""
         # Use provided UoW or create default
-        uow = self.uow or UnitOfWork()
+        uow = self.uow or AsyncUnitOfWork()
 
-        # Using 'with uow' manages the transaction scope
-        with uow:
+        # Using 'async with uow' manages the transaction scope
+        async with uow:
             try:
                 # Check if user exists by firebase_uid
-                existing_user = uow.users.find_by_firebase_uid(command.firebase_uid)
+                existing_user = await uow.users.find_by_firebase_uid(command.firebase_uid)
 
                 # Fallback: check by email if UID not found (handles provider switch / UID change)
                 if not existing_user and command.email:
-                    existing_user = uow.users.find_by_email(command.email)
+                    existing_user = await uow.users.find_by_email(command.email)
                     if existing_user:
                         logger.warning(
                             f"Email {command.email} found with different UID. "
@@ -53,11 +53,11 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                 if existing_user:
                     # Update existing user
                     updated = self._update_existing_user(existing_user, command)
-                    user = uow.users.save(existing_user)
+                    user = await uow.users.save(existing_user)
                     logger.info('Updated existing user')
                 else:
                     # Check if this is a previously deleted user re-registering
-                    deleted_user = uow.users.find_deleted_by_firebase_uid(command.firebase_uid)
+                    deleted_user = await uow.users.find_deleted_by_firebase_uid(command.firebase_uid)
                     if deleted_user:
                         logger.info(
                             f'Detected re-registration of deleted user (old_id={deleted_user.id}). '
@@ -69,7 +69,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                     # Create new user (works for both new users and re-registrations)
                     user = self._create_new_user(command, uow)
                     # Save user to get ID
-                    user = uow.users.save(user)
+                    user = await uow.users.save(user)
                     created = True
                     logger.info('Created new user')
 
@@ -79,17 +79,17 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                         lang = command.language_code.lower().strip()
                         if lang in SUPPORTED_LANGUAGES:
                             user.language_code = lang
-                            uow.users.save(user)
+                            await uow.users.save(user)
 
                     # Create default notification preferences
-                    self._create_default_notification_preferences(user.id, uow)
+                    await self._create_default_notification_preferences(user.id, uow)
 
                 # Commit transaction
-                uow.commit()
+                await uow.commit()
 
                 # Get subscription info from UoW
                 subscription_info = None
-                active_subscription = uow.subscriptions.find_active_by_user_id(str(user.id))
+                active_subscription = await uow.subscriptions.find_active_by_user_id(str(user.id))
                 has_subscription = active_subscription is not None
 
                 if active_subscription:
@@ -129,7 +129,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                 }
 
             except Exception as e:
-                uow.rollback()
+                await uow.rollback()
                 logger.error(f"Error syncing user data: {str(e)}")
                 raise
 
@@ -216,7 +216,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
 
         return first_name, last_name
     
-    def _create_default_notification_preferences(self, user_id, uow: UnitOfWorkPort):
+    async def _create_default_notification_preferences(self, user_id, uow):
         """Create default notification preferences. Non-fatal: logs and skips on error."""
         if not user_id:
             logger.warning("Cannot create notification preferences: user_id is None")
@@ -234,7 +234,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
 
         try:
             default_prefs = NotificationPreferences.create_default(user_id_str)
-            uow.notifications.save_notification_preferences(default_prefs)
+            await uow.notifications.save_notification_preferences(default_prefs)
             logger.info(f"Added default notification preferences for user {user_id}")
         except Exception as e:
             # Non-fatal: notification prefs failure should not crash user sync

@@ -26,8 +26,8 @@ class AddCustomIngredientCommandHandler(EventHandler[AddCustomIngredientCommand,
     async def handle(self, command: AddCustomIngredientCommand) -> Dict[str, Any]:
         """Handle adding custom ingredient to meal."""
         try:
-            with self.uow as uow:
-                meal = uow.meals.find_by_id(command.meal_id)
+            async with self.uow as uow:
+                meal = await uow.meals.find_by_id(command.meal_id)
                 if not meal:
                     raise ValueError(f"Meal {command.meal_id} not found")
 
@@ -41,7 +41,7 @@ class AddCustomIngredientCommandHandler(EventHandler[AddCustomIngredientCommand,
 
                 meal_service = MealService()
                 updated_meal = meal_service.apply_food_item_changes(meal, [change])
-                saved_meal = uow.meals.save(updated_meal)
+                saved_meal = await uow.meals.save(updated_meal)
 
             meal_date = (saved_meal.created_at or utc_now()).date()
             await self.event_bus.publish(MealCacheInvalidationRequiredEvent(

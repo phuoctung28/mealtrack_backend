@@ -10,8 +10,9 @@ from src.app.events.base import handles, EventHandler
 from src.app.queries.user import GetUserMetricsQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.ports.cache_port import CachePort
+from sqlalchemy import select
 from src.infra.database.models.user.profile import UserProfile
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -36,16 +37,15 @@ class GetUserMetricsQueryHandler(EventHandler[GetUserMetricsQuery, Dict[str, Any
 
     async def _compute(self, query: GetUserMetricsQuery) -> Dict[str, Any]:
         """Fetch user metrics from DB."""
-        with UnitOfWork() as uow:
+        async with AsyncUnitOfWork() as uow:
             # Get current user profile using the UnitOfWork session
-            profile = (
-                uow.session.query(UserProfile)
-                .filter(
+            result = await uow.session.execute(
+                select(UserProfile).where(
                     UserProfile.user_id == query.user_id,
                     UserProfile.is_current.is_(True),
                 )
-                .first()
             )
+            profile = result.scalars().first()
 
             if not profile:
                 raise ResourceNotFoundException(f"Current profile for user {query.user_id} not found")

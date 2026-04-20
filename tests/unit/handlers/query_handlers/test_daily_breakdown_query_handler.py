@@ -39,20 +39,21 @@ async def test_uses_single_range_query_for_week():
         header_timezone="UTC",
     )
 
-    mock_uow = MagicMock()
-    mock_uow.__enter__ = MagicMock(return_value=mock_uow)
-    mock_uow.__exit__ = MagicMock(return_value=False)
-    mock_uow.meals.find_by_date_range.return_value = [
+    mock_uow = AsyncMock()
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.meals.find_by_date_range = AsyncMock(return_value=[
         _meal(datetime(2026, 4, 13, 12, 0, tzinfo=timezone.utc), protein=20.0),
         _meal(datetime(2026, 4, 15, 12, 0, tzinfo=timezone.utc), protein=30.0),
-    ]
+    ])
+    mock_uow.meals.find_by_date = AsyncMock()
 
     with patch(
-        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.UnitOfWork",
+        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.AsyncUnitOfWork",
         return_value=mock_uow,
     ), patch(
-        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.resolve_user_timezone",
-        return_value="UTC",
+        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.resolve_user_timezone_async",
+        new=AsyncMock(return_value="UTC"),
     ), patch.object(
         handler,
         "_get_base_daily_targets",
@@ -60,8 +61,8 @@ async def test_uses_single_range_query_for_week():
     ):
         result = await handler.handle(query)
 
-    mock_uow.meals.find_by_date_range.assert_called_once()
-    mock_uow.meals.find_by_date.assert_not_called()
+    mock_uow.meals.find_by_date_range.assert_awaited_once()
+    mock_uow.meals.find_by_date.assert_not_awaited()
     assert result["week_start"] == "2026-04-13"
     assert len(result["days"]) == 7
     assert result["days"][0]["protein_consumed"] == 20.0
@@ -81,18 +82,19 @@ async def test_returns_cached_week_without_querying_meals():
         header_timezone="UTC",
     )
 
-    mock_uow = MagicMock()
-    mock_uow.__enter__ = MagicMock(return_value=mock_uow)
-    mock_uow.__exit__ = MagicMock(return_value=False)
+    mock_uow = AsyncMock()
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.meals.find_by_date_range = AsyncMock()
 
     with patch(
-        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.UnitOfWork",
+        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.AsyncUnitOfWork",
         return_value=mock_uow,
     ), patch(
-        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.resolve_user_timezone",
-        return_value="UTC",
+        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.resolve_user_timezone_async",
+        new=AsyncMock(return_value="UTC"),
     ):
         result = await handler.handle(query)
 
     assert result == cached
-    mock_uow.meals.find_by_date_range.assert_not_called()
+    mock_uow.meals.find_by_date_range.assert_not_awaited()

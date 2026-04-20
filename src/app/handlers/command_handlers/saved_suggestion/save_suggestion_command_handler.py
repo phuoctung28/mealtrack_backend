@@ -20,15 +20,15 @@ class SaveSuggestionCommandHandler(EventHandler[SaveSuggestionCommand, Dict[str,
         self.cache_service = cache_service
 
     async def handle(self, command: SaveSuggestionCommand) -> Dict[str, Any]:
-        with self.uow as uow:
+        async with self.uow as uow:
             # Check if already saved (idempotent)
-            existing = uow.saved_suggestions.find_by_user_and_suggestion(
+            existing = await uow.saved_suggestions.find_by_user_and_suggestion(
                 command.user_id, command.suggestion_id
             )
             if existing:
                 return existing
 
-            result = uow.saved_suggestions.save(
+            result = await uow.saved_suggestions.save(
                 user_id=command.user_id,
                 suggestion_id=command.suggestion_id,
                 meal_type=command.meal_type,

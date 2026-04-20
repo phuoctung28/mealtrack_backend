@@ -14,7 +14,7 @@ from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -50,27 +50,27 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
         logger.info(f"EVENT HANDLER CALLED: Received MealImageUploadedEvent for meal {event.meal_id}")
         
         # Use provided UoW or create default
-        uow = self.uow or UnitOfWork()
-        
-        with uow:
+        uow = self.uow or AsyncUnitOfWork()
+
+        async with uow:
             try:
                 logger.info(f"Starting background analysis for meal {event.meal_id}")
-                
+
                 # Get the meal from repository
-                meal = uow.meals.find_by_id(event.meal_id)
+                meal = await uow.meals.find_by_id(event.meal_id)
                 if not meal:
                     logger.error(f"Meal {event.meal_id} not found for background analysis")
                     return
-                
+
                 # Skip if already processed
                 if meal.status != MealStatus.PROCESSING:
                     logger.info(f"Meal {event.meal_id} already processed with status {meal.status}")
                     return
-                
+
                 # Update status to ANALYZING
                 meal = meal.mark_analyzing()
-                uow.meals.save(meal)
-                uow.commit()
+                await uow.meals.save(meal)
+                await uow.commit()
                 logger.info(f"Updated meal {event.meal_id} status to ANALYZING")
                 
                 # Try to perform real analysis if we can get image contents
@@ -78,7 +78,7 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
                 await self._perform_analysis(meal, uow, language=event.language)
                 
             except Exception as e:
-                uow.rollback()
+                await uow.rollback()
                 logger.error(f"Error processing meal image upload event for meal {event.meal_id}: {str(e)}")
                 await self._mark_meal_as_failed(event.meal_id, str(e))
     
@@ -131,8 +131,8 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
                     # Don't fail the whole analysis if translation fails
 
             # Save the fully analyzed meal
-            uow.meals.save(meal)
-            uow.commit()
+            await uow.meals.save(meal)
+            await uow.commit()
             logger.info(f"Real analysis completed for meal {meal.meal_id}")
 
         except Exception as e:
@@ -141,17 +141,17 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
     
     async def _mark_meal_as_failed(self, meal_id: str, error_message: str):
         """Mark a meal as failed with error message."""
-        uow = self.uow or UnitOfWork()
-        
-        with uow:
+        uow = self.uow or AsyncUnitOfWork()
+
+        async with uow:
             try:
-                meal = uow.meals.find_by_id(meal_id)
+                meal = await uow.meals.find_by_id(meal_id)
                 if meal:
                     meal = meal.mark_failed(error_message=error_message)
-                    uow.meals.save(meal)
-                    uow.commit()
+                    await uow.meals.save(meal)
+                    await uow.commit()
                     logger.info(f"Marked meal {meal_id} as failed")
             except Exception as save_error:
-                uow.rollback()
+                await uow.rollback()
                 logger.error(f"Failed to update meal status to failed: {str(save_error)}")
 

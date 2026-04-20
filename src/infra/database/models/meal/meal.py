@@ -44,7 +44,8 @@ class MealORM(Base, TimestampMixin):
     # Relationships
     image_id = Column(String(36), ForeignKey("mealimage.image_id"), nullable=False)
     image = relationship("MealImageORM", uselist=False, lazy="joined")
-    nutrition = relationship("NutritionORM", uselist=False, back_populates="meal", cascade="all, delete-orphan")
+    nutrition = relationship("NutritionORM", uselist=False, back_populates="meal",
+                             cascade="all, delete-orphan", lazy="raise")
     translations = relationship(
         "MealTranslationORM",
         back_populates="meal",

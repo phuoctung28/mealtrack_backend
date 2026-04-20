@@ -6,8 +6,9 @@ from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import FastAPI, Request
+from sqlalchemy import select, func
 
-from src.infra.database.config import SessionLocal
+from src.infra.database.config_async import AsyncSessionLocal
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.meal.meal_image import MealImageORM
@@ -18,8 +19,8 @@ from src.infra.database.models.user.user import User
 logger = logging.getLogger(__name__)
 
 
-def _ensure_dev_user() -> Optional[User]:
-    """Create or fetch the single development user and profile.
+async def _ensure_dev_user_async() -> Optional[User]:
+    """Create or fetch the single development user and profile (async).
 
     This is safe to call multiple times. Returns the persisted SQLAlchemy User instance
     loaded from a short-lived session; do not store it for reuse across requests.
@@ -30,11 +31,15 @@ def _ensure_dev_user() -> Optional[User]:
     email = os.getenv("DEV_USER_EMAIL", "dev@example.com")
     username = os.getenv("DEV_USER_USERNAME", "dev_user")
 
-    session = SessionLocal()
+    if AsyncSessionLocal is None:
+        return None
+
+    session = AsyncSessionLocal()
     try:
-        user: Optional[User] = (
-            session.query(User).filter(User.firebase_uid == firebase_uid).first()
+        result = await session.execute(
+            select(User).where(User.firebase_uid == firebase_uid)
         )
+        user: Optional[User] = result.scalars().first()
 
         if user:
             return user
@@ -51,7 +56,7 @@ def _ensure_dev_user() -> Optional[User]:
             onboarding_completed=True,
         )
         session.add(user)
-        session.flush()
+        await session.flush()
 
         # Create a basic current profile
         profile = UserProfile(
@@ -76,16 +81,16 @@ def _ensure_dev_user() -> Optional[User]:
             pain_points=[],
         )
         session.add(profile)
-        session.commit()
+        await session.commit()
 
         logger.info("Created development user '%s' (%s)", username, user.id)
         return user
     except Exception as exc:
-        session.rollback()
+        await session.rollback()
         logger.warning("Failed to ensure dev user (database may not be ready): %s", exc)
         return None
     finally:
-        session.close()
+        await session.close()
 
 
 def add_dev_auth_bypass(app: FastAPI) -> None:
@@ -98,25 +103,12 @@ def add_dev_auth_bypass(app: FastAPI) -> None:
         logger.info("Dev auth bypass not enabled (ENVIRONMENT != development)")
         return
 
-    # Try to ensure the user exists up-front and seed meals (may fail during test collection)
-    user = _ensure_dev_user()
-    if user:
-        _seed_dev_meals(user.id)
-    else:
-        logger.warning("Dev user creation deferred - will create on first request")
-
     @app.middleware("http")
     async def dev_user_injector(request: Request, call_next):  # type: ignore[override]
         # Load fresh per request to avoid cross-session ORM usage
-        session = SessionLocal()
-        try:
-            firebase_uid = os.getenv("DEV_USER_FIREBASE_UID", "dev_firebase_uid")
-            user: Optional[User] = (
-                session.query(User).filter(User.firebase_uid == firebase_uid).first()
-            )
-
-            if user is None:
-                user = _ensure_dev_user()
+        user = await _ensure_dev_user_async()
+        if user is not None:
+            await _seed_dev_meals_async(user.id)
 
             # Provide only what downstream code expects
             request.state.user = SimpleNamespace(
@@ -126,17 +118,18 @@ def add_dev_auth_bypass(app: FastAPI) -> None:
                 username=user.username,
                 has_active_subscription=lambda: True,
             )
-        finally:
-            session.close()
 
         return await call_next(request)
 
 
-def _seed_dev_meals(user_id: str) -> None:
-    """Seed a small set of meals with nutrition for today's date if none exist.
+async def _seed_dev_meals_async(user_id: str) -> None:
+    """Seed a small set of meals with nutrition for today's date if none exist (async).
     Creates breakfast, lunch, dinner with simple nutrition totals so daily macros works.
     """
-    session = SessionLocal()
+    if AsyncSessionLocal is None:
+        return
+
+    session = AsyncSessionLocal()
     try:
         # Check if there are any meals today for this user (use UTC to match created_at)
         from datetime import timedelta
@@ -144,30 +137,33 @@ def _seed_dev_meals(user_id: str) -> None:
         start_dt = datetime.combine(today_utc, datetime.min.time(), tzinfo=timezone.utc)
         end_dt = start_dt + timedelta(days=1)
 
-        existing = (
-            session.query(MealORM)
-            .filter(MealORM.user_id == user_id)
-            .filter(MealORM.created_at >= start_dt)
-            .filter(MealORM.created_at < end_dt)
-            .count()
+        existing = await session.scalar(
+            select(func.count())
+            .select_from(MealORM)
+            .where(
+                MealORM.user_id == user_id,
+                MealORM.created_at >= start_dt,
+                MealORM.created_at < end_dt,
+            )
         )
         if existing > 0:
             # Backfill missing ready_at for READY meals created earlier without it
-            meals_missing_ready = (
-                session.query(MealORM)
-                .filter(MealORM.user_id == user_id)
-                .filter(MealORM.created_at >= start_dt)
-                .filter(MealORM.created_at < end_dt)
-                .filter(MealORM.status == MealStatusEnum.READY)
-                .filter(MealORM.ready_at.is_(None))
-                .all()
+            result = await session.execute(
+                select(MealORM).where(
+                    MealORM.user_id == user_id,
+                    MealORM.created_at >= start_dt,
+                    MealORM.created_at < end_dt,
+                    MealORM.status == MealStatusEnum.READY,
+                    MealORM.ready_at.is_(None),
+                )
             )
+            meals_missing_ready = result.scalars().all()
             if meals_missing_ready:
                 now = datetime.now(timezone.utc)
                 for m in meals_missing_ready:
                     m.ready_at = m.created_at or now
                     m.updated_at = now
-                session.commit()
+                await session.commit()
             return
 
         def create_meal(meal_name: str, p: float, c: float, f: float):
@@ -211,12 +207,12 @@ def _seed_dev_meals(user_id: str) -> None:
         create_meal("Chicken Salad Lunch", 50.0, 30.0, 30.0)
         create_meal("Salmon Dinner", 45.0, 40.0, 35.0)
 
-        session.commit()
+        await session.commit()
         logger.info("Seeded dev meals for user %s", user_id)
     except Exception as exc:
-        session.rollback()
+        await session.rollback()
         logger.error("Failed to seed dev meals: %s", exc)
     finally:
-        session.close()
+        await session.close()
 
 

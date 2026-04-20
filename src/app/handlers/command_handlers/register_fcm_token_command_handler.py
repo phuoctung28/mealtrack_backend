@@ -10,7 +10,7 @@ from src.app.events.base import EventHandler, handles
 from src.domain.model.notification import UserFcmToken, DeviceType
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
 from src.domain.utils.timezone_utils import is_valid_timezone, normalize_timezone
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class RegisterFcmTokenCommandHandler(
 
     async def handle(self, command: RegisterFcmTokenCommand) -> Dict[str, Any]:
         """Handle FCM token registration with old token cleanup."""
-        with UnitOfWork() as uow:
+        async with AsyncUnitOfWork() as uow:
             # Use notification repository from UoW if not injected
             notification_repo = self.notification_repository or uow.notifications
 
@@ -38,10 +38,8 @@ class RegisterFcmTokenCommandHandler(
             )
 
             # 1. Deactivate OLD tokens for this user+device (token refresh scenario)
-            existing_tokens = (
-                notification_repo.find_active_fcm_tokens_by_user(
-                    command.user_id
-                )
+            existing_tokens = await notification_repo.find_active_fcm_tokens_by_user(
+                command.user_id
             )
             deactivated_count = 0
             for old_token in existing_tokens:
@@ -50,7 +48,7 @@ class RegisterFcmTokenCommandHandler(
                     old_token.device_type == device_type
                     and old_token.fcm_token != command.fcm_token
                 ):
-                    notification_repo.deactivate_fcm_token(
+                    await notification_repo.deactivate_fcm_token(
                         old_token.fcm_token
                     )
                     deactivated_count += 1
@@ -63,12 +61,12 @@ class RegisterFcmTokenCommandHandler(
                 device_type=device_type,
             )
 
-            saved_token = notification_repo.save_fcm_token(fcm_token)
+            saved_token = await notification_repo.save_fcm_token(fcm_token)
 
             # 3. Update user timezone if provided
             if command.timezone and is_valid_timezone(command.timezone):
                 canonical_tz = normalize_timezone(command.timezone)
-                uow.users.update_user_timezone(command.user_id, canonical_tz)
+                await uow.users.update_user_timezone(command.user_id, canonical_tz)
                 logger.info(f"Updated timezone for user {command.user_id}: {canonical_tz}")
 
             # UoW auto-commits on exit

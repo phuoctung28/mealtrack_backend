@@ -384,14 +384,14 @@ def get_suggestion_orchestration_service():
         finally:
             db.close()
 
-    from src.infra.database.uow import UnitOfWork
+    from src.infra.database.uow_async import AsyncUnitOfWork
 
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
         suggestion_repo=suggestion_repo,
         nutrition_lookup=get_nutrition_lookup_service(),
         profile_provider=profile_provider,
-        uow_factory=UnitOfWork,
+        uow_factory=AsyncUnitOfWork,
         meal_names_schema_class=MealNamesResponse,
         discovery_meals_schema_class=DiscoveryMealsResponse,
     )

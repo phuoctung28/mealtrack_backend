@@ -1,4 +1,4 @@
-"""Tests that get_daily_macros handler opens UnitOfWork once on cache miss."""
+"""Tests that get_daily_macros handler opens AsyncUnitOfWork once on cache miss."""
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,21 +19,21 @@ def _make_handler():
 
 @pytest.mark.asyncio
 async def test_cache_miss_opens_uow_once():
-    """On a cache miss, UnitOfWork is instantiated exactly once for DB reads."""
+    """On a cache miss, AsyncUnitOfWork is instantiated exactly once for DB reads."""
     handler = _make_handler()
     query = GetDailyMacrosQuery(user_id="u1", target_date=date(2026, 4, 18))
 
     with patch(
-        "src.app.handlers.query_handlers.get_daily_macros_query_handler.UnitOfWork"
+        "src.app.handlers.query_handlers.get_daily_macros_query_handler.AsyncUnitOfWork"
     ) as mock_cls:
-        mock_uow = MagicMock()
-        mock_uow.__enter__ = MagicMock(return_value=mock_uow)
-        mock_uow.__exit__ = MagicMock(return_value=False)
+        mock_uow = AsyncMock()
+        mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+        mock_uow.__aexit__ = AsyncMock(return_value=False)
         fake_user = MagicMock()
         fake_user.timezone = "UTC"
-        mock_uow.users.find_by_id.return_value = fake_user
-        mock_uow.meals.find_by_date.return_value = []
-        mock_uow.weekly_budgets.find_by_user_and_week.return_value = None
+        mock_uow.users.find_by_id = AsyncMock(return_value=fake_user)
+        mock_uow.meals.find_by_date = AsyncMock(return_value=[])
+        mock_uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=None)
         mock_cls.return_value = mock_uow
 
         # Patch TDEE handler so it doesn't open its own UoW.
@@ -63,24 +63,24 @@ async def test_weekly_budget_fetched_in_shared_uow():
 
     class TrackingUow:
         def __init__(self):
-            self.users = MagicMock()
+            self.users = AsyncMock()
             fake_user = MagicMock()
             fake_user.timezone = "UTC"
-            self.users.find_by_id.return_value = fake_user
-            self.meals = MagicMock()
-            self.meals.find_by_date.return_value = []
-            self.weekly_budgets = MagicMock()
-            self.weekly_budgets.find_by_user_and_week.return_value = None
+            self.users.find_by_id = AsyncMock(return_value=fake_user)
+            self.meals = AsyncMock()
+            self.meals.find_by_date = AsyncMock(return_value=[])
+            self.weekly_budgets = AsyncMock()
+            self.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=None)
             uow_instances.append(self)
 
-        def __enter__(self):
+        async def __aenter__(self):
             return self
 
-        def __exit__(self, *args):
+        async def __aexit__(self, *args):
             return False
 
     with patch(
-        "src.app.handlers.query_handlers.get_daily_macros_query_handler.UnitOfWork",
+        "src.app.handlers.query_handlers.get_daily_macros_query_handler.AsyncUnitOfWork",
         TrackingUow,
     ):
         # Same patch strategy: target definition module for deferred import.
@@ -93,5 +93,5 @@ async def test_weekly_budget_fetched_in_shared_uow():
             await handler.handle(query)
 
     first_uow = uow_instances[0]
-    first_uow.meals.find_by_date.assert_called_once()
-    first_uow.weekly_budgets.find_by_user_and_week.assert_called_once()
+    first_uow.meals.find_by_date.assert_awaited_once()
+    first_uow.weekly_budgets.find_by_user_and_week.assert_awaited_once()

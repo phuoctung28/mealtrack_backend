@@ -4,6 +4,7 @@ High-level cache service that handles serialization and metrics.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Optional, TypeVar
 
@@ -12,6 +13,11 @@ from pydantic import BaseModel
 from src.domain.ports.cache_port import CachePort
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
+
+# Strip the trailing 'Z' produced by an older serializer bug that wrote
+# tz-aware datetimes as '...+HH:MMZ' (offset + Z together is invalid ISO8601
+# and rejected by Pydantic v2). Heals existing Redis entries on read.
+_LEGACY_OFFSET_Z_RE = re.compile(r'([+-]\d{2}:\d{2})Z')
 
 T = TypeVar("T")
 
@@ -54,7 +60,8 @@ class CacheService(CachePort):
             self.monitor.record_hit()
 
         try:
-            return json.loads(raw)
+            sanitized = _LEGACY_OFFSET_Z_RE.sub(r'\1', raw) if isinstance(raw, str) else raw
+            return json.loads(sanitized)
         except json.JSONDecodeError:
             return None
 
@@ -107,6 +114,9 @@ def _json_serializer(value: Any) -> Any:
     if isinstance(value, BaseModel):
         return value.model_dump()
     if isinstance(value, datetime):
-        return value.isoformat() + 'Z'
+        # tz-aware datetimes already encode the offset (e.g. +00:00); only
+        # append 'Z' for naive datetimes (assumed UTC) to avoid producing
+        # malformed strings like '...+00:00Z' that Pydantic rejects.
+        return value.isoformat() if value.tzinfo is not None else value.isoformat() + 'Z'
     raise TypeError(f"Object of type {value.__class__.__name__} is not JSON serializable")
 

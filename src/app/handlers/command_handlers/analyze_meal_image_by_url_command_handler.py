@@ -58,8 +58,8 @@ class AnalyzeMealImageByUrlHandler(
         try:
             image_id = command.public_id.split("/")[-1]
 
-            with self.uow as uow:
-                user_timezone = uow.users.get_user_timezone(command.user_id)
+            async with self.uow as uow:
+                user_timezone = await uow.users.get_user_timezone(command.user_id)
 
             if not user_timezone or not is_valid_timezone(user_timezone):
                 user_timezone = "UTC"
@@ -95,9 +95,9 @@ class AnalyzeMealImageByUrlHandler(
                 source="scanner",
             )
 
-            with self.uow as uow:
-                saved_meal = uow.meals.save(meal)
-                uow.commit()
+            async with self.uow as uow:
+                saved_meal = await uow.meals.save(meal)
+                await uow.commit()
 
             phase1_start = time.time()
             if command.user_description:
@@ -160,9 +160,9 @@ class AnalyzeMealImageByUrlHandler(
                         )
                 phase2_elapsed = time.time() - phase2_start
 
-            with self.uow as uow:
-                final_meal = uow.meals.save(meal)
-                uow.commit()
+            async with self.uow as uow:
+                final_meal = await uow.meals.save(meal)
+                await uow.commit()
                 logger.info(
                     "[ANALYSIS-COMPLETE] meal=%s | total_elapsed=%.2fs | phase1=%.2fs | phase2=%.2fs | language=%s | status=%s",
                     final_meal.meal_id,
@@ -173,8 +173,8 @@ class AnalyzeMealImageByUrlHandler(
                     final_meal.status,
                 )
 
-            with self.uow as uow:
-                final_meal = uow.meals.find_by_id(meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS)
+            async with self.uow as uow:
+                final_meal = await uow.meals.find_by_id(meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS)
 
             await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
                 aggregate_id=command.user_id,
@@ -186,7 +186,7 @@ class AnalyzeMealImageByUrlHandler(
             logger.error("Failed to analyze meal by URL: %s", str(e))
             if "meal" in locals() and meal.meal_id:
                 meal = meal.mark_failed(error_message=str(e))
-                with self.uow as uow:
-                    uow.meals.save(meal)
-                    uow.commit()
+                async with self.uow as uow:
+                    await uow.meals.save(meal)
+                    await uow.commit()
             raise

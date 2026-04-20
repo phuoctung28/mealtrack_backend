@@ -26,13 +26,13 @@ async def test_sync_user_creates_new_user_with_fake_uow():
     
     # Act
     result = await handler.handle(command)
-    
+
     # Assert
     assert result["created"] is True
     assert result["user"]["email"] == "test@example.com"
-    
+
     # Verify persistence in fake repo
-    user_in_repo = fake_uow.users.find_by_firebase_uid("firebase_123")
+    user_in_repo = await fake_uow.users.find_by_firebase_uid("firebase_123")
     assert user_in_repo is not None
     assert user_in_repo.username == "testuser" # Logic from _generate_username
     assert fake_uow.committed is True
@@ -51,7 +51,7 @@ async def test_sync_user_updates_existing_user_with_fake_uow():
         password_hash="",
         provider=AuthProvider.GOOGLE
     )
-    fake_uow.users.save(existing_user)
+    await fake_uow.users.save(existing_user)
     
     handler = SyncUserCommandHandler(uow=fake_uow)
     
@@ -70,6 +70,6 @@ async def test_sync_user_updates_existing_user_with_fake_uow():
     assert result["user"]["email"] == "new@example.com"
     
     # Verify update in repo
-    updated_user = fake_uow.users.find_by_firebase_uid("firebase_123")
+    updated_user = await fake_uow.users.find_by_firebase_uid("firebase_123")
     assert updated_user.email == "new@example.com"
     assert fake_uow.committed is True
