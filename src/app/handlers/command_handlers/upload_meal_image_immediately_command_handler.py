@@ -16,10 +16,12 @@ from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
+from src.domain.services.meal_analysis.fast_path_policy import MealAnalyzeFastPathPolicy
 from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.domain.services.meal_type_determination_service import determine_meal_type_from_timestamp
 from src.domain.utils.timezone_utils import utc_now, get_zone_info, is_valid_timezone, noon_utc_for_date
 from src.infra.repositories.meal_repository import MealProjection
+from src.infra.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         meal_translation_service: Optional[MealAnalysisTranslationService] = None,
+        fast_path_policy: Optional[MealAnalyzeFastPathPolicy] = None,
     ):
         self.uow = uow
         self.event_bus = event_bus
@@ -43,6 +46,46 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
         self.meal_translation_service = meal_translation_service
+        if fast_path_policy is None:
+            self._fast_path_policy = MealAnalyzeFastPathPolicy.from_settings(get_settings())
+        else:
+            self._fast_path_policy = fast_path_policy
+
+    def _run_vision_analysis(
+        self, command: UploadMealImageImmediatelyCommand, meal_id: str
+    ) -> Any:
+        max_attempts = max(1, self._fast_path_policy.max_attempts)
+        last_error: Optional[Exception] = None
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                if command.user_description:
+                    from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+                    logger.info(
+                        f"[PHASE-1-START] meal={meal_id} | "
+                        f"vision analysis with user context | "
+                        f"attempt={attempt}/{max_attempts}"
+                    )
+                    strategy = AnalysisStrategyFactory.create_user_context_strategy(command.user_description)
+                    return self.vision_service.analyze_with_strategy(command.file_contents, strategy)
+
+                logger.info(
+                    f"[PHASE-1-START] meal={meal_id} | "
+                    f"vision analysis | attempt={attempt}/{max_attempts}"
+                )
+                return self.vision_service.analyze(command.file_contents)
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"[PHASE-1-RETRY] meal={meal_id} | "
+                    f"attempt={attempt}/{max_attempts} failed: {e}"
+                )
+                if attempt == max_attempts:
+                    raise
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("Vision analysis failed without a captured exception.")
     
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
@@ -116,20 +159,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
 
             # PHASE 1: AI Vision Analysis (generates content in English)
             phase1_start = time.time()
-            if command.user_description:
-                from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
-                logger.info(
-                    f"[PHASE-1-START] meal={saved_meal.meal_id} | "
-                    f"vision analysis with user context"
-                )
-                strategy = AnalysisStrategyFactory.create_user_context_strategy(command.user_description)
-                vision_result = self.vision_service.analyze_with_strategy(command.file_contents, strategy)
-            else:
-                logger.info(
-                    f"[PHASE-1-START] meal={saved_meal.meal_id} | "
-                    f"vision analysis"
-                )
-                vision_result = self.vision_service.analyze(command.file_contents)
+            vision_result = self._run_vision_analysis(command, saved_meal.meal_id)
             phase1_elapsed = time.time() - phase1_start
             logger.info(
                 f"[PHASE-1-COMPLETE] meal={saved_meal.meal_id} | "
@@ -167,7 +197,12 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
 
             # PHASE 2: Translation (after parsing, before final save)
             phase2_elapsed = 0.0
-            if command.language and command.language != "en" and self.meal_translation_service:
+            if (
+                command.language
+                and command.language != "en"
+                and self.meal_translation_service
+                and self._fast_path_policy.translation_in_critical_path
+            ):
                 phase2_start = time.time()
                 logger.info(
                     f"[PHASE-2-START] meal={saved_meal.meal_id} | "
