@@ -154,7 +154,7 @@ class SuggestionOrchestrationService:
 
         if self._uow_factory:
             uow_ctx = self._uow_factory()
-            with uow_ctx as uow:
+            async with uow_ctx as uow:
                 daily_tdee = await get_adjusted_daily_target(self._tdee_service, user_id, profile, uow=uow)
         else:
             daily_tdee = await get_adjusted_daily_target(self._tdee_service, user_id, profile)
