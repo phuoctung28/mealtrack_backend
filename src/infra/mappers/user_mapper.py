@@ -118,7 +118,7 @@ class UserProfileMapper:
             pain_points=profile_domain.pain_points,
             training_level=profile_domain.training_level,
             date_of_birth=profile_domain.date_of_birth,
-            referral_sources=profile_domain.referral_sources or None,
+            referral_sources=profile_domain.referral_sources or [],
             challenge_duration=profile_domain.challenge_duration,
             training_types=profile_domain.training_types,
             custom_protein_g=profile_domain.custom_protein_g,
