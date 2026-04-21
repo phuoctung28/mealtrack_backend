@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.domain.model.user import UserDomainModel, UserProfileDomainModel
+from src.domain.utils.timezone_utils import utc_now
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
@@ -116,6 +117,8 @@ class AsyncUserRepository(UserRepositoryPort):
         entity = result.scalars().first()
         return UserProfileMapper.to_domain(entity) if entity else None
 
+    _IMMUTABLE_COLS = {"id", "created_at", "updated_at"}
+
     async def update_profile(self, profile_domain: UserProfileDomainModel) -> UserProfileDomainModel:
         profile_id_str = str(profile_domain.id) if isinstance(profile_domain.id, UUID) else profile_domain.id
         entity = await self.session.get(UserProfile, profile_id_str)
@@ -126,8 +129,20 @@ class AsyncUserRepository(UserRepositoryPort):
             updated = UserProfileMapper.to_persistence(profile_domain)
             for col in UserProfile.__table__.columns:
                 col_name = col.key
-                if col_name != "_sa_instance_state":
-                    setattr(entity, col_name, getattr(updated, col_name, None))
+                if col_name not in self._IMMUTABLE_COLS:
+                    new_val = getattr(updated, col_name, None)
+                    old_val = getattr(entity, col_name, None)
+                    # Only mark a column dirty when its value truly changes.
+                    if new_val != old_val:
+                        setattr(entity, col_name, new_val)
+
+        # Data hygiene: legacy rows may have NULL timestamps despite NOT NULL constraints.
+        # Backfill them so any subsequent UPDATE does not violate constraints.
+        now = utc_now()
+        if getattr(entity, "created_at", None) is None:
+            entity.created_at = now
+        if getattr(entity, "updated_at", None) is None:
+            entity.updated_at = now
         await self.session.flush()
         await self.session.refresh(entity)
         return UserProfileMapper.to_domain(entity)
