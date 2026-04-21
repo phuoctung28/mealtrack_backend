@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.domain.model.user import UserDomainModel, UserProfileDomainModel
+from src.domain.utils.timezone_utils import utc_now
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
@@ -129,7 +130,19 @@ class AsyncUserRepository(UserRepositoryPort):
             for col in UserProfile.__table__.columns:
                 col_name = col.key
                 if col_name not in self._IMMUTABLE_COLS:
-                    setattr(entity, col_name, getattr(updated, col_name, None))
+                    new_val = getattr(updated, col_name, None)
+                    old_val = getattr(entity, col_name, None)
+                    # Only mark a column dirty when its value truly changes.
+                    if new_val != old_val:
+                        setattr(entity, col_name, new_val)
+
+        # Data hygiene: legacy rows may have NULL timestamps despite NOT NULL constraints.
+        # Backfill them so any subsequent UPDATE does not violate constraints.
+        now = utc_now()
+        if getattr(entity, "created_at", None) is None:
+            entity.created_at = now
+        if getattr(entity, "updated_at", None) is None:
+            entity.updated_at = now
         await self.session.flush()
         await self.session.refresh(entity)
         return UserProfileMapper.to_domain(entity)
