@@ -14,6 +14,7 @@ from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
+from src.infra.config.settings import get_settings
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,9 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
     ):
         self.uow = uow
         self.vision_service = vision_service or VisionAIService()
-        self.gpt_parser = gpt_parser or GPTResponseParser()
+        self.gpt_parser = gpt_parser or GPTResponseParser(
+            strict_schema_mode=get_settings().MEAL_ANALYZE_STRICT_SCHEMA_MODE
+        )
         self.image_store = image_store or CloudinaryImageStore()
         self.meal_translation_service = meal_translation_service
 
@@ -154,4 +157,3 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             except Exception as save_error:
                 await uow.rollback()
                 logger.error(f"Failed to update meal status to failed: {str(save_error)}")
-

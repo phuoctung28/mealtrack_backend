@@ -22,6 +22,11 @@ class GPTResponseParser:
     """
 
     MAX_FOOD_ITEMS = 8
+
+    def __init__(self, strict_schema_mode: Optional[bool] = None):
+        if strict_schema_mode is None:
+            strict_schema_mode = True
+        self._strict_schema_mode = bool(strict_schema_mode)
     
     def parse_to_nutrition(self, gpt_response: Dict[str, Any]) -> Nutrition:
         """
@@ -43,7 +48,8 @@ class GPTResponseParser:
                 raise GPTResponseParsingError("No structured data found in GPT response")
 
             normalized_data = self._normalize_structured_data(data)
-            VisionAnalyzeResponse.model_validate(normalized_data)
+            if self._strict_schema_mode:
+                VisionAnalyzeResponse.model_validate(normalized_data)
 
             # Parse food items
             food_items = self._parse_food_items(normalized_data)

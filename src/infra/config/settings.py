@@ -165,6 +165,10 @@ class Settings(BaseSettings):
     MEAL_ANALYZE_MAX_ATTEMPTS: int = Field(default=2)
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(default=700)
     MEAL_ANALYZE_TRANSLATION_IN_CRITICAL_PATH: bool = Field(default=False)
+    MEAL_ANALYZE_RUNTIME_POLICY_ENABLED: bool = Field(default=True)
+    MEAL_ANALYZE_CANARY_PERCENT: int = Field(default=100, ge=0, le=100)
+    MEAL_ANALYZE_OPTIMIZED_PROMPT_ENABLED: bool = Field(default=True)
+    MEAL_ANALYZE_STRICT_SCHEMA_MODE: bool = Field(default=True)
 
     model_config = SettingsConfigDict(
         env_file=".env",

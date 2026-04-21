@@ -95,7 +95,25 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
     Basic meal analysis strategy without additional context.
     """
 
+    def __init__(self, optimized_prompt_enabled: Optional[bool] = None):
+        if optimized_prompt_enabled is None:
+            optimized_prompt_enabled = True
+        self.optimized_prompt_enabled = bool(optimized_prompt_enabled)
+
+    def _legacy_analysis_prompt(self) -> str:
+        return (
+            "You are a nutrition analysis assistant. "
+            "Examine the image and return JSON with dish_name, emoji, foods, "
+            "total_calories, and confidence. "
+            "Each food item includes name, quantity, unit, calories, and macros. "
+            "Confidence should be between 0 and 1. "
+            "Always return well-formed JSON."
+        ) + SCAN_DECOMPOSITION_RULES
+
     def get_analysis_prompt(self) -> str:
+        if not self.optimized_prompt_enabled:
+            return self._legacy_analysis_prompt()
+
         return (
             "You are a nutrition analysis assistant. Return ONLY valid JSON with no commentary text:\n"
             "{\n"
@@ -430,9 +448,13 @@ class AnalysisStrategyFactory:
     """
 
     @staticmethod
-    def create_basic_strategy() -> MealAnalysisStrategy:
+    def create_basic_strategy(
+        optimized_prompt_enabled: Optional[bool] = None,
+    ) -> MealAnalysisStrategy:
         """Create a basic analysis strategy."""
-        return BasicAnalysisStrategy()
+        return BasicAnalysisStrategy(
+            optimized_prompt_enabled=optimized_prompt_enabled
+        )
 
     @staticmethod
     def create_portion_strategy(portion_size: float, unit: str) -> MealAnalysisStrategy:

@@ -57,6 +57,31 @@ def test_run_vision_analysis_raises_after_max_attempts():
     assert handler.vision_service.analyze.call_count == 2
 
 
+def test_run_vision_analysis_uses_legacy_attempts_when_user_outside_canary():
+    handler = UploadMealImageImmediatelyHandler(
+        uow=MagicMock(),
+        event_bus=MagicMock(),
+        fast_path_policy=MealAnalyzeFastPathPolicy(
+            max_attempts=3,
+            runtime_policy_enabled=True,
+            canary_percent=0,
+        ),
+    )
+    handler.vision_service = MagicMock()
+    handler.vision_service.analyze.side_effect = Exception("vision failed")
+
+    command = UploadMealImageImmediatelyCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        file_contents=b"img",
+        content_type="image/jpeg",
+    )
+
+    with pytest.raises(Exception, match="vision failed"):
+        handler._run_vision_analysis(command, "meal-123")
+
+    assert handler.vision_service.analyze.call_count == 1
+
+
 @pytest.mark.asyncio
 async def test_translation_not_called_when_policy_disables_critical_path():
     saved_state = {}

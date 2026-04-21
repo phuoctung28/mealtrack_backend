@@ -106,3 +106,9 @@ class TestBasicAnalysisPromptConstraints:
         prompt = BasicAnalysisStrategy().get_analysis_prompt()
 
         assert len(prompt) <= 2600
+
+    def test_basic_analysis_strategy_can_disable_optimized_prompt(self):
+        prompt = BasicAnalysisStrategy(optimized_prompt_enabled=False).get_analysis_prompt()
+
+        assert "ONLY valid JSON with no commentary text" not in prompt
+        assert "always return well-formed json" in prompt.lower()

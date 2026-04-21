@@ -54,7 +54,8 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
     def _run_vision_analysis(
         self, command: UploadMealImageImmediatelyCommand, meal_id: str
     ) -> Any:
-        max_attempts = max(1, self._fast_path_policy.max_attempts)
+        resolved_policy = self._resolve_policy_for_user(command.user_id)
+        max_attempts = max(1, resolved_policy.max_attempts)
         last_error: Optional[Exception] = None
 
         for attempt in range(1, max_attempts + 1):
@@ -86,6 +87,12 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         if last_error:
             raise last_error
         raise RuntimeError("Vision analysis failed without a captured exception.")
+
+    def _resolve_policy_for_user(self, user_id: str) -> MealAnalyzeFastPathPolicy:
+        """Resolve effective fast-path policy for a user with canary support."""
+        if self._fast_path_policy.should_use_fast_path(user_id):
+            return self._fast_path_policy
+        return MealAnalyzeFastPathPolicy.legacy()
     
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
@@ -158,6 +165,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                 logger.info(f"Created meal record {saved_meal.meal_id} with ANALYZING status")
 
             # PHASE 1: AI Vision Analysis (generates content in English)
+            resolved_policy = self._resolve_policy_for_user(command.user_id)
             phase1_start = time.time()
             vision_result = self._run_vision_analysis(command, saved_meal.meal_id)
             phase1_elapsed = time.time() - phase1_start
@@ -201,7 +209,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                 command.language
                 and command.language != "en"
                 and self.meal_translation_service
-                and self._fast_path_policy.translation_in_critical_path
+                and resolved_policy.translation_in_critical_path
             ):
                 phase2_start = time.time()
                 logger.info(

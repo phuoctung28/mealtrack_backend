@@ -144,7 +144,9 @@ def get_gpt_parser() -> GPTResponseParser:
     Returns:
         GPTResponseParser: The parser instance
     """
-    return GPTResponseParser()
+    return GPTResponseParser(
+        strict_schema_mode=get_settings().MEAL_ANALYZE_STRICT_SCHEMA_MODE
+    )
 
 
 # Food Cache Service
