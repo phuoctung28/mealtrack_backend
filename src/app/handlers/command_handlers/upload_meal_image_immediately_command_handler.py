@@ -1,6 +1,7 @@
 """
 Handler for immediate meal image upload and analysis.
 """
+import asyncio
 import logging
 import time
 from datetime import datetime, timezone
@@ -93,12 +94,157 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         if self._fast_path_policy.should_use_fast_path(user_id):
             return self._fast_path_policy
         return MealAnalyzeFastPathPolicy.legacy()
-    
+
+    def _run_vision_once(self, command: UploadMealImageImmediatelyCommand, meal_id: str) -> Any:
+        """Single-attempt vision call used by the parallel path (no retries to preserve latency budget)."""
+        if command.user_description:
+            from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+            strategy = AnalysisStrategyFactory.create_user_context_strategy(command.user_description)
+            return self.vision_service.analyze_with_strategy(command.file_contents, strategy)
+        return self.vision_service.analyze(command.file_contents)
+
+    async def _handle_parallel_upload(
+        self,
+        command: UploadMealImageImmediatelyCommand,
+        resolved_policy: MealAnalyzeFastPathPolicy,
+    ) -> Meal:
+        """Run image upload and AI analysis concurrently then apply failure matrix."""
+        async with self.uow as uow:
+            user_timezone = await uow.users.get_user_timezone(command.user_id)
+            if not user_timezone or not is_valid_timezone(user_timezone):
+                user_timezone = "UTC"
+
+            now = utc_now()
+            meal_date = command.target_date if command.target_date else now.date()
+            if command.target_date and command.target_date != now.date():
+                meal_datetime = noon_utc_for_date(meal_date, user_timezone)
+            else:
+                meal_datetime = now
+
+            zone_info = get_zone_info(user_timezone)
+            local_datetime = meal_datetime.astimezone(zone_info)
+            meal_type = determine_meal_type_from_timestamp(local_datetime)
+
+            placeholder_image_id = str(uuid4())
+            meal = Meal(
+                meal_id=str(uuid4()),
+                user_id=command.user_id,
+                status=MealStatus.ANALYZING,
+                created_at=meal_datetime,
+                meal_type=meal_type,
+                image=MealImage(
+                    image_id=placeholder_image_id,
+                    format="jpeg" if "jpeg" in command.content_type else "png",
+                    size_bytes=len(command.file_contents),
+                ),
+                source="scanner",
+            )
+            saved_meal = await uow.meals.save(meal)
+            await uow.commit()
+            logger.info(f"[PARALLEL] Created meal {saved_meal.meal_id} with ANALYZING status")
+
+        logger.info(f"[PHASE-UPLOAD-START] meal={saved_meal.meal_id}")
+        logger.info(f"[PHASE-ANALYSIS-START] meal={saved_meal.meal_id}")
+
+        loop = asyncio.get_event_loop()
+        start = time.time()
+        upload_task = loop.run_in_executor(
+            None, self.image_store.save, command.file_contents, command.content_type
+        )
+        analysis_task = loop.run_in_executor(
+            None, self._run_vision_once, command, saved_meal.meal_id
+        )
+        results = await asyncio.gather(upload_task, analysis_task, return_exceptions=True)
+        total_elapsed = time.time() - start
+
+        upload_result, analysis_result = results
+        upload_error = upload_result if isinstance(upload_result, Exception) else None
+        analysis_error = analysis_result if isinstance(analysis_result, Exception) else None
+
+        if upload_error:
+            logger.warning(f"[PHASE-UPLOAD-FAIL] meal={saved_meal.meal_id} | error={upload_error}")
+        else:
+            logger.info(f"[PHASE-UPLOAD-COMPLETE] meal={saved_meal.meal_id} | elapsed={total_elapsed:.2f}s")
+
+        if analysis_error:
+            logger.warning(f"[PHASE-ANALYSIS-FAIL] meal={saved_meal.meal_id} | error={analysis_error}")
+        else:
+            logger.info(f"[PHASE-ANALYSIS-COMPLETE] meal={saved_meal.meal_id} | elapsed={total_elapsed:.2f}s")
+
+        if upload_error or analysis_error:
+            meal.status = MealStatus.FAILED
+            # Prioritise analysis error (non-food domain) over upload error
+            error_to_raise = analysis_error or upload_error
+            meal.error_message = str(error_to_raise)
+            async with self.uow as uow:
+                await uow.meals.save(meal)
+                await uow.commit()
+            raise error_to_raise
+
+        # Both succeeded — populate image URL and nutrition
+        image_url = upload_result
+        meal.image = MealImage(
+            image_id=placeholder_image_id,
+            format="jpeg" if "jpeg" in command.content_type else "png",
+            size_bytes=len(command.file_contents),
+            url=image_url,
+        )
+
+        nutrition = self.gpt_parser.parse_to_nutrition(analysis_result)
+        dish_name = self.gpt_parser.parse_dish_name(analysis_result)
+
+        has_food = (
+            nutrition
+            and nutrition.food_items
+            and len(nutrition.food_items) > 0
+            and nutrition.calories > 0
+        )
+        if not has_food:
+            meal.status = MealStatus.FAILED
+            meal.error_message = "No edible food detected"
+            async with self.uow as uow:
+                await uow.meals.save(meal)
+                await uow.commit()
+            raise ValueError(
+                "No edible food detected in the image. "
+                "Please take a photo of food and try again."
+            )
+
+        meal.dish_name = dish_name or "Unknown dish"
+        meal.emoji = self.gpt_parser.parse_emoji(analysis_result)
+        meal.status = MealStatus.READY
+        meal.ready_at = utc_now()
+        meal.raw_gpt_json = self.gpt_parser.extract_raw_json(analysis_result)
+        meal.nutrition = nutrition
+
+        async with self.uow as uow:
+            final_meal = await uow.meals.save(meal)
+            await uow.commit()
+            logger.info(
+                f"[ANALYSIS-COMPLETE] meal={final_meal.meal_id} | "
+                f"total_elapsed={total_elapsed:.2f}s | status={final_meal.status}"
+            )
+            final_meal = await uow.meals.find_by_id(
+                meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
+            )
+
+        await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
+            aggregate_id=command.user_id,
+            user_id=command.user_id,
+            meal_date=meal_date,
+        ))
+
+        return final_meal
+
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""
         if not all([self.image_store, self.vision_service, self.gpt_parser]):
             raise RuntimeError("Required dependencies not configured")
-        
+
+        resolved_policy = self._resolve_policy_for_user(command.user_id)
+        if resolved_policy.parallel_upload_enabled:
+            return await self._handle_parallel_upload(command, resolved_policy)
+
         try:
             # Upload image to storage
             logger.info("Uploading image to storage")
