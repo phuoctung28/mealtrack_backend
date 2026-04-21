@@ -116,6 +116,8 @@ class AsyncUserRepository(UserRepositoryPort):
         entity = result.scalars().first()
         return UserProfileMapper.to_domain(entity) if entity else None
 
+    _IMMUTABLE_COLS = {"id", "created_at", "updated_at"}
+
     async def update_profile(self, profile_domain: UserProfileDomainModel) -> UserProfileDomainModel:
         profile_id_str = str(profile_domain.id) if isinstance(profile_domain.id, UUID) else profile_domain.id
         entity = await self.session.get(UserProfile, profile_id_str)
@@ -126,7 +128,7 @@ class AsyncUserRepository(UserRepositoryPort):
             updated = UserProfileMapper.to_persistence(profile_domain)
             for col in UserProfile.__table__.columns:
                 col_name = col.key
-                if col_name != "_sa_instance_state":
+                if col_name not in self._IMMUTABLE_COLS:
                     setattr(entity, col_name, getattr(updated, col_name, None))
         await self.session.flush()
         await self.session.refresh(entity)
