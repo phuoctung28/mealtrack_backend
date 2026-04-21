@@ -24,6 +24,7 @@ def test_from_settings_maps_values():
         MEAL_ANALYZE_TRANSLATION_IN_CRITICAL_PATH=True,
         MEAL_ANALYZE_RUNTIME_POLICY_ENABLED=True,
         MEAL_ANALYZE_CANARY_PERCENT=35,
+        MEAL_ANALYZE_PARALLEL_UPLOAD_ENABLED=False,
     )
 
     policy = MealAnalyzeFastPathPolicy.from_settings(settings)
@@ -35,6 +36,23 @@ def test_from_settings_maps_values():
     assert policy.translation_in_critical_path is True
     assert policy.runtime_policy_enabled is True
     assert policy.canary_percent == 35
+
+
+def test_from_settings_reads_parallel_upload_flag():
+    settings = SimpleNamespace(
+        MEAL_ANALYZE_PRIMARY_TIMEOUT_SECONDS=3.75,
+        MEAL_ANALYZE_RETRY_TIMEOUT_SECONDS=2.25,
+        MEAL_ANALYZE_MAX_ATTEMPTS=4,
+        MEAL_ANALYZE_MAX_OUTPUT_TOKENS=900,
+        MEAL_ANALYZE_TRANSLATION_IN_CRITICAL_PATH=True,
+        MEAL_ANALYZE_RUNTIME_POLICY_ENABLED=True,
+        MEAL_ANALYZE_CANARY_PERCENT=35,
+        MEAL_ANALYZE_PARALLEL_UPLOAD_ENABLED=True,
+    )
+
+    policy = MealAnalyzeFastPathPolicy.from_settings(settings)
+
+    assert policy.parallel_upload_enabled is True
 
 
 def test_from_settings_uses_legacy_policy_when_runtime_policy_disabled():

@@ -24,6 +24,7 @@ class MealAnalyzeFastPathPolicy:
     translation_in_critical_path: bool = False
     runtime_policy_enabled: bool = True
     canary_percent: int = 100
+    parallel_upload_enabled: bool = False
 
     @classmethod
     def legacy(cls) -> "MealAnalyzeFastPathPolicy":
@@ -36,6 +37,7 @@ class MealAnalyzeFastPathPolicy:
             translation_in_critical_path=True,
             runtime_policy_enabled=False,
             canary_percent=0,
+            parallel_upload_enabled=False,
         )
 
     @classmethod
@@ -56,6 +58,7 @@ class MealAnalyzeFastPathPolicy:
                 translation_in_critical_path=legacy.translation_in_critical_path,
                 runtime_policy_enabled=False,
                 canary_percent=settings.MEAL_ANALYZE_CANARY_PERCENT,
+                parallel_upload_enabled=legacy.parallel_upload_enabled,
             )
 
         return cls(
@@ -66,6 +69,7 @@ class MealAnalyzeFastPathPolicy:
             translation_in_critical_path=settings.MEAL_ANALYZE_TRANSLATION_IN_CRITICAL_PATH,
             runtime_policy_enabled=settings.MEAL_ANALYZE_RUNTIME_POLICY_ENABLED,
             canary_percent=settings.MEAL_ANALYZE_CANARY_PERCENT,
+            parallel_upload_enabled=settings.MEAL_ANALYZE_PARALLEL_UPLOAD_ENABLED,
         )
 
     def should_use_fast_path(self, user_id: str) -> bool:
