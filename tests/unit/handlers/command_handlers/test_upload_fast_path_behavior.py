@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -9,6 +10,7 @@ from src.app.commands.meal.upload_meal_image_immediately_command import (
 from src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler import (
     UploadMealImageImmediatelyHandler,
 )
+from src.domain.model.meal import MealStatus
 from src.domain.services.meal_analysis.fast_path_policy import MealAnalyzeFastPathPolicy
 
 
@@ -200,3 +202,132 @@ async def test_translation_called_when_policy_enables_critical_path_for_non_engl
     assert translate_kwargs["dish_name"] == "Pho"
     assert translate_kwargs["food_items"] == nutrition.food_items
     assert translate_kwargs["meal"] == saved_state["meal"]
+
+
+@pytest.fixture
+def parallel_mode_harness():
+    saved_state = {"meals": []}
+    mock_uow = MagicMock()
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users = MagicMock()
+    mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
+    mock_uow.meals = MagicMock()
+
+    async def save_meal(meal):
+        saved_state["meals"].append(meal)
+        saved_state["meal"] = meal
+        return meal
+
+    async def find_meal(meal_id, projection=None):
+        return saved_state.get("meal")
+
+    mock_uow.meals.save = AsyncMock(side_effect=save_meal)
+    mock_uow.meals.find_by_id = AsyncMock(side_effect=find_meal)
+    mock_uow.commit = AsyncMock()
+
+    mock_event_bus = MagicMock()
+    mock_event_bus.publish = AsyncMock()
+
+    handler = UploadMealImageImmediatelyHandler(
+        uow=mock_uow,
+        event_bus=mock_event_bus,
+        fast_path_policy=MealAnalyzeFastPathPolicy(parallel_upload_enabled=True),
+    )
+    handler.image_store = MagicMock()
+    handler.vision_service = MagicMock()
+    handler.gpt_parser = MagicMock()
+    handler.gpt_parser.parse_to_nutrition.return_value = SimpleNamespace(
+        food_items=[MagicMock()], calories=400
+    )
+    handler.gpt_parser.parse_dish_name.return_value = "Pho"
+    handler.gpt_parser.parse_emoji.return_value = "🍲"
+    handler.gpt_parser.extract_raw_json.return_value = "{}"
+    handler.meal_translation_service = MagicMock()
+    handler.meal_translation_service.translate_meal = AsyncMock()
+
+    command = UploadMealImageImmediatelyCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        file_contents=b"img",
+        content_type="image/jpeg",
+        language="en",
+    )
+    return SimpleNamespace(handler=handler, command=command, saved_state=saved_state)
+
+
+@pytest.mark.asyncio
+async def test_parallel_mode_runs_upload_and_analysis_and_returns_ready(parallel_mode_harness):
+    harness = parallel_mode_harness
+
+    def upload_side_effect(file_contents, content_type):
+        time.sleep(0.2)
+        return "mock://images/00000000-0000-0000-0000-000000000123"
+
+    def analyze_side_effect(file_contents):
+        time.sleep(0.2)
+        return {"dish_name": "Pho"}
+
+    harness.handler.image_store.save.side_effect = upload_side_effect
+    harness.handler.vision_service.analyze.side_effect = analyze_side_effect
+
+    started_at = time.perf_counter()
+    meal = await harness.handler.handle(harness.command)
+    elapsed = time.perf_counter() - started_at
+
+    assert meal.status == MealStatus.READY
+    assert elapsed < 0.34
+
+
+@pytest.mark.asyncio
+async def test_parallel_mode_marks_failed_when_upload_fails_but_analysis_succeeds(
+    parallel_mode_harness,
+):
+    harness = parallel_mode_harness
+
+    def upload_side_effect(file_contents, content_type):
+        time.sleep(0.2)
+        raise RuntimeError("upload failed")
+
+    def analyze_side_effect(file_contents):
+        time.sleep(0.2)
+        return {"dish_name": "Pho"}
+
+    harness.handler.image_store.save.side_effect = upload_side_effect
+    harness.handler.vision_service.analyze.side_effect = analyze_side_effect
+
+    with pytest.raises(RuntimeError, match="upload failed"):
+        await harness.handler.handle(harness.command)
+
+    assert harness.handler.vision_service.analyze.call_count == 1
+    assert any(
+        meal.status == MealStatus.FAILED for meal in harness.saved_state["meals"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_parallel_mode_marks_failed_when_analysis_fails_even_if_upload_succeeds(
+    parallel_mode_harness,
+):
+    harness = parallel_mode_harness
+
+    def upload_side_effect(file_contents, content_type):
+        time.sleep(0.2)
+        return "mock://images/00000000-0000-0000-0000-000000000123"
+
+    def analyze_side_effect(file_contents):
+        time.sleep(0.2)
+        raise ValueError("analysis failed")
+
+    harness.handler.image_store.save.side_effect = upload_side_effect
+    harness.handler.vision_service.analyze.side_effect = analyze_side_effect
+
+    started_at = time.perf_counter()
+    with pytest.raises(ValueError, match="analysis failed"):
+        await harness.handler.handle(harness.command)
+    elapsed = time.perf_counter() - started_at
+
+    assert harness.handler.image_store.save.call_count == 1
+    assert any(
+        meal.status == MealStatus.FAILED for meal in harness.saved_state["meals"]
+    )
+    assert elapsed < 0.34
