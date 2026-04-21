@@ -331,3 +331,26 @@ async def test_parallel_mode_marks_failed_when_analysis_fails_even_if_upload_suc
         meal.status == MealStatus.FAILED for meal in harness.saved_state["meals"]
     )
     assert elapsed < 0.34
+
+
+@pytest.mark.asyncio
+async def test_parallel_mode_prioritises_analysis_error_when_both_fail(
+    parallel_mode_harness,
+):
+    harness = parallel_mode_harness
+
+    def upload_side_effect(file_contents, content_type):
+        raise RuntimeError("upload failed")
+
+    def analyze_side_effect(file_contents):
+        raise ValueError("analysis failed")
+
+    harness.handler.image_store.save.side_effect = upload_side_effect
+    harness.handler.vision_service.analyze.side_effect = analyze_side_effect
+
+    with pytest.raises(ValueError, match="analysis failed"):
+        await harness.handler.handle(harness.command)
+
+    assert any(
+        meal.status == MealStatus.FAILED for meal in harness.saved_state["meals"]
+    )
