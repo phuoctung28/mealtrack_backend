@@ -14,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.domain.services.meal_analysis.prompt_eval_loop import PromptEvalCase, PromptEvalLoop
 from src.domain.strategies.meal_analysis_strategy import BasicAnalysisStrategy
+from src.infra.config.settings import get_settings
 
 
 def _default_cases() -> list[PromptEvalCase]:
@@ -61,6 +62,13 @@ def _default_cases() -> list[PromptEvalCase]:
     ]
 
 
+def resolve_gate_candidate(ranked: list, runtime_candidate_name: str):
+    for candidate in ranked:
+        if candidate.name == runtime_candidate_name:
+            return candidate
+    return ranked[0]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--min-parse-success-rate", type=float, default=1.0)
@@ -75,13 +83,20 @@ def main() -> int:
     }
 
     ranked = loop.rank_candidates(candidates, cases)
-    best = ranked[0]
+    runtime_candidate_name = (
+        "optimized"
+        if get_settings().MEAL_ANALYZE_OPTIMIZED_PROMPT_ENABLED
+        else "legacy"
+    )
+    candidate_for_gate = resolve_gate_candidate(
+        ranked, runtime_candidate_name=runtime_candidate_name
+    )
 
     print(json.dumps([result.__dict__ for result in ranked], indent=2))
 
     try:
         loop.enforce_thresholds(
-            best,
+            candidate_for_gate,
             min_parse_success_rate=args.min_parse_success_rate,
             max_prompt_tokens=args.max_prompt_tokens,
         )
