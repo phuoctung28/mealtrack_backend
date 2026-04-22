@@ -222,6 +222,7 @@ class DailyContextPrecomputeService:
                 pref_rows=pref_rows,
                 tokens_by_user=tokens_by_user,
                 calorie_goals=calorie_goals,
+                consumed_by_user=consumed_by_user,
                 profiles_by_user=profiles_by_user,
                 today=today,
                 tz_name=tz_name,
@@ -261,6 +262,7 @@ class DailyContextPrecomputeService:
         pref_rows,
         tokens_by_user: dict,
         calorie_goals: dict,
+        consumed_by_user: dict,
         profiles_by_user: dict,
         today: date,
         tz_name: str,
@@ -286,6 +288,7 @@ class DailyContextPrecomputeService:
             context = {
                 "fcm_tokens": tokens,
                 "calorie_goal": calorie_goal,
+                "calories_consumed": int(round(consumed_by_user.get(user_id, 0.0))),
                 "gender": gender,
                 "language_code": language_code,
             }

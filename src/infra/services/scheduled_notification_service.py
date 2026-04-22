@@ -156,18 +156,26 @@ class ScheduledNotificationService:
                 failed_ids.append(notif.id)
                 continue
 
-            if not redis_ctx:
-                logger.warning("Redis cache miss for user %s — using calorie_goal only", notif.user_id)
-                calories_consumed = 0
-            else:
-                calories_consumed = int(redis_ctx.get("calories_consumed", 0))
-
             calorie_goal = int(ctx.get("calorie_goal", 2000))
-            remaining = max(0, calorie_goal - calories_consumed)
             gender = ctx.get("gender", "male")
             lang = ctx.get("language_code", "en")
 
-            title, body = _render_message(notif.notification_type, remaining, gender, lang)
+            if notif.notification_type == "daily_summary":
+                # Use JSONB snapshot from midnight pre-compute (stable for full-day summary)
+                calories_consumed = int(ctx.get("calories_consumed", 0))
+            else:
+                # Use Redis for meal reminders (fresher, ~30 min stale)
+                if not redis_ctx:
+                    logger.warning("Redis cache miss for user %s — using calorie_goal only", notif.user_id)
+                    calories_consumed = 0
+                else:
+                    calories_consumed = int(redis_ctx.get("calories_consumed", 0))
+
+            remaining = max(0, calorie_goal - calories_consumed)
+            title, body = _render_message(
+                notif.notification_type, remaining, gender, lang,
+                calories_consumed=calories_consumed, calorie_goal=calorie_goal,
+            )
             for tok in tokens:
                 groups[(notif.notification_type, title, body)].append(tok)
             sent_ids.append(notif.id)
@@ -256,7 +264,14 @@ class ScheduledNotificationService:
 
 # ── Module-level helpers ───────────────────────────────────────────────────────
 
-def _render_message(notification_type: str, remaining: int, gender: str, lang: str) -> tuple[str, str]:
+def _render_message(
+    notification_type: str,
+    remaining: int,
+    gender: str,
+    lang: str,
+    calories_consumed: int = 0,
+    calorie_goal: int = 2000,
+) -> tuple[str, str]:
     """Render title + body for a notification type."""
     messages = get_messages(lang, gender)
     if notification_type == "meal_reminder_breakfast":
@@ -269,9 +284,23 @@ def _render_message(notification_type: str, remaining: int, gender: str, lang: s
         cfg = messages["meal_reminder"]["dinner"]
         return cfg["title"], cfg["body_template"].format(remaining=remaining)
     elif notification_type == "daily_summary":
-        # Simplified: use "under_goal" variant — full daily_summary fixed in Task 7
-        cfg = messages["daily_summary"]["under_goal"]
-        return cfg["title"], cfg["body_template"].format(deficit=remaining)
+        summary = messages["daily_summary"]
+        if calories_consumed == 0:
+            cfg = summary["zero_logs"]
+            return cfg["title"], cfg["body"]
+        pct = (calories_consumed / calorie_goal * 100) if calorie_goal > 0 else 0
+        if 95 <= pct <= 105:
+            cfg = summary["on_target"]
+            return cfg["title"], cfg["body_template"].format(percentage=int(pct))
+        elif pct < 95:
+            cfg = summary["under_goal"]
+            return cfg["title"], cfg["body_template"].format(deficit=int(calorie_goal - calories_consumed))
+        elif pct <= 120:
+            cfg = summary["slightly_over"]
+            return cfg["title"], cfg["body_template"].format(excess=int(calories_consumed - calorie_goal))
+        else:
+            cfg = summary["way_over"]
+            return cfg["title"], cfg["body_template"].format(excess=int(calories_consumed - calorie_goal))
     return "Notification", ""
 
 

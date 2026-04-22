@@ -51,3 +51,34 @@ async def test_send_loop_marks_notifications_sent():
         await svc._send_due_notifications(now)
 
     mock_firebase.send_multicast.assert_called_once()
+
+
+def test_render_message_daily_summary_zero_logs():
+    from src.infra.services.scheduled_notification_service import _render_message
+    title, body = _render_message("daily_summary", 2000, "male", "en", calories_consumed=0, calorie_goal=2000)
+    assert "Busy" in title
+    assert "log" in body.lower()
+
+
+def test_render_message_daily_summary_on_target():
+    from src.infra.services.scheduled_notification_service import _render_message
+    title, body = _render_message("daily_summary", 0, "male", "en", calories_consumed=1980, calorie_goal=2000)
+    assert "99%" in body
+
+
+def test_render_message_daily_summary_under_goal():
+    from src.infra.services.scheduled_notification_service import _render_message
+    title, body = _render_message("daily_summary", 500, "male", "en", calories_consumed=1500, calorie_goal=2000)
+    assert "500" in body
+
+
+def test_render_message_daily_summary_slightly_over():
+    from src.infra.services.scheduled_notification_service import _render_message
+    title, body = _render_message("daily_summary", 0, "male", "en", calories_consumed=2200, calorie_goal=2000)
+    assert "200" in body
+
+
+def test_render_message_daily_summary_way_over():
+    from src.infra.services.scheduled_notification_service import _render_message
+    title, body = _render_message("daily_summary", 0, "male", "en", calories_consumed=2600, calorie_goal=2000)
+    assert "600" in body
