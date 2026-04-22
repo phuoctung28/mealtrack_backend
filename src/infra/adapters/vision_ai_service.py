@@ -2,10 +2,12 @@ import base64
 import json
 import logging
 import re
+from io import BytesIO
 from typing import Dict, Any, List
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
+from PIL import Image
 
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.strategies.meal_analysis_strategy import (
@@ -31,6 +33,28 @@ class VisionAIService(VisionAIServicePort):
         self._model_manager = GeminiModelManager.get_instance()
         # Disable thinking tokens and cap output to reduce latency
         self.model = self._model_manager.get_model(thinking_budget=0, max_output_tokens=1024)
+
+    def _compress_image(self, image_bytes: bytes) -> bytes:
+        try:
+            img = Image.open(BytesIO(image_bytes))
+            w, h = img.size
+
+            if max(w, h) <= 768 and len(image_bytes) < 200 * 1024:  # already small enough, skip compression
+                return image_bytes
+
+            if max(w, h) > 768:
+                ratio = 768 / max(w, h)
+                img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+
+            buf = BytesIO()
+            img.save(buf, format="JPEG", quality=85)
+            return buf.getvalue()
+        except Exception as exc:
+            logger.warning("Image compression failed, using original: %s", exc)
+            return image_bytes
 
     def _analyze_image_reference(
         self, image_reference: str, strategy: MealAnalysisStrategy
