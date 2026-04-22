@@ -121,6 +121,7 @@ class VisionAIService(VisionAIServicePort):
         Raises:
             RuntimeError: If analysis fails
         """
+        image_bytes = self._compress_image(image_bytes)
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
         image_data_url = f"data:image/jpeg;base64,{image_base64}"
         return self._analyze_image_reference(image_data_url, strategy)
