@@ -80,3 +80,5 @@ plans/
 # Local profiling artifacts
 profile*.txt
 profile*.svg
+# Git worktrees
+.worktrees/
