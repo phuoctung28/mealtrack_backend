@@ -121,6 +121,22 @@ class FirebaseService:
             logger.error(f"Error sending notification to user {user_id}: {e}")
             return {"success": False, "reason": "error", "error": str(e)}
 
+    def send_multicast(
+        self,
+        tokens: list[str],
+        title: str,
+        body: str,
+        notification_type: str = "scheduled",
+        data: dict[str, str] | None = None,
+    ) -> dict:
+        """Send the same notification to a batch of FCM tokens (up to 500 per call)."""
+        if not firebase_admin._apps:
+            return {"success": False, "reason": "firebase_not_initialized"}
+
+        message_data = dict(data or {})
+        message_data["type"] = notification_type
+        return self._send_to_tokens(tokens, title, body, message_data)
+
     def _send_to_tokens(
         self, tokens: List[str], title: str, body: str, data: Dict[str, str]
     ) -> Dict[str, Any]:

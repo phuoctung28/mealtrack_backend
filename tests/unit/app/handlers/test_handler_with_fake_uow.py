@@ -3,7 +3,7 @@ Unit tests demonstrating FakeUoW pattern for handler testing.
 These tests show how handlers can be tested without a database.
 """
 import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import AsyncMock, Mock, MagicMock, patch
 from uuid import uuid4
 
 from src.app.commands.meal import DeleteMealCommand
@@ -17,7 +17,7 @@ class TestDeleteMealWithFakeUoW:
 
     @pytest.mark.asyncio
     async def test_delete_meal_marks_as_inactive(self):
-        """Test that deleting a meal performs hard-delete via session queries."""
+        """Test that deleting a meal delegates to repository delete."""
         # Arrange
         user_id = str(uuid4())
 
@@ -40,15 +40,16 @@ class TestDeleteMealWithFakeUoW:
             dish_name="Test Meal"
         )
 
-        # Build a mock UoW with session support
+        # Build a mock UoW — handler now delegates deletion to uow.meals.delete()
         mock_uow = MagicMock()
-        mock_uow.meals.find_by_id.return_value = meal
-        mock_uow.session.query.return_value.filter.return_value.first.return_value = None
-        mock_uow.session.query.return_value.filter.return_value.all.return_value = []
-        mock_uow.__enter__ = Mock(return_value=mock_uow)
-        mock_uow.__exit__ = Mock(return_value=False)
+        mock_uow.meals.find_by_id = AsyncMock(return_value=meal)
+        mock_uow.meals.delete = AsyncMock(return_value=None)
+        mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+        mock_uow.__aexit__ = AsyncMock(return_value=False)
 
-        handler = DeleteMealCommandHandler(uow=mock_uow)
+        mock_event_bus = MagicMock()
+        mock_event_bus.publish = AsyncMock()
+        handler = DeleteMealCommandHandler(uow=mock_uow, event_bus=mock_event_bus)
 
         # Act
         command = DeleteMealCommand(meal_id=meal.meal_id, user_id=user_id)
@@ -57,50 +58,50 @@ class TestDeleteMealWithFakeUoW:
         # Assert
         assert result["meal_id"] == meal.meal_id
         assert "deleted" in result["message"].lower()
-        mock_uow.commit.assert_called_once()
+        mock_uow.meals.delete.assert_called_once_with(meal.meal_id)
 
 # Removed TestSyncUserWithFakeUoW - SyncUserCommand not in scope for this demo
 
 class TestFakeUoWTransactionBehavior:
     """Test FakeUnitOfWork transaction behavior."""
-    
+
     def test_commit_sets_flag(self):
         """Test that commit sets the committed flag."""
         fake_uow = FakeUnitOfWork()
-        
+
         with fake_uow:
-            fake_uow.commit()
-        
+            fake_uow._sync_commit()
+
         assert fake_uow.committed is True
         assert fake_uow.rolled_back is False
-    
+
     def test_rollback_sets_flag(self):
         """Test that rollback sets the rolled_back flag."""
         fake_uow = FakeUnitOfWork()
-        
+
         with fake_uow:
-            fake_uow.rollback()
-        
+            fake_uow._sync_rollback()
+
         assert fake_uow.rolled_back is True
-    
+
     def test_context_manager_commits_on_success(self):
         """Test that context manager commits on successful execution."""
         fake_uow = FakeUnitOfWork()
-        
+
         with fake_uow:
             # Simulate successful operation
             pass
-        
+
         assert fake_uow.committed is True
-    
+
     def test_context_manager_rollsback_on_exception(self):
         """Test that context manager rolls back on exception."""
         fake_uow = FakeUnitOfWork()
-        
+
         try:
             with fake_uow:
                 raise ValueError("Test error")
         except ValueError:
             pass
-        
+
         assert fake_uow.rolled_back is True

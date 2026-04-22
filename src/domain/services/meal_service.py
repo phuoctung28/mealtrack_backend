@@ -3,24 +3,20 @@ MealService - Domain service for meal operations.
 Provides shared meal editing and management logic.
 """
 import logging
-from typing import List, Optional
+from typing import List
 from uuid import uuid4
 
 from src.domain.model.meal import Meal
-from src.domain.model.meal.food_item_change import FoodItemChange, CustomNutritionData
+from src.domain.model.meal.food_item_change import FoodItemChange
 from src.domain.model.nutrition import FoodItem
 from src.domain.model.nutrition import Nutrition
-from src.domain.ports.meal_repository_port import MealRepositoryPort
 
 logger = logging.getLogger(__name__)
 
 
 class MealService:
     """Service for meal operations."""
-    
-    def __init__(self, meal_repository: MealRepositoryPort):
-        self.meal_repository = meal_repository
-    
+
     def apply_food_item_changes(
         self,
         meal: Meal,
@@ -113,26 +109,3 @@ class MealService:
         
         return meal
     
-    def add_custom_ingredient(
-        self,
-        meal_id: str,
-        name: str,
-        quantity: float,
-        unit: str,
-        nutrition: Optional[CustomNutritionData] = None
-    ) -> Meal:
-        """Add a custom ingredient to a meal."""
-        meal = self.meal_repository.find_by_id(meal_id)
-        if not meal:
-            raise ValueError(f"Meal {meal_id} not found")
-        
-        food_item_change = FoodItemChange(
-            action="add",
-            name=name,
-            quantity=quantity,
-            unit=unit,
-            custom_nutrition=nutrition
-        )
-        
-        updated_meal = self.apply_food_item_changes(meal, [food_item_change])
-        return self.meal_repository.save(updated_meal)

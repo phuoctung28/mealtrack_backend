@@ -52,8 +52,10 @@ class User(Base, BaseMixin):
     )
     
     # Relationships
-    profiles = relationship("UserProfile", back_populates="user", cascade="all, delete-orphan")
-    subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
+    profiles = relationship("UserProfile", back_populates="user",
+                            cascade="all, delete-orphan", lazy="raise")
+    subscriptions = relationship("Subscription", back_populates="user",
+                                 cascade="all, delete-orphan", lazy="raise")
     
     @property
     def current_profile(self):

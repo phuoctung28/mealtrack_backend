@@ -23,7 +23,7 @@ from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.cache.cache_service import CacheService
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
-from src.infra.config.settings import settings
+from src.infra.config.settings import get_settings, settings
 from src.infra.database.config import get_db as get_db_from_config
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
@@ -144,7 +144,9 @@ def get_gpt_parser() -> GPTResponseParser:
     Returns:
         GPTResponseParser: The parser instance
     """
-    return GPTResponseParser()
+    return GPTResponseParser(
+        strict_schema_mode=get_settings().MEAL_ANALYZE_STRICT_SCHEMA_MODE
+    )
 
 
 # Food Cache Service
@@ -318,14 +320,10 @@ def initialize_scheduled_notification_service() -> ScheduledNotificationService:
     """
     global _scheduled_notification_service
     if _scheduled_notification_service is None:
-        # Create instances without using Depends (we're not in request context)
-        # Let NotificationRepository manage its own sessions to avoid ScopedSession here
-        notification_repository = NotificationRepository()
         firebase_service = get_firebase_service()
-        notification_service = NotificationService(notification_repository, firebase_service)
         _scheduled_notification_service = ScheduledNotificationService(
-            notification_repository, 
-            notification_service
+            firebase_service,
+            _redis_client,
         )
     return _scheduled_notification_service
 
@@ -347,7 +345,7 @@ def get_meal_suggestion_repository():
 def get_suggestion_orchestration_service():
     """
     Get suggestion orchestration service (singleton-safe).
-    
+
     This service uses ScopedSession internally to access the current request's
     database session, making it safe to use as a singleton in the event bus.
     """
@@ -355,6 +353,7 @@ def get_suggestion_orchestration_service():
     from src.infra.adapters.meal_generation_service import MealGenerationService
     from src.infra.database.config import SessionLocal
     from src.infra.repositories.user_repository import UserRepository
+    from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
 
     meal_gen_service = MealGenerationService()
     suggestion_repo = get_meal_suggestion_repository()
@@ -368,14 +367,16 @@ def get_suggestion_orchestration_service():
         finally:
             db.close()
 
-    from src.infra.database.uow import UnitOfWork
+    from src.infra.database.uow_async import AsyncUnitOfWork
 
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
         suggestion_repo=suggestion_repo,
         nutrition_lookup=get_nutrition_lookup_service(),
         profile_provider=profile_provider,
-        uow_factory=UnitOfWork,
+        uow_factory=AsyncUnitOfWork,
+        meal_names_schema_class=MealNamesResponse,
+        discovery_meals_schema_class=DiscoveryMealsResponse,
     )
 
 

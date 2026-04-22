@@ -8,7 +8,7 @@ from src.infra.database.config import Base
 from src.infra.database.models.base import PrimaryEntityMixin
 
 
-class FoodItem(Base, PrimaryEntityMixin):
+class FoodItemORM(Base, PrimaryEntityMixin):
     """Database model for food items in a meal."""
 
     __tablename__ = 'food_item'  # Explicit table name to match migration
@@ -40,57 +40,4 @@ class FoodItem(Base, PrimaryEntityMixin):
     order_index = Column(Integer, default=0, nullable=False, server_default='0')
 
     # Relationships
-    nutrition = relationship("Nutrition", back_populates="food_items")
-
-    def to_domain(self):
-        """Convert DB model to domain model."""
-        from src.domain.model.nutrition import FoodItem as DomainFoodItem
-        from src.domain.model.nutrition import Macros as DomainMacros
-
-        macros = DomainMacros(
-            protein=self.protein,
-            carbs=self.carbs,
-            fat=self.fat,
-            fiber=self.fiber or 0.0,
-            sugar=self.sugar or 0.0,
-        )
-
-        return DomainFoodItem(
-            id=self.id,
-            name=self.name,
-            quantity=self.quantity,
-            unit=self.unit,
-            macros=macros,
-            micros=None,  # Not implemented yet
-            confidence=self.confidence,
-            fdc_id=self.fdc_id,
-            is_custom=self.is_custom
-        )
-
-    @classmethod
-    def from_domain(cls, domain_model, nutrition_id=None):
-        """Create DB model from domain model."""
-        item = cls(
-            name=domain_model.name,
-            quantity=domain_model.quantity,
-            unit=domain_model.unit,
-            confidence=domain_model.confidence,
-            nutrition_id=nutrition_id,
-            fdc_id=getattr(domain_model, 'fdc_id', None),
-            is_custom=getattr(domain_model, 'is_custom', False)
-        )
-
-        # Set the ID if provided (for updates)
-        # Convert UUID objects to strings for DB storage
-        if hasattr(domain_model, 'id') and domain_model.id:
-            item.id = str(domain_model.id)
-
-        # Set macro fields directly
-        if domain_model.macros:
-            item.protein = domain_model.macros.protein
-            item.carbs = domain_model.macros.carbs
-            item.fat = domain_model.macros.fat
-            item.fiber = domain_model.macros.fiber
-            item.sugar = domain_model.macros.sugar
-
-        return item
+    nutrition = relationship("NutritionORM", back_populates="food_items")

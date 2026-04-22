@@ -21,6 +21,8 @@ from .meal_plan import (
     DietaryPreference,
     FitnessGoal,
     MealType,
+    PlanDuration,
+    UserPreferences,
 )
 from .meal_suggestion import (
     MealSuggestion,
@@ -31,13 +33,14 @@ from .meal_suggestion import (
     MacroEstimate,
     MEAL_SIZE_PERCENTAGES
 )
-from .suggestion_session import SuggestionSession
 
 __all__ = [
     'PlannedMeal',
     'DietaryPreference',
     'FitnessGoal',
     'MealType',
+    'PlanDuration',
+    'UserPreferences',
     'MealGenerationRequest',
     'MealGenerationType',
     'MealGenerationContext',
@@ -56,6 +59,5 @@ __all__ = [
     'RecipeStep',
     'MacroEstimate',
     'MEAL_SIZE_PERCENTAGES',
-    'SuggestionSession',
 ]
 

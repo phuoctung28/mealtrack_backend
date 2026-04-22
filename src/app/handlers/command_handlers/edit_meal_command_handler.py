@@ -3,19 +3,18 @@ Handler for editing meal ingredients.
 """
 import logging
 import uuid
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from src.api.exceptions import ValidationException, ResourceNotFoundException, AuthorizationException
 from src.app.commands.meal import EditMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import MealEditedEvent
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition import FoodItem, Macros
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.uow import UnitOfWork
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,25 +23,17 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
     """Handler for editing meal ingredients."""
 
     def __init__(self,
-                 uow: Optional[UnitOfWorkPort] = None,
-                 cache_service: Optional[CacheService] = None):
+                 uow: UnitOfWorkPort,
+                 event_bus: Any):
         self.uow = uow
-        self.cache_service = cache_service
-
-    def set_dependencies(self, **kwargs):
-        """Set dependencies for dependency injection."""
-        self.uow = kwargs.get('uow', self.uow)
-        self.cache_service = kwargs.get('cache_service', self.cache_service)
+        self.event_bus = event_bus
 
     async def handle(self, command: EditMealCommand) -> Dict[str, Any]:
         """Handle meal editing operations."""
-        # Use provided UoW or create default
-        uow = self.uow or UnitOfWork()
-
-        with uow:
+        async with self.uow as uow:
             try:
                 # 1. Validate meal exists
-                meal = uow.meals.find_by_id(command.meal_id)
+                meal = await uow.meals.find_by_id(command.meal_id)
                 if not meal:
                     raise ResourceNotFoundException("Meal not found")
 
@@ -69,10 +60,15 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 )
 
                 # 5. Persist changes
-                saved_meal = uow.meals.save(updated_meal)
-                uow.commit()
+                saved_meal = await uow.meals.save(updated_meal)
+                await uow.commit()
 
-                await self._invalidate_daily_macros(saved_meal)
+                meal_date = (saved_meal.created_at or utc_now()).date()
+                await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
+                    aggregate_id=saved_meal.user_id,
+                    user_id=saved_meal.user_id,
+                    meal_date=meal_date,
+                ))
 
                 # 6. Calculate nutrition delta for event
                 nutrition_delta = self._calculate_nutrition_delta(meal.nutrition, updated_nutrition)
@@ -110,7 +106,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                     ]
                 }
             except Exception as e:
-                uow.rollback()
+                await uow.rollback()
                 logger.error(f"Error editing meal: {str(e)}")
                 raise
 
@@ -178,22 +174,3 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
 
         return "; ".join(summary_parts) if summary_parts else "Updated meal"
 
-    async def _invalidate_daily_macros(self, meal):
-        if not self.cache_service or not meal:
-            return
-        created_at = meal.created_at or utc_now()
-        meal_date = created_at.date()
-        cache_key, _ = CacheKeys.daily_macros(meal.user_id, meal_date)
-        await self.cache_service.invalidate(cache_key)
-
-        # Invalidate weekly budget cache so wallet updates after meal edit
-        from datetime import timedelta
-        week_start = meal_date - timedelta(days=meal_date.weekday())
-        weekly_key, _ = CacheKeys.weekly_budget(meal.user_id, week_start)
-        await self.cache_service.invalidate(weekly_key)
-
-        # Invalidate streak and daily activities so feed reflects the edit
-        streak_key, _ = CacheKeys.user_streak(meal.user_id)
-        await self.cache_service.invalidate(streak_key)
-        activities_key, _ = CacheKeys.daily_activities(meal.user_id, meal_date)
-        await self.cache_service.invalidate(activities_key)

@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional
 from src.app.events.base import EventHandler, handles
 from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
 from src.domain.cache.cache_keys import CacheKeys
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.uow import UnitOfWork
+from src.domain.ports.cache_port import CachePort
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class GetSavedSuggestionsQueryHandler(EventHandler[GetSavedSuggestionsQuery, Dict[str, Any]]):
     """Return all saved suggestions for a user, newest first."""
 
-    def __init__(self, cache_service: Optional[CacheService] = None):
+    def __init__(self, cache_service: Optional[CachePort] = None):
         self.cache_service = cache_service
 
     async def handle(self, query: GetSavedSuggestionsQuery) -> Dict[str, Any]:
@@ -30,8 +30,8 @@ class GetSavedSuggestionsQueryHandler(EventHandler[GetSavedSuggestionsQuery, Dic
         return result
 
     async def _compute(self, query: GetSavedSuggestionsQuery) -> Dict[str, Any]:
-        with UnitOfWork() as uow:
-            rows = uow.saved_suggestions_db.find_by_user(query.user_id)
+        async with AsyncUnitOfWork() as uow:
+            rows = await uow.saved_suggestions_db.find_by_user(query.user_id)
             items = [
                 {
                     "id": row.id,

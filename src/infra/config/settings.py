@@ -115,7 +115,7 @@ class Settings(BaseSettings):
     # Sentry error monitoring
     SENTRY_DSN: str | None = Field(default=None, description="Sentry DSN; disables Sentry when unset")
     SENTRY_TRACES_SAMPLE_RATE: float = Field(default=0.1, description="Performance trace sample rate (0.0-1.0)")
-    SENTRY_PROFILES_SAMPLE_RATE: float = Field(default=0.0, description="Profile sample rate (0.0-1.0)")
+    SENTRY_PROFILES_SAMPLE_RATE: float = Field(default=0.05, description="Profile sample rate (0.0-1.0)")
     SENTRY_SEND_PII: bool = Field(default=False, description="Send user IP/headers to Sentry")
 
     # Feature flags / development toggles
@@ -133,6 +133,43 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str | None = Field(default=None)
     EMAIL_FROM_ADDRESS: str | None = Field(default=None)
     EMAIL_FROM_NAME: str | None = Field(default=None)
+
+    # --- Meal image cache (nightly-fill vector cache) ---
+    MEAL_IMAGE_CACHE_ENABLED: bool = Field(default=False)
+    TEXT_DEDUP_THRESHOLD: float = Field(default=0.65)
+    IMAGE_MATCH_THRESHOLD: float = Field(default=0.65)
+    MEAL_IMAGE_COSINE_HIT_THRESHOLD: float = Field(
+        default=0.65,
+        description="Cosine similarity above which a cached image is reused (0.65–0.80 recommended)",
+    )
+
+    # Embeddings — SigLIP google/siglip-base-patch16-224 (768-d)
+    CLIP_MODEL_NAME: str = Field(default="google/siglip-base-patch16-224")
+    CLIP_DEVICE: str = Field(default="cpu")
+    CLIP_EMBEDDING_DIM: int = Field(default=768)
+
+    # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)
+    CF_ACCOUNT_ID: str | None = Field(default=None, description="Cloudflare account ID (dash.cloudflare.com → right sidebar)")
+    CF_API_TOKEN: str | None = Field(default=None, description="Cloudflare API token with Workers AI permission")
+    CF_IMAGE_MODEL: str = Field(default="@cf/black-forest-labs/flux-1-schnell", description="CF Workers AI model for image generation")
+    AI_IMAGE_TIMEOUT_SECONDS: int = Field(default=60)
+
+    # Nightly cron drain
+    MAX_JOBS_PER_CRON: int = Field(default=50)
+    CRON_EXTERNAL_CALL_DELAY_SECONDS: float = Field(default=2.0)
+    MAX_RESOLUTION_ATTEMPTS: int = Field(default=5)
+
+    # Meal analysis fast-path policy defaults
+    MEAL_ANALYZE_PRIMARY_TIMEOUT_SECONDS: float = Field(default=2.5)
+    MEAL_ANALYZE_RETRY_TIMEOUT_SECONDS: float = Field(default=1.5)
+    MEAL_ANALYZE_MAX_ATTEMPTS: int = Field(default=2)
+    MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(default=700)
+    MEAL_ANALYZE_TRANSLATION_IN_CRITICAL_PATH: bool = Field(default=False)
+    MEAL_ANALYZE_RUNTIME_POLICY_ENABLED: bool = Field(default=True)
+    MEAL_ANALYZE_CANARY_PERCENT: int = Field(default=100, ge=0, le=100)
+    MEAL_ANALYZE_PARALLEL_UPLOAD_ENABLED: bool = Field(default=False)
+    MEAL_ANALYZE_OPTIMIZED_PROMPT_ENABLED: bool = Field(default=True)
+    MEAL_ANALYZE_STRICT_SCHEMA_MODE: bool = Field(default=True)
 
     model_config = SettingsConfigDict(
         env_file=".env",

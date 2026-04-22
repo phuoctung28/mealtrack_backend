@@ -12,8 +12,9 @@ from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition, Foo
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.infra.database.config import Base
 # Import all models to ensure they're registered with Base metadata
-from src.infra.database.models.meal.meal import Meal as MealModel
-from src.infra.database.models.meal.meal_image import MealImage as MealImageModel
+from src.infra.database.models.meal.meal import MealORM
+from src.infra.database.models.meal.meal_image import MealImageORM
+from src.infra.mappers.meal_mapper import meal_domain_to_orm, meal_image_domain_to_orm
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
 from src.infra.event_bus import PyMediatorEventBus, EventBus
@@ -26,15 +27,34 @@ from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIServ
 from tests.fixtures.mock_image_store import MockImageStore
 
 
+class AsyncSyncRepoWrapper:
+    """Wraps a sync repository so every method is also awaitable."""
+
+    def __init__(self, sync_repo):
+        self._sync = sync_repo
+
+    def __getattr__(self, name):
+        attr = getattr(self._sync, name)
+        if callable(attr):
+            async def _async_wrapper(*args, **kwargs):
+                return attr(*args, **kwargs)
+            return _async_wrapper
+        return attr
+
+
 class TestUnitOfWork:
-    """Test-friendly UoW that doesn't close the session on exit."""
+    """Test-friendly UoW that doesn't close the session on exit.
+
+    Supports both sync (``with``) and async (``async with``) context managers
+    so it works with both legacy sync tests and the new async command handlers.
+    """
 
     def __init__(self, session: Session):
         from src.infra.repositories.meal_repository import MealRepository
         from src.infra.repositories.user_repository import UserRepository
         self.session = session
-        self.meals = MealRepository(session)
-        self.users = UserRepository(session)
+        self.meals = AsyncSyncRepoWrapper(MealRepository(session))
+        self.users = AsyncSyncRepoWrapper(UserRepository(session))
 
     def __enter__(self):
         return self
@@ -45,11 +65,20 @@ class TestUnitOfWork:
             self.session.rollback()
         # Don't commit here - tests manage their own commits
 
-    def commit(self):
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        # Don't close session - let the test fixture manage it
+        if exc_type:
+            self.session.rollback()
+        # Don't commit here - tests manage their own commits
+
+    async def commit(self):
         # No-op for tests - session already has the data
         pass
 
-    def rollback(self):
+    async def rollback(self):
         self.session.rollback()
 
 
@@ -412,13 +441,15 @@ def event_bus(
         EditMealCommand,
         EditMealCommandHandler(
             uow=test_uow,  # Use test UoW with test session
+            event_bus=event_bus,
         )
     )
 
     event_bus.register_handler(
         AddCustomIngredientCommand,
         AddCustomIngredientCommandHandler(
-            uow=test_uow  # Use test UoW with test session
+            uow=test_uow,  # Use test UoW with test session
+            event_bus=event_bus,
         )
     )
 
@@ -426,15 +457,17 @@ def event_bus(
     from src.app.commands.meal.delete_meal_command import DeleteMealCommand
     event_bus.register_handler(
         DeleteMealCommand,
-        DeleteMealCommandHandler(uow=test_uow, cache_service=None)  # Use test UoW
+        DeleteMealCommandHandler(uow=test_uow, event_bus=event_bus)  # Use test UoW
     )
-    
+
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
+            uow=test_uow,
+            event_bus=event_bus,
             image_store=mock_image_store,
             vision_service=mock_vision_service,
-            gpt_parser=gpt_parser
+            gpt_parser=gpt_parser,
         )
     )
     
@@ -584,15 +617,15 @@ def sample_meal_domain() -> Meal:
 
 
 @pytest.fixture
-def sample_meal_db(test_session, sample_meal_domain) -> MealModel:
+def sample_meal_db(test_session, sample_meal_domain) -> MealORM:
     """Create a sample meal in the database."""
     # First create the meal image
-    meal_image = MealImageModel.from_domain(sample_meal_domain.image)
+    meal_image = meal_image_domain_to_orm(sample_meal_domain.image)
     test_session.add(meal_image)
     test_session.flush()
-    
-    # Create meal using from_domain method
-    meal_model = MealModel.from_domain(sample_meal_domain)
+
+    # Create meal using mapper
+    meal_model = meal_domain_to_orm(sample_meal_domain)
     test_session.add(meal_model)
     test_session.commit()
     return meal_model
@@ -681,14 +714,14 @@ def sample_meal_with_nutrition(test_session, sample_user) -> Meal:
     )
     
     # Store in database
-    meal_image_model = MealImageModel.from_domain(meal.image)
+    meal_image_model = meal_image_domain_to_orm(meal.image)
     test_session.add(meal_image_model)
     test_session.flush()
-    
-    meal_model = MealModel.from_domain(meal)
+
+    meal_model = meal_domain_to_orm(meal)
     test_session.add(meal_model)
     test_session.commit()
-    
+
     return meal
 
 
@@ -696,7 +729,7 @@ def sample_meal_with_nutrition(test_session, sample_user) -> Meal:
 def sample_meal_processing(test_session, sample_user) -> Meal:
     """Create a sample meal in PROCESSING status for testing."""
     import uuid
-    
+
     meal = Meal(
         meal_id=str(uuid.uuid4()),
         user_id=sample_user.id,
@@ -709,16 +742,16 @@ def sample_meal_processing(test_session, sample_user) -> Meal:
             url="https://example.com/processing.jpg"
         )
     )
-    
+
     # Store in database
-    meal_image_model = MealImageModel.from_domain(meal.image)
+    meal_image_model = meal_image_domain_to_orm(meal.image)
     test_session.add(meal_image_model)
     test_session.flush()
-    
-    meal_model = MealModel.from_domain(meal)
+
+    meal_model = meal_domain_to_orm(meal)
     test_session.add(meal_model)
     test_session.commit()
-    
+
     return meal
 
 

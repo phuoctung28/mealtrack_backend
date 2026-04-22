@@ -1,43 +1,79 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
+from enum import Enum, auto
 from typing import Dict, List, Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus
+from src.domain.model.nutrition import Nutrition
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.utils.timezone_utils import get_zone_info, utc_now
 from src.infra.database.utils.datetime_helper import local_date_expr
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.meal.meal import Meal as DBMeal
-from src.infra.database.models.meal.meal_image import MealImage as DBMealImage
-from src.infra.database.models.nutrition.nutrition import Nutrition as DBNutrition
+from src.infra.database.models.meal.meal import MealORM
+from src.infra.database.models.meal.meal_image import MealImageORM
+from src.infra.database.models.meal.food_item_translation_model import (
+    FoodItemTranslationORM,
+)
+from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
+from src.infra.database.models.nutrition.food_item import FoodItemORM
+from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.mappers import MealStatusMapper
-from src.infra.mappers.meal_mapper import MealMapper, MealImageMapper, NutritionMapper, FoodItemMapper
+from src.infra.mappers.meal_mapper import (
+    meal_orm_to_domain,
+    meal_domain_to_orm,
+    meal_image_domain_to_orm,
+    nutrition_domain_to_orm,
+    food_item_domain_to_orm,
+)
 
 logger = logging.getLogger(__name__)
 
-_MEAL_LOAD_OPTIONS = (
-    joinedload(DBMeal.image),
-    selectinload(DBMeal.nutrition).selectinload(DBNutrition.food_items),
-    selectinload(DBMeal.translations),
-)
+
+class MealProjection(Enum):
+    MACROS_ONLY = auto()  # nutrition + food_items only
+    FULL = auto()  # image + nutrition + food_items (default)
+    FULL_WITH_TRANSLATIONS = auto()  # everything, including translations
+
+
+_PROJECTION_OPTS: dict = {
+    MealProjection.MACROS_ONLY: (
+        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+    ),
+    MealProjection.FULL: (
+        joinedload(MealORM.image),
+        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+    ),
+    MealProjection.FULL_WITH_TRANSLATIONS: (
+        joinedload(MealORM.image),
+        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+        joinedload(MealORM.translations),
+    ),
+}
 
 
 class MealRepository(MealRepositoryPort):
     """Implementation of the meal repository using SQLAlchemy."""
-    
+
     def __init__(self, db: Session):
         """Initialize with session dependency."""
         self.db = db
-    
+
     def save(self, meal: Meal) -> Meal:
         """Save a meal to the database."""
         try:
             # Check if meal already exists
-            existing_meal = self.db.query(DBMeal).filter(DBMeal.meal_id == meal.meal_id).first()
-            
+            existing_meal = (
+                self.db.query(MealORM)
+                .options(
+                    selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items)
+                )
+                .filter(MealORM.meal_id == meal.meal_id)
+                .first()
+            )
+
             if existing_meal:
                 # Update existing meal
                 # Update scalar fields
@@ -56,127 +92,176 @@ class MealRepository(MealRepositoryPort):
                 # Handle nutrition sync
                 if meal.nutrition:
                     if not existing_meal.nutrition:
-                        # Create new nutrition
-                        db_nutrition = NutritionMapper.to_persistence(meal.nutrition, meal_id=meal.meal_id)
+                        # Create new nutrition (food_items are already included
+                        # by nutrition_domain_to_orm via the ORM relationship)
+                        db_nutrition = nutrition_domain_to_orm(
+                            meal.nutrition, meal_id=meal.meal_id
+                        )
                         existing_meal.nutrition = db_nutrition
-                        # Flush to get nutrition ID before creating food_items
-                        self.db.flush()
-                        # Add food items with order preserved
-                        if meal.nutrition.food_items:
-                            for idx, item in enumerate(meal.nutrition.food_items):
-                                db_item = FoodItemMapper.to_persistence(item, nutrition_id=db_nutrition.id)
-                                db_item.order_index = idx
-                                self.db.add(db_item)
                     else:
                         # Update existing nutrition
                         self._update_nutrition(existing_meal.nutrition, meal.nutrition)
-                
+
                 self.db.commit()
-                # Return refreshed domain object
-                return MealMapper.to_domain(existing_meal)
+                # Re-fetch with eager-loaded relationships after commit to avoid lazy='raise'
+                existing_meal = (
+                    self.db.query(MealORM)
+                    .options(
+                        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items)
+                    )
+                    .filter(MealORM.meal_id == meal.meal_id)
+                    .first()
+                )
+                return meal_orm_to_domain(existing_meal)
             else:
                 # Create new meal
-                db_meal = MealMapper.to_persistence(meal)
-                
+                db_meal = meal_domain_to_orm(meal)
+
                 # Handle Image - must be done before adding meal
                 if meal.image:
-                    existing_image = self.db.query(DBMealImage).filter(
-                        DBMealImage.image_id == meal.image.image_id
-                    ).first()
-                    
+                    existing_image = (
+                        self.db.query(MealImageORM)
+                        .filter(MealImageORM.image_id == meal.image.image_id)
+                        .first()
+                    )
+
                     if not existing_image:
-                        db_image = MealImageMapper.to_persistence(meal.image)
+                        db_image = meal_image_domain_to_orm(meal.image)
                         self.db.add(db_image)
                         self.db.flush()  # Flush to ensure image exists before linking
-                    
+
                     # Set image_id on meal before adding to session
                     db_meal.image_id = str(meal.image.image_id)
-                
+
                 self.db.add(db_meal)
-                
-                # Handle Nutrition if present
-                if meal.nutrition:
-                    db_nutrition = NutritionMapper.to_persistence(meal.nutrition, meal_id=meal.meal_id)
-                    self.db.add(db_nutrition)
-                    # Flush to get nutrition ID before creating food_items
-                    self.db.flush()
-                    # Add food items with order preserved
-                    if meal.nutrition.food_items:
-                        for idx, item in enumerate(meal.nutrition.food_items):
-                            db_item = FoodItemMapper.to_persistence(item, nutrition_id=db_nutrition.id)
-                            db_item.order_index = idx
-                            self.db.add(db_item)
 
                 self.db.commit()
                 self.db.refresh(db_meal)
-                return MealMapper.to_domain(db_meal)
+                # Re-fetch with eager-loaded relationships to avoid lazy='raise' on nutrition
+                db_meal = (
+                    self.db.query(MealORM)
+                    .options(
+                        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items)
+                    )
+                    .filter(MealORM.meal_id == db_meal.meal_id)
+                    .first()
+                )
+                return meal_orm_to_domain(db_meal)
 
         except Exception as e:
             self.db.rollback()
             raise e
-    
-    def find_by_id(self, meal_id: str) -> Optional[Meal]:
+
+    def find_by_id(
+        self, meal_id: str, projection: MealProjection = MealProjection.FULL
+    ) -> Optional[Meal]:
         """Find a meal by ID."""
         db_meal = (
-            self.db.query(DBMeal)
-            .options(*_MEAL_LOAD_OPTIONS)
-            .filter(DBMeal.meal_id == meal_id)
+            self.db.query(MealORM)
+            .options(*_PROJECTION_OPTS[projection])
+            .filter(MealORM.meal_id == meal_id)
             .first()
         )
-        return MealMapper.to_domain(db_meal) if db_meal else None
-    
+        return meal_orm_to_domain(db_meal) if db_meal else None
+
     def find_by_status(self, status: MealStatus, limit: int = 10) -> List[Meal]:
         """Find meals by status."""
         db_meals = (
-            self.db.query(DBMeal)
-            .options(*_MEAL_LOAD_OPTIONS)
-            .filter(DBMeal.status == MealStatusMapper.to_db(status))
-            .order_by(DBMeal.created_at)
+            self.db.query(MealORM)
+            .options(*_PROJECTION_OPTS[MealProjection.FULL])
+            .filter(MealORM.status == MealStatusMapper.to_db(status))
+            .order_by(MealORM.created_at)
             .limit(limit)
             .all()
         )
-        return [MealMapper.to_domain(m) for m in db_meals]
-    
-    def delete(self, meal_id: str) -> bool:
-        """Delete a meal by ID."""
-        try:
-            db_meal = self.db.query(DBMeal).filter(DBMeal.meal_id == meal_id).first()
-            if db_meal:
-                self.db.delete(db_meal)
-                self.db.commit()
-                return True
-            return False
-        except Exception as e:
-            self.db.rollback()
-            raise e
-    
+        return [meal_orm_to_domain(m) for m in db_meals]
+
+    def delete(self, meal_id: str) -> None:
+        """Delete a meal with data preservation.
+
+        Performs:
+        1. Soft-delete food_items (is_deleted=True, nutrition_id=NULL)
+        2. Soft-delete meal_translations (is_deleted=True, meal_id=NULL)
+        3. Soft-delete food_item_translations (is_deleted=True)
+        4. Hard-delete nutrition
+        5. Hard-delete meal
+        """
+        # Step 1a: Soft-delete food_items + nullify nutrition FK
+        nutrition = (
+            self.db.query(NutritionORM).filter(NutritionORM.meal_id == meal_id).first()
+        )
+
+        if nutrition:
+            nutrition_id = nutrition.id
+            self.db.execute(
+                update(FoodItemORM)
+                .where(FoodItemORM.nutrition_id == nutrition_id)
+                .values(is_deleted=True, nutrition_id=None)
+            )
+
+        # Step 1b: Soft-delete meal_translations + nullify meal FK
+        meal_translation_ids = [
+            mt.id
+            for mt in self.db.query(MealTranslationORM.id)
+            .filter(MealTranslationORM.meal_id == meal_id)
+            .all()
+        ]
+
+        self.db.execute(
+            update(MealTranslationORM)
+            .where(MealTranslationORM.meal_id == meal_id)
+            .values(is_deleted=True, meal_id=None)
+        )
+
+        # Step 1c: Soft-delete food_item_translations
+        if meal_translation_ids:
+            self.db.execute(
+                update(FoodItemTranslationORM)
+                .where(
+                    FoodItemTranslationORM.meal_translation_id.in_(meal_translation_ids)
+                )
+                .values(is_deleted=True)
+            )
+
+        # Step 2a: Hard-delete nutrition
+        self.db.execute(
+            NutritionORM.__table__.delete().where(NutritionORM.meal_id == meal_id)
+        )
+
+        # Step 2b: Hard-delete meal
+        self.db.execute(MealORM.__table__.delete().where(MealORM.meal_id == meal_id))
+
     def find_all_paginated(self, offset: int = 0, limit: int = 20) -> List[Meal]:
         """Retrieves all meals with pagination."""
         db_meals = (
-            self.db.query(DBMeal)
-            .options(*_MEAL_LOAD_OPTIONS)
-            .order_by(DBMeal.created_at.desc())
+            self.db.query(MealORM)
+            .options(*_PROJECTION_OPTS[MealProjection.FULL])
+            .order_by(MealORM.created_at.desc())
             .offset(offset)
             .limit(limit)
             .all()
         )
-        return [MealMapper.to_domain(m) for m in db_meals]
-    
+        return [meal_orm_to_domain(m) for m in db_meals]
+
     def count(self) -> int:
         """Counts the total number of meals."""
-        return self.db.query(DBMeal).count()
+        return self.db.query(MealORM).count()
 
     def count_by_source(self, user_id: str, source: str) -> int:
         """Count meals by source type for a user."""
         return (
-            self.db.query(DBMeal)
-            .filter(DBMeal.user_id == user_id, DBMeal.source == source)
+            self.db.query(MealORM)
+            .filter(MealORM.user_id == user_id, MealORM.source == source)
             .count()
         )
-    
+
     def find_by_date(
-        self, date_obj: date, user_id: str = None, limit: int = 50,
+        self,
+        date_obj: date,
+        user_id: str = None,
+        limit: int = 50,
         user_timezone: Optional[str] = None,
+        projection: MealProjection = MealProjection.FULL,
     ) -> List[Meal]:
         """Find meals created on a specific date.
 
@@ -184,37 +269,40 @@ class MealRepository(MealRepositoryPort):
             user_timezone: IANA timezone (e.g. 'Asia/Saigon'). When provided,
                 date_obj is treated as a user-local date and boundaries are
                 converted to UTC for correct filtering.
+            projection: Controls which relationships are loaded.
         """
         tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
-        start_datetime = datetime.combine(date_obj, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        start_datetime = datetime.combine(
+            date_obj, datetime.min.time(), tzinfo=tz
+        ).astimezone(timezone.utc)
         end_datetime = start_datetime + timedelta(days=1)
 
         query = (
-            self.db.query(DBMeal)
-            .options(*_MEAL_LOAD_OPTIONS)
-            .filter(DBMeal.created_at >= start_datetime)
-            .filter(DBMeal.created_at < end_datetime)
+            self.db.query(MealORM)
+            .options(*_PROJECTION_OPTS[projection])
+            .filter(MealORM.created_at >= start_datetime)
+            .filter(MealORM.created_at < end_datetime)
         )
 
         if user_id:
-            query = query.filter(DBMeal.user_id == user_id)
+            query = query.filter(MealORM.user_id == user_id)
 
         db_meals = (
-            query
-            .filter(DBMeal.status != MealStatusEnum.INACTIVE)
-            .order_by(DBMeal.created_at.desc())
+            query.filter(MealORM.status != MealStatusEnum.INACTIVE)
+            .order_by(MealORM.created_at.desc())
             .limit(limit)
             .all()
         )
-        return [MealMapper.to_domain(m) for m in db_meals]
+        return [meal_orm_to_domain(m) for m in db_meals]
 
     def find_by_date_range(
         self,
         user_id: str,
         start_date: date,
         end_date: date,
-        limit: int = 100,
+        limit: int = 500,
         user_timezone: Optional[str] = None,
+        projection: MealProjection = MealProjection.FULL,
     ) -> List[Meal]:
         """Find meals created within a date range (inclusive).
 
@@ -224,30 +312,35 @@ class MealRepository(MealRepositoryPort):
                 UTC for correct filtering against UTC-stored created_at.
         """
         tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
-        start_datetime = datetime.combine(start_date, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        start_datetime = datetime.combine(
+            start_date, datetime.min.time(), tzinfo=tz
+        ).astimezone(timezone.utc)
         end_datetime = (
-            datetime.combine(end_date, datetime.min.time(), tzinfo=tz) + timedelta(days=1)
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
+            + timedelta(days=1)
         ).astimezone(timezone.utc)
 
         query = (
-            self.db.query(DBMeal)
-            .options(*_MEAL_LOAD_OPTIONS)
-            .filter(DBMeal.created_at >= start_datetime)
-            .filter(DBMeal.created_at < end_datetime)
-            .filter(DBMeal.user_id == user_id)
+            self.db.query(MealORM)
+            .options(*_PROJECTION_OPTS[projection])
+            .filter(MealORM.created_at >= start_datetime)
+            .filter(MealORM.created_at < end_datetime)
+            .filter(MealORM.user_id == user_id)
         )
 
         db_meals = (
-            query
-            .filter(DBMeal.status != MealStatusEnum.INACTIVE)
-            .order_by(DBMeal.created_at.asc())
+            query.filter(MealORM.status != MealStatusEnum.INACTIVE)
+            .order_by(MealORM.created_at.asc())
             .limit(limit)
             .all()
         )
-        return [MealMapper.to_domain(m) for m in db_meals]
+        return [meal_orm_to_domain(m) for m in db_meals]
 
     def get_daily_meal_counts(
-        self, user_id: str, start_date: date, end_date: date,
+        self,
+        user_id: str,
+        start_date: date,
+        end_date: date,
         user_timezone: Optional[str] = None,
     ) -> Dict[date, int]:
         """Return {date: meal_count} for each day in range with at least 1 meal.
@@ -255,20 +348,23 @@ class MealRepository(MealRepositoryPort):
         Uses a single GROUP BY query for efficiency.
         """
         tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
-        start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        start_dt = datetime.combine(
+            start_date, datetime.min.time(), tzinfo=tz
+        ).astimezone(timezone.utc)
         end_dt = (
-            datetime.combine(end_date, datetime.min.time(), tzinfo=tz) + timedelta(days=1)
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
+            + timedelta(days=1)
         ).astimezone(timezone.utc)
 
-        date_expr = local_date_expr(self.db, DBMeal.created_at, user_timezone)
+        date_expr = local_date_expr(self.db, MealORM.created_at, user_timezone)
 
         rows = (
             self.db.query(date_expr, func.count())
             .filter(
-                DBMeal.user_id == user_id,
-                DBMeal.created_at >= start_dt,
-                DBMeal.created_at < end_dt,
-                DBMeal.status != MealStatusEnum.INACTIVE,
+                MealORM.user_id == user_id,
+                MealORM.created_at >= start_dt,
+                MealORM.created_at < end_dt,
+                MealORM.status != MealStatusEnum.INACTIVE,
             )
             .group_by(date_expr)
             .all()
@@ -290,13 +386,13 @@ class MealRepository(MealRepositoryPort):
 
         Reuses timezone logic from get_daily_meal_counts().
         """
-        date_expr = local_date_expr(self.db, DBMeal.created_at, user_timezone)
+        date_expr = local_date_expr(self.db, MealORM.created_at, user_timezone)
 
         rows = (
             self.db.query(date_expr)
             .filter(
-                DBMeal.user_id == user_id,
-                DBMeal.status != MealStatusEnum.INACTIVE,
+                MealORM.user_id == user_id,
+                MealORM.status != MealStatusEnum.INACTIVE,
             )
             .distinct()
             .order_by(date_expr.desc())
@@ -311,30 +407,20 @@ class MealRepository(MealRepositoryPort):
                 result.append(day_val)
         return result
 
-    def _update_nutrition(self, db_nutrition: DBNutrition, domain_nutrition: Meal.nutrition):
+    def _update_nutrition(
+        self, db_nutrition: NutritionORM, domain_nutrition: Nutrition
+    ) -> None:
         """Helper to sync nutrition data."""
         # Update scalar fields (calories derived from macros: P*4 + C*4 + F*9)
         db_nutrition.protein = domain_nutrition.macros.protein
         db_nutrition.carbs = domain_nutrition.macros.carbs
         db_nutrition.fat = domain_nutrition.macros.fat
         db_nutrition.confidence_score = domain_nutrition.confidence_score
-        
-        # Sync food items (Simplified: Delete all and re-create is easier/safer if IDs not persistent)
-        # But we want to preserve IDs if possible.
-        
-        # Get existing items
-        existing_items = {item.id: item for item in db_nutrition.food_items} if db_nutrition.food_items else {}
-        
-        # Domain items don't strictly match DB items by ID unless we enforce it.
-        # But domain `FoodItem` doesn't seem to have `id` in `to_domain`?
-        # Let's check `FoodItemMapper`.
-        
-        # In `MealMapper.py`, `FoodItemMapper.to_domain` does NOT map ID!
-        # Because `FoodItem` domain model might not have an ID?
-        # Let's check `src/domain/model/nutrition/nutrition.py`.
-        
-        # If FoodItem has no ID in domain, we can't reliably update. We must replace.
-        
+
+        # Sync food items: Delete all and re-create since food items are immutable in the domain.
+        # The domain FoodItem has an ID, but we don't maintain the mapping during updates,
+        # so replacing all items is simpler and ensures consistency.
+
         # Delete old items
         for item in db_nutrition.food_items:
             self.db.delete(item)
@@ -342,6 +428,6 @@ class MealRepository(MealRepositoryPort):
         # Add new items with order preserved
         if domain_nutrition.food_items:
             for idx, item in enumerate(domain_nutrition.food_items):
-                db_item = FoodItemMapper.to_persistence(item, nutrition_id=db_nutrition.id)
+                db_item = food_item_domain_to_orm(item, nutrition_id=db_nutrition.id)
                 db_item.order_index = idx
                 self.db.add(db_item)

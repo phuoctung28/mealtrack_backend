@@ -18,16 +18,16 @@ from .enums import (
     GoalEnum,
 )
 # Meal models
-from .meal.meal import Meal
-from .meal.meal_image import MealImage
+from .meal.meal import MealORM
+from .meal.meal_image import MealImageORM
 # Translation models (meals + food items)
-from .meal.meal_translation_model import MealTranslation
-from .meal.food_item_translation_model import FoodItemTranslation
+from .meal.meal_translation_model import MealTranslationORM
+from .meal.food_item_translation_model import FoodItemTranslationORM
 # Notification models
-from .notification import NotificationPreferences, NotificationSentLog, UserFcmToken
-from .nutrition.food_item import FoodItem
+from .notification import NotificationORM, NotificationPreferencesORM, UserFcmTokenORM
+from .nutrition.food_item import FoodItemORM
 # Nutrition models
-from .nutrition.nutrition import Nutrition
+from .nutrition.nutrition import NutritionORM
 from .subscription import Subscription
 from .user.profile import UserProfile
 # User models
@@ -40,10 +40,10 @@ from .feature_flag import FeatureFlag
 from .saved_suggestion import SavedSuggestionModel
 
 # Weekly budgets
-from .weekly.weekly_macro_budget import WeeklyMacroBudget
+from .weekly.weekly_macro_budget import WeeklyMacroBudgetORM
 
 # Cheat days
-from .cheat_day.cheat_day import CheatDay
+from .cheat_day.cheat_day import CheatDayORM
 
 # Food reference (evolved from barcode_products)
 from .food_reference_model import FoodReferenceModel
@@ -73,21 +73,21 @@ __all__ = [
     "Subscription",
     
     # Nutrition models
-    "Nutrition",
-    "FoodItem",
-    
+    "NutritionORM",
+    "FoodItemORM",
+
     # Meal models
-    "Meal",
-    "MealImage",
-    "MealTranslation",
-    "FoodItemTranslation",
+    "MealORM",
+    "MealImageORM",
+    "MealTranslationORM",
+    "FoodItemTranslationORM",
     
     # Test models
     
     # Notification models
-    "NotificationPreferences",
-    "NotificationSentLog",
-    "UserFcmToken",
+    "NotificationORM",
+    "NotificationPreferencesORM",
+    "UserFcmTokenORM",
 
     # Feature flags
     "FeatureFlag",
@@ -96,10 +96,10 @@ __all__ = [
     "SavedSuggestionModel",
 
     # Weekly budgets
-    "WeeklyMacroBudget",
+    "WeeklyMacroBudgetORM",
 
     # Cheat days
-    "CheatDay",
+    "CheatDayORM",
 
     # Food reference (evolved from barcode_products)
     "FoodReferenceModel",

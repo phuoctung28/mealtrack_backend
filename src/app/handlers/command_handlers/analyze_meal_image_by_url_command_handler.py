@@ -3,15 +3,15 @@ Handler for immediate meal image analysis using pre-uploaded image URL.
 """
 import logging
 import time
-from datetime import timedelta
-from typing import Optional
+from typing import Any, Optional
 from uuid import uuid4
 
 from src.app.commands.meal import AnalyzeMealImageByUrlCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
 from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_analysis.translation_service import (
     MealAnalysisTranslationService,
@@ -25,8 +25,7 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     utc_now,
 )
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.uow import UnitOfWork
+from src.infra.repositories.meal_repository import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -39,14 +38,16 @@ class AnalyzeMealImageByUrlHandler(
 
     def __init__(
         self,
+        uow: UnitOfWorkPort,
+        event_bus: Any,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
-        cache_service: Optional[CacheService] = None,
         meal_translation_service: Optional[MealAnalysisTranslationService] = None,
     ):
+        self.uow = uow
+        self.event_bus = event_bus
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
-        self.cache_service = cache_service
         self.meal_translation_service = meal_translation_service
 
     async def handle(self, command: AnalyzeMealImageByUrlCommand) -> Meal:
@@ -57,8 +58,8 @@ class AnalyzeMealImageByUrlHandler(
         try:
             image_id = command.public_id.split("/")[-1]
 
-            with UnitOfWork() as uow:
-                user_timezone = uow.users.get_user_timezone(command.user_id)
+            async with self.uow as uow:
+                user_timezone = await uow.users.get_user_timezone(command.user_id)
 
             if not user_timezone or not is_valid_timezone(user_timezone):
                 user_timezone = "UTC"
@@ -94,9 +95,9 @@ class AnalyzeMealImageByUrlHandler(
                 source="scanner",
             )
 
-            with UnitOfWork() as uow:
-                saved_meal = uow.meals.save(meal)
-                uow.commit()
+            async with self.uow as uow:
+                saved_meal = await uow.meals.save(meal)
+                await uow.commit()
 
             phase1_start = time.time()
             if command.user_description:
@@ -129,12 +130,12 @@ class AnalyzeMealImageByUrlHandler(
                     "Please take a photo of food and try again."
                 )
 
-            meal.dish_name = dish_name or "Unknown dish"
-            meal.emoji = self.gpt_parser.parse_emoji(vision_result)
-            meal.status = MealStatus.READY
-            meal.ready_at = utc_now()
-            meal.raw_gpt_json = self.gpt_parser.extract_raw_json(vision_result)
-            meal.nutrition = nutrition
+            meal = meal.mark_ready(
+                nutrition=nutrition,
+                dish_name=dish_name or "Unknown dish",
+                raw_gpt_json=self.gpt_parser.extract_raw_json(vision_result),
+                emoji=self.gpt_parser.parse_emoji(vision_result),
+            )
 
             phase2_elapsed = 0.0
             if (
@@ -159,9 +160,9 @@ class AnalyzeMealImageByUrlHandler(
                         )
                 phase2_elapsed = time.time() - phase2_start
 
-            with UnitOfWork() as uow:
-                final_meal = uow.meals.save(meal)
-                uow.commit()
+            async with self.uow as uow:
+                final_meal = await uow.meals.save(meal)
+                await uow.commit()
                 logger.info(
                     "[ANALYSIS-COMPLETE] meal=%s | total_elapsed=%.2fs | phase1=%.2fs | phase2=%.2fs | language=%s | status=%s",
                     final_meal.meal_id,
@@ -172,34 +173,20 @@ class AnalyzeMealImageByUrlHandler(
                     final_meal.status,
                 )
 
-            with UnitOfWork() as uow:
-                final_meal = uow.meals.find_by_id(meal.meal_id)
+            async with self.uow as uow:
+                final_meal = await uow.meals.find_by_id(meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS)
 
-            await self._invalidate_daily_macros(command.user_id, meal_date)
+            await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
+                aggregate_id=command.user_id,
+                user_id=command.user_id,
+                meal_date=meal_date,
+            ))
             return final_meal
         except Exception as e:
             logger.error("Failed to analyze meal by URL: %s", str(e))
             if "meal" in locals() and meal.meal_id:
-                meal.status = MealStatus.FAILED
-                meal.error_message = str(e)
-                with UnitOfWork() as uow:
-                    uow.meals.save(meal)
-                    uow.commit()
+                meal = meal.mark_failed(error_message=str(e))
+                async with self.uow as uow:
+                    await uow.meals.save(meal)
+                    await uow.commit()
             raise
-
-    async def _invalidate_daily_macros(self, user_id: str, target_date) -> None:
-        if not self.cache_service:
-            return
-
-        cache_key, _ = CacheKeys.daily_macros(user_id, target_date)
-        await self.cache_service.invalidate(cache_key)
-
-        week_start = target_date - timedelta(days=target_date.weekday())
-        weekly_key, _ = CacheKeys.weekly_budget(user_id, week_start)
-        await self.cache_service.invalidate(weekly_key)
-
-        # Invalidate streak and daily activities caches
-        streak_key, _ = CacheKeys.user_streak(user_id)
-        await self.cache_service.invalidate(streak_key)
-        activities_key, _ = CacheKeys.daily_activities(user_id, target_date)
-        await self.cache_service.invalidate(activities_key)

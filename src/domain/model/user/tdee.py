@@ -138,7 +138,7 @@ class TdeeResponse:
         result = {
             "bmr": self.bmr,
             "tdee": self.tdee,
-            "goal": self.goal,
+            "goal": self.goal.value,
             "macros": {
                 "calories": self.macros.calories,
                 "protein": self.macros.protein,

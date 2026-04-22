@@ -17,19 +17,16 @@ logger = logging.getLogger(__name__)
 _request_id: ContextVar[str] = ContextVar("request_id", default=None)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL_DIRECT = os.getenv("DATABASE_URL_DIRECT")
 
-if DATABASE_URL:
+if DATABASE_URL_DIRECT:
+    SQLALCHEMY_DATABASE_URL = DATABASE_URL_DIRECT
+    DATABASE_URL_SOURCE = "DATABASE_URL_DIRECT"
+elif DATABASE_URL:
     SQLALCHEMY_DATABASE_URL = DATABASE_URL
-    # Normalise protocol — psycopg2 driver required
-    if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
-        SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace(
-            "postgres://", "postgresql+psycopg2://", 1
-        )
-    elif SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
-        SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace(
-            "postgresql://", "postgresql+psycopg2://", 1
-        )
+    DATABASE_URL_SOURCE = "DATABASE_URL"
 else:
+    DATABASE_URL_SOURCE = "DB_*"
     db_user = os.getenv("DB_USER", "nutree")
     db_password = os.getenv("DB_PASSWORD", "")
     db_host = os.getenv("DB_HOST", "localhost")
@@ -39,11 +36,24 @@ else:
         f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
     )
 
+# Normalise protocol — psycopg2 driver required for both pooler and direct URLs.
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace(
+        "postgres://", "postgresql+psycopg2://", 1
+    )
+elif SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace(
+        "postgresql://", "postgresql+psycopg2://", 1
+    )
+
 # Detect Neon pooler endpoint (PgBouncer) vs direct connection.
 # Pooler URLs contain "-pooler" in the hostname.
 # When using pooler: SQLAlchemy should NOT maintain its own pool (NullPool)
 # because Neon's PgBouncer already handles connection reuse.
-IS_NEON_POOLER = "-pooler" in SQLALCHEMY_DATABASE_URL
+IS_NEON_POOLER = (
+    DATABASE_URL_SOURCE != "DATABASE_URL_DIRECT"
+    and "-pooler" in SQLALCHEMY_DATABASE_URL
+)
 
 # psycopg2 TCP keepalive — prevents idle connections from being silently dropped
 # by firewalls/load balancers between app and Neon.
@@ -73,7 +83,8 @@ if IS_NEON_POOLER:
     )
 
     logger.info(
-        "Database engine created with NullPool (Neon pooler detected)"
+        "Database engine created with NullPool (Neon pooler detected, source=%s)",
+        DATABASE_URL_SOURCE,
     )
 else:
     # Direct connection or local PostgreSQL — use a small QueuePool.
@@ -99,9 +110,10 @@ else:
     )
 
     logger.info(
-        "Database engine created with QueuePool -> "
+        "Database engine created with QueuePool -> source: %s, "
         "workers: %s, pool_size: %s, max_overflow: %s, "
         "total_capacity: %s, timeout: %ss, recycle: %ss",
+        DATABASE_URL_SOURCE,
         UVICORN_WORKERS,
         POOL_SIZE,
         POOL_MAX_OVERFLOW,
@@ -119,10 +131,7 @@ SessionLocal = sessionmaker(
 
 # Scoped session - uses context var for request isolation
 # This ensures each request gets its own session, even when using singleton services
-ScopedSession = scoped_session(
-    SessionLocal,
-    scopefunc=lambda: _request_id.get()
-)
+ScopedSession = scoped_session(SessionLocal, scopefunc=lambda: _request_id.get())
 
 
 class Base(AsyncAttrs, DeclarativeBase):

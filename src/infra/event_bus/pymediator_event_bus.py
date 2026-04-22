@@ -7,7 +7,7 @@ from typing import Any, Type, TypeVar, Dict, List
 
 from pymediator import Mediator as PyMediator, SingletonRegistry
 
-from src.app.events.base import Event, DomainEvent, EventHandler
+from src.domain.events.base import Event, DomainEvent, EventHandler
 from .event_bus import EventBus
 
 logger = logging.getLogger(__name__)

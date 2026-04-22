@@ -2,4 +2,6 @@
 Common domain model utilities and shared types.
 """
 
-__all__ = []
+from .enums import MealType
+
+__all__ = ["MealType"]

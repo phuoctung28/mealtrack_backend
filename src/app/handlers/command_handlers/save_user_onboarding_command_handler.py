@@ -12,8 +12,8 @@ from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.user import UserProfileDomainModel
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.uow import UnitOfWork
+from src.domain.ports.cache_port import CachePort
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, None]):
     """Handler for saving user onboarding data."""
 
-    def __init__(self, uow: Optional[UnitOfWorkPort] = None, cache_service: Optional[CacheService] = None):
+    def __init__(self, uow: Optional[UnitOfWorkPort] = None, cache_service: Optional[CachePort] = None):
         self.uow = uow
         self.cache_service = cache_service
 
@@ -39,17 +39,17 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
             raise ValidationException("Height must be greater than 0")
 
         # Use provided UoW or create default
-        uow = self.uow or UnitOfWork()
+        uow = self.uow or AsyncUnitOfWork()
 
-        with uow:
+        async with uow:
             try:
                 # Get existing user
-                user = uow.users.find_by_id(UUID(command.user_id))
+                user = await uow.users.find_by_id(UUID(command.user_id))
                 if not user:
                     raise ResourceNotFoundException(f"User {command.user_id} not found. User must be created before onboarding.")
 
                 # Get or create user profile
-                profile = uow.users.get_profile(UUID(command.user_id))
+                profile = await uow.users.get_profile(UUID(command.user_id))
 
                 if not profile:
                     # Create new profile
@@ -105,12 +105,12 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     profile.custom_fat_g = command.custom_fat_g
 
                 # Save profile
-                uow.users.update_profile(profile)
-                uow.commit()
+                await uow.users.update_profile(profile)
+                await uow.commit()
                 await self._invalidate_user_profile(command.user_id)
 
             except Exception as e:
-                uow.rollback()
+                await uow.rollback()
                 logger.error(f"Error saving onboarding data: {str(e)}")
                 raise
 

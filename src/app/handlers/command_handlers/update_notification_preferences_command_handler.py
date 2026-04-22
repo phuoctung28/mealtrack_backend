@@ -8,8 +8,8 @@ from src.app.commands.notification import UpdateNotificationPreferencesCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.notification import NotificationPreferences
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.uow import UnitOfWork
+from src.domain.ports.cache_port import CachePort
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class UpdateNotificationPreferencesCommandHandler(EventHandler[UpdateNotificationPreferencesCommand, Dict[str, Any]]):
     """Handler for updating notification preferences."""
 
-    def __init__(self, cache_service: Optional[CacheService] = None):
+    def __init__(self, cache_service: Optional[CachePort] = None):
         self.cache_service = cache_service
 
     def set_dependencies(self, **kwargs):
@@ -28,12 +28,12 @@ class UpdateNotificationPreferencesCommandHandler(EventHandler[UpdateNotificatio
     async def handle(self, command: UpdateNotificationPreferencesCommand) -> Dict[str, Any]:
         """Handle notification preferences update."""
         try:
-            with UnitOfWork() as uow:
-                existing_prefs = uow.notifications.find_notification_preferences_by_user(command.user_id)
+            async with AsyncUnitOfWork() as uow:
+                existing_prefs = await uow.notifications.find_notification_preferences_by_user(command.user_id)
 
                 if not existing_prefs:
                     existing_prefs = NotificationPreferences.create_default(command.user_id)
-                    saved_prefs = uow.notifications.save_notification_preferences(existing_prefs)
+                    saved_prefs = await uow.notifications.save_notification_preferences(existing_prefs)
                 else:
                     saved_prefs = existing_prefs
 
@@ -47,8 +47,8 @@ class UpdateNotificationPreferencesCommandHandler(EventHandler[UpdateNotificatio
                     language=command.language,
                 )
 
-                final_prefs = uow.notifications.save_notification_preferences(updated_prefs)
-                uow.commit()
+                final_prefs = await uow.notifications.save_notification_preferences(updated_prefs)
+                await uow.commit()
 
                 logger.info(f"Notification preferences updated for user {command.user_id}")
                 result = {"success": True, "preferences": final_prefs.to_dict()}

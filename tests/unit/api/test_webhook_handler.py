@@ -95,23 +95,27 @@ class TestWebhookHandler:
 
         # Set a valid webhook secret for the test
         with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
-            with patch('src.api.routes.v1.webhooks.UnitOfWork') as mock_uow_class:
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
                 mock_uow = MagicMock()
-                mock_uow_class.return_value.__enter__ = MagicMock(return_value=mock_uow)
-                mock_uow_class.return_value.__exit__ = MagicMock(return_value=False)
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.commit = AsyncMock()
+                mock_uow.rollback = AsyncMock()
+                mock_uow_class.return_value = mock_uow
                 
                 # Mock user exists
                 mock_user = MagicMock(id="user_123")
-                mock_query = MagicMock()
-                mock_uow.session.query.return_value = mock_query
-                mock_query.filter_by.return_value.first.return_value = mock_user
+                mock_uow.session.execute = AsyncMock()
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = mock_user
+                mock_uow.session.execute.return_value = mock_result
                 
-                # Mock no existing subscription
-                with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', return_value=None):
+                # Mock no existing subscription (async)
+                with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None):
                     result = await revenuecat_webhook(mock_request, authorization="test_secret")
                 
                 assert result == {"status": "success"}
-                mock_uow.commit.assert_called_once()
+                mock_uow.commit.assert_awaited_once()
     
     async def test_webhook_user_not_found(self, mock_request, webhook_event):
         """Test webhook returns 404 when user not found (so RevenueCat retries)."""
@@ -119,15 +123,19 @@ class TestWebhookHandler:
 
         # Set a valid webhook secret for the test
         with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
-            with patch('src.api.routes.v1.webhooks.UnitOfWork') as mock_uow_class:
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
                 mock_uow = MagicMock()
-                mock_uow_class.return_value.__enter__ = MagicMock(return_value=mock_uow)
-                mock_uow_class.return_value.__exit__ = MagicMock(return_value=False)
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.commit = AsyncMock()
+                mock_uow.rollback = AsyncMock()
+                mock_uow_class.return_value = mock_uow
 
                 # Mock user not found for all lookup strategies
-                mock_query = MagicMock()
-                mock_uow.session.query.return_value = mock_query
-                mock_query.filter_by.return_value.first.return_value = None
+                mock_uow.session.execute = AsyncMock()
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = None
+                mock_uow.session.execute.return_value = mock_result
 
                 with pytest.raises(HTTPException) as exc_info:
                     await revenuecat_webhook(mock_request, authorization="test_secret")
@@ -160,7 +168,7 @@ class TestWebhookHandler:
             assert exc_info.value.status_code == 401
             assert exc_info.value.detail == "Unauthorized"
     
-    def test_handle_purchase(self, mock_uow):
+    async def test_handle_purchase(self, mock_uow):
         """Test handling initial purchase event."""
         user = MagicMock(id="user_123")
         event = {
@@ -172,11 +180,11 @@ class TestWebhookHandler:
             "transaction_id": "123456",
             "environment": "PRODUCTION"
         }
-        
-        # Mock no existing subscription
-        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', return_value=None):
-            handle_purchase(mock_uow, user, event)
-        
+
+        # Mock no existing subscription (async)
+        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None):
+            await handle_purchase(mock_uow, user, event)
+
         # Verify subscription was added
         mock_uow.session.add.assert_called_once()
         added_subscription = mock_uow.session.add.call_args[0][0]
@@ -184,7 +192,7 @@ class TestWebhookHandler:
         assert added_subscription.product_id == "premium_monthly"
         assert added_subscription.status == "active"
     
-    def test_handle_renewal(self, mock_uow):
+    async def test_handle_renewal(self, mock_uow):
         """Test handling renewal event."""
         user = MagicMock(id="user_123")
         subscription = MagicMock()
@@ -192,47 +200,47 @@ class TestWebhookHandler:
             "app_user_id": "user_123",
             "expiration_at_ms": 1699478400000
         }
-        
-        # Mock existing subscription
-        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', return_value=subscription):
-            handle_renewal(mock_uow, user, event)
-        
+
+        # Mock existing subscription (async)
+        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=subscription):
+            await handle_renewal(mock_uow, user, event)
+
         assert subscription.status == "active"
         assert subscription.expires_at is not None
     
-    def test_handle_cancellation(self, mock_uow):
+    async def test_handle_cancellation(self, mock_uow):
         """Test handling cancellation event."""
         user = MagicMock(id="user_123")
         subscription = MagicMock()
         event = {"app_user_id": "user_123"}
-        
-        # Mock existing subscription
-        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', return_value=subscription):
-            handle_cancellation(mock_uow, user, event)
-        
+
+        # Mock existing subscription (async)
+        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=subscription):
+            await handle_cancellation(mock_uow, user, event)
+
         assert subscription.status == "cancelled"
         assert subscription.cancelled_at is not None
     
-    def test_handle_expiration(self, mock_uow):
+    async def test_handle_expiration(self, mock_uow):
         """Test handling expiration event."""
         user = MagicMock(id="user_123")
         subscription = MagicMock()
         event = {"app_user_id": "user_123"}
-        
-        # Mock existing subscription
-        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', return_value=subscription):
-            handle_expiration(mock_uow, user, event)
-        
+
+        # Mock existing subscription (async)
+        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=subscription):
+            await handle_expiration(mock_uow, user, event)
+
         assert subscription.status == "expired"
     
-    def test_handle_billing_issue(self, mock_uow):
+    async def test_handle_billing_issue(self, mock_uow):
         """Test handling billing issue event."""
         user = MagicMock(id="user_123")
         subscription = MagicMock()
         event = {"app_user_id": "user_123"}
-        
-        # Mock existing subscription
-        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', return_value=subscription):
-            handle_billing_issue(mock_uow, user, event)
-        
+
+        # Mock existing subscription (async)
+        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=subscription):
+            await handle_billing_issue(mock_uow, user, event)
+
         assert subscription.status == "billing_issue"
