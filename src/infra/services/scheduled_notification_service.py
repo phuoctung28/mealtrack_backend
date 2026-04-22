@@ -132,10 +132,11 @@ class ScheduledNotificationService:
 
     async def _check_midnight_precompute(self, now: datetime) -> None:
         """For each timezone currently at local midnight, trigger pre-compute."""
-        today = now.date()
         at_midnight = _timezones_at_midnight(self._distinct_timezones, now)
         for tz_name in at_midnight:
             try:
+                # Use the local date for this timezone, not the UTC date
+                today = now.astimezone(ZoneInfo(tz_name)).date()
                 await self._precompute.precompute_for_timezone(tz_name, today)
             except Exception as exc:
                 logger.error("Pre-compute failed for %s: %s", tz_name, exc)

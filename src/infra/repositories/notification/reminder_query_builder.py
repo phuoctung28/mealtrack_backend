@@ -127,13 +127,16 @@ class ReminderQueryBuilder:
 
     @staticmethod
     def find_due_notifications(db: Session, now: datetime) -> list:
-        """Return all pending notifications scheduled within the current 60-second window."""
+        """Return all pending notifications due on or before the end of the current 60-second window.
+
+        No lower bound: if the scheduler is delayed, past-due pending rows are
+        still picked up rather than silently dropped.
+        """
         window_end = now + timedelta(seconds=60)
         return (
             db.query(NotificationORM)
             .filter(
-                NotificationORM.scheduled_for_utc >= now,
-                NotificationORM.scheduled_for_utc < window_end,
+                NotificationORM.scheduled_for_utc <= window_end,
                 NotificationORM.status == 'pending',
             )
             .all()

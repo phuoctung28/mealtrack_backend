@@ -34,6 +34,7 @@ class DailyContextPrecomputeService:
     def __init__(self, redis_client: RedisClient):
         self._redis = redis_client
         self._tdee_service = TdeeCalculationService()
+        self._locks: dict[str, asyncio.Lock] = {}
 
     # ------------------------------------------------------------------
     # Key helpers
@@ -54,24 +55,35 @@ class DailyContextPrecomputeService:
 
     async def precompute_for_timezone(self, tz_name: str, today: date) -> None:
         """No-op if sentinel exists; otherwise runs DB sync work in thread pool."""
+        # Fast path — sentinel already set (common case once run each day)
         if await self.is_precomputed(today, tz_name):
             logger.debug("Pre-compute sentinel hit for %s on %s — skipping", tz_name, today)
             return
 
-        logger.info("Pre-computing notification context for %s on %s", tz_name, today)
-        redis_items = await asyncio.to_thread(self._precompute_db_sync, tz_name, today)
-
-        if redis_items:
-            ok = await self._redis.hset_batch(redis_items)
-            if not ok:
-                logger.error(
-                    "hset_batch failed for %s — sentinel will NOT be set, retry next tick",
-                    tz_name,
-                )
+        # Serialize concurrent callers for the same (date, tz) pair. Startup catch-up
+        # and the midnight loop tick can overlap; lock + recheck prevents double execution.
+        lock_key = f"{today.isoformat()}:{tz_name}"
+        if lock_key not in self._locks:
+            self._locks[lock_key] = asyncio.Lock()
+        async with self._locks[lock_key]:
+            if await self.is_precomputed(today, tz_name):
+                logger.debug("Pre-compute sentinel hit for %s on %s — skipping", tz_name, today)
                 return
 
-        await self._redis.set(self.sentinel_key(today, tz_name), "1", ttl=_SENTINEL_TTL)
-        logger.info("Pre-compute complete for %s: %d users", tz_name, len(redis_items))
+            logger.info("Pre-computing notification context for %s on %s", tz_name, today)
+            redis_items = await asyncio.to_thread(self._precompute_db_sync, tz_name, today)
+
+            if redis_items:
+                ok = await self._redis.hset_batch(redis_items)
+                if not ok:
+                    logger.error(
+                        "hset_batch failed for %s — sentinel will NOT be set, retry next tick",
+                        tz_name,
+                    )
+                    return
+
+            await self._redis.set(self.sentinel_key(today, tz_name), "1", ttl=_SENTINEL_TTL)
+            logger.info("Pre-compute complete for %s: %d users", tz_name, len(redis_items))
 
     # ------------------------------------------------------------------
     # Synchronous DB work (runs in thread pool via asyncio.to_thread)
