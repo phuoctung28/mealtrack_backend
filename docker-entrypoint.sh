@@ -8,6 +8,17 @@ log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
 }
 
+# Run database migrations (skip on Render where pre-deploy handles this)
+if [ "${RENDER:-}" != "true" ]; then
+    log "📦 Running database migrations..."
+    if python migrations/run.py; then
+        log "✅ Migrations completed successfully"
+    else
+        log "❌ Migrations failed!"
+        exit 1
+    fi
+fi
+
 # Render defaults web services to port 10000 if a custom port is not configured.
 # Railway injects PORT; local Docker defaults to 8000.
 if [ -z "${PORT:-}" ]; then

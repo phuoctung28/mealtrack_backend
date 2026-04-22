@@ -158,6 +158,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Database connection warming failed: %s", e)
 
+    # Initialize Redis cache (must happen BEFORE notification service)
+    try:
+        await initialize_cache_layer()
+    except Exception as exc:
+        logger.error("Failed to initialize cache layer: %s", exc)
+        if os.getenv("FAIL_ON_CACHE_ERROR", "false").lower() == "true":
+            raise
+
     # Initialize and start scheduled notification service
     scheduled_service = None
     try:
@@ -168,14 +176,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to start scheduled notification service: {e}")
         # Continue running the API even if notification service fails
-
-    # Initialize Redis cache
-    try:
-        await initialize_cache_layer()
-    except Exception as exc:
-        logger.error("Failed to initialize cache layer: %s", exc)
-        if os.getenv("FAIL_ON_CACHE_ERROR", "false").lower() == "true":
-            raise
 
     logger.info("MealTrack API started successfully!")
     yield
