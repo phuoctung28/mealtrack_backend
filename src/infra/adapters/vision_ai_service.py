@@ -30,8 +30,8 @@ class VisionAIService(VisionAIServicePort):
     def __init__(self):
         """Initialize the Gemini client using singleton manager."""
         self._model_manager = GeminiModelManager.get_instance()
-        # Use standard temperature=0.7 to share model instance across all services
-        self.model = self._model_manager.get_model()
+        # Disable thinking tokens and cap output to reduce latency
+        self.model = self._model_manager.get_model(thinking_budget=0, max_output_tokens=1024)
         self._optimized_prompt_enabled = (
             get_settings().MEAL_ANALYZE_OPTIMIZED_PROMPT_ENABLED
         )
