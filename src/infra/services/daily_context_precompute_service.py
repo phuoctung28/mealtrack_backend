@@ -7,11 +7,13 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.domain.services.meal_suggestion.suggestion_tdee_helpers import build_tdee_request
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.redis_client import RedisClient
+from src.infra.database.models.notification.notification import NotificationORM
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -60,7 +62,13 @@ class DailyContextPrecomputeService:
         redis_items = await asyncio.to_thread(self._precompute_db_sync, tz_name, today)
 
         if redis_items:
-            await self._redis.hset_batch(redis_items)
+            ok = await self._redis.hset_batch(redis_items)
+            if not ok:
+                logger.error(
+                    "hset_batch failed for %s — sentinel will NOT be set, retry next tick",
+                    tz_name,
+                )
+                return
 
         await self._redis.set(self.sentinel_key(today, tz_name), "1", ttl=_SENTINEL_TTL)
         logger.info("Pre-compute complete for %s: %d users", tz_name, len(redis_items))
@@ -156,13 +164,18 @@ class DailyContextPrecomputeService:
             ).astimezone(timezone.utc)
             day_end_utc = day_start_utc + timedelta(days=1)
 
-            # Calories derived: P*4 + C*4 + F*9 (approximate for notification display)
+            # Calories: P*4 + (C-fiber)*4 + fiber*2 + F*9 (canonical formula per CLAUDE.md)
             consumed_rows = session.execute(
                 text("""
                     SELECT
                         m.user_id,
                         COALESCE(
-                            SUM((n.protein * 4.0) + (n.carbs * 4.0) + (n.fat * 9.0)),
+                            SUM(
+                                (n.protein * 4.0)
+                                + (GREATEST(n.carbs - n.fiber, 0) * 4.0)
+                                + (n.fiber * 2.0)
+                                + (n.fat * 9.0)
+                            ),
                             0
                         ) AS consumed_calories
                     FROM meal m
@@ -215,15 +228,11 @@ class DailyContextPrecomputeService:
             )
 
             if notif_rows:
-                from sqlalchemy.dialects.postgresql import insert as pg_insert
-                from src.infra.database.models.notification.notification import NotificationORM
-
                 stmt = pg_insert(NotificationORM).values(notif_rows)
                 stmt = stmt.on_conflict_do_nothing(
                     index_elements=["user_id", "notification_type", "scheduled_date"],
                 )
                 session.execute(stmt)
-                session.commit()
 
             # ---- Build Redis items ----
             redis_items: list[tuple[str, dict, int]] = []
