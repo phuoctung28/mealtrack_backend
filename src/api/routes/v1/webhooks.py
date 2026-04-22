@@ -110,11 +110,11 @@ async def revenuecat_webhook(
                 await handle_expiration(uow, user, event)
 
             elif event_type == "BILLING_ISSUE":
-                await handle_billing_issue(uow, user, event)
-
+                handle_billing_issue(uow, user, event)
+                
             elif event_type == "PRODUCT_CHANGE":
-                await handle_product_change(uow, user, event)
-
+                handle_product_change(uow, user, event)
+            
             else:
                 logger.info(f"Unhandled event type: {event_type}")
 
@@ -131,13 +131,13 @@ async def revenuecat_webhook(
     return {"status": "success"}
 
 
-async def handle_purchase(uow, user, event):
+def handle_purchase(uow, user, event):
     """Handle initial purchase."""
     logger.info(f"Creating subscription for user {user.id}")
 
     # Check if subscription already exists
-    existing = await get_subscription_by_revenuecat_id(
-        uow,
+    existing = get_subscription_by_revenuecat_id(
+        uow, 
         event.get("app_user_id")
     )
 
@@ -145,7 +145,7 @@ async def handle_purchase(uow, user, event):
         logger.warning(f"Subscription already exists for {user.id}, updating instead")
         await handle_renewal(uow, user, event)
         return
-    
+
     # Create new subscription record
     subscription = Subscription(
         id=str(uuid.uuid4()),
@@ -159,9 +159,12 @@ async def handle_purchase(uow, user, event):
         store_transaction_id=event.get("transaction_id"),
         is_sandbox=event.get("environment") == "SANDBOX",
     )
-    
+
     uow.session.add(subscription)
     logger.info(f"User {user.id} purchased {subscription.product_id}")
+
+    # Credit referrer if this user has a pending referral conversion
+    _credit_referral_on_purchase(uow, str(user.id))
 
 
 async def handle_renewal(uow, user, event):
@@ -235,6 +238,43 @@ async def handle_product_change(uow, user, event):
         subscription.status = "active"
         subscription.updated_at = utc_now()
         logger.info(f"User {user.id} changed to {subscription.product_id}")
+
+
+def handle_refund(uow, user, event):
+    """Handle refund — revoke referral credit if conversion was previously credited."""
+    _revoke_referral_on_refund(uow, str(user.id))
+
+
+def _credit_referral_on_purchase(uow, user_id: str) -> None:
+    """Credit the referrer's wallet when a referred user completes their first purchase."""
+    from src.infra.repositories.referral_repository import ReferralRepository
+    repo = ReferralRepository(uow.session)
+    conversion = repo.get_conversion_by_referred_user(user_id)
+    if conversion and conversion.status == "pending":
+        conversion.status = "converted"
+        conversion.converted_at = utc_now()
+        repo.credit_wallet(conversion.referrer_user_id, conversion.commission_amount)
+        logger.info(
+            "Referral credited: referrer=%s amount=%d",
+            conversion.referrer_user_id,
+            conversion.commission_amount,
+        )
+
+
+def _revoke_referral_on_refund(uow, user_id: str) -> None:
+    """Revoke the referrer's wallet credit when a referred user is refunded."""
+    from src.infra.repositories.referral_repository import ReferralRepository
+    repo = ReferralRepository(uow.session)
+    conversion = repo.get_conversion_by_referred_user(user_id)
+    if conversion and conversion.status == "converted":
+        conversion.status = "revoked"
+        conversion.revoked_at = utc_now()
+        repo.revoke_from_wallet(conversion.referrer_user_id, conversion.commission_amount)
+        logger.info(
+            "Referral revoked: referrer=%s amount=%d",
+            conversion.referrer_user_id,
+            conversion.commission_amount,
+        )
 
 
 async def get_subscription_by_revenuecat_id(uow, revenuecat_id: str):

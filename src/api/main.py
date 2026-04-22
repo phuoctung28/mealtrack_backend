@@ -50,6 +50,7 @@ from src.api.routes.v1.monitoring import router as monitoring_router
 from src.api.routes.v1.notifications import router as notifications_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
+from src.api.routes.v1.referrals import router as referrals_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.infra.config.settings import settings
 from src.infra.database.config import engine
@@ -246,6 +247,7 @@ app.include_router(ingredients_router)
 app.include_router(tdee_router)
 app.include_router(saved_suggestions_router)
 app.include_router(cheat_days_router)
+app.include_router(referrals_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get("ENVIRONMENT") == "development":
