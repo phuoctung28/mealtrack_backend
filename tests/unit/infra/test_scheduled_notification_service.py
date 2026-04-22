@@ -82,3 +82,19 @@ def test_render_message_daily_summary_way_over():
     from src.infra.services.scheduled_notification_service import _render_message
     title, body = _render_message("daily_summary", 0, "male", "en", calories_consumed=2600, calorie_goal=2000)
     assert "600" in body
+
+
+@pytest.mark.asyncio
+async def test_startup_catchup_calls_precompute_for_each_timezone():
+    from src.infra.services.scheduled_notification_service import ScheduledNotificationService
+
+    mock_precompute = AsyncMock()
+    mock_precompute.precompute_for_timezone = AsyncMock()
+
+    svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
+    svc._precompute = mock_precompute
+    svc._distinct_timezones = ['UTC', 'Asia/Ho_Chi_Minh']
+
+    await svc._startup_catchup()
+
+    assert mock_precompute.precompute_for_timezone.call_count == 2

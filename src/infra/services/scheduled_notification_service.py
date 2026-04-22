@@ -76,6 +76,7 @@ class ScheduledNotificationService:
         self._running = True
         self._distinct_timezones = await asyncio.to_thread(self._fetch_distinct_timezones)
         self._tasks.append(asyncio.create_task(self._scheduling_loop()))
+        self._tasks.append(asyncio.create_task(self._startup_catchup()))
         logger.info("Scheduled notification service started (leader)")
 
     async def stop(self) -> None:
@@ -113,6 +114,19 @@ class ScheduledNotificationService:
             except Exception as exc:
                 logger.error("Scheduler loop error: %s", exc)
                 await asyncio.sleep(self.LOOP_ERROR_RETRY_SECONDS)
+
+    # ── Startup catch-up ──────────────────────────────────────────────────────
+
+    async def _startup_catchup(self) -> None:
+        """Pre-compute context for all timezones that missed today's midnight run."""
+        now = utc_now()
+        for tz_name in self._distinct_timezones:
+            try:
+                today = now.astimezone(ZoneInfo(tz_name)).date()
+                await self._precompute.precompute_for_timezone(tz_name, today)
+            except Exception as exc:
+                logger.error("Startup catch-up failed for %s: %s", tz_name, exc)
+        logger.info("Startup catch-up complete for %d timezones", len(self._distinct_timezones))
 
     # ── Phase 1: Midnight pre-compute ─────────────────────────────────────────
 
