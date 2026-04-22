@@ -24,7 +24,7 @@ from .meal.meal_image import MealImageORM
 from .meal.meal_translation_model import MealTranslationORM
 from .meal.food_item_translation_model import FoodItemTranslationORM
 # Notification models
-from .notification import NotificationPreferencesORM, NotificationSentLog, UserFcmTokenORM
+from .notification import NotificationORM, NotificationPreferencesORM, UserFcmTokenORM
 from .nutrition.food_item import FoodItemORM
 # Nutrition models
 from .nutrition.nutrition import NutritionORM
@@ -85,8 +85,8 @@ __all__ = [
     # Test models
     
     # Notification models
+    "NotificationORM",
     "NotificationPreferencesORM",
-    "NotificationSentLog",
     "UserFcmTokenORM",
 
     # Feature flags

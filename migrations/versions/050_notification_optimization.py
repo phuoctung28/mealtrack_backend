@@ -2,15 +2,21 @@
 
 Revision ID: 050
 Revises: 049
+Create Date: 2026-04-22 00:00:00.000000
+
 """
+from typing import Sequence, Union
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "050"
-down_revision = "049"
-branch_labels = None
-depends_on = None
+
+# revision identifiers, used by Alembic.
+revision: str = '050'
+down_revision: Union[str, None] = '049'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
@@ -51,6 +57,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Intentional data loss — job queue rows are ephemeral, no historical value
     op.drop_table('notifications')
     op.create_table(
         'notification_sent_log',
