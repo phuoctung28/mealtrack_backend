@@ -2,8 +2,11 @@ import json
 import uuid
 from typing import Dict, Any, List, Optional
 
+from pydantic import ValidationError
+
 from src.domain.model.nutrition import Macros
 from src.domain.model.nutrition import Nutrition, FoodItem
+from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
 from src.domain.services.emoji_validator import validate_emoji
 
 
@@ -17,6 +20,13 @@ class GPTResponseParser:
     
     This class implements US-2.2 - Parse the GPT response to structured food list and macros.
     """
+
+    MAX_FOOD_ITEMS = 8
+
+    def __init__(self, strict_schema_mode: Optional[bool] = None):
+        if strict_schema_mode is None:
+            strict_schema_mode = True
+        self._strict_schema_mode = bool(strict_schema_mode)
     
     def parse_to_nutrition(self, gpt_response: Dict[str, Any]) -> Nutrition:
         """
@@ -36,15 +46,19 @@ class GPTResponseParser:
             data = gpt_response.get("structured_data")
             if not data:
                 raise GPTResponseParsingError("No structured data found in GPT response")
-            
+
+            normalized_data = self._normalize_structured_data(data)
+            if self._strict_schema_mode:
+                VisionAnalyzeResponse.model_validate(normalized_data)
+
             # Parse food items
-            food_items = self._parse_food_items(data)
+            food_items = self._parse_food_items(normalized_data)
             
             # Get total macros
-            total_macros = self._calculate_total_macros(data, food_items)
+            total_macros = self._calculate_total_macros(normalized_data, food_items)
             
             # Get confidence score
-            confidence_score = float(data.get("confidence", 0.5))
+            confidence_score = float(normalized_data.get("confidence", 0.5))
             confidence_score = min(max(0.0, confidence_score), 1.0)
 
             # Create Nutrition object — calories derived from macros
@@ -57,44 +71,55 @@ class GPTResponseParser:
             
             return nutrition
             
-        except (KeyError, ValueError, TypeError) as e:
+        except (KeyError, ValueError, TypeError, ValidationError) as e:
             raise GPTResponseParsingError(f"Failed to parse GPT response: {str(e)}")
+
+    def _normalize_structured_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize structured data before validation."""
+        normalized_data = dict(data)
+        foods = normalized_data.get("foods")
+        if isinstance(foods, list) and len(foods) > self.MAX_FOOD_ITEMS:
+            normalized_data["foods"] = foods[: self.MAX_FOOD_ITEMS]
+        return normalized_data
     
     def _parse_food_items(self, data: Dict[str, Any]) -> List[FoodItem]:
         """Parse food items from GPT response data."""
         food_items = []
-        if "foods" in data:
-            for food_data in data["foods"]:
-                # Validate required fields
-                required_fields = ["name", "quantity", "unit", "macros"]
-                for field in required_fields:
-                    if field not in food_data:
-                        raise GPTResponseParsingError(f"Missing required field '{field}' in food item")
-                
-                # Create Macros object
-                macros_data = food_data["macros"]
-                macros = Macros(
-                    protein=float(macros_data.get("protein", 0)),
-                    carbs=float(macros_data.get("carbs", 0)),
-                    fat=float(macros_data.get("fat", 0)),
-                )
-                
-                # Create FoodItem with confidence score
-                confidence = 1.0  # Default confidence
-                if "confidence" in food_data:
-                    confidence = min(max(0.0, float(food_data["confidence"])), 1.0)
-                
-                food_item = FoodItem(
-                    id=uuid.uuid4(),  # Generate UUID for editing support
-                    name=food_data["name"],
-                    quantity=float(food_data["quantity"]),
-                    unit=food_data["unit"],
-                    macros=macros,
-                    micros=None,  # GPT doesn't provide micros yet
-                    confidence=confidence
-                )
-                
-                food_items.append(food_item)
+        foods = data.get("foods")
+        if not isinstance(foods, list):
+            return food_items
+
+        for food_data in foods[:self.MAX_FOOD_ITEMS]:
+            # Validate required fields
+            required_fields = ["name", "quantity", "unit", "macros"]
+            for field in required_fields:
+                if field not in food_data:
+                    raise GPTResponseParsingError(f"Missing required field '{field}' in food item")
+
+            # Create Macros object
+            macros_data = food_data["macros"]
+            macros = Macros(
+                protein=float(macros_data.get("protein", 0)),
+                carbs=float(macros_data.get("carbs", 0)),
+                fat=float(macros_data.get("fat", 0)),
+            )
+
+            # Create FoodItem with confidence score
+            confidence = 1.0  # Default confidence
+            if "confidence" in food_data:
+                confidence = min(max(0.0, float(food_data["confidence"])), 1.0)
+
+            food_item = FoodItem(
+                id=uuid.uuid4(),  # Generate UUID for editing support
+                name=food_data["name"],
+                quantity=float(food_data["quantity"]),
+                unit=food_data["unit"],
+                macros=macros,
+                micros=None,  # GPT doesn't provide micros yet
+                confidence=confidence
+            )
+
+            food_items.append(food_item)
         
         return food_items
     

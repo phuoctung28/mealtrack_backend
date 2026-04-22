@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
 
 # Override DATABASE_URL before importing the engine so it picks up the direct
@@ -50,11 +51,67 @@ def db_is_fresh() -> bool:
     return len(app_tables) == 0
 
 
+def get_current_alembic_revision() -> str | None:
+    """
+    Return current Alembic revision, if present.
+
+    A partially initialised database can contain application tables but no
+    `alembic_version` table/row (e.g. interrupted bootstrap). In that state,
+    running `alembic upgrade head` from base replays revision 001 and fails with
+    duplicate-table errors. We detect that and recover by stamping head.
+    """
+    inspector = inspect(engine)
+    if "alembic_version" not in inspector.get_table_names():
+        return None
+
+    with engine.begin() as conn:
+        return conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).scalar()
+
+
+def stamp_alembic_head(cfg: Config) -> None:
+    """
+    Persist Alembic head revision metadata directly in the database.
+
+    Some local setups can end up with application tables but no `alembic_version`.
+    Writing the version row ourselves makes bootstrap recovery deterministic.
+    """
+    head_revision = ScriptDirectory.from_config(cfg).get_current_head()
+    if not head_revision:
+        raise RuntimeError("Unable to resolve Alembic head revision.")
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS alembic_version (
+                    version_num VARCHAR(32) NOT NULL PRIMARY KEY
+                )
+                """
+            )
+        )
+        conn.execute(text("DELETE FROM alembic_version"))
+        conn.execute(
+            text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
+            {"revision": head_revision},
+        )
+
+
 def main():
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", migration_url)
+
     if not db_is_fresh():
+        revision = get_current_alembic_revision()
+        if revision is None:
+            print(
+                "Database has tables but no Alembic revision metadata; "
+                "stamping head to recover bootstrap state."
+            )
+            stamp_alembic_head(cfg)
+            print("Done.")
+            return
+
         print("Database already initialised — running alembic upgrade head for any new migrations.")
-        cfg = Config("alembic.ini")
-        cfg.set_main_option("sqlalchemy.url", migration_url)
         command.upgrade(cfg, "head")
         print("Done.")
         return
@@ -71,9 +128,7 @@ def main():
     print("  All tables created.")
 
     # 3. Stamp Alembic at head so future migrations apply correctly
-    cfg = Config("alembic.ini")
-    cfg.set_main_option("sqlalchemy.url", migration_url)
-    command.stamp(cfg, "head")
+    stamp_alembic_head(cfg)
     print("  Alembic stamped at head.")
 
     print("Database initialisation complete.")

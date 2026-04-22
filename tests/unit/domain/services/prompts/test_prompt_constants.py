@@ -5,6 +5,7 @@ from src.domain.services.prompts.prompt_constants import (
     get_fallback_meal_name,
     LANGUAGE_NAMES,
 )
+from src.domain.strategies.meal_analysis_strategy import BasicAnalysisStrategy
 
 
 class TestFallbackMealNames:
@@ -86,3 +87,28 @@ class TestFallbackMealNames:
         assert "vi" in LANGUAGE_NAMES
         assert LANGUAGE_NAMES["en"] == "English"
         assert LANGUAGE_NAMES["vi"] == "Vietnamese"
+
+
+class TestBasicAnalysisPromptConstraints:
+    """Test prompt constraints for basic analysis strategy."""
+
+    def test_basic_analysis_prompt_requires_json_only_and_compact_fields(self):
+        """Ensure JSON-only output and compact field constraints are explicit."""
+        prompt = BasicAnalysisStrategy().get_analysis_prompt().lower()
+
+        assert "only valid json" in prompt
+        assert "no commentary text" in prompt
+        assert "max 8 food items" in prompt
+        assert "keep dish_name concise" in prompt
+
+    def test_basic_analysis_prompt_is_compact(self):
+        """Ensure the basic analysis prompt is materially compressed."""
+        prompt = BasicAnalysisStrategy().get_analysis_prompt()
+
+        assert len(prompt) <= 2600
+
+    def test_basic_analysis_strategy_can_disable_optimized_prompt(self):
+        prompt = BasicAnalysisStrategy(optimized_prompt_enabled=False).get_analysis_prompt()
+
+        assert "ONLY valid JSON with no commentary text" not in prompt
+        assert "always return well-formed json" in prompt.lower()
