@@ -48,7 +48,9 @@ class GPTFoodItem(BaseModel):
 class GPTAnalysisResponse(BaseModel):
     """Complete GPT analysis response structure."""
     dish_name: str = Field(..., description="Overall dish name or food list")
-    foods: List[GPTFoodItem] = Field(..., min_items=1, description="List of analyzed foods")
+    foods: List[GPTFoodItem] = Field(
+        ..., min_items=1, max_items=8, description="List of analyzed foods"
+    )
     total_calories: float = Field(..., ge=0, description="Total calories")
     confidence: float = Field(..., ge=0, le=1, description="Overall confidence")
     

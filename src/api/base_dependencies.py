@@ -23,7 +23,7 @@ from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.cache.cache_service import CacheService
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
-from src.infra.config.settings import settings
+from src.infra.config.settings import get_settings, settings
 from src.infra.database.config import get_db as get_db_from_config
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
@@ -144,7 +144,9 @@ def get_gpt_parser() -> GPTResponseParser:
     Returns:
         GPTResponseParser: The parser instance
     """
-    return GPTResponseParser()
+    return GPTResponseParser(
+        strict_schema_mode=get_settings().MEAL_ANALYZE_STRICT_SCHEMA_MODE
+    )
 
 
 # Food Cache Service

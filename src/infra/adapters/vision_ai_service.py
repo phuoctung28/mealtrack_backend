@@ -14,6 +14,7 @@ from src.domain.strategies.meal_analysis_strategy import (
     MealAnalysisStrategy,
     AnalysisStrategyFactory
 )
+from src.infra.config.settings import get_settings
 from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
 # Load environment variables
@@ -33,6 +34,9 @@ class VisionAIService(VisionAIServicePort):
         self._model_manager = GeminiModelManager.get_instance()
         # Disable thinking tokens and cap output to reduce latency
         self.model = self._model_manager.get_model(thinking_budget=0, max_output_tokens=2048)
+        self._optimized_prompt_enabled = (
+            get_settings().MEAL_ANALYZE_OPTIMIZED_PROMPT_ENABLED
+        )
 
     def _compress_image(self, image_bytes: bytes) -> bytes:
         try:
@@ -195,14 +199,18 @@ class VisionAIService(VisionAIServicePort):
         Raises:
             RuntimeError: If analysis fails
         """
-        strategy = AnalysisStrategyFactory.create_basic_strategy()
+        strategy = AnalysisStrategyFactory.create_basic_strategy(
+            optimized_prompt_enabled=self._optimized_prompt_enabled
+        )
         return self.analyze_with_strategy(image_bytes, strategy)
 
     def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
         """
         Analyze a food image from a public URL.
         """
-        strategy = AnalysisStrategyFactory.create_basic_strategy()
+        strategy = AnalysisStrategyFactory.create_basic_strategy(
+            optimized_prompt_enabled=self._optimized_prompt_enabled
+        )
         return self.analyze_by_url_with_strategy(image_url, strategy)
 
     def analyze_with_portion_context(
