@@ -32,14 +32,14 @@ class VisionAIService(VisionAIServicePort):
         """Initialize the Gemini client using singleton manager."""
         self._model_manager = GeminiModelManager.get_instance()
         # Disable thinking tokens and cap output to reduce latency
-        self.model = self._model_manager.get_model(thinking_budget=0, max_output_tokens=1024)
+        self.model = self._model_manager.get_model(thinking_budget=0, max_output_tokens=2048)
 
     def _compress_image(self, image_bytes: bytes) -> bytes:
         try:
             img = Image.open(BytesIO(image_bytes))
             w, h = img.size
 
-            if max(w, h) <= 768 and len(image_bytes) < 200 * 1024:  # already small enough, skip compression
+            if img.format == "JPEG" and max(w, h) <= 768 and len(image_bytes) < 200 * 1024:  # already small JPEG
                 return image_bytes
 
             if max(w, h) > 768:
