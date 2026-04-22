@@ -1,5 +1,5 @@
 """Reminder query builder for finding users due for notifications."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from src.domain.utils.timezone_utils import (
     DEFAULT_TIMEZONE
 )
 from src.infra.database.models.notification import NotificationPreferencesORM as DBNotificationPreferences
+from src.infra.database.models.notification.notification import NotificationORM
 from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM as DBUserFcmToken
 from src.infra.database.models.user.user import User
 
@@ -118,3 +119,20 @@ class ReminderQueryBuilder:
                 matching_users.append(user_id)
 
         return matching_users
+
+    @staticmethod
+    def find_due_notifications(db: Session, now: datetime) -> list:
+        """Return all pending notifications due on or before the end of the current 60-second window.
+
+        No lower bound: if the scheduler is delayed, past-due pending rows are
+        still picked up rather than silently dropped.
+        """
+        window_end = now + timedelta(seconds=60)
+        return (
+            db.query(NotificationORM)
+            .filter(
+                NotificationORM.scheduled_for_utc <= window_end,
+                NotificationORM.status == 'pending',
+            )
+            .all()
+        )

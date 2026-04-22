@@ -294,15 +294,7 @@ def get_notification_service(
     Returns:
         NotificationService: The notification service
     """
-    from src.infra.adapters.notification_sent_log_dedup_store import (
-        NotificationSentLogDedupStore,
-    )
-
-    return NotificationService(
-        notification_repository,
-        firebase_service,
-        dedup_store=NotificationSentLogDedupStore(),
-    )
+    return NotificationService(notification_repository, firebase_service)
 
 
 # Scheduled Notification Service (singleton pattern - create once and reuse)
@@ -328,21 +320,10 @@ def initialize_scheduled_notification_service() -> ScheduledNotificationService:
     """
     global _scheduled_notification_service
     if _scheduled_notification_service is None:
-        # Create instances without using Depends (we're not in request context)
-        # Let NotificationRepository manage its own sessions to avoid ScopedSession here
-        notification_repository = NotificationRepository()
         firebase_service = get_firebase_service()
-        from src.infra.adapters.notification_sent_log_dedup_store import (
-            NotificationSentLogDedupStore,
-        )
-        notification_service = NotificationService(
-            notification_repository,
-            firebase_service,
-            dedup_store=NotificationSentLogDedupStore(),
-        )
         _scheduled_notification_service = ScheduledNotificationService(
-            notification_repository, 
-            notification_service
+            firebase_service,
+            _redis_client,
         )
     return _scheduled_notification_service
 
