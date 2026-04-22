@@ -1,12 +1,6 @@
-"""
-Notification service for sending push notifications.
-
-Includes deduplication guard so multiple workers (uvicorn --workers N)
-don't send the same scheduled notification twice in the same minute.
-"""
+"""Notification service for sending push notifications."""
 
 import logging
-from datetime import datetime
 from typing import Dict, List, Optional, Any
 
 from src.domain.model.notification import (
@@ -15,9 +9,7 @@ from src.domain.model.notification import (
     NotificationPreferences,
 )
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
-from src.domain.ports.notification_dedup_port import NotificationDedupPort
 from src.domain.services.notification_messages import get_messages
-from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +31,9 @@ class NotificationService:
         self,
         notification_repository: NotificationRepositoryPort,
         firebase_service,
-        dedup_store: NotificationDedupPort | None = None,
     ):
         self.notification_repository = notification_repository
         self.firebase_service = firebase_service
-        self._dedup_store = dedup_store
 
     async def send_notification(
         self,
@@ -91,14 +81,7 @@ class NotificationService:
                 )
                 return {"success": False, "reason": "disabled"}
 
-            # 3. Dedup guard — prevent duplicate sends from multiple workers
-            if self._is_already_sent(user_id, notification_type):
-                logger.info(
-                    f"Skipping duplicate {notification_type} for user {user_id}"
-                )
-                return {"success": True, "reason": "deduplicated"}
-
-            # 4. Send notification via Firebase
+            # 3. Send notification via Firebase
             fcm_tokens = [token.fcm_token for token in tokens]
             for t in tokens:
                 logger.info(
@@ -282,34 +265,6 @@ class NotificationService:
             logger.info(
                 f"Deactivated {deactivated_count} invalid FCM tokens ({context})"
             )
-
-    def _minute_key(self) -> str:
-        """Current UTC minute as string key for dedup window."""
-        return utc_now().strftime("%Y%m%d%H%M")
-
-    def _is_already_sent(
-        self, user_id: str, notification_type: NotificationType
-    ) -> bool:
-        """Atomically check-and-mark a notification as sent.
-
-        Uses INSERT with duplicate-key ignore so only the first worker
-        to reach this point records the row; all others get False.
-        """
-        minute_key = self._minute_key()
-        if self._dedup_store is None:
-            # If no store is wired (e.g., tests), fail-open: don't block sends.
-            return False
-        return self._dedup_store.try_claim_sent(
-            user_id=user_id,
-            notification_type=str(notification_type),
-            minute_key=minute_key,
-        )
-
-    def cleanup_old_sent_logs(self, older_than_hours: int = 24) -> int:
-        """Delete sent-log rows older than N hours to prevent table bloat."""
-        if self._dedup_store is None:
-            return 0
-        return self._dedup_store.cleanup_old_sent_logs(older_than_hours=older_than_hours)
 
     def get_notification_preferences(
         self, user_id: str

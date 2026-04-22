@@ -80,5 +80,7 @@ plans/
 # Local profiling artifacts
 profile*.txt
 profile*.svg
+
+docs/superpowers/
 # Git worktrees
 .worktrees/
