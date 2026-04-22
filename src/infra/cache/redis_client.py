@@ -126,3 +126,46 @@ class RedisClient:
             logger.warning("Redis EXISTS error for key %s: %s", key, exc)
             return False
 
+    async def hset_with_ttl(self, key: str, mapping: dict, ttl: int) -> bool:
+        """Set a hash and its TTL in a single pipeline round-trip."""
+        if not self.client:
+            return False
+        try:
+            async with self.client.pipeline(transaction=False) as pipe:
+                pipe.hset(key, mapping=mapping)
+                pipe.expire(key, ttl)
+                await pipe.execute()
+            return True
+        except RedisError as exc:
+            logger.warning("Redis HSET pipeline error for key %s: %s", key, exc)
+            return False
+
+    async def hset_batch(self, items: list[tuple[str, dict, int]]) -> bool:
+        """Set multiple hashes with TTL in a single pipeline. items: [(key, mapping, ttl)]."""
+        if not self.client or not items:
+            return True
+        try:
+            async with self.client.pipeline(transaction=False) as pipe:
+                for key, mapping, ttl in items:
+                    pipe.hset(key, mapping=mapping)
+                    pipe.expire(key, ttl)
+                await pipe.execute()
+            return True
+        except RedisError as exc:
+            logger.warning("Redis batch HSET pipeline error: %s", exc)
+            return False
+
+    async def hgetall_batch(self, keys: list[str]) -> list[dict]:
+        """Fetch all fields of multiple hashes in a single pipeline. Returns list aligned to keys."""
+        if not self.client or not keys:
+            return [{} for _ in keys]
+        try:
+            async with self.client.pipeline(transaction=False) as pipe:
+                for key in keys:
+                    pipe.hgetall(key)
+                results = await pipe.execute()
+            return [r or {} for r in results]
+        except RedisError as exc:
+            logger.warning("Redis batch HGETALL pipeline error: %s", exc)
+            return [{} for _ in keys]
+
