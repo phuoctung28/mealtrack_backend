@@ -17,7 +17,7 @@ def test_vision_service_disables_thinking_and_caps_output():
 
         mock_cls.get_instance.assert_called_once()
         mock_mgr.get_model.assert_called_once_with(
-            thinking_budget=0, max_output_tokens=1024
+            thinking_budget=0, max_output_tokens=2048
         )
 
 
@@ -45,6 +45,7 @@ def test_compress_image_resizes_large_image():
 
 def test_compress_image_skips_small_image():
     service = _make_service()
+    # Fast-path only applies to small JPEGs — PNG/WebP always get converted
     small_bytes = _make_jpeg(400, 300, quality=50)
     assert len(small_bytes) < 200 * 1024  # confirm precondition
 
