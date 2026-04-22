@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Dict, List
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from src.domain.model.notification import NotificationType
 from src.domain.services.notification_messages import get_messages
@@ -41,7 +41,7 @@ def _timezones_at_midnight(tz_names: list[str], now_utc: datetime) -> list[str]:
             local = now_utc.astimezone(ZoneInfo(tz_name))
             if local.hour == 0 and local.minute == 0:
                 result.append(tz_name)
-        except (ZoneInfoNotFoundError, Exception):
+        except Exception:
             pass
     return result
 
@@ -198,13 +198,15 @@ class ScheduledNotificationService:
         with UnitOfWork() as uow:
             if sent_ids:
                 uow.session.execute(
-                    text("UPDATE notifications SET status = 'sent' WHERE id IN :ids"),
-                    {"ids": tuple(sent_ids)},
+                    text("UPDATE notifications SET status = 'sent' WHERE id IN :ids")
+                    .bindparams(bindparam("ids", expanding=True)),
+                    {"ids": sent_ids},
                 )
             if failed_ids:
                 uow.session.execute(
-                    text("UPDATE notifications SET status = 'failed' WHERE id IN :ids"),
-                    {"ids": tuple(failed_ids)},
+                    text("UPDATE notifications SET status = 'failed' WHERE id IN :ids")
+                    .bindparams(bindparam("ids", expanding=True)),
+                    {"ids": failed_ids},
                 )
 
     def _cleanup_expired_notifications(self) -> None:
@@ -225,8 +227,9 @@ class ScheduledNotificationService:
     def _deactivate_tokens(self, tokens: list[str]) -> None:
         with UnitOfWork() as uow:
             uow.session.execute(
-                text("UPDATE user_fcm_tokens SET is_active = false WHERE fcm_token IN :tokens"),
-                {"tokens": tuple(tokens)},
+                text("UPDATE user_fcm_tokens SET is_active = false WHERE fcm_token IN :tokens")
+                .bindparams(bindparam("tokens", expanding=True)),
+                {"tokens": tokens},
             )
 
     async def send_test_notification(self, user_id: str) -> Dict:
@@ -234,11 +237,12 @@ class ScheduledNotificationService:
         tokens = await asyncio.to_thread(self._get_tokens_for_user, user_id)
         if not tokens:
             return {"success": False, "reason": "no_tokens"}
-        return self._firebase.send_multicast(
-            tokens=tokens,
-            title="Test Notification",
-            body="This is a test notification from the backend",
-            notification_type=str(NotificationType.DAILY_SUMMARY),
+        return await asyncio.to_thread(
+            self._firebase.send_multicast,
+            tokens,
+            "Test Notification",
+            "This is a test notification from the backend",
+            str(NotificationType.DAILY_SUMMARY),
         )
 
     def _get_tokens_for_user(self, user_id: str) -> list[str]:
