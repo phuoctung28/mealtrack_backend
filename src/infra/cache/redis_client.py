@@ -142,7 +142,9 @@ class RedisClient:
 
     async def hset_batch(self, items: list[tuple[str, dict, int]]) -> bool:
         """Set multiple hashes with TTL in a single pipeline. items: [(key, mapping, ttl)]."""
-        if not self.client or not items:
+        if not self.client:
+            return False
+        if not items:
             return True
         try:
             async with self.client.pipeline(transaction=False) as pipe:
