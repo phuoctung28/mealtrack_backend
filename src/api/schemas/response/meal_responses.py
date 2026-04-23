@@ -215,14 +215,3 @@ class ManualMealCreationResponse(BaseModel):
     model_config = ConfigDict(
         json_encoders={datetime: _serialize_datetime_utc}
     )
-
-
-class UploadSignatureResponse(BaseModel):
-    """Response DTO for Cloudinary signed upload parameters."""
-
-    timestamp: int = Field(..., description="Unix timestamp used for signature")
-    signature: str = Field(..., description="Cloudinary request signature")
-    api_key: str = Field(..., description="Cloudinary API key")
-    cloud_name: str = Field(..., description="Cloudinary cloud name")
-    public_id: str = Field(..., description="Cloudinary public ID")
-    folder: str = Field(..., description="Cloudinary folder")
