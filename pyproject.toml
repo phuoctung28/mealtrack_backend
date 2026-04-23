@@ -19,6 +19,13 @@ pythonpath = ["."]
 omit = [
     # Development and testing utilities
     "src/api/middleware/dev_auth_bypass.py",
+    # No-logic DTOs / models (exclude from coverage gate)
+    "src/api/schemas/*",
+    "src/api/schemas/**",
+    "src/domain/model/*",
+    "src/domain/model/**",
+    "src/infra/database/models/*",
+    "src/infra/database/models/**",
     # Database infrastructure
     "src/infra/database/migration_manager.py",
     "src/infra/database/uow.py",

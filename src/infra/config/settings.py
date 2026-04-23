@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     FIREBASE_SERVICE_ACCOUNT_PATH: str | None = Field(default=None)
 
     # External APIs & integrations
+    DEEPL_API_KEY: str | None = Field(default=None, description="DeepL API key for meal translation")
     GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
     FATSECRET_CLIENT_ID: str | None = Field(default=None, description="FatSecret OAuth 2.0 client ID")
@@ -164,7 +165,6 @@ class Settings(BaseSettings):
     MEAL_ANALYZE_RETRY_TIMEOUT_SECONDS: float = Field(default=1.5)
     MEAL_ANALYZE_MAX_ATTEMPTS: int = Field(default=2)
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(default=700)
-    MEAL_ANALYZE_TRANSLATION_IN_CRITICAL_PATH: bool = Field(default=False)
     MEAL_ANALYZE_RUNTIME_POLICY_ENABLED: bool = Field(default=True)
     MEAL_ANALYZE_CANARY_PERCENT: int = Field(default=100, ge=0, le=100)
     MEAL_ANALYZE_PARALLEL_UPLOAD_ENABLED: bool = Field(default=False)

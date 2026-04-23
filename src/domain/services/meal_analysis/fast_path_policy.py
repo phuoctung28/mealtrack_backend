@@ -21,7 +21,6 @@ class MealAnalyzeFastPathPolicy:
     retry_timeout_seconds: float = 1.5
     max_attempts: int = 2
     max_output_tokens: int = 700
-    translation_in_critical_path: bool = False
     runtime_policy_enabled: bool = True
     canary_percent: int = 100
     parallel_upload_enabled: bool = False
@@ -34,7 +33,6 @@ class MealAnalyzeFastPathPolicy:
             retry_timeout_seconds=10.0,
             max_attempts=1,
             max_output_tokens=1024,
-            translation_in_critical_path=True,
             runtime_policy_enabled=False,
             canary_percent=0,
             parallel_upload_enabled=False,
@@ -55,7 +53,6 @@ class MealAnalyzeFastPathPolicy:
                 retry_timeout_seconds=legacy.retry_timeout_seconds,
                 max_attempts=legacy.max_attempts,
                 max_output_tokens=legacy.max_output_tokens,
-                translation_in_critical_path=legacy.translation_in_critical_path,
                 runtime_policy_enabled=False,
                 canary_percent=settings.MEAL_ANALYZE_CANARY_PERCENT,
                 parallel_upload_enabled=legacy.parallel_upload_enabled,
@@ -66,7 +63,6 @@ class MealAnalyzeFastPathPolicy:
             retry_timeout_seconds=settings.MEAL_ANALYZE_RETRY_TIMEOUT_SECONDS,
             max_attempts=settings.MEAL_ANALYZE_MAX_ATTEMPTS,
             max_output_tokens=settings.MEAL_ANALYZE_MAX_OUTPUT_TOKENS,
-            translation_in_critical_path=settings.MEAL_ANALYZE_TRANSLATION_IN_CRITICAL_PATH,
             runtime_policy_enabled=settings.MEAL_ANALYZE_RUNTIME_POLICY_ENABLED,
             canary_percent=settings.MEAL_ANALYZE_CANARY_PERCENT,
             parallel_upload_enabled=settings.MEAL_ANALYZE_PARALLEL_UPLOAD_ENABLED,
