@@ -13,8 +13,8 @@ from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_analysis.translation_service import (
-    MealAnalysisTranslationService,
+from src.domain.services.meal_analysis.deepl_meal_translation_service import (
+    DeepLMealTranslationService,
 )
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
@@ -42,7 +42,7 @@ class AnalyzeMealImageByUrlHandler(
         event_bus: Any,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
-        meal_translation_service: Optional[MealAnalysisTranslationService] = None,
+        meal_translation_service: Optional[DeepLMealTranslationService] = None,
     ):
         self.uow = uow
         self.event_bus = event_bus

@@ -18,7 +18,7 @@ from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_analysis.fast_path_policy import MealAnalyzeFastPathPolicy
-from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
+from src.domain.services.meal_analysis.deepl_meal_translation_service import DeepLMealTranslationService
 from src.domain.services.meal_type_determination_service import determine_meal_type_from_timestamp
 from src.domain.utils.timezone_utils import utc_now, get_zone_info, is_valid_timezone, noon_utc_for_date
 from src.infra.repositories.meal_repository import MealProjection
@@ -38,7 +38,7 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         image_store: ImageStorePort = None,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
-        meal_translation_service: Optional[MealAnalysisTranslationService] = None,
+        meal_translation_service: Optional[DeepLMealTranslationService] = None,
         fast_path_policy: Optional[MealAnalyzeFastPathPolicy] = None,
     ):
         self.uow = uow

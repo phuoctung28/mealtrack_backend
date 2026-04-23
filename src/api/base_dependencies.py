@@ -409,6 +409,7 @@ def get_suggestion_orchestration_service():
         uow_factory=AsyncUnitOfWork,
         meal_names_schema_class=MealNamesResponse,
         discovery_meals_schema_class=DiscoveryMealsResponse,
+        translation_service=get_deepl_suggestion_translation_service(),
     )
 
 
