@@ -17,6 +17,7 @@ from src.domain.services.meal_suggestion.parallel_recipe_generator import Parall
 from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
     get_adjusted_daily_target,
 )
+from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
 
@@ -40,6 +41,7 @@ class SuggestionOrchestrationService:
         portion_service: PortionCalculationService = None,
         profile_provider: Optional[Callable[[str], Any]] = None,
         uow_factory: Optional[Callable[[], Any]] = None,
+        translation_service: Optional[TranslationService] = None,
     ):
         self._generation = generation_service
         self._repo = suggestion_repo
@@ -50,6 +52,7 @@ class SuggestionOrchestrationService:
 
         self._recipe_generator = ParallelRecipeGenerator(
             generation_service=generation_service,
+            translation_service=translation_service or TranslationService(generation_service),
             macro_validator=MacroValidationService(),
             nutrition_lookup=nutrition_lookup,
             meal_names_schema_class=meal_names_schema_class,
