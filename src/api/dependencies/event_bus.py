@@ -285,7 +285,7 @@ def get_configured_event_bus() -> EventBus:
         get_fat_secret_service_instance,
         get_cache_service,
         get_suggestion_orchestration_service,
-        get_meal_translation_service,
+        get_deepl_meal_translation_service,
     )
 
     image_store = get_image_store()
@@ -304,7 +304,7 @@ def get_configured_event_bus() -> EventBus:
 
     # Register meal command handlers
     # Handlers receive AsyncUnitOfWork (concrete) and event_bus at the composition root
-    meal_translation_service = get_meal_translation_service()
+    meal_translation_service = get_deepl_meal_translation_service()
     event_bus.register_handler(
         UploadMealImageImmediatelyCommand,
         UploadMealImageImmediatelyHandler(
