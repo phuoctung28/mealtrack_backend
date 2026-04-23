@@ -76,7 +76,6 @@ def test_get_configured_event_bus_is_singleton(monkeypatch):
     monkeypatch.setattr(deps, "get_food_mapping_service", lambda: object())
     monkeypatch.setattr(deps, "get_fat_secret_service_instance", lambda: object())
     monkeypatch.setattr(deps, "get_cache_service", lambda: object())
-    monkeypatch.setattr(deps, "get_ai_chat_service", lambda: object())
     monkeypatch.setattr(deps, "get_suggestion_orchestration_service", lambda: object())
     monkeypatch.setattr(deps, "get_deepl_meal_translation_service", lambda: object())
 
