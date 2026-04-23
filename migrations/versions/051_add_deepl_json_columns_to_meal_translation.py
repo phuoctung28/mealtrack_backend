@@ -3,15 +3,15 @@
 Stores translated instructions and ingredients directly on the translation row,
 enabling the DeepL cache check without joining food_item_translation.
 
-Revision ID: 046
-Revises: 045
+Revision ID: 051
+Revises: 050
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers
-revision = '046'
-down_revision = '045'
+revision = '051'
+down_revision = '050'
 branch_labels = None
 depends_on = None
 
