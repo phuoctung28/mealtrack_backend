@@ -6,19 +6,20 @@ TDEE helpers: suggestion_tdee_helpers.py
 """
 import logging
 import uuid
-from typing import List, Optional, Tuple, Callable, Any
+from typing import List, Optional, Tuple, Callable, Any, AsyncGenerator, Dict
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.ports.meal_suggestion_repository_port import MealSuggestionRepositoryPort
 from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
 from src.domain.services.meal_suggestion.nutrition_lookup_service import NutritionLookupService
+from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
+    DeepLSuggestionTranslationService,
+)
 from src.domain.services.meal_suggestion.parallel_recipe_generator import ParallelRecipeGenerator
 from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
     get_adjusted_daily_target,
-    calculate_daily_tdee,
 )
-from src.domain.services.meal_suggestion.translation_service import TranslationService
 from src.domain.services.portion_calculation_service import PortionCalculationService
 from src.domain.services.tdee_service import TdeeCalculationService
 
@@ -42,6 +43,7 @@ class SuggestionOrchestrationService:
         portion_service: PortionCalculationService = None,
         profile_provider: Optional[Callable[[str], Any]] = None,
         uow_factory: Optional[Callable[[], Any]] = None,
+        translation_service: Optional[DeepLSuggestionTranslationService] = None,
     ):
         self._generation = generation_service
         self._repo = suggestion_repo
@@ -52,7 +54,7 @@ class SuggestionOrchestrationService:
 
         self._recipe_generator = ParallelRecipeGenerator(
             generation_service=generation_service,
-            translation_service=TranslationService(generation_service),
+            translation_service=translation_service,
             macro_validator=MacroValidationService(),
             nutrition_lookup=nutrition_lookup,
             meal_names_schema_class=meal_names_schema_class,
@@ -78,41 +80,139 @@ class SuggestionOrchestrationService:
         suggestion_count: int = 3,
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """Generate 3 suggestions, excluding meals shown in existing session if provided."""
-        is_existing_session = False
-        if session_id:
-            try:
-                session, exclude_names = await self._load_existing_session(session_id, user_id, language)
-                is_existing_session = True
-            except ValueError:
-                logger.info(f"Session {session_id} not found, creating new session for user {user_id}")
-                session, exclude_names = await self._create_new_session(
-                    user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
-                    language, servings, cooking_equipment, cuisine_region,
-                    calorie_target_override, protein_target, carbs_target, fat_target,
-                )
-        else:
-            session, exclude_names = await self._create_new_session(
-                user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
-                language, servings, cooking_equipment, cuisine_region,
-                calorie_target_override, protein_target, carbs_target, fat_target,
-            )
+        session, exclude_names = await self._get_or_create_session(
+            user_id=user_id,
+            meal_type=meal_type,
+            meal_portion_type=meal_portion_type,
+            ingredients=ingredients,
+            cooking_time_minutes=cooking_time_minutes,
+            session_id=session_id,
+            language=language,
+            servings=servings,
+            cooking_equipment=cooking_equipment,
+            cuisine_region=cuisine_region,
+            calorie_target_override=calorie_target_override,
+            protein_target=protein_target,
+            carbs_target=carbs_target,
+            fat_target=fat_target,
+        )
 
         suggestions = await self._recipe_generator.generate(
             session=session, exclude_meal_names=exclude_names, suggestion_count=suggestion_count,
         )
-        session.add_shown_ids([s.id for s in suggestions])
-        session.add_shown_meals([s.meal_name for s in suggestions])
 
-        if is_existing_session:
-            await self._repo.update_session(session)
-        else:
-            await self._repo.save_session(session)
-        await self._repo.save_suggestions(suggestions)
+        await self._persist_generation_result(
+            session=session,
+            suggestions=suggestions,
+            existing_session=bool(session_id),
+        )
         return session, suggestions
+
+    async def stream_suggestions(
+        self,
+        user_id: str,
+        meal_type: str,
+        meal_portion_type: str,
+        ingredients: List[str],
+        cooking_time_minutes: int,
+        session_id: Optional[str] = None,
+        language: str = "en",
+        servings: int = 1,
+        cooking_equipment: Optional[List[str]] = None,
+        cuisine_region: Optional[str] = None,
+        calorie_target_override: Optional[int] = None,
+        protein_target: Optional[float] = None,
+        carbs_target: Optional[float] = None,
+        fat_target: Optional[float] = None,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Stream meal generation events and persist generated suggestions."""
+        session, exclude_names = await self._get_or_create_session(
+            user_id=user_id,
+            meal_type=meal_type,
+            meal_portion_type=meal_portion_type,
+            ingredients=ingredients,
+            cooking_time_minutes=cooking_time_minutes,
+            session_id=session_id,
+            language=language,
+            servings=servings,
+            cooking_equipment=cooking_equipment,
+            cuisine_region=cuisine_region,
+            calorie_target_override=calorie_target_override,
+            protein_target=protein_target,
+            carbs_target=carbs_target,
+            fat_target=fat_target,
+        )
+
+        suggestions: List[MealSuggestion] = []
+        async for event in self._recipe_generator.generate_stream(
+            session=session, exclude_meal_names=exclude_names
+        ):
+            if event.get("event") == "meal_detail":
+                suggestion = event.get("data", {}).get("suggestion")
+                if suggestion is not None:
+                    suggestions.append(suggestion)
+            yield event
+
+        await self._persist_generation_result(
+            session=session,
+            suggestions=suggestions,
+            existing_session=bool(session_id),
+        )
+        yield {
+            "event": "complete",
+            "data": {
+                "session_id": session.id,
+                "meal_type": session.meal_type,
+                "meal_portion_type": session.meal_portion_type,
+                "target_calories": session.target_calories,
+            },
+        }
 
     # ------------------------------------------------------------------
     # Session helpers
     # ------------------------------------------------------------------
+    async def _get_or_create_session(
+        self,
+        user_id: str,
+        meal_type: str,
+        meal_portion_type: str,
+        ingredients: List[str],
+        cooking_time_minutes: int,
+        session_id: Optional[str],
+        language: str,
+        servings: int,
+        cooking_equipment: Optional[List[str]],
+        cuisine_region: Optional[str],
+        calorie_target_override: Optional[int],
+        protein_target: Optional[float],
+        carbs_target: Optional[float],
+        fat_target: Optional[float],
+    ) -> Tuple[SuggestionSession, List[str]]:
+        if session_id:
+            try:
+                return await self._load_existing_session(session_id, user_id, language)
+            except ValueError:
+                logger.info(f"Session {session_id} not found, creating new session for user {user_id}")
+        return await self._create_new_session(
+            user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
+            language, servings, cooking_equipment, cuisine_region,
+            calorie_target_override, protein_target, carbs_target, fat_target,
+        )
+
+    async def _persist_generation_result(
+        self,
+        session: SuggestionSession,
+        suggestions: List[MealSuggestion],
+        existing_session: bool,
+    ) -> None:
+        session.add_shown_ids([s.id for s in suggestions])
+        session.add_shown_meals([s.meal_name for s in suggestions])
+
+        if existing_session:
+            await self._repo.update_session(session)
+        else:
+            await self._repo.save_session(session)
+        await self._repo.save_suggestions(suggestions)
 
     async def _load_existing_session(
         self, session_id: str, user_id: str, language: str

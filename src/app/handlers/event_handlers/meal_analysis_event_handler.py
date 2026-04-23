@@ -11,7 +11,7 @@ from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
+from src.domain.services.meal_analysis.deepl_meal_translation_service import DeepLMealTranslationService
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.config.settings import get_settings
@@ -30,7 +30,7 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         image_store: ImageStorePort = None,
-        meal_translation_service: Optional[MealAnalysisTranslationService] = None
+        meal_translation_service: Optional[DeepLMealTranslationService] = None
     ):
         self.uow = uow
         self.vision_service = vision_service or VisionAIService()
