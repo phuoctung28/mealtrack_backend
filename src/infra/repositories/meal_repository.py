@@ -4,7 +4,7 @@ from enum import Enum, auto
 from typing import Dict, List, Optional
 
 from sqlalchemy import func, update
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload, noload
 
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.nutrition import Nutrition
@@ -40,6 +40,7 @@ class MealProjection(Enum):
 
 _PROJECTION_OPTS: dict = {
     MealProjection.MACROS_ONLY: (
+        noload(MealORM.image),
         selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
     ),
     MealProjection.FULL: (

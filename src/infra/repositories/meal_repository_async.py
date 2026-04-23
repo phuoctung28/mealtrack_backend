@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy import func, update, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.orm import selectinload, joinedload, noload
 
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.nutrition import Nutrition
@@ -42,6 +42,7 @@ def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
 
 _PROJECTION_OPTS: dict = {
     MealProjection.MACROS_ONLY: (
+        noload(MealORM.image),
         selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
     ),
     MealProjection.FULL: (
