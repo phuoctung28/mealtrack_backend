@@ -90,6 +90,16 @@ class MealRepository(MealRepositoryPort):
                 existing_meal.is_manually_edited = meal.is_manually_edited
                 existing_meal.emoji = meal.emoji
 
+                # Handle image URL update
+                if meal.image and meal.image.url:
+                    existing_image = (
+                        self.db.query(MealImageORM)
+                        .filter(MealImageORM.image_id == meal.image.image_id)
+                        .first()
+                    )
+                    if existing_image and existing_image.url != meal.image.url:
+                        existing_image.url = meal.image.url
+
                 # Handle nutrition sync
                 if meal.nutrition:
                     if not existing_meal.nutrition:
