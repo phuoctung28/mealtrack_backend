@@ -136,7 +136,6 @@ class Settings(BaseSettings):
     EMAIL_FROM_NAME: str | None = Field(default=None)
 
     # --- Meal image cache (nightly-fill vector cache) ---
-    MEAL_IMAGE_CACHE_ENABLED: bool = Field(default=False)
     TEXT_DEDUP_THRESHOLD: float = Field(default=0.65)
     IMAGE_MATCH_THRESHOLD: float = Field(default=0.65)
     MEAL_IMAGE_COSINE_HIT_THRESHOLD: float = Field(

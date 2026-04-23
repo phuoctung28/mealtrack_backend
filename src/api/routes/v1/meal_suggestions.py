@@ -38,6 +38,8 @@ from src.app.commands.meal_suggestion import (
     IngredientItem,
 )
 from src.infra.event_bus import EventBus
+from sqlalchemy.orm import Session
+from src.api.base_dependencies import get_db
 
 router = APIRouter(prefix="/v1/meal-suggestions", tags=["Meal Suggestions"])
 
@@ -109,6 +111,7 @@ async def discover_meals(
     body: DiscoverMealsRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
+    db: Session = Depends(get_db),
 ):
     """
     Lightweight discovery: single AI call → 6 meals with names + macros.
@@ -142,28 +145,19 @@ async def discover_meals(
             count=body.batch_size,
         )
 
-        # --- meal-image-cache integration ---
+        # --- meal-image-cache integration (always enabled) ---
         from src.api.dependencies.food_image import get_food_image_service
         from src.api.dependencies.meal_image_cache import (
             get_meal_image_cache_service, get_pending_queue,
         )
         from src.domain.model.meal_image_cache import PendingItem
         from src.domain.services.meal_image_cache.name_canonicalizer import slug as _slug
-        from src.infra.config.settings import get_settings as _get_settings
 
         image_service = get_food_image_service()
-        cfg = _get_settings()
-
-        if cfg.MEAL_IMAGE_CACHE_ENABLED:
-            from src.api.base_dependencies import get_db as _get_db
-            _db = next(_get_db())
-            cache_svc = await get_meal_image_cache_service(session=_db)
-            pending_repo = await get_pending_queue(session=_db)
-            english_names = [m["english_name"] for m in meals]
-            cache_hits = await cache_svc.lookup_batch(english_names)
-        else:
-            cache_hits = [None] * len(meals)
-            pending_repo = None
+        cache_svc = await get_meal_image_cache_service(session=db)
+        pending_repo = await get_pending_queue(session=db)
+        english_names = [m["english_name"] for m in meals]
+        cache_hits = await cache_svc.lookup_batch(english_names)
 
         images_list: list = []
         misses: list[PendingItem] = []
@@ -186,7 +180,7 @@ async def discover_meals(
                 candidate_source=(img_result.source if img_result else None),
             ))
 
-        if cfg.MEAL_IMAGE_CACHE_ENABLED and pending_repo and misses:
+        if pending_repo and misses:
             await pending_repo.enqueue_many(misses)
 
         images = images_list
