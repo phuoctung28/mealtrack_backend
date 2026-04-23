@@ -355,7 +355,6 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                 command.language
                 and command.language != "en"
                 and self.meal_translation_service
-                and resolved_policy.translation_in_critical_path
             ):
                 phase2_start = time.time()
                 logger.info(
