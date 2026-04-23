@@ -160,6 +160,18 @@ class Settings(BaseSettings):
     CRON_EXTERNAL_CALL_DELAY_SECONDS: float = Field(default=2.0)
     MAX_RESOLUTION_ATTEMPTS: int = Field(default=5)
 
+    # Meal analysis fast-path policy defaults
+    MEAL_ANALYZE_PRIMARY_TIMEOUT_SECONDS: float = Field(default=2.5)
+    MEAL_ANALYZE_RETRY_TIMEOUT_SECONDS: float = Field(default=1.5)
+    MEAL_ANALYZE_MAX_ATTEMPTS: int = Field(default=2)
+    MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(default=700)
+    MEAL_ANALYZE_TRANSLATION_IN_CRITICAL_PATH: bool = Field(default=False)
+    MEAL_ANALYZE_RUNTIME_POLICY_ENABLED: bool = Field(default=True)
+    MEAL_ANALYZE_CANARY_PERCENT: int = Field(default=100, ge=0, le=100)
+    MEAL_ANALYZE_PARALLEL_UPLOAD_ENABLED: bool = Field(default=False)
+    MEAL_ANALYZE_OPTIMIZED_PROMPT_ENABLED: bool = Field(default=True)
+    MEAL_ANALYZE_STRICT_SCHEMA_MODE: bool = Field(default=True)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

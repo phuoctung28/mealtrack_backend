@@ -10,9 +10,6 @@ concurrency:
   group: meal-image-resolver
   cancel-in-progress: false
 
-permissions:
-  contents: read
-
 jobs:
   drain:
     runs-on: ubuntu-latest

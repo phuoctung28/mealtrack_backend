@@ -2,16 +2,19 @@ import base64
 import json
 import logging
 import re
+from io import BytesIO
 from typing import Dict, Any, List
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
+from PIL import Image
 
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.strategies.meal_analysis_strategy import (
     MealAnalysisStrategy,
     AnalysisStrategyFactory
 )
+from src.infra.config.settings import get_settings
 from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
 # Load environment variables
@@ -29,8 +32,33 @@ class VisionAIService(VisionAIServicePort):
     def __init__(self):
         """Initialize the Gemini client using singleton manager."""
         self._model_manager = GeminiModelManager.get_instance()
-        # Use standard temperature=0.7 to share model instance across all services
-        self.model = self._model_manager.get_model()
+        # Disable thinking tokens and cap output to reduce latency
+        self.model = self._model_manager.get_model(thinking_budget=0, max_output_tokens=2048)
+        self._optimized_prompt_enabled = (
+            get_settings().MEAL_ANALYZE_OPTIMIZED_PROMPT_ENABLED
+        )
+
+    def _compress_image(self, image_bytes: bytes) -> bytes:
+        try:
+            img = Image.open(BytesIO(image_bytes))
+            w, h = img.size
+
+            if img.format == "JPEG" and max(w, h) <= 768 and len(image_bytes) < 200 * 1024:  # already small JPEG
+                return image_bytes
+
+            if max(w, h) > 768:
+                ratio = 768 / max(w, h)
+                img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+
+            buf = BytesIO()
+            img.save(buf, format="JPEG", quality=85)
+            return buf.getvalue()
+        except Exception as exc:
+            logger.warning("Image compression failed, using original: %s", exc)
+            return image_bytes
 
     def _analyze_image_reference(
         self, image_reference: str, strategy: MealAnalysisStrategy
@@ -97,6 +125,7 @@ class VisionAIService(VisionAIServicePort):
         Raises:
             RuntimeError: If analysis fails
         """
+        image_bytes = self._compress_image(image_bytes)
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
         image_data_url = f"data:image/jpeg;base64,{image_base64}"
         return self._analyze_image_reference(image_data_url, strategy)
@@ -170,14 +199,18 @@ class VisionAIService(VisionAIServicePort):
         Raises:
             RuntimeError: If analysis fails
         """
-        strategy = AnalysisStrategyFactory.create_basic_strategy()
+        strategy = AnalysisStrategyFactory.create_basic_strategy(
+            optimized_prompt_enabled=self._optimized_prompt_enabled
+        )
         return self.analyze_with_strategy(image_bytes, strategy)
 
     def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
         """
         Analyze a food image from a public URL.
         """
-        strategy = AnalysisStrategyFactory.create_basic_strategy()
+        strategy = AnalysisStrategyFactory.create_basic_strategy(
+            optimized_prompt_enabled=self._optimized_prompt_enabled
+        )
         return self.analyze_by_url_with_strategy(image_url, strategy)
 
     def analyze_with_portion_context(

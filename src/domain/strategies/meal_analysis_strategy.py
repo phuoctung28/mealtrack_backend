@@ -41,6 +41,16 @@ EMOJI SELECTION (for the "emoji" field):
 - NEVER return text or multiple emoji — exactly one emoji character
 """
 
+# Compact rules for basic strategy prompts to meet length constraints
+BASIC_SCAN_DECOMPOSITION_RULES = (
+    "DECOMPOSE: split compound dishes into ingredients (soup→broth/noodles/meat/veg; "
+    "sandwich→bread/meat/cheese/sauce). Single-ingredient foods may stay 1 item. "
+    "Quantities in grams; calories ≈ protein*4 + carbs*4 + fat*9. "
+    "EMOJI: return exactly one emoji for the overall dish by serving style "
+    "(🍜 soup noodles, 🍝 dry noodles, 🍚 rice, 🍛 curry, 🍲 stew, 🥗 salad, 🍖 grilled, "
+    "🥘 braised, 🥟 rolls, 🥪 sandwich, 🍳 egg, 🥣 porridge, 🍗 fried, 🥩 steak; fallback 🍽️)."
+)
+
 
 class MealAnalysisStrategy(ABC):
     """
@@ -85,40 +95,42 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
     Basic meal analysis strategy without additional context.
     """
 
+    def __init__(self, optimized_prompt_enabled: Optional[bool] = None):
+        if optimized_prompt_enabled is None:
+            optimized_prompt_enabled = True
+        self.optimized_prompt_enabled = bool(optimized_prompt_enabled)
+
+    def _legacy_analysis_prompt(self) -> str:
+        return (
+            "You are a nutrition analysis assistant. "
+            "Examine the image and return JSON with dish_name, emoji, foods, "
+            "total_calories, and confidence. "
+            "Each food item includes name, quantity, unit, calories, and macros. "
+            "Confidence should be between 0 and 1. "
+            "Always return well-formed JSON."
+        ) + SCAN_DECOMPOSITION_RULES
+
     def get_analysis_prompt(self) -> str:
-        return """
-        You are a nutrition analysis assistant that can analyze food in images.
-        Examine the image carefully and provide detailed nutritional information.
+        if not self.optimized_prompt_enabled:
+            return self._legacy_analysis_prompt()
 
-        Return your analysis in the following JSON format:
-        {
-          "dish_name": "Overall dish name or comma-separated food items if complex",
-          "emoji": "single food emoji that best represents this dish (e.g. 🍜 for noodle soup, 🍚 for rice, 🥗 for salad)",
-          "foods": [
-            {
-              "name": "Food name",
-              "quantity": 1.0,
-              "unit": "serving/g/oz/cup/etc",
-              "calories": 100,
-              "macros": {
-                "protein": 10,
-                "carbs": 20,
-                "fat": 5,
-              }
-            }
-          ],
-          "total_calories": 100,
-          "confidence": 0.8
-        }
-
-        - Include a dish_name field with the overall dish name (e.g., "Chicken Caesar Salad", "Spaghetti Bolognese")
-        - If the foods are difficult to describe as a single dish, list them as comma-separated items (e.g., "grilled chicken, rice, broccoli")
-        - Each food item should include name, estimated quantity, unit of measurement, calories, and macros
-        - For quantities, estimate as precisely as possible based on visual cues
-        - All macros should be in grams
-        - Confidence should be between 0 (low) and 1 (high) based on how certain you are of your analysis
-        - Always return well-formed JSON
-        """ + SCAN_DECOMPOSITION_RULES
+        return (
+            "You are a nutrition analysis assistant. Return ONLY valid JSON with no commentary text:\n"
+            "{\n"
+            '  "dish_name": "Overall dish name or comma-separated items",\n'
+            '  "emoji": "single emoji for the overall dish",\n'
+            '  "foods": [\n'
+            '    {"name": "Food name", "quantity": 1.0, "unit": "g", "calories": 100,\n'
+            '     "macros": {"protein": 10, "carbs": 20, "fat": 5}}\n'
+            "  ],\n"
+            '  "total_calories": 100,\n'
+            '  "confidence": 0.8\n'
+            "}\n"
+            "- Keep dish_name concise; if multiple items, use comma-separated names.\n"
+            "- Each food item includes name, quantity, unit, calories, macros (grams).\n"
+            "- Confidence between 0 and 1.\n"
+            "- Max 8 food items.\n"
+        ) + BASIC_SCAN_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         return "Analyze this food image and provide nutritional information:"
@@ -436,9 +448,13 @@ class AnalysisStrategyFactory:
     """
 
     @staticmethod
-    def create_basic_strategy() -> MealAnalysisStrategy:
+    def create_basic_strategy(
+        optimized_prompt_enabled: Optional[bool] = None,
+    ) -> MealAnalysisStrategy:
         """Create a basic analysis strategy."""
-        return BasicAnalysisStrategy()
+        return BasicAnalysisStrategy(
+            optimized_prompt_enabled=optimized_prompt_enabled
+        )
 
     @staticmethod
     def create_portion_strategy(portion_size: float, unit: str) -> MealAnalysisStrategy:

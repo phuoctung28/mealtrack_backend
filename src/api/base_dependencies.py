@@ -22,7 +22,7 @@ from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.cache.cache_service import CacheService
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
-from src.infra.config.settings import settings
+from src.infra.config.settings import get_settings, settings
 from src.infra.database.config import get_db as get_db_from_config
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
@@ -146,7 +146,9 @@ def get_gpt_parser() -> GPTResponseParser:
     Returns:
         GPTResponseParser: The parser instance
     """
-    return GPTResponseParser()
+    return GPTResponseParser(
+        strict_schema_mode=get_settings().MEAL_ANALYZE_STRICT_SCHEMA_MODE
+    )
 
 
 # Food Cache Service
@@ -294,15 +296,7 @@ def get_notification_service(
     Returns:
         NotificationService: The notification service
     """
-    from src.infra.adapters.notification_sent_log_dedup_store import (
-        NotificationSentLogDedupStore,
-    )
-
-    return NotificationService(
-        notification_repository,
-        firebase_service,
-        dedup_store=NotificationSentLogDedupStore(),
-    )
+    return NotificationService(notification_repository, firebase_service)
 
 
 # Scheduled Notification Service (singleton pattern - create once and reuse)
@@ -328,21 +322,10 @@ def initialize_scheduled_notification_service() -> ScheduledNotificationService:
     """
     global _scheduled_notification_service
     if _scheduled_notification_service is None:
-        # Create instances without using Depends (we're not in request context)
-        # Let NotificationRepository manage its own sessions to avoid ScopedSession here
-        notification_repository = NotificationRepository()
         firebase_service = get_firebase_service()
-        from src.infra.adapters.notification_sent_log_dedup_store import (
-            NotificationSentLogDedupStore,
-        )
-        notification_service = NotificationService(
-            notification_repository,
-            firebase_service,
-            dedup_store=NotificationSentLogDedupStore(),
-        )
         _scheduled_notification_service = ScheduledNotificationService(
-            notification_repository, 
-            notification_service
+            firebase_service,
+            _redis_client,
         )
     return _scheduled_notification_service
 
