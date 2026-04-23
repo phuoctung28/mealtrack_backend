@@ -131,13 +131,13 @@ async def revenuecat_webhook(
     return {"status": "success"}
 
 
-def handle_purchase(uow, user, event):
+async def handle_purchase(uow, user, event):
     """Handle initial purchase."""
     logger.info(f"Creating subscription for user {user.id}")
 
     # Check if subscription already exists
-    existing = get_subscription_by_revenuecat_id(
-        uow, 
+    existing = await get_subscription_by_revenuecat_id(
+        uow,
         event.get("app_user_id")
     )
 
