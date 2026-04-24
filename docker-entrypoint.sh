@@ -8,8 +8,10 @@ log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
 }
 
-# Run database migrations (skip on Render where pre-deploy handles this)
-if [ "${RENDER:-}" != "true" ]; then
+# Run database migrations (skip production only — uses pre-deploy)
+if [ "${ENV:-}" = "production" ]; then
+    log "⏭️ Skipping migrations (pre-deploy handles this)"
+else
     log "📦 Running database migrations..."
     if python migrations/run.py; then
         log "✅ Migrations completed successfully"
