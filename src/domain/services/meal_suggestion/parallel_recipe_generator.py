@@ -44,7 +44,7 @@ class ParallelRecipeGenerator:
     """
 
     DEFAULT_SUGGESTIONS_COUNT = 3
-    MIN_ACCEPTABLE_RESULTS = 2
+    MIN_ACCEPTABLE_RESULTS = 1  # was 2 — allow partial results
     PHASE1_TIMEOUT = 20
     DISCOVERY_TIMEOUT = 15
 

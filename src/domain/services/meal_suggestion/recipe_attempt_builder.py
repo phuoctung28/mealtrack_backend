@@ -23,7 +23,7 @@ from src.domain.services.meal_suggestion.nutrition_lookup_service import Nutriti
 logger = logging.getLogger(__name__)
 
 PARALLEL_SINGLE_MEAL_TOKENS = 4000
-PARALLEL_SINGLE_MEAL_TIMEOUT = 35
+PARALLEL_SINGLE_MEAL_TIMEOUT = 20  # was 35
 
 
 async def attempt_recipe_generation(
