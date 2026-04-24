@@ -189,7 +189,7 @@ async def _seed_dev_meals_async(user_id: str) -> None:
                 image_id=image_id,
                 created_at=now,
                 updated_at=now,
-                ready_at=now,
+                ready_at=now.replace(tzinfo=None),  # Column is naive DateTime
             )
             session.add(db_meal)
 

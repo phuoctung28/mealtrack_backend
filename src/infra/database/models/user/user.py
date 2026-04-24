@@ -56,6 +56,8 @@ class User(Base, BaseMixin):
                             cascade="all, delete-orphan", lazy="raise")
     subscriptions = relationship("Subscription", back_populates="user",
                                  cascade="all, delete-orphan", lazy="raise")
+    referral_code = relationship("ReferralCode", back_populates="user", uselist=False)
+    referral_wallet = relationship("ReferralWallet", back_populates="user", uselist=False)
     
     @property
     def current_profile(self):
