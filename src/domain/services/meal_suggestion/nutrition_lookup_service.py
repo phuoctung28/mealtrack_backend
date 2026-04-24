@@ -17,14 +17,14 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-NUTRITION_CACHE_TTL = 86400  # 24 hours
-T2_TIMEOUT = 2.0  # FatSecret timeout
-T3_TIMEOUT = 3.0  # AI estimate timeout
-
 from src.domain.constants.food_density import get_density
 from src.domain.services.meal_suggestion.ingredient_name_normalizer import normalize_food_name
 
 logger = logging.getLogger(__name__)
+
+NUTRITION_CACHE_TTL = 86400  # 24 hours
+T2_TIMEOUT = 2.0  # FatSecret timeout
+T3_TIMEOUT = 3.0  # AI estimate timeout
 
 # Volume conversions: unit → millilitres
 _VOLUME_TO_ML: Dict[str, float] = {"cup": 240.0, "tbsp": 15.0, "tsp": 5.0}
@@ -153,16 +153,38 @@ class NutritionLookupService:
             return result
 
         # T2: FatSecret (resolver handles caching to food_reference)
-        per100 = await self._resolver.resolve(name)
+        try:
+            per100 = await asyncio.wait_for(
+                self._resolver.resolve(name), timeout=T2_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            logger.warning("T2 FatSecret timeout for %s", name)
+            per100 = None
         if per100 is not None:
             result = self._build_from_per100(per100, name, quantity_g, "T2_fatsecret")
             await self._cache_result(cache_key, result)
             return result
 
         # T3: AI estimate — last resort
-        result = await self._ai_estimate(name, quantity_g)
-        await self._cache_result(cache_key, result)
-        return result
+        try:
+            result = await asyncio.wait_for(
+                self._ai_estimate(name, quantity_g), timeout=T3_TIMEOUT
+            )
+            await self._cache_result(cache_key, result)
+            return result
+        except asyncio.TimeoutError:
+            logger.warning("T3 AI timeout for %s", name)
+            return IngredientMacros(
+                name=name,
+                quantity_g=round(quantity_g, 1),
+                calories=0.0,
+                protein=0.0,
+                carbs=0.0,
+                fat=0.0,
+                fiber=0.0,
+                sugar=0.0,
+                source_tier="T3_ai_estimate",
+            )
 
     # ------------------------------------------------------------------
     # Redis cache helpers

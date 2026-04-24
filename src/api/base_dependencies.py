@@ -453,6 +453,7 @@ def get_nutrition_lookup_service():
             food_ref_repo=get_food_reference_repository(),
             ingredient_nutrition_resolver=get_ingredient_nutrition_resolver(),
             generation_service=MealGenerationService(),
+            redis_client=_redis_client,
         )
     return _nutrition_lookup_service
 
