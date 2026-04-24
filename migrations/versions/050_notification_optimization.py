@@ -53,7 +53,9 @@ def upgrade() -> None:
 
     # Drop old dedup table (if exists — may not exist on fresh DBs)
     conn = op.get_bind()
-    if conn.dialect.has_table(conn, 'notification_sent_log'):
+    from sqlalchemy import inspect
+    inspector = inspect(conn)
+    if inspector.has_table('notification_sent_log'):
         op.drop_index('ix_sent_log_cleanup', table_name='notification_sent_log')
         op.drop_table('notification_sent_log')
 
