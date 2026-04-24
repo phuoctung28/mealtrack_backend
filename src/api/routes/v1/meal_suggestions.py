@@ -3,43 +3,62 @@ Meal suggestion API endpoints (Phase 06).
 Simplified to only include generation endpoint.
 """
 
+import asyncio
 import logging
+from typing import Any, Awaitable, Callable
 
 from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy.orm import Session
 from starlette.responses import Response
 
+from src.api.base_dependencies import get_db
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
-from src.api.middleware.accept_language import get_request_language
-from src.api.middleware.rate_limit import limiter
 from src.api.mappers.meal_suggestion_mapper import (
     to_suggestions_list_response,
-    to_discovery_batch_response,
 )
+from src.api.middleware.accept_language import get_request_language
+from src.api.middleware.rate_limit import limiter
 from src.api.schemas.request.meal_suggestion_requests import (
-    MealSuggestionRequest,
-    SaveMealSuggestionRequest,
     DiscoverMealsRequest,
     GenerateRecipesRequest,
+    MealSuggestionRequest,
+    SaveMealSuggestionRequest,
 )
 from src.api.schemas.response.meal_suggestion_responses import (
-    SuggestionsListResponse,
-    SaveMealSuggestionResponse,
     DiscoveryBatchResponse,
-    RecipeBatchResponse,
     FoodImageResponse,
+    RecipeBatchResponse,
+    SaveMealSuggestionResponse,
+    SuggestionsListResponse,
 )
-
-logger = logging.getLogger(__name__)
 from src.app.commands.meal_suggestion import (
     GenerateMealSuggestionsCommand,
-    SaveMealSuggestionCommand,
     IngredientItem,
+    SaveMealSuggestionCommand,
 )
 from src.infra.event_bus import EventBus
-from sqlalchemy.orm import Session
-from src.api.base_dependencies import get_db
+
+logger = logging.getLogger(__name__)
+
+
+async def _fetch_images_parallel(
+    names: list[str],
+    search_fn: Callable[[str], Awaitable[Any]],
+    timeout: float = 3.0,
+) -> list[Any]:
+    """Fetch images in parallel with per-item timeout and error isolation."""
+
+    async def safe_fetch(name: str):
+        try:
+            return await asyncio.wait_for(search_fn(name), timeout=timeout)
+        except Exception as e:
+            logger.warning("Image fetch failed for %r: %s", name, e)
+            return None
+
+    return await asyncio.gather(*[safe_fetch(n) for n in names])
+
 
 router = APIRouter(prefix="/v1/meal-suggestions", tags=["Meal Suggestions"])
 
@@ -104,6 +123,7 @@ async def generate_suggestions(
     except Exception as e:
         raise handle_exception(e) from e
 
+
 @router.post("/discover", response_model=DiscoveryBatchResponse)
 @limiter.limit("5/minute")
 async def discover_meals(
@@ -119,7 +139,6 @@ async def discover_meals(
     Supports pagination via session_id — previously shown meals are auto-excluded.
     """
     try:
-        import asyncio
         import uuid
         language = get_request_language(request)
         portion_type = body.get_effective_portion_type()
@@ -159,8 +178,11 @@ async def discover_meals(
         english_names = [m["english_name"] for m in meals]
         cache_hits = await cache_svc.lookup_batch(english_names)
 
-        images_list: list = []
-        misses: list[PendingItem] = []
+        # Separate cache hits from misses
+        images_list: list = [None] * len(meals)
+        miss_indices: list[int] = []
+        miss_names: list[str] = []
+
         for i, m in enumerate(meals):
             hit = cache_hits[i]
             if hit is not None:
@@ -168,13 +190,28 @@ async def discover_meals(
                     "image cache hit: meal=%r source=%s cosine=%.3f url=%s",
                     m["english_name"], hit.source, hit.cosine, hit.image_url,
                 )
-                images_list.append(hit)
-                continue
-            img_result = await image_service.search_food_image(m["english_name"])
-            images_list.append(img_result)
+                images_list[i] = hit
+            else:
+                miss_indices.append(i)
+                miss_names.append(m["english_name"])
+
+        # Fetch cache misses in parallel
+        if miss_names:
+            miss_results = await _fetch_images_parallel(
+                miss_names,
+                image_service.search_food_image,
+                timeout=3.0,
+            )
+            for idx, result in zip(miss_indices, miss_results):
+                images_list[idx] = result
+
+        # Build pending queue items for misses
+        misses: list[PendingItem] = []
+        for i in miss_indices:
+            img_result = images_list[i]
             misses.append(PendingItem(
-                meal_name=m["english_name"],
-                name_slug=_slug(m["english_name"]),
+                meal_name=meals[i]["english_name"],
+                name_slug=_slug(meals[i]["english_name"]),
                 candidate_image_url=(img_result.url if img_result else None),
                 candidate_thumbnail_url=(img_result.thumbnail_url if img_result else None),
                 candidate_source=(img_result.source if img_result else None),
@@ -224,7 +261,7 @@ async def discover_meals(
         )
         response_meals = []
         for i, m in enumerate(meals):
-            img = images[i] if i < len(images) and not isinstance(images[i], Exception) else None
+            img = images[i] if i < len(images) else None
             meal_id = f"disc_{uuid.uuid4().hex[:12]}"
             response_meals.append(DiscoveryMealResponse(
                 id=meal_id,
