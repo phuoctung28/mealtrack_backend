@@ -6,15 +6,48 @@ from pathlib import Path
 # Add src to path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sqlalchemy import engine_from_config
+from sqlalchemy import create_engine, engine_from_config
 from sqlalchemy import pool
+from sqlalchemy.pool import NullPool
 
 from alembic import context
-
-# Import our database configuration
 from alembic.script import ScriptDirectory
-from src.infra.database.config import Base, SQLALCHEMY_DATABASE_URL, engine
 from sqlalchemy import text
+
+# Import Base for metadata, but create our own engine for migrations
+from src.infra.database.config import Base
+
+# For migrations, prefer direct connection over pooler
+# Neon's PgBouncer pooler doesn't handle DDL commits reliably
+DATABASE_URL_DIRECT = os.getenv("DATABASE_URL_DIRECT")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+if DATABASE_URL_DIRECT:
+    MIGRATION_URL = DATABASE_URL_DIRECT
+elif "-pooler" in DATABASE_URL:
+    MIGRATION_URL = DATABASE_URL.replace("-pooler", "")
+else:
+    MIGRATION_URL = DATABASE_URL
+
+# Normalize protocol for psycopg2
+if MIGRATION_URL.startswith("postgres://"):
+    MIGRATION_URL = MIGRATION_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif MIGRATION_URL.startswith("postgresql://"):
+    MIGRATION_URL = MIGRATION_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+# Create dedicated engine for migrations with direct connection
+migration_engine = create_engine(
+    MIGRATION_URL,
+    echo=False,
+    poolclass=NullPool,
+    connect_args={
+        "connect_timeout": 10,
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+    },
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -75,7 +108,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = SQLALCHEMY_DATABASE_URL or config.get_main_option("sqlalchemy.url")
+    url = MIGRATION_URL or config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -95,13 +128,8 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    # Override the sqlalchemy.url with our database URL if available
-    configuration = config.get_section(config.config_ini_section, {})
-    if SQLALCHEMY_DATABASE_URL:
-        configuration["sqlalchemy.url"] = SQLALCHEMY_DATABASE_URL
-
-    # Use our pre-configured engine with SSL support instead of creating a new one
-    connectable = engine
+    # Use direct connection engine for migrations (not pooler)
+    connectable = migration_engine
 
     with connectable.connect() as connection:
         _apply_migration_timeouts(connection)
