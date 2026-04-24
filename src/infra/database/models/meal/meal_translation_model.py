@@ -23,8 +23,8 @@ class MealTranslationORM(Base):
     meal_id = Column(String(36), ForeignKey("meal.meal_id"), nullable=True, index=True)  # Nullable to prevent cascade delete
     language = Column(String(7), nullable=False)  # ISO 639-1: en, vi, es, fr, de, ja, zh
     dish_name = Column(String(255), nullable=False)
-    translated_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, nullable=False)
+    translated_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
 
     # Soft delete
     is_deleted = Column(Boolean, default=False, nullable=False, server_default='false')

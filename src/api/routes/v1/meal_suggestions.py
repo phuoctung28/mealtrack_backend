@@ -235,8 +235,23 @@ async def discover_meals(
         images = images_list
         # --- end integration ---
 
-        # Use English names (translation removed per commit 1af462f)
+        # Translate meal names if non-English
         translated_names = [m["name"] for m in meals]
+        if language and language != "en":
+            try:
+                from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
+                from src.infra.config.settings import settings
+
+                if settings.DEEPL_API_KEY:
+                    adapter = DeepLTranslationAdapter(settings.DEEPL_API_KEY)
+                    translated = await adapter.translate_texts(
+                        [m["name"] for m in meals],
+                        language.upper()
+                    )
+                    if translated and len(translated) == len(meals):
+                        translated_names = translated
+            except Exception as e:
+                logger.warning("Name translation failed, using English: %s", e)
 
         def _as_image_fields(x):
             """Accepts CachedImage (image_url attr) or FoodImageResult (url attr)."""
