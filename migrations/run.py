@@ -17,12 +17,50 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import os
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import inspect, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import OperationalError, DatabaseError
-from src.infra.database.config import engine, Base
+from sqlalchemy.pool import NullPool
+
+# For migrations, prefer direct connection over pooler
+# Neon's PgBouncer pooler doesn't handle DDL commits reliably
+DATABASE_URL_DIRECT = os.getenv("DATABASE_URL_DIRECT")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+if DATABASE_URL_DIRECT:
+    MIGRATION_URL = DATABASE_URL_DIRECT
+elif "-pooler" in DATABASE_URL:
+    # Convert pooler URL to direct URL by removing "-pooler"
+    # Neon's PgBouncer pooler doesn't handle DDL commits reliably
+    MIGRATION_URL = DATABASE_URL.replace("-pooler", "")
+else:
+    MIGRATION_URL = DATABASE_URL
+
+# Normalize protocol
+if MIGRATION_URL.startswith("postgres://"):
+    MIGRATION_URL = MIGRATION_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif MIGRATION_URL.startswith("postgresql://"):
+    MIGRATION_URL = MIGRATION_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+# Create dedicated engine for migrations with direct connection
+engine = create_engine(
+    MIGRATION_URL,
+    echo=False,
+    poolclass=NullPool,
+    connect_args={
+        "connect_timeout": 10,
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+    },
+)
+
+# Import Base after engine is created
+from src.infra.database.config import Base
 
 # Configure logging with timestamp
 logging.basicConfig(
