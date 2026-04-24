@@ -72,10 +72,10 @@ class BraveSearchNutritionService:
                 description = r.get("description", "")
                 url = r.get("url", "")
                 snippets.append(f"{title}: {description}")
-                logger.info(f"Brave result for {barcode}: {title} | {url}")
+                logger.debug(f"Brave result for {barcode}: {title} | {url}")
 
             combined = "\n\n".join(snippets)
-            logger.info(f"Brave snippets for {barcode} ({len(results)} results, {len(combined)} chars)")
+            logger.debug(f"Brave snippets for {barcode} ({len(results)} results, {len(combined)} chars)")
             return combined
         except Exception as e:
             logger.warning(f"Brave search API error for {barcode}: {e}")
@@ -117,7 +117,7 @@ class BraveSearchNutritionService:
             confidence = result.get("confidence", "low")
             if confidence == "low":
                 result["is_estimate"] = True  # Mark low-confidence as estimate
-                logger.info(f"Brave+AI extraction low confidence for {barcode}, marking as estimate")
+                logger.debug(f"Brave+AI extraction low confidence for {barcode}, marking as estimate")
 
             required = ["protein_100g", "carbs_100g", "fat_100g"]
             if not all(result.get(f) is not None for f in required):

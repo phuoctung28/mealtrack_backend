@@ -70,7 +70,7 @@ class DailyContextPrecomputeService:
                 logger.debug("Pre-compute sentinel hit for %s on %s — skipping", tz_name, today)
                 return
 
-            logger.info("Pre-computing notification context for %s on %s", tz_name, today)
+            logger.debug("Pre-computing notification context for %s on %s", tz_name, today)
             redis_items = await asyncio.to_thread(self._precompute_db_sync, tz_name, today)
 
             if redis_items:
@@ -83,7 +83,7 @@ class DailyContextPrecomputeService:
                     return
 
             await self._redis.set(self.sentinel_key(today, tz_name), "1", ttl=_SENTINEL_TTL)
-            logger.info("Pre-compute complete for %s: %d users", tz_name, len(redis_items))
+            logger.debug("Pre-compute complete for %s: %d users", tz_name, len(redis_items))
 
     # ------------------------------------------------------------------
     # Synchronous DB work (runs in thread pool via asyncio.to_thread)
