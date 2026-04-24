@@ -2,6 +2,7 @@
 Three-tier nutrition lookup orchestration service.
 
 Tier resolution order per ingredient:
+  Redis — cached per-100g macros (24-hour TTL)
   T1 — exact match on food_reference.name_normalized (MySQL, no fuzzy)
   T2 — FatSecret via IngredientNutritionResolver (caches result to T1)
   T3 — AI single-ingredient estimate (last resort, logged as WARNING)
@@ -9,9 +10,14 @@ Tier resolution order per ingredient:
 Calories are ALWAYS derived: P×4 + (C−fiber)×4 + fiber×2 + F×9
 """
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+NUTRITION_CACHE_TTL = 86400  # 24 hours
+T2_TIMEOUT = 2.0  # FatSecret timeout
+T3_TIMEOUT = 3.0  # AI estimate timeout
 
 from pydantic import BaseModel, Field
 
@@ -86,10 +92,12 @@ class NutritionLookupService:
         food_ref_repo: Any,
         ingredient_nutrition_resolver: Any,
         generation_service: Any,
+        redis_client: Any = None,
     ) -> None:
         self._repo = food_ref_repo
         self._resolver = ingredient_nutrition_resolver
         self._gen = generation_service
+        self._redis = redis_client
 
     # ------------------------------------------------------------------
     # Public API
@@ -123,20 +131,83 @@ class NutritionLookupService:
     async def _lookup_ingredient(
         self, name: str, quantity_g: float
     ) -> IngredientMacros:
-        """Resolve macros for one ingredient through T1 → T2 → T3."""
+        """Resolve macros for one ingredient: Redis → T1 → T2 → T3."""
+        normalized = normalize_food_name(name)
+        cache_key = f"nutrition:{normalized}"
+
+        # Check Redis cache first
+        if self._redis:
+            try:
+                cached = await self._redis.get(cache_key)
+                if cached:
+                    data = json.loads(cached)
+                    return self._build_from_cached(data, name, quantity_g)
+            except Exception as exc:
+                logger.warning("Redis get failed for %s: %s", cache_key, exc)
 
         # T1: exact match on name_normalized
-        ref = self._repo.find_by_normalized_name(normalize_food_name(name))
+        ref = self._repo.find_by_normalized_name(normalized)
         if ref:
-            return self._calculate_from_ref(ref, name, quantity_g, "T1_food_reference")
+            result = self._calculate_from_ref(ref, name, quantity_g, "T1_food_reference")
+            await self._cache_result(cache_key, result)
+            return result
 
         # T2: FatSecret (resolver handles caching to food_reference)
         per100 = await self._resolver.resolve(name)
         if per100 is not None:
-            return self._build_from_per100(per100, name, quantity_g, "T2_fatsecret")
+            result = self._build_from_per100(per100, name, quantity_g, "T2_fatsecret")
+            await self._cache_result(cache_key, result)
+            return result
 
         # T3: AI estimate — last resort
-        return await self._ai_estimate(name, quantity_g)
+        result = await self._ai_estimate(name, quantity_g)
+        await self._cache_result(cache_key, result)
+        return result
+
+    # ------------------------------------------------------------------
+    # Redis cache helpers
+    # ------------------------------------------------------------------
+
+    def _build_from_cached(
+        self, data: Dict[str, Any], name: str, quantity_g: float
+    ) -> IngredientMacros:
+        """Build IngredientMacros from cached per-100g data."""
+        factor = quantity_g / 100.0
+        protein = data["protein"] * factor
+        carbs = data["carbs"] * factor
+        fat = data["fat"] * factor
+        fiber = data.get("fiber", 0.0) * factor
+        sugar = data.get("sugar", 0.0) * factor
+        calories = _derive_calories(protein, carbs, fat, fiber)
+        return IngredientMacros(
+            name=name,
+            quantity_g=round(quantity_g, 1),
+            calories=round(calories, 1),
+            protein=round(protein, 1),
+            carbs=round(carbs, 1),
+            fat=round(fat, 1),
+            fiber=round(fiber, 1),
+            sugar=round(sugar, 1),
+            source_tier=data.get("source_tier", "cached"),
+        )
+
+    async def _cache_result(self, key: str, result: IngredientMacros) -> None:
+        """Cache per-100g macros in Redis."""
+        if not self._redis:
+            return
+        try:
+            factor = 100.0 / result.quantity_g if result.quantity_g > 0 else 1.0
+            data = {
+                "protein": round(result.protein * factor, 2),
+                "carbs": round(result.carbs * factor, 2),
+                "fat": round(result.fat * factor, 2),
+                "fiber": round(result.fiber * factor, 2),
+                "sugar": round(result.sugar * factor, 2),
+                "source_tier": result.source_tier,
+            }
+            await self._redis.setex(key, NUTRITION_CACHE_TTL, json.dumps(data))
+        except Exception as exc:
+            logger.warning("Redis setex failed for %s: %s", key, exc)
 
     # ------------------------------------------------------------------
     # Calculation helpers
