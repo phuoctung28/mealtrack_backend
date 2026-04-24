@@ -15,11 +15,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from pydantic import BaseModel, Field
+
 NUTRITION_CACHE_TTL = 86400  # 24 hours
 T2_TIMEOUT = 2.0  # FatSecret timeout
 T3_TIMEOUT = 3.0  # AI estimate timeout
-
-from pydantic import BaseModel, Field
 
 from src.domain.constants.food_density import get_density
 from src.domain.services.meal_suggestion.ingredient_name_normalizer import normalize_food_name
