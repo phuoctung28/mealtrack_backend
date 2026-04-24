@@ -175,6 +175,34 @@ class FoodReferenceRepository:
         finally:
             session.close()
 
+    def find_batch_by_normalized_names(
+        self, names_normalized: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Batch lookup by normalized ingredient names.
+
+        Returns dict keyed by name_normalized for O(1) lookup.
+        Missing names are simply absent from the result.
+        """
+        if not names_normalized:
+            return {}
+
+        session: Session = SessionLocal()
+        try:
+            stmt = select(FoodReferenceModel).where(
+                FoodReferenceModel.name_normalized.in_(names_normalized)
+            )
+            results = session.execute(stmt).scalars().all()
+            return {
+                r.name_normalized: self._to_dict(r)
+                for r in results
+                if r.name_normalized is not None
+            }
+        except Exception as e:
+            logger.error(f"Error batch lookup for {len(names_normalized)} names: {e}")
+            return {}
+        finally:
+            session.close()
+
     def find_by_normalized_name(self, name_normalized: str) -> Optional[Dict[str, Any]]:
         """Exact-match lookup by normalized ingredient name."""
         session: Session = SessionLocal()
