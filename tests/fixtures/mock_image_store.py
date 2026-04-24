@@ -14,11 +14,12 @@ class MockImageStore(ImageStorePort):
         """Initialize with in-memory storage."""
         self.storage: Dict[str, bytes] = {}
     
-    def save(self, image_data: bytes, content_type: str) -> str:
+    def save(self, image_data: bytes, content_type: str, image_id: Optional[str] = None) -> str:
         """Save image data and return image ID."""
-        image_id = str(uuid.uuid4())
+        if image_id is None:
+            image_id = str(uuid.uuid4())
         self.storage[image_id] = image_data
-        return image_id
+        return f"mock://images/{image_id}"
     
     def load(self, image_id: str) -> Optional[bytes]:
         """Load image data from storage."""

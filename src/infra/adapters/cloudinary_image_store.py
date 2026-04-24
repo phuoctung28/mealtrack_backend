@@ -48,29 +48,33 @@ class CloudinaryImageStore(ImageStorePort):
         
         logger.info("CloudinaryImageStore initialized successfully")
     
-    def save(self, image_bytes: bytes, content_type: str) -> str:
+    def save(self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None) -> str:
         """
         Save image bytes to Cloudinary.
-        
+
         Args:
             image_bytes: The raw bytes of the image
             content_type: MIME type of the image ("image/jpeg" or "image/png")
-            
+            image_id: Optional pre-generated image ID to use (for parallel uploads)
+
         Returns:
-            A unique image ID (UUID string)
-            
+            The URL of the saved image
+
         Raises:
             ValueError: If content_type is not supported or image is invalid
         """
         logger.info(f"Saving image of type {content_type}, size {len(image_bytes)} bytes")
-        
+
         # Validate content type
         if content_type not in ["image/jpeg", "image/png"]:
             raise ValueError(f"Unsupported content type: {content_type}")
-        
-        # Generate a UUID for the image
-        image_id = str(uuid.uuid4())
-        logger.info(f"Generated image_id: {image_id}")
+
+        # Use provided image_id or generate a new UUID
+        if image_id is None:
+            image_id = str(uuid.uuid4())
+            logger.info(f"Generated image_id: {image_id}")
+        else:
+            logger.info(f"Using provided image_id: {image_id}")
         
         # Determine file extension from content type
         if content_type == "image/jpeg":
