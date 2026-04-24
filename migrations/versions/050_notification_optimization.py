@@ -51,9 +51,11 @@ def upgrade() -> None:
         postgresql_where=sa.text("status != 'pending'"),
     )
 
-    # Drop old dedup table
-    op.drop_index('ix_sent_log_cleanup', table_name='notification_sent_log')
-    op.drop_table('notification_sent_log')
+    # Drop old dedup table (if exists — may not exist on fresh DBs)
+    conn = op.get_bind()
+    if conn.dialect.has_table(conn, 'notification_sent_log'):
+        op.drop_index('ix_sent_log_cleanup', table_name='notification_sent_log')
+        op.drop_table('notification_sent_log')
 
 
 def downgrade() -> None:
