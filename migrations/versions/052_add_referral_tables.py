@@ -1,14 +1,14 @@
 """Add referral system tables.
 
-Revision ID: 051
-Revises: 050
+Revision ID: 052
+Revises: 051
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSON
 
-revision = "051"
-down_revision = "050"
+revision = "052"
+down_revision = "051"
 branch_labels = None
 depends_on = None
 
