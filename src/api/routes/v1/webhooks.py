@@ -114,7 +114,10 @@ async def revenuecat_webhook(
                 
             elif event_type == "PRODUCT_CHANGE":
                 handle_product_change(uow, user, event)
-            
+
+            elif event_type == "REFUND":
+                await handle_refund(uow, user, event)
+
             else:
                 logger.info(f"Unhandled event type: {event_type}")
 
@@ -240,8 +243,17 @@ async def handle_product_change(uow, user, event):
         logger.info(f"User {user.id} changed to {subscription.product_id}")
 
 
-def handle_refund(uow, user, event):
-    """Handle refund — revoke referral credit if conversion was previously credited."""
+async def handle_refund(uow, user, event):
+    """Handle refund — update subscription status and revoke referral credit."""
+    subscription = await get_subscription_by_revenuecat_id(
+        uow,
+        event.get("app_user_id")
+    )
+    if subscription:
+        subscription.status = "refunded"
+        subscription.updated_at = utc_now()
+        logger.info(f"User {user.id} subscription refunded")
+
     _revoke_referral_on_refund(uow, str(user.id))
 
 
