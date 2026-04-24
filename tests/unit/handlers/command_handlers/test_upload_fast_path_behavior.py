@@ -59,31 +59,6 @@ def test_run_vision_analysis_raises_after_max_attempts():
     assert handler.vision_service.analyze.call_count == 2
 
 
-def test_run_vision_analysis_uses_legacy_attempts_when_user_outside_canary():
-    handler = UploadMealImageImmediatelyHandler(
-        uow=MagicMock(),
-        event_bus=MagicMock(),
-        fast_path_policy=MealAnalyzeFastPathPolicy(
-            max_attempts=3,
-            runtime_policy_enabled=True,
-            canary_percent=0,
-        ),
-    )
-    handler.vision_service = MagicMock()
-    handler.vision_service.analyze.side_effect = Exception("vision failed")
-
-    command = UploadMealImageImmediatelyCommand(
-        user_id="00000000-0000-0000-0000-000000000001",
-        file_contents=b"img",
-        content_type="image/jpeg",
-    )
-
-    with pytest.raises(Exception, match="vision failed"):
-        handler._run_vision_analysis(command, "meal-123")
-
-    assert handler.vision_service.analyze.call_count == 1
-
-
 @pytest.mark.asyncio
 async def test_translation_called_for_non_english_language():
     saved_state = {}
@@ -174,7 +149,6 @@ def parallel_mode_harness():
     handler = UploadMealImageImmediatelyHandler(
         uow=mock_uow,
         event_bus=mock_event_bus,
-        fast_path_policy=MealAnalyzeFastPathPolicy(parallel_upload_enabled=True),
     )
     handler.image_store = MagicMock()
     handler.vision_service = MagicMock()
@@ -201,7 +175,7 @@ def parallel_mode_harness():
 async def test_parallel_mode_runs_upload_and_analysis_and_returns_ready(parallel_mode_harness):
     harness = parallel_mode_harness
 
-    def upload_side_effect(file_contents, content_type):
+    def upload_side_effect(file_contents, content_type, image_id=None):
         time.sleep(0.2)
         return "mock://images/00000000-0000-0000-0000-000000000123"
 
@@ -226,7 +200,7 @@ async def test_parallel_mode_marks_failed_when_upload_fails_but_analysis_succeed
 ):
     harness = parallel_mode_harness
 
-    def upload_side_effect(file_contents, content_type):
+    def upload_side_effect(file_contents, content_type, image_id=None):
         time.sleep(0.2)
         raise RuntimeError("upload failed")
 
@@ -252,7 +226,7 @@ async def test_parallel_mode_marks_failed_when_analysis_fails_even_if_upload_suc
 ):
     harness = parallel_mode_harness
 
-    def upload_side_effect(file_contents, content_type):
+    def upload_side_effect(file_contents, content_type, image_id=None):
         time.sleep(0.2)
         return "mock://images/00000000-0000-0000-0000-000000000123"
 
@@ -281,7 +255,7 @@ async def test_parallel_mode_prioritises_analysis_error_when_both_fail(
 ):
     harness = parallel_mode_harness
 
-    def upload_side_effect(file_contents, content_type):
+    def upload_side_effect(file_contents, content_type, image_id=None):
         raise RuntimeError("upload failed")
 
     def analyze_side_effect(file_contents):

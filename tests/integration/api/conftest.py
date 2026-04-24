@@ -148,9 +148,11 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
     
     class MockImageStore(ImageStorePort):
         """Mock image store that implements ImageStorePort."""
-        def save(self, image_bytes: bytes, content_type: str) -> str:
+        def save(self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None) -> str:
             """Return a UUID string as image_id (matches CloudinaryImageStore.save signature)."""
-            return str(uuid4())
+            if image_id is None:
+                image_id = str(uuid4())
+            return f"https://mock-cloudinary.com/{image_id}.jpg"
         
         def load(self, image_id: str) -> Optional[bytes]:
             """Mock load - return None (not used in tests)."""

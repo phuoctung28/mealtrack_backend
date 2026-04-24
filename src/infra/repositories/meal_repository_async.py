@@ -84,6 +84,15 @@ class AsyncMealRepository(MealRepositoryPort):
             existing_meal.is_manually_edited = meal.is_manually_edited
             existing_meal.emoji = meal.emoji
 
+            # Update image URL if changed (parallel upload sets URL after initial save)
+            if meal.image and meal.image.url:
+                img_result = await self.session.execute(
+                    select(MealImageORM).where(MealImageORM.image_id == meal.image.image_id)
+                )
+                existing_image = img_result.scalars().first()
+                if existing_image and existing_image.url != meal.image.url:
+                    existing_image.url = meal.image.url
+
             if meal.nutrition:
                 if not existing_meal.nutrition:
                     db_nutrition = nutrition_domain_to_orm(meal.nutrition, meal_id=meal.meal_id)
