@@ -235,20 +235,8 @@ async def discover_meals(
         images = images_list
         # --- end integration ---
 
-        # Translate names if non-English
+        # Use English names (translation removed per commit 1af462f)
         translated_names = [m["name"] for m in meals]
-        if language != "en":
-            from src.api.base_dependencies import get_translation_service
-
-            try:
-                translation_svc = get_translation_service()
-                translated = await translation_svc.translate_names(
-                    [m["name"] for m in meals], language
-                )
-                if translated and len(translated) == len(meals):
-                    translated_names = translated
-            except Exception as e:
-                logger.warning(f"Name translation failed, using English: {e}")
 
         def _as_image_fields(x):
             """Accepts CachedImage (image_url attr) or FoodImageResult (url attr)."""
