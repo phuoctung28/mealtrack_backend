@@ -60,7 +60,6 @@ ENV PYTHONUNBUFFERED=1
 
 # Default worker count. Override with WEB_CONCURRENCY on Render.
 ENV UVICORN_WORKERS=1
-ENV AUTO_MIGRATE=false
 
 # Health check uses PORT at runtime. The entrypoint defaults to 8000 locally
 # and 10000 on Render when PORT is not explicitly set.
