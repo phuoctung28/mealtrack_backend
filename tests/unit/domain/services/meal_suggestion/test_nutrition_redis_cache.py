@@ -12,14 +12,18 @@ from src.domain.services.meal_suggestion.nutrition_lookup_service import (
 async def test_lookup_checks_redis_before_db():
     """Verify Redis is checked before DB lookup."""
     redis_mock = AsyncMock()
-    redis_mock.get = AsyncMock(return_value=json.dumps({
-        "protein": 31.0,
-        "carbs": 0.0,
-        "fat": 3.6,
-        "fiber": 0.0,
-        "sugar": 0.0,
-        "source_tier": "T1_food_reference",
-    }))
+    redis_mock.get = AsyncMock(
+        return_value=json.dumps(
+            {
+                "protein": 31.0,
+                "carbs": 0.0,
+                "fat": 3.6,
+                "fiber": 0.0,
+                "sugar": 0.0,
+                "source_tier": "T1_food_reference",
+            }
+        )
+    )
 
     repo_mock = MagicMock()
     repo_mock.find_by_normalized_name = MagicMock()  # Should NOT be called
@@ -46,14 +50,16 @@ async def test_lookup_caches_result_in_redis_on_miss():
     redis_mock.setex = AsyncMock()
 
     repo_mock = MagicMock()
-    repo_mock.find_by_normalized_name = MagicMock(return_value={
-        "id": 1,
-        "protein_100g": 31.0,
-        "carbs_100g": 0.0,
-        "fat_100g": 3.6,
-        "fiber_100g": 0.0,
-        "sugar_100g": 0.0,
-    })
+    repo_mock.find_by_normalized_name = MagicMock(
+        return_value={
+            "id": 1,
+            "protein_100g": 31.0,
+            "carbs_100g": 0.0,
+            "fat_100g": 3.6,
+            "fiber_100g": 0.0,
+            "sugar_100g": 0.0,
+        }
+    )
 
     svc = NutritionLookupService(
         food_ref_repo=repo_mock,

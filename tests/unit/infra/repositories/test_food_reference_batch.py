@@ -8,13 +8,15 @@ def test_find_batch_by_normalized_names_returns_dict():
     """Verify batch lookup returns dict keyed by normalized name."""
     repo = FoodReferenceRepository()
 
-    with patch.object(repo, '_to_dict') as mock_to_dict:
+    with patch.object(repo, "_to_dict") as mock_to_dict:
         mock_to_dict.side_effect = lambda m: {
             "name_normalized": m.name_normalized,
             "protein_100g": m.protein_100g,
         }
 
-        with patch('src.infra.repositories.food_reference_repository.SessionLocal') as mock_session:
+        with patch(
+            "src.infra.repositories.food_reference_repository.SessionLocal"
+        ) as mock_session:
             mock_model_1 = MagicMock()
             mock_model_1.name_normalized = "chicken breast"
             mock_model_1.protein_100g = 31.0
@@ -24,10 +26,13 @@ def test_find_batch_by_normalized_names_returns_dict():
             mock_model_2.protein_100g = 2.7
 
             mock_session.return_value.execute.return_value.scalars.return_value.all.return_value = [
-                mock_model_1, mock_model_2
+                mock_model_1,
+                mock_model_2,
             ]
 
-            result = repo.find_batch_by_normalized_names(["chicken breast", "rice", "unknown"])
+            result = repo.find_batch_by_normalized_names(
+                ["chicken breast", "rice", "unknown"]
+            )
 
             assert "chicken breast" in result
             assert "rice" in result

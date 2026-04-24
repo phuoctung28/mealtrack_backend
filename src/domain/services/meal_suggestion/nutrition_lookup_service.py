@@ -9,6 +9,7 @@ Tier resolution order per ingredient:
 
 Calories are ALWAYS derived: P×4 + (C−fiber)×4 + fiber×2 + F×9
 """
+
 import asyncio
 import json
 import logging
@@ -18,7 +19,9 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from src.domain.constants.food_density import get_density
-from src.domain.services.meal_suggestion.ingredient_name_normalizer import normalize_food_name
+from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
+    normalize_food_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,19 +37,20 @@ _VOLUME_TO_ML: Dict[str, float] = {"cup": 240.0, "tbsp": 15.0, "tsp": 5.0}
 # Output dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class IngredientMacros:
     """Calculated macros for a specific ingredient quantity."""
 
     name: str
     quantity_g: float
-    calories: float       # derived: P×4 + (C−fiber)×4 + fiber×2 + F×9
+    calories: float  # derived: P×4 + (C−fiber)×4 + fiber×2 + F×9
     protein: float
     carbs: float
     fat: float
     fiber: float
     sugar: float
-    source_tier: str      # "T1_food_reference" | "T2_fatsecret" | "T3_ai_estimate"
+    source_tier: str  # "T1_food_reference" | "T2_fatsecret" | "T3_ai_estimate"
     food_reference_id: Optional[int] = field(default=None)
 
 
@@ -61,14 +65,15 @@ class MealMacros:
     fiber: float
     sugar: float
     ingredients: List[IngredientMacros]
-    t1_count: int   # resolved via food_reference
-    t2_count: int   # resolved via FatSecret
-    t3_count: int   # resolved via AI fallback
+    t1_count: int  # resolved via food_reference
+    t2_count: int  # resolved via FatSecret
+    t3_count: int  # resolved via AI fallback
 
 
 # ---------------------------------------------------------------------------
 # Pydantic schema for T3 AI structured output
 # ---------------------------------------------------------------------------
+
 
 class SingleIngredientSchema(BaseModel):
     """Per-100g macros returned by the AI for a single ingredient."""
@@ -83,6 +88,7 @@ class SingleIngredientSchema(BaseModel):
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
+
 
 class NutritionLookupService:
     """Resolve macros for meal ingredients using three-tier lookup."""
@@ -148,7 +154,9 @@ class NutritionLookupService:
         # T1: exact match on name_normalized
         ref = self._repo.find_by_normalized_name(normalized)
         if ref:
-            result = self._calculate_from_ref(ref, name, quantity_g, "T1_food_reference")
+            result = self._calculate_from_ref(
+                ref, name, quantity_g, "T1_food_reference"
+            )
             await self._cache_result(cache_key, result)
             return result
 
@@ -265,7 +273,7 @@ class NutritionLookupService:
 
     def _build_from_per100(
         self,
-        per100: Any,   # PerHundredGramsMacros from ingredient_nutrition_resolver
+        per100: Any,  # PerHundredGramsMacros from ingredient_nutrition_resolver
         name: str,
         quantity_g: float,
         tier: str,
@@ -291,9 +299,7 @@ class NutritionLookupService:
             food_reference_id=None,
         )
 
-    async def _ai_estimate(
-        self, name: str, quantity_g: float
-    ) -> IngredientMacros:
+    async def _ai_estimate(self, name: str, quantity_g: float) -> IngredientMacros:
         """T3 fallback: ask AI for per-100g macros. Never raises."""
         logger.warning("T3 AI estimate used for ingredient: %s", name)
 
@@ -320,12 +326,14 @@ class NutritionLookupService:
                 timeout=10.0,
             )
             # generate_meal_plan returns a dict when schema is provided
-            schema_data = SingleIngredientSchema(**raw) if isinstance(raw, dict) else raw
-            return self._build_from_per100(schema_data, name, quantity_g, "T3_ai_estimate")
-        except Exception as exc:
-            logger.error(
-                "T3 AI estimate failed for ingredient '%s': %s", name, exc
+            schema_data = (
+                SingleIngredientSchema(**raw) if isinstance(raw, dict) else raw
             )
+            return self._build_from_per100(
+                schema_data, name, quantity_g, "T3_ai_estimate"
+            )
+        except Exception as exc:
+            logger.error("T3 AI estimate failed for ingredient '%s': %s", name, exc)
             return IngredientMacros(
                 name=name,
                 quantity_g=round(quantity_g, 1),
@@ -445,7 +453,9 @@ class NutritionLookupService:
             fiber=round(total_fiber, 1),
             sugar=round(total_sugar, 1),
             ingredients=ingredients,
-            t1_count=sum(1 for i in ingredients if i.source_tier == "T1_food_reference"),
+            t1_count=sum(
+                1 for i in ingredients if i.source_tier == "T1_food_reference"
+            ),
             t2_count=sum(1 for i in ingredients if i.source_tier == "T2_fatsecret"),
             t3_count=sum(1 for i in ingredients if i.source_tier == "T3_ai_estimate"),
         )
@@ -455,9 +465,8 @@ class NutritionLookupService:
 # Module-level utility
 # ---------------------------------------------------------------------------
 
-def _derive_calories(
-    protein: float, carbs: float, fat: float, fiber: float
-) -> float:
+
+def _derive_calories(protein: float, carbs: float, fat: float, fiber: float) -> float:
     """Fiber-aware calorie derivation: P×4 + (C−fiber)×4 + fiber×2 + F×9."""
     net_carbs = max(carbs - fiber, 0.0)
     return protein * 4.0 + net_carbs * 4.0 + fiber * 2.0 + fat * 9.0

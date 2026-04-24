@@ -2,6 +2,7 @@
 Single-recipe generation attempt with macro validation and MealSuggestion assembly.
 Used by ParallelRecipeGenerator for each individual recipe AI call.
 """
+
 import asyncio
 import logging
 import uuid
@@ -17,8 +18,12 @@ from src.domain.model.meal_suggestion import (
 )
 from src.domain.services.emoji_validator import validate_emoji
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
-from src.domain.services.meal_suggestion.nutrition_lookup_service import NutritionLookupService
+from src.domain.services.meal_suggestion.macro_validation_service import (
+    MacroValidationService,
+)
+from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+    NutritionLookupService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +78,9 @@ async def attempt_recipe_generation(
 
         ingredients: List[Dict] = raw.get("ingredients", [])
         recipe_steps: List[Dict] = raw.get("recipe_steps", [])
-        prep_time: int = raw.get("prep_time_minutes") or session.cooking_time_minutes or 30
+        prep_time: int = (
+            raw.get("prep_time_minutes") or session.cooking_time_minutes or 30
+        )
 
         if not ingredients or not recipe_steps:
             logger.warning(
@@ -86,7 +93,9 @@ async def attempt_recipe_generation(
         meal_macros = await nutrition_lookup.calculate_meal_macros(ingredients)
 
         # Scale ingredient quantities to match the session's calorie target
-        scaled_macros = nutrition_lookup.scale_to_target(meal_macros, session.target_calories)
+        scaled_macros = nutrition_lookup.scale_to_target(
+            meal_macros, session.target_calories
+        )
         if scaled_macros is None:
             logger.info(
                 f"[PHASE-2-SCALE-REJECT]{marker} index={index} | "
@@ -97,7 +106,10 @@ async def attempt_recipe_generation(
 
         # Warn (don't reject) if protein ratio is >20% off the session's protein target
         if session.protein_target and session.protein_target > 0:
-            protein_diff = abs(scaled_macros.protein - session.protein_target) / session.protein_target
+            protein_diff = (
+                abs(scaled_macros.protein - session.protein_target)
+                / session.protein_target
+            )
             if protein_diff > 0.20:
                 logger.warning(
                     f"[PHASE-2-PROTEIN-DRIFT]{marker} index={index} | "
@@ -175,7 +187,7 @@ def _log_ingredient_coverage(
 
     def _found(user_ing: str) -> bool:
         ui = user_ing.lower().strip()
-        prefix = ui[:max(4, len(ui) - 2)]
+        prefix = ui[: max(4, len(ui) - 2)]
         return (
             ui in recipe_ing_names
             or prefix in recipe_ing_names
