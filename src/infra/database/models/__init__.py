@@ -50,6 +50,9 @@ from .food_reference_model import FoodReferenceModel
 # Backward-compatible alias
 BarcodeProductModel = FoodReferenceModel
 
+# Referral system
+from .referral import ReferralCode, ReferralConversion, ReferralWallet, PayoutRequest
+
 __all__ = [
     # Base
     "BaseMixin",
@@ -104,4 +107,10 @@ __all__ = [
     # Food reference (evolved from barcode_products)
     "FoodReferenceModel",
     "BarcodeProductModel",  # backward-compatible alias
+
+    # Referral system
+    "ReferralCode",
+    "ReferralConversion",
+    "ReferralWallet",
+    "PayoutRequest",
 ]
