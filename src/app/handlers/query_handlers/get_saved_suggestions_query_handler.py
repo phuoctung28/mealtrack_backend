@@ -1,6 +1,6 @@
 """Handler for retrieving a user's saved suggestions."""
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
@@ -32,15 +32,4 @@ class GetSavedSuggestionsQueryHandler(EventHandler[GetSavedSuggestionsQuery, Dic
     async def _compute(self, query: GetSavedSuggestionsQuery) -> Dict[str, Any]:
         async with AsyncUnitOfWork() as uow:
             rows = await uow.saved_suggestions_db.find_by_user(query.user_id)
-            items = [
-                {
-                    "id": row.id,
-                    "suggestion_id": row.suggestion_id,
-                    "meal_type": row.meal_type,
-                    "portion_multiplier": row.portion_multiplier,
-                    "suggestion_data": row.suggestion_data,
-                    "saved_at": row.saved_at.isoformat() if row.saved_at else None,
-                }
-                for row in rows
-            ]
-            return {"items": items, "count": len(items)}
+            return {"items": rows, "count": len(rows)}
