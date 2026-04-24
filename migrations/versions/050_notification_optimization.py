@@ -20,6 +20,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    import logging
+    logger = logging.getLogger('alembic.runtime.migration')
+
+    logger.info("050: Starting notifications table creation...")
+
     op.create_table(
         'notifications',
         sa.Column('id', sa.String(36), primary_key=True),
@@ -50,14 +55,26 @@ def upgrade() -> None:
         ['expires_at'],
         postgresql_where=sa.text("status != 'pending'"),
     )
+    logger.info("050: notifications table created successfully")
 
     # Drop old dedup table (if exists — may not exist on fresh DBs)
     conn = op.get_bind()
     from sqlalchemy import inspect
     inspector = inspect(conn)
+
+    # Verify table was created
+    if inspector.has_table('notifications'):
+        logger.info("050: VERIFIED - notifications table exists in inspector")
+    else:
+        logger.error("050: PROBLEM - notifications table NOT found after create_table!")
+
     if inspector.has_table('notification_sent_log'):
+        logger.info("050: Dropping notification_sent_log...")
         op.drop_index('ix_sent_log_cleanup', table_name='notification_sent_log')
         op.drop_table('notification_sent_log')
+        logger.info("050: notification_sent_log dropped")
+    else:
+        logger.info("050: notification_sent_log does not exist, skipping drop")
 
 
 def downgrade() -> None:
