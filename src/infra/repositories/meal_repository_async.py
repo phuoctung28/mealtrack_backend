@@ -31,13 +31,6 @@ from src.infra.repositories.meal_repository import MealProjection
 logger = logging.getLogger(__name__)
 
 
-def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
-    """Convert aware datetime to naive UTC for TIMESTAMP WITHOUT TIME ZONE columns."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt
-    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 _PROJECTION_OPTS: dict = {
@@ -75,11 +68,11 @@ class AsyncMealRepository(MealRepositoryPort):
             existing_meal.status = MealStatusMapper.to_db(meal.status)
             existing_meal.dish_name = meal.dish_name
             existing_meal.meal_type = meal.meal_type
-            existing_meal.ready_at = _to_naive_utc(meal.ready_at)
+            existing_meal.ready_at = meal.ready_at
             existing_meal.error_message = meal.error_message
             existing_meal.raw_ai_response = meal.raw_gpt_json
             existing_meal.updated_at = meal.updated_at or utc_now()
-            existing_meal.last_edited_at = _to_naive_utc(meal.last_edited_at)
+            existing_meal.last_edited_at = meal.last_edited_at
             existing_meal.edit_count = meal.edit_count
             existing_meal.is_manually_edited = meal.is_manually_edited
             existing_meal.emoji = meal.emoji

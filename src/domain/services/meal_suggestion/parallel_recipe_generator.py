@@ -3,6 +3,7 @@ Parallel recipe generation for meal suggestions.
 Implements 3-phase: name generation → parallel recipe generation → translation.
 Per-recipe attempt logic lives in recipe_attempt_builder.py.
 """
+
 import asyncio
 import logging
 import time
@@ -13,20 +14,45 @@ from src.domain.ports.meal_generation_service_port import MealGenerationServiceP
 from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
     DeepLSuggestionTranslationService,
 )
-from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
-from src.domain.services.meal_suggestion.nutrition_lookup_service import NutritionLookupService
-from src.domain.services.meal_suggestion.recipe_attempt_builder import attempt_recipe_generation
+from src.domain.services.meal_suggestion.macro_validation_service import (
+    MacroValidationService,
+)
+from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+    NutritionLookupService,
+)
+from src.domain.services.meal_suggestion.recipe_attempt_builder import (
+    attempt_recipe_generation,
+)
 
 logger = logging.getLogger(__name__)
 
 LANGUAGE_NAMES = {
-    "en": "English", "vi": "Vietnamese", "fr": "French", "es": "Spanish",
-    "de": "German", "it": "Italian", "ja": "Japanese", "ko": "Korean",
-    "zh": "Chinese", "ru": "Russian", "pt": "Portuguese", "hi": "Hindi",
-    "ar": "Arabic", "tr": "Turkish", "nl": "Dutch", "pl": "Polish",
-    "sv": "Swedish", "da": "Danish", "fi": "Finnish", "no": "Norwegian",
-    "cs": "Czech", "el": "Greek", "he": "Hebrew", "id": "Indonesian",
-    "ms": "Malay", "th": "Thai",
+    "en": "English",
+    "vi": "Vietnamese",
+    "fr": "French",
+    "es": "Spanish",
+    "de": "German",
+    "it": "Italian",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "zh": "Chinese",
+    "ru": "Russian",
+    "pt": "Portuguese",
+    "hi": "Hindi",
+    "ar": "Arabic",
+    "tr": "Turkish",
+    "nl": "Dutch",
+    "pl": "Polish",
+    "sv": "Swedish",
+    "da": "Danish",
+    "fi": "Finnish",
+    "no": "Norwegian",
+    "cs": "Czech",
+    "el": "Greek",
+    "he": "Hebrew",
+    "id": "Indonesian",
+    "ms": "Malay",
+    "th": "Thai",
 }
 
 
@@ -44,7 +70,7 @@ class ParallelRecipeGenerator:
     """
 
     DEFAULT_SUGGESTIONS_COUNT = 3
-    MIN_ACCEPTABLE_RESULTS = 2
+    MIN_ACCEPTABLE_RESULTS = 1  # was 2 — allow partial results
     PHASE1_TIMEOUT = 20
     DISCOVERY_TIMEOUT = 15
 
@@ -75,7 +101,9 @@ class ParallelRecipeGenerator:
         start_time = time.time()
         target_lang = get_language_name(session.language)
 
-        meal_names = await self._phase1_generate_names(session, exclude_meal_names, target_lang, count)
+        meal_names = await self._phase1_generate_names(
+            session, exclude_meal_names, target_lang, count
+        )
         phase1_elapsed = time.time() - start_time
 
         if session.language and session.language != "en":
@@ -110,7 +138,9 @@ class ParallelRecipeGenerator:
 
         Returns list of dicts with validated macros. ~200 tokens total.
         """
-        from src.domain.services.prompts.prompt_template_manager import PromptTemplateManager
+        from src.domain.services.prompts.prompt_template_manager import (
+            PromptTemplateManager,
+        )
 
         discovery_schema = self._discovery_meals_schema
         if not discovery_schema:
@@ -144,12 +174,19 @@ class ParallelRecipeGenerator:
             raw = await asyncio.wait_for(
                 asyncio.to_thread(
                     self._generation.generate_meal_plan,
-                    prompt, system, "json", 1000, discovery_schema, "meal_names",
+                    prompt,
+                    system,
+                    "json",
+                    1000,
+                    discovery_schema,
+                    "meal_names",
                 ),
                 timeout=self.DISCOVERY_TIMEOUT,
             )
         except Exception as e:
-            logger.error(f"[DISCOVERY-FAILED] session={session.id} | {type(e).__name__}: {e}")
+            logger.error(
+                f"[DISCOVERY-FAILED] session={session.id} | {type(e).__name__}: {e}"
+            )
             raise RuntimeError(f"Discovery generation failed: {e}") from e
 
         # Dedup + validate macros
@@ -162,21 +199,25 @@ class ParallelRecipeGenerator:
                 continue
             seen.add(name.lower())
 
-            macros = self._macro_validator.validate_and_correct({
-                "calories": meal.get("calories", 0),
-                "protein": meal.get("protein", 0),
-                "carbs": meal.get("carbs", 0),
-                "fat": meal.get("fat", 0),
-            })
+            macros = self._macro_validator.validate_and_correct(
+                {
+                    "calories": meal.get("calories", 0),
+                    "protein": meal.get("protein", 0),
+                    "carbs": meal.get("carbs", 0),
+                    "fat": meal.get("fat", 0),
+                }
+            )
 
-            results.append({
-                "name": name,
-                "english_name": name,
-                "calories": macros["calories"],
-                "protein": macros["protein"],
-                "carbs": macros["carbs"],
-                "fat": macros["fat"],
-            })
+            results.append(
+                {
+                    "name": name,
+                    "english_name": name,
+                    "calories": macros["calories"],
+                    "protein": macros["protein"],
+                    "carbs": macros["carbs"],
+                    "fat": macros["fat"],
+                }
+            )
 
             if len(results) >= count:
                 break
@@ -193,10 +234,15 @@ class ParallelRecipeGenerator:
         return results
 
     async def _phase1_generate_names(
-        self, session: SuggestionSession, exclude_meal_names: List[str], target_lang: str,
+        self,
+        session: SuggestionSession,
+        exclude_meal_names: List[str],
+        target_lang: str,
         suggestion_count: int = 3,
     ) -> List[str]:
-        from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_meal_names_prompt
+        from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
+            build_meal_names_prompt,
+        )
 
         meal_names_schema = self._meal_names_schema
         if not meal_names_schema:
@@ -226,8 +272,14 @@ class ParallelRecipeGenerator:
                 names_raw = await asyncio.wait_for(
                     asyncio.to_thread(
                         self._generation.generate_meal_plan,
-                        build_meal_names_prompt(session, exclude_meal_names, names_to_generate),
-                        names_system, "json", 1000, meal_names_schema, "meal_names",
+                        build_meal_names_prompt(
+                            session, exclude_meal_names, names_to_generate
+                        ),
+                        names_system,
+                        "json",
+                        1000,
+                        meal_names_schema,
+                        "meal_names",
                     ),
                     timeout=self.PHASE1_TIMEOUT,
                 )
@@ -249,20 +301,31 @@ class ParallelRecipeGenerator:
             logger.info(f"[PHASE-1-COMPLETE] session={session.id} | names={meal_names}")
             return meal_names
         except Exception as e:
-            logger.error(f"[PHASE-1-FAILED] session={session.id} | {type(e).__name__}: {e}")
+            logger.error(
+                f"[PHASE-1-FAILED] session={session.id} | {type(e).__name__}: {e}"
+            )
             raise RuntimeError(f"Failed to generate meal names: {e}") from e
 
     async def _phase2_generate_recipes(
-        self, session: SuggestionSession, meal_names: List[str], target_lang: str,
+        self,
+        session: SuggestionSession,
+        meal_names: List[str],
+        target_lang: str,
         suggestion_count: int = 3,
         min_acceptable_override: int = 0,
         preserve_order: bool = True,
     ) -> List[MealSuggestion]:
-        from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_recipe_details_prompt
+        from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
+            build_recipe_details_prompt,
+        )
 
         total_attempts = len(meal_names)
-        min_acceptable = min_acceptable_override or max(suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS)
-        logger.info(f"[PHASE-2-START] session={session.id} | recipes for {meal_names} | preserve_order={preserve_order}")
+        min_acceptable = min_acceptable_override or max(
+            suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS
+        )
+        logger.info(
+            f"[PHASE-2-START] session={session.id} | recipes for {meal_names} | preserve_order={preserve_order}"
+        )
         recipe_system = (
             "You are a professional chef. Return ONLY this exact JSON structure:\n"
             '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
@@ -275,7 +338,11 @@ class ParallelRecipeGenerator:
         )
         prompts = [build_recipe_details_prompt(n, session) for n in meal_names]
         tasks = [
-            asyncio.create_task(self._generate_with_retry(prompts[i], meal_names[i], i, recipe_system, session))
+            asyncio.create_task(
+                self._generate_with_retry(
+                    prompts[i], meal_names[i], i, recipe_system, session
+                )
+            )
             for i in range(total_attempts)
         ]
 
@@ -301,8 +368,12 @@ class ParallelRecipeGenerator:
                     if result is not None:
                         successful.append(result)
                         if len(successful) >= suggestion_count:
-                            cancelled = sum(1 for t in tasks if not t.done() and t.cancel())
-                            logger.info(f"[EARLY-STOP] Got {suggestion_count} meals, cancelled {cancelled} tasks")
+                            cancelled = sum(
+                                1 for t in tasks if not t.done() and t.cancel()
+                            )
+                            logger.info(
+                                f"[EARLY-STOP] Got {suggestion_count} meals, cancelled {cancelled} tasks"
+                            )
                             break
                 except Exception as e:
                     logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
@@ -313,28 +384,57 @@ class ParallelRecipeGenerator:
         )
         if len(successful) < min_acceptable:
             if not successful:
-                raise RuntimeError(f"Failed to generate any recipes from {total_attempts} attempts")
-            raise RuntimeError(f"Insufficient recipes: {len(successful)}/{min_acceptable} minimum")
+                raise RuntimeError(
+                    f"Failed to generate any recipes from {total_attempts} attempts"
+                )
+            raise RuntimeError(
+                f"Insufficient recipes: {len(successful)}/{min_acceptable} minimum"
+            )
         if len(successful) < suggestion_count:
-            logger.warning(f"[PHASE-2-PARTIAL] session={session.id} | returning {len(successful)}/{suggestion_count} meals")
+            logger.warning(
+                f"[PHASE-2-PARTIAL] session={session.id} | returning {len(successful)}/{suggestion_count} meals"
+            )
         return successful
 
     async def _generate_with_retry(
-        self, prompt: str, meal_name: str, index: int, recipe_system: str, session: SuggestionSession
+        self,
+        prompt: str,
+        meal_name: str,
+        index: int,
+        recipe_system: str,
+        session: SuggestionSession,
     ) -> Optional[MealSuggestion]:
         """Try primary model pool; retry on alternate pool if first attempt fails."""
         primary = "recipe_primary" if index % 2 == 0 else "recipe_secondary"
         result = await attempt_recipe_generation(
-            self._generation, self._macro_validator, self._nutrition_lookup,
-            prompt, meal_name, index, primary, recipe_system, session,
+            self._generation,
+            self._macro_validator,
+            self._nutrition_lookup,
+            prompt,
+            meal_name,
+            index,
+            primary,
+            recipe_system,
+            session,
         )
         if result is not None:
             return result
-        alternate = "recipe_secondary" if primary == "recipe_primary" else "recipe_primary"
-        logger.info(f"[PHASE-2-RETRY] index={index} | {primary} → {alternate} | meal={meal_name}")
+        alternate = (
+            "recipe_secondary" if primary == "recipe_primary" else "recipe_primary"
+        )
+        logger.info(
+            f"[PHASE-2-RETRY] index={index} | {primary} → {alternate} | meal={meal_name}"
+        )
         return await attempt_recipe_generation(
-            self._generation, self._macro_validator, self._nutrition_lookup,
-            prompt, meal_name, index, alternate, recipe_system, session,
+            self._generation,
+            self._macro_validator,
+            self._nutrition_lookup,
+            prompt,
+            meal_name,
+            index,
+            alternate,
+            recipe_system,
+            session,
             is_retry=True,
         )
 
@@ -365,7 +465,9 @@ class ParallelRecipeGenerator:
         suggestion_count: int,
     ) -> List[MealSuggestion]:
         """Pipeline Phase 2 + translation: translate each recipe as it completes."""
-        from src.domain.services.meal_suggestion.suggestion_prompt_builder import build_recipe_details_prompt
+        from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
+            build_recipe_details_prompt,
+        )
 
         recipe_system = (
             "You are a professional chef. Return ONLY this exact JSON structure:\n"
@@ -380,7 +482,9 @@ class ParallelRecipeGenerator:
         prompts = [build_recipe_details_prompt(n, session) for n in meal_names]
         gen_tasks = [
             asyncio.create_task(
-                self._generate_with_retry(prompts[i], meal_names[i], i, recipe_system, session)
+                self._generate_with_retry(
+                    prompts[i], meal_names[i], i, recipe_system, session
+                )
             )
             for i in range(len(meal_names))
         ]
@@ -389,7 +493,9 @@ class ParallelRecipeGenerator:
         gen_successes = 0
         min_acceptable = max(suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS)
 
-        logger.info(f"[PHASE-2-PIPELINE-START] session={session.id} | recipes={meal_names}")
+        logger.info(
+            f"[PHASE-2-PIPELINE-START] session={session.id} | recipes={meal_names}"
+        )
         gen_start = time.time()
 
         for coro in asyncio.as_completed(gen_tasks):
@@ -403,7 +509,9 @@ class ParallelRecipeGenerator:
                         )
                     )
                     if gen_successes >= suggestion_count:
-                        cancelled = sum(1 for t in gen_tasks if not t.done() and t.cancel())
+                        cancelled = sum(
+                            1 for t in gen_tasks if not t.done() and t.cancel()
+                        )
                         logger.info(
                             f"[EARLY-STOP] Got {suggestion_count} recipes, "
                             f"cancelled {cancelled} gen tasks"
@@ -421,8 +529,12 @@ class ParallelRecipeGenerator:
             for t in translate_tasks:
                 t.cancel()
             if not gen_successes:
-                raise RuntimeError(f"Failed to generate any recipes from {len(meal_names)} attempts")
-            raise RuntimeError(f"Insufficient recipes: {gen_successes}/{min_acceptable} minimum")
+                raise RuntimeError(
+                    f"Failed to generate any recipes from {len(meal_names)} attempts"
+                )
+            raise RuntimeError(
+                f"Insufficient recipes: {gen_successes}/{min_acceptable} minimum"
+            )
 
         suggestions = await asyncio.gather(*translate_tasks)
         return list(suggestions)

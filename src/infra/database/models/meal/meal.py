@@ -20,12 +20,12 @@ class MealORM(Base, TimestampMixin):
     status = Column(Enum(MealStatusEnum, native_enum=False), nullable=False)
     dish_name = Column(String(255), nullable=True)  # The name of the dish
     meal_type = Column(String(20), nullable=True)  # breakfast, lunch, dinner, snack
-    ready_at = Column(DateTime, nullable=True)  # When meal analysis was completed
+    ready_at = Column(DateTime(timezone=True), nullable=True)  # When meal analysis was completed
     error_message = Column(Text, nullable=True)
     raw_ai_response = Column(Text, nullable=True)
 
     # Edit tracking fields
-    last_edited_at = Column(DateTime, nullable=True)  # When meal was last edited
+    last_edited_at = Column(DateTime(timezone=True), nullable=True)  # When meal was last edited
     edit_count = Column(Integer, default=0, nullable=False)  # Number of times edited
     is_manually_edited = Column(Boolean, default=False, nullable=False)  # Whether meal has been manually edited
 

@@ -1,5 +1,5 @@
 """Meal cluster ORM <-> domain mapping functions."""
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, Optional
 
 from src.domain.model.meal.meal import Meal as DomainMeal
@@ -18,14 +18,6 @@ from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.mappers.status_mapper import MealStatusMapper
 
-
-def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
-    """Convert aware datetime to naive UTC for TIMESTAMP WITHOUT TIME ZONE columns."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt
-    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 # ---------------------------------------------------------------------------
@@ -202,8 +194,8 @@ def meal_translation_domain_to_orm(domain: DomainMealTranslation) -> MealTransla
         meal_id=domain.meal_id,
         language=domain.language,
         dish_name=domain.dish_name,
-        translated_at=_to_naive_utc(domain.translated_at or now),
-        created_at=_to_naive_utc(now),
+        translated_at=domain.translated_at or now,
+        created_at=now,
     )
     for fi in domain.food_items:
         translation.food_items.append(
@@ -225,10 +217,10 @@ def meal_domain_to_orm(domain: DomainMeal) -> MealORM:
         updated_at=getattr(domain, "updated_at", None) or utc_now(),
         dish_name=getattr(domain, "dish_name", None),
         meal_type=getattr(domain, "meal_type", None),
-        ready_at=_to_naive_utc(getattr(domain, "ready_at", None)),
+        ready_at=getattr(domain, "ready_at", None),
         error_message=getattr(domain, "error_message", None),
         raw_ai_response=getattr(domain, "raw_gpt_json", None),
-        last_edited_at=_to_naive_utc(getattr(domain, "last_edited_at", None)),
+        last_edited_at=getattr(domain, "last_edited_at", None),
         edit_count=getattr(domain, "edit_count", 0),
         is_manually_edited=getattr(domain, "is_manually_edited", False),
         source=getattr(domain, "source", None),
