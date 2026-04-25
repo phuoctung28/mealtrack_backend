@@ -28,13 +28,13 @@ class Subscription(Base, BaseMixin):
 
     # Subscription status
     status = Column(
-        Enum('active', 'expired', 'cancelled', 'billing_issue', native_enum=False),
+        Enum('active', 'expired', 'cancelled', 'billing_issue', 'refunded', native_enum=False),
         nullable=False,
         default='active'
     )
-    purchased_at = Column(DateTime, nullable=False)
-    expires_at = Column(DateTime, nullable=True)
-    cancelled_at = Column(DateTime, nullable=True)
+    purchased_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
     
     # Store metadata
     store_transaction_id = Column(String(255), nullable=True)
