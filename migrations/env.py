@@ -6,48 +6,12 @@ from pathlib import Path
 # Add src to path so we can import our modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sqlalchemy import create_engine, engine_from_config
-from sqlalchemy import pool
-from sqlalchemy.pool import NullPool
-
 from alembic import context
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
-# Import Base for metadata, but create our own engine for migrations
 from src.infra.database.config import Base
-
-# For migrations, prefer direct connection over pooler
-# Neon's PgBouncer pooler doesn't handle DDL commits reliably
-DATABASE_URL_DIRECT = os.getenv("DATABASE_URL_DIRECT")
-DATABASE_URL = os.getenv("DATABASE_URL", "")
-
-if DATABASE_URL_DIRECT:
-    MIGRATION_URL = DATABASE_URL_DIRECT
-elif "-pooler" in DATABASE_URL:
-    MIGRATION_URL = DATABASE_URL.replace("-pooler", "")
-else:
-    MIGRATION_URL = DATABASE_URL
-
-# Normalize protocol for psycopg2
-if MIGRATION_URL.startswith("postgres://"):
-    MIGRATION_URL = MIGRATION_URL.replace("postgres://", "postgresql+psycopg2://", 1)
-elif MIGRATION_URL.startswith("postgresql://"):
-    MIGRATION_URL = MIGRATION_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
-
-# Create dedicated engine for migrations with direct connection
-migration_engine = create_engine(
-    MIGRATION_URL,
-    echo=False,
-    poolclass=NullPool,
-    connect_args={
-        "connect_timeout": 10,
-        "keepalives": 1,
-        "keepalives_idle": 30,
-        "keepalives_interval": 10,
-        "keepalives_count": 5,
-    },
-)
+from migrations.utils import MIGRATION_URL, migration_engine
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -87,6 +51,8 @@ def _apply_migration_timeouts(connection) -> None:
     connection.execute(text(f"SET statement_timeout = {statement_timeout_ms}"))
     # Commit SET statements to avoid transaction state issues
     connection.commit()
+
+
 def _next_sequential_rev_id(context, revision, directives):
     """Auto-assign sequential numeric revision IDs (048, 049, ...)."""
     if not directives:
