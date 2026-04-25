@@ -93,6 +93,8 @@ def _apply_migration_timeouts(connection) -> None:
 
     connection.execute(text(f"SET lock_timeout = {lock_timeout_ms}"))
     connection.execute(text(f"SET statement_timeout = {statement_timeout_ms}"))
+    # Commit SET statements to avoid transaction state issues
+    connection.commit()
 def _next_sequential_rev_id(context, revision, directives):
     """Auto-assign sequential numeric revision IDs (048, 049, ...)."""
     if not directives:
@@ -149,6 +151,10 @@ def run_migrations_online() -> None:
 
         with context.begin_transaction():
             context.run_migrations()
+
+        # Explicit commit to ensure DDL is persisted (Neon requirement)
+        connection.commit()
+        print("[MIGRATIONS] Transaction committed successfully", flush=True)
 
 
 if context.is_offline_mode():
