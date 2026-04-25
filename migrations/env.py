@@ -24,16 +24,24 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 if DATABASE_URL_DIRECT:
     MIGRATION_URL = DATABASE_URL_DIRECT
+    _url_source = "DATABASE_URL_DIRECT"
 elif "-pooler" in DATABASE_URL:
     MIGRATION_URL = DATABASE_URL.replace("-pooler", "")
+    _url_source = "DATABASE_URL (pooler stripped)"
 else:
     MIGRATION_URL = DATABASE_URL
+    _url_source = "DATABASE_URL (no pooler)"
 
 # Normalize protocol for psycopg2
 if MIGRATION_URL.startswith("postgres://"):
     MIGRATION_URL = MIGRATION_URL.replace("postgres://", "postgresql+psycopg2://", 1)
 elif MIGRATION_URL.startswith("postgresql://"):
     MIGRATION_URL = MIGRATION_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+# Log which URL we're using (mask password)
+import re
+_masked_url = re.sub(r'://[^:]+:[^@]+@', '://***:***@', MIGRATION_URL)
+print(f"[MIGRATIONS] Using {_url_source}: {_masked_url}", flush=True)
 
 # Create dedicated engine for migrations with direct connection
 migration_engine = create_engine(
