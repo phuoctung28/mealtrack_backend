@@ -33,10 +33,11 @@ async def health_check():
     )
 
 
-@router.get("/")
+@router.api_route("/", methods=["GET", "HEAD"])
 async def root():
     """
     Root endpoint with API information.
+    Supports HEAD for Render health checks.
     """
     return {
         "name": "MealTrack API",
