@@ -25,6 +25,15 @@ from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
 
 logger = logging.getLogger(__name__)
 
+# Cache metrics for observability
+_cache_metrics = {
+    "redis_hits": 0,
+    "redis_misses": 0,
+    "t1_hits": 0,
+    "t2_hits": 0,
+    "t3_hits": 0,
+}
+
 NUTRITION_CACHE_TTL = 86400  # 24 hours
 T2_TIMEOUT = 2.0  # FatSecret timeout
 T3_TIMEOUT = 3.0  # AI estimate timeout
@@ -128,7 +137,11 @@ class NutritionLookupService:
             for ing in ingredients
         ]
         results: List[IngredientMacros] = await asyncio.gather(*tasks)
-        return self._aggregate(list(results))
+        meal = self._aggregate(list(results))
+        total = _cache_metrics["redis_hits"] + _cache_metrics["redis_misses"]
+        if total > 0 and total % 100 == 0:
+            self.log_cache_metrics()
+        return meal
 
     # ------------------------------------------------------------------
     # Three-tier lookup
@@ -147,13 +160,17 @@ class NutritionLookupService:
                 cached = await self._redis.get(cache_key)
                 if cached:
                     data = json.loads(cached)
+                    _cache_metrics["redis_hits"] += 1
                     return self._build_from_cached(data, name, quantity_g)
             except Exception as exc:
                 logger.warning("Redis get failed for %s: %s", cache_key, exc)
 
+        _cache_metrics["redis_misses"] += 1
+
         # T1: exact match on name_normalized
         ref = self._repo.find_by_normalized_name(normalized)
         if ref:
+            _cache_metrics["t1_hits"] += 1
             result = self._calculate_from_ref(
                 ref, name, quantity_g, "T1_food_reference"
             )
@@ -169,11 +186,13 @@ class NutritionLookupService:
             logger.warning("T2 FatSecret timeout for %s", name)
             per100 = None
         if per100 is not None:
+            _cache_metrics["t2_hits"] += 1
             result = self._build_from_per100(per100, name, quantity_g, "T2_fatsecret")
             await self._cache_result(cache_key, result)
             return result
 
         # T3: AI estimate — last resort
+        _cache_metrics["t3_hits"] += 1
         try:
             result = await asyncio.wait_for(
                 self._ai_estimate(name, quantity_g), timeout=T3_TIMEOUT
@@ -458,6 +477,34 @@ class NutritionLookupService:
             ),
             t2_count=sum(1 for i in ingredients if i.source_tier == "T2_fatsecret"),
             t3_count=sum(1 for i in ingredients if i.source_tier == "T3_ai_estimate"),
+        )
+
+    @staticmethod
+    def get_cache_metrics() -> dict:
+        """Return current cache metrics for monitoring."""
+        total = _cache_metrics["redis_hits"] + _cache_metrics["redis_misses"]
+        hit_rate = (
+            _cache_metrics["redis_hits"] / total * 100 if total > 0 else 0.0
+        )
+        return {
+            **_cache_metrics,
+            "total_lookups": total,
+            "redis_hit_rate_pct": round(hit_rate, 1),
+        }
+
+    @staticmethod
+    def log_cache_metrics() -> None:
+        """Log current cache metrics at INFO level."""
+        metrics = NutritionLookupService.get_cache_metrics()
+        logger.info(
+            "[NUTRITION-CACHE] hits=%d misses=%d hit_rate=%.1f%% | "
+            "T1=%d T2=%d T3=%d",
+            metrics["redis_hits"],
+            metrics["redis_misses"],
+            metrics["redis_hit_rate_pct"],
+            metrics["t1_hits"],
+            metrics["t2_hits"],
+            metrics["t3_hits"],
         )
 
 
