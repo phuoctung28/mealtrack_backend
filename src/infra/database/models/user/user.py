@@ -1,12 +1,11 @@
 """
 Core user model for authentication and account management.
 """
-from datetime import datetime
-
 from sqlalchemy import Column, String, Boolean, DateTime, Text, Index, Enum
 from sqlalchemy.orm import relationship
 
 from src.api.schemas.common.auth_enums import AuthProviderEnum
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.config import Base
 from src.infra.database.models.base import BaseMixin
 
@@ -34,7 +33,7 @@ class User(Base, BaseMixin):
     # Status & Activity
     is_active = Column(Boolean, default=True, nullable=False)
     onboarding_completed = Column(Boolean, default=False, nullable=False)
-    last_accessed = Column(DateTime, default=datetime.now, nullable=False)
+    last_accessed = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     
     # Timezone (IANA format, e.g., "America/Los_Angeles")
