@@ -215,7 +215,7 @@ class TestWebhookHandler:
         event = {"app_user_id": "user_123"}
 
         # Mock existing subscription (async)
-        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=subscription):
+        with patch('src.api.routes.v1.webhooks.get_or_create_subscription', new_callable=AsyncMock, return_value=subscription):
             await handle_cancellation(mock_uow, user, event)
 
         assert subscription.status == "cancelled"
@@ -228,7 +228,7 @@ class TestWebhookHandler:
         event = {"app_user_id": "user_123"}
 
         # Mock existing subscription (async)
-        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=subscription):
+        with patch('src.api.routes.v1.webhooks.get_or_create_subscription', new_callable=AsyncMock, return_value=subscription):
             await handle_expiration(mock_uow, user, event)
 
         assert subscription.status == "expired"
@@ -240,7 +240,7 @@ class TestWebhookHandler:
         event = {"app_user_id": "user_123"}
 
         # Mock existing subscription (async)
-        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=subscription):
+        with patch('src.api.routes.v1.webhooks.get_or_create_subscription', new_callable=AsyncMock, return_value=subscription):
             await handle_billing_issue(mock_uow, user, event)
 
         assert subscription.status == "billing_issue"

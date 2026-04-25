@@ -189,10 +189,7 @@ async def handle_renewal(uow, user, event):
 
 async def handle_cancellation(uow, user, event):
     """Handle subscription cancellation."""
-    subscription = await get_subscription_by_revenuecat_id(
-        uow,
-        event.get("app_user_id")
-    )
+    subscription = await get_or_create_subscription(uow, user, event)
 
     if subscription:
         subscription.status = "cancelled"
@@ -204,10 +201,7 @@ async def handle_cancellation(uow, user, event):
 
 async def handle_expiration(uow, user, event):
     """Handle subscription expiration."""
-    subscription = await get_subscription_by_revenuecat_id(
-        uow,
-        event.get("app_user_id")
-    )
+    subscription = await get_or_create_subscription(uow, user, event)
 
     if subscription:
         subscription.status = "expired"
@@ -217,10 +211,7 @@ async def handle_expiration(uow, user, event):
 
 async def handle_billing_issue(uow, user, event):
     """Handle billing issues."""
-    subscription = await get_subscription_by_revenuecat_id(
-        uow,
-        event.get("app_user_id")
-    )
+    subscription = await get_or_create_subscription(uow, user, event)
 
     if subscription:
         subscription.status = "billing_issue"
@@ -230,10 +221,7 @@ async def handle_billing_issue(uow, user, event):
 
 async def handle_product_change(uow, user, event):
     """Handle product change (e.g., monthly to yearly)."""
-    subscription = await get_subscription_by_revenuecat_id(
-        uow,
-        event.get("app_user_id")
-    )
+    subscription = await get_or_create_subscription(uow, user, event)
 
     if subscription:
         subscription.product_id = event.get("product_id")
@@ -245,10 +233,7 @@ async def handle_product_change(uow, user, event):
 
 async def handle_refund(uow, user, event):
     """Handle refund — update subscription status and revoke referral credit."""
-    subscription = await get_subscription_by_revenuecat_id(
-        uow,
-        event.get("app_user_id")
-    )
+    subscription = await get_or_create_subscription(uow, user, event)
     if subscription:
         subscription.status = "refunded"
         subscription.updated_at = utc_now()
@@ -287,6 +272,30 @@ def _revoke_referral_on_refund(uow, user_id: str) -> None:
             conversion.referrer_user_id,
             conversion.commission_amount,
         )
+
+
+async def get_or_create_subscription(uow, user, event):
+    """Get existing subscription or create one if missing (handles missed INITIAL_PURCHASE)."""
+    subscription = await uow.subscriptions.find_by_revenuecat_id(event.get("app_user_id"))
+
+    if not subscription:
+        logger.warning(f"No subscription found for user {user.id}, creating record (missed INITIAL_PURCHASE)")
+        subscription = Subscription(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            revenuecat_subscriber_id=event.get("app_user_id"),
+            product_id=event.get("product_id") or "unknown",
+            platform=parse_platform(event.get("store")),
+            status="active",
+            purchased_at=parse_timestamp(event.get("purchased_at_ms")) or utc_now(),
+            expires_at=parse_timestamp(event.get("expiration_at_ms")),
+            store_transaction_id=event.get("transaction_id"),
+            is_sandbox=event.get("environment") == "SANDBOX",
+        )
+        uow.session.add(subscription)
+        await uow.session.flush()
+
+    return subscription
 
 
 async def get_subscription_by_revenuecat_id(uow, revenuecat_id: str):
