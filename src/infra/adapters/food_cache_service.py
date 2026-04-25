@@ -19,7 +19,7 @@ class FoodCacheService(FoodCacheServicePort):
         self.cache_service = cache_service
         
         if cache_service:
-            logger.info("FoodCacheService initialized with Redis cache")
+            logger.debug("FoodCacheService initialized with Redis cache")
         else:
             logger.warning(
                 "FoodCacheService initialized without Redis. "
