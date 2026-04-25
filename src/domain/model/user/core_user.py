@@ -11,6 +11,7 @@ from uuid import UUID
 
 from src.domain.model.auth.auth_provider import AuthProvider
 from src.domain.model.base import BaseDomainModel
+from src.domain.utils.timezone_utils import utc_now
 
 
 @dataclass(kw_only=True)
@@ -54,7 +55,7 @@ class UserDomainModel(BaseDomainModel):
     provider: AuthProvider
     is_active: bool = True
     onboarding_completed: bool = False
-    last_accessed: datetime = field(default_factory=datetime.now)
+    last_accessed: datetime = field(default_factory=utc_now)
     timezone: str = 'UTC'
     first_name: Optional[str] = None
     last_name: Optional[str] = None
