@@ -1,6 +1,7 @@
 """
 Query to preview TDEE calculation without authentication.
 """
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -10,6 +11,7 @@ from src.app.events.base import Query
 @dataclass
 class PreviewTdeeQuery(Query):
     """Query to preview TDEE calculation without persisting data."""
+
     age: int
     sex: str  # 'male' or 'female'
     height: float

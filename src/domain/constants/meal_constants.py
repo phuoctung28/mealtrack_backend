@@ -8,34 +8,34 @@ and configuration values used throughout the domain layer.
 
 class MealDistribution:
     """Constants for meal calorie distribution."""
-    
+
     # Standard distribution percentages
     BREAKFAST_PERCENT = 0.25
     LUNCH_PERCENT = 0.35
     DINNER_PERCENT = 0.30
     SNACK_PERCENT = 0.10
-    
+
     # Calorie thresholds
     MIN_CALORIES_FOR_SNACK = 1800
-    
+
     # With snack adjustments
     BREAKFAST_WITH_SNACK = 0.225  # 25% * 0.9
-    LUNCH_WITH_SNACK = 0.315      # 35% * 0.9
-    DINNER_WITH_SNACK = 0.27      # 30% * 0.9
+    LUNCH_WITH_SNACK = 0.315  # 35% * 0.9
+    DINNER_WITH_SNACK = 0.27  # 30% * 0.9
 
 
 class NutritionConstants:
     """Constants for nutrition calculations."""
-    
+
     # Calorie per gram of macronutrients
     CALORIES_PER_GRAM_PROTEIN = 4
     CALORIES_PER_GRAM_CARBS = 4
     CALORIES_PER_GRAM_FAT = 9
-    
+
     # Validation tolerances
     CALORIE_TOLERANCE_PERCENT = 0.20  # 20% tolerance for calorie validation
     TOTAL_CALORIE_TOLERANCE_PERCENT = 0.05  # 5% tolerance for total calories
-    
+
     # Default confidence scores
     DEFAULT_FOOD_CONFIDENCE = 1.0
     MIN_CONFIDENCE_THRESHOLD = 0.5
@@ -43,13 +43,13 @@ class NutritionConstants:
 
 class PortionUnits:
     """Valid units for portion sizes."""
-    
+
     WEIGHT_UNITS = ["g", "oz", "kg", "lb"]
     VOLUME_UNITS = ["ml", "l", "cup", "tbsp", "tsp", "fl oz"]
     COUNT_UNITS = ["piece", "serving", "slice", "unit"]
-    
+
     ALL_UNITS = WEIGHT_UNITS + VOLUME_UNITS + COUNT_UNITS
-    
+
     # Conversion factors to grams (approximate)
     TO_GRAMS = {
         "g": 1,
@@ -58,21 +58,21 @@ class PortionUnits:
         "lb": 453.59,
         "cup": 240,  # Approximate, varies by ingredient
         "tbsp": 15,  # Approximate
-        "tsp": 5,    # Approximate
+        "tsp": 5,  # Approximate
     }
 
 
 class GPTPromptConstants:
     """Constants for GPT prompts."""
-    
+
     # Response format version
     RESPONSE_FORMAT_VERSION = "1.0"
-    
+
     # Confidence thresholds
     HIGH_CONFIDENCE = 0.8
     MEDIUM_CONFIDENCE = 0.6
     LOW_CONFIDENCE = 0.4
-    
+
     # Token limits
     MAX_OUTPUT_TOKENS = 2000
     MAX_PROMPT_LENGTH = 4000
@@ -80,16 +80,16 @@ class GPTPromptConstants:
 
 class MealPlanningConstants:
     """Constants for meal planning."""
-    
+
     # Cooking time defaults (minutes)
     DEFAULT_WEEKDAY_COOKING_TIME = 30
     DEFAULT_WEEKEND_COOKING_TIME = 60
     MAX_SNACK_PREP_TIME = 15
-    
+
     # Meal variety
     MIN_DAYS_BEFORE_REPEAT = 3
     MAX_CUISINE_REPEATS_PER_WEEK = 2
-    
+
     # Plan duration
     WEEKLY_PLAN_DAYS = 7
     DAILY_PLAN_DAYS = 1
@@ -100,19 +100,19 @@ class TDEEConstants:
 
     # Job type base multipliers (NEAT component)
     JOB_TYPE_MULTIPLIERS = {
-        "desk": 1.2,       # Sitting most of day
-        "on_feet": 1.4,    # Standing/walking (retail, teaching)
-        "physical": 1.6,   # Manual labor (construction, warehouse)
+        "desk": 1.2,  # Sitting most of day
+        "on_feet": 1.4,  # Standing/walking (retail, teaching)
+        "physical": 1.6,  # Manual labor (construction, warehouse)
     }
 
     # Exercise contribution per weekly hour
     EXERCISE_MULTIPLIER_PER_HOUR = 0.05
 
     # Goal adjustments (calories)
-    CUTTING_DEFICIT = 500      # 500 calorie deficit
-    BULKING_SURPLUS = 300      # 300 calorie surplus (lean bulk)
+    CUTTING_DEFICIT = 500  # 500 calorie deficit
+    BULKING_SURPLUS = 300  # 300 calorie surplus (lean bulk)
     # MAINTENANCE_ADJUSTMENT removed - use RECOMP_ADJUSTMENT instead
-    RECOMP_ADJUSTMENT = 0      # No calorie adjustment for recomposition
+    RECOMP_ADJUSTMENT = 0  # No calorie adjustment for recomposition
 
     # Evidence-based protein targets (g per kg body weight)
     # Cut: Helms 2014 — higher protein preserves lean mass in deficit
@@ -158,11 +158,11 @@ class TDEEConstants:
     MIN_CARBS_PER_KG = 2.5
 
     # Min/max bounds for safety
-    MIN_PROTEIN_G = 60   # Minimum daily protein
+    MIN_PROTEIN_G = 60  # Minimum daily protein
     MAX_PROTEIN_G = 300  # Maximum daily protein
-    MIN_FAT_G = 40       # Minimum daily fat for hormone function
-    MAX_FAT_G = 150      # Maximum daily fat
-    MIN_CARBS_G = 50     # Minimum daily carbs
+    MIN_FAT_G = 40  # Minimum daily fat for hormone function
+    MAX_FAT_G = 150  # Maximum daily fat
+    MIN_CARBS_G = 50  # Minimum daily carbs
 
     # Validation ranges
     MIN_AGE = 13
@@ -186,7 +186,7 @@ class WeeklyBudgetConstants:
     MAX_DAILY_DEFICIT_RATIO = 0.10
 
     # Adjusted daily macro bounds (ratio of standard daily)
-    MACRO_FLOOR_RATIO = 0.5    # Never below 50% of base
+    MACRO_FLOOR_RATIO = 0.5  # Never below 50% of base
     MACRO_CEILING_RATIO = 1.5  # Never above 150% of base
 
     # Smart prompt threshold: suggest cheat tag when daily consumed > this × daily target

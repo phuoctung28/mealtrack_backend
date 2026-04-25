@@ -1,4 +1,5 @@
 """Query handler — get or lazily create the authenticated user's referral code."""
+
 import logging
 
 from src.app.queries.referral.get_my_referral_code_query import (

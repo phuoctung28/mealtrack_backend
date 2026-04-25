@@ -1,6 +1,7 @@
 """
 Unit tests for WeeklyBudgetService.
 """
+
 import pytest
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -15,8 +16,8 @@ from src.domain.services.weekly_budget_service import (
     EffectiveAdjustedResult,
 )
 
-
 # --- Fakes for testing get_effective_adjusted_daily / calculate_weekly_consumed ---
+
 
 @dataclass
 class FakeNutritionMacros:
@@ -24,19 +25,23 @@ class FakeNutritionMacros:
     carbs: float = 0.0
     fat: float = 0.0
 
+
 @dataclass
 class FakeNutrition:
     calories: float = 0.0
     macros: FakeNutritionMacros = None
+
     def __post_init__(self):
         if self.macros is None:
             self.macros = FakeNutritionMacros()
+
 
 @dataclass
 class FakeMeal:
     status: MealStatus = MealStatus.READY
     nutrition: Optional[FakeNutrition] = None
     created_at: Optional[datetime] = None
+
 
 @dataclass
 class FakeCheatDay:
@@ -45,6 +50,7 @@ class FakeCheatDay:
 
 class FakeMealRepo:
     """Fake meal repository with controllable data."""
+
     def __init__(self, meals: List[FakeMeal] = None, daily_counts: dict = None):
         self._meals = meals or []
         self._daily_counts = daily_counts or {}
@@ -58,6 +64,7 @@ class FakeMealRepo:
 
 class FakeCheatDayRepo:
     """Fake cheat day repository."""
+
     def __init__(self, cheat_days: List[FakeCheatDay] = None):
         self._cheat_days = cheat_days or []
 
@@ -67,6 +74,7 @@ class FakeCheatDayRepo:
 
 class FakeUoW:
     """Fake Unit of Work for testing."""
+
     def __init__(self, meals=None, daily_counts=None, cheat_days=None):
         self.meals = FakeMealRepo(meals or [], daily_counts or {})
         self.cheat_days = FakeCheatDayRepo(cheat_days or [])
@@ -88,13 +96,13 @@ class TestWeeklyBudgetService:
             user_id="user-1",
             week_start_date=date(2026, 2, 16),
             target_calories=11970,  # 1710 * 7 (macro-consistent)
-            target_protein=490,     # 70 * 7
-            target_carbs=1400,      # 200 * 7
-            target_fat=490,         # 70 * 7
+            target_protein=490,  # 70 * 7
+            target_carbs=1400,  # 200 * 7
+            target_fat=490,  # 70 * 7
             consumed_calories=5130,  # 3 days at 1710
-            consumed_protein=210,    # 3 * 70
-            consumed_carbs=600,      # 3 * 200
-            consumed_fat=210,        # 3 * 70
+            consumed_protein=210,  # 3 * 70
+            consumed_carbs=600,  # 3 * 200
+            consumed_fat=210,  # 3 * 70
         )
 
         # 4 days remaining — macros: P=70, C=200, F=70 → 1710 kcal/day
@@ -221,9 +229,9 @@ class TestWeeklyBudgetService:
             user_id="user-1",
             week_start_date=date(2026, 2, 16),
             target_calories=10500,  # 1500 * 7
-            target_protein=420,     # 60 * 7
-            target_carbs=1312.5,    # 187.5 * 7
-            target_fat=350,         # 50 * 7
+            target_protein=420,  # 60 * 7
+            target_carbs=1312.5,  # 187.5 * 7
+            target_fat=350,  # 50 * 7
             consumed_calories=9000,
             consumed_protein=360,
             consumed_carbs=1200,
@@ -250,7 +258,7 @@ class TestWeeklyBudgetService:
             user_id="user-1",
             week_start_date=date(2026, 2, 16),
             target_calories=14000,
-            target_protein=980,     # 140 * 7
+            target_protein=980,  # 140 * 7
             target_carbs=1400,
             target_fat=490,
             consumed_calories=13000,
@@ -380,10 +388,10 @@ class TestWeeklyBudgetService:
             target_protein=798,
             target_carbs=2426.2,
             target_fat=477.4,
-            consumed_calories=7368,   # 3 × 2456
-            consumed_protein=342,     # 3 × 114
-            consumed_carbs=1039.8,    # 3 × 346.6
-            consumed_fat=204.6,       # 3 × 68.2
+            consumed_calories=7368,  # 3 × 2456
+            consumed_protein=342,  # 3 × 114
+            consumed_carbs=1039.8,  # 3 × 346.6
+            consumed_fat=204.6,  # 3 × 68.2
         )
         result = WeeklyBudgetService.calculate_adjusted_daily(
             weekly_budget=budget,
@@ -475,22 +483,29 @@ class TestWeeklyMacroBudgetDomain:
 
 # --- Helper to build a standard weekly budget for effective adjusted tests ---
 
-def _make_budget(week_start=date(2026, 3, 23), consumed_cal=0.0, consumed_p=0.0,
-                 consumed_c=0.0, consumed_f=0.0):
+
+def _make_budget(
+    week_start=date(2026, 3, 23),
+    consumed_cal=0.0,
+    consumed_p=0.0,
+    consumed_c=0.0,
+    consumed_f=0.0,
+):
     """Weekly budget: 2000 cal/day → 14000/wk, P=70, C=250, F=70."""
     return WeeklyMacroBudget(
         weekly_budget_id="eff-test",
         user_id="user-1",
         week_start_date=week_start,
         target_calories=14000,
-        target_protein=490,   # 70 * 7
-        target_carbs=1750,    # 250 * 7
-        target_fat=490,       # 70 * 7
+        target_protein=490,  # 70 * 7
+        target_carbs=1750,  # 250 * 7
+        target_fat=490,  # 70 * 7
         consumed_calories=consumed_cal,
         consumed_protein=consumed_p,
         consumed_carbs=consumed_c,
         consumed_fat=consumed_f,
     )
+
 
 # Base daily values matching _make_budget
 _BASE_CAL = 2000.0
@@ -506,22 +521,36 @@ class TestCalculateWeeklyConsumed:
     def test_no_meals_returns_zeros(self):
         uow = FakeUoW(meals=[])
         result = WeeklyBudgetService.calculate_weekly_consumed(
-            uow, "user-1", date(2026, 3, 23),
+            uow,
+            "user-1",
+            date(2026, 3, 23),
         )
         assert result == {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
 
     def test_sums_ready_meals(self):
         meals = [
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=500, macros=FakeNutritionMacros(protein=30, carbs=50, fat=20)
-            ), created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc)),
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=700, macros=FakeNutritionMacros(protein=40, carbs=80, fat=25)
-            ), created_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc)),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=500,
+                    macros=FakeNutritionMacros(protein=30, carbs=50, fat=20),
+                ),
+                created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc),
+            ),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=700,
+                    macros=FakeNutritionMacros(protein=40, carbs=80, fat=25),
+                ),
+                created_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc),
+            ),
         ]
         uow = FakeUoW(meals=meals)
         result = WeeklyBudgetService.calculate_weekly_consumed(
-            uow, "user-1", date(2026, 3, 23),
+            uow,
+            "user-1",
+            date(2026, 3, 23),
         )
         assert result["calories"] == 1200
         assert result["protein"] == 70
@@ -530,51 +559,93 @@ class TestCalculateWeeklyConsumed:
 
     def test_excludes_non_ready_meals(self):
         meals = [
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=500, macros=FakeNutritionMacros(protein=30, carbs=50, fat=20)
-            ), created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc)),
-            FakeMeal(status=MealStatus.PROCESSING, nutrition=FakeNutrition(
-                calories=999, macros=FakeNutritionMacros(protein=99, carbs=99, fat=99)
-            ), created_at=datetime(2026, 3, 23, 13, 0, tzinfo=timezone.utc)),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=500,
+                    macros=FakeNutritionMacros(protein=30, carbs=50, fat=20),
+                ),
+                created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc),
+            ),
+            FakeMeal(
+                status=MealStatus.PROCESSING,
+                nutrition=FakeNutrition(
+                    calories=999,
+                    macros=FakeNutritionMacros(protein=99, carbs=99, fat=99),
+                ),
+                created_at=datetime(2026, 3, 23, 13, 0, tzinfo=timezone.utc),
+            ),
         ]
         uow = FakeUoW(meals=meals)
         result = WeeklyBudgetService.calculate_weekly_consumed(
-            uow, "user-1", date(2026, 3, 23),
+            uow,
+            "user-1",
+            date(2026, 3, 23),
         )
         assert result["calories"] == 500
 
     def test_exclude_date_skips_meals_on_that_date(self):
         meals = [
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=500, macros=FakeNutritionMacros(protein=30, carbs=50, fat=20)
-            ), created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc)),
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=700, macros=FakeNutritionMacros(protein=40, carbs=80, fat=25)
-            ), created_at=datetime(2026, 3, 25, 12, 0, tzinfo=timezone.utc)),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=500,
+                    macros=FakeNutritionMacros(protein=30, carbs=50, fat=20),
+                ),
+                created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc),
+            ),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=700,
+                    macros=FakeNutritionMacros(protein=40, carbs=80, fat=25),
+                ),
+                created_at=datetime(2026, 3, 25, 12, 0, tzinfo=timezone.utc),
+            ),
         ]
         uow = FakeUoW(meals=meals)
         # Exclude March 25
         result = WeeklyBudgetService.calculate_weekly_consumed(
-            uow, "user-1", date(2026, 3, 23),
-            exclude_date=date(2026, 3, 25), user_timezone="UTC",
+            uow,
+            "user-1",
+            date(2026, 3, 23),
+            exclude_date=date(2026, 3, 25),
+            user_timezone="UTC",
         )
         assert result["calories"] == 500
 
     def test_exclude_dates_skips_multiple_dates(self):
         meals = [
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=500, macros=FakeNutritionMacros(protein=30, carbs=50, fat=20)
-            ), created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc)),
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=600, macros=FakeNutritionMacros(protein=35, carbs=60, fat=22)
-            ), created_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc)),
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=700, macros=FakeNutritionMacros(protein=40, carbs=80, fat=25)
-            ), created_at=datetime(2026, 3, 25, 12, 0, tzinfo=timezone.utc)),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=500,
+                    macros=FakeNutritionMacros(protein=30, carbs=50, fat=20),
+                ),
+                created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc),
+            ),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=600,
+                    macros=FakeNutritionMacros(protein=35, carbs=60, fat=22),
+                ),
+                created_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc),
+            ),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=700,
+                    macros=FakeNutritionMacros(protein=40, carbs=80, fat=25),
+                ),
+                created_at=datetime(2026, 3, 25, 12, 0, tzinfo=timezone.utc),
+            ),
         ]
         uow = FakeUoW(meals=meals)
         result = WeeklyBudgetService.calculate_weekly_consumed(
-            uow, "user-1", date(2026, 3, 23),
+            uow,
+            "user-1",
+            date(2026, 3, 23),
             exclude_dates=[date(2026, 3, 23), date(2026, 3, 25)],
             user_timezone="UTC",
         )
@@ -592,12 +663,17 @@ class TestGetEffectiveAdjustedDaily:
         uow = FakeUoW(meals=[], daily_counts={})
 
         result = WeeklyBudgetService.get_effective_adjusted_daily(
-            uow=uow, user_id="user-1",
-            week_start=week_start, target_date=week_start,
+            uow=uow,
+            user_id="user-1",
+            week_start=week_start,
+            target_date=week_start,
             weekly_budget=budget,
-            base_daily_cal=_BASE_CAL, base_daily_protein=_BASE_P,
-            base_daily_carbs=_BASE_C, base_daily_fat=_BASE_F,
-            bmr=_BMR, cheat_dates=[],
+            base_daily_cal=_BASE_CAL,
+            base_daily_protein=_BASE_P,
+            base_daily_carbs=_BASE_C,
+            base_daily_fat=_BASE_F,
+            bmr=_BMR,
+            cheat_dates=[],
         )
         assert result.show_logging_prompt is False
         assert result.skipped_days == 0
@@ -610,12 +686,22 @@ class TestGetEffectiveAdjustedDaily:
         wednesday = date(2026, 3, 25)
         # Mon+Tue meals: 1800 cal each = 3600 total
         meals = [
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=1800, macros=FakeNutritionMacros(protein=70, carbs=250, fat=40)
-            ), created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc)),
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=1800, macros=FakeNutritionMacros(protein=70, carbs=250, fat=40)
-            ), created_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc)),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=1800,
+                    macros=FakeNutritionMacros(protein=70, carbs=250, fat=40),
+                ),
+                created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc),
+            ),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=1800,
+                    macros=FakeNutritionMacros(protein=70, carbs=250, fat=40),
+                ),
+                created_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc),
+            ),
         ]
         # daily_counts: {Mon: 1, Tue: 1}
         daily_counts = {date(2026, 3, 23): 1, date(2026, 3, 24): 1}
@@ -623,12 +709,17 @@ class TestGetEffectiveAdjustedDaily:
         uow = FakeUoW(meals=meals, daily_counts=daily_counts)
 
         result = WeeklyBudgetService.get_effective_adjusted_daily(
-            uow=uow, user_id="user-1",
-            week_start=week_start, target_date=wednesday,
+            uow=uow,
+            user_id="user-1",
+            week_start=week_start,
+            target_date=wednesday,
             weekly_budget=budget,
-            base_daily_cal=_BASE_CAL, base_daily_protein=_BASE_P,
-            base_daily_carbs=_BASE_C, base_daily_fat=_BASE_F,
-            bmr=_BMR, cheat_dates=[],
+            base_daily_cal=_BASE_CAL,
+            base_daily_protein=_BASE_P,
+            base_daily_carbs=_BASE_C,
+            base_daily_fat=_BASE_F,
+            bmr=_BMR,
+            cheat_dates=[],
         )
         assert result.logged_past_days == 2
         assert result.skipped_days == 0
@@ -644,12 +735,17 @@ class TestGetEffectiveAdjustedDaily:
         uow = FakeUoW(meals=[], daily_counts={})
 
         result = WeeklyBudgetService.get_effective_adjusted_daily(
-            uow=uow, user_id="user-1",
-            week_start=week_start, target_date=thursday,
+            uow=uow,
+            user_id="user-1",
+            week_start=week_start,
+            target_date=thursday,
             weekly_budget=budget,
-            base_daily_cal=_BASE_CAL, base_daily_protein=_BASE_P,
-            base_daily_carbs=_BASE_C, base_daily_fat=_BASE_F,
-            bmr=_BMR, cheat_dates=[],
+            base_daily_cal=_BASE_CAL,
+            base_daily_protein=_BASE_P,
+            base_daily_carbs=_BASE_C,
+            base_daily_fat=_BASE_F,
+            bmr=_BMR,
+            cheat_dates=[],
         )
         # total_logged = 0 + 1 = 1 < MIN_LOGGED(3), past_days=3 >= 3 → prompt
         assert result.show_logging_prompt is True
@@ -663,12 +759,22 @@ class TestGetEffectiveAdjustedDaily:
         wednesday = date(2026, 3, 25)
         # Mon: normal meal, Tue: cheat day binge
         meals = [
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=2000, macros=FakeNutritionMacros(protein=70, carbs=250, fat=70)
-            ), created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc)),
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=4000, macros=FakeNutritionMacros(protein=100, carbs=500, fat=150)
-            ), created_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc)),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=2000,
+                    macros=FakeNutritionMacros(protein=70, carbs=250, fat=70),
+                ),
+                created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc),
+            ),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=4000,
+                    macros=FakeNutritionMacros(protein=100, carbs=500, fat=150),
+                ),
+                created_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc),
+            ),
         ]
         daily_counts = {date(2026, 3, 23): 1, date(2026, 3, 24): 1}
         budget = _make_budget(week_start)
@@ -676,22 +782,32 @@ class TestGetEffectiveAdjustedDaily:
 
         # With cheat day on Tue
         result_with_cheat = WeeklyBudgetService.get_effective_adjusted_daily(
-            uow=uow, user_id="user-1",
-            week_start=week_start, target_date=wednesday,
+            uow=uow,
+            user_id="user-1",
+            week_start=week_start,
+            target_date=wednesday,
             weekly_budget=budget,
-            base_daily_cal=_BASE_CAL, base_daily_protein=_BASE_P,
-            base_daily_carbs=_BASE_C, base_daily_fat=_BASE_F,
-            bmr=_BMR, cheat_dates=[date(2026, 3, 24)],
+            base_daily_cal=_BASE_CAL,
+            base_daily_protein=_BASE_P,
+            base_daily_carbs=_BASE_C,
+            base_daily_fat=_BASE_F,
+            bmr=_BMR,
+            cheat_dates=[date(2026, 3, 24)],
         )
 
         # Without cheat day
         result_no_cheat = WeeklyBudgetService.get_effective_adjusted_daily(
-            uow=uow, user_id="user-1",
-            week_start=week_start, target_date=wednesday,
+            uow=uow,
+            user_id="user-1",
+            week_start=week_start,
+            target_date=wednesday,
             weekly_budget=budget,
-            base_daily_cal=_BASE_CAL, base_daily_protein=_BASE_P,
-            base_daily_carbs=_BASE_C, base_daily_fat=_BASE_F,
-            bmr=_BMR, cheat_dates=[],
+            base_daily_cal=_BASE_CAL,
+            base_daily_protein=_BASE_P,
+            base_daily_carbs=_BASE_C,
+            base_daily_fat=_BASE_F,
+            bmr=_BMR,
+            cheat_dates=[],
         )
 
         # Budget cap: both are capped at actual_remaining / remaining_days (8000/5=1600)
@@ -705,9 +821,14 @@ class TestGetEffectiveAdjustedDaily:
         week_start = date(2026, 3, 23)
         wednesday = date(2026, 3, 25)
         meals = [
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=2000, macros=FakeNutritionMacros(protein=70, carbs=250, fat=70)
-            ), created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc)),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=2000,
+                    macros=FakeNutritionMacros(protein=70, carbs=250, fat=70),
+                ),
+                created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc),
+            ),
         ]
         daily_counts = {date(2026, 3, 23): 1}
         cheat_days = [FakeCheatDay(date=date(2026, 3, 24))]
@@ -716,12 +837,17 @@ class TestGetEffectiveAdjustedDaily:
 
         # cheat_dates=None → auto-load
         result = WeeklyBudgetService.get_effective_adjusted_daily(
-            uow=uow, user_id="user-1",
-            week_start=week_start, target_date=wednesday,
+            uow=uow,
+            user_id="user-1",
+            week_start=week_start,
+            target_date=wednesday,
             weekly_budget=budget,
-            base_daily_cal=_BASE_CAL, base_daily_protein=_BASE_P,
-            base_daily_carbs=_BASE_C, base_daily_fat=_BASE_F,
-            bmr=_BMR, cheat_dates=None,
+            base_daily_cal=_BASE_CAL,
+            base_daily_protein=_BASE_P,
+            base_daily_carbs=_BASE_C,
+            base_daily_fat=_BASE_F,
+            bmr=_BMR,
+            cheat_dates=None,
         )
         # Should not raise, and should have processed cheat day
         assert result.adjusted is not None
@@ -732,9 +858,14 @@ class TestGetEffectiveAdjustedDaily:
         sunday = date(2026, 3, 29)
         # 6 days of meals consumed
         meals = [
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=2000, macros=FakeNutritionMacros(protein=70, carbs=250, fat=70)
-            ), created_at=datetime(2026, 3, 23 + i, 12, 0, tzinfo=timezone.utc))
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=2000,
+                    macros=FakeNutritionMacros(protein=70, carbs=250, fat=70),
+                ),
+                created_at=datetime(2026, 3, 23 + i, 12, 0, tzinfo=timezone.utc),
+            )
             for i in range(6)
         ]
         daily_counts = {date(2026, 3, 23 + i): 1 for i in range(6)}
@@ -742,12 +873,17 @@ class TestGetEffectiveAdjustedDaily:
         uow = FakeUoW(meals=meals, daily_counts=daily_counts)
 
         result = WeeklyBudgetService.get_effective_adjusted_daily(
-            uow=uow, user_id="user-1",
-            week_start=week_start, target_date=sunday,
+            uow=uow,
+            user_id="user-1",
+            week_start=week_start,
+            target_date=sunday,
             weekly_budget=budget,
-            base_daily_cal=_BASE_CAL, base_daily_protein=_BASE_P,
-            base_daily_carbs=_BASE_C, base_daily_fat=_BASE_F,
-            bmr=_BMR, cheat_dates=[],
+            base_daily_cal=_BASE_CAL,
+            base_daily_protein=_BASE_P,
+            base_daily_carbs=_BASE_C,
+            base_daily_fat=_BASE_F,
+            bmr=_BMR,
+            cheat_dates=[],
         )
         assert result.adjusted.remaining_days == 1
         assert result.logged_past_days == 6
@@ -757,24 +893,40 @@ class TestGetEffectiveAdjustedDaily:
         week_start = date(2026, 3, 23)
         tuesday = date(2026, 3, 24)
         meals = [
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=500, macros=FakeNutritionMacros(protein=30, carbs=50, fat=20)
-            ), created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc)),
-            FakeMeal(status=MealStatus.READY, nutrition=FakeNutrition(
-                calories=700, macros=FakeNutritionMacros(protein=40, carbs=80, fat=25)
-            ), created_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc)),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=500,
+                    macros=FakeNutritionMacros(protein=30, carbs=50, fat=20),
+                ),
+                created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc),
+            ),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=700,
+                    macros=FakeNutritionMacros(protein=40, carbs=80, fat=25),
+                ),
+                created_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc),
+            ),
         ]
         daily_counts = {date(2026, 3, 23): 1}
         budget = _make_budget(week_start)
         uow = FakeUoW(meals=meals, daily_counts=daily_counts)
 
         result = WeeklyBudgetService.get_effective_adjusted_daily(
-            uow=uow, user_id="user-1",
-            week_start=week_start, target_date=tuesday,
+            uow=uow,
+            user_id="user-1",
+            week_start=week_start,
+            target_date=tuesday,
             weekly_budget=budget,
-            base_daily_cal=_BASE_CAL, base_daily_protein=_BASE_P,
-            base_daily_carbs=_BASE_C, base_daily_fat=_BASE_F,
-            bmr=_BMR, user_timezone="UTC", cheat_dates=[],
+            base_daily_cal=_BASE_CAL,
+            base_daily_protein=_BASE_P,
+            base_daily_carbs=_BASE_C,
+            base_daily_fat=_BASE_F,
+            bmr=_BMR,
+            user_timezone="UTC",
+            cheat_dates=[],
         )
         # consumed_total includes both days
         assert result.consumed_total["calories"] == 1200

@@ -1,6 +1,7 @@
 """
 Async Redis client with connection pooling.
 """
+
 from __future__ import annotations
 
 import logging
@@ -170,4 +171,3 @@ class RedisClient:
         except RedisError as exc:
             logger.warning("Redis batch HGETALL pipeline error: %s", exc)
             return [{} for _ in keys]
-

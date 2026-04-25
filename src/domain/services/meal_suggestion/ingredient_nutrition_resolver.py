@@ -5,11 +5,14 @@ Wraps FatSecretService to provide per-100g macros for individual
 ingredients. Every cache hit is persisted to food_reference so T1
 warms automatically over time.
 """
+
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from src.domain.services.meal_suggestion.ingredient_name_normalizer import normalize_food_name
+from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
+    normalize_food_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +54,7 @@ class IngredientNutritionResolver:
                 query=name, max_results=5
             )
         except Exception as exc:
-            logger.warning(
-                "FatSecret search failed for ingredient '%s': %s", name, exc
-            )
+            logger.warning("FatSecret search failed for ingredient '%s': %s", name, exc)
             return None
 
         if not results:
@@ -147,6 +148,4 @@ class IngredientNutritionResolver:
             )
         except Exception as exc:
             # Non-fatal: cache warm-up failure must not break the resolver
-            logger.warning(
-                "Failed to upsert food_reference for '%s': %s", name, exc
-            )
+            logger.warning("Failed to upsert food_reference for '%s': %s", name, exc)

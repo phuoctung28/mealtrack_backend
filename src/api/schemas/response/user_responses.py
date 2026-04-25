@@ -1,6 +1,7 @@
 """
 User management response schemas for Firebase integration.
 """
+
 from datetime import datetime
 from typing import Optional
 
@@ -12,9 +13,17 @@ from ..common.auth_enums import AuthProviderEnum
 
 class SubscriptionInfo(BaseModel):
     """Subscription information."""
-    product_id: str = Field(..., description="Subscription product ID (premium_monthly or premium_yearly)")
-    status: str = Field(..., description="Subscription status (active, cancelled, expired, billing_issue)")
-    expires_at: Optional[datetime] = Field(None, description="Subscription expiration date")
+
+    product_id: str = Field(
+        ..., description="Subscription product ID (premium_monthly or premium_yearly)"
+    )
+    status: str = Field(
+        ...,
+        description="Subscription status (active, cancelled, expired, billing_issue)",
+    )
+    expires_at: Optional[datetime] = Field(
+        None, description="Subscription expiration date"
+    )
     is_monthly: bool = Field(..., description="Whether this is a monthly subscription")
     is_yearly: bool = Field(..., description="Whether this is a yearly subscription")
     platform: str = Field(..., description="Platform (ios, android, web)")
@@ -22,6 +31,7 @@ class SubscriptionInfo(BaseModel):
 
 class UserProfileResponse(BaseModel):
     """Response containing user profile information."""
+
     id: str = Field(..., description="User internal ID")
     firebase_uid: str = Field(..., description="Firebase user unique identifier")
     email: EmailStr = Field(..., description="User email address")
@@ -33,18 +43,27 @@ class UserProfileResponse(BaseModel):
     photo_url: Optional[str] = Field(None, description="Profile photo URL")
     provider: AuthProviderEnum = Field(..., description="Authentication provider")
     is_active: bool = Field(..., description="Whether user account is active")
-    onboarding_completed: bool = Field(..., description="Whether user completed onboarding")
-    last_accessed: Optional[datetime] = Field(None, description="Last accessed timestamp")
+    onboarding_completed: bool = Field(
+        ..., description="Whether user completed onboarding"
+    )
+    last_accessed: Optional[datetime] = Field(
+        None, description="Last accessed timestamp"
+    )
     created_at: datetime = Field(..., description="Account creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
     # Subscription fields
-    has_subscription: bool = Field(..., description="Whether user has active subscription")
-    subscription: Optional[SubscriptionInfo] = Field(None, description="Active subscription details if any")
+    has_subscription: bool = Field(
+        ..., description="Whether user has active subscription"
+    )
+    subscription: Optional[SubscriptionInfo] = Field(
+        None, description="Active subscription details if any"
+    )
 
 
 class UserSyncResponse(BaseModel):
     """Response from user sync operation."""
+
     user: UserProfileResponse = Field(..., description="User profile data")
     created: bool = Field(..., description="Whether user was newly created")
     updated: bool = Field(..., description="Whether existing user was updated")
@@ -53,14 +72,20 @@ class UserSyncResponse(BaseModel):
 
 class UserStatusResponse(BaseModel):
     """Response containing user status information."""
+
     firebase_uid: str = Field(..., description="Firebase user unique identifier")
-    onboarding_completed: bool = Field(..., description="Whether user completed onboarding")
+    onboarding_completed: bool = Field(
+        ..., description="Whether user completed onboarding"
+    )
     is_active: bool = Field(..., description="Whether user account is active")
-    last_accessed: Optional[datetime] = Field(None, description="Last accessed timestamp")
+    last_accessed: Optional[datetime] = Field(
+        None, description="Last accessed timestamp"
+    )
 
 
 class UserUpdateResponse(BaseModel):
     """Response from user update operations."""
+
     firebase_uid: str = Field(..., description="Firebase user unique identifier")
     updated: bool = Field(..., description="Whether update was successful")
     message: str = Field(..., description="Operation result message")
@@ -69,31 +94,44 @@ class UserUpdateResponse(BaseModel):
 
 class OnboardingCompletionResponse(BaseModel):
     """Response from onboarding completion operation."""
+
     firebase_uid: str = Field(..., description="Firebase user unique identifier")
-    onboarding_completed: bool = Field(..., description="Current onboarding completion status")
+    onboarding_completed: bool = Field(
+        ..., description="Current onboarding completion status"
+    )
     updated: bool = Field(..., description="Whether update was successful")
     message: str = Field(..., description="Operation result message")
 
 
 class UserMetricsResponse(BaseModel):
     """Response containing user's current metrics for settings display."""
+
     user_id: str = Field(..., description="User internal ID")
     age: int = Field(..., description="User age")
     gender: str = Field(..., description="User gender")
     height_cm: float = Field(..., description="Height in centimeters")
     weight_kg: float = Field(..., description="Current weight in kilograms")
-    body_fat_percentage: Optional[float] = Field(None, description="Body fat percentage")
+    body_fat_percentage: Optional[float] = Field(
+        None, description="Body fat percentage"
+    )
     job_type: str = Field(..., description="Job type: desk, on_feet, physical")
     training_days_per_week: int = Field(..., description="Training days per week (0-7)")
-    training_minutes_per_session: int = Field(..., description="Training minutes per session (15-180)")
-    training_level: Optional[str] = Field(None, description="Training level: beginner, intermediate, advanced")
+    training_minutes_per_session: int = Field(
+        ..., description="Training minutes per session (15-180)"
+    )
+    training_level: Optional[str] = Field(
+        None, description="Training level: beginner, intermediate, advanced"
+    )
     fitness_goal: str = Field(..., description="Current fitness goal")
-    target_weight_kg: Optional[float] = Field(None, description="Target weight in kilograms")
+    target_weight_kg: Optional[float] = Field(
+        None, description="Target weight in kilograms"
+    )
     updated_at: datetime = Field(..., description="Last update timestamp")
 
 
 class UserDeleteResponse(BaseModel):
     """Response from user account deletion operation."""
+
     firebase_uid: str = Field(..., description="Firebase user unique identifier")
     deleted: bool = Field(..., description="Whether deletion was successful")
     message: str = Field(..., description="Operation result message")

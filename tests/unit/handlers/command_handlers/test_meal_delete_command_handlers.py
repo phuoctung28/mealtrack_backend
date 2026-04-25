@@ -1,6 +1,7 @@
 """
 Unit tests for DeleteMeal (hard delete) command handler.
 """
+
 import pytest
 
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
@@ -9,7 +10,9 @@ from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 @pytest.mark.unit
 class TestDeleteMealCommandHandler:
     @pytest.mark.asyncio
-    async def test_hard_delete_removes_meal_and_nutrition(self, event_bus, meal_repository, sample_meal_db, test_session):
+    async def test_hard_delete_removes_meal_and_nutrition(
+        self, event_bus, meal_repository, sample_meal_db, test_session
+    ):
         # Arrange
         meal_id = sample_meal_db.meal_id
         user_id = sample_meal_db.user_id  # Use the same user_id from the sample meal
@@ -35,9 +38,12 @@ class TestDeleteMealCommandHandler:
     async def test_soft_delete_nonexistent_meal_raises(self, event_bus, test_session):
         # Arrange
         user_id = "123e4567-e89b-12d3-a456-426614174000"  # Sample user ID
-        command = DeleteMealCommand(meal_id="00000000-0000-0000-0000-000000000000", user_id=user_id)
+        command = DeleteMealCommand(
+            meal_id="00000000-0000-0000-0000-000000000000", user_id=user_id
+        )
 
         # Act / Assert - handler now receives UoW via constructor injection
         from src.api.exceptions import ResourceNotFoundException
+
         with pytest.raises(ResourceNotFoundException):
             await event_bus.send(command)

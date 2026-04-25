@@ -1,6 +1,7 @@
 """
 BraveSearchNutritionService - Search barcode nutrition via Brave Search + Gemini extraction.
 """
+
 import logging
 from typing import Optional, Dict, Any
 
@@ -14,7 +15,9 @@ class BraveSearchNutritionService:
 
     SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 
-    def __init__(self, api_key: str, meal_generation_service: Any, macro_validation_service: Any):
+    def __init__(
+        self, api_key: str, meal_generation_service: Any, macro_validation_service: Any
+    ):
         self._api_key = api_key
         self._meal_gen = meal_generation_service
         self._macro_validator = macro_validation_service
@@ -26,7 +29,10 @@ class BraveSearchNutritionService:
         return self._client
 
     async def get_product(
-        self, barcode: str, language: str = "en", product_name: Optional[str] = None,
+        self,
+        barcode: str,
+        language: str = "en",
+        product_name: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Search barcode nutrition via web search + AI extraction."""
         try:
@@ -45,11 +51,17 @@ class BraveSearchNutritionService:
             logger.warning(f"Brave search failed for barcode {barcode}: {e}")
             return None
 
-    async def _search_barcode(self, barcode: str, product_name: Optional[str] = None) -> Optional[str]:
+    async def _search_barcode(
+        self, barcode: str, product_name: Optional[str] = None
+    ) -> Optional[str]:
         """Search Brave for barcode nutrition info, return combined snippets."""
         try:
             # Search with barcode + product name if available, otherwise just barcode
-            query = f"{barcode} {product_name} nutrition" if product_name else f"{barcode} barcode product"
+            query = (
+                f"{barcode} {product_name} nutrition"
+                if product_name
+                else f"{barcode} barcode product"
+            )
             client = self._get_client()
             response = await client.get(
                 self.SEARCH_URL,
@@ -75,7 +87,9 @@ class BraveSearchNutritionService:
                 logger.info(f"Brave result for {barcode}: {title} | {url}")
 
             combined = "\n\n".join(snippets)
-            logger.info(f"Brave snippets for {barcode} ({len(results)} results, {len(combined)} chars)")
+            logger.info(
+                f"Brave snippets for {barcode} ({len(results)} results, {len(combined)} chars)"
+            )
             return combined
         except Exception as e:
             logger.warning(f"Brave search API error for {barcode}: {e}")
@@ -100,13 +114,14 @@ class BraveSearchNutritionService:
                 "Return null ONLY if you cannot identify the product at all from the snippets."
             )
 
-            user_prompt = (
-                f"Barcode: {barcode}\nLanguage: {language}\n\nWeb search snippets:\n{snippets}"
-            )
+            user_prompt = f"Barcode: {barcode}\nLanguage: {language}\n\nWeb search snippets:\n{snippets}"
 
             result = self._meal_gen.generate_meal_plan(
-                user_prompt, system_prompt, response_type="json",
-                max_tokens=500, model_purpose="barcode",
+                user_prompt,
+                system_prompt,
+                response_type="json",
+                max_tokens=500,
+                model_purpose="barcode",
             )
 
             if not result or not isinstance(result, dict):
@@ -117,7 +132,9 @@ class BraveSearchNutritionService:
             confidence = result.get("confidence", "low")
             if confidence == "low":
                 result["is_estimate"] = True  # Mark low-confidence as estimate
-                logger.info(f"Brave+AI extraction low confidence for {barcode}, marking as estimate")
+                logger.info(
+                    f"Brave+AI extraction low confidence for {barcode}, marking as estimate"
+                )
 
             required = ["protein_100g", "carbs_100g", "fat_100g"]
             if not all(result.get(f) is not None for f in required):

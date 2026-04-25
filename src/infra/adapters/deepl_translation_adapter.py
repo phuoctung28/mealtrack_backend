@@ -4,6 +4,7 @@ DeepL translation adapter.
 Wraps the official deepl Python SDK and maps ISO 639-1 language codes
 to the codes expected by the DeepL API v2.
 """
+
 import asyncio
 import logging
 from typing import List

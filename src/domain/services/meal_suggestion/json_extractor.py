@@ -1,4 +1,5 @@
 """JSON extraction utilities for meal suggestion responses."""
+
 import json
 import re
 from typing import Dict
@@ -15,12 +16,12 @@ class JsonExtractor:
             return json.loads(content)
         except json.JSONDecodeError:
             # Try to find JSON in markdown code block
-            json_match = re.search(r'```json(.*?)```', content, re.DOTALL)
+            json_match = re.search(r"```json(.*?)```", content, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group(1).strip())
 
             # Try to find any JSON-like structure
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group(0))
 
@@ -41,7 +42,7 @@ class JsonExtractor:
 
         except json.JSONDecodeError:
             # Try to find JSON in markdown code block
-            json_match = re.search(r'```json(.*?)```', content, re.DOTALL)
+            json_match = re.search(r"```json(.*?)```", content, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group(1).strip())
                 if "meals" not in data or not isinstance(data["meals"], list):
@@ -49,7 +50,7 @@ class JsonExtractor:
                 return data
 
             # Try to find any JSON-like structure
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group(0))
                 if "meals" not in data or not isinstance(data["meals"], list):

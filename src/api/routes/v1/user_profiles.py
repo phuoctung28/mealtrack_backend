@@ -2,6 +2,7 @@
 User profiles API endpoints - Event-driven architecture.
 Handles user profile management and TDEE calculations.
 """
+
 from datetime import date
 
 from fastapi import APIRouter, Depends
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/v1/user-profiles", tags=["User Profiles"])
 async def save_user_onboarding(
     request: OnboardingCompleteRequest,
     user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Save user onboarding data and return TDEE calculation.
@@ -49,6 +50,7 @@ async def save_user_onboarding(
             dob = date(request.birth_year, request.birth_month, request.birth_day)
         except ValueError:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=400, detail="Invalid birth date")
         today = date.today()
         age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
@@ -85,31 +87,32 @@ async def save_user_onboarding(
     except Exception as e:
         raise handle_exception(e) from e
 
+
 @router.get("/metrics", response_model=UserMetricsResponse)
 async def get_user_metrics(
     user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Get user's current metrics for settings display.
-    
+
     Retrieves the user's current profile metrics including:
     - Physical attributes (age, gender, height, weight, body fat)
     - Activity level
     - Fitness goal
     - Target weight
-    
+
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
         # Create query
         query = GetUserMetricsQuery(user_id=user_id)
-        
+
         # Send query
         result = await event_bus.send(query)
-        
+
         return UserMetricsResponse(**result)
-        
+
     except Exception as e:
         raise handle_exception(e) from e
 
@@ -117,31 +120,27 @@ async def get_user_metrics(
 @router.get("/tdee", response_model=TdeeCalculationResponse)
 async def get_user_tdee(
     user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Get user's current TDEE calculation based on their profile.
-    
+
     Retrieves the user's current profile and calculates:
     - BMR using Mifflin-St Jeor or Katch-McArdle formula
     - TDEE based on job type and training frequency
     - Macro targets based on fitness goal
-    
+
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
     try:
         # Create query
         query = GetUserTdeeQuery(user_id=user_id)
-        
+
         # Send query
         result = await event_bus.send(query)
 
         # Map goal string to enum
-        goal_map = {
-            'cut': Goal.CUT,
-            'bulk': Goal.BULK,
-            'recomp': Goal.RECOMP
-        }
+        goal_map = {"cut": Goal.CUT, "bulk": Goal.BULK, "recomp": Goal.RECOMP}
 
         # Create domain response
         domain_response = TdeeResponse(
@@ -152,10 +151,10 @@ async def get_user_tdee(
                 calories=result["macros"]["calories"],
                 protein=result["macros"]["protein"],
                 carbs=result["macros"]["carbs"],
-                fat=result["macros"]["fat"]
-            )
+                fat=result["macros"]["fat"],
+            ),
         )
-        
+
         # Use mapper to convert to response DTO
         mapper = TdeeMapper()
         response = mapper.to_response_dto(domain_response)
@@ -170,11 +169,12 @@ async def get_user_tdee(
     except Exception as e:
         raise handle_exception(e) from e
 
+
 @router.post("/metrics", response_model=TdeeCalculationResponse)
 async def update_user_metrics(
     request: UpdateMetricsRequest,
     user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Update user metrics (weight, job_type, training_days_per_week, training_minutes_per_session, body fat, fitness goal) and return updated TDEE/macros.
@@ -193,7 +193,9 @@ async def update_user_metrics(
             training_minutes_per_session=request.training_minutes_per_session,
             body_fat_percent=request.body_fat_percent,
             fitness_goal=request.fitness_goal.value if request.fitness_goal else None,
-            training_level=request.training_level.value if request.training_level else None,
+            training_level=(
+                request.training_level.value if request.training_level else None
+            ),
         )
 
         await event_bus.send(command)
@@ -202,11 +204,7 @@ async def update_user_metrics(
         query = GetUserTdeeQuery(user_id=user_id)
         result = await event_bus.send(query)
 
-        goal_map = {
-            'cut': Goal.CUT,
-            'bulk': Goal.BULK,
-            'recomp': Goal.RECOMP
-        }
+        goal_map = {"cut": Goal.CUT, "bulk": Goal.BULK, "recomp": Goal.RECOMP}
 
         domain_response = TdeeResponse(
             bmr=result["bmr"],
@@ -216,8 +214,8 @@ async def update_user_metrics(
                 calories=result["macros"]["calories"],
                 protein=result["macros"]["protein"],
                 carbs=result["macros"]["carbs"],
-                fat=result["macros"]["fat"]
-            )
+                fat=result["macros"]["fat"],
+            ),
         )
 
         mapper = TdeeMapper()
@@ -257,9 +255,9 @@ async def update_custom_macros(
         result = await event_bus.send(query)
 
         goal_map = {
-            'cut': Goal.CUT,
-            'bulk': Goal.BULK,
-            'recomp': Goal.RECOMP,
+            "cut": Goal.CUT,
+            "bulk": Goal.BULK,
+            "recomp": Goal.RECOMP,
         }
 
         domain_response = TdeeResponse(

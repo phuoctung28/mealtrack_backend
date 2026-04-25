@@ -1,6 +1,7 @@
 """
 Meal image model for storing image metadata.
 """
+
 from sqlalchemy import Column, String, Integer
 
 from src.infra.database.config import Base
@@ -10,7 +11,7 @@ from src.infra.database.models.base import TimestampMixin
 class MealImageORM(Base, TimestampMixin):
     """Database model for meal images."""
 
-    __tablename__ = 'mealimage'
+    __tablename__ = "mealimage"
 
     # Primary key
     image_id = Column(String(36), primary_key=True)

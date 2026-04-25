@@ -1,4 +1,5 @@
 """Query handler — validate a referral code: existence, self-referral, already-referred checks."""
+
 import logging
 
 from sqlalchemy import select

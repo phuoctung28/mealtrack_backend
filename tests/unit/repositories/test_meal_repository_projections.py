@@ -1,4 +1,5 @@
 """Tests that MealRepository projection parameter controls relationship loading."""
+
 from unittest.mock import MagicMock
 from datetime import date
 from datetime import datetime
@@ -12,11 +13,12 @@ from src.domain.model import Meal, MealStatus, MealImage, Nutrition, Macros, Foo
 
 def _make_repo():
     session = MagicMock()
-    session.query.return_value.options.return_value.filter.return_value\
-        .filter.return_value.filter.return_value.order_by.return_value\
-        .limit.return_value.all.return_value = []
-    session.query.return_value.options.return_value.filter.return_value\
-        .first.return_value = None
+    session.query.return_value.options.return_value.filter.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = (
+        []
+    )
+    session.query.return_value.options.return_value.filter.return_value.first.return_value = (
+        None
+    )
     return MealRepository(session)
 
 
@@ -31,7 +33,9 @@ def test_find_by_date_accepts_projection_parameter():
     """find_by_date must accept a projection keyword argument without error."""
     repo = _make_repo()
     # Should not raise TypeError
-    repo.find_by_date(date(2026, 4, 18), user_id="u1", projection=MealProjection.MACROS_ONLY)
+    repo.find_by_date(
+        date(2026, 4, 18), user_id="u1", projection=MealProjection.MACROS_ONLY
+    )
 
 
 def test_find_by_id_accepts_projection_parameter():
@@ -45,17 +49,17 @@ def test_projection_opt_counts():
     from src.infra.repositories.meal_repository import _PROJECTION_OPTS, MealProjection
 
     # MACROS_ONLY: noload(image) + nutrition chain selectinload
-    assert len(_PROJECTION_OPTS[MealProjection.MACROS_ONLY]) == 2, (
-        "MACROS_ONLY must have 2 load options (noload image, nutrition chain)"
-    )
+    assert (
+        len(_PROJECTION_OPTS[MealProjection.MACROS_ONLY]) == 2
+    ), "MACROS_ONLY must have 2 load options (noload image, nutrition chain)"
     # FULL: image + nutrition chain
-    assert len(_PROJECTION_OPTS[MealProjection.FULL]) == 2, (
-        "FULL must have 2 load options (image, nutrition chain)"
-    )
+    assert (
+        len(_PROJECTION_OPTS[MealProjection.FULL]) == 2
+    ), "FULL must have 2 load options (image, nutrition chain)"
     # FULL_WITH_TRANSLATIONS: image + nutrition chain + translations
-    assert len(_PROJECTION_OPTS[MealProjection.FULL_WITH_TRANSLATIONS]) == 3, (
-        "FULL_WITH_TRANSLATIONS must have 3 load options (image, nutrition chain, translations)"
-    )
+    assert (
+        len(_PROJECTION_OPTS[MealProjection.FULL_WITH_TRANSLATIONS]) == 3
+    ), "FULL_WITH_TRANSLATIONS must have 3 load options (image, nutrition chain, translations)"
 
 
 def test_save_new_meal_inserts_food_items_once(test_session):

@@ -2,6 +2,7 @@
 GetUserProfileQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
+
 import logging
 from typing import Dict, Any, Optional
 
@@ -58,7 +59,9 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
             profile = result.scalars().first()
 
             if not profile:
-                raise ResourceNotFoundException(f"Profile for user {query.user_id} not found")
+                raise ResourceNotFoundException(
+                    f"Profile for user {query.user_id} not found"
+                )
 
             sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
 
@@ -70,7 +73,9 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
                 job_type=ActivityGoalMapper.map_job_type(profile.job_type),
                 training_days_per_week=profile.training_days_per_week,
                 training_minutes_per_session=profile.training_minutes_per_session,
-                training_level=ActivityGoalMapper.map_training_level(profile.training_level),
+                training_level=ActivityGoalMapper.map_training_level(
+                    profile.training_level
+                ),
                 goal=ActivityGoalMapper.map_goal(profile.fitness_goal),
                 body_fat_pct=profile.body_fat_percentage,
                 unit_system=UnitSystem.METRIC,
@@ -98,8 +103,12 @@ class GetUserProfileQueryHandler(EventHandler[GetUserProfileQuery, Dict[str, Any
                     "dietary_preferences": profile.dietary_preferences or [],
                     "health_conditions": profile.health_conditions or [],
                     "allergies": profile.allergies or [],
-                    "created_at": profile.created_at.isoformat() if profile.created_at else None,
-                    "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+                    "created_at": (
+                        profile.created_at.isoformat() if profile.created_at else None
+                    ),
+                    "updated_at": (
+                        profile.updated_at.isoformat() if profile.updated_at else None
+                    ),
                 },
                 "tdee": tdee_result.to_dict(),
             }

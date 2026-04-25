@@ -7,11 +7,16 @@ includes routes, and handles application lifecycle events.
 
 # Prefer IPv4 to avoid hangs when IPv6 is unreachable (common in local dev)
 import socket
+
 _original_getaddrinfo = socket.getaddrinfo
+
+
 def _ipv4_first_getaddrinfo(*args, **kwargs):
     results = _original_getaddrinfo(*args, **kwargs)
     results.sort(key=lambda x: x[0] != socket.AF_INET)
     return results
+
+
 socket.getaddrinfo = _ipv4_first_getaddrinfo
 
 import json
@@ -151,6 +156,7 @@ async def lifespan(app: FastAPI):
     # Warm database connection — triggers Neon compute wakeup on cold start
     try:
         from sqlalchemy import text
+
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
             conn.commit()
@@ -234,7 +240,6 @@ app.include_router(meals_router)
 app.include_router(activities_router)
 app.include_router(feature_flags_router)
 app.include_router(meal_suggestions_router)
-# app.include_router(daily_meals_router)
 app.include_router(user_profiles_router)
 app.include_router(users_router)
 app.include_router(foods_router)

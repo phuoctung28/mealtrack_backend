@@ -5,6 +5,7 @@ Single source of truth for adjusted daily targets — used by:
 - GetWeeklyBudgetQueryHandler (API)
 - get_adjusted_daily_target (notification + suggestion)
 """
+
 import logging
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AdjustedDailyTargets:
     """Adjusted daily targets based on weekly budget consumption."""
+
     calories: float
     carbs: float
     fat: float
@@ -31,6 +33,7 @@ class AdjustedDailyTargets:
 @dataclass
 class EffectiveAdjustedResult:
     """Rich result from get_effective_adjusted_daily with context for UI."""
+
     adjusted: AdjustedDailyTargets
     consumed_before_today: Dict[str, float]
     consumed_total: Dict[str, float]
@@ -67,7 +70,10 @@ class WeeklyBudgetService:
         tz = get_zone_info(user_timezone) if user_timezone else None
 
         meals = uow.meals.find_by_date_range(
-            user_id, week_start, week_end, user_timezone=user_timezone,
+            user_id,
+            week_start,
+            week_end,
+            user_timezone=user_timezone,
         )
 
         total_calories = 0.0
@@ -82,8 +88,7 @@ class WeeklyBudgetService:
                 if (exclude_date or exclude_dates_set) and meal.created_at:
                     aware_dt = ensure_utc(meal.created_at)
                     meal_local_date = (
-                        aware_dt.astimezone(tz).date() if tz
-                        else aware_dt.date()
+                        aware_dt.astimezone(tz).date() if tz else aware_dt.date()
                     )
                     if exclude_date and meal_local_date == exclude_date:
                         continue
@@ -161,15 +166,19 @@ class WeeklyBudgetService:
         past_days_count = (target_date - week_start).days
         if past_days_count > 0:
             daily_counts = uow.meals.get_daily_meal_counts(
-                user_id, week_start, past_end,
+                user_id,
+                week_start,
+                past_end,
                 user_timezone=user_timezone,
             )
             logged_past_days = len(daily_counts)
             skipped_days = past_days_count - logged_past_days
 
             total_logged = logged_past_days + 1  # +1 for today
-            if (total_logged < WeeklyBudgetConstants.MIN_LOGGED_DAYS_FOR_REDISTRIBUTION
-                    and past_days_count >= 3):
+            if (
+                total_logged < WeeklyBudgetConstants.MIN_LOGGED_DAYS_FOR_REDISTRIBUTION
+                and past_days_count >= 3
+            ):
                 show_logging_prompt = True
 
         # Cheat days don't count as logged for redistribution
@@ -177,17 +186,25 @@ class WeeklyBudgetService:
 
         # --- Calculate consumed totals from actual meals ---
         consumed_total = calc.calculate_weekly_consumed(
-            uow, user_id, week_start, user_timezone=user_timezone,
+            uow,
+            user_id,
+            week_start,
+            user_timezone=user_timezone,
         )
         consumed_before_today = calc.calculate_weekly_consumed(
-            uow, user_id, week_start,
-            exclude_date=target_date, user_timezone=user_timezone,
+            uow,
+            user_id,
+            week_start,
+            exclude_date=target_date,
+            user_timezone=user_timezone,
         )
 
         # For redistribution: exclude cheat day consumption too
         if past_cheat_dates:
             consumed_for_redistribution = calc.calculate_weekly_consumed(
-                uow, user_id, week_start,
+                uow,
+                user_id,
+                week_start,
                 exclude_date=target_date,
                 exclude_dates=past_cheat_dates,
                 user_timezone=user_timezone,
@@ -199,13 +216,19 @@ class WeeklyBudgetService:
         if show_logging_prompt:
             # Insufficient logging data → return base targets
             adjusted = calc.calculate_adjusted_daily(
-                replace(weekly_budget, consumed_calories=0, consumed_protein=0,
-                        consumed_carbs=0, consumed_fat=0),
+                replace(
+                    weekly_budget,
+                    consumed_calories=0,
+                    consumed_protein=0,
+                    consumed_carbs=0,
+                    consumed_fat=0,
+                ),
                 standard_daily_calories=base_daily_cal,
                 standard_daily_carbs=base_daily_carbs,
                 standard_daily_fat=base_daily_fat,
                 standard_daily_protein=base_daily_protein,
-                bmr=bmr, remaining_days=7,
+                bmr=bmr,
+                remaining_days=7,
             )
         else:
             # Skip & Redistribute: shrink effective week (excludes cheat days)
@@ -243,7 +266,9 @@ class WeeklyBudgetService:
         # promising more than the budget can deliver.
         # Uses consumed_before_today (not consumed_total) so today's eating
         # doesn't change today's target mid-day.
-        remaining_before_today = weekly_budget.target_calories - consumed_before_today["calories"]
+        remaining_before_today = (
+            weekly_budget.target_calories - consumed_before_today["calories"]
+        )
         if remaining_days > 0 and remaining_before_today > 0:
             max_daily = remaining_before_today / remaining_days
             if adjusted.calories > max_daily:
@@ -284,7 +309,9 @@ class WeeklyBudgetService:
             remaining_days = 1
 
         # Calculate BMR floor (80% of standard daily)
-        bmr_floor = max(bmr, standard_daily_calories * WeeklyBudgetConstants.BMR_FLOOR_RATIO)
+        bmr_floor = max(
+            bmr, standard_daily_calories * WeeklyBudgetConstants.BMR_FLOOR_RATIO
+        )
 
         # Redistribute remaining weekly budget
         remaining_calories = weekly_budget.remaining_calories
@@ -298,10 +325,13 @@ class WeeklyBudgetService:
         # Apply floors and ceilings to macros (prevents 0g fat, absurd carbs)
         floor = WeeklyBudgetConstants.MACRO_FLOOR_RATIO
         ceil = WeeklyBudgetConstants.MACRO_CEILING_RATIO
-        adjusted_carbs = max(standard_daily_carbs * floor,
-                            min(adjusted_carbs, standard_daily_carbs * ceil))
-        adjusted_fat = max(standard_daily_fat * floor,
-                          min(adjusted_fat, standard_daily_fat * ceil))
+        adjusted_carbs = max(
+            standard_daily_carbs * floor,
+            min(adjusted_carbs, standard_daily_carbs * ceil),
+        )
+        adjusted_fat = max(
+            standard_daily_fat * floor, min(adjusted_fat, standard_daily_fat * ceil)
+        )
 
         # Protein stays fixed regardless of weekly consumption
         adjusted_protein = standard_daily_protein
@@ -312,14 +342,19 @@ class WeeklyBudgetService:
         rounded_fat = round(adjusted_fat, 1)
 
         # Derive calories from rounded macros — single source of truth
-        adjusted_calories = (rounded_protein * 4) + (rounded_carbs * 4) + (rounded_fat * 9)
+        adjusted_calories = (
+            (rounded_protein * 4) + (rounded_carbs * 4) + (rounded_fat * 9)
+        )
 
         # Calorie cap: prevent macro inflation above calorie-level redistribution.
         # When user over-eats expensive macros (fat=9cal/g) but under-eats cheap
         # macros (carbs=4cal/g), independent macro redistribution can inflate
         # calories above what pure calorie redistribution would give.
         calorie_redistributed = remaining_calories / remaining_days
-        if adjusted_calories > calorie_redistributed and calorie_redistributed < standard_daily_calories:
+        if (
+            adjusted_calories > calorie_redistributed
+            and calorie_redistributed < standard_daily_calories
+        ):
             protein_cal = rounded_protein * 4
             non_protein_target = calorie_redistributed - protein_cal
             non_protein_current = (rounded_carbs * 4) + (rounded_fat * 9)
@@ -327,10 +362,14 @@ class WeeklyBudgetService:
                 scale = non_protein_target / non_protein_current
                 rounded_carbs = round(rounded_carbs * scale, 1)
                 rounded_fat = round(rounded_fat * scale, 1)
-                adjusted_calories = protein_cal + (rounded_carbs * 4) + (rounded_fat * 9)
+                adjusted_calories = (
+                    protein_cal + (rounded_carbs * 4) + (rounded_fat * 9)
+                )
 
         # Deficit cap: never reduce more than MAX_DAILY_DEFICIT_RATIO below base
-        min_allowed = standard_daily_calories * (1 - WeeklyBudgetConstants.MAX_DAILY_DEFICIT_RATIO)
+        min_allowed = standard_daily_calories * (
+            1 - WeeklyBudgetConstants.MAX_DAILY_DEFICIT_RATIO
+        )
         if adjusted_calories < min_allowed:
             deficit_gap = min_allowed - adjusted_calories
             # Scale carbs and fat up proportionally to meet minimum
@@ -343,7 +382,9 @@ class WeeklyBudgetService:
                 rounded_carbs = round(rounded_carbs + (deficit_gap * carb_ratio) / 4, 1)
                 rounded_fat = round(rounded_fat + (deficit_gap * fat_ratio) / 9, 1)
             # Re-derive calories from updated macros
-            adjusted_calories = (rounded_protein * 4) + (rounded_carbs * 4) + (rounded_fat * 9)
+            adjusted_calories = (
+                (rounded_protein * 4) + (rounded_carbs * 4) + (rounded_fat * 9)
+            )
 
         # Check if we hit the BMR floor
         bmr_floor_active = False

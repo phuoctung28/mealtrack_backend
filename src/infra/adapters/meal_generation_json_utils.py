@@ -91,9 +91,7 @@ def extract_json(content: str) -> Dict[str, Any]:
                     logger.info("[JSON-EXTRACT] regex+clean parse success")
                     return result
             except json.JSONDecodeError as e4:
-                logger.warning(
-                    f"[JSON-PARSE-FAIL-REGEX] error={e4.msg} | pos={e4.pos}"
-                )
+                logger.warning(f"[JSON-PARSE-FAIL-REGEX] error={e4.msg} | pos={e4.pos}")
 
         # Log the problematic content for debugging (truncated)
         content_preview = content[:500] + "..." if len(content) > 500 else content

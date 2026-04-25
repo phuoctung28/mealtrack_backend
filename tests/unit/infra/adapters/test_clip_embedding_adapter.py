@@ -31,8 +31,10 @@ class _FakeModel:
 
     def __call__(self, **kwargs):
         torch = pytest.importorskip("torch")
+
         class _Out:
             logits_per_image = torch.tensor([[2.0]])  # sigmoid(2.0) ≈ 0.88
+
         return _Out()
 
 

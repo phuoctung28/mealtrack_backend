@@ -1,4 +1,5 @@
 """FCM token CRUD operations."""
+
 import logging
 from typing import List, Optional
 
@@ -19,9 +20,11 @@ class FcmTokenOperations:
     def save_fcm_token(db: Session, token: UserFcmToken) -> UserFcmToken:
         """Save an FCM token to the database."""
         try:
-            existing_token = db.query(UserFcmTokenORM).filter(
-                UserFcmTokenORM.fcm_token == token.fcm_token
-            ).first()
+            existing_token = (
+                db.query(UserFcmTokenORM)
+                .filter(UserFcmTokenORM.fcm_token == token.fcm_token)
+                .first()
+            )
 
             if existing_token:
                 existing_token.user_id = token.user_id
@@ -38,7 +41,7 @@ class FcmTokenOperations:
                     device_type=token.device_type.value,
                     is_active=token.is_active,
                     created_at=token.created_at,
-                    updated_at=token.updated_at
+                    updated_at=token.updated_at,
                 )
                 db.add(db_token)
                 db.commit()
@@ -51,29 +54,37 @@ class FcmTokenOperations:
     @staticmethod
     def find_fcm_token_by_token(db: Session, fcm_token: str) -> Optional[UserFcmToken]:
         """Find an FCM token by the token string."""
-        db_token = db.query(UserFcmTokenORM).filter(
-            UserFcmTokenORM.fcm_token == fcm_token
-        ).first()
+        db_token = (
+            db.query(UserFcmTokenORM)
+            .filter(UserFcmTokenORM.fcm_token == fcm_token)
+            .first()
+        )
         return fcm_token_orm_to_domain(db_token) if db_token else None
 
     @staticmethod
     def find_active_fcm_tokens_by_user(db: Session, user_id: str) -> List[UserFcmToken]:
         """Find all active FCM tokens for a user."""
-        db_tokens = db.query(UserFcmTokenORM).filter(
-            and_(
-                UserFcmTokenORM.user_id == user_id,
-                UserFcmTokenORM.is_active == True
+        db_tokens = (
+            db.query(UserFcmTokenORM)
+            .filter(
+                and_(
+                    UserFcmTokenORM.user_id == user_id,
+                    UserFcmTokenORM.is_active == True,
+                )
             )
-        ).all()
+            .all()
+        )
         return [fcm_token_orm_to_domain(token) for token in db_tokens]
 
     @staticmethod
     def deactivate_fcm_token(db: Session, fcm_token: str) -> bool:
         """Deactivate an FCM token."""
         try:
-            db_token = db.query(UserFcmTokenORM).filter(
-                UserFcmTokenORM.fcm_token == fcm_token
-            ).first()
+            db_token = (
+                db.query(UserFcmTokenORM)
+                .filter(UserFcmTokenORM.fcm_token == fcm_token)
+                .first()
+            )
 
             if db_token:
                 db_token.is_active = False
@@ -90,9 +101,11 @@ class FcmTokenOperations:
     def delete_fcm_token(db: Session, fcm_token: str) -> bool:
         """Delete an FCM token."""
         try:
-            db_token = db.query(UserFcmTokenORM).filter(
-                UserFcmTokenORM.fcm_token == fcm_token
-            ).first()
+            db_token = (
+                db.query(UserFcmTokenORM)
+                .filter(UserFcmTokenORM.fcm_token == fcm_token)
+                .first()
+            )
 
             if db_token:
                 db.delete(db_token)

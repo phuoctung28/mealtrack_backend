@@ -1,4 +1,5 @@
 """CheatDay ORM <-> domain mapping functions."""
+
 from src.domain.model.cheat_day import CheatDay
 from src.infra.database.models.cheat_day.cheat_day import CheatDayORM
 

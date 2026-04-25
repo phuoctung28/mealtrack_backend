@@ -1,7 +1,10 @@
 """Command handler — record a referred user's code application as a pending conversion."""
+
 import logging
 
-from src.app.commands.referral.apply_referral_code_command import ApplyReferralCodeCommand
+from src.app.commands.referral.apply_referral_code_command import (
+    ApplyReferralCodeCommand,
+)
 from src.infra.repositories.referral_repository import ReferralRepository
 
 logger = logging.getLogger(__name__)

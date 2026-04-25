@@ -172,7 +172,9 @@ def parallel_mode_harness():
 
 
 @pytest.mark.asyncio
-async def test_parallel_mode_runs_upload_and_analysis_and_returns_ready(parallel_mode_harness):
+async def test_parallel_mode_runs_upload_and_analysis_and_returns_ready(
+    parallel_mode_harness,
+):
     harness = parallel_mode_harness
 
     def upload_side_effect(file_contents, content_type, image_id=None):

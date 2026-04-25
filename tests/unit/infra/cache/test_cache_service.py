@@ -2,6 +2,7 @@
 Unit tests for CacheService JSON (de)serialization, including the
 datetime-with-offset fix that prevented '+HH:MMZ' malformed strings.
 """
+
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
@@ -9,8 +10,8 @@ import pytest
 
 from src.infra.cache.cache_service import CacheService, _json_serializer
 
-
 # ---------- Serializer ----------
+
 
 def test_serializer_naive_datetime_appends_z():
     """Naive datetimes are assumed UTC; legacy 'Z' suffix preserved."""
@@ -27,6 +28,7 @@ def test_serializer_tz_aware_datetime_no_double_z():
 
 
 # ---------- Round-trip + legacy heal via get_json ----------
+
 
 @pytest.fixture
 def service():
@@ -47,9 +49,7 @@ async def test_get_json_heals_legacy_offset_z(service):
 @pytest.mark.asyncio
 async def test_get_json_heals_negative_offset_z(service):
     """Sanitizer also fixes negative offsets (e.g. '-05:00Z')."""
-    service.redis.get = AsyncMock(
-        return_value='{"t": "2026-04-13T10:12:43-05:00Z"}'
-    )
+    service.redis.get = AsyncMock(return_value='{"t": "2026-04-13T10:12:43-05:00Z"}')
     result = await service.get_json("k")
     assert result == {"t": "2026-04-13T10:12:43-05:00"}
 

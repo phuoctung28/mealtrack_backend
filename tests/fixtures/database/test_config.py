@@ -1,6 +1,7 @@
 """
 Test database configuration using MySQL.
 """
+
 import os
 
 from sqlalchemy import create_engine
@@ -13,13 +14,13 @@ def get_test_database_url() -> str:
     """Get database URL for testing."""
     # Check for DATABASE_URL first (same pattern as production)
     database_url = os.getenv("DATABASE_URL")
-    
+
     if database_url:
         # Replace mysql:// with mysql+pymysql:// if needed
         if database_url.startswith("mysql://"):
             database_url = database_url.replace("mysql://", "mysql+pymysql://", 1)
         return database_url
-    
+
     # Fall back to individual variables for local testing
     return (
         f"mysql+pymysql://{os.getenv('TEST_DB_USER', 'root')}:"
@@ -33,7 +34,7 @@ def get_test_database_url() -> str:
 def create_test_engine():
     """Create test database engine with appropriate settings."""
     database_url = get_test_database_url()
-    
+
     # Use larger pool size for concurrent tests
     engine = create_engine(
         database_url,
@@ -44,7 +45,7 @@ def create_test_engine():
         echo=False,  # Set to True for SQL debugging
         pool_timeout=30,  # Timeout waiting for connection
     )
-    
+
     return engine
 
 
@@ -60,7 +61,7 @@ def create_test_tables(engine):
 def drop_test_tables(engine):
     """Drop all tables in test database."""
     from sqlalchemy import MetaData
-    
+
     # Import all models to ensure they're registered with Base.metadata
     from src.infra.database import models  # noqa: F401
 
@@ -68,7 +69,7 @@ def drop_test_tables(engine):
     meta = MetaData()
     meta.reflect(bind=engine)
     meta.drop_all(bind=engine)
-    
+
     # Also try to drop using Base metadata in case reflection missed any
     Base.metadata.drop_all(bind=engine)
 

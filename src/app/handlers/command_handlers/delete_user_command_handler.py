@@ -141,6 +141,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
         Uses bulk updates for performance. All operations are atomic within the transaction.
         """
         from sqlalchemy import update as sa_update
+
         try:
             # 1. Soft-delete meals (set status=INACTIVE)
             meals_result = await uow.session.execute(

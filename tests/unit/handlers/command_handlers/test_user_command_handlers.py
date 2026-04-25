@@ -1,6 +1,7 @@
 """
 Unit tests for user command handlers.
 """
+
 import uuid
 from datetime import datetime
 from unittest.mock import patch, MagicMock
@@ -15,17 +16,19 @@ from tests.conftest import TestUnitOfWork
 @pytest.mark.unit
 class TestSaveUserOnboardingCommandHandler:
     """Test SaveUserOnboardingCommand handler."""
-    
+
     @pytest.mark.asyncio
     async def test_save_user_onboarding_success(self, event_bus, test_session):
         """Test successful user onboarding save."""
         # Create user first with unique IDs
         from uuid import UUID
+
         user_id = str(uuid.uuid4())
         unique_suffix = str(uuid.uuid4())[:8]  # Use only first 8 chars
         firebase_uid = f"test-fb-{unique_suffix}"
-        
+
         from src.infra.database.models.user.user import User
+
         user = User(
             id=user_id,  # String ID as per BaseMixin
             firebase_uid=firebase_uid,
@@ -34,24 +37,33 @@ class TestSaveUserOnboardingCommandHandler:
             password_hash="dummy_hash",
             is_active=True,  # Required for find_by_id to work
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         # Add user to session and commit
         test_session.add(user)
         test_session.flush()
         test_session.commit()
-        
+
         # Verify user is queryable directly (not via repository) to ensure it's in the DB
-        db_user = test_session.query(User).filter(User.id == user_id, User.is_active == True).first()
-        assert db_user is not None, f"User {user_id} must be queryable directly in test_session"
-        
+        db_user = (
+            test_session.query(User)
+            .filter(User.id == user_id, User.is_active == True)
+            .first()
+        )
+        assert (
+            db_user is not None
+        ), f"User {user_id} must be queryable directly in test_session"
+
         # Verify repository can find user with UUID conversion
         from uuid import UUID
         from src.infra.repositories.user_repository import UserRepository
+
         test_repo = UserRepository(test_session)
         repo_user = test_repo.find_by_id(UUID(user_id))
-        assert repo_user is not None, f"UserRepository must find user {user_id} with UUID conversion"
-        
+        assert (
+            repo_user is not None
+        ), f"UserRepository must find user {user_id} with UUID conversion"
+
         # Arrange
         command = SaveUserOnboardingCommand(
             user_id=user_id,
@@ -65,12 +77,15 @@ class TestSaveUserOnboardingCommandHandler:
             fitness_goal="recomp",
             dietary_preferences=["vegetarian"],
             pain_points=["diabetes"],
-            referral_sources=["tiktok", "friend_family"]
+            referral_sources=["tiktok", "friend_family"],
         )
-        
+
         # Act - Get handler from event_bus and set its uow to use test_session
         # The repository can find the user, so UnitOfWork should too
-        from src.app.commands.user.save_user_onboarding_command import SaveUserOnboardingCommand as CmdType
+        from src.app.commands.user.save_user_onboarding_command import (
+            SaveUserOnboardingCommand as CmdType,
+        )
+
         handler = event_bus._async_handlers.get(CmdType)
         if handler:
             original_uow = handler.uow
@@ -82,19 +97,27 @@ class TestSaveUserOnboardingCommandHandler:
             finally:
                 handler.uow = original_uow
         else:
-            # Fallback: patch UnitOfWork  
-            with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.AsyncUnitOfWork', side_effect=lambda *args, **kwargs: TestUnitOfWork(session=test_session)):
+            # Fallback: patch UnitOfWork
+            with patch(
+                "src.app.handlers.command_handlers.save_user_onboarding_command_handler.AsyncUnitOfWork",
+                side_effect=lambda *args, **kwargs: TestUnitOfWork(
+                    session=test_session
+                ),
+            ):
                 result = await event_bus.send(command)
-        
+
         # Assert - SaveUserOnboardingCommand should return None
         assert result is None
-        
+
         # Verify the profile was created/updated in the database
         from src.infra.database.models.user.profile import UserProfile
-        saved_profile = test_session.query(UserProfile).filter(
-            UserProfile.user_id == user_id
-        ).first()
-        
+
+        saved_profile = (
+            test_session.query(UserProfile)
+            .filter(UserProfile.user_id == user_id)
+            .first()
+        )
+
         assert saved_profile is not None
         assert saved_profile.age == 30
         assert saved_profile.gender == "male"
@@ -104,7 +127,7 @@ class TestSaveUserOnboardingCommandHandler:
         assert saved_profile.training_days_per_week == 4
         assert saved_profile.training_minutes_per_session == 60
         assert saved_profile.fitness_goal == "recomp"
-    
+
     @pytest.mark.asyncio
     async def test_save_user_onboarding_invalid_age(self, event_bus, test_session):
         """Test onboarding with invalid age."""
@@ -112,8 +135,9 @@ class TestSaveUserOnboardingCommandHandler:
         user_id = str(uuid.uuid4())
         unique_suffix = str(uuid.uuid4())[:8]  # Use only first 8 chars
         firebase_uid = f"test-fb-{unique_suffix}"
-        
+
         from src.infra.database.models.user.user import User
+
         user = User(
             id=user_id,
             firebase_uid=firebase_uid,
@@ -122,11 +146,11 @@ class TestSaveUserOnboardingCommandHandler:
             password_hash="dummy_hash",
             is_active=True,  # Required for find_by_id to work
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         test_session.add(user)
         test_session.commit()
-        
+
         # Arrange
         command = SaveUserOnboardingCommand(
             user_id=user_id,
@@ -140,13 +164,13 @@ class TestSaveUserOnboardingCommandHandler:
             fitness_goal="maintenance",
             dietary_preferences=[],
             pain_points=[],
-            referral_sources=["google_search"]
+            referral_sources=["google_search"],
         )
-        
+
         # Act & Assert
         with pytest.raises(ValidationException):
             await event_bus.send(command)
-    
+
     @pytest.mark.asyncio
     async def test_save_user_onboarding_invalid_weight(self, event_bus, test_session):
         """Test onboarding with invalid weight."""
@@ -154,8 +178,9 @@ class TestSaveUserOnboardingCommandHandler:
         user_id = str(uuid.uuid4())
         unique_suffix = str(uuid.uuid4())[:8]  # Use only first 8 chars
         firebase_uid = f"test-fb-{unique_suffix}"
-        
+
         from src.infra.database.models.user.user import User
+
         user = User(
             id=user_id,
             firebase_uid=firebase_uid,
@@ -164,11 +189,11 @@ class TestSaveUserOnboardingCommandHandler:
             password_hash="dummy_hash",
             is_active=True,  # Required for find_by_id to work
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         test_session.add(user)
         test_session.commit()
-        
+
         # Arrange
         command = SaveUserOnboardingCommand(
             user_id=user_id,
@@ -182,13 +207,13 @@ class TestSaveUserOnboardingCommandHandler:
             fitness_goal="maintenance",
             dietary_preferences=[],
             pain_points=[],
-            referral_sources=["instagram"]
+            referral_sources=["instagram"],
         )
-        
+
         # Act & Assert
         with pytest.raises(ValidationException):
             await event_bus.send(command)
-    
+
     @pytest.mark.asyncio
     async def test_save_user_onboarding_updates_existing_profile(
         self, event_bus, test_session, sample_user_profile
@@ -208,13 +233,16 @@ class TestSaveUserOnboardingCommandHandler:
             fitness_goal="cut",  # Different goal
             dietary_preferences=["vegan"],
             pain_points=[],
-            referral_sources=["youtube"]
+            referral_sources=["youtube"],
         )
-        
+
         # Act - Get handler from event_bus and set its uow to use test_session
         # The handler uses 'self.uow or UnitOfWork()', so if we set self.uow, it will use that
         from uuid import UUID
-        from src.app.commands.user.save_user_onboarding_command import SaveUserOnboardingCommand as CmdType
+        from src.app.commands.user.save_user_onboarding_command import (
+            SaveUserOnboardingCommand as CmdType,
+        )
+
         handler = event_bus._async_handlers.get(CmdType)
         if handler:
             original_uow = handler.uow
@@ -226,17 +254,25 @@ class TestSaveUserOnboardingCommandHandler:
                 handler.uow = original_uow
         else:
             # Fallback: patch UnitOfWork
-            with patch('src.app.handlers.command_handlers.save_user_onboarding_command_handler.AsyncUnitOfWork', side_effect=lambda *args, **kwargs: TestUnitOfWork(session=test_session)):
+            with patch(
+                "src.app.handlers.command_handlers.save_user_onboarding_command_handler.AsyncUnitOfWork",
+                side_effect=lambda *args, **kwargs: TestUnitOfWork(
+                    session=test_session
+                ),
+            ):
                 result = await event_bus.send(command)
-        
+
         # Assert - SaveUserOnboardingCommand should return None
         assert result is None
         # Verify profile was updated
         # Use user_id string directly to avoid DetachedInstanceError
         from src.infra.database.models.user.profile import UserProfile
-        updated_profile = test_session.query(UserProfile).filter(
-            UserProfile.user_id == user_id
-        ).first()
+
+        updated_profile = (
+            test_session.query(UserProfile)
+            .filter(UserProfile.user_id == user_id)
+            .first()
+        )
         assert updated_profile is not None, f"Profile should exist for user {user_id}"
         assert updated_profile.age == 35
         assert updated_profile.height_cm == 180

@@ -1,4 +1,5 @@
 """Cheat days API endpoints."""
+
 from datetime import datetime
 from typing import Optional
 
@@ -56,7 +57,9 @@ async def unmark_cheat_day(
 
 @router.get("")
 async def get_cheat_days(
-    week_of: Optional[str] = Query(None, description="Date within target week YYYY-MM-DD"),
+    week_of: Optional[str] = Query(
+        None, description="Date within target week YYYY-MM-DD"
+    ),
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):

@@ -12,6 +12,7 @@ class Ingredient:
     """
     Domain model representing an ingredient that belongs to a food item.
     """
+
     ingredient_id: str
     food_id: str  # Reference to the parent food
     name: str
@@ -22,7 +23,7 @@ class Ingredient:
     micros: Optional[Micros] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    
+
     def __post_init__(self):
         """Validate invariants."""
         # Validate UUID formats
@@ -31,15 +32,17 @@ class Ingredient:
             uuid.UUID(self.food_id)
         except ValueError as e:
             raise ValueError(f"Invalid UUID format: {e}")
-        
+
         if self.quantity <= 0:
             raise ValueError(f"Quantity must be positive: {self.quantity}")
-            
+
         if self.calories is not None and self.calories < 0:
             raise ValueError(f"Calories cannot be negative: {self.calories}")
-    
+
     @classmethod
-    def create_new(cls, food_id: str, name: str, quantity: float, unit: str, **kwargs) -> 'Ingredient':
+    def create_new(
+        cls, food_id: str, name: str, quantity: float, unit: str, **kwargs
+    ) -> "Ingredient":
         """Factory method to create a new ingredient."""
         return cls(
             ingredient_id=str(uuid.uuid4()),
@@ -48,10 +51,15 @@ class Ingredient:
             quantity=quantity,
             unit=unit,
             created_at=utc_now(),
-            **kwargs
+            **kwargs,
         )
-    
-    def update_nutritional_info(self, calories: Optional[float], macros: Optional[Macros], micros: Optional[Micros] = None) -> 'Ingredient':
+
+    def update_nutritional_info(
+        self,
+        calories: Optional[float],
+        macros: Optional[Macros],
+        micros: Optional[Micros] = None,
+    ) -> "Ingredient":
         """Update the nutritional information of the ingredient."""
         return Ingredient(
             ingredient_id=self.ingredient_id,
@@ -63,9 +71,9 @@ class Ingredient:
             macros=macros,
             micros=micros,
             created_at=self.created_at,
-            updated_at=utc_now()
+            updated_at=utc_now(),
         )
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary format."""
         result = {
@@ -73,9 +81,9 @@ class Ingredient:
             "food_id": self.food_id,
             "name": self.name,
             "quantity": self.quantity,
-            "unit": self.unit
+            "unit": self.unit,
         }
-        
+
         if self.calories is not None:
             result["calories"] = self.calories
         if self.macros:
@@ -86,5 +94,5 @@ class Ingredient:
             result["created_at"] = self.created_at.isoformat()
         if self.updated_at:
             result["updated_at"] = self.updated_at.isoformat()
-            
-        return result 
+
+        return result

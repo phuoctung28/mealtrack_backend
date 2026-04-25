@@ -5,6 +5,7 @@ Drop-in replacement for the Gemini-based TranslationService.
 Translates meal_name, description, ingredient names, and recipe step
 instructions using a single batched DeepL API call per suggestion.
 """
+
 import asyncio
 import logging
 from dataclasses import replace as dataclasses_replace
@@ -52,7 +53,9 @@ class DeepLSuggestionTranslationService:
         except Exception as exc:
             logger.warning(
                 "DeepL translation failed for suggestion=%s lang=%s: %s",
-                suggestion.id, target_language, exc
+                suggestion.id,
+                target_language,
+                exc,
             )
             return suggestion
 
@@ -73,7 +76,8 @@ class DeepLSuggestionTranslationService:
             if isinstance(result, Exception):
                 logger.warning(
                     "DeepL translation failed for suggestion=%s: %s",
-                    original.id, result
+                    original.id,
+                    result,
                 )
                 translated.append(original)
             else:
@@ -106,8 +110,10 @@ class DeepLSuggestionTranslationService:
             translated.append(strings[len(translated)])
 
         idx = 0
-        translated_name = translated[idx]; idx += 1
-        translated_description = translated[idx]; idx += 1
+        translated_name = translated[idx]
+        idx += 1
+        translated_description = translated[idx]
+        idx += 1
 
         translated_ingredients = [
             dataclasses_replace(ing, name=translated[idx + i])

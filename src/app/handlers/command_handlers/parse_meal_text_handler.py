@@ -1,6 +1,7 @@
 """
 Handler for parsing natural language meal text into structured food items.
 """
+
 import json
 import logging
 import re
@@ -25,11 +26,14 @@ from src.app.handlers.command_handlers.meal_text_parsing_utils import (
     parse_fatsecret_nutrition,
 )
 from src.domain.services.emoji_validator import validate_emoji
+
 logger = logging.getLogger(__name__)
 
 
 @handles(ParseMealTextCommand)
-class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextResponseDto]):
+class ParseMealTextHandler(
+    EventHandler[ParseMealTextCommand, ParseMealTextResponseDto]
+):
     """Handler for parsing meal text descriptions using Gemini."""
 
     def __init__(self):
@@ -155,13 +159,21 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         # Try FatSecret — use English name from parentheses for lookup accuracy
         lookup_name = self._extract_english_name(name)
         try:
-            fatsecret_results = await self._fat_secret_service.search_foods(lookup_name, max_results=5)
+            fatsecret_results = await self._fat_secret_service.search_foods(
+                lookup_name, max_results=5
+            )
             if fatsecret_results and len(fatsecret_results) > 0:
                 fs_food = fatsecret_results[0]
                 per_100g = parse_fatsecret_nutrition(fs_food)
                 allowed_units = fs_food.get("allowed_units")
                 if per_100g:
-                    scaled = scale_per_100g_nutrition(per_100g, quantity, unit, allowed_units=allowed_units, food_name=lookup_name)
+                    scaled = scale_per_100g_nutrition(
+                        per_100g,
+                        quantity,
+                        unit,
+                        allowed_units=allowed_units,
+                        food_name=lookup_name,
+                    )
                     fs_calories = scaled.get("calories", 0)
 
                     # Reject FatSecret if it diverges >3x from AI estimate
@@ -201,8 +213,7 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
     ) -> None:
         """Detect and batch-translate any remaining English food names."""
         english_indices = [
-            i for i, item in enumerate(items)
-            if self._is_english(item.get("name", ""))
+            i for i, item in enumerate(items) if self._is_english(item.get("name", ""))
         ]
         if not english_indices:
             return
@@ -246,12 +257,12 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         Heuristic: if text inside parens is ASCII, it's English; otherwise
         the text before parens is English.
         """
-        match = re.search(r'^(.+?)\s*\(([^)]+)\)$', name.strip())
+        match = re.search(r"^(.+?)\s*\(([^)]+)\)$", name.strip())
         if not match:
             return name
         before, inside = match.group(1), match.group(2)
         # If inside parens is mostly ASCII → it's the English name
-        if all(ord(c) < 256 for c in inside.replace(' ', '')):
+        if all(ord(c) < 256 for c in inside.replace(" ", "")):
             return inside
         return before
 
@@ -263,12 +274,12 @@ class ParseMealTextHandler(EventHandler[ParseMealTextCommand, ParseMealTextRespo
         'Thịt bò (Sliced Beef)' + vi → 'Thịt bò'
         'Eggs' (no parens) → 'Eggs'
         """
-        match = re.search(r'^(.+?)\s*\(([^)]+)\)$', name.strip())
+        match = re.search(r"^(.+?)\s*\(([^)]+)\)$", name.strip())
         if not match:
             return name
         before, inside = match.group(1), match.group(2)
         # Non-ASCII part is the local language name
-        before_ascii = all(ord(c) < 256 for c in before.replace(' ', ''))
+        before_ascii = all(ord(c) < 256 for c in before.replace(" ", ""))
         if before_ascii:
             return inside  # Local name is inside parens
         return before  # Local name is before parens

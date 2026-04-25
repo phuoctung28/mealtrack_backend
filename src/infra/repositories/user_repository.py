@@ -1,4 +1,5 @@
 """Repository for user-related database operations."""
+
 import logging
 from typing import Optional, List
 from uuid import UUID
@@ -34,7 +35,9 @@ class UserRepository(UserRepositoryPort):
         """Save or update a user."""
         user_entity = UserMapper.to_persistence(user_domain)
         # Manually set profiles as they are a relationship
-        user_entity.profiles = [UserProfileMapper.to_persistence(p) for p in user_domain.profiles]
+        user_entity.profiles = [
+            UserProfileMapper.to_persistence(p) for p in user_domain.profiles
+        ]
 
         if not user_entity.id:
             self.db.add(user_entity)
@@ -54,9 +57,9 @@ class UserRepository(UserRepositoryPort):
         except IntegrityError as e:
             self.db.rollback()
             error_msg = str(e.orig).lower() if e.orig else str(e).lower()
-            if 'email' in error_msg:
+            if "email" in error_msg:
                 raise ValueError("User with this email already exists")
-            elif 'firebase_uid' in error_msg:
+            elif "firebase_uid" in error_msg:
                 raise ValueError("Firebase UID already registered")
             else:
                 raise ValueError("User with this email or username already exists")
@@ -94,7 +97,9 @@ class UserRepository(UserRepositoryPort):
         )
         return UserMapper.to_domain(user_entity) if user_entity else None
 
-    def find_deleted_by_firebase_uid(self, firebase_uid: str) -> Optional[UserDomainModel]:
+    def find_deleted_by_firebase_uid(
+        self, firebase_uid: str
+    ) -> Optional[UserDomainModel]:
         """Find deleted user by Firebase UID (only inactive users)."""
         user_entity = (
             self.db.query(User)
@@ -138,10 +143,16 @@ class UserRepository(UserRepositoryPort):
         )
         return UserProfileMapper.to_domain(profile_entity) if profile_entity else None
 
-    def update_profile(self, profile_domain: UserProfileDomainModel) -> UserProfileDomainModel:
+    def update_profile(
+        self, profile_domain: UserProfileDomainModel
+    ) -> UserProfileDomainModel:
         """Update or create user profile (upsert)."""
         # Convert UUID to string for SQLite compatibility
-        profile_id_str = str(profile_domain.id) if isinstance(profile_domain.id, UUID) else profile_domain.id
+        profile_id_str = (
+            str(profile_domain.id)
+            if isinstance(profile_domain.id, UUID)
+            else profile_domain.id
+        )
         profile_entity = self.db.query(UserProfile).get(profile_id_str)
 
         if not profile_entity:
@@ -152,7 +163,7 @@ class UserRepository(UserRepositoryPort):
             # Update existing profile
             profile_data = profile_domain.__dict__
             for key, value in profile_data.items():
-                if hasattr(profile_entity, key) and key != '_sa_instance_state':
+                if hasattr(profile_entity, key) and key != "_sa_instance_state":
                     setattr(profile_entity, key, value)
 
         self.db.commit()
@@ -161,11 +172,14 @@ class UserRepository(UserRepositoryPort):
 
     def update_user_timezone(self, user_id: UUID, timezone: str) -> None:
         """Update user's timezone in the database."""
-        rows = self.db.query(User).filter(User.id == user_id).update(
-            {"timezone": timezone}
+        rows = (
+            self.db.query(User)
+            .filter(User.id == user_id)
+            .update({"timezone": timezone})
         )
         self.db.commit()
         logger.info(f"Timezone update: user={user_id} tz={timezone} rows={rows}")
+
     def get_user_timezone(self, user_id: UUID) -> Optional[str]:
         """Get user's timezone from database."""
         user_entity = (
@@ -177,8 +191,10 @@ class UserRepository(UserRepositoryPort):
 
     def update_user_language(self, user_id: UUID, language_code: str) -> None:
         """Update user's preferred language in the database."""
-        rows = self.db.query(User).filter(User.id == user_id).update(
-            {"language_code": language_code}
+        rows = (
+            self.db.query(User)
+            .filter(User.id == user_id)
+            .update({"language_code": language_code})
         )
         self.db.commit()
         logger.info(f"Language update: user={user_id} lang={language_code} rows={rows}")

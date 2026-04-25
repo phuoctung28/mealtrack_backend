@@ -4,6 +4,7 @@ Adapter for RevenueCat subscription service.
 This adapter implements the SubscriptionServicePort interface
 and handles HTTP communication with RevenueCat API.
 """
+
 import logging
 import os
 from datetime import datetime
@@ -41,7 +42,7 @@ class RevenueCatAdapter(SubscriptionServicePort):
         url = f"{self.BASE_URL}/subscribers/{app_user_id}"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         try:
@@ -86,7 +87,9 @@ class RevenueCatAdapter(SubscriptionServicePort):
 
         # Check if not expired
         try:
-            expires_date = datetime.fromisoformat(expires_date_str.replace('Z', '+00:00'))
+            expires_date = datetime.fromisoformat(
+                expires_date_str.replace("Z", "+00:00")
+            )
             return datetime.now(expires_date.tzinfo) < expires_date
         except Exception as e:
             logger.error(f"Error parsing expires_date: {e}")
@@ -112,13 +115,15 @@ class RevenueCatAdapter(SubscriptionServicePort):
 
             if expires_date_str:
                 try:
-                    expires_date = datetime.fromisoformat(expires_date_str.replace('Z', '+00:00'))
+                    expires_date = datetime.fromisoformat(
+                        expires_date_str.replace("Z", "+00:00")
+                    )
                     if datetime.now(expires_date.tzinfo) < expires_date:
                         return {
                             "product_id": product_id,
                             "expires_date": expires_date,
                             "store": sub_data.get("store"),
-                            "is_active": True
+                            "is_active": True,
                         }
                 except Exception:
                     continue

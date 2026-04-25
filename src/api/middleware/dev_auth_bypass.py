@@ -133,6 +133,7 @@ async def _seed_dev_meals_async(user_id: str) -> None:
     try:
         # Check if there are any meals today for this user (use UTC to match created_at)
         from datetime import timedelta
+
         today_utc = datetime.now(timezone.utc).date()
         start_dt = datetime.combine(today_utc, datetime.min.time(), tzinfo=timezone.utc)
         end_dt = start_dt + timedelta(days=1)
@@ -214,5 +215,3 @@ async def _seed_dev_meals_async(user_id: str) -> None:
         logger.error("Failed to seed dev meals: %s", exc)
     finally:
         await session.close()
-
-

@@ -2,6 +2,7 @@
 SyncUserCommandHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
+
 import logging
 import re
 from typing import Dict, Any, Optional
@@ -34,7 +35,9 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
         async with uow:
             try:
                 # Check if user exists by firebase_uid
-                existing_user = await uow.users.find_by_firebase_uid(command.firebase_uid)
+                existing_user = await uow.users.find_by_firebase_uid(
+                    command.firebase_uid
+                )
 
                 # Fallback: check by email if UID not found (handles provider switch / UID change)
                 if not existing_user and command.email:
@@ -54,14 +57,16 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                     # Update existing user
                     updated = self._update_existing_user(existing_user, command)
                     user = await uow.users.save(existing_user)
-                    logger.info('Updated existing user')
+                    logger.info("Updated existing user")
                 else:
                     # Check if this is a previously deleted user re-registering
-                    deleted_user = await uow.users.find_deleted_by_firebase_uid(command.firebase_uid)
+                    deleted_user = await uow.users.find_deleted_by_firebase_uid(
+                        command.firebase_uid
+                    )
                     if deleted_user:
                         logger.info(
-                            f'Detected re-registration of deleted user (old_id={deleted_user.id}). '
-                            f'Creating fresh account with new ID.'
+                            f"Detected re-registration of deleted user (old_id={deleted_user.id}). "
+                            f"Creating fresh account with new ID."
                         )
                         # Note: We do NOT restore the old user; we create a brand new one
                         # The old record stays anonymized for audit trail
@@ -71,11 +76,14 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                     # Save user to get ID
                     user = await uow.users.save(user)
                     created = True
-                    logger.info('Created new user')
+                    logger.info("Created new user")
 
                     # Set language from Accept-Language header if provided
                     if command.language_code:
-                        from src.app.commands.user.update_language_command import SUPPORTED_LANGUAGES
+                        from src.app.commands.user.update_language_command import (
+                            SUPPORTED_LANGUAGES,
+                        )
+
                         lang = command.language_code.lower().strip()
                         if lang in SUPPORTED_LANGUAGES:
                             user.language_code = lang
@@ -89,17 +97,31 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
 
                 # Get subscription info from UoW
                 subscription_info = None
-                active_subscription = await uow.subscriptions.find_active_by_user_id(str(user.id))
+                active_subscription = await uow.subscriptions.find_active_by_user_id(
+                    str(user.id)
+                )
                 has_subscription = active_subscription is not None
 
                 if active_subscription:
                     subscription_info = {
                         "product_id": active_subscription.product_id,
                         "status": active_subscription.status,
-                        "expires_at": active_subscription.expires_at.isoformat() if active_subscription.expires_at else None,
+                        "expires_at": (
+                            active_subscription.expires_at.isoformat()
+                            if active_subscription.expires_at
+                            else None
+                        ),
                         "platform": active_subscription.platform,
-                        "is_monthly": active_subscription.product_id.endswith("_monthly") if active_subscription.product_id else False,
-                        "is_yearly": active_subscription.product_id.endswith("_yearly") if active_subscription.product_id else False,
+                        "is_monthly": (
+                            active_subscription.product_id.endswith("_monthly")
+                            if active_subscription.product_id
+                            else False
+                        ),
+                        "is_yearly": (
+                            active_subscription.product_id.endswith("_yearly")
+                            if active_subscription.product_id
+                            else False
+                        ),
                     }
 
                 # Prepare response
@@ -121,11 +143,19 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                         "created_at": user.created_at,
                         "updated_at": user.updated_at,
                         "has_subscription": has_subscription,
-                        "subscription": subscription_info
+                        "subscription": subscription_info,
                     },
                     "created": created,
                     "updated": updated,
-                    "message": "User created successfully" if created else "User updated successfully" if updated else "User data up to date"
+                    "message": (
+                        "User created successfully"
+                        if created
+                        else (
+                            "User updated successfully"
+                            if updated
+                            else "User data up to date"
+                        )
+                    ),
                 }
 
             except Exception as e:
@@ -133,17 +163,23 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                 logger.error(f"Error syncing user data: {str(e)}")
                 raise
 
-    def _create_new_user(self, command: SyncUserCommand, uow: UnitOfWorkPort) -> UserDomainModel:
+    def _create_new_user(
+        self, command: SyncUserCommand, uow: UnitOfWorkPort
+    ) -> UserDomainModel:
         """Create a new user domain model from Firebase data."""
         # Generate username if not provided
-        username = command.username or self._generate_username(command.email, command.display_name)
+        username = command.username or self._generate_username(
+            command.email, command.display_name
+        )
 
         # Ensure username is unique (this logic requires repo support, simulating for now or skipping check)
         # Real impl would check uow.users.find_by_username(username)
-        # username = self._ensure_unique_username(username, uow) 
+        # username = self._ensure_unique_username(username, uow)
 
         # Extract names if not provided
-        first_name, last_name = self._extract_names(command.display_name, command.first_name, command.last_name)
+        first_name, last_name = self._extract_names(
+            command.display_name, command.first_name, command.last_name
+        )
 
         # Create new user domain model
         return UserDomainModel(
@@ -161,7 +197,9 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
             onboarding_completed=False,
         )
 
-    def _update_existing_user(self, user: UserDomainModel, command: SyncUserCommand) -> bool:
+    def _update_existing_user(
+        self, user: UserDomainModel, command: SyncUserCommand
+    ) -> bool:
         """Update existing user with new Firebase data."""
         updated = False
 
@@ -182,7 +220,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
             updated = True
 
         # Provider update logic?
-        
+
         # Always update last_accessed
         user.last_accessed = utc_now()
         # updated = True # Logic says always updated if accessed? Maybe separation is better.
@@ -192,17 +230,19 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
     def _generate_username(self, email: str, display_name: str = None) -> str:
         """Generate a username from email or display name."""
         if display_name:
-            username = re.sub(r'[^a-zA-Z0-9]', '', display_name.lower())
+            username = re.sub(r"[^a-zA-Z0-9]", "", display_name.lower())
         else:
-            username = email.split('@')[0]
-            username = re.sub(r'[^a-zA-Z0-9]', '', username.lower())
+            username = email.split("@")[0]
+            username = re.sub(r"[^a-zA-Z0-9]", "", username.lower())
 
         if len(username) < 3:
             username = f"user{username}"
 
         return username[:20]
 
-    def _extract_names(self, display_name: str = None, first_name: str = None, last_name: str = None):
+    def _extract_names(
+        self, display_name: str = None, first_name: str = None, last_name: str = None
+    ):
         """Extract first and last names from display name or provided names."""
         if first_name and last_name:
             return first_name, last_name
@@ -210,12 +250,12 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
         if display_name:
             name_parts = display_name.strip().split()
             if len(name_parts) >= 2:
-                return name_parts[0], ' '.join(name_parts[1:])
+                return name_parts[0], " ".join(name_parts[1:])
             elif len(name_parts) == 1:
                 return name_parts[0], None
 
         return first_name, last_name
-    
+
     async def _create_default_notification_preferences(self, user_id, uow):
         """Create default notification preferences. Non-fatal: logs and skips on error."""
         if not user_id:
@@ -227,6 +267,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
         # Validate UUID format before constructing domain model (NUTREE-44)
         try:
             import uuid
+
             uuid.UUID(user_id_str)
         except ValueError:
             logger.error(f"Skipping notification prefs: invalid UUID {user_id_str!r}")
@@ -238,4 +279,6 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
             logger.info(f"Added default notification preferences for user {user_id}")
         except Exception as e:
             # Non-fatal: notification prefs failure should not crash user sync
-            logger.error(f"Failed to create notification preferences for {user_id}: {e}")
+            logger.error(
+                f"Failed to create notification preferences for {user_id}: {e}"
+            )

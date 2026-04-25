@@ -169,26 +169,35 @@ class DiscoverMealsRequest(BaseModel):
         None, description="Portion type: snack, main, omad"
     )
     ingredients: List[str] = Field(
-        default_factory=list, max_length=20,
+        default_factory=list,
+        max_length=20,
         description="Optional available ingredients (max 20)",
     )
     cooking_time_minutes: Optional[CookingTimeEnum] = Field(
-        None, description="Cooking time constraint",
+        None,
+        description="Cooking time constraint",
     )
     cuisine_region: Optional[str] = Field(
-        None, description="Preferred cuisine region",
+        None,
+        description="Preferred cuisine region",
     )
     calorie_target: Optional[int] = Field(
-        None, gt=0, description="Override calorie target",
+        None,
+        gt=0,
+        description="Override calorie target",
     )
     protein_target: Optional[float] = Field(None, ge=0)
     carbs_target: Optional[float] = Field(None, ge=0)
     fat_target: Optional[float] = Field(None, ge=0)
     session_id: Optional[str] = Field(
-        None, description="Session ID for load-more (auto-excludes shown meals)",
+        None,
+        description="Session ID for load-more (auto-excludes shown meals)",
     )
     batch_size: int = Field(
-        default=10, ge=1, le=12, description="Meals per batch (default 10, max 12)",
+        default=10,
+        ge=1,
+        le=12,
+        description="Meals per batch (default 10, max 12)",
     )
 
     def get_effective_portion_type(self) -> MealPortionTypeEnum:
@@ -203,7 +212,9 @@ class GenerateRecipesRequest(BaseModel):
     """Request to generate full recipes for 1-3 selected discovery meals."""
 
     meal_names: List[str] = Field(
-        ..., min_length=1, max_length=3,
+        ...,
+        min_length=1,
+        max_length=3,
         description="English meal names from discovery grid (1-3)",
     )
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
@@ -249,9 +260,7 @@ class SaveIngredientItem(BaseModel):
     carbs: float = Field(
         default=0.0, ge=0, description="Carbohydrates in grams (0 if unknown)"
     )
-    fat: float = Field(
-        default=0.0, ge=0, description="Fat in grams (0 if unknown)"
-    )
+    fat: float = Field(default=0.0, ge=0, description="Fat in grams (0 if unknown)")
 
 
 class SaveMealSuggestionRequest(BaseModel):
@@ -294,14 +303,17 @@ class SaveMealSuggestionRequest(BaseModel):
     meal_date: str = Field(
         ..., description="Target date for the meal (YYYY-MM-DD format)"
     )
-    cuisine_type: Optional[str] = Field(None, description="Cuisine type (e.g., Asian, Vietnamese)")
+    cuisine_type: Optional[str] = Field(
+        None, description="Cuisine type (e.g., Asian, Vietnamese)"
+    )
     origin_country: Optional[str] = Field(None, description="Country of origin")
     emoji: Optional[str] = Field(None, description="AI-assigned food emoji")
     image_url: Optional[str] = Field(
         None, description="Food image URL from discovery (Pexels/Unsplash hotlink)"
     )
     unsplash_download_location: Optional[str] = Field(
-        None, description="Unsplash download_location URL — triggers download event per API guidelines"
+        None,
+        description="Unsplash download_location URL — triggers download event per API guidelines",
     )
 
     @field_validator("meal_date")

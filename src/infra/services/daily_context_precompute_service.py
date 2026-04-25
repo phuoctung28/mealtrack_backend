@@ -1,4 +1,5 @@
 """Batch pre-compute user notification context per timezone group."""
+
 import asyncio
 import logging
 import uuid
@@ -9,7 +10,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from src.domain.services.meal_suggestion.suggestion_tdee_helpers import build_tdee_request
+from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
+    build_tdee_request,
+)
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.redis_client import RedisClient
@@ -18,14 +21,14 @@ from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
-_CONTEXT_TTL = 86_400       # 24 h
+_CONTEXT_TTL = 86_400  # 24 h
 _SENTINEL_TTL = 25 * 3_600  # 25 h — survives the full day
 _NOTIF_EXPIRY_DAYS = 7
 
-_DEFAULT_BREAKFAST_MINUTES = 480   # 08:00
-_DEFAULT_LUNCH_MINUTES = 720       # 12:00
-_DEFAULT_DINNER_MINUTES = 1_080    # 18:00
-_DEFAULT_SUMMARY_MINUTES = 1_260   # 21:00
+_DEFAULT_BREAKFAST_MINUTES = 480  # 08:00
+_DEFAULT_LUNCH_MINUTES = 720  # 12:00
+_DEFAULT_DINNER_MINUTES = 1_080  # 18:00
+_DEFAULT_SUMMARY_MINUTES = 1_260  # 21:00
 
 
 class DailyContextPrecomputeService:
@@ -57,7 +60,9 @@ class DailyContextPrecomputeService:
         """No-op if sentinel exists; otherwise runs DB sync work in thread pool."""
         # Fast path — sentinel already set (common case once run each day)
         if await self.is_precomputed(today, tz_name):
-            logger.debug("Pre-compute sentinel hit for %s on %s — skipping", tz_name, today)
+            logger.debug(
+                "Pre-compute sentinel hit for %s on %s — skipping", tz_name, today
+            )
             return
 
         # Serialize concurrent callers for the same (date, tz) pair. Startup catch-up
@@ -67,11 +72,17 @@ class DailyContextPrecomputeService:
             self._locks[lock_key] = asyncio.Lock()
         async with self._locks[lock_key]:
             if await self.is_precomputed(today, tz_name):
-                logger.debug("Pre-compute sentinel hit for %s on %s — skipping", tz_name, today)
+                logger.debug(
+                    "Pre-compute sentinel hit for %s on %s — skipping", tz_name, today
+                )
                 return
 
-            logger.info("Pre-computing notification context for %s on %s", tz_name, today)
-            redis_items = await asyncio.to_thread(self._precompute_db_sync, tz_name, today)
+            logger.info(
+                "Pre-computing notification context for %s on %s", tz_name, today
+            )
+            redis_items = await asyncio.to_thread(
+                self._precompute_db_sync, tz_name, today
+            )
 
             if redis_items:
                 ok = await self._redis.hset_batch(redis_items)
@@ -82,14 +93,20 @@ class DailyContextPrecomputeService:
                     )
                     return
 
-            await self._redis.set(self.sentinel_key(today, tz_name), "1", ttl=_SENTINEL_TTL)
-            logger.info("Pre-compute complete for %s: %d users", tz_name, len(redis_items))
+            await self._redis.set(
+                self.sentinel_key(today, tz_name), "1", ttl=_SENTINEL_TTL
+            )
+            logger.info(
+                "Pre-compute complete for %s: %d users", tz_name, len(redis_items)
+            )
 
     # ------------------------------------------------------------------
     # Synchronous DB work (runs in thread pool via asyncio.to_thread)
     # ------------------------------------------------------------------
 
-    def _precompute_db_sync(self, tz_name: str, today: date) -> list[tuple[str, dict, int]]:
+    def _precompute_db_sync(
+        self, tz_name: str, today: date
+    ) -> list[tuple[str, dict, int]]:
         """
         All DB work: 5 SQL queries + 1 bulk INSERT.
         Returns list of (redis_key, mapping, ttl) for async Redis batch write.
@@ -206,8 +223,7 @@ class DailyContextPrecomputeService:
             ).fetchall()
 
             consumed_by_user: dict[str, float] = {
-                row.user_id: float(row.consumed_calories)
-                for row in consumed_rows
+                row.user_id: float(row.consumed_calories) for row in consumed_rows
             }
 
             # ---- Compute calorie goals via TDEE (per user, with fallback) ----
@@ -257,7 +273,9 @@ class DailyContextPrecomputeService:
 
                 mapping = {
                     "calorie_goal": str(calorie_goals.get(user_id, 2000)),
-                    "calories_consumed": str(int(round(consumed_by_user.get(user_id, 0.0)))),
+                    "calories_consumed": str(
+                        int(round(consumed_by_user.get(user_id, 0.0)))
+                    ),
                     "gender": gender,
                     "language_code": language_code,
                 }
@@ -307,40 +325,55 @@ class DailyContextPrecomputeService:
 
             if pref.meal_reminders_enabled:
                 for notif_type, local_minutes in [
-                    ("meal_reminder_breakfast", pref.breakfast_time_minutes or _DEFAULT_BREAKFAST_MINUTES),
-                    ("meal_reminder_lunch", pref.lunch_time_minutes or _DEFAULT_LUNCH_MINUTES),
-                    ("meal_reminder_dinner", pref.dinner_time_minutes or _DEFAULT_DINNER_MINUTES),
+                    (
+                        "meal_reminder_breakfast",
+                        pref.breakfast_time_minutes or _DEFAULT_BREAKFAST_MINUTES,
+                    ),
+                    (
+                        "meal_reminder_lunch",
+                        pref.lunch_time_minutes or _DEFAULT_LUNCH_MINUTES,
+                    ),
+                    (
+                        "meal_reminder_dinner",
+                        pref.dinner_time_minutes or _DEFAULT_DINNER_MINUTES,
+                    ),
                 ]:
                     scheduled_utc = _local_minutes_to_utc(today, local_minutes, tz_name)
                     if scheduled_utc is None:
                         continue
-                    rows.append({
-                        "id": str(uuid.uuid4()),
-                        "user_id": user_id,
-                        "notification_type": notif_type,
-                        "scheduled_date": today,
-                        "scheduled_for_utc": scheduled_utc,
-                        "status": "pending",
-                        "context": context,
-                        "created_at": now,
-                        "expires_at": expires_at,
-                    })
+                    rows.append(
+                        {
+                            "id": str(uuid.uuid4()),
+                            "user_id": user_id,
+                            "notification_type": notif_type,
+                            "scheduled_date": today,
+                            "scheduled_for_utc": scheduled_utc,
+                            "status": "pending",
+                            "context": context,
+                            "created_at": now,
+                            "expires_at": expires_at,
+                        }
+                    )
 
             if pref.daily_summary_enabled:
-                summary_minutes = pref.daily_summary_time_minutes or _DEFAULT_SUMMARY_MINUTES
+                summary_minutes = (
+                    pref.daily_summary_time_minutes or _DEFAULT_SUMMARY_MINUTES
+                )
                 scheduled_utc = _local_minutes_to_utc(today, summary_minutes, tz_name)
                 if scheduled_utc is not None:
-                    rows.append({
-                        "id": str(uuid.uuid4()),
-                        "user_id": user_id,
-                        "notification_type": "daily_summary",
-                        "scheduled_date": today,
-                        "scheduled_for_utc": scheduled_utc,
-                        "status": "pending",
-                        "context": context,
-                        "created_at": now,
-                        "expires_at": expires_at,
-                    })
+                    rows.append(
+                        {
+                            "id": str(uuid.uuid4()),
+                            "user_id": user_id,
+                            "notification_type": "daily_summary",
+                            "scheduled_date": today,
+                            "scheduled_for_utc": scheduled_utc,
+                            "status": "pending",
+                            "context": context,
+                            "created_at": now,
+                            "expires_at": expires_at,
+                        }
+                    )
 
         return rows
 
@@ -350,8 +383,12 @@ def _local_minutes_to_utc(local_date: date, local_minutes: int, tz_name: str):
     try:
         tz = ZoneInfo(tz_name)
         local_dt = datetime(
-            local_date.year, local_date.month, local_date.day,
-            local_minutes // 60, local_minutes % 60, 0,
+            local_date.year,
+            local_date.month,
+            local_date.day,
+            local_minutes // 60,
+            local_minutes % 60,
+            0,
             tzinfo=tz,
         )
         return local_dt.astimezone(timezone.utc)

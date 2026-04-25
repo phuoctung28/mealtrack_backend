@@ -1,6 +1,7 @@
 """
 Factory for creating test meals.
 """
+
 from uuid import uuid4
 from datetime import datetime
 from typing import Optional, List
@@ -42,7 +43,7 @@ class MealFactory:
             height=1080,
             url=f"https://test-image-url.com/{image_id}.jpg",
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         session.add(image)
         session.flush()
@@ -71,15 +72,36 @@ class MealFactory:
             fat=12.0,
             confidence_score=0.95,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         session.add(nutrition)
         session.flush()
 
         food_items_data = [
-            {"name": "Chicken Breast", "quantity": 200.0, "unit": "g", "protein": 62.0, "carbs": 0.0, "fat": 7.0},
-            {"name": "Rice", "quantity": 150.0, "unit": "g", "protein": 4.5, "carbs": 40.0, "fat": 0.6},
-            {"name": "Broccoli", "quantity": 100.0, "unit": "g", "protein": 2.8, "carbs": 7.0, "fat": 0.4},
+            {
+                "name": "Chicken Breast",
+                "quantity": 200.0,
+                "unit": "g",
+                "protein": 62.0,
+                "carbs": 0.0,
+                "fat": 7.0,
+            },
+            {
+                "name": "Rice",
+                "quantity": 150.0,
+                "unit": "g",
+                "protein": 4.5,
+                "carbs": 40.0,
+                "fat": 0.6,
+            },
+            {
+                "name": "Broccoli",
+                "quantity": 100.0,
+                "unit": "g",
+                "protein": 2.8,
+                "carbs": 7.0,
+                "fat": 0.4,
+            },
         ]
 
         for item_data in food_items_data:
@@ -95,7 +117,7 @@ class MealFactory:
                 confidence=0.95,
                 is_custom=False,
                 created_at=datetime.now(),
-                updated_at=datetime.now()
+                updated_at=datetime.now(),
             )
             session.add(food_item)
 
@@ -104,10 +126,7 @@ class MealFactory:
 
     @staticmethod
     def create_manual_meal(
-        session: Session,
-        user_id: str,
-        foods: List[dict],
-        **overrides
+        session: Session, user_id: str, foods: List[dict], **overrides
     ) -> MealORM:
         """
         Create manual meal from food list.
@@ -130,7 +149,7 @@ class MealFactory:
             size_bytes=0,
             url=None,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         session.add(image)
         session.flush()
@@ -163,7 +182,7 @@ class MealFactory:
             fat=total_fat,
             confidence_score=1.0,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         session.add(nutrition)
         session.flush()
@@ -181,7 +200,7 @@ class MealFactory:
                 confidence=1.0,
                 is_custom=food_data.get("is_custom", False),
                 created_at=datetime.now(),
-                updated_at=datetime.now()
+                updated_at=datetime.now(),
             )
             session.add(food_item)
 

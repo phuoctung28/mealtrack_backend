@@ -1,4 +1,5 @@
 """Timezone utilities for notification scheduling and datetime operations."""
+
 import logging
 from datetime import datetime, date, timezone, timedelta
 from typing import TYPE_CHECKING, Optional, Union
@@ -63,6 +64,7 @@ def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
 
 # Default timezone
 DEFAULT_TIMEZONE = "UTC"
@@ -129,9 +131,7 @@ def is_valid_timezone(timezone_str: str) -> bool:
 
 
 def is_in_quiet_hours(
-    local_minutes: int,
-    quiet_start: Optional[int],
-    quiet_end: Optional[int]
+    local_minutes: int, quiet_start: Optional[int], quiet_end: Optional[int]
 ) -> bool:
     """
     Check if local_minutes falls within quiet hours window.
@@ -161,7 +161,7 @@ def is_in_quiet_hours(
 def get_user_monday(
     target_date: Union[date, datetime],
     user_id: str,
-    uow: Optional["UnitOfWorkPort"] = None
+    uow: Optional["UnitOfWorkPort"] = None,
 ) -> date:
     """
     Get the Monday of the week for a given date in user's timezone.
@@ -218,7 +218,11 @@ async def resolve_user_timezone_async(
     except Exception:
         pass
 
-    if header_timezone and header_timezone != "UTC" and is_valid_timezone(header_timezone):
+    if (
+        header_timezone
+        and header_timezone != "UTC"
+        and is_valid_timezone(header_timezone)
+    ):
         return normalize_timezone(header_timezone)
 
     return db_tz
@@ -246,7 +250,11 @@ def resolve_user_timezone(
         pass
 
     # 2. Try header fallback
-    if header_timezone and header_timezone != "UTC" and is_valid_timezone(header_timezone):
+    if (
+        header_timezone
+        and header_timezone != "UTC"
+        and is_valid_timezone(header_timezone)
+    ):
         canonical_tz = normalize_timezone(header_timezone)
         # Opportunistic DB update — separate try to avoid breaking caller's UoW
         if db_tz == "UTC":
@@ -281,7 +289,12 @@ def noon_utc_for_date(target_date: date, user_timezone: str = "UTC") -> datetime
     """
     tz = get_zone_info(user_timezone)
     local_noon = datetime(
-        target_date.year, target_date.month, target_date.day,
-        12, 0, 0, tzinfo=tz,
+        target_date.year,
+        target_date.month,
+        target_date.day,
+        12,
+        0,
+        0,
+        tzinfo=tz,
     )
     return local_noon.astimezone(timezone.utc)

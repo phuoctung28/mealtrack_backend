@@ -1,6 +1,7 @@
 """
 Domain service for providing fallback meals when generation fails.
 """
+
 from typing import Dict
 
 from src.domain.model.meal_planning import GeneratedMeal, NutritionSummary
@@ -9,23 +10,25 @@ from src.domain.model.meal_planning import MealType
 
 class FallbackMealService:
     """Service for providing fallback meals when AI generation fails."""
-    
-    def get_fallback_meal(self, meal_type: MealType, calorie_target: int) -> GeneratedMeal:
+
+    def get_fallback_meal(
+        self, meal_type: MealType, calorie_target: int
+    ) -> GeneratedMeal:
         """Get a fallback meal for the specified type and calorie target."""
         # Scale portions based on calorie target
         scale_factor = calorie_target / 400  # Base meals are ~400 calories
-        
+
         fallback_templates = self._get_fallback_templates()
         template = fallback_templates.get(meal_type, fallback_templates[MealType.LUNCH])
-        
+
         # Scale nutrition and portions
         scaled_nutrition = NutritionSummary(
             calories=int(template["base_calories"] * scale_factor),
             protein=template["base_protein"] * scale_factor,
             carbs=template["base_carbs"] * scale_factor,
-            fat=template["base_fat"] * scale_factor
+            fat=template["base_fat"] * scale_factor,
         )
-        
+
         # Scale ingredient portions
         scaled_ingredients = []
         for ingredient in template["ingredients"]:
@@ -34,7 +37,7 @@ class FallbackMealService:
                 scaled_ingredients.append(ingredient.format(portion=portion))
             else:
                 scaled_ingredients.append(ingredient)
-        
+
         return GeneratedMeal(
             meal_id=f"fallback_{meal_type.value}_{calorie_target}",
             meal_type=meal_type.value,
@@ -49,9 +52,9 @@ class FallbackMealService:
             is_vegetarian=template["is_vegetarian"],
             is_vegan=template["is_vegan"],
             is_gluten_free=template["is_gluten_free"],
-            cuisine_type=template["cuisine_type"]
+            cuisine_type=template["cuisine_type"],
         )
-    
+
     def _get_fallback_templates(self) -> Dict[MealType, Dict]:
         """Get fallback meal templates."""
         return {
@@ -69,22 +72,22 @@ class FallbackMealService:
                     "{portion}g rolled oats",
                     "30g protein powder",
                     "1 medium banana",
-                    "15ml almond butter"
+                    "15ml almond butter",
                 ],
                 "seasonings": [
                     "1g ground cinnamon",
                     "0.5g salt",
-                    "2ml vanilla extract"
+                    "2ml vanilla extract",
                 ],
                 "instructions": [
                     "Cook oats with water or milk",
                     "Stir in protein powder",
-                    "Top with sliced banana and almond butter"
+                    "Top with sliced banana and almond butter",
                 ],
                 "is_vegetarian": True,
                 "is_vegan": False,
                 "is_gluten_free": False,
-                "cuisine_type": "International"
+                "cuisine_type": "International",
             },
             MealType.LUNCH: {
                 "name": "Grilled Chicken Salad Bowl",
@@ -101,25 +104,25 @@ class FallbackMealService:
                     "100g mixed greens",
                     "150g cherry tomatoes",
                     "100g diced cucumber",
-                    "50g sliced avocado"
+                    "50g sliced avocado",
                 ],
                 "seasonings": [
                     "15ml olive oil",
                     "2g salt",
                     "1g black pepper",
                     "15ml lemon juice",
-                    "2g garlic powder"
+                    "2g garlic powder",
                 ],
                 "instructions": [
                     "Grill chicken breast",
                     "Prepare salad greens and vegetables",
                     "Slice grilled chicken",
-                    "Assemble bowl and dress"
+                    "Assemble bowl and dress",
                 ],
                 "is_vegetarian": False,
                 "is_vegan": False,
                 "is_gluten_free": True,
-                "cuisine_type": "International"
+                "cuisine_type": "International",
             },
             MealType.DINNER: {
                 "name": "Baked Salmon with Vegetables",
@@ -136,25 +139,25 @@ class FallbackMealService:
                     "200g broccoli florets",
                     "1 medium sweet potato",
                     "15ml olive oil",
-                    "1 lemon"
+                    "1 lemon",
                 ],
                 "seasonings": [
                     "3g dried dill",
                     "2g salt",
                     "1g black pepper",
                     "2g garlic powder",
-                    "5g lemon zest"
+                    "5g lemon zest",
                 ],
                 "instructions": [
                     "Season salmon with herbs",
                     "Prepare vegetables",
                     "Bake everything at 400°F for 20-25 minutes",
-                    "Serve with lemon"
+                    "Serve with lemon",
                 ],
                 "is_vegetarian": False,
                 "is_vegan": False,
                 "is_gluten_free": True,
-                "cuisine_type": "International"
+                "cuisine_type": "International",
             },
             MealType.SNACK: {
                 "name": "Greek Yogurt with Berries",
@@ -169,20 +172,20 @@ class FallbackMealService:
                 "ingredients": [
                     "{portion}g Greek yogurt",
                     "75g mixed berries",
-                    "5ml honey (optional)"
+                    "5ml honey (optional)",
                 ],
                 "seasonings": [
                     "2ml vanilla extract",
                     "1g ground cinnamon",
-                    "0.5g salt"
+                    "0.5g salt",
                 ],
                 "instructions": [
                     "Add berries to yogurt",
-                    "Drizzle with honey if desired"
+                    "Drizzle with honey if desired",
                 ],
                 "is_vegetarian": True,
                 "is_vegan": False,
                 "is_gluten_free": True,
-                "cuisine_type": "International"
-            }
+                "cuisine_type": "International",
+            },
         }

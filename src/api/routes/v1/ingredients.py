@@ -1,6 +1,7 @@
 """
 Ingredient recognition API endpoints.
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, Request
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/v1/ingredients", tags=["Ingredients"])
 async def recognize_ingredient(
     request: IngredientRecognitionRequest,
     http_request: Request,
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Recognize a food ingredient from an image.
@@ -61,6 +62,6 @@ async def ingredients_health():
         "features": [
             "photo_ingredient_identification",
             "gemini_vision_ai",
-            "confidence_scoring"
-        ]
+            "confidence_scoring",
+        ],
     }

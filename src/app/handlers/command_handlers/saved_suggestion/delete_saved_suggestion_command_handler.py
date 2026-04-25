@@ -1,4 +1,5 @@
 """Handler for deleting a saved suggestion."""
+
 import logging
 from typing import Any, Dict, Optional
 
@@ -12,7 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 @handles(DeleteSavedSuggestionCommand)
-class DeleteSavedSuggestionCommandHandler(EventHandler[DeleteSavedSuggestionCommand, Dict[str, Any]]):
+class DeleteSavedSuggestionCommandHandler(
+    EventHandler[DeleteSavedSuggestionCommand, Dict[str, Any]]
+):
     """Delete a saved suggestion by suggestion_id for a user."""
 
     def __init__(self, cache_service: Optional[CachePort] = None):
@@ -24,7 +27,9 @@ class DeleteSavedSuggestionCommandHandler(EventHandler[DeleteSavedSuggestionComm
                 command.user_id, command.suggestion_id
             )
             if deleted:
-                logger.info(f"Deleted saved suggestion {command.suggestion_id} for user {command.user_id}")
+                logger.info(
+                    f"Deleted saved suggestion {command.suggestion_id} for user {command.user_id}"
+                )
 
         if self.cache_service:
             cache_key, _ = CacheKeys.saved_suggestions(command.user_id)

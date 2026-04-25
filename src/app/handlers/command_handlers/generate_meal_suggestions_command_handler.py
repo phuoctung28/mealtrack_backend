@@ -1,20 +1,25 @@
 """
 GenerateMealSuggestionsCommandHandler - Handler for generating meal suggestions.
 """
+
 import logging
 from typing import List, Tuple
 
 from src.app.commands.meal_suggestion import GenerateMealSuggestionsCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
-from src.domain.services.meal_suggestion.suggestion_orchestration_service import SuggestionOrchestrationService
+from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
+    SuggestionOrchestrationService,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @handles(GenerateMealSuggestionsCommand)
 class GenerateMealSuggestionsCommandHandler(
-    EventHandler[GenerateMealSuggestionsCommand, Tuple[SuggestionSession, List[MealSuggestion]]]
+    EventHandler[
+        GenerateMealSuggestionsCommand, Tuple[SuggestionSession, List[MealSuggestion]]
+    ]
 ):
     """Handler for generating exactly 3 meal suggestions."""
 
@@ -26,7 +31,7 @@ class GenerateMealSuggestionsCommandHandler(
     ) -> Tuple[SuggestionSession, List[MealSuggestion]]:
         """
         Generate meal suggestions based on user inputs.
-        
+
         If session_id is provided, regenerates with automatic exclusion of previously shown meals.
 
         Args:

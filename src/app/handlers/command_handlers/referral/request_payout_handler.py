@@ -1,4 +1,5 @@
 """Command handler — validate wallet balance and create a referral payout request."""
+
 import logging
 
 from src.app.commands.referral.request_payout_command import RequestPayoutCommand

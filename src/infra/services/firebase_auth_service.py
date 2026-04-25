@@ -1,4 +1,5 @@
 """Firebase Authentication Service for user management operations."""
+
 import logging
 from typing import Optional
 

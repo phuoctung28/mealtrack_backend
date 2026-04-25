@@ -1,6 +1,7 @@
 """
 Domain entities for meal suggestion system.
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -12,10 +13,11 @@ from src.domain.model.common.enums import MealType  # noqa: F401
 
 class MealSize(str, Enum):
     """T-shirt sizing for meal portions (percentage of daily TDEE)."""
-    S = "S"      # 10% of daily TDEE
-    M = "M"      # 20%
-    L = "L"      # 40%
-    XL = "XL"    # 60%
+
+    S = "S"  # 10% of daily TDEE
+    M = "M"  # 20%
+    L = "L"  # 40%
+    XL = "XL"  # 60%
     OMAD = "OMAD"  # 100% (One Meal A Day)
 
 
@@ -31,6 +33,7 @@ MEAL_SIZE_PERCENTAGES = {
 
 class SuggestionStatus(str, Enum):
     """Status of a meal suggestion."""
+
     PENDING = "pending"
     ACCEPTED = "accepted"
     REJECTED = "rejected"
@@ -39,6 +42,7 @@ class SuggestionStatus(str, Enum):
 @dataclass
 class Ingredient:
     """Value object representing an ingredient."""
+
     name: str
     amount: float
     unit: str
@@ -47,6 +51,7 @@ class Ingredient:
 @dataclass
 class RecipeStep:
     """Value object representing a recipe instruction step."""
+
     step: int
     instruction: str
     duration_minutes: Optional[int] = None
@@ -55,6 +60,7 @@ class RecipeStep:
 @dataclass
 class MacroEstimate:
     """Value object for macro estimates with portion multiplication."""
+
     calories: int
     protein: float
     carbs: float
@@ -73,6 +79,7 @@ class MacroEstimate:
 @dataclass
 class MealSuggestion:
     """Domain entity representing a generated meal suggestion."""
+
     id: str
     session_id: str
     user_id: str

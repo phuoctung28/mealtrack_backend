@@ -1,4 +1,5 @@
 """Unit tests for Pexels/Unsplash food image adapters and the DI singleton."""
+
 from unittest.mock import patch
 
 import pytest
@@ -14,9 +15,7 @@ from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
 @pytest.mark.asyncio
 class TestPexelsAdapter:
     async def test_returns_none_when_api_key_missing(self):
-        with patch(
-            "src.infra.adapters.pexels_image_adapter.settings"
-        ) as mock_settings:
+        with patch("src.infra.adapters.pexels_image_adapter.settings") as mock_settings:
             mock_settings.PEXELS_API_KEY = None
             adapter = PexelsImageAdapter()
             result = await adapter.search("grilled chicken")

@@ -1,6 +1,7 @@
 """
 Handler for ingredient recognition command.
 """
+
 import base64
 import logging
 from typing import Dict, Any
@@ -14,7 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 @handles(RecognizeIngredientCommand)
-class RecognizeIngredientCommandHandler(EventHandler[RecognizeIngredientCommand, Dict[str, Any]]):
+class RecognizeIngredientCommandHandler(
+    EventHandler[RecognizeIngredientCommand, Dict[str, Any]]
+):
     """Handler for recognizing ingredients from images."""
 
     def __init__(
@@ -25,7 +28,7 @@ class RecognizeIngredientCommandHandler(EventHandler[RecognizeIngredientCommand,
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
-        self.vision_service = kwargs.get('vision_service', self.vision_service)
+        self.vision_service = kwargs.get("vision_service", self.vision_service)
 
     async def handle(self, command: RecognizeIngredientCommand) -> Dict[str, Any]:
         """
@@ -53,7 +56,7 @@ class RecognizeIngredientCommandHandler(EventHandler[RecognizeIngredientCommand,
                     "confidence": 0.0,
                     "category": None,
                     "success": False,
-                    "message": "Invalid image data format"
+                    "message": "Invalid image data format",
                 }
 
             # Validate image size (max 5MB)
@@ -64,11 +67,13 @@ class RecognizeIngredientCommandHandler(EventHandler[RecognizeIngredientCommand,
                     "confidence": 0.0,
                     "category": None,
                     "success": False,
-                    "message": "Image too large (max 5MB)"
+                    "message": "Image too large (max 5MB)",
                 }
 
             # Use the ingredient identification strategy
-            strategy = AnalysisStrategyFactory.create_ingredient_identification_strategy()
+            strategy = (
+                AnalysisStrategyFactory.create_ingredient_identification_strategy()
+            )
             result = self.vision_service.analyze_with_strategy(image_bytes, strategy)
 
             # Parse structured_data from response
@@ -90,7 +95,7 @@ class RecognizeIngredientCommandHandler(EventHandler[RecognizeIngredientCommand,
                 "confidence": confidence,
                 "category": category,
                 "success": success,
-                "message": None if success else "Could not identify ingredient"
+                "message": None if success else "Could not identify ingredient",
             }
 
         except Exception as e:
@@ -100,5 +105,5 @@ class RecognizeIngredientCommandHandler(EventHandler[RecognizeIngredientCommand,
                 "confidence": 0.0,
                 "category": None,
                 "success": False,
-                "message": f"Recognition failed: {str(e)}"
+                "message": f"Recognition failed: {str(e)}",
             }

@@ -48,7 +48,8 @@ class MealImageCacheService:
         if len(embeddings) != len(names):
             logger.warning(
                 "Embedding count mismatch: got %d, expected %d",
-                len(embeddings), len(names)
+                len(embeddings),
+                len(names),
             )
             return [None] * len(names)
 

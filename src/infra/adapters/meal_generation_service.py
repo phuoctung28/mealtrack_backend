@@ -16,7 +16,11 @@ from src.infra.services.ai.gemini_model_manager import (
     GeminiModelManager,
     GeminiModelPurpose,
 )
-from src.infra.adapters.meal_generation_json_utils import extract_json, truncate, clean_json_content
+from src.infra.adapters.meal_generation_json_utils import (
+    extract_json,
+    truncate,
+    clean_json_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +85,16 @@ class MealGenerationService(MealGenerationServicePort):
                 max_tokens = self._determine_optimal_tokens(prompt, system_message)
 
             # Get model name for logging (mirrors GeminiModelManager.get_model_for_purpose logic)
-            from src.infra.services.ai.gemini_model_config import PURPOSE_ENV_VARS, PURPOSE_MODEL_DEFAULTS
+            from src.infra.services.ai.gemini_model_config import (
+                PURPOSE_ENV_VARS,
+                PURPOSE_MODEL_DEFAULTS,
+            )
+
             env_var = PURPOSE_ENV_VARS.get(purpose, "GEMINI_MODEL")
-            model_name = os.getenv(env_var, PURPOSE_MODEL_DEFAULTS.get(purpose, self._model_manager.model_name))
+            model_name = os.getenv(
+                env_var,
+                PURPOSE_MODEL_DEFAULTS.get(purpose, self._model_manager.model_name),
+            )
 
             # Log request config with purpose
             logger.info(

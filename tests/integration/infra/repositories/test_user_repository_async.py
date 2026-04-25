@@ -1,4 +1,5 @@
 """Integration tests for AsyncUserRepository."""
+
 import pytest
 import uuid
 from datetime import datetime

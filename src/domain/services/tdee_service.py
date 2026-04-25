@@ -1,5 +1,12 @@
 from src.domain.constants import TDEEConstants, NutritionConstants
-from src.domain.model.user import TdeeRequest, TdeeResponse, MacroTargets, JobType, Goal, TrainingLevel
+from src.domain.model.user import (
+    TdeeRequest,
+    TdeeResponse,
+    MacroTargets,
+    JobType,
+    Goal,
+    TrainingLevel,
+)
 from src.domain.services.bmr_calculator import BMRCalculatorFactory
 
 
@@ -19,7 +26,7 @@ class TdeeCalculationService:
             bmr,
             request.job_type,
             request.training_days_per_week,
-            request.training_minutes_per_session
+            request.training_minutes_per_session,
         )
         macro_targets = self._calculate_all_macro_targets(
             tdee, request.weight_kg, request.goal, request.training_level
@@ -31,11 +38,11 @@ class TdeeCalculationService:
             macros=macro_targets,
             formula_used=formula_name,
         )
-    
+
     def _calculate_bmr(self, request: TdeeRequest) -> tuple[float, str]:
         """
         Calculate BMR using the appropriate formula based on available data.
-        
+
         Returns:
             tuple: (bmr_value, formula_name)
         """
@@ -49,17 +56,13 @@ class TdeeCalculationService:
             height_cm=request.height_cm,
             age=request.age,
             sex=request.sex,
-            body_fat_pct=request.body_fat_pct
+            body_fat_pct=request.body_fat_pct,
         )
 
         return bmr, calculator.get_formula_name()
 
     def _calculate_tdee_from_activity(
-        self,
-        bmr: float,
-        job_type: JobType,
-        training_days: int,
-        training_minutes: int
+        self, bmr: float, job_type: JobType, training_days: int, training_minutes: int
     ) -> float:
         """Calculate TDEE from BMR using job type and training hours.
 
@@ -74,7 +77,7 @@ class TdeeCalculationService:
         exercise_add = weekly_hours * TDEEConstants.EXERCISE_MULTIPLIER_PER_HOUR
         multiplier = base + exercise_add
         return bmr * multiplier
-    
+
     def _calculate_all_macro_targets(
         self,
         tdee: float,
@@ -113,21 +116,23 @@ class TdeeCalculationService:
         # Use training-level-aware protein if provided, otherwise use default
         if training_level:
             training_key = training_level.value
-            protein_multiplier = (
-                TDEEConstants.PROTEIN_PER_KG_BY_TRAINING
-                .get(goal_key, {})
-                .get(training_key, TDEEConstants.PROTEIN_PER_KG.get(goal_key, 1.8))
-            )
+            protein_multiplier = TDEEConstants.PROTEIN_PER_KG_BY_TRAINING.get(
+                goal_key, {}
+            ).get(training_key, TDEEConstants.PROTEIN_PER_KG.get(goal_key, 1.8))
         else:
             protein_multiplier = TDEEConstants.PROTEIN_PER_KG.get(goal_key, 1.8)
         protein_g = weight_kg * protein_multiplier
-        protein_g = max(TDEEConstants.MIN_PROTEIN_G, min(protein_g, TDEEConstants.MAX_PROTEIN_G))
+        protein_g = max(
+            TDEEConstants.MIN_PROTEIN_G, min(protein_g, TDEEConstants.MAX_PROTEIN_G)
+        )
 
         # Fat dual-gate: max(weight-based, percentage-based) for hormone safety
         # Dorgan 1996: <20% cal reduces testosterone; Kerksick 2018 ISSN
         fat_from_weight = weight_kg * TDEEConstants.FAT_PER_KG.get(goal_key, 0.9)
         fat_min_pct = TDEEConstants.FAT_MIN_PERCENT.get(goal_key, 0.25)
-        fat_from_percent = (calories * fat_min_pct) / NutritionConstants.CALORIES_PER_GRAM_FAT
+        fat_from_percent = (
+            calories * fat_min_pct
+        ) / NutritionConstants.CALORIES_PER_GRAM_FAT
         fat_g = max(fat_from_weight, fat_from_percent)
         fat_g = max(TDEEConstants.MIN_FAT_G, min(fat_g, TDEEConstants.MAX_FAT_G))
 
@@ -137,7 +142,10 @@ class TdeeCalculationService:
         protein_cals = protein_g * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
         fat_cals = fat_g * NutritionConstants.CALORIES_PER_GRAM_FAT
         remaining_cals = calories - protein_cals - fat_cals
-        carb_g = max(TDEEConstants.MIN_CARBS_G, remaining_cals / NutritionConstants.CALORIES_PER_GRAM_CARBS)
+        carb_g = max(
+            TDEEConstants.MIN_CARBS_G,
+            remaining_cals / NutritionConstants.CALORIES_PER_GRAM_CARBS,
+        )
 
         # Round macros first, then derive calories from rounded macros
         rounded_protein = round(protein_g, 1)
@@ -155,7 +163,7 @@ class TdeeCalculationService:
             fat=rounded_fat,
             carbs=rounded_carbs,
         )
-    
+
     def calculate_macros(
         self,
         tdee: float,
@@ -182,4 +190,4 @@ class TdeeCalculationService:
                 f"weight_kg must be between {TDEEConstants.MIN_WEIGHT_KG} and "
                 f"{TDEEConstants.MAX_WEIGHT_KG}, got {weight_kg}"
             )
-        return self._calculate_all_macro_targets(tdee, weight_kg, goal, training_level) 
+        return self._calculate_all_macro_targets(tdee, weight_kg, goal, training_level)
