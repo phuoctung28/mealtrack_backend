@@ -22,7 +22,9 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import OperationalError, DatabaseError
-from src.infra.database.config import engine, Base
+
+from src.infra.database.config import Base
+from migrations.utils import migration_engine as engine
 
 # Configure logging with timestamp
 logging.basicConfig(
