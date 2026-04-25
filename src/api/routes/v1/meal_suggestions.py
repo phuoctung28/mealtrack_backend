@@ -7,9 +7,8 @@ import asyncio
 import logging
 from typing import Any, Awaitable, Callable
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
-from starlette.responses import Response
 
 from src.api.base_dependencies import get_db
 from src.api.dependencies.auth import get_current_user_id
@@ -238,14 +237,15 @@ async def discover_meals(
         translated_names = [m["name"] for m in meals]
         if language and language != "en":
             try:
-                from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
+                from src.infra.adapters.deepl_translation_adapter import (
+                    DeepLTranslationAdapter,
+                )
                 from src.infra.config.settings import settings
 
                 if settings.DEEPL_API_KEY:
                     adapter = DeepLTranslationAdapter(settings.DEEPL_API_KEY)
                     translated = await adapter.translate_texts(
-                        [m["name"] for m in meals],
-                        language.upper()
+                        [m["name"] for m in meals], language.upper()
                     )
                     if translated and len(translated) == len(meals):
                         translated_names = translated
@@ -383,7 +383,6 @@ async def generate_recipes(
 
     except Exception as e:
         raise handle_exception(e) from e
-
 
 
 @router.post("/save", response_model=SaveMealSuggestionResponse)
