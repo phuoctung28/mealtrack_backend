@@ -25,26 +25,28 @@ class ImageStore(ImageStorePort):
         if USE_MOCK_STORAGE and not os.path.exists(UPLOAD_DIR):
             os.makedirs(UPLOAD_DIR)
     
-    def save(self, image_bytes: bytes, content_type: str) -> str:
+    def save(self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None) -> str:
         """
         Save image bytes to storage.
-        
+
         Args:
             image_bytes: The raw bytes of the image
             content_type: MIME type of the image ("image/jpeg" or "image/png")
-            
+            image_id: Optional pre-generated image ID to use (for parallel uploads)
+
         Returns:
-            A unique image ID (UUID string)
-            
+            The URL of the saved image
+
         Raises:
             ValueError: If content_type is not supported or image is invalid
         """
         # Validate content type
         if content_type not in ["image/jpeg", "image/png"]:
             raise ValueError(f"Unsupported content type: {content_type}")
-        
-        # Generate a deterministic UUID for the image
-        image_id = str(uuid.uuid4())
+
+        # Use provided image_id or generate a new UUID
+        if image_id is None:
+            image_id = str(uuid.uuid4())
         
         # For development, save locally
         extension = "jpg" if content_type == "image/jpeg" else "png"
@@ -55,14 +57,6 @@ class ImageStore(ImageStorePort):
         
         return image_id
 
-    def generate_upload_params(self) -> dict[str, str | int]:
-        """
-        Direct signed uploads are not supported by local mock storage.
-        """
-        raise NotImplementedError(
-            "generate_upload_params is only supported by CloudinaryImageStore"
-        )
-    
     def load(self, image_id: str) -> Optional[bytes]:
         """
         Load image bytes by ID.

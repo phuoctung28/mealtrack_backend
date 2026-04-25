@@ -44,9 +44,9 @@ def test_projection_opt_counts():
     """Each projection must have the correct number of load options."""
     from src.infra.repositories.meal_repository import _PROJECTION_OPTS, MealProjection
 
-    # MACROS_ONLY: nutrition + food_items selectinload (counts as 1 chained option)
-    assert len(_PROJECTION_OPTS[MealProjection.MACROS_ONLY]) == 1, (
-        "MACROS_ONLY must have 1 load option (nutrition chain)"
+    # MACROS_ONLY: noload(image) + nutrition chain selectinload
+    assert len(_PROJECTION_OPTS[MealProjection.MACROS_ONLY]) == 2, (
+        "MACROS_ONLY must have 2 load options (noload image, nutrition chain)"
     )
     # FULL: image + nutrition chain
     assert len(_PROJECTION_OPTS[MealProjection.FULL]) == 2, (

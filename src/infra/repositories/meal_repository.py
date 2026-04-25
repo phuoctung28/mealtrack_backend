@@ -4,7 +4,7 @@ from enum import Enum, auto
 from typing import Dict, List, Optional
 
 from sqlalchemy import func, update
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload, noload
 
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.nutrition import Nutrition
@@ -40,6 +40,7 @@ class MealProjection(Enum):
 
 _PROJECTION_OPTS: dict = {
     MealProjection.MACROS_ONLY: (
+        noload(MealORM.image),
         selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
     ),
     MealProjection.FULL: (
@@ -88,6 +89,16 @@ class MealRepository(MealRepositoryPort):
                 existing_meal.edit_count = meal.edit_count
                 existing_meal.is_manually_edited = meal.is_manually_edited
                 existing_meal.emoji = meal.emoji
+
+                # Handle image URL update
+                if meal.image and meal.image.url:
+                    existing_image = (
+                        self.db.query(MealImageORM)
+                        .filter(MealImageORM.image_id == meal.image.image_id)
+                        .first()
+                    )
+                    if existing_image and existing_image.url != meal.image.url:
+                        existing_image.url = meal.image.url
 
                 # Handle nutrition sync
                 if meal.nutrition:

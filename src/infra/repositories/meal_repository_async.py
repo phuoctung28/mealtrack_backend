@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy import func, update, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.orm import selectinload, joinedload, noload
 
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.nutrition import Nutrition
@@ -42,6 +42,7 @@ def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
 
 _PROJECTION_OPTS: dict = {
     MealProjection.MACROS_ONLY: (
+        noload(MealORM.image),
         selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
     ),
     MealProjection.FULL: (
@@ -82,6 +83,15 @@ class AsyncMealRepository(MealRepositoryPort):
             existing_meal.edit_count = meal.edit_count
             existing_meal.is_manually_edited = meal.is_manually_edited
             existing_meal.emoji = meal.emoji
+
+            # Update image URL if changed (parallel upload sets URL after initial save)
+            if meal.image and meal.image.url:
+                img_result = await self.session.execute(
+                    select(MealImageORM).where(MealImageORM.image_id == meal.image.image_id)
+                )
+                existing_image = img_result.scalars().first()
+                if existing_image and existing_image.url != meal.image.url:
+                    existing_image.url = meal.image.url
 
             if meal.nutrition:
                 if not existing_meal.nutrition:

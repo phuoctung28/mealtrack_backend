@@ -67,8 +67,8 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                         training_minutes_per_session=command.training_minutes_per_session,
                         fitness_goal=command.fitness_goal,
                         meals_per_day=command.meals_per_day,
-                        pain_points=command.pain_points,
-                        dietary_preferences=command.dietary_preferences,
+                        pain_points=command.pain_points or [],
+                        dietary_preferences=command.dietary_preferences or [],
                         training_level=command.training_level,
                         referral_sources=command.referral_sources,
                         challenge_duration=command.challenge_duration,
@@ -86,8 +86,10 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     profile.training_minutes_per_session = command.training_minutes_per_session
                     profile.fitness_goal = command.fitness_goal
                     profile.meals_per_day = command.meals_per_day
-                    profile.pain_points = command.pain_points
-                    profile.dietary_preferences = command.dietary_preferences
+                    if command.pain_points is not None:
+                        profile.pain_points = command.pain_points
+                    if command.dietary_preferences is not None:
+                        profile.dietary_preferences = command.dietary_preferences
                     profile.training_level = command.training_level
                     profile.date_of_birth = command.date_of_birth
                     profile.target_weight_kg = command.target_weight_kg

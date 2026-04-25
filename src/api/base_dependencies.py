@@ -1,11 +1,10 @@
 import logging
 import os
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
@@ -29,6 +28,9 @@ from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
 from src.infra.services.firebase_service import FirebaseService
 from src.infra.services.scheduled_notification_service import ScheduledNotificationService
+
+if TYPE_CHECKING:
+    from src.domain.ports.subscription_service_port import SubscriptionServicePort
 
 # Note: Old handler imports removed - using event-driven architecture now
 # from src.app.handlers.activity_handler import ActivityHandler
@@ -144,9 +146,7 @@ def get_gpt_parser() -> GPTResponseParser:
     Returns:
         GPTResponseParser: The parser instance
     """
-    return GPTResponseParser(
-        strict_schema_mode=get_settings().MEAL_ANALYZE_STRICT_SCHEMA_MODE
-    )
+    return GPTResponseParser(strict_schema_mode=True)
 
 
 # Food Cache Service
@@ -202,34 +202,6 @@ def get_fat_secret_service_instance():
     """Get the FatSecret service instance."""
     from src.infra.adapters.fat_secret_service import get_fat_secret_service
     return get_fat_secret_service()
-
-
-# Nutritionix Service
-def get_nutritionix_service_instance():
-    """Get the Nutritionix service instance, or None if not configured."""
-    from src.infra.adapters.nutritionix_service import get_nutritionix_service
-    return get_nutritionix_service()
-
-
-# BraveSearch Nutrition Service (singleton — None when API key not configured)
-_brave_search_nutrition_service = None
-
-
-def get_brave_search_nutrition_service_instance():
-    """Get the BraveSearch nutrition service singleton, or None if unconfigured."""
-    global _brave_search_nutrition_service
-    if _brave_search_nutrition_service is None:
-        from src.infra.adapters.brave_search_nutrition_service import get_brave_search_nutrition_service
-        from src.infra.adapters.meal_generation_service import MealGenerationService
-        from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
-
-        meal_gen = MealGenerationService()
-        macro_validator = MacroValidationService()
-        _brave_search_nutrition_service = get_brave_search_nutrition_service(
-            meal_generation_service=meal_gen,
-            macro_validation_service=macro_validator,
-        )
-    return _brave_search_nutrition_service
 
 
 # Food Reference Repository (replaces barcode_product_repository)
@@ -342,6 +314,36 @@ def get_meal_suggestion_repository():
     return MealSuggestionRepository(_redis_client)
 
 
+_deepl_suggestion_translation_service = None
+
+
+def get_deepl_suggestion_translation_service():
+    """Get DeepL-backed suggestion translation service (singleton).
+
+    Replaces the Gemini-based TranslationService for meal suggestions.
+    Returns None if DEEPL_API_KEY is not set (generation still works, just in English).
+    """
+    global _deepl_suggestion_translation_service
+
+    if _deepl_suggestion_translation_service is not None:
+        return _deepl_suggestion_translation_service
+
+    if not settings.DEEPL_API_KEY:
+        logger.warning("DEEPL_API_KEY not set – suggestion translation will be skipped")
+        return None
+
+    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
+    from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
+        DeepLSuggestionTranslationService,
+    )
+
+    _deepl_suggestion_translation_service = DeepLSuggestionTranslationService(
+        deepl_port=DeepLTranslationAdapter(settings.DEEPL_API_KEY),
+    )
+    logger.info("DeepL suggestion translation service initialised")
+    return _deepl_suggestion_translation_service
+
+
 def get_suggestion_orchestration_service():
     """
     Get suggestion orchestration service (singleton-safe).
@@ -377,6 +379,7 @@ def get_suggestion_orchestration_service():
         uow_factory=AsyncUnitOfWork,
         meal_names_schema_class=MealNamesResponse,
         discovery_meals_schema_class=DiscoveryMealsResponse,
+        translation_service=get_deepl_suggestion_translation_service(),
     )
 
 
@@ -384,33 +387,34 @@ def get_suggestion_orchestration_service():
 # The event bus configuration in event_bus.py handles all dependencies
 
 
-# Meal Analysis Translation Service
-def get_meal_translation_service() -> MealAnalysisTranslationService:
+_deepl_meal_translation_service = None
+
+
+def get_deepl_meal_translation_service():
+    """Get DeepL-backed meal translation service (singleton).
+
+    Returns None if DEEPL_API_KEY is not configured so callers can
+    treat translation as optional.
     """
-    Get the meal analysis translation service instance.
-    Repository uses session factory internally — safe for singletons.
-    """
-    from src.domain.services.meal_suggestion.translation_service import TranslationService
-    from src.domain.services.meal_analysis.translation_service import MealAnalysisTranslationService
+    global _deepl_meal_translation_service
+
+    if _deepl_meal_translation_service is not None:
+        return _deepl_meal_translation_service
+
+    if not settings.DEEPL_API_KEY:
+        logger.warning("DEEPL_API_KEY not set – meal translation will be skipped")
+        return None
+
+    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
     from src.infra.repositories.meal_translation_repository import MealTranslationRepository
-    from src.infra.adapters.meal_generation_service import MealGenerationService
+    from src.domain.services.meal_analysis.deepl_meal_translation_service import DeepLMealTranslationService
 
-    translation_repo = MealTranslationRepository()  # uses SessionLocal factory
-    generation_service = MealGenerationService()
-    translation_service = TranslationService(generation_service)
-
-    return MealAnalysisTranslationService(
-        translation_repo=translation_repo,
-        translation_service=translation_service
+    _deepl_meal_translation_service = DeepLMealTranslationService(
+        translation_repo=MealTranslationRepository(),
+        deepl_port=DeepLTranslationAdapter(settings.DEEPL_API_KEY),
     )
-
-
-def get_translation_service() -> "TranslationService":
-    """Get lightweight TranslationService for translating strings via Gemini."""
-    from src.domain.services.meal_suggestion.translation_service import TranslationService
-    from src.infra.adapters.meal_generation_service import MealGenerationService
-
-    return TranslationService(MealGenerationService())
+    logger.info("DeepL meal translation service initialised")
+    return _deepl_meal_translation_service
 
 
 # IngredientNutritionResolver (singleton — reuses FatSecret + FoodReferenceRepository singletons)

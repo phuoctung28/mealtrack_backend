@@ -1,6 +1,5 @@
 import logging
 import os
-import time
 import uuid
 from typing import Optional
 
@@ -8,7 +7,6 @@ import cloudinary
 import cloudinary.api
 import cloudinary.exceptions
 import cloudinary.uploader
-import cloudinary.utils
 from dotenv import load_dotenv
 
 from src.domain.ports.image_store_port import ImageStorePort
@@ -50,29 +48,33 @@ class CloudinaryImageStore(ImageStorePort):
         
         logger.info("CloudinaryImageStore initialized successfully")
     
-    def save(self, image_bytes: bytes, content_type: str) -> str:
+    def save(self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None) -> str:
         """
         Save image bytes to Cloudinary.
-        
+
         Args:
             image_bytes: The raw bytes of the image
             content_type: MIME type of the image ("image/jpeg" or "image/png")
-            
+            image_id: Optional pre-generated image ID to use (for parallel uploads)
+
         Returns:
-            A unique image ID (UUID string)
-            
+            The URL of the saved image
+
         Raises:
             ValueError: If content_type is not supported or image is invalid
         """
         logger.info(f"Saving image of type {content_type}, size {len(image_bytes)} bytes")
-        
+
         # Validate content type
         if content_type not in ["image/jpeg", "image/png"]:
             raise ValueError(f"Unsupported content type: {content_type}")
-        
-        # Generate a UUID for the image
-        image_id = str(uuid.uuid4())
-        logger.info(f"Generated image_id: {image_id}")
+
+        # Use provided image_id or generate a new UUID
+        if image_id is None:
+            image_id = str(uuid.uuid4())
+            logger.info(f"Generated image_id: {image_id}")
+        else:
+            logger.info(f"Using provided image_id: {image_id}")
         
         # Determine file extension from content type
         if content_type == "image/jpeg":
@@ -110,33 +112,6 @@ class CloudinaryImageStore(ImageStorePort):
             logger.error(f"Error uploading to Cloudinary: {str(e)}")
             raise
 
-    def generate_upload_params(self) -> dict[str, str | int]:
-        """
-        Generate signed parameters for direct client uploads.
-        """
-        timestamp = int(time.time())
-        image_id = str(uuid.uuid4())
-        folder = "mealtrack"
-        public_id = f"{folder}/{image_id}"
-
-        params_to_sign = {
-            "timestamp": timestamp,
-            "folder": folder,
-            "public_id": public_id,
-        }
-        signature = cloudinary.utils.api_sign_request(
-            params_to_sign, cloudinary.config().api_secret
-        )
-
-        return {
-            "timestamp": timestamp,
-            "signature": signature,
-            "api_key": cloudinary.config().api_key,
-            "cloud_name": cloudinary.config().cloud_name,
-            "public_id": public_id,
-            "folder": folder,
-        }
-    
     def load(self, image_id: str) -> Optional[bytes]:
         """
         Load image bytes by ID from Cloudinary.

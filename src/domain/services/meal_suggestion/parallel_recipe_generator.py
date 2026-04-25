@@ -10,10 +10,12 @@ from typing import List, Optional
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
+    DeepLSuggestionTranslationService,
+)
 from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
 from src.domain.services.meal_suggestion.nutrition_lookup_service import NutritionLookupService
 from src.domain.services.meal_suggestion.recipe_attempt_builder import attempt_recipe_generation
-from src.domain.services.meal_suggestion.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +51,7 @@ class ParallelRecipeGenerator:
     def __init__(
         self,
         generation_service: MealGenerationServicePort,
-        translation_service: TranslationService,
+        translation_service: DeepLSuggestionTranslationService,
         macro_validator: MacroValidationService,
         nutrition_lookup: NutritionLookupService,
         meal_names_schema_class: type,
@@ -340,6 +342,9 @@ class ParallelRecipeGenerator:
         self, suggestion: MealSuggestion, language: str
     ) -> MealSuggestion:
         """Translate a single suggestion; return original on failure."""
+        if self._translation_service is None:
+            logger.debug(f"[TRANSLATE-SKIP] No translation service configured")
+            return suggestion
         try:
             results = await self._translation_service.translate_meal_suggestions_batch(
                 [suggestion], language

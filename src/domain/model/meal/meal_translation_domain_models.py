@@ -50,14 +50,26 @@ class MealTranslation:
         meal_id: Reference to original meal
         language: ISO 639-1 language code (e.g., 'vi', 'es')
         dish_name: Translated dish name
-        food_items: List of translated food items
+        food_items: List of translated food items (legacy – kept for backward compat)
         translated_at: Timestamp of translation
+        meal_instruction: Translated instructions as List[{instruction, duration_minutes}]
+        meal_ingredients: Translated ingredient names as List[str] (same order as food items)
     """
     meal_id: str
     language: str
     dish_name: str
     food_items: List[FoodItemTranslation]
     translated_at: datetime = field(default_factory=datetime.utcnow)
+    meal_instruction: Optional[list] = None
+    meal_ingredients: Optional[list] = None
+
+    def is_fully_cached(self) -> bool:
+        """Return True when all three translatable fields have been populated by DeepL."""
+        return (
+            self.dish_name is not None
+            and self.meal_instruction is not None
+            and self.meal_ingredients is not None
+        )
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""

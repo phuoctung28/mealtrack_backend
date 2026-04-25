@@ -38,9 +38,9 @@ class OnboardingCompleteRequest(BaseModel):
     # Training level - OPTIONAL (resistance training experience)
     training_level: Optional[str] = Field(None, description="beginner/intermediate/advanced")
 
-    # User experience - REQUIRED (at least one item each)
-    pain_points: List[str] = Field(..., min_items=1, description="User pain points")
-    dietary_preferences: List[str] = Field(..., min_items=1, description="Dietary preferences")
+    # User experience
+    pain_points: List[str] = Field(default_factory=list, description="User pain points")
+    dietary_preferences: List[str] = Field(default_factory=list, description="Dietary preferences")
 
     # Meal preferences - OPTIONAL (default 3, screen removed in onboarding redesign)
     meals_per_day: int = Field(3, ge=1, le=10)

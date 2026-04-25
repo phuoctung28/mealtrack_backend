@@ -6,29 +6,20 @@ class ImageStorePort(ABC):
     """Port interface for image storage operations."""
 
     @abstractmethod
-    def save(self, image_bytes: bytes, content_type: str) -> str:
+    def save(self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None) -> str:
         """
         Saves image bytes to storage.
 
         Args:
             image_bytes: The raw bytes of the image
             content_type: MIME type of the image ("image/jpeg" or "image/png")
+            image_id: Optional pre-generated image ID to use (for parallel uploads)
 
         Returns:
-            A unique image ID (UUID string)
+            The URL of the saved image
 
         Raises:
             ValueError: If content_type is not supported or image is invalid
-        """
-        pass
-
-    @abstractmethod
-    def generate_upload_params(self) -> dict[str, str | int]:
-        """
-        Generate signed upload parameters for direct client upload.
-
-        Returns:
-            Signed parameters required by Cloudinary direct upload.
         """
         pass
 

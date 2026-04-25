@@ -76,7 +76,6 @@ def mock_user_repo():
 @pytest.fixture
 def recipe_generator(mock_generation_service):
     """Create ParallelRecipeGenerator with mocked dependencies."""
-    from src.domain.services.meal_suggestion.translation_service import TranslationService
     from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
     from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
     meal_macros = _make_meal_macros()
@@ -85,7 +84,7 @@ def recipe_generator(mock_generation_service):
     nutrition_lookup.scale_to_target = Mock(return_value=meal_macros)
     return ParallelRecipeGenerator(
         generation_service=mock_generation_service,
-        translation_service=TranslationService(mock_generation_service),
+        translation_service=None,  # No translation in tests
         macro_validator=MacroValidationService(),
         nutrition_lookup=nutrition_lookup,
         meal_names_schema_class=MealNamesResponse,
