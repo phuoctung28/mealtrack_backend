@@ -1,7 +1,7 @@
 """add_refunded_to_subscription_status and fix datetime columns
 
-Revision ID: 053
-Revises: 052
+Revision ID: 054
+Revises: 053
 Create Date: 2026-04-25
 
 """
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = '053'
-down_revision: Union[str, None] = '052'
+revision: str = '054'
+down_revision: Union[str, None] = '053'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -4,14 +4,14 @@ The last_accessed column was declared as TIMESTAMP WITHOUT TIME ZONE while
 the code uses utc_now() which returns timezone-aware datetimes. asyncpg
 rejects mixing naive and aware datetimes.
 
-Revision ID: 054
-Revises: 053
+Revision ID: 055
+Revises: 054
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = '054'
-down_revision = '053'
+revision = '055'
+down_revision = '054'
 branch_labels = None
 depends_on = None
 
