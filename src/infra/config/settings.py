@@ -34,7 +34,7 @@ class Settings(BaseSettings):
         default=3, description="DB connections per worker"
     )
     POOL_MAX_OVERFLOW: int = Field(default=2, description="Max overflow connections")
-    POOL_TIMEOUT: int = Field(default=30)
+    POOL_TIMEOUT: int = Field(default=10)
     POOL_RECYCLE: int = Field(default=120)
     POOL_ECHO: bool = Field(default=False)
 
