@@ -1,46 +1,49 @@
 """Query handler — validate a referral code: existence, self-referral, already-referred checks."""
+
 import logging
+from typing import Optional
 
-from sqlalchemy import select
-
+from src.app.events.base import EventHandler, handles
 from src.app.queries.referral.validate_referral_code_query import (
     ValidateCodeResult,
     ValidateReferralCodeQuery,
 )
-from src.infra.database.models.user.user import User
-from src.infra.repositories.referral_repository import ReferralRepository
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
+from src.infra.database.uow_async import AsyncUnitOfWork
+from src.infra.repositories.referral_repository_async import AsyncReferralRepository
 
 logger = logging.getLogger(__name__)
 
 
-class ValidateReferralCodeQueryHandler:
-    def handle(self, query: ValidateReferralCodeQuery, uow) -> ValidateCodeResult:
-        repo = ReferralRepository(uow.session)
+@handles(ValidateReferralCodeQuery)
+class ValidateReferralCodeQueryHandler(
+    EventHandler[ValidateReferralCodeQuery, ValidateCodeResult]
+):
+    def __init__(self, uow: Optional[AsyncUnitOfWorkPort] = None):
+        self.uow = uow
 
-        code = repo.get_code_by_code(query.code)
-        if not code:
-            return ValidateCodeResult(valid=False, error="invalid_code")
+    async def handle(self, query: ValidateReferralCodeQuery) -> ValidateCodeResult:
+        uow = self.uow or AsyncUnitOfWork()
+        async with uow:
+            repo = AsyncReferralRepository(uow.session)
 
-        if code.user_id == query.user_id:
-            return ValidateCodeResult(valid=False, error="self_referral")
+            code = await repo.get_code_by_code(query.code)
+            if not code:
+                return ValidateCodeResult(valid=False, error="invalid_code")
 
-        existing = repo.get_conversion_by_referred_user(query.user_id)
-        if existing:
-            return ValidateCodeResult(valid=False, error="already_referred")
+            if code.user_id == query.user_id:
+                return ValidateCodeResult(valid=False, error="self_referral")
 
-        # Fetch referrer's first name for personalised UI copy
-        result = uow.session.execute(
-            select(User.first_name, User.display_name).where(User.id == code.user_id)
-        )
-        row = result.first()
-        referrer_name = "Friend"
-        if row:
-            raw = row.first_name or row.display_name or ""
-            referrer_name = raw.split()[0] if raw.strip() else "Friend"
+            existing = await repo.get_conversion_by_referred_user(query.user_id)
+            if existing:
+                return ValidateCodeResult(valid=False, error="already_referred")
 
-        return ValidateCodeResult(
-            valid=True,
-            referrer_name=referrer_name,
-            discount_monthly=199000,
-            discount_annual=499000,
-        )
+            # Fetch referrer's first name for personalised UI copy
+            referrer_name = await repo.get_user_first_name(code.user_id)
+
+            return ValidateCodeResult(
+                valid=True,
+                referrer_name=referrer_name,
+                discount_monthly=199000,
+                discount_annual=499000,
+            )

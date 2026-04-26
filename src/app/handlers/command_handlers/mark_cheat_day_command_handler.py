@@ -1,4 +1,5 @@
 """Handler for marking a cheat day."""
+
 import logging
 import uuid
 from datetime import date
@@ -7,9 +8,12 @@ from typing import Dict, Any, Optional
 from src.api.exceptions import ValidationException
 from src.app.commands.cheat_day import MarkCheatDayCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.model.cheat_day import CheatDay
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.domain.utils.timezone_utils import utc_now, resolve_user_timezone_async, user_today
+from src.domain.utils.timezone_utils import (
+    utc_now,
+    resolve_user_timezone_async,
+    user_today,
+)
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -35,25 +39,27 @@ class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, Dict[str, Any
                         error_code="PAST_DATE_NOT_ALLOWED",
                     )
 
-                existing = await uow.cheat_days.find_by_user_and_date(command.user_id, target_date)
+                existing = await uow.cheat_days.find_by_user_and_date(
+                    command.user_id, target_date
+                )
                 if existing:
                     raise ValidationException(
                         message=f"Date {target_date} is already marked as cheat day",
                         error_code="ALREADY_MARKED",
                     )
 
-                cheat_day = CheatDay(
-                    cheat_day_id=str(uuid.uuid4()),
+                cheat_day_id = str(uuid.uuid4())
+
+                await uow.cheat_days.add(
+                    cheat_day_id=cheat_day_id,
                     user_id=command.user_id,
-                    date=target_date,
+                    target_date=target_date,
                     marked_at=utc_now(),
                 )
-
-                await uow.cheat_days.add(cheat_day)
                 await uow.commit()
 
                 return {
-                    "cheat_day_id": cheat_day.cheat_day_id,
+                    "cheat_day_id": cheat_day_id,
                     "date": target_date.isoformat(),
                     "message": "Date marked as cheat day",
                 }

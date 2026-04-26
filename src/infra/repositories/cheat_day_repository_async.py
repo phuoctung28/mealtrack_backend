@@ -1,13 +1,12 @@
 """Async cheat day repository."""
-from datetime import date
+
+from datetime import date, datetime
 from typing import List, Optional
 
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.model.cheat_day import CheatDay
 from src.infra.database.models.cheat_day.cheat_day import CheatDayORM
-from src.infra.mappers.cheat_day_mapper import cheat_day_orm_to_domain, cheat_day_domain_to_orm
 
 
 class AsyncCheatDayRepository:
@@ -16,25 +15,36 @@ class AsyncCheatDayRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def add(self, cheat_day: CheatDay) -> None:
-        db = cheat_day_domain_to_orm(cheat_day)
-        self.session.add(db)
+    async def add(
+        self,
+        cheat_day_id: str,
+        user_id: str,
+        target_date: date,
+        marked_at: datetime,
+    ) -> None:
+        cheat_day = CheatDayORM(
+            id=cheat_day_id,
+            user_id=user_id,
+            date=target_date,
+            marked_at=marked_at,
+        )
+        self.session.add(cheat_day)
         await self.session.flush()
 
-    async def find_by_user_and_date(self, user_id: str, target_date: date) -> Optional[CheatDay]:
+    async def find_by_user_and_date(
+        self, user_id: str, target_date: date
+    ) -> Optional[CheatDayORM]:
         result = await self.session.execute(
-            select(CheatDayORM)
-            .where(
+            select(CheatDayORM).where(
                 CheatDayORM.user_id == user_id,
                 CheatDayORM.date == target_date,
             )
         )
-        db = result.scalars().first()
-        return cheat_day_orm_to_domain(db) if db else None
+        return result.scalars().first()
 
     async def find_by_user_and_date_range(
         self, user_id: str, start: date, end: date
-    ) -> List[CheatDay]:
+    ) -> List[CheatDayORM]:
         result = await self.session.execute(
             select(CheatDayORM)
             .where(
@@ -44,7 +54,7 @@ class AsyncCheatDayRepository:
             )
             .order_by(CheatDayORM.date)
         )
-        return [cheat_day_orm_to_domain(r) for r in result.scalars().all()]
+        return list(result.scalars().all())
 
     async def delete(self, cheat_day_id: str) -> None:
         await self.session.execute(

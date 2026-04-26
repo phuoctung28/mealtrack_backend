@@ -13,7 +13,7 @@ from src.infra.database.models.meal.meal_image import MealImageORM
 from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.database.models.weekly.weekly_macro_budget import WeeklyMacroBudget
-from src.infra.database.models.cheat_day.cheat_day import CheatDay
+from src.infra.database.models.cheat_day.cheat_day import CheatDayORM
 from src.infra.database.models.enums import MealStatusEnum
 
 from scripts.seed_demo_meals import ALL_DAYS_MEALS, CHEAT_DAY_INDICES
@@ -148,7 +148,7 @@ def seed_cheat_days(db: Session, user_id: str) -> None:
     monday = _week_start()
     for day_idx in CHEAT_DAY_INDICES:
         cheat_date = monday + timedelta(days=day_idx)
-        db.add(CheatDay(
+        db.add(CheatDayORM(
             id=str(uuid.uuid4()),
             user_id=user_id,
             date=cheat_date,

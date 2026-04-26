@@ -1,2 +1,1 @@
-from .cheat_day import CheatDay
-__all__ = ["CheatDay"]
+"""Cheat day domain model package - deprecated and empty."""

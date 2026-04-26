@@ -1,6 +1,7 @@
 """Domain model package."""
+
 # flake8: noqa
-from .base import BaseDomainModel
+from .base import BaseDomainModel, validate_uuid
 from .meal import (
     Meal,
     MealStatus,
