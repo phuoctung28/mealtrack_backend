@@ -80,6 +80,18 @@ class DeepLSuggestionTranslationService:
                 translated.append(result)
         return translated
 
+    async def translate_names(
+        self, names: List[str], target_language: str
+    ) -> List[str]:
+        """Translate a list of meal names. Returns originals on failure."""
+        if target_language == "en" or not names:
+            return names
+        try:
+            return await self._deepl.translate_texts(names, target_language)
+        except Exception as exc:
+            logger.warning("DeepL name translation failed: %s", exc)
+            return names
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
