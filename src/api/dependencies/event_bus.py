@@ -123,6 +123,22 @@ from src.app.handlers.query_handlers.referral.get_referral_stats_handler import 
     GetReferralStatsQueryHandler,
 )
 
+# Feature flag commands and queries
+from src.app.commands.feature_flag import CreateFeatureFlagCommand, UpdateFeatureFlagCommand
+from src.app.queries.feature_flag import GetFeatureFlagsQuery, GetFeatureFlagByNameQuery
+from src.app.handlers.command_handlers.feature_flag.create_feature_flag_handler import (
+    CreateFeatureFlagCommandHandler,
+)
+from src.app.handlers.command_handlers.feature_flag.update_feature_flag_handler import (
+    UpdateFeatureFlagCommandHandler,
+)
+from src.app.handlers.query_handlers.feature_flag.get_feature_flags_handler import (
+    GetFeatureFlagsQueryHandler,
+)
+from src.app.handlers.query_handlers.feature_flag.get_feature_flag_by_name_handler import (
+    GetFeatureFlagByNameQueryHandler,
+)
+
 # Import event handlers
 from src.app.handlers.event_handlers.meal_analysis_event_handler import (
     MealAnalysisEventHandler,
@@ -551,6 +567,20 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(GetReferralStatsQuery, GetReferralStatsQueryHandler())
     event_bus.register_handler(ApplyReferralCodeCommand, ApplyReferralCodeCommandHandler())
     event_bus.register_handler(RequestPayoutCommand, RequestPayoutCommandHandler())
+
+    # Register feature flag handlers
+    event_bus.register_handler(
+        GetFeatureFlagsQuery, GetFeatureFlagsQueryHandler(cache_service=cache_service)
+    )
+    event_bus.register_handler(
+        GetFeatureFlagByNameQuery, GetFeatureFlagByNameQueryHandler(cache_service=cache_service)
+    )
+    event_bus.register_handler(
+        CreateFeatureFlagCommand, CreateFeatureFlagCommandHandler(cache_service=cache_service)
+    )
+    event_bus.register_handler(
+        UpdateFeatureFlagCommand, UpdateFeatureFlagCommandHandler(cache_service=cache_service)
+    )
 
     # Register saved suggestion handlers
     event_bus.register_handler(

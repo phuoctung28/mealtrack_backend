@@ -1,190 +1,115 @@
-"""
-Feature flags API endpoints for application-level feature control.
-"""
-from typing import Optional
+"""Feature flags API endpoints for application-level feature control."""
 
 from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
 
-from src.api.base_dependencies import get_cache_service, get_db
-from src.api.schemas.request.feature_flag_requests import CreateFeatureFlagRequest, UpdateFeatureFlagRequest
+from src.api.dependencies.event_bus import get_event_bus
+from src.api.schemas.request.feature_flag_requests import (
+    CreateFeatureFlagRequest,
+    UpdateFeatureFlagRequest,
+)
 from src.api.schemas.response.feature_flag_responses import (
     FeatureFlagsResponse,
     IndividualFeatureFlagResponse,
     FeatureFlagCreatedResponse,
-    FeatureFlagUpdatedResponse
+    FeatureFlagUpdatedResponse,
 )
-from src.domain.cache.cache_keys import CacheKeys
-from src.domain.utils.timezone_utils import utc_now
-from src.infra.cache.cache_service import CacheService
-from src.infra.database.models.feature_flag import FeatureFlag
+from src.app.commands.feature_flag import CreateFeatureFlagCommand, UpdateFeatureFlagCommand
+from src.app.handlers.command_handlers.feature_flag.create_feature_flag_handler import (
+    FeatureFlagExistsError,
+)
+from src.app.handlers.command_handlers.feature_flag.update_feature_flag_handler import (
+    FeatureFlagNotFoundError as UpdateNotFoundError,
+)
+from src.app.handlers.query_handlers.feature_flag.get_feature_flag_by_name_handler import (
+    FeatureFlagNotFoundError,
+)
+from src.app.queries.feature_flag import GetFeatureFlagsQuery, GetFeatureFlagByNameQuery
+from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/feature-flags", tags=["Feature Flags"])
 
 
 @router.get("/", response_model=FeatureFlagsResponse)
 async def get_feature_flags(
-    db: Session = Depends(get_db),
-    cache_service: Optional[CacheService] = Depends(get_cache_service),
+    event_bus: EventBus = Depends(get_event_bus),
 ):
-    """
-    Get all feature flags from the database.
-    
-    Returns all feature flags currently stored in the system.
-    """
-    cache_key, ttl = CacheKeys.feature_flags()
-    if cache_service:
-        cached = await cache_service.get_json(cache_key)
-        if cached:
-            return FeatureFlagsResponse(**cached)
-
-    feature_flags = db.query(FeatureFlag).all()
-    flags_dict = {flag.name: flag.enabled for flag in feature_flags}
-
-    response = FeatureFlagsResponse(
-        flags=flags_dict,
-        updated_at=utc_now()
-    )
-
-    if cache_service:
-        await cache_service.set_json(cache_key, response.model_dump(), ttl)
-
-    return response
+    """Get all feature flags from the database."""
+    result = await event_bus.send(GetFeatureFlagsQuery())
+    return FeatureFlagsResponse(flags=result.flags, updated_at=result.updated_at)
 
 
 @router.get("/{feature_name}", response_model=IndividualFeatureFlagResponse)
 async def get_individual_feature_flag(
     feature_name: str,
-    db: Session = Depends(get_db),
-    cache_service: Optional[CacheService] = Depends(get_cache_service),
+    event_bus: EventBus = Depends(get_event_bus),
 ):
-    """
-    Get a specific feature flag from the database.
-    
-    - **feature_name**: Name of the feature flag to retrieve
-    
-    Returns the status of a single feature flag.
-    """
-    cache_key, ttl = CacheKeys.feature_flag(feature_name)
-    if cache_service:
-        cached = await cache_service.get_json(cache_key)
-        if cached:
-            return IndividualFeatureFlagResponse(**cached)
-
-    feature_flag = db.query(FeatureFlag).filter(FeatureFlag.name == feature_name).first()
-    
-    if not feature_flag:
+    """Get a specific feature flag from the database."""
+    try:
+        result = await event_bus.send(GetFeatureFlagByNameQuery(name=feature_name))
+    except FeatureFlagNotFoundError:
         raise HTTPException(
-            status_code=404,
-            detail=f"Feature flag '{feature_name}' not found"
+            status_code=404, detail=f"Feature flag '{feature_name}' not found"
         )
-    
-    response = IndividualFeatureFlagResponse(
-        name=feature_flag.name,
-        enabled=feature_flag.enabled,
-        description=feature_flag.description,
-        created_at=feature_flag.created_at,
-        updated_at=feature_flag.updated_at
+
+    return IndividualFeatureFlagResponse(
+        name=result.name,
+        enabled=result.enabled,
+        description=result.description,
+        created_at=result.created_at,
+        updated_at=result.updated_at,
     )
-
-    if cache_service:
-        await cache_service.set_json(cache_key, response.model_dump(), ttl)
-
-    return response
 
 
 @router.post("/", response_model=FeatureFlagCreatedResponse, status_code=201)
 async def create_feature_flag(
     request: CreateFeatureFlagRequest,
-    db: Session = Depends(get_db),
-    cache_service: Optional[CacheService] = Depends(get_cache_service),
+    event_bus: EventBus = Depends(get_event_bus),
 ):
-    """
-    Create a new feature flag.
-    
-    - **name**: Unique name for the feature flag
-    - **enabled**: Initial enabled state (default: False)  
-    - **description**: Optional description of the feature flag
-    
-    Returns the created feature flag information.
-    """
-    # Check if feature flag already exists
-    existing_flag = db.query(FeatureFlag).filter(FeatureFlag.name == request.name).first()
-    if existing_flag:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Feature flag '{request.name}' already exists"
+    """Create a new feature flag."""
+    try:
+        result = await event_bus.send(
+            CreateFeatureFlagCommand(
+                name=request.name,
+                enabled=request.enabled,
+                description=request.description,
+            )
         )
-    
-    # Create new feature flag
-    new_flag = FeatureFlag(
-        name=request.name,
-        enabled=request.enabled,
-        description=request.description
-    )
-    
-    db.add(new_flag)
-    db.commit()
-    db.refresh(new_flag)
-    
-    response = FeatureFlagCreatedResponse(
-        name=new_flag.name,
-        enabled=new_flag.enabled,
-        description=new_flag.description,
-        created_at=new_flag.created_at
-    )
+    except FeatureFlagExistsError:
+        raise HTTPException(
+            status_code=409, detail=f"Feature flag '{request.name}' already exists"
+        )
 
-    if cache_service:
-        await cache_service.invalidate(CacheKeys.feature_flags()[0])
-        await cache_service.invalidate(CacheKeys.feature_flag(new_flag.name)[0])
-
-    return response
+    return FeatureFlagCreatedResponse(
+        name=result.name,
+        enabled=result.enabled,
+        description=result.description,
+        created_at=result.created_at,
+    )
 
 
 @router.put("/{feature_name}", response_model=FeatureFlagUpdatedResponse)
 async def update_feature_flag(
-    feature_name: str, 
-    request: UpdateFeatureFlagRequest, 
-    db: Session = Depends(get_db),
-    cache_service: Optional[CacheService] = Depends(get_cache_service),
+    feature_name: str,
+    request: UpdateFeatureFlagRequest,
+    event_bus: EventBus = Depends(get_event_bus),
 ):
-    """
-    Update an existing feature flag.
-    
-    - **feature_name**: Name of the feature flag to update
-    - **enabled**: New enabled state (optional)
-    - **description**: New description (optional)
-    
-    Returns the updated feature flag information.
-    """
-    feature_flag = db.query(FeatureFlag).filter(FeatureFlag.name == feature_name).first()
-    
-    if not feature_flag:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Feature flag '{feature_name}' not found"
+    """Update an existing feature flag."""
+    try:
+        result = await event_bus.send(
+            UpdateFeatureFlagCommand(
+                name=feature_name,
+                enabled=request.enabled,
+                description=request.description,
+            )
         )
-    
-    # Update only provided fields
-    if request.enabled is not None:
-        feature_flag.enabled = request.enabled
-    if request.description is not None:
-        feature_flag.description = request.description
+    except UpdateNotFoundError:
+        raise HTTPException(
+            status_code=404, detail=f"Feature flag '{feature_name}' not found"
+        )
 
-    feature_flag.updated_at = utc_now()
-    
-    db.commit()
-    db.refresh(feature_flag)
-    
-    response = FeatureFlagUpdatedResponse(
-        name=feature_flag.name,
-        enabled=feature_flag.enabled,
-        description=feature_flag.description,
-        updated_at=feature_flag.updated_at
+    return FeatureFlagUpdatedResponse(
+        name=result.name,
+        enabled=result.enabled,
+        description=result.description,
+        updated_at=result.updated_at,
     )
-
-    if cache_service:
-        await cache_service.invalidate(CacheKeys.feature_flags()[0])
-        await cache_service.invalidate(CacheKeys.feature_flag(feature_flag.name)[0])
-
-    return response
