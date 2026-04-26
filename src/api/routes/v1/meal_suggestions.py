@@ -160,7 +160,14 @@ async def discover_meals(
             cache_svc = await get_meal_image_cache_service(session=_db)
             pending_repo = await get_pending_queue(session=_db)
             english_names = [m["english_name"] for m in meals]
-            cache_hits = await cache_svc.lookup_batch(english_names)
+            try:
+                cache_hits = await cache_svc.lookup_batch(english_names)
+            except Exception as exc:
+                logger.warning("Cache lookup failed, rolling back: %s", exc)
+                cache_hits = [None] * len(meals)
+            finally:
+                # Rollback any aborted transaction state before proceeding to writes
+                _db.rollback()
         else:
             cache_hits = [None] * len(meals)
             pending_repo = None
@@ -195,14 +202,15 @@ async def discover_meals(
         # Translate names if non-English
         translated_names = [m["name"] for m in meals]
         if language != "en":
-            from src.api.base_dependencies import get_translation_service
+            from src.api.base_dependencies import get_deepl_suggestion_translation_service
             try:
-                translation_svc = get_translation_service()
-                translated = await translation_svc.translate_names(
-                    [m["name"] for m in meals], language
-                )
-                if translated and len(translated) == len(meals):
-                    translated_names = translated
+                translation_svc = get_deepl_suggestion_translation_service()
+                if translation_svc:
+                    translated = await translation_svc.translate_names(
+                        [m["name"] for m in meals], language
+                    )
+                    if translated and len(translated) == len(meals):
+                        translated_names = translated
             except Exception as e:
                 logger.warning(f"Name translation failed, using English: {e}")
 

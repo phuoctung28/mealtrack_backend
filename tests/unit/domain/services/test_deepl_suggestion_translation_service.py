@@ -154,3 +154,35 @@ async def test_translate_meal_suggestions_batch_falls_back_per_item(service, sug
     assert result[0] == suggestion  # failed item falls back
     assert result[1].meal_name.startswith("ok:")
 
+
+@pytest.mark.asyncio
+async def test_translate_names_skips_english(service, deepl_port):
+    names = ["Grilled Chicken", "Baked Salmon"]
+    result = await service.translate_names(names, "en")
+    assert result == names
+    deepl_port.translate_texts.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_translate_names_skips_empty_list(service, deepl_port):
+    result = await service.translate_names([], "vi")
+    assert result == []
+    deepl_port.translate_texts.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_translate_names_translates_successfully(service, deepl_port):
+    deepl_port.translate_texts.return_value = ["Gà nướng", "Cá hồi nướng"]
+    names = ["Grilled Chicken", "Baked Salmon"]
+    result = await service.translate_names(names, "vi")
+    assert result == ["Gà nướng", "Cá hồi nướng"]
+    deepl_port.translate_texts.assert_awaited_once_with(names, "vi")
+
+
+@pytest.mark.asyncio
+async def test_translate_names_returns_originals_on_exception(service, deepl_port):
+    deepl_port.translate_texts.side_effect = Exception("DeepL error")
+    names = ["Grilled Chicken", "Baked Salmon"]
+    result = await service.translate_names(names, "vi")
+    assert result == names
+

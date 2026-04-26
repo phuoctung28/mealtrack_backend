@@ -202,6 +202,35 @@ def get_user_monday(
     return monday
 
 
+async def get_user_monday_async(
+    target_date: Union[date, datetime],
+    user_id: str,
+    uow,  # AsyncUnitOfWorkPort
+) -> date:
+    """Async version of get_user_monday for AsyncUnitOfWork."""
+    user_timezone = "UTC"
+
+    if uow:
+        try:
+            user = await uow.users.find_by_id(user_id)
+            if user and user.timezone:
+                user_timezone = user.timezone
+        except Exception:
+            pass
+
+    tz = get_zone_info(user_timezone)
+
+    if isinstance(target_date, datetime):
+        local_date = target_date.astimezone(tz).date()
+    else:
+        local_date = target_date
+
+    monday_offset = local_date.weekday()
+    monday = local_date - timedelta(days=monday_offset)
+
+    return monday
+
+
 async def resolve_user_timezone_async(
     user_id: str,
     uow,  # AsyncUnitOfWorkPort
