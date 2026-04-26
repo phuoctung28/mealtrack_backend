@@ -1,7 +1,7 @@
 """
 Unit tests for TDEE helper functions in suggestion_tdee_helpers.py.
 """
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -18,6 +18,9 @@ def mock_tdee_service():
     service = Mock()
     result = Mock()
     result.macros.calories = 2200.0
+    result.macros.protein = 150.0
+    result.macros.carbs = 220.0
+    result.macros.fat = 70.0
     result.bmr = 1800.0
     service.calculate_tdee.return_value = result
     return service
@@ -80,14 +83,14 @@ class TestGetAdjustedDailyTarget:
         )
 
         mock_uow = Mock()
-        mock_uow.weekly_budgets.find_by_user_and_week.return_value = mock_budget
+        mock_uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=mock_budget)
 
         with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.WeeklyBudgetService") as mock_budget_svc, \
-             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday", return_value=date(2026, 3, 9)), \
-             patch("src.domain.utils.timezone_utils.resolve_user_timezone", return_value="UTC"), \
-             patch("src.domain.utils.timezone_utils.user_today", return_value=date(2026, 3, 13)):
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday_async", new_callable=AsyncMock, return_value=date(2026, 3, 9)), \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.resolve_user_timezone_async", new_callable=AsyncMock, return_value="UTC"), \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.user_today", return_value=date(2026, 3, 13)):
 
-            mock_budget_svc.get_effective_adjusted_daily.return_value = mock_effective
+            mock_budget_svc.get_effective_adjusted_daily_async = AsyncMock(return_value=mock_effective)
 
             result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile, uow=mock_uow)
 
@@ -96,12 +99,14 @@ class TestGetAdjustedDailyTarget:
     @pytest.mark.asyncio
     async def test_falls_back_to_raw_tdee_when_no_budget(self, mock_tdee_service, mock_profile):
         """Should fall back to raw TDEE when no weekly budget found."""
-        mock_uow = Mock()
-        mock_uow.weekly_budgets.find_by_user_and_week.return_value = None
+        from datetime import date
 
-        with patch("src.domain.utils.timezone_utils.resolve_user_timezone", return_value="UTC"), \
-             patch("src.domain.utils.timezone_utils.user_today", return_value=Mock()), \
-             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday", return_value=Mock()):
+        mock_uow = Mock()
+        mock_uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=None)
+
+        with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.resolve_user_timezone_async", new_callable=AsyncMock, return_value="UTC"), \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.user_today", return_value=date(2026, 3, 13)), \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday_async", new_callable=AsyncMock, return_value=date(2026, 3, 9)):
 
             result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile, uow=mock_uow)
 
