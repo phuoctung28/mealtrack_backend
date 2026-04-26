@@ -101,6 +101,28 @@ from src.app.handlers.query_handlers.get_cheat_days_query_handler import (
     GetCheatDaysQueryHandler,
 )
 
+# Referral commands and queries
+from src.app.commands.referral.apply_referral_code_command import ApplyReferralCodeCommand
+from src.app.commands.referral.request_payout_command import RequestPayoutCommand
+from src.app.queries.referral.validate_referral_code_query import ValidateReferralCodeQuery
+from src.app.queries.referral.get_my_referral_code_query import GetMyReferralCodeQuery
+from src.app.queries.referral.get_referral_stats_query import GetReferralStatsQuery
+from src.app.handlers.command_handlers.referral.apply_referral_code_handler import (
+    ApplyReferralCodeCommandHandler,
+)
+from src.app.handlers.command_handlers.referral.request_payout_handler import (
+    RequestPayoutCommandHandler,
+)
+from src.app.handlers.query_handlers.referral.validate_referral_code_handler import (
+    ValidateReferralCodeQueryHandler,
+)
+from src.app.handlers.query_handlers.referral.get_my_referral_code_handler import (
+    GetMyReferralCodeQueryHandler,
+)
+from src.app.handlers.query_handlers.referral.get_referral_stats_handler import (
+    GetReferralStatsQueryHandler,
+)
+
 # Import event handlers
 from src.app.handlers.event_handlers.meal_analysis_event_handler import (
     MealAnalysisEventHandler,
@@ -164,6 +186,11 @@ from src.infra.event_bus import PyMediatorEventBus, EventBus
 # Singleton event buses
 _food_search_event_bus: Optional[EventBus] = None
 _configured_event_bus: Optional[EventBus] = None
+
+
+def get_event_bus() -> EventBus:
+    """FastAPI dependency to get the configured event bus."""
+    return get_configured_event_bus()
 
 
 def get_food_search_event_bus() -> EventBus:
@@ -517,6 +544,13 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(MarkCheatDayCommand, MarkCheatDayCommandHandler())
     event_bus.register_handler(UnmarkCheatDayCommand, UnmarkCheatDayCommandHandler())
     event_bus.register_handler(GetCheatDaysQuery, GetCheatDaysQueryHandler())
+
+    # Register referral handlers
+    event_bus.register_handler(ValidateReferralCodeQuery, ValidateReferralCodeQueryHandler())
+    event_bus.register_handler(GetMyReferralCodeQuery, GetMyReferralCodeQueryHandler())
+    event_bus.register_handler(GetReferralStatsQuery, GetReferralStatsQueryHandler())
+    event_bus.register_handler(ApplyReferralCodeCommand, ApplyReferralCodeCommandHandler())
+    event_bus.register_handler(RequestPayoutCommand, RequestPayoutCommandHandler())
 
     # Register saved suggestion handlers
     event_bus.register_handler(
