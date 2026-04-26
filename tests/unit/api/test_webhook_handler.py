@@ -110,9 +110,10 @@ class TestWebhookHandler:
                 mock_result.scalars.return_value.first.return_value = mock_user
                 mock_uow.session.execute.return_value = mock_result
                 
-                # Mock no existing subscription (async)
+                # Mock no existing subscription (async) and referral credit
                 with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None):
-                    result = await revenuecat_webhook(mock_request, authorization="test_secret")
+                    with patch('src.api.routes.v1.webhooks._credit_referral_on_purchase', new_callable=AsyncMock):
+                        result = await revenuecat_webhook(mock_request, authorization="test_secret")
                 
                 assert result == {"status": "success"}
                 mock_uow.commit.assert_awaited_once()
@@ -181,9 +182,10 @@ class TestWebhookHandler:
             "environment": "PRODUCTION"
         }
 
-        # Mock no existing subscription (async)
+        # Mock no existing subscription (async) and referral credit
         with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None):
-            await handle_purchase(mock_uow, user, event)
+            with patch('src.api.routes.v1.webhooks._credit_referral_on_purchase', new_callable=AsyncMock):
+                await handle_purchase(mock_uow, user, event)
 
         # Verify subscription was added
         mock_uow.session.add.assert_called_once()
