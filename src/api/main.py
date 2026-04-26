@@ -42,19 +42,19 @@ from src.api.middleware.rate_limit import limiter
 from src.api.middleware.request_logger import RequestLoggerMiddleware
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
-from src.api.routes.v1.tdee import router as tdee_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
 from src.api.routes.v1.health import router as health_router
 from src.api.routes.v1.ingredients import router as ingredients_router
 from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
 from src.api.routes.v1.meals import router as meals_router
-from src.api.routes.v1.saved_suggestions import router as saved_suggestions_router
 from src.api.routes.v1.monitoring import router as monitoring_router
 from src.api.routes.v1.notifications import router as notifications_router
+from src.api.routes.v1.referrals import router as referrals_router
+from src.api.routes.v1.saved_suggestions import router as saved_suggestions_router
+from src.api.routes.v1.tdee import router as tdee_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
-from src.api.routes.v1.referrals import router as referrals_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.infra.config.settings import settings
 from src.infra.database.config import engine
