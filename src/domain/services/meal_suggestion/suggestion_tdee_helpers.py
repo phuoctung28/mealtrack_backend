@@ -10,7 +10,11 @@ from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
 from src.domain.model.user import TdeeRequest, Sex, UnitSystem
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
-from src.domain.utils.timezone_utils import get_user_monday
+from src.domain.utils.timezone_utils import (
+    get_user_monday_async,
+    resolve_user_timezone_async,
+    user_today,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +52,7 @@ async def get_adjusted_daily_target(
 ) -> float:
     """Return adjusted daily calorie target using Skip & Redistribute.
 
-    Delegates to WeeklyBudgetService.get_effective_adjusted_daily() which
+    Delegates to WeeklyBudgetService.get_effective_adjusted_daily_async() which
     recalculates consumed from actual meals (not stale DB values).
     Falls back to raw TDEE if no budget exists or uow not provided.
     """
@@ -61,18 +65,17 @@ async def get_adjusted_daily_target(
             logger.info(f"No UoW provided for user {user_id}, using raw TDEE: {base_calories}")
             return base_calories
 
-        from src.domain.utils.timezone_utils import resolve_user_timezone, user_today
-        user_tz = resolve_user_timezone(user_id, uow)
+        user_tz = await resolve_user_timezone_async(user_id, uow)
         today = user_today(user_tz)
-        week_start = get_user_monday(today, user_id, uow)
-        weekly_budget = uow.weekly_budgets.find_by_user_and_week(user_id, week_start)
+        week_start = await get_user_monday_async(today, user_id, uow)
+        weekly_budget = await uow.weekly_budgets.find_by_user_and_week(user_id, week_start)
 
         if not weekly_budget:
             logger.info(f"No weekly budget for user {user_id}, using raw TDEE: {base_calories}")
             return base_calories
 
-        # Use shared method: recalculates consumed, applies skip/redistribute
-        effective = WeeklyBudgetService.get_effective_adjusted_daily(
+        # Use async shared method: recalculates consumed, applies skip/redistribute
+        effective = await WeeklyBudgetService.get_effective_adjusted_daily_async(
             uow=uow, user_id=user_id,
             week_start=week_start, target_date=today,
             weekly_budget=weekly_budget,

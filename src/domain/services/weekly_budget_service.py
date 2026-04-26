@@ -102,6 +102,53 @@ class WeeklyBudgetService:
         }
 
     @staticmethod
+    async def calculate_weekly_consumed_async(
+        uow: Any,
+        user_id: str,
+        week_start: date,
+        exclude_date: Optional[date] = None,
+        exclude_dates: Optional[List[date]] = None,
+        user_timezone: Optional[str] = None,
+    ) -> Dict[str, float]:
+        """Async version of calculate_weekly_consumed for AsyncUnitOfWork."""
+        week_end = week_start + timedelta(days=6)
+        tz = get_zone_info(user_timezone) if user_timezone else None
+
+        meals = await uow.meals.find_by_date_range(
+            user_id, week_start, week_end, user_timezone=user_timezone,
+        )
+
+        total_calories = 0.0
+        total_protein = 0.0
+        total_carbs = 0.0
+        total_fat = 0.0
+
+        exclude_dates_set = set(exclude_dates) if exclude_dates else set()
+        for meal in meals:
+            if meal.status == MealStatus.READY and meal.nutrition:
+                if (exclude_date or exclude_dates_set) and meal.created_at:
+                    aware_dt = ensure_utc(meal.created_at)
+                    meal_local_date = (
+                        aware_dt.astimezone(tz).date() if tz
+                        else aware_dt.date()
+                    )
+                    if exclude_date and meal_local_date == exclude_date:
+                        continue
+                    if meal_local_date in exclude_dates_set:
+                        continue
+                total_calories += meal.nutrition.calories or 0
+                total_protein += meal.nutrition.macros.protein or 0
+                total_carbs += meal.nutrition.macros.carbs or 0
+                total_fat += meal.nutrition.macros.fat or 0
+
+        return {
+            "calories": total_calories,
+            "protein": total_protein,
+            "carbs": total_carbs,
+            "fat": total_fat,
+        }
+
+    @staticmethod
     def get_effective_adjusted_daily(
         uow: Any,
         user_id: str,
@@ -253,6 +300,143 @@ class WeeklyBudgetService:
                     carbs=round(adjusted.carbs * scale, 1),
                     fat=round(adjusted.fat * scale, 1),
                     protein=adjusted.protein,  # protein stays fixed
+                    bmr_floor_active=adjusted.bmr_floor_active,
+                    remaining_days=adjusted.remaining_days,
+                )
+
+        return EffectiveAdjustedResult(
+            adjusted=adjusted,
+            consumed_before_today=consumed_before_today,
+            consumed_total=consumed_total,
+            logged_past_days=logged_past_days,
+            skipped_days=skipped_days,
+            show_logging_prompt=show_logging_prompt,
+        )
+
+    @staticmethod
+    async def get_effective_adjusted_daily_async(
+        uow: Any,
+        user_id: str,
+        week_start: date,
+        target_date: date,
+        weekly_budget: Any,
+        base_daily_cal: float,
+        base_daily_protein: float,
+        base_daily_carbs: float,
+        base_daily_fat: float,
+        bmr: float,
+        user_timezone: str = "UTC",
+        cheat_dates: Optional[List[date]] = None,
+    ) -> EffectiveAdjustedResult:
+        """Async version of get_effective_adjusted_daily for AsyncUnitOfWork."""
+        calc = WeeklyBudgetService
+
+        # --- Resolve cheat days ---
+        if cheat_dates is None:
+            cheat_day_records = await uow.cheat_days.find_by_user_and_date_range(
+                user_id, week_start, week_start + timedelta(days=6)
+            )
+            all_cheat_dates = [cd.date for cd in cheat_day_records]
+        else:
+            all_cheat_dates = cheat_dates
+
+        past_cheat_dates = [d for d in all_cheat_dates if d < target_date]
+        past_cheat_count = len(past_cheat_dates)
+
+        # --- Remaining days ---
+        remaining_days = calc.calculate_remaining_days(week_start, target_date)
+
+        # --- Count logged past days ---
+        past_end = target_date - timedelta(days=1)
+        skipped_days = 0
+        show_logging_prompt = False
+        logged_past_days = 0
+
+        past_days_count = (target_date - week_start).days
+        if past_days_count > 0:
+            daily_counts = await uow.meals.get_daily_meal_counts(
+                user_id, week_start, past_end,
+                user_timezone=user_timezone,
+            )
+            logged_past_days = len(daily_counts)
+            skipped_days = past_days_count - logged_past_days
+
+            total_logged = logged_past_days + 1
+            if (total_logged < WeeklyBudgetConstants.MIN_LOGGED_DAYS_FOR_REDISTRIBUTION
+                    and past_days_count >= 3):
+                show_logging_prompt = True
+
+        redistribution_logged_days = max(0, logged_past_days - past_cheat_count)
+
+        # --- Calculate consumed totals from actual meals ---
+        consumed_total = await calc.calculate_weekly_consumed_async(
+            uow, user_id, week_start, user_timezone=user_timezone,
+        )
+        consumed_before_today = await calc.calculate_weekly_consumed_async(
+            uow, user_id, week_start,
+            exclude_date=target_date, user_timezone=user_timezone,
+        )
+
+        if past_cheat_dates:
+            consumed_for_redistribution = await calc.calculate_weekly_consumed_async(
+                uow, user_id, week_start,
+                exclude_date=target_date,
+                exclude_dates=past_cheat_dates,
+                user_timezone=user_timezone,
+            )
+        else:
+            consumed_for_redistribution = consumed_before_today
+
+        # --- Calculate adjusted daily ---
+        if show_logging_prompt:
+            adjusted = calc.calculate_adjusted_daily(
+                replace(weekly_budget, consumed_calories=0, consumed_protein=0,
+                        consumed_carbs=0, consumed_fat=0),
+                standard_daily_calories=base_daily_cal,
+                standard_daily_carbs=base_daily_carbs,
+                standard_daily_fat=base_daily_fat,
+                standard_daily_protein=base_daily_protein,
+                bmr=bmr, remaining_days=7,
+            )
+        else:
+            effective_week_days = redistribution_logged_days + remaining_days
+            prorated_target_cal = base_daily_cal * effective_week_days
+            prorated_target_carbs = base_daily_carbs * effective_week_days
+            prorated_target_fat = base_daily_fat * effective_week_days
+            prorated_target_protein = base_daily_protein * effective_week_days
+
+            budget_for_adjustment = replace(
+                weekly_budget,
+                target_calories=prorated_target_cal,
+                target_protein=prorated_target_protein,
+                target_carbs=prorated_target_carbs,
+                target_fat=prorated_target_fat,
+                consumed_calories=consumed_for_redistribution["calories"],
+                consumed_protein=consumed_for_redistribution["protein"],
+                consumed_carbs=consumed_for_redistribution["carbs"],
+                consumed_fat=consumed_for_redistribution["fat"],
+            )
+            adjusted = calc.calculate_adjusted_daily(
+                budget_for_adjustment,
+                standard_daily_calories=base_daily_cal,
+                standard_daily_carbs=base_daily_carbs,
+                standard_daily_fat=base_daily_fat,
+                standard_daily_protein=base_daily_protein,
+                bmr=bmr,
+                remaining_days=remaining_days,
+            )
+
+        # --- Budget cap ---
+        remaining_before_today = weekly_budget.target_calories - consumed_before_today["calories"]
+        if remaining_days > 0 and remaining_before_today > 0:
+            max_daily = remaining_before_today / remaining_days
+            if adjusted.calories > max_daily:
+                scale = max_daily / adjusted.calories
+                adjusted = AdjustedDailyTargets(
+                    calories=round(max_daily, 1),
+                    carbs=round(adjusted.carbs * scale, 1),
+                    fat=round(adjusted.fat * scale, 1),
+                    protein=adjusted.protein,
                     bmr_floor_active=adjusted.bmr_floor_active,
                     remaining_days=adjusted.remaining_days,
                 )
