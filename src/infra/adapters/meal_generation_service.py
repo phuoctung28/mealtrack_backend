@@ -7,19 +7,18 @@ import logging
 import os
 import re
 import time
-from typing import Dict, Any, Optional
+from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.infra.services.ai.gemini_model_manager import (
-    GeminiModelManager,
-    GeminiModelPurpose,
-)
 from src.infra.adapters.meal_generation_json_utils import (
     extract_json,
     truncate,
-    clean_json_content,
+)
+from src.infra.services.ai.gemini_model_manager import (
+    GeminiModelManager,
+    GeminiModelPurpose,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,8 +47,8 @@ class MealGenerationService(MealGenerationServicePort):
         response_type: str = "json",
         max_tokens: int = None,
         schema: type = None,
-        model_purpose: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        model_purpose: str | None = None,
+    ) -> dict[str, Any]:
         """
         Generate meal plan using provided prompt and system message.
         Single entry point for all meal generation.
@@ -208,7 +207,7 @@ class MealGenerationService(MealGenerationServicePort):
                         raise ValueError(
                             f"Both structured output and legacy JSON mode failed for schema {schema.__name__}. "
                             f"Structured: None response. Legacy: {str(legacy_err)[:100]}"
-                        )
+                        ) from legacy_err
 
                 # Convert to dict for consistent interface
                 if hasattr(structured_response, "model_dump"):

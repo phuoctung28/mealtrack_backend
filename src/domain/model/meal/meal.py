@@ -2,11 +2,11 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
 
-from src.domain.utils.timezone_utils import utc_now, format_iso_utc
-from .meal_image import MealImage
+from src.domain.utils.timezone_utils import format_iso_utc, utc_now
+
 from ..nutrition import Nutrition
+from .meal_image import MealImage
 from .meal_translation_domain_models import MealTranslation
 
 
@@ -36,43 +36,43 @@ class Meal:
     status: MealStatus
     created_at: datetime
     image: MealImage
-    dish_name: Optional[str] = None
-    nutrition: Optional[Nutrition] = None
-    ready_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    raw_gpt_json: Optional[str] = None
+    dish_name: str | None = None
+    nutrition: Nutrition | None = None
+    ready_at: datetime | None = None
+    error_message: str | None = None
+    raw_gpt_json: str | None = None
     # Edit tracking fields
-    updated_at: Optional[datetime] = None
-    last_edited_at: Optional[datetime] = None
+    updated_at: datetime | None = None
+    last_edited_at: datetime | None = None
     edit_count: int = 0
     is_manually_edited: bool = False
-    meal_type: Optional[str] = None
-    translations: Optional[Dict[str, MealTranslation]] = None
+    meal_type: str | None = None
+    translations: dict[str, MealTranslation] | None = None
     # Source tracking (scanner, prompt, food_search, manual)
-    source: Optional[str] = None
+    source: str | None = None
     # Recipe details (populated for AI suggestions)
-    description: Optional[str] = None
-    instructions: Optional[list] = (
+    description: str | None = None
+    instructions: list | None = (
         None  # List[str] (legacy) or List[dict] with {instruction, duration_minutes}
     )
-    prep_time_min: Optional[int] = None
-    cook_time_min: Optional[int] = None
-    cuisine_type: Optional[str] = None
-    origin_country: Optional[str] = None
-    emoji: Optional[str] = None  # AI-assigned food emoji, stored once on creation
+    prep_time_min: int | None = None
+    cook_time_min: int | None = None
+    cuisine_type: str | None = None
+    origin_country: str | None = None
+    emoji: str | None = None  # AI-assigned food emoji, stored once on creation
 
     def __post_init__(self):
         """Validate invariants."""
         # Validate UUID formats
         try:
             uuid.UUID(self.meal_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for meal_id: {self.meal_id}")
+        except ValueError as e:
+            raise ValueError(f"Invalid UUID format for meal_id: {self.meal_id}") from e
 
         try:
             uuid.UUID(self.user_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for user_id: {self.user_id}")
+        except ValueError as e:
+            raise ValueError(f"Invalid UUID format for user_id: {self.user_id}") from e
 
         # Status-based validations
         if self.status == MealStatus.READY and self.nutrition is None:
@@ -98,15 +98,15 @@ class Meal:
 
     def _recipe_fields(self) -> dict:
         """Return recipe fields dict for state transitions."""
-        return dict(
-            description=self.description,
-            instructions=self.instructions,
-            prep_time_min=self.prep_time_min,
-            cook_time_min=self.cook_time_min,
-            cuisine_type=self.cuisine_type,
-            origin_country=self.origin_country,
-            emoji=self.emoji,
-        )
+        return {
+            "description": self.description,
+            "instructions": self.instructions,
+            "prep_time_min": self.prep_time_min,
+            "cook_time_min": self.cook_time_min,
+            "cuisine_type": self.cuisine_type,
+            "origin_country": self.origin_country,
+            "emoji": self.emoji,
+        }
 
     def mark_analyzing(self) -> "Meal":
         """Transition to ANALYZING state."""
@@ -158,8 +158,8 @@ class Meal:
         self,
         nutrition: Nutrition,
         dish_name: str,
-        raw_gpt_json: Optional[str] = None,
-        emoji: Optional[str] = None,
+        raw_gpt_json: str | None = None,
+        emoji: str | None = None,
     ) -> "Meal":
         """Transition to READY state with final nutrition data."""
         return Meal(

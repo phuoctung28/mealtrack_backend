@@ -2,7 +2,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Any
 
 from src.domain.utils.timezone_utils import utc_now
 
@@ -24,26 +24,30 @@ class Activity:
     """
 
     activity_id: str
-    user_id: Optional[str]  # For when user system is implemented
+    user_id: str | None  # For when user system is implemented
     activity_type: ActivityType
     title: str
-    description: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None  # Store activity-specific data
-    created_at: Optional[datetime] = None
+    description: str | None = None
+    metadata: dict[str, Any] | None = None  # Store activity-specific data
+    created_at: datetime | None = None
 
     def __post_init__(self):
         """Validate invariants."""
         # Validate UUID format
         try:
             uuid.UUID(self.activity_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for activity_id: {self.activity_id}")
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid UUID format for activity_id: {self.activity_id}"
+            ) from e
 
         if self.user_id:
             try:
                 uuid.UUID(self.user_id)
-            except ValueError:
-                raise ValueError(f"Invalid UUID format for user_id: {self.user_id}")
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid UUID format for user_id: {self.user_id}"
+                ) from e
 
     @classmethod
     def create_new(

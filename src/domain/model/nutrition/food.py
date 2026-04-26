@@ -1,9 +1,9 @@
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from src.domain.utils.timezone_utils import utc_now
+
 from .macros import Macros
 
 
@@ -15,16 +15,16 @@ class Food:
 
     food_id: str
     name: str
-    brand: Optional[str] = None
-    description: Optional[str] = None
-    serving_size: Optional[float] = None
-    serving_unit: Optional[str] = None
-    calories_per_serving: Optional[float] = None
-    macros_per_serving: Optional[Macros] = None
-    barcode: Optional[str] = None
-    image_url: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    brand: str | None = None
+    description: str | None = None
+    serving_size: float | None = None
+    serving_unit: str | None = None
+    calories_per_serving: float | None = None
+    macros_per_serving: Macros | None = None
+    barcode: str | None = None
+    image_url: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
     is_verified: bool = False
 
     def __post_init__(self):
@@ -32,8 +32,8 @@ class Food:
         # Validate UUID format
         try:
             uuid.UUID(self.food_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for food_id: {self.food_id}")
+        except ValueError as e:
+            raise ValueError(f"Invalid UUID format for food_id: {self.food_id}") from e
 
         if self.serving_size is not None and self.serving_size <= 0:
             raise ValueError(f"Serving size must be positive: {self.serving_size}")

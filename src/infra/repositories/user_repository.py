@@ -1,7 +1,6 @@
 """Repository for user-related database operations."""
 
 import logging
-from typing import Optional, List
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -58,13 +57,15 @@ class UserRepository(UserRepositoryPort):
             self.db.rollback()
             error_msg = str(e.orig).lower() if e.orig else str(e).lower()
             if "email" in error_msg:
-                raise ValueError("User with this email already exists")
+                raise ValueError("User with this email already exists") from e
             elif "firebase_uid" in error_msg:
-                raise ValueError("Firebase UID already registered")
+                raise ValueError("Firebase UID already registered") from e
             else:
-                raise ValueError("User with this email or username already exists")
+                raise ValueError(
+                    "User with this email or username already exists"
+                ) from e
 
-    def find_by_id(self, user_id: UUID) -> Optional[UserDomainModel]:
+    def find_by_id(self, user_id: UUID) -> UserDomainModel | None:
         """Find user by ID (only active users)."""
         # Convert UUID to string for comparison since User.id is String(36)
         # SQLAlchemy should handle this automatically, but SQLite may need explicit conversion
@@ -77,7 +78,7 @@ class UserRepository(UserRepositoryPort):
         )
         return UserMapper.to_domain(user_entity) if user_entity else None
 
-    def find_by_email(self, email: str) -> Optional[UserDomainModel]:
+    def find_by_email(self, email: str) -> UserDomainModel | None:
         """Find user by email (only active users)."""
         user_entity = (
             self.db.query(User)
@@ -87,7 +88,7 @@ class UserRepository(UserRepositoryPort):
         )
         return UserMapper.to_domain(user_entity) if user_entity else None
 
-    def find_by_firebase_uid(self, firebase_uid: str) -> Optional[UserDomainModel]:
+    def find_by_firebase_uid(self, firebase_uid: str) -> UserDomainModel | None:
         """Find user by Firebase UID (only active users)."""
         user_entity = (
             self.db.query(User)
@@ -97,9 +98,7 @@ class UserRepository(UserRepositoryPort):
         )
         return UserMapper.to_domain(user_entity) if user_entity else None
 
-    def find_deleted_by_firebase_uid(
-        self, firebase_uid: str
-    ) -> Optional[UserDomainModel]:
+    def find_deleted_by_firebase_uid(self, firebase_uid: str) -> UserDomainModel | None:
         """Find deleted user by Firebase UID (only inactive users)."""
         user_entity = (
             self.db.query(User)
@@ -109,7 +108,7 @@ class UserRepository(UserRepositoryPort):
         )
         return UserMapper.to_domain(user_entity) if user_entity else None
 
-    def find_all(self, limit: int = 100, offset: int = 0) -> List[UserDomainModel]:
+    def find_all(self, limit: int = 100, offset: int = 0) -> list[UserDomainModel]:
         """Find all users with pagination."""
         user_entities = (
             self.db.query(User)
@@ -132,7 +131,7 @@ class UserRepository(UserRepositoryPort):
             return True
         return False
 
-    def get_profile(self, user_id: UUID) -> Optional[UserProfileDomainModel]:
+    def get_profile(self, user_id: UUID) -> UserProfileDomainModel | None:
         """Get the current user profile."""
         # Convert UUID to string for SQLite compatibility
         user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
@@ -180,7 +179,7 @@ class UserRepository(UserRepositoryPort):
         self.db.commit()
         logger.info(f"Timezone update: user={user_id} tz={timezone} rows={rows}")
 
-    def get_user_timezone(self, user_id: UUID) -> Optional[str]:
+    def get_user_timezone(self, user_id: UUID) -> str | None:
         """Get user's timezone from database."""
         user_entity = (
             self.db.query(User)

@@ -50,7 +50,7 @@ async def recognize_ingredient(
 
     except Exception as e:
         logger.error(f"Ingredient recognition endpoint error: {e}")
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.get("/health")

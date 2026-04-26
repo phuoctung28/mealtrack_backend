@@ -8,8 +8,8 @@ from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.schemas.request.notification_requests import (
-    FcmTokenRegistrationRequest,
     FcmTokenDeletionRequest,
+    FcmTokenRegistrationRequest,
     NotificationPreferencesUpdateRequest,
 )
 from src.api.schemas.response.notification_responses import (
@@ -18,8 +18,8 @@ from src.api.schemas.response.notification_responses import (
     NotificationPreferencesUpdateResponse,
 )
 from src.app.commands.notification import (
-    RegisterFcmTokenCommand,
     DeleteFcmTokenCommand,
+    RegisterFcmTokenCommand,
     UpdateNotificationPreferencesCommand,
 )
 from src.app.queries.notification import GetNotificationPreferencesQuery
@@ -53,7 +53,7 @@ async def register_fcm_token(
         return FcmTokenResponse(success=result["success"], message=result["message"])
 
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.delete("/tokens", response_model=FcmTokenResponse)
@@ -77,7 +77,7 @@ async def delete_fcm_token(
         return FcmTokenResponse(success=result["success"], message=result["message"])
 
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.get("/preferences", response_model=NotificationPreferencesResponse)
@@ -100,7 +100,7 @@ async def get_notification_preferences(
         return NotificationPreferencesResponse(**result)
 
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.put("/preferences", response_model=NotificationPreferencesUpdateResponse)
@@ -135,4 +135,4 @@ async def update_notification_preferences(
         )
 
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e

@@ -1,6 +1,5 @@
 import uuid
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -13,17 +12,19 @@ class MealImage:
     image_id: str  # UUID as string
     format: str  # "jpeg" or "png"
     size_bytes: int
-    width: Optional[int] = None
-    height: Optional[int] = None
-    url: Optional[str] = None
+    width: int | None = None
+    height: int | None = None
+    url: str | None = None
 
     def __post_init__(self):
         """Validate invariants."""
         # Validate UUID format
         try:
             uuid.UUID(self.image_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for image_id: {self.image_id}")
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid UUID format for image_id: {self.image_id}"
+            ) from e
 
         # Validate format
         if self.format.lower() not in ["jpeg", "png"]:

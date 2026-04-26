@@ -1,9 +1,9 @@
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from src.domain.utils.timezone_utils import utc_now
+
 from ..nutrition import Macros, Micros
 
 
@@ -18,11 +18,11 @@ class Ingredient:
     name: str
     quantity: float
     unit: str
-    calories: Optional[float] = None
-    macros: Optional[Macros] = None
-    micros: Optional[Micros] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    calories: float | None = None
+    macros: Macros | None = None
+    micros: Micros | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     def __post_init__(self):
         """Validate invariants."""
@@ -31,7 +31,7 @@ class Ingredient:
             uuid.UUID(self.ingredient_id)
             uuid.UUID(self.food_id)
         except ValueError as e:
-            raise ValueError(f"Invalid UUID format: {e}")
+            raise ValueError(f"Invalid UUID format: {e}") from e
 
         if self.quantity <= 0:
             raise ValueError(f"Quantity must be positive: {self.quantity}")
@@ -56,9 +56,9 @@ class Ingredient:
 
     def update_nutritional_info(
         self,
-        calories: Optional[float],
-        macros: Optional[Macros],
-        micros: Optional[Micros] = None,
+        calories: float | None,
+        macros: Macros | None,
+        micros: Micros | None = None,
     ) -> "Ingredient":
         """Update the nutritional information of the ingredient."""
         return Ingredient(

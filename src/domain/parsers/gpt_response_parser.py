@@ -1,11 +1,10 @@
 import json
 import uuid
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 from pydantic import ValidationError
 
-from src.domain.model.nutrition import Macros
-from src.domain.model.nutrition import Nutrition, FoodItem
+from src.domain.model.nutrition import FoodItem, Macros, Nutrition
 from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
 from src.domain.services.emoji_validator import validate_emoji
 
@@ -25,12 +24,12 @@ class GPTResponseParser:
 
     MAX_FOOD_ITEMS = 8
 
-    def __init__(self, strict_schema_mode: Optional[bool] = None):
+    def __init__(self, strict_schema_mode: bool | None = None):
         if strict_schema_mode is None:
             strict_schema_mode = True
         self._strict_schema_mode = bool(strict_schema_mode)
 
-    def parse_to_nutrition(self, gpt_response: Dict[str, Any]) -> Nutrition:
+    def parse_to_nutrition(self, gpt_response: dict[str, Any]) -> Nutrition:
         """
         Parse GPT response into Nutrition domain model.
 
@@ -76,9 +75,11 @@ class GPTResponseParser:
             return nutrition
 
         except (KeyError, ValueError, TypeError, ValidationError) as e:
-            raise GPTResponseParsingError(f"Failed to parse GPT response: {str(e)}")
+            raise GPTResponseParsingError(
+                f"Failed to parse GPT response: {str(e)}"
+            ) from e
 
-    def _normalize_structured_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_structured_data(self, data: dict[str, Any]) -> dict[str, Any]:
         """Normalize structured data before validation."""
         normalized_data = dict(data)
         foods = normalized_data.get("foods")
@@ -86,7 +87,7 @@ class GPTResponseParser:
             normalized_data["foods"] = foods[: self.MAX_FOOD_ITEMS]
         return normalized_data
 
-    def _parse_food_items(self, data: Dict[str, Any]) -> List[FoodItem]:
+    def _parse_food_items(self, data: dict[str, Any]) -> list[FoodItem]:
         """Parse food items from GPT response data."""
         food_items = []
         foods = data.get("foods")
@@ -130,7 +131,7 @@ class GPTResponseParser:
         return food_items
 
     def _calculate_total_macros(
-        self, data: Dict[str, Any], food_items: List[FoodItem]
+        self, data: dict[str, Any], food_items: list[FoodItem]
     ) -> Macros:
         """Calculate total macros based on food items and top-level macros if available."""
         if food_items:
@@ -157,7 +158,7 @@ class GPTResponseParser:
 
         return total_macros
 
-    def parse_dish_name(self, gpt_response: Dict[str, Any]) -> Optional[str]:
+    def parse_dish_name(self, gpt_response: dict[str, Any]) -> str | None:
         """
         Parse dish name from GPT response.
 
@@ -173,7 +174,7 @@ class GPTResponseParser:
         except (KeyError, TypeError):
             return None
 
-    def parse_emoji(self, gpt_response: Dict[str, Any]) -> Optional[str]:
+    def parse_emoji(self, gpt_response: dict[str, Any]) -> str | None:
         """Parse and validate emoji from AI response."""
         try:
             structured_data = gpt_response.get("structured_data", {})
@@ -181,7 +182,7 @@ class GPTResponseParser:
         except (KeyError, TypeError):
             return None
 
-    def extract_raw_json(self, gpt_response: Dict[str, Any]) -> str:
+    def extract_raw_json(self, gpt_response: dict[str, Any]) -> str:
         """
         Extract the raw JSON from GPT response as a string.
 

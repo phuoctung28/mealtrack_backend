@@ -8,7 +8,6 @@ and handles HTTP communication with RevenueCat API.
 import logging
 import os
 from datetime import datetime
-from typing import Optional, Dict
 
 import httpx
 
@@ -26,10 +25,10 @@ class RevenueCatAdapter(SubscriptionServicePort):
 
     BASE_URL = "https://api.revenuecat.com/v1"
 
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str | None = None):
         self.api_key = api_key or os.getenv("REVENUECAT_SECRET_API_KEY", "")
 
-    async def get_subscriber_info(self, app_user_id: str) -> Optional[Dict]:
+    async def get_subscriber_info(self, app_user_id: str) -> dict | None:
         """
         Get subscriber info from RevenueCat.
 
@@ -95,7 +94,7 @@ class RevenueCatAdapter(SubscriptionServicePort):
             logger.error(f"Error parsing expires_date: {e}")
             return False
 
-    async def get_subscription_info(self, app_user_id: str) -> Optional[Dict]:
+    async def get_subscription_info(self, app_user_id: str) -> dict | None:
         """
         Get active subscription details.
 

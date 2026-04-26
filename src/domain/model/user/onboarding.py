@@ -2,7 +2,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Dict, Any, Union
+from typing import Any
 
 from src.domain.utils.timezone_utils import utc_now
 
@@ -41,11 +41,11 @@ class OnboardingField:
     label: str
     field_type: FieldType
     required: bool = True
-    placeholder: Optional[str] = None
-    help_text: Optional[str] = None
-    options: Optional[List[Dict[str, Any]]] = None  # For select/radio fields
-    validation: Optional[Dict[str, Any]] = None  # Validation rules
-    default_value: Optional[Union[str, int, float, bool]] = None
+    placeholder: str | None = None
+    help_text: str | None = None
+    options: list[dict[str, Any]] | None = None  # For select/radio fields
+    validation: dict[str, Any] | None = None  # Validation rules
+    default_value: str | int | float | bool | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary format."""
@@ -81,18 +81,20 @@ class OnboardingSection:
     description: str
     section_type: OnboardingSectionType
     order: int
-    fields: List[OnboardingField]
+    fields: list[OnboardingField]
     is_active: bool = True
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     def __post_init__(self):
         """Validate invariants."""
         # Validate UUID format
         try:
             uuid.UUID(self.section_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for section_id: {self.section_id}")
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid UUID format for section_id: {self.section_id}"
+            ) from e
 
         if self.order < 0:
             raise ValueError(f"Order must be non-negative: {self.order}")
@@ -107,7 +109,7 @@ class OnboardingSection:
         description: str,
         section_type: OnboardingSectionType,
         order: int,
-        fields: List[OnboardingField],
+        fields: list[OnboardingField],
     ) -> "OnboardingSection":
         """Factory method to create a new onboarding section."""
         return cls(
@@ -147,11 +149,11 @@ class OnboardingResponse:
     """
 
     response_id: str
-    user_id: Optional[str]  # For when user system is implemented
+    user_id: str | None  # For when user system is implemented
     section_id: str
-    field_responses: Dict[str, Any]  # field_id -> value mapping
-    completed_at: Optional[datetime] = None
-    created_at: Optional[datetime] = None
+    field_responses: dict[str, Any]  # field_id -> value mapping
+    completed_at: datetime | None = None
+    created_at: datetime | None = None
 
     def __post_init__(self):
         """Validate invariants."""
@@ -160,20 +162,22 @@ class OnboardingResponse:
             uuid.UUID(self.response_id)
             uuid.UUID(self.section_id)
         except ValueError as e:
-            raise ValueError(f"Invalid UUID format: {e}")
+            raise ValueError(f"Invalid UUID format: {e}") from e
 
         if self.user_id:
             try:
                 uuid.UUID(self.user_id)
-            except ValueError:
-                raise ValueError(f"Invalid UUID format for user_id: {self.user_id}")
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid UUID format for user_id: {self.user_id}"
+                ) from e
 
     @classmethod
     def create_new(
         cls,
         section_id: str,
-        field_responses: Dict[str, Any],
-        user_id: Optional[str] = None,
+        field_responses: dict[str, Any],
+        user_id: str | None = None,
     ) -> "OnboardingResponse":
         """Factory method to create a new onboarding response."""
         return cls(

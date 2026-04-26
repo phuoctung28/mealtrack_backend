@@ -6,21 +6,26 @@ Handles user authentication sync, profile retrieval, and status management.
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 
+from src.api.dependencies.auth import (
+    get_current_user_id,
+    verify_firebase_token,
+    verify_firebase_uid_ownership,
+)
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.schemas.request.user_requests import (
     UserSyncRequest,
     UserUpdateLastAccessedRequest,
 )
-from pydantic import BaseModel
 from src.api.schemas.response.user_responses import (
-    UserSyncResponse,
-    UserProfileResponse,
-    UserStatusResponse,
-    UserUpdateResponse,
     OnboardingCompletionResponse,
     UserDeleteResponse,
+    UserProfileResponse,
+    UserStatusResponse,
+    UserSyncResponse,
+    UserUpdateResponse,
 )
 from src.app.commands.user import (
     CompleteOnboardingCommand,
@@ -39,11 +44,6 @@ from src.app.queries.user.get_user_onboarding_status_query import (
     GetUserOnboardingStatusQuery,
 )
 from src.infra.event_bus import EventBus
-from src.api.dependencies.auth import (
-    get_current_user_id,
-    verify_firebase_token,
-    verify_firebase_uid_ownership,
-)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/users", tags=["Users"])
@@ -146,7 +146,7 @@ async def sync_user_from_firebase(
                 "exception_type": type(e).__name__,
             },
         )
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.get("/firebase/{firebase_uid}", response_model=UserProfileResponse)
@@ -173,7 +173,7 @@ async def get_user_by_firebase_uid(
         return UserProfileResponse(**result)
 
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.get("/firebase/{firebase_uid}/status", response_model=UserStatusResponse)
@@ -200,7 +200,7 @@ async def get_user_onboarding_status(
         return UserStatusResponse(**result)
 
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.put("/firebase/{firebase_uid}/last-accessed", response_model=UserUpdateResponse)
@@ -231,7 +231,7 @@ async def update_user_last_accessed(
         return UserUpdateResponse(**result)
 
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.put(
@@ -261,7 +261,7 @@ async def complete_onboarding(
         return OnboardingCompletionResponse(**result)
 
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.put("/timezone")
@@ -346,4 +346,4 @@ async def delete_user_account(
             f"Account deletion failed for firebase_uid: {firebase_uid}",
             extra={"firebase_uid": firebase_uid, "exception_type": type(e).__name__},
         )
-        raise handle_exception(e)
+        raise handle_exception(e) from e

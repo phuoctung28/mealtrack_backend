@@ -8,10 +8,9 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Request, HTTPException, Header
+from fastapi import APIRouter, Header, HTTPException, Request
 
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.subscription import Subscription
@@ -24,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 @router.post("/revenuecat")
 async def revenuecat_webhook(
-    request: Request, authorization: Optional[str] = Header(None)
+    request: Request, authorization: str | None = Header(None)
 ):
     """
     Handle RevenueCat webhook events.
@@ -48,7 +47,7 @@ async def revenuecat_webhook(
         payload = await request.json()
     except Exception as e:
         logger.error(f"Failed to parse webhook: {e}")
-        raise HTTPException(status_code=400, detail="Invalid JSON")
+        raise HTTPException(status_code=400, detail="Invalid JSON") from e
 
     # Extract event data
     event = payload.get("event", {})
@@ -187,7 +186,7 @@ async def handle_renewal(uow, user, event):
             f"User {user.id} renewed subscription until {subscription.expires_at}"
         )
     else:
-        logger.warning(f"Subscription not found for renewal, creating new one")
+        logger.warning("Subscription not found for renewal, creating new one")
         await handle_purchase(uow, user, event)
 
 
@@ -332,12 +331,12 @@ def parse_platform(store: str) -> str:
     return store_map.get(store_upper, "ios")
 
 
-def parse_timestamp(ms: Optional[int]) -> Optional[datetime]:
+def parse_timestamp(ms: int | None) -> datetime | None:
     """Parse millisecond timestamp to datetime."""
     if ms is None:
         return None
     try:
-        return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+        return datetime.fromtimestamp(ms / 1000, tz=UTC)
     except Exception as e:
         logger.error(f"Error parsing timestamp {ms}: {e}")
         return None

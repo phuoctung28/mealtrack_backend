@@ -4,7 +4,7 @@ Request schemas for meal suggestion generation.
 
 import warnings
 from enum import Enum
-from typing import List, Literal, Optional, Union
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -64,36 +64,36 @@ class MealSuggestionRequest(BaseModel):
         ..., description="Type of meal to generate suggestions for"
     )
     # NEW: Simplified portion type (preferred)
-    meal_portion_type: Optional[MealPortionTypeEnum] = Field(
+    meal_portion_type: MealPortionTypeEnum | None = Field(
         None,
         description="Portion type: snack (~225 kcal), main (TDEE-based), omad (full daily)",
     )
     # DEPRECATED: Keep for backward compatibility
-    meal_size: Optional[MealSizeEnum] = Field(
+    meal_size: MealSizeEnum | None = Field(
         None, description="DEPRECATED: Use meal_portion_type instead"
     )
-    ingredients: List[str] = Field(
+    ingredients: list[str] = Field(
         default_factory=list,
         max_length=20,
         description="Optional list of available ingredients (max 20)",
     )
-    ingredient_image_url: Optional[str] = Field(
+    ingredient_image_url: str | None = Field(
         None, description="Optional photo of ingredients for AI recognition"
     )
-    cooking_time_minutes: Optional[CookingTimeEnum] = Field(
+    cooking_time_minutes: CookingTimeEnum | None = Field(
         None,
         description="Cooking time constraint (20/30/45/60 minutes). If omitted, no time limit.",
     )
-    dietary_preferences: List[str] = Field(
+    dietary_preferences: list[str] = Field(
         default_factory=list,
         description="Optional dietary preferences (e.g., vegetarian, vegan, halal)",
     )
-    calorie_target: Optional[int] = Field(
+    calorie_target: int | None = Field(
         None,
         gt=0,
         description="Optional calorie target override (calculated from portion type if not provided)",
     )
-    session_id: Optional[str] = Field(
+    session_id: str | None = Field(
         None,
         description="Optional session ID for regeneration (automatically excludes previously shown meals)",
     )
@@ -103,26 +103,26 @@ class MealSuggestionRequest(BaseModel):
         le=4,
         description="DEPRECATED: Server now strictly generates 1 serving per suggestion. Field kept for backward compatibility with older clients.",
     )
-    cooking_equipment: List[str] = Field(
+    cooking_equipment: list[str] = Field(
         default_factory=list,
         max_length=10,
         description="Available cooking equipment (e.g., Air fryer, Microwave, Pan)",
     )
-    exclude_ids: List[str] = Field(
+    exclude_ids: list[str] = Field(
         default_factory=list,
         description="DEPRECATED: Use session_id instead for automatic exclusion",
     )
-    cuisine_region: Optional[str] = Field(
+    cuisine_region: str | None = Field(
         None,
         description="Preferred cuisine region (Asian, Western, Latin, Mediterranean). If omitted, diverse cuisines used.",
     )
-    protein_target: Optional[float] = Field(
+    protein_target: float | None = Field(
         None, ge=0, description="Optional protein target override in grams"
     )
-    carbs_target: Optional[float] = Field(
+    carbs_target: float | None = Field(
         None, ge=0, description="Optional carbs target override in grams"
     )
-    fat_target: Optional[float] = Field(
+    fat_target: float | None = Field(
         None, ge=0, description="Optional fat target override in grams"
     )
 
@@ -165,31 +165,31 @@ class DiscoverMealsRequest(BaseModel):
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
         ..., description="Type of meal"
     )
-    meal_portion_type: Optional[MealPortionTypeEnum] = Field(
+    meal_portion_type: MealPortionTypeEnum | None = Field(
         None, description="Portion type: snack, main, omad"
     )
-    ingredients: List[str] = Field(
+    ingredients: list[str] = Field(
         default_factory=list,
         max_length=20,
         description="Optional available ingredients (max 20)",
     )
-    cooking_time_minutes: Optional[CookingTimeEnum] = Field(
+    cooking_time_minutes: CookingTimeEnum | None = Field(
         None,
         description="Cooking time constraint",
     )
-    cuisine_region: Optional[str] = Field(
+    cuisine_region: str | None = Field(
         None,
         description="Preferred cuisine region",
     )
-    calorie_target: Optional[int] = Field(
+    calorie_target: int | None = Field(
         None,
         gt=0,
         description="Override calorie target",
     )
-    protein_target: Optional[float] = Field(None, ge=0)
-    carbs_target: Optional[float] = Field(None, ge=0)
-    fat_target: Optional[float] = Field(None, ge=0)
-    session_id: Optional[str] = Field(
+    protein_target: float | None = Field(None, ge=0)
+    carbs_target: float | None = Field(None, ge=0)
+    fat_target: float | None = Field(None, ge=0)
+    session_id: str | None = Field(
         None,
         description="Session ID for load-more (auto-excludes shown meals)",
     )
@@ -211,7 +211,7 @@ class DiscoverMealsRequest(BaseModel):
 class GenerateRecipesRequest(BaseModel):
     """Request to generate full recipes for 1-3 selected discovery meals."""
 
-    meal_names: List[str] = Field(
+    meal_names: list[str] = Field(
         ...,
         min_length=1,
         max_length=3,
@@ -220,20 +220,20 @@ class GenerateRecipesRequest(BaseModel):
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
         ..., description="Type of meal"
     )
-    calorie_target: Optional[int] = Field(None, gt=0)
-    cuisine_region: Optional[str] = None
-    ingredients: List[str] = Field(default_factory=list, max_length=20)
-    cooking_time_minutes: Optional[int] = Field(None, ge=5, le=120)
-    protein_target: Optional[float] = Field(None, ge=0)
-    carbs_target: Optional[float] = Field(None, ge=0)
-    fat_target: Optional[float] = Field(None, ge=0)
+    calorie_target: int | None = Field(None, gt=0)
+    cuisine_region: str | None = None
+    ingredients: list[str] = Field(default_factory=list, max_length=20)
+    cooking_time_minutes: int | None = Field(None, ge=5, le=120)
+    protein_target: float | None = Field(None, ge=0)
+    carbs_target: float | None = Field(None, ge=0)
+    fat_target: float | None = Field(None, ge=0)
 
 
 class SaveInstructionItem(BaseModel):
     """A single cooking instruction step with optional duration."""
 
     instruction: str = Field(..., description="Instruction text")
-    duration_minutes: Optional[int] = Field(
+    duration_minutes: int | None = Field(
         None, ge=0, description="Estimated duration in minutes"
     )
 
@@ -273,7 +273,7 @@ class SaveMealSuggestionRequest(BaseModel):
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
         ..., description="Type of meal"
     )
-    calories: Optional[int] = Field(
+    calories: int | None = Field(
         None,
         gt=0,
         description="Total calories. If omitted, derived from macros (protein*4 + carbs*4 + fat*9).",
@@ -283,15 +283,15 @@ class SaveMealSuggestionRequest(BaseModel):
         ..., ge=0, description="Carbohydrates in grams (already scaled)"
     )
     fat: float = Field(..., ge=0, description="Fat in grams (already scaled)")
-    description: Optional[str] = Field(None, description="Meal description")
-    estimated_cook_time_minutes: Optional[int] = Field(
+    description: str | None = Field(None, description="Meal description")
+    estimated_cook_time_minutes: int | None = Field(
         None, ge=0, description="Estimated cooking time in minutes"
     )
-    ingredients: List[SaveIngredientItem] = Field(
+    ingredients: list[SaveIngredientItem] = Field(
         default_factory=list,
         description="Structured ingredient list with name, amount, and unit",
     )
-    instructions: List[Union[str, SaveInstructionItem]] = Field(
+    instructions: list[str | SaveInstructionItem] = Field(
         default_factory=list,
         description="Cooking instructions as strings or {instruction, duration_minutes} objects",
     )
@@ -303,15 +303,15 @@ class SaveMealSuggestionRequest(BaseModel):
     meal_date: str = Field(
         ..., description="Target date for the meal (YYYY-MM-DD format)"
     )
-    cuisine_type: Optional[str] = Field(
+    cuisine_type: str | None = Field(
         None, description="Cuisine type (e.g., Asian, Vietnamese)"
     )
-    origin_country: Optional[str] = Field(None, description="Country of origin")
-    emoji: Optional[str] = Field(None, description="AI-assigned food emoji")
-    image_url: Optional[str] = Field(
+    origin_country: str | None = Field(None, description="Country of origin")
+    emoji: str | None = Field(None, description="AI-assigned food emoji")
+    image_url: str | None = Field(
         None, description="Food image URL from discovery (Pexels/Unsplash hotlink)"
     )
-    unsplash_download_location: Optional[str] = Field(
+    unsplash_download_location: str | None = Field(
         None,
         description="Unsplash download_location URL — triggers download event per API guidelines",
     )
@@ -325,8 +325,8 @@ class SaveMealSuggestionRequest(BaseModel):
         try:
             datetime.strptime(v, "%Y-%m-%d")
             return v
-        except ValueError:
-            raise ValueError("meal_date must be in YYYY-MM-DD format")
+        except ValueError as e:
+            raise ValueError("meal_date must be in YYYY-MM-DD format") from e
 
     class Config:
         json_schema_extra = {

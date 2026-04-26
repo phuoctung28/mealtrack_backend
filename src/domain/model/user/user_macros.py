@@ -1,9 +1,10 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, date
-from typing import Optional, Dict, Any
+from datetime import date, datetime
+from typing import Any
 
 from src.domain.utils.timezone_utils import utc_now
+
 from ..nutrition import Macros
 
 
@@ -14,31 +15,33 @@ class UserMacros:
     """
 
     user_macros_id: str
-    user_id: Optional[str]  # For when user system is implemented
+    user_id: str | None  # For when user system is implemented
     target_date: date
     target_calories: float
     target_macros: Macros
     consumed_calories: float = 0.0
-    consumed_macros: Optional[Macros] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    onboard_data: Optional[Dict[str, Any]] = None  # Store onboarding choices
+    consumed_macros: Macros | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    onboard_data: dict[str, Any] | None = None  # Store onboarding choices
 
     def __post_init__(self):
         """Validate invariants."""
         # Validate UUID format
         try:
             uuid.UUID(self.user_macros_id)
-        except ValueError:
+        except ValueError as e:
             raise ValueError(
                 f"Invalid UUID format for user_macros_id: {self.user_macros_id}"
-            )
+            ) from e
 
         if self.user_id:
             try:
                 uuid.UUID(self.user_id)
-            except ValueError:
-                raise ValueError(f"Invalid UUID format for user_id: {self.user_id}")
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid UUID format for user_id: {self.user_id}"
+                ) from e
 
         if self.target_calories <= 0:
             raise ValueError(
@@ -76,7 +79,7 @@ class UserMacros:
         target_date: date,
         target_calories: float,
         target_macros: Macros,
-        onboard_data: Dict[str, Any],
+        onboard_data: dict[str, Any],
     ) -> "UserMacros":
         """Create user macros from onboarding data."""
         return cls.create_new(
@@ -123,7 +126,7 @@ class UserMacros:
         )
 
     @property
-    def completion_percentage(self) -> Dict[str, float]:
+    def completion_percentage(self) -> dict[str, float]:
         """Calculate completion percentage for calories and macros."""
         return {
             "calories": min(

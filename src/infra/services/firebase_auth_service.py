@@ -1,7 +1,6 @@
 """Firebase Authentication Service for user management operations."""
 
 import logging
-from typing import Optional
 
 from firebase_admin import auth
 from firebase_admin.auth import UserNotFoundError
@@ -28,20 +27,20 @@ class FirebaseAuthService:
         """
         try:
             auth.delete_user(firebase_uid)
-            logger.info(f"Successfully deleted Firebase user")
+            logger.info("Successfully deleted Firebase user")
             return True
 
         except UserNotFoundError:
-            logger.warning(f"Firebase user not found - may have been already deleted")
+            logger.warning("Firebase user not found - may have been already deleted")
             # User already deleted is considered a success for idempotency
             return True
 
         except Exception as e:
             logger.error(f"Failed to delete Firebase user: {str(e)}")
-            raise Exception(f"Failed to delete user from Firebase: {str(e)}")
+            raise Exception(f"Failed to delete user from Firebase: {str(e)}") from e
 
     @staticmethod
-    def get_firebase_user(firebase_uid: str) -> Optional[auth.UserRecord]:
+    def get_firebase_user(firebase_uid: str) -> auth.UserRecord | None:
         """
         Get a user from Firebase Authentication.
 
@@ -54,7 +53,7 @@ class FirebaseAuthService:
         try:
             return auth.get_user(firebase_uid)
         except UserNotFoundError:
-            logger.warning(f"Firebase user not found")
+            logger.warning("Firebase user not found")
             return None
         except Exception as e:
             logger.error(f"Failed to get Firebase user: {str(e)}")
@@ -88,11 +87,11 @@ class FirebaseAuthService:
         """
         try:
             auth.revoke_refresh_tokens(firebase_uid)
-            logger.info(f"Successfully revoked refresh tokens for Firebase user")
+            logger.info("Successfully revoked refresh tokens for Firebase user")
             return True
 
         except UserNotFoundError:
-            logger.warning(f"Firebase user not found - tokens already invalidated")
+            logger.warning("Firebase user not found - tokens already invalidated")
             return True
 
         except Exception as e:

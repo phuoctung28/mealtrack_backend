@@ -5,9 +5,9 @@ User FCM token domain model.
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from src.domain.utils.timezone_utils import utc_now
+
 from .enums import DeviceType
 
 
@@ -22,21 +22,23 @@ class UserFcmToken:
     fcm_token: str
     device_type: DeviceType
     is_active: bool = True
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     def __post_init__(self):
         """Validate invariants."""
         # Validate UUID formats
         try:
             uuid.UUID(self.token_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for token_id: {self.token_id}")
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid UUID format for token_id: {self.token_id}"
+            ) from e
 
         try:
             uuid.UUID(self.user_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for user_id: {self.user_id}")
+        except ValueError as e:
+            raise ValueError(f"Invalid UUID format for user_id: {self.user_id}") from e
 
         # Validate FCM token format (basic check)
         if not self.fcm_token or len(self.fcm_token) < 10:

@@ -3,7 +3,7 @@ import json
 import logging
 import re
 from io import BytesIO
-from typing import Dict, Any, List
+from typing import Any
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -11,10 +11,9 @@ from PIL import Image
 
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.strategies.meal_analysis_strategy import (
-    MealAnalysisStrategy,
     AnalysisStrategyFactory,
+    MealAnalysisStrategy,
 )
-from src.infra.config.settings import get_settings
 from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
 # Load environment variables
@@ -67,7 +66,7 @@ class VisionAIService(VisionAIServicePort):
 
     def _analyze_image_reference(
         self, image_reference: str, strategy: MealAnalysisStrategy
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze an image reference (data URL or public URL) using strategy.
         """
@@ -114,11 +113,11 @@ class VisionAIService(VisionAIServicePort):
         except Exception as e:
             raise RuntimeError(
                 f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}"
-            )
+            ) from e
 
     def analyze_with_strategy(
         self, image_bytes: bytes, strategy: MealAnalysisStrategy
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze a food image using the provided analysis strategy.
 
@@ -139,13 +138,13 @@ class VisionAIService(VisionAIServicePort):
 
     def analyze_by_url_with_strategy(
         self, image_url: str, strategy: MealAnalysisStrategy
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze a food image by public URL using the provided analysis strategy.
         """
         return self._analyze_image_reference(image_url, strategy)
 
-    def _extract_json_from_response(self, content: str) -> Dict[str, Any]:
+    def _extract_json_from_response(self, content: str) -> dict[str, Any]:
         """
         Extract JSON from AI response, handling various formats.
 
@@ -193,7 +192,7 @@ class VisionAIService(VisionAIServicePort):
             "Please try again or use a clearer image."
         )
 
-    def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
+    def analyze(self, image_bytes: bytes) -> dict[str, Any]:
         """
         Analyze a food image to extract nutritional information.
 
@@ -211,7 +210,7 @@ class VisionAIService(VisionAIServicePort):
         )
         return self.analyze_with_strategy(image_bytes, strategy)
 
-    def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
+    def analyze_by_url(self, image_url: str) -> dict[str, Any]:
         """
         Analyze a food image from a public URL.
         """
@@ -222,7 +221,7 @@ class VisionAIService(VisionAIServicePort):
 
     def analyze_with_portion_context(
         self, image_bytes: bytes, portion_size: float, unit: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze a food image with specific portion size context.
 
@@ -238,8 +237,8 @@ class VisionAIService(VisionAIServicePort):
         return self.analyze_with_strategy(image_bytes, strategy)
 
     def analyze_with_ingredients_context(
-        self, image_bytes: bytes, ingredients: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, image_bytes: bytes, ingredients: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Analyze a food image with known ingredients context.
 
@@ -255,7 +254,7 @@ class VisionAIService(VisionAIServicePort):
 
     def analyze_with_weight_context(
         self, image_bytes: bytes, weight_grams: float
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze a food image with specific weight context for accurate nutrition.
 

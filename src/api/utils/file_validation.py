@@ -2,8 +2,6 @@
 File validation utilities for API endpoints.
 """
 
-from typing import List
-
 from fastapi import UploadFile
 
 from src.api.exceptions import ValidationException
@@ -14,7 +12,7 @@ class FileValidator:
 
     @staticmethod
     def validate_image_file(
-        file: UploadFile, allowed_content_types: List[str], max_size_bytes: int
+        file: UploadFile, allowed_content_types: list[str], max_size_bytes: int
     ) -> bytes:
         """
         Validate an uploaded image file.
@@ -49,7 +47,7 @@ class FileValidator:
                 message="Failed to read file content",
                 error_code="FILE_READ_ERROR",
                 details={"error": str(e)},
-            )
+            ) from e
         finally:
             file.file.seek(0)  # Reset file pointer
 

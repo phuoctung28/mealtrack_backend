@@ -4,9 +4,9 @@ Handles parsing, cleaning, and recovery from malformed JSON.
 """
 
 import json
-import re
 import logging
-from typing import Dict, Any, List
+import re
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ def truncate(s: str, max_len: int = 200) -> str:
     return s[:max_len] + "..." if len(s) > max_len else s
 
 
-def extract_json(content: str) -> Dict[str, Any]:
+def extract_json(content: str) -> dict[str, Any]:
     """
     Extract and validate JSON from AI response with better error handling.
     """
@@ -99,7 +99,7 @@ def extract_json(content: str) -> Dict[str, Any]:
             f"[JSON-EXTRACT-FAILED] all parsing attempts failed | "
             f"content_preview={content_preview}"
         )
-        raise ValueError(f"Could not extract valid JSON from response: {str(e)}")
+        raise ValueError(f"Could not extract valid JSON from response: {str(e)}") from e
 
 
 def clean_json_content(content: str) -> str:

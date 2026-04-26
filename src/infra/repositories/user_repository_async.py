@@ -1,7 +1,6 @@
 """Async user repository backed by asyncpg + AsyncSession."""
 
 import logging
-from typing import Optional, List
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -10,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.domain.model.user import UserDomainModel, UserProfileDomainModel
-from src.domain.utils.timezone_utils import utc_now
 from src.domain.ports.user_repository_port import UserRepositoryPort
+from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
 from src.infra.mappers.user_mapper import UserMapper, UserProfileMapper
@@ -52,13 +51,15 @@ class AsyncUserRepository(UserRepositoryPort):
             # Do NOT call session.rollback() — UoW.__aexit__ handles rollback
             error_msg = str(e.orig).lower() if e.orig else str(e).lower()
             if "email" in error_msg:
-                raise ValueError("User with this email already exists")
+                raise ValueError("User with this email already exists") from e
             elif "firebase_uid" in error_msg:
-                raise ValueError("Firebase UID already registered")
+                raise ValueError("Firebase UID already registered") from e
             else:
-                raise ValueError("User with this email or username already exists")
+                raise ValueError(
+                    "User with this email or username already exists"
+                ) from e
 
-    async def find_by_id(self, user_id: UUID) -> Optional[UserDomainModel]:
+    async def find_by_id(self, user_id: UUID) -> UserDomainModel | None:
         user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
         result = await self.session.execute(
             select(User)
@@ -68,7 +69,7 @@ class AsyncUserRepository(UserRepositoryPort):
         entity = result.scalars().first()
         return UserMapper.to_domain(entity) if entity else None
 
-    async def find_by_email(self, email: str) -> Optional[UserDomainModel]:
+    async def find_by_email(self, email: str) -> UserDomainModel | None:
         result = await self.session.execute(
             select(User)
             .options(*_USER_LOADS)
@@ -77,9 +78,7 @@ class AsyncUserRepository(UserRepositoryPort):
         entity = result.scalars().first()
         return UserMapper.to_domain(entity) if entity else None
 
-    async def find_by_firebase_uid(
-        self, firebase_uid: str
-    ) -> Optional[UserDomainModel]:
+    async def find_by_firebase_uid(self, firebase_uid: str) -> UserDomainModel | None:
         result = await self.session.execute(
             select(User)
             .options(*_USER_LOADS)
@@ -90,7 +89,7 @@ class AsyncUserRepository(UserRepositoryPort):
 
     async def find_deleted_by_firebase_uid(
         self, firebase_uid: str
-    ) -> Optional[UserDomainModel]:
+    ) -> UserDomainModel | None:
         result = await self.session.execute(
             select(User)
             .options(*_USER_LOADS)
@@ -101,7 +100,7 @@ class AsyncUserRepository(UserRepositoryPort):
 
     async def find_all(
         self, limit: int = 100, offset: int = 0
-    ) -> List[UserDomainModel]:
+    ) -> list[UserDomainModel]:
         result = await self.session.execute(
             select(User)
             .options(*_USER_LOADS)
@@ -121,7 +120,7 @@ class AsyncUserRepository(UserRepositoryPort):
             return True
         return False
 
-    async def get_profile(self, user_id: UUID) -> Optional[UserProfileDomainModel]:
+    async def get_profile(self, user_id: UUID) -> UserProfileDomainModel | None:
         user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
         result = await self.session.execute(
             select(UserProfile).where(
@@ -172,7 +171,7 @@ class AsyncUserRepository(UserRepositoryPort):
             update(User).where(User.id == str(user_id)).values(timezone=timezone)
         )
 
-    async def get_user_timezone(self, user_id: UUID) -> Optional[str]:
+    async def get_user_timezone(self, user_id: UUID) -> str | None:
         result = await self.session.execute(
             select(User.timezone).where(User.id == str(user_id), User.is_active == True)
         )

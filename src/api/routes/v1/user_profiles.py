@@ -20,7 +20,7 @@ from src.app.commands.user.update_custom_macros_command import UpdateCustomMacro
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.queries.tdee import GetUserTdeeQuery
 from src.app.queries.user import GetUserMetricsQuery
-from src.domain.model.user import TdeeResponse, Goal, MacroTargets
+from src.domain.model.user import Goal, MacroTargets, TdeeResponse
 from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/user-profiles", tags=["User Profiles"])
@@ -48,10 +48,10 @@ async def save_user_onboarding(
         # Compute age from DOB (validate date is real — e.g., reject Feb 31)
         try:
             dob = date(request.birth_year, request.birth_month, request.birth_day)
-        except ValueError:
+        except ValueError as e:
             from fastapi import HTTPException
 
-            raise HTTPException(status_code=400, detail="Invalid birth date")
+            raise HTTPException(status_code=400, detail="Invalid birth date") from e
         today = date.today()
         age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 

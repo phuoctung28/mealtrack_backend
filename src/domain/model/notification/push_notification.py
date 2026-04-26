@@ -4,7 +4,6 @@ Push notification domain model.
 
 import uuid
 from dataclasses import dataclass
-from typing import Optional
 
 from .enums import NotificationType
 
@@ -19,14 +18,14 @@ class PushNotification:
     title: str
     body: str
     notification_type: NotificationType
-    data: Optional[dict] = None
+    data: dict | None = None
 
     def __post_init__(self):
         """Validate invariants."""
         try:
             uuid.UUID(self.user_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for user_id: {self.user_id}")
+        except ValueError as e:
+            raise ValueError(f"Invalid UUID format for user_id: {self.user_id}") from e
 
         if not self.title or not self.body:
             raise ValueError("Title and body must be non-empty strings")
