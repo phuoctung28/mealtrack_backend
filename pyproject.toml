@@ -116,7 +116,6 @@ ignore = [
     "E501",   # line too long (handled by formatter)
     "E402",   # module level import not at top (main.py loads dotenv first)
     "B008",   # function calls in argument defaults (FastAPI Depends)
-    "E712",   # SQLAlchemy filter expressions need == True/False for SQL generation
 ]
 
 [tool.ruff.lint.isort]

@@ -4,13 +4,13 @@ Unit tests for user command handlers.
 
 import uuid
 from datetime import datetime
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
+from tests.conftest import TestUnitOfWork
 
 from src.api.exceptions import ValidationException
 from src.app.commands.user import SaveUserOnboardingCommand
-from tests.conftest import TestUnitOfWork
 
 
 @pytest.mark.unit
@@ -47,7 +47,7 @@ class TestSaveUserOnboardingCommandHandler:
         # Verify user is queryable directly (not via repository) to ensure it's in the DB
         db_user = (
             test_session.query(User)
-            .filter(User.id == user_id, User.is_active == True)
+            .filter(User.id == user_id, User.is_active.is_(True))
             .first()
         )
         assert (
@@ -55,7 +55,6 @@ class TestSaveUserOnboardingCommandHandler:
         ), f"User {user_id} must be queryable directly in test_session"
 
         # Verify repository can find user with UUID conversion
-        from uuid import UUID
         from src.infra.repositories.user_repository import UserRepository
 
         test_repo = UserRepository(test_session)
@@ -238,7 +237,6 @@ class TestSaveUserOnboardingCommandHandler:
 
         # Act - Get handler from event_bus and set its uow to use test_session
         # The handler uses 'self.uow or UnitOfWork()', so if we set self.uow, it will use that
-        from uuid import UUID
         from src.app.commands.user.save_user_onboarding_command import (
             SaveUserOnboardingCommand as CmdType,
         )

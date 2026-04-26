@@ -64,7 +64,7 @@ class AsyncUserRepository(UserRepositoryPort):
         result = await self.session.execute(
             select(User)
             .options(*_USER_LOADS)
-            .where(User.id == user_id_str, User.is_active == True)
+            .where(User.id == user_id_str, User.is_active.is_(True))
         )
         entity = result.scalars().first()
         return UserMapper.to_domain(entity) if entity else None
@@ -73,7 +73,7 @@ class AsyncUserRepository(UserRepositoryPort):
         result = await self.session.execute(
             select(User)
             .options(*_USER_LOADS)
-            .where(User.email == email, User.is_active == True)
+            .where(User.email == email, User.is_active.is_(True))
         )
         entity = result.scalars().first()
         return UserMapper.to_domain(entity) if entity else None
@@ -82,7 +82,7 @@ class AsyncUserRepository(UserRepositoryPort):
         result = await self.session.execute(
             select(User)
             .options(*_USER_LOADS)
-            .where(User.firebase_uid == firebase_uid, User.is_active == True)
+            .where(User.firebase_uid == firebase_uid, User.is_active.is_(True))
         )
         entity = result.scalars().first()
         return UserMapper.to_domain(entity) if entity else None
@@ -93,7 +93,7 @@ class AsyncUserRepository(UserRepositoryPort):
         result = await self.session.execute(
             select(User)
             .options(*_USER_LOADS)
-            .where(User.firebase_uid == firebase_uid, User.is_active == False)
+            .where(User.firebase_uid == firebase_uid, User.is_active.is_(False))
         )
         entity = result.scalars().first()
         return UserMapper.to_domain(entity) if entity else None
@@ -104,7 +104,7 @@ class AsyncUserRepository(UserRepositoryPort):
         result = await self.session.execute(
             select(User)
             .options(*_USER_LOADS)
-            .where(User.is_active == True)
+            .where(User.is_active.is_(True))
             .limit(limit)
             .offset(offset)
         )
@@ -124,7 +124,7 @@ class AsyncUserRepository(UserRepositoryPort):
         user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
         result = await self.session.execute(
             select(UserProfile).where(
-                UserProfile.user_id == user_id_str, UserProfile.is_current == True
+                UserProfile.user_id == user_id_str, UserProfile.is_current.is_(True)
             )
         )
         entity = result.scalars().first()
@@ -173,7 +173,9 @@ class AsyncUserRepository(UserRepositoryPort):
 
     async def get_user_timezone(self, user_id: UUID) -> str | None:
         result = await self.session.execute(
-            select(User.timezone).where(User.id == str(user_id), User.is_active == True)
+            select(User.timezone).where(
+                User.id == str(user_id), User.is_active.is_(True)
+            )
         )
         return result.scalar_one_or_none()
 

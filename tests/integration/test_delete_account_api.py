@@ -38,7 +38,8 @@ class TestDeleteAccountIntegration:
         active_user = (
             test_session.query(User)
             .filter(
-                User.firebase_uid == "firebase_integration_123", User.is_active == True
+                User.firebase_uid == "firebase_integration_123",
+                User.is_active.is_(True),
             )
             .first()
         )
@@ -68,7 +69,7 @@ class TestDeleteAccountIntegration:
                 test_session.query(User)
                 .filter(
                     User.firebase_uid == "firebase_integration_123",
-                    User.is_active == True,
+                    User.is_active.is_(True),
                 )
                 .first()
             )
@@ -259,7 +260,7 @@ class TestDeleteAccountIntegration:
             active_user = (
                 test_session.query(User)
                 .filter(
-                    User.firebase_uid == "firebase_filter_int", User.is_active == True
+                    User.firebase_uid == "firebase_filter_int", User.is_active.is_(True)
                 )
                 .first()
             )

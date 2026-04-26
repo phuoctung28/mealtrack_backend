@@ -1,7 +1,6 @@
 """FCM token CRUD operations."""
 
 import logging
-from typing import List, Optional
 
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
@@ -52,7 +51,7 @@ class FcmTokenOperations:
             raise e
 
     @staticmethod
-    def find_fcm_token_by_token(db: Session, fcm_token: str) -> Optional[UserFcmToken]:
+    def find_fcm_token_by_token(db: Session, fcm_token: str) -> UserFcmToken | None:
         """Find an FCM token by the token string."""
         db_token = (
             db.query(UserFcmTokenORM)
@@ -62,14 +61,14 @@ class FcmTokenOperations:
         return fcm_token_orm_to_domain(db_token) if db_token else None
 
     @staticmethod
-    def find_active_fcm_tokens_by_user(db: Session, user_id: str) -> List[UserFcmToken]:
+    def find_active_fcm_tokens_by_user(db: Session, user_id: str) -> list[UserFcmToken]:
         """Find all active FCM tokens for a user."""
         db_tokens = (
             db.query(UserFcmTokenORM)
             .filter(
                 and_(
                     UserFcmTokenORM.user_id == user_id,
-                    UserFcmTokenORM.is_active == True,
+                    UserFcmTokenORM.is_active.is_(True),
                 )
             )
             .all()

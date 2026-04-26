@@ -73,7 +73,7 @@ class UserRepository(UserRepositoryPort):
         user_entity = (
             self.db.query(User)
             .options(*_USER_RELATIONSHIP_LOADS)
-            .filter(User.id == user_id_str, User.is_active == True)
+            .filter(User.id == user_id_str, User.is_active.is_(True))
             .first()
         )
         return UserMapper.to_domain(user_entity) if user_entity else None
@@ -83,7 +83,7 @@ class UserRepository(UserRepositoryPort):
         user_entity = (
             self.db.query(User)
             .options(*_USER_RELATIONSHIP_LOADS)
-            .filter(User.email == email, User.is_active == True)
+            .filter(User.email == email, User.is_active.is_(True))
             .first()
         )
         return UserMapper.to_domain(user_entity) if user_entity else None
@@ -93,7 +93,7 @@ class UserRepository(UserRepositoryPort):
         user_entity = (
             self.db.query(User)
             .options(*_USER_RELATIONSHIP_LOADS)
-            .filter(User.firebase_uid == firebase_uid, User.is_active == True)
+            .filter(User.firebase_uid == firebase_uid, User.is_active.is_(True))
             .first()
         )
         return UserMapper.to_domain(user_entity) if user_entity else None
@@ -103,7 +103,7 @@ class UserRepository(UserRepositoryPort):
         user_entity = (
             self.db.query(User)
             .options(*_USER_RELATIONSHIP_LOADS)
-            .filter(User.firebase_uid == firebase_uid, User.is_active == False)
+            .filter(User.firebase_uid == firebase_uid, User.is_active.is_(False))
             .first()
         )
         return UserMapper.to_domain(user_entity) if user_entity else None
@@ -113,7 +113,7 @@ class UserRepository(UserRepositoryPort):
         user_entities = (
             self.db.query(User)
             .options(*_USER_RELATIONSHIP_LOADS)
-            .filter(User.is_active == True)
+            .filter(User.is_active.is_(True))
             .limit(limit)
             .offset(offset)
             .all()
@@ -137,7 +137,9 @@ class UserRepository(UserRepositoryPort):
         user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
         profile_entity = (
             self.db.query(UserProfile)
-            .filter(UserProfile.user_id == user_id_str, UserProfile.is_current == True)
+            .filter(
+                UserProfile.user_id == user_id_str, UserProfile.is_current.is_(True)
+            )
             .first()
         )
         return UserProfileMapper.to_domain(profile_entity) if profile_entity else None
@@ -183,7 +185,7 @@ class UserRepository(UserRepositoryPort):
         """Get user's timezone from database."""
         user_entity = (
             self.db.query(User)
-            .filter(User.id == user_id, User.is_active == True)
+            .filter(User.id == user_id, User.is_active.is_(True))
             .first()
         )
         return user_entity.timezone if user_entity else None
