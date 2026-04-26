@@ -160,7 +160,14 @@ async def discover_meals(
             cache_svc = await get_meal_image_cache_service(session=_db)
             pending_repo = await get_pending_queue(session=_db)
             english_names = [m["english_name"] for m in meals]
-            cache_hits = await cache_svc.lookup_batch(english_names)
+            try:
+                cache_hits = await cache_svc.lookup_batch(english_names)
+            except Exception as exc:
+                logger.warning("Cache lookup failed, rolling back: %s", exc)
+                cache_hits = [None] * len(meals)
+            finally:
+                # Rollback any aborted transaction state before proceeding to writes
+                _db.rollback()
         else:
             cache_hits = [None] * len(meals)
             pending_repo = None
