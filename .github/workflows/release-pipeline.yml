@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
 
+permissions: {}
+
 env:
   TEST_IMAGE: mealtrack-backend:test-${{ github.sha }}
   PROD_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
@@ -12,6 +14,8 @@ jobs:
   build-test-image:
     name: 🔨 Build Test Image
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -50,32 +54,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger mealtrack-e2e workflow
-        uses: peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@ff4da817e31db7f9deb889f7ef7a042d694ff76a
         with:
           token: ${{ secrets.E2E_REPO_PAT }}
           repository: phuoctung28/mealtrack-e2e
           event-type: run-e2e
           client-payload: '{"ref": "${{ github.sha }}", "triggered_by": "backend-release"}'
 
-  wait-for-e2e:
-    name: ⏳ Wait for E2E Results
-    needs: trigger-e2e
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Wait for E2E workflow completion
-        uses: fountainhead/action-wait-for-check@v1.2.0
-        with:
-          token: ${{ secrets.E2E_REPO_PAT }}
-          repo: mealtrack-e2e
-          ref: main
-          checkName: e2e
-          timeoutSeconds: 900
-          intervalSeconds: 30
-
   approval:
     name: ✅ Manual Approval
-    needs: wait-for-e2e
+    # wait-for-e2e polling was removed because it polled ref: main which does not reflect
+    # this run's E2E results. The approver must manually verify E2E passed in the
+    # mealtrack-e2e repository before approving this gate.
+    needs: trigger-e2e
     runs-on: ubuntu-latest
     environment: production
     steps:
