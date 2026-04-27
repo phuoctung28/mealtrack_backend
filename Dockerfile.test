@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11.9-slim
 
 WORKDIR /app
 
@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies
 COPY requirements.txt requirements-test.txt ./
-RUN pip install --no-cache-dir -r requirements.txt -r requirements-test.txt
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements-test.txt
 
 # Copy application and tests
 COPY src/ ./src/
@@ -19,6 +20,11 @@ COPY migrations/ ./migrations/
 
 # Set Python path
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Add non-root user for security
+RUN useradd -m -u 1000 testuser && chown -R testuser:testuser /app
+USER testuser
 
 # Default command: run unit tests
 CMD ["pytest", "tests/unit", "-v", "--tb=short"]
