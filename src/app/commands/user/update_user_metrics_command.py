@@ -16,4 +16,5 @@ class UpdateUserMetricsCommand:
     body_fat_percent: Optional[float] = None
     fitness_goal: Optional[str] = None
     training_level: Optional[str] = None
+    target_weight_kg: Optional[float] = None
 

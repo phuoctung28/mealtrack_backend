@@ -32,7 +32,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
         # Validate at least one field is provided
         if not any([command.weight_kg, command.job_type, command.training_days_per_week,
                     command.training_minutes_per_session, command.body_fat_percent, command.fitness_goal,
-                    command.training_level]):
+                    command.training_level, command.target_weight_kg]):
             raise ValidationException("At least one metric must be provided")
 
         async with self.uow as uow:
@@ -87,6 +87,12 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 if command.training_level not in _VALID_TRAINING_LEVELS:
                     raise ValidationException(f"Training level must be one of: {sorted(_VALID_TRAINING_LEVELS)}")
                 profile.training_level = command.training_level
+
+            # Handle target weight update
+            if command.target_weight_kg is not None:
+                if command.target_weight_kg <= 0:
+                    raise ValidationException("Target weight must be greater than 0")
+                profile.target_weight_kg = command.target_weight_kg
 
             # Ensure this profile is marked as current
             profile.is_current = True
