@@ -1,0 +1,24 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt requirements-test.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-test.txt
+
+# Copy application and tests
+COPY src/ ./src/
+COPY tests/ ./tests/
+COPY pytest.ini pyproject.toml alembic.ini ./
+COPY migrations/ ./migrations/
+
+# Set Python path
+ENV PYTHONPATH=/app
+
+# Default command: run unit tests
+CMD ["pytest", "tests/unit", "-v", "--tb=short"]
