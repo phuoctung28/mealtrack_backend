@@ -194,6 +194,7 @@ async def update_user_metrics(
             body_fat_percent=request.body_fat_percent,
             fitness_goal=request.fitness_goal.value if request.fitness_goal else None,
             training_level=request.training_level.value if request.training_level else None,
+            target_weight_kg=request.target_weight_kg,
         )
 
         await event_bus.send(command)

@@ -36,5 +36,6 @@ class UpdateMetricsRequest(BaseModel):
     body_fat_percent: float | None = Field(None, description="Body fat percentage", ge=0, le=70)
     fitness_goal: GoalEnum | None = Field(None, description="Fitness goal (cut, bulk, recomp)")
     training_level: TrainingLevelEnum | None = Field(None, description="Training level (beginner, intermediate, advanced)")
+    target_weight_kg: float | None = Field(None, description="Target weight in kg", gt=0)
 
 
