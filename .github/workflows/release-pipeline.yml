@@ -1,0 +1,105 @@
+name: Release Pipeline
+
+on:
+  push:
+    branches: [main]
+
+env:
+  TEST_IMAGE: mealtrack-backend:test-${{ github.sha }}
+  PROD_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+jobs:
+  build-test-image:
+    name: 🔨 Build Test Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build test image
+        run: docker build -f Dockerfile.test -t ${{ env.TEST_IMAGE }} .
+
+      - name: Save image as artifact
+        run: docker save ${{ env.TEST_IMAGE }} -o test-image.tar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-image
+          path: test-image.tar
+          retention-days: 1
+
+  unit-tests:
+    name: 🧪 Unit Tests
+    needs: build-test-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-image
+
+      - name: Load test image
+        run: docker load -i test-image.tar
+
+      - name: Run unit tests
+        run: |
+          docker run --rm ${{ env.TEST_IMAGE }} \
+            pytest tests/unit -v --cov=src --cov-fail-under=65
+
+  trigger-e2e:
+    name: 🚀 Trigger E2E Tests
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger mealtrack-e2e workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.E2E_REPO_PAT }}
+          repository: phuoctung28/mealtrack-e2e
+          event-type: run-e2e
+          client-payload: '{"ref": "${{ github.sha }}", "triggered_by": "backend-release"}'
+
+  wait-for-e2e:
+    name: ⏳ Wait for E2E Results
+    needs: trigger-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Wait for E2E workflow completion
+        uses: fountainhead/action-wait-for-check@v1.2.0
+        with:
+          token: ${{ secrets.E2E_REPO_PAT }}
+          repo: mealtrack-e2e
+          ref: main
+          checkName: e2e
+          timeoutSeconds: 900
+          intervalSeconds: 30
+
+  approval:
+    name: ✅ Manual Approval
+    needs: wait-for-e2e
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: echo "Release approved"
+
+  build-push-image:
+    name: 📦 Build & Push Production Image
+    needs: approval
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        run: |
+          docker build -t ${{ env.PROD_IMAGE }} .
+          docker tag ${{ env.PROD_IMAGE }} ghcr.io/${{ github.repository }}:latest
+          docker push ${{ env.PROD_IMAGE }}
+          docker push ghcr.io/${{ github.repository }}:latest
