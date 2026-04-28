@@ -32,10 +32,10 @@ class CloudinaryImageStore(ImageStorePort):
         api_key = os.getenv("CLOUDINARY_API_KEY")
         api_secret = os.getenv("CLOUDINARY_API_SECRET")
 
-        logger.info(f"Initializing CloudinaryImageStore with cloud_name: {cloud_name}")
+        logger.debug(f"Initializing CloudinaryImageStore with cloud_name: {cloud_name}")
 
         use_mock = bool(int(os.getenv("USE_MOCK_STORAGE", "0")))
-        logger.info(f"USE_MOCK_STORAGE is set to: {use_mock}")
+        logger.debug(f"USE_MOCK_STORAGE is set to: {use_mock}")
 
         if not all([cloud_name, api_key, api_secret]):
             raise ValueError(
@@ -45,7 +45,7 @@ class CloudinaryImageStore(ImageStorePort):
         # Configure Cloudinary
         cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret)
 
-        logger.info("CloudinaryImageStore initialized successfully")
+        logger.debug("CloudinaryImageStore initialized successfully")
 
     def save(
         self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None
@@ -64,7 +64,7 @@ class CloudinaryImageStore(ImageStorePort):
         Raises:
             ValueError: If content_type is not supported or image is invalid
         """
-        logger.info(
+        logger.debug(
             f"Saving image of type {content_type}, size {len(image_bytes)} bytes"
         )
 
@@ -75,9 +75,9 @@ class CloudinaryImageStore(ImageStorePort):
         # Use provided image_id or generate a new UUID
         if image_id is None:
             image_id = str(uuid.uuid4())
-            logger.info(f"Generated image_id: {image_id}")
+            logger.debug(f"Generated image_id: {image_id}")
         else:
-            logger.info(f"Using provided image_id: {image_id}")
+            logger.debug(f"Using provided image_id: {image_id}")
 
         # Determine file extension from content type
         if content_type == "image/jpeg":
@@ -93,7 +93,7 @@ class CloudinaryImageStore(ImageStorePort):
 
         try:
             # Upload the image with explicit format
-            logger.info(f"Uploading to Cloudinary with public_id: {folder}/{image_id}")
+            logger.debug(f"Uploading to Cloudinary with public_id: {folder}/{image_id}")
             response = cloudinary.uploader.upload(
                 image_bytes,
                 public_id=f"{folder}/{image_id}",
@@ -105,10 +105,10 @@ class CloudinaryImageStore(ImageStorePort):
             response_url = response.get("secure_url")
 
             if response_url:
-                logger.info(f"Upload successful. Cloudinary URL: {response_url}")
+                logger.debug(f"Upload successful. Cloudinary URL: {response_url}")
                 return response_url
             else:
-                logger.info(
+                logger.warning(
                     f"'secure_url' not found in Cloudinary response. Returning fallback image_id: {image_id}"
                 )
                 return image_id
@@ -129,7 +129,7 @@ class CloudinaryImageStore(ImageStorePort):
         """
         import requests
 
-        logger.info(f"Loading image with ID: {image_id}")
+        logger.debug(f"Loading image with ID: {image_id}")
 
         # Get the URL for the image
         url = self.get_url(image_id)
@@ -140,10 +140,10 @@ class CloudinaryImageStore(ImageStorePort):
 
         # Fetch the image from Cloudinary
         try:
-            logger.info(f"Fetching image from URL: {url}")
+            logger.debug(f"Fetching image from URL: {url}")
             response = requests.get(url)
             if response.status_code == 200:
-                logger.info("Image successfully fetched")
+                logger.debug("Image successfully fetched")
                 return response.content
             else:
                 logger.error(
@@ -165,7 +165,7 @@ class CloudinaryImageStore(ImageStorePort):
         Returns:
             URL to access the image if available, None otherwise
         """
-        logger.info(f"Getting URL for image ID: {image_id}")
+        logger.debug(f"Getting URL for image ID: {image_id}")
         folder = "mealtrack"  # Same folder used in save method
         public_id = f"{folder}/{image_id}"
 
@@ -176,7 +176,7 @@ class CloudinaryImageStore(ImageStorePort):
             # Extract the secure_url which includes the version number
             secure_url = resource.get("secure_url")
             if secure_url:
-                logger.info(f"Found Cloudinary URL: {secure_url}")
+                logger.debug(f"Found Cloudinary URL: {secure_url}")
                 return secure_url
             else:
                 logger.error(
@@ -191,7 +191,7 @@ class CloudinaryImageStore(ImageStorePort):
             logger.error(f"Error getting Cloudinary resource: {str(e)}")
 
             # Fallback to manual URL construction (without version)
-            logger.info("Falling back to manual URL construction")
+            logger.debug("Falling back to manual URL construction")
             cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME")
             if not cloud_name:
                 logger.error("CLOUDINARY_CLOUD_NAME not found in environment")
@@ -204,7 +204,7 @@ class CloudinaryImageStore(ImageStorePort):
                 # Build the direct Cloudinary URL (without version as fallback)
                 url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{folder}/{image_id}.{fmt}"
 
-                logger.info(f"Trying fallback URL: {url}")
+                logger.debug(f"Trying fallback URL: {url}")
 
                 # Check if the URL is accessible
                 try:
@@ -212,7 +212,7 @@ class CloudinaryImageStore(ImageStorePort):
 
                     response = requests.head(url, timeout=5)
                     if response.status_code == 200:
-                        logger.info(f"Found working fallback URL: {url}")
+                        logger.debug(f"Found working fallback URL: {url}")
                         return url
                 except (requests.exceptions.RequestException, Exception) as e:
                     logger.debug(f"URL check failed for {url}: {e}")
@@ -230,14 +230,14 @@ class CloudinaryImageStore(ImageStorePort):
         Returns:
             True if deleted successfully, False otherwise
         """
-        logger.info(f"Deleting image with ID: {image_id}")
+        logger.debug(f"Deleting image with ID: {image_id}")
         folder = "mealtrack"  # Same folder used in other methods
 
         try:
             # Delete the image from Cloudinary
             response = cloudinary.uploader.destroy(f"{folder}/{image_id}")
             success = response.get("result") == "ok"
-            logger.info(f"Delete result: {success}")
+            logger.debug(f"Delete result: {success}")
             return success
         except Exception as e:
             logger.error(f"Error deleting image: {str(e)}")

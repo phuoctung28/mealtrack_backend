@@ -97,7 +97,7 @@ class PyMediatorEventBus(EventBus):
             self._domain_event_subscribers[event_type] = []
 
         self._domain_event_subscribers[event_type].append(handler)
-        logger.info(f"Subscribed to {event_type.__name__}")
+        logger.debug(f"Subscribed to {event_type.__name__}")
 
     async def send(self, event: Event) -> Any:
         """Send a command/query and get the result."""
@@ -123,14 +123,14 @@ class PyMediatorEventBus(EventBus):
             if isinstance(result, list) and all(
                 isinstance(e, DomainEvent) for e in result
             ):
-                logger.info(
+                logger.debug(
                     f"Publishing {len(result)} domain events from command result"
                 )
                 for domain_event in result:
                     await self.publish(domain_event)
             elif isinstance(result, dict) and "events" in result:
                 events = result.get("events", [])
-                logger.info(
+                logger.debug(
                     f"Publishing {len(events)} domain events from command result"
                 )
                 for domain_event in events:
@@ -172,7 +172,7 @@ class PyMediatorEventBus(EventBus):
         if tasks:
             # Execute all tasks in the background (fire-and-forget)
             async def run_tasks_in_background():
-                logger.info(f"Starting background processing for {event_type.__name__}")
+                logger.debug(f"Starting background processing for {event_type.__name__}")
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
                 # Log any exceptions
@@ -182,12 +182,12 @@ class PyMediatorEventBus(EventBus):
                             f"Subscriber {i} for {event_type.__name__} failed: {result}",
                             exc_info=result,
                         )
-                logger.info(
+                logger.debug(
                     f"Background processing completed for {event_type.__name__}"
                 )
 
             # Schedule the task to run in the background
-            logger.info(f"Scheduling background task for {event_type.__name__}")
+            logger.debug(f"Scheduling background task for {event_type.__name__}")
             asyncio.create_task(run_tasks_in_background())
 
     def close(self):

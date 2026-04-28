@@ -77,7 +77,7 @@ class DailyContextPrecomputeService:
                 )
                 return
 
-            logger.info(
+            logger.debug(
                 "Pre-computing notification context for %s on %s", tz_name, today
             )
             redis_items = await asyncio.to_thread(
@@ -96,7 +96,7 @@ class DailyContextPrecomputeService:
             await self._redis.set(
                 self.sentinel_key(today, tz_name), "1", ttl=_SENTINEL_TTL
             )
-            logger.info(
+            logger.debug(
                 "Pre-compute complete for %s: %d users", tz_name, len(redis_items)
             )
 

@@ -84,10 +84,10 @@ class BraveSearchNutritionService:
                 description = r.get("description", "")
                 url = r.get("url", "")
                 snippets.append(f"{title}: {description}")
-                logger.info(f"Brave result for {barcode}: {title} | {url}")
+                logger.debug(f"Brave result for {barcode}: {title} | {url}")
 
             combined = "\n\n".join(snippets)
-            logger.info(
+            logger.debug(
                 f"Brave snippets for {barcode} ({len(results)} results, {len(combined)} chars)"
             )
             return combined
@@ -132,7 +132,7 @@ class BraveSearchNutritionService:
             confidence = result.get("confidence", "low")
             if confidence == "low":
                 result["is_estimate"] = True  # Mark low-confidence as estimate
-                logger.info(
+                logger.debug(
                     f"Brave+AI extraction low confidence for {barcode}, marking as estimate"
                 )
 

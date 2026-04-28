@@ -179,7 +179,7 @@ class UserRepository(UserRepositoryPort):
             .update({"timezone": timezone})
         )
         self.db.commit()
-        logger.info(f"Timezone update: user={user_id} tz={timezone} rows={rows}")
+        logger.debug(f"Timezone update: user={user_id} tz={timezone} rows={rows}")
 
     def get_user_timezone(self, user_id: UUID) -> str | None:
         """Get user's timezone from database."""
@@ -198,4 +198,4 @@ class UserRepository(UserRepositoryPort):
             .update({"language_code": language_code})
         )
         self.db.commit()
-        logger.info(f"Language update: user={user_id} lang={language_code} rows={rows}")
+        logger.debug(f"Language update: user={user_id} lang={language_code} rows={rows}")

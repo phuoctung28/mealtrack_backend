@@ -120,7 +120,7 @@ class ParallelRecipeGenerator:
             phase3_elapsed = 0.0
 
         total_elapsed = time.time() - start_time
-        logger.info(
+        logger.debug(
             f"[PIPELINE-COMPLETE] session={session.id} | total_elapsed={total_elapsed:.2f}s | "
             f"phase1={phase1_elapsed:.2f}s | phase2={phase2_elapsed:.2f}s | "
             f"phase3={phase3_elapsed:.2f}s | language={session.language} | "
@@ -223,7 +223,7 @@ class ParallelRecipeGenerator:
                 break
 
         elapsed = time.time() - start
-        logger.info(
+        logger.debug(
             f"[DISCOVERY-COMPLETE] session={session.id} | elapsed={elapsed:.2f}s | "
             f"meals={[r['name'] for r in results]}"
         )
@@ -253,7 +253,7 @@ class ParallelRecipeGenerator:
 
         # Request extra names for headroom (failures, dedup); retry once on shortage
         names_to_generate = suggestion_count + 4
-        logger.info(
+        logger.debug(
             f"[PHASE-1-START] session={session.id} | generating {names_to_generate} names in {target_lang} | "
             f"excluding {len(exclude_meal_names)} previous meals"
         )
@@ -298,7 +298,7 @@ class ParallelRecipeGenerator:
                     f"Could not generate enough unique meal names "
                     f"(got {len(meal_names)}, need {suggestion_count})."
                 )
-            logger.info(f"[PHASE-1-COMPLETE] session={session.id} | names={meal_names}")
+            logger.debug(f"[PHASE-1-COMPLETE] session={session.id} | names={meal_names}")
             return meal_names
         except Exception as e:
             logger.error(
@@ -323,7 +323,7 @@ class ParallelRecipeGenerator:
         min_acceptable = min_acceptable_override or max(
             suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS
         )
-        logger.info(
+        logger.debug(
             f"[PHASE-2-START] session={session.id} | recipes for {meal_names} | preserve_order={preserve_order}"
         )
         recipe_system = (
@@ -371,14 +371,14 @@ class ParallelRecipeGenerator:
                             cancelled = sum(
                                 1 for t in tasks if not t.done() and t.cancel()
                             )
-                            logger.info(
+                            logger.debug(
                                 f"[EARLY-STOP] Got {suggestion_count} meals, cancelled {cancelled} tasks"
                             )
                             break
                 except Exception as e:
                     logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
 
-        logger.info(
+        logger.debug(
             f"[PHASE-2-COMPLETE] session={session.id} | "
             f"success={len(successful)}/{total_attempts} | elapsed={time.time()-gen_start:.2f}s"
         )
@@ -422,7 +422,7 @@ class ParallelRecipeGenerator:
         alternate = (
             "recipe_secondary" if primary == "recipe_primary" else "recipe_primary"
         )
-        logger.info(
+        logger.debug(
             f"[PHASE-2-RETRY] index={index} | {primary} → {alternate} | meal={meal_name}"
         )
         return await attempt_recipe_generation(
@@ -493,7 +493,7 @@ class ParallelRecipeGenerator:
         gen_successes = 0
         min_acceptable = max(suggestion_count - 1, self.MIN_ACCEPTABLE_RESULTS)
 
-        logger.info(
+        logger.debug(
             f"[PHASE-2-PIPELINE-START] session={session.id} | recipes={meal_names}"
         )
         gen_start = time.time()
@@ -512,7 +512,7 @@ class ParallelRecipeGenerator:
                         cancelled = sum(
                             1 for t in gen_tasks if not t.done() and t.cancel()
                         )
-                        logger.info(
+                        logger.debug(
                             f"[EARLY-STOP] Got {suggestion_count} recipes, "
                             f"cancelled {cancelled} gen tasks"
                         )
@@ -520,7 +520,7 @@ class ParallelRecipeGenerator:
             except Exception as e:
                 logger.warning(f"[RECIPE-ERROR] {type(e).__name__}: {e}")
 
-        logger.info(
+        logger.debug(
             f"[PHASE-2-PIPELINE-COMPLETE] session={session.id} | "
             f"success={gen_successes}/{len(meal_names)} | elapsed={time.time()-gen_start:.2f}s"
         )

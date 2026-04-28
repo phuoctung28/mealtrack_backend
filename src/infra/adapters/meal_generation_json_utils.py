@@ -50,7 +50,7 @@ def extract_json(content: str) -> dict[str, Any]:
             )
             try:
                 result = json.loads(cleaned_content)
-                logger.info("[JSON-EXTRACT] cleaned parse success")
+                logger.debug("[JSON-EXTRACT] cleaned parse success")
                 return result
             except json.JSONDecodeError as e2:
                 logger.warning(
@@ -69,7 +69,7 @@ def extract_json(content: str) -> dict[str, Any]:
             )
             try:
                 result = json.loads(json_content)
-                logger.info("[JSON-EXTRACT] markdown parse success")
+                logger.debug("[JSON-EXTRACT] markdown parse success")
                 return result
             except json.JSONDecodeError as e3:
                 logger.warning(
@@ -88,7 +88,7 @@ def extract_json(content: str) -> dict[str, Any]:
                 cleaned_json = clean_json_content(json_content)
                 if cleaned_json:
                     result = json.loads(cleaned_json)
-                    logger.info("[JSON-EXTRACT] regex+clean parse success")
+                    logger.debug("[JSON-EXTRACT] regex+clean parse success")
                     return result
             except json.JSONDecodeError as e4:
                 logger.warning(f"[JSON-PARSE-FAIL-REGEX] error={e4.msg} | pos={e4.pos}")
@@ -237,7 +237,7 @@ def clean_json_content(content: str) -> str:
         content = content[:last_complete_suggestion_end]
         # Close the suggestions array and root object
         content += "]}"
-        logger.info(
+        logger.debug(
             f"[JSON-CLEAN-RECOVERY] truncated {truncated_len} chars | "
             f"kept {last_complete_suggestion_end} chars | "
             f"preserved {complete_objects_count} complete objects | "
