@@ -44,9 +44,60 @@ jobs:
           event-type: run-e2e
           client-payload: '{"ref": "${{ github.sha }}", "triggered_by": "backend-release"}'
 
+      - name: Wait for E2E to complete
+        env:
+          GH_TOKEN: ${{ secrets.E2E_REPO_PAT }}
+        run: |
+          echo "Waiting for E2E workflow to start..."
+          sleep 30
+
+          # Get the latest workflow run triggered by repository_dispatch
+          for i in {1..60}; do
+            RUN_ID=$(gh api repos/phuoctung28/mealtrack-e2e/actions/runs \
+              --jq '.workflow_runs[] | select(.event=="repository_dispatch") | .id' \
+              | head -1)
+
+            if [ -n "$RUN_ID" ]; then
+              echo "Found E2E run: $RUN_ID"
+              break
+            fi
+            echo "Waiting for E2E run to appear... ($i/60)"
+            sleep 10
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "E2E workflow did not start"
+            exit 1
+          fi
+
+          # Poll for completion
+          echo "Polling E2E run status..."
+          for i in {1..60}; do
+            STATUS=$(gh api repos/phuoctung28/mealtrack-e2e/actions/runs/$RUN_ID --jq '.status')
+            CONCLUSION=$(gh api repos/phuoctung28/mealtrack-e2e/actions/runs/$RUN_ID --jq '.conclusion')
+
+            echo "Status: $STATUS, Conclusion: $CONCLUSION"
+
+            if [ "$STATUS" = "completed" ]; then
+              if [ "$CONCLUSION" = "success" ]; then
+                echo "✅ E2E tests passed!"
+                exit 0
+              else
+                echo "❌ E2E tests failed with conclusion: $CONCLUSION"
+                exit 1
+              fi
+            fi
+
+            echo "Waiting for E2E to complete... ($i/60)"
+            sleep 30
+          done
+
+          echo "E2E workflow timed out"
+          exit 1
+
   build-sit-image:
-    name: 🔨 Build SIT Image
-    needs: unit-tests
+    name: 🔨 Build SIT Image (delivery)
+    needs: trigger-e2e
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,21 +113,21 @@ jobs:
 
       - name: Build and push SIT image
         run: |
-          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sit-${{ github.sha }} .
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sit-${{ github.sha }}
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:delivery .
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:delivery
 
   approval:
     name: ✅ Manual Approval
-    needs: [trigger-e2e, build-sit-image]
+    needs: build-sit-image
     runs-on: ubuntu-latest
     environment: production
     steps:
       - run: |
           echo "## ✅ Release Approved" >> $GITHUB_STEP_SUMMARY
-          echo "Verify E2E tests passed in mealtrack-e2e repo before approving." >> $GITHUB_STEP_SUMMARY
+          echo "SIT image verified. Ready to build production image." >> $GITHUB_STEP_SUMMARY
 
   build-prod-image:
-    name: 📦 Build Production Image
+    name: 📦 Build Production Image (main)
     needs: approval
     runs-on: ubuntu-latest
     permissions:
@@ -93,15 +144,15 @@ jobs:
 
       - name: Build and push production image
         run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main .
           docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: 📊 Image Summary
         run: |
           echo "## 🐳 Production Image Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Tags Published" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main\`" >> $GITHUB_STEP_SUMMARY
           echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
