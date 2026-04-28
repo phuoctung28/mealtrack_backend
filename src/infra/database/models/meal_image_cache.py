@@ -16,7 +16,7 @@ class MealImageCacheModel(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     meal_name = Column(Text, nullable=False)
     name_slug = Column(Text, nullable=False, unique=True)
-    text_embedding = Column(Vector(768), nullable=False)
+    text_embedding = Column(Vector(512), nullable=False)
     image_url = Column(Text, nullable=False)
     thumbnail_url = Column(Text, nullable=True)
     source = Column(Text, nullable=False)

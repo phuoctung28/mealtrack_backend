@@ -21,10 +21,8 @@ from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
-# Per LangChain docs: https://docs.langchain.com/oss/python/integrations/embeddings/google_generative_ai
-# Use a single, explicitly supported model ID.
+# gemini-embedding-2-preview returns 512-d vectors natively.
 _GEMINI_EMBEDDING_MODEL = "gemini-embedding-2-preview"
-_OUTPUT_DIM = 768  # matches the pgvector column definition (Vector(768))
 
 
 class GeminiTextEmbeddingAdapter:
@@ -42,7 +40,6 @@ class GeminiTextEmbeddingAdapter:
             model=model,
             google_api_key=api_key,
             task_type="semantic_similarity",
-            output_dimensionality=_OUTPUT_DIM,
         )
 
     async def embed_text(self, texts: list[str]) -> list[list[float]]:
