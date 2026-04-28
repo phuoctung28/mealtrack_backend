@@ -86,7 +86,7 @@ class MealGenerationService(MealGenerationServicePort):
             model_name = os.getenv(env_var, PURPOSE_MODEL_DEFAULTS.get(purpose, self._model_manager.model_name))
 
             # Log request config with purpose
-            logger.info(
+            logger.debug(
                 f"[AI-REQUEST] purpose={purpose.value} | model={model_name} | "
                 f"max_tokens={max_tokens} | "
                 f"prompt_len={len(prompt)} | "
@@ -109,7 +109,7 @@ class MealGenerationService(MealGenerationServicePort):
 
             # Use structured output if schema provided (guarantees valid format)
             if schema:
-                logger.info(f"[STRUCTURED-OUTPUT] using schema={schema.__name__}")
+                logger.debug(f"[STRUCTURED-OUTPUT] using schema={schema.__name__}")
                 # NOTE: with_structured_output uses function calling, incompatible with response_mime_type
                 # Use include_raw=True to get raw response as fallback when parsing fails
                 llm_with_structure = llm.with_structured_output(
@@ -132,7 +132,7 @@ class MealGenerationService(MealGenerationServicePort):
                 )
                 raw_response = result.get("raw") if isinstance(result, dict) else None
 
-                logger.info(
+                logger.debug(
                     f"[STRUCTURED-RESPONSE] elapsed={elapsed:.2f}s | "
                     f"schema={schema.__name__} | "
                     f"parsed_type={type(structured_response).__name__} | "
@@ -151,7 +151,7 @@ class MealGenerationService(MealGenerationServicePort):
                         # Try legacy JSON parsing as fallback
                         try:
                             fallback_data = extract_json(raw_content)
-                            logger.info(
+                            logger.debug(
                                 "[STRUCTURED-OUTPUT-FALLBACK-SUCCESS] Parsed raw JSON successfully"
                             )
                             return fallback_data
@@ -178,14 +178,14 @@ class MealGenerationService(MealGenerationServicePort):
                         legacy_response = legacy_llm.invoke(messages)
                         legacy_elapsed = time.time() - start_time
 
-                        logger.info(
+                        logger.debug(
                             f"[E2-LEGACY-RESPONSE] elapsed={legacy_elapsed:.2f}s | "
                             f"content_len={len(legacy_response.content)}"
                         )
 
                         # Parse legacy JSON response
                         legacy_data = extract_json(legacy_response.content)
-                        logger.info(
+                        logger.debug(
                             "[E2-LEGACY-SUCCESS] Successfully parsed legacy JSON response"
                         )
                         return legacy_data
@@ -220,7 +220,7 @@ class MealGenerationService(MealGenerationServicePort):
             elapsed = time.time() - start_time
 
             # Log response details
-            logger.info(
+            logger.debug(
                 f"[AI-RESPONSE] elapsed={elapsed:.2f}s | "
                 f"content_len={len(content)} chars (~{len(content)//4} tokens) | "
                 f"starts_with={truncate(content[:50], 50)} | "

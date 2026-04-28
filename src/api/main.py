@@ -61,7 +61,7 @@ load_dotenv()
 initialize_sentry()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
