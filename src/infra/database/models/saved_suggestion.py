@@ -15,8 +15,8 @@ class SavedSuggestionModel(Base):
     meal_type = Column(String(20), nullable=False)
     portion_multiplier = Column(Integer, default=1)
     suggestion_data = Column(JSON, nullable=False)
-    saved_at = Column(DateTime(timezone=True), nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False)
+    saved_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, nullable=False)
 
     __table_args__ = (
         UniqueConstraint('user_id', 'suggestion_id', name='uq_user_suggestion'),
