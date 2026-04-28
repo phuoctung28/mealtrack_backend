@@ -9,7 +9,7 @@ class CheatDayORM(Base):
     id = Column(String(36), primary_key=True)
     user_id = Column(String(36), nullable=False, index=True)
     date = Column(Date, nullable=False)
-    marked_at = Column(DateTime, nullable=False)
+    marked_at = Column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
         UniqueConstraint('user_id', 'date', name='uq_user_cheat_date'),
