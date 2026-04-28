@@ -5,68 +5,103 @@ on:
     branches:
       - delivery
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Custom image tag'
-        required: false
-        default: 'latest'
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
-    name: 🐳 Build and Push to GHCR
+  unit-tests:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Run unit tests
+        run: pytest tests/unit -v --cov=src --cov-fail-under=65
+
+  trigger-e2e:
+    name: 🚀 Trigger E2E Tests
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger mealtrack-e2e workflow
+        uses: peter-evans/repository-dispatch@ff4da817e31db7f9deb889f7ef7a042d694ff76a
+        with:
+          token: ${{ secrets.E2E_REPO_PAT }}
+          repository: phuoctung28/mealtrack-e2e
+          event-type: run-e2e
+          client-payload: '{"ref": "${{ github.sha }}", "triggered_by": "backend-release"}'
+
+  build-sit-image:
+    name: 🔨 Build SIT Image
+    needs: unit-tests
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🔑 Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 🏷️ Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
+      - name: Build and push SIT image
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sit-${{ github.sha }} .
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sit-${{ github.sha }}
 
-      - name: 🐳 Build and push Docker image
-        uses: docker/build-push-action@v5
+  approval:
+    name: ✅ Manual Approval
+    needs: [trigger-e2e, build-sit-image]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: |
+          echo "## ✅ Release Approved" >> $GITHUB_STEP_SUMMARY
+          echo "Verify E2E tests passed in mealtrack-e2e repo before approving." >> $GITHUB_STEP_SUMMARY
+
+  build-prod-image:
+    name: 📦 Build Production Image
+    needs: approval
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
         with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push production image
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: 📊 Image Summary
         run: |
-          echo "## 🐳 GitHub Container Registry Image Published" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Image Details" >> $GITHUB_STEP_SUMMARY
-          echo "- **Registry:** \`ghcr.io\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Repository:** \`${{ github.repository }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "## 🐳 Production Image Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Tags Published" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Pull Command" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ghcr.io/${{ github.repository }}:latest" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
