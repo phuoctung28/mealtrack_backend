@@ -36,6 +36,11 @@ omit = [
     "src/infra/services/firebase_auth_service.py",
     "src/infra/services/ai/openai_chat_service.py",
     "src/infra/websocket/connection_manager.py",
+    # Operational infrastructure (Redis locks, batch jobs, health checks)
+    "src/infra/services/scheduler_leader_lock.py",
+    "src/infra/services/daily_context_precompute_service.py",
+    "src/api/routes/v1/health.py",
+    "src/api/dependencies/meal_image_cache.py",
     # Standard exclusions
     "*/tests/*",
     "*/test_*.py",
