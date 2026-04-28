@@ -1,6 +1,7 @@
 """
 Unit tests for update user metrics endpoint and handler.
 """
+
 from dataclasses import dataclass, field
 from typing import List, Optional
 from unittest.mock import AsyncMock, Mock, MagicMock
@@ -71,10 +72,7 @@ class TestUpdateUserMetricsCommand:
 
     def test_create_command_with_partial_fields(self):
         """Test creating command with only some metrics."""
-        command = UpdateUserMetricsCommand(
-            user_id="test_user",
-            weight_kg=75.0
-        )
+        command = UpdateUserMetricsCommand(user_id="test_user", weight_kg=75.0)
 
         assert command.user_id == "test_user"
         assert command.weight_kg == 75.0
@@ -233,7 +231,9 @@ class TestUpdateUserMetricsCommandHandler:
         mock_uow = _make_mock_uow(profile)
 
         handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
-        command = UpdateUserMetricsCommand(user_id="test_user", fitness_goal="super_shredded")
+        command = UpdateUserMetricsCommand(
+            user_id="test_user", fitness_goal="super_shredded"
+        )
 
         with pytest.raises(ValidationException) as exc_info:
             await handler.handle(command)

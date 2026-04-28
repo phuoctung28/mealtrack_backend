@@ -1,4 +1,5 @@
 """Cover src.api.main: Firebase init branches and lifespan error paths."""
+
 import importlib
 import sys
 from unittest.mock import MagicMock, patch
@@ -121,9 +122,7 @@ def test_initialize_firebase_from_json_string(monkeypatch):
     with patch.object(main.credentials, "Certificate", cert):
         main.initialize_firebase()
     init.assert_called_once()
-    cert.assert_called_once_with(
-        {"type": "service_account", "project_id": "p"}
-    )
+    cert.assert_called_once_with({"type": "service_account", "project_id": "p"})
 
 
 def test_initialize_firebase_invalid_json_string(monkeypatch):
@@ -143,7 +142,9 @@ def test_initialize_firebase_from_credentials_file(monkeypatch, tmp_path):
     main = _reload_main()
 
     cred_path = tmp_path / "sa.json"
-    cred_path.write_text('{"type":"service_account","project_id":"x"}', encoding="utf-8")
+    cred_path.write_text(
+        '{"type":"service_account","project_id":"x"}', encoding="utf-8"
+    )
 
     def _not_init():
         raise ValueError("not init")

@@ -1,6 +1,7 @@
 """
 Command to edit meal ingredients and portions.
 """
+
 from dataclasses import dataclass, field
 from typing import Optional, List
 
@@ -11,6 +12,7 @@ from src.domain.model.meal.food_item_change import FoodItemChange, CustomNutriti
 @dataclass
 class EditMealCommand(Command):
     """Command to edit a meal's ingredients."""
+
     meal_id: str
     user_id: str = ""
     dish_name: Optional[str] = None
@@ -20,6 +22,7 @@ class EditMealCommand(Command):
 @dataclass
 class AddCustomIngredientCommand(Command):
     """Command to add a custom ingredient to a meal."""
+
     meal_id: str
     name: str
     quantity: float

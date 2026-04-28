@@ -1,4 +1,5 @@
 """ORM model for meal_image_cache table."""
+
 from __future__ import annotations
 
 import uuid
@@ -21,7 +22,12 @@ class MealImageCacheModel(Base):
     thumbnail_url = Column(Text, nullable=True)
     source = Column(Text, nullable=False)
     confidence = Column(Float, nullable=True)
-    created_at = Column(DateTime(timezone=True),
-                        server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True),
-                        server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )

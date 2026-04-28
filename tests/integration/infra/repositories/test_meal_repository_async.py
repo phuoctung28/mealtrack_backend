@@ -1,4 +1,5 @@
 """Integration tests for AsyncMealRepository."""
+
 import pytest
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +12,9 @@ from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.database.models.enums import MealStatusEnum
 
 
-async def _insert_minimal_meal(session: AsyncSession, user_id: str, meal_id: str = "meal-001") -> MealORM:
+async def _insert_minimal_meal(
+    session: AsyncSession, user_id: str, meal_id: str = "meal-001"
+) -> MealORM:
     image = MealImageORM(
         image_id=f"img-{meal_id}",
         format="jpeg",

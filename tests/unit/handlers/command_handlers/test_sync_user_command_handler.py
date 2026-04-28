@@ -1,13 +1,16 @@
 """
 Unit tests for SyncUserCommandHandler.
 """
+
 from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch, MagicMock
 
 import pytest
 
 from src.app.commands.user.sync_user_command import SyncUserCommand
-from src.app.handlers.command_handlers.sync_user_command_handler import SyncUserCommandHandler
+from src.app.handlers.command_handlers.sync_user_command_handler import (
+    SyncUserCommandHandler,
+)
 from tests.fixtures.fakes.fake_uow import FakeUnitOfWork
 
 
@@ -25,7 +28,7 @@ class TestSyncUserCommandHandler:
         """Test creating a new user when no user exists."""
         fake_uow = FakeUnitOfWork()
         handler.uow = fake_uow
-        
+
         command = SyncUserCommand(
             firebase_uid="firebase_123",
             email="newuser@example.com",
@@ -35,11 +38,11 @@ class TestSyncUserCommandHandler:
             provider="google",
             username="newuser",
             first_name="New",
-            last_name="User"
+            last_name="User",
         )
-        
+
         result = await handler.handle(command)
-        
+
         assert result["created"] is True
         assert result["updated"] is False
         assert result["user"]["firebase_uid"] == "firebase_123"
@@ -53,19 +56,19 @@ class TestSyncUserCommandHandler:
         fake_uow = FakeUnitOfWork()
         from src.domain.model.user import UserDomainModel
         from src.domain.model.auth.auth_provider import AuthProvider
-        
+
         # Pre-populate existing user
         existing_user = UserDomainModel(
             firebase_uid="firebase_456",
             email="old@example.com",
             username="olduser",
             password_hash="",
-            provider=AuthProvider.GOOGLE
+            provider=AuthProvider.GOOGLE,
         )
         await fake_uow.users.save(existing_user)
 
         handler.uow = fake_uow
-        
+
         command = SyncUserCommand(
             firebase_uid="firebase_456",
             email="updated@example.com",
@@ -75,11 +78,11 @@ class TestSyncUserCommandHandler:
             provider="google",
             username="updateduser",
             first_name="Updated",
-            last_name="User"
+            last_name="User",
         )
-        
+
         result = await handler.handle(command)
-        
+
         assert result["created"] is False
         assert result["updated"] is True
         assert result["message"] == "User updated successfully"
@@ -91,32 +94,35 @@ class TestSyncUserCommandHandler:
         fake_uow = FakeUnitOfWork()
         from src.domain.model.user import UserDomainModel
         from src.domain.model.auth.auth_provider import AuthProvider
-        
+
         # Pre-populate existing user
         existing_user = UserDomainModel(
             firebase_uid="firebase_789",
             email="same@example.com",
             username="sameuser",
             password_hash="",
-            provider=AuthProvider.GOOGLE
+            provider=AuthProvider.GOOGLE,
         )
         await fake_uow.users.save(existing_user)
 
         handler.uow = fake_uow
-        
+
         command = SyncUserCommand(
             firebase_uid="firebase_789",
             email="same@example.com",
             phone_number="+1234567890",
             display_name="Same User",
             photo_url="https://example.com/photo.jpg",
-            provider="google"
+            provider="google",
         )
-        
+
         result = await handler.handle(command)
-        
+
         assert result["created"] is False
-        assert result["message"] in ["User updated successfully", "User data up to date"]
+        assert result["message"] in [
+            "User updated successfully",
+            "User data up to date",
+        ]
         assert fake_uow.committed is True
 
     @pytest.mark.asyncio
@@ -125,9 +131,10 @@ class TestSyncUserCommandHandler:
         fake_uow = FakeUnitOfWork()
         from src.domain.model.user import UserDomainModel
         from src.domain.model.auth.auth_provider import AuthProvider
-        
+
         # Pre-populate user with standard subscription
         from uuid import uuid4
+
         user_id = uuid4()
         existing_user = UserDomainModel(
             id=user_id,  # Set ID explicitly
@@ -135,21 +142,23 @@ class TestSyncUserCommandHandler:
             email="standard@example.com",
             username="standarduser",
             password_hash="",
-            provider=AuthProvider.GOOGLE
+            provider=AuthProvider.GOOGLE,
         )
         await fake_uow.users.save(existing_user)
 
         # Add standard subscription
         from src.domain.model.subscription import Subscription
+
         # Use future datetime that's definitely in the future
         from datetime import timedelta
+
         expires_at = datetime.now() + timedelta(days=365)  # 1 year in the future
         subscription = Subscription(
             user_id=str(user_id),  # Use the same user_id
             product_id="standard_monthly",
             status="active",
             expires_at=expires_at,
-            platform="ios"
+            platform="ios",
         )
         saved_subscription = await fake_uow.subscriptions.save(subscription)
 
@@ -160,7 +169,9 @@ class TestSyncUserCommandHandler:
         # Debug: Check all subscriptions
         all_subs = list(fake_uow.subscriptions._subscriptions.values())
         matching = [s for s in all_subs if s.user_id == str(user_id)]
-        assert len(matching) > 0, f"Should have subscription for user {user_id}. All: {[(s.user_id, s.status) for s in all_subs]}"
+        assert (
+            len(matching) > 0
+        ), f"Should have subscription for user {user_id}. All: {[(s.user_id, s.status) for s in all_subs]}"
 
         # Verify subscription can be found before handler runs
         found_before = await fake_uow.subscriptions.find_active_by_user_id(str(user_id))
@@ -169,31 +180,46 @@ class TestSyncUserCommandHandler:
             for sub in matching:
                 if sub.expires_at:
                     from datetime import datetime as dt
+
                     is_valid = sub.expires_at > dt.now()
-                    print(f"Subscription expires_at={sub.expires_at}, now={dt.now()}, valid={is_valid}")
-        assert found_before is not None, f"Subscription should be findable for user {user_id} before handler runs"
-        
+                    print(
+                        f"Subscription expires_at={sub.expires_at}, now={dt.now()}, valid={is_valid}"
+                    )
+        assert (
+            found_before is not None
+        ), f"Subscription should be findable for user {user_id} before handler runs"
+
         handler.uow = fake_uow
-        
+
         command = SyncUserCommand(
             firebase_uid="firebase_standard",
             email="standard@example.com",
-            provider="google"
+            provider="google",
         )
-        
+
         result = await handler.handle(command)
-        
+
         # Verify user ID matches - handler should find existing user
         result_user_id = result["user"]["id"]
-        assert str(result_user_id) == str(user_id), f"User ID mismatch: {result_user_id} != {user_id}"
-        
+        assert str(result_user_id) == str(
+            user_id
+        ), f"User ID mismatch: {result_user_id} != {user_id}"
+
         # Verify subscription can still be found after handler runs
-        found_after = await fake_uow.subscriptions.find_active_by_user_id(str(result_user_id))
-        assert found_after is not None, f"Subscription should still be findable for user {result_user_id} after handler runs"
+        found_after = await fake_uow.subscriptions.find_active_by_user_id(
+            str(result_user_id)
+        )
+        assert (
+            found_after is not None
+        ), f"Subscription should still be findable for user {result_user_id} after handler runs"
 
         # The handler should have found the subscription and set has_subscription
-        assert result["user"]["has_subscription"] is True, f"User should have subscription. Found subscription: {found_after is not None}"
-        assert result["user"]["subscription"] is not None, "Subscription info should be present"
+        assert (
+            result["user"]["has_subscription"] is True
+        ), f"User should have subscription. Found subscription: {found_after is not None}"
+        assert (
+            result["user"]["subscription"] is not None
+        ), "Subscription info should be present"
         assert result["user"]["subscription"]["product_id"] == "standard_monthly"
         assert result["user"]["subscription"]["is_monthly"] is True
 
@@ -202,18 +228,18 @@ class TestSyncUserCommandHandler:
         """Test handling database error during sync."""
         fake_uow = FakeUnitOfWork()
         # Make the UoW raise an error
-        fake_uow.users.find_by_firebase_uid = AsyncMock(side_effect=Exception("Database error"))
-        handler.uow = fake_uow
-        
-        command = SyncUserCommand(
-            firebase_uid="firebase_error",
-            email="error@example.com",
-            provider="phone"
+        fake_uow.users.find_by_firebase_uid = AsyncMock(
+            side_effect=Exception("Database error")
         )
-        
+        handler.uow = fake_uow
+
+        command = SyncUserCommand(
+            firebase_uid="firebase_error", email="error@example.com", provider="phone"
+        )
+
         with pytest.raises(Exception, match="Database error"):
             await handler.handle(command)
-        
+
         assert fake_uow.rolled_back is True
 
     def test_generate_username_from_email(self, handler):
@@ -280,15 +306,15 @@ class TestSyncUserCommandHandler:
         """Test handler creates UoW when none provided."""
         handler = SyncUserCommandHandler(uow=None)
         command = SyncUserCommand(
-            firebase_uid="test",
-            email="test@example.com",
-            provider="google"
+            firebase_uid="test", email="test@example.com", provider="google"
         )
 
         # Handler should create UnitOfWork internally, but it will fail without real DB
         # This test verifies the handler doesn't crash when uow is None
         # In real usage, UnitOfWork() will be created
-        with patch('src.app.handlers.command_handlers.sync_user_command_handler.AsyncUnitOfWork') as mock_uow_class:
+        with patch(
+            "src.app.handlers.command_handlers.sync_user_command_handler.AsyncUnitOfWork"
+        ) as mock_uow_class:
             mock_uow = FakeUnitOfWork()
             mock_uow_class.return_value = mock_uow
             result = await handler.handle(command)
@@ -347,7 +373,9 @@ class TestSyncUserReRegistration:
 
         # New user should have a different ID
         new_user_id = result["user"]["id"]
-        assert str(new_user_id) != str(old_user_id), "New user should have different ID from deleted user"
+        assert str(new_user_id) != str(
+            old_user_id
+        ), "New user should have different ID from deleted user"
 
         # New user should have onboarding_completed=False (fresh start)
         assert result["user"]["onboarding_completed"] is False
@@ -399,8 +427,12 @@ class TestSyncUserReRegistration:
         old_user = fake_uow.users.users.get(old_user_id)
         assert old_user is not None, "Deleted user record should still exist"
         assert old_user.is_active is False, "Deleted user should remain inactive"
-        assert old_user.email == "old_anonymized@deleted.local", "Deleted user email should be preserved"
-        assert old_user.onboarding_completed is True, "Deleted user onboarding should be preserved"
+        assert (
+            old_user.email == "old_anonymized@deleted.local"
+        ), "Deleted user email should be preserved"
+        assert (
+            old_user.onboarding_completed is True
+        ), "Deleted user onboarding should be preserved"
 
     @pytest.mark.asyncio
     async def test_new_user_triggers_onboarding(self, handler):
@@ -474,6 +506,9 @@ class TestSyncUserReRegistration:
         new_user_id = str(result["user"]["id"])
 
         # Check notification preferences were created for new user
-        prefs = await fake_uow.notifications.find_notification_preferences_by_user(new_user_id)
-        assert prefs is not None, "Notification preferences should be created for new user"
-
+        prefs = await fake_uow.notifications.find_notification_preferences_by_user(
+            new_user_id
+        )
+        assert (
+            prefs is not None
+        ), "Notification preferences should be created for new user"

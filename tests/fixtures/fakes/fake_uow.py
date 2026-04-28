@@ -3,7 +3,9 @@ from tests.fixtures.fakes.fake_user_repository import FakeUserRepository
 from tests.fixtures.fakes.fake_notification_repository import FakeNotificationRepository
 from tests.fixtures.fakes.fake_subscription_repository import FakeSubscriptionRepository
 from tests.fixtures.fakes.fake_meal_repository import FakeMealRepository
-from tests.fixtures.fakes.fake_meal_suggestion_repository import FakeMealSuggestionRepository
+from tests.fixtures.fakes.fake_meal_suggestion_repository import (
+    FakeMealSuggestionRepository,
+)
 
 
 class FakeUnitOfWork(UnitOfWorkPort):
@@ -19,7 +21,7 @@ class FakeUnitOfWork(UnitOfWorkPort):
         self.rolled_back = False
 
     # ---- Sync context manager (kept for legacy tests) ----
-    def __enter__(self) -> 'FakeUnitOfWork':
+    def __enter__(self) -> "FakeUnitOfWork":
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
@@ -35,7 +37,7 @@ class FakeUnitOfWork(UnitOfWorkPort):
         self.rolled_back = True
 
     # ---- Async context manager (for async handlers) ----
-    async def __aenter__(self) -> 'FakeUnitOfWork':
+    async def __aenter__(self) -> "FakeUnitOfWork":
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback) -> None:

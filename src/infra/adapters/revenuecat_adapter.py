@@ -4,10 +4,10 @@ Adapter for RevenueCat subscription service.
 This adapter implements the SubscriptionServicePort interface
 and handles HTTP communication with RevenueCat API.
 """
+
 import logging
 import os
 from datetime import datetime
-from typing import Optional, Dict
 
 import httpx
 
@@ -25,10 +25,10 @@ class RevenueCatAdapter(SubscriptionServicePort):
 
     BASE_URL = "https://api.revenuecat.com/v1"
 
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str | None = None):
         self.api_key = api_key or os.getenv("REVENUECAT_SECRET_API_KEY", "")
 
-    async def get_subscriber_info(self, app_user_id: str) -> Optional[Dict]:
+    async def get_subscriber_info(self, app_user_id: str) -> dict | None:
         """
         Get subscriber info from RevenueCat.
 
@@ -41,7 +41,7 @@ class RevenueCatAdapter(SubscriptionServicePort):
         url = f"{self.BASE_URL}/subscribers/{app_user_id}"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         try:
@@ -86,13 +86,15 @@ class RevenueCatAdapter(SubscriptionServicePort):
 
         # Check if not expired
         try:
-            expires_date = datetime.fromisoformat(expires_date_str.replace('Z', '+00:00'))
+            expires_date = datetime.fromisoformat(
+                expires_date_str.replace("Z", "+00:00")
+            )
             return datetime.now(expires_date.tzinfo) < expires_date
         except Exception as e:
             logger.error(f"Error parsing expires_date: {e}")
             return False
 
-    async def get_subscription_info(self, app_user_id: str) -> Optional[Dict]:
+    async def get_subscription_info(self, app_user_id: str) -> dict | None:
         """
         Get active subscription details.
 
@@ -112,13 +114,15 @@ class RevenueCatAdapter(SubscriptionServicePort):
 
             if expires_date_str:
                 try:
-                    expires_date = datetime.fromisoformat(expires_date_str.replace('Z', '+00:00'))
+                    expires_date = datetime.fromisoformat(
+                        expires_date_str.replace("Z", "+00:00")
+                    )
                     if datetime.now(expires_date.tzinfo) < expires_date:
                         return {
                             "product_id": product_id,
                             "expires_date": expires_date,
                             "store": sub_data.get("store"),
-                            "is_active": True
+                            "is_active": True,
                         }
                 except Exception:
                     continue

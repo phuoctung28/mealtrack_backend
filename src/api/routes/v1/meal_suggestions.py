@@ -7,9 +7,8 @@ import asyncio
 import logging
 from typing import Any, Awaitable, Callable
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
-from starlette.responses import Response
 
 from src.api.base_dependencies import get_db
 from src.api.dependencies.auth import get_current_user_id
@@ -28,7 +27,6 @@ from src.api.schemas.request.meal_suggestion_requests import (
 )
 from src.api.schemas.response.meal_suggestion_responses import (
     DiscoveryBatchResponse,
-    FoodImageResponse,
     RecipeBatchResponse,
     SaveMealSuggestionResponse,
     SuggestionsListResponse,
@@ -239,14 +237,15 @@ async def discover_meals(
         translated_names = [m["name"] for m in meals]
         if language and language != "en":
             try:
-                from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
+                from src.infra.adapters.deepl_translation_adapter import (
+                    DeepLTranslationAdapter,
+                )
                 from src.infra.config.settings import settings
 
                 if settings.DEEPL_API_KEY:
                     adapter = DeepLTranslationAdapter(settings.DEEPL_API_KEY)
                     translated = await adapter.translate_texts(
-                        [m["name"] for m in meals],
-                        language.upper()
+                        [m["name"] for m in meals], language.upper()
                     )
                     if translated and len(translated) == len(meals):
                         translated_names = translated
@@ -384,34 +383,6 @@ async def generate_recipes(
 
     except Exception as e:
         raise handle_exception(e) from e
-
-
-@router.get("/image", response_model=FoodImageResponse)
-@limiter.limit("30/minute")
-async def get_food_image(
-    request: Request,
-    q: str = Query(
-        ..., min_length=2, max_length=100, description="English food search query"
-    ),
-    _user_id: str = Depends(get_current_user_id),
-):
-    """Search for a food image by query. Returns 200 with image data or 204 if not found."""
-    try:
-        from src.api.dependencies.food_image import get_food_image_service
-
-        image_service = get_food_image_service()
-        result = await image_service.search_food_image(q)
-        if result is None:
-            return Response(status_code=204)
-        return FoodImageResponse(
-            url=result.url,
-            thumbnail_url=result.thumbnail_url,
-            source=result.source,
-            photographer=result.photographer,
-        )
-    except Exception as e:
-        logger.warning(f"Food image search failed for query '{q}': {e}")
-        return Response(status_code=204)
 
 
 @router.post("/save", response_model=SaveMealSuggestionResponse)

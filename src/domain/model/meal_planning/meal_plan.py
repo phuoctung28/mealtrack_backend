@@ -3,12 +3,15 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Dict
 
-from src.domain.model.common.enums import MealType  # noqa: F401 — re-exported for backwards compat
+from src.domain.model.common.enums import (
+    MealType,
+)  # noqa: F401 — re-exported for backwards compat
 
 
 @dataclass
 class PlannedMeal:
     """Represents a single meal in a meal plan"""
+
     meal_id: str
     meal_type: MealType
     name: str
@@ -26,30 +29,30 @@ class PlannedMeal:
     is_vegan: bool
     is_gluten_free: bool
     cuisine_type: Optional[str] = None
-    
+
     def __init__(self, **kwargs):
-        self.meal_id = kwargs.get('meal_id', str(uuid.uuid4()))
-        self.meal_type = kwargs['meal_type']
-        self.name = kwargs['name']
-        self.description = kwargs['description']
-        self.prep_time = kwargs['prep_time']
-        self.cook_time = kwargs['cook_time']
-        self.calories = kwargs['calories']
-        self.protein = kwargs['protein']
-        self.carbs = kwargs['carbs']
-        self.fat = kwargs['fat']
-        self.ingredients = kwargs['ingredients']
-        self.seasonings = kwargs.get('seasonings', [])
-        self.instructions = kwargs['instructions']
-        self.is_vegetarian = kwargs['is_vegetarian']
-        self.is_vegan = kwargs['is_vegan']
-        self.is_gluten_free = kwargs['is_gluten_free']
-        self.cuisine_type = kwargs.get('cuisine_type')
-    
+        self.meal_id = kwargs.get("meal_id", str(uuid.uuid4()))
+        self.meal_type = kwargs["meal_type"]
+        self.name = kwargs["name"]
+        self.description = kwargs["description"]
+        self.prep_time = kwargs["prep_time"]
+        self.cook_time = kwargs["cook_time"]
+        self.calories = kwargs["calories"]
+        self.protein = kwargs["protein"]
+        self.carbs = kwargs["carbs"]
+        self.fat = kwargs["fat"]
+        self.ingredients = kwargs["ingredients"]
+        self.seasonings = kwargs.get("seasonings", [])
+        self.instructions = kwargs["instructions"]
+        self.is_vegetarian = kwargs["is_vegetarian"]
+        self.is_vegan = kwargs["is_vegan"]
+        self.is_gluten_free = kwargs["is_gluten_free"]
+        self.cuisine_type = kwargs.get("cuisine_type")
+
     @property
     def total_time(self) -> int:
         return self.prep_time + self.cook_time
-    
+
     def to_dict(self) -> Dict:
         return {
             "meal_id": self.meal_id,
@@ -69,7 +72,7 @@ class PlannedMeal:
             "is_vegetarian": self.is_vegetarian,
             "is_vegan": self.is_vegan,
             "is_gluten_free": self.is_gluten_free,
-            "cuisine_type": self.cuisine_type
+            "cuisine_type": self.cuisine_type,
         }
 
 
@@ -99,6 +102,7 @@ class PlanDuration(str, Enum):
 @dataclass
 class UserPreferences:
     """User dietary and lifestyle preferences for meal planning."""
+
     dietary_preferences: List[DietaryPreference]
     allergies: List[str]
     fitness_goal: FitnessGoal

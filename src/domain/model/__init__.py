@@ -1,4 +1,5 @@
 """Domain model package."""
+
 # flake8: noqa
 from .base import BaseDomainModel
 from .meal import (

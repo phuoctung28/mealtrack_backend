@@ -36,7 +36,9 @@ async def test_translate_texts_maps_language_and_flattens_list_results(monkeypat
     async def fake_to_thread(fn, *args, **kwargs):
         return fn(*args, **kwargs)
 
-    monkeypatch.setattr("src.infra.adapters.deepl_translation_adapter.asyncio.to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        "src.infra.adapters.deepl_translation_adapter.asyncio.to_thread", fake_to_thread
+    )
 
     result = await adapter.translate_texts(["x", "y"], "vi")
     assert result == ["a", "b"]
@@ -59,7 +61,9 @@ async def test_translate_texts_flattens_single_result(monkeypatch):
     async def fake_to_thread(fn, *args, **kwargs):
         return fn(*args, **kwargs)
 
-    monkeypatch.setattr("src.infra.adapters.deepl_translation_adapter.asyncio.to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        "src.infra.adapters.deepl_translation_adapter.asyncio.to_thread", fake_to_thread
+    )
 
     result = await adapter.translate_texts(["x"], "pt")
     assert result == ["only"]
@@ -80,8 +84,9 @@ async def test_translate_texts_raises_on_deepl_exception(monkeypatch):
     async def fake_to_thread(fn, *args, **kwargs):
         return fn(*args, **kwargs)
 
-    monkeypatch.setattr("src.infra.adapters.deepl_translation_adapter.asyncio.to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        "src.infra.adapters.deepl_translation_adapter.asyncio.to_thread", fake_to_thread
+    )
 
     with pytest.raises(deepl.DeepLException):
         await adapter.translate_texts(["x"], "vi")
-

@@ -1,4 +1,5 @@
 """Meal cluster ORM <-> domain mapping functions."""
+
 from datetime import datetime
 from typing import Dict, Optional
 
@@ -8,21 +9,26 @@ from src.domain.model.meal.meal_translation_domain_models import (
     MealTranslation as DomainMealTranslation,
     FoodItemTranslation as DomainFoodItemTranslation,
 )
-from src.domain.model.nutrition import Nutrition as DomainNutrition, Macros, FoodItem as DomainFoodItem
+from src.domain.model.nutrition import (
+    Nutrition as DomainNutrition,
+    Macros,
+    FoodItem as DomainFoodItem,
+)
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.meal.meal_image import MealImageORM
 from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
-from src.infra.database.models.meal.food_item_translation_model import FoodItemTranslationORM
+from src.infra.database.models.meal.food_item_translation_model import (
+    FoodItemTranslationORM,
+)
 from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.mappers.status_mapper import MealStatusMapper
 
-
-
 # ---------------------------------------------------------------------------
 # ORM -> Domain
 # ---------------------------------------------------------------------------
+
 
 def food_item_orm_to_domain(orm: FoodItemORM) -> DomainFoodItem:
     return DomainFoodItem(
@@ -45,7 +51,11 @@ def food_item_orm_to_domain(orm: FoodItemORM) -> DomainFoodItem:
 
 
 def nutrition_orm_to_domain(orm: NutritionORM) -> DomainNutrition:
-    food_items = [food_item_orm_to_domain(fi) for fi in orm.food_items] if orm.food_items else None
+    food_items = (
+        [food_item_orm_to_domain(fi) for fi in orm.food_items]
+        if orm.food_items
+        else None
+    )
     return DomainNutrition(
         macros=Macros(
             protein=orm.protein,
@@ -71,7 +81,9 @@ def meal_image_orm_to_domain(orm: MealImageORM) -> DomainMealImage:
     )
 
 
-def food_item_translation_orm_to_domain(orm: FoodItemTranslationORM) -> DomainFoodItemTranslation:
+def food_item_translation_orm_to_domain(
+    orm: FoodItemTranslationORM,
+) -> DomainFoodItemTranslation:
     return DomainFoodItemTranslation(
         food_item_id=orm.food_item_id,
         name=orm.name,
@@ -84,10 +96,7 @@ def meal_translation_orm_to_domain(orm: MealTranslationORM) -> DomainMealTransla
         meal_id=orm.meal_id,
         language=orm.language,
         dish_name=orm.dish_name,
-        food_items=[
-            food_item_translation_orm_to_domain(fi)
-            for fi in orm.food_items
-        ],
+        food_items=[food_item_translation_orm_to_domain(fi) for fi in orm.food_items],
         translated_at=orm.translated_at,
     )
 
@@ -95,7 +104,9 @@ def meal_translation_orm_to_domain(orm: MealTranslationORM) -> DomainMealTransla
 def meal_orm_to_domain(orm: MealORM) -> DomainMeal:
     translations_dict: Optional[Dict[str, DomainMealTranslation]] = None
     if orm.translations:
-        translations_dict = {t.language: meal_translation_orm_to_domain(t) for t in orm.translations}
+        translations_dict = {
+            t.language: meal_translation_orm_to_domain(t) for t in orm.translations
+        }
 
     return DomainMeal(
         meal_id=orm.meal_id,
@@ -128,6 +139,7 @@ def meal_orm_to_domain(orm: MealORM) -> DomainMeal:
 # ---------------------------------------------------------------------------
 # Domain -> ORM
 # ---------------------------------------------------------------------------
+
 
 def food_item_domain_to_orm(domain: DomainFoodItem, nutrition_id=None) -> FoodItemORM:
     item = FoodItemORM(
@@ -243,31 +255,41 @@ def meal_domain_to_orm(domain: DomainMeal) -> MealORM:
 # Legacy class-based API (kept for backward compatibility during migration)
 # ---------------------------------------------------------------------------
 
+
 class MealMapper:
     """Mapper for Meal entity."""
+
     to_domain = staticmethod(meal_orm_to_domain)
     to_persistence = staticmethod(meal_domain_to_orm)
 
 
 class MealImageMapper:
     """Mapper for MealImage entity."""
+
     to_domain = staticmethod(meal_image_orm_to_domain)
     to_persistence = staticmethod(meal_image_domain_to_orm)
 
 
 class NutritionMapper:
     """Mapper for Nutrition entity."""
+
     to_domain = staticmethod(nutrition_orm_to_domain)
-    to_persistence = staticmethod(lambda domain, meal_id: nutrition_domain_to_orm(domain, meal_id))
+    to_persistence = staticmethod(
+        lambda domain, meal_id: nutrition_domain_to_orm(domain, meal_id)
+    )
 
 
 class FoodItemMapper:
     """Mapper for FoodItem entity."""
+
     to_domain = staticmethod(food_item_orm_to_domain)
-    to_persistence = staticmethod(lambda domain, nutrition_id: food_item_domain_to_orm(domain, nutrition_id))
+    to_persistence = staticmethod(
+        lambda domain, nutrition_id: food_item_domain_to_orm(domain, nutrition_id)
+    )
 
 
 class MealTranslationMapper:
     """Mapper for MealTranslation entity."""
+
     to_domain = staticmethod(meal_translation_orm_to_domain)
     to_persistence = staticmethod(meal_translation_domain_to_orm)

@@ -11,8 +11,7 @@ tests/
 │   └── factories.py     # Factory classes for test objects
 ├── unit/                # Unit tests (fast, isolated)
 │   ├── test_meal_command_handlers.py
-│   ├── test_user_command_handlers.py
-│   └── test_daily_meal_command_handlers.py
+│   └── test_user_command_handlers.py
 └── integration/         # Integration tests (with database)
     ├── test_meal_query_handlers.py
     ├── test_user_query_handlers.py

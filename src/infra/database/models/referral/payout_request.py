@@ -1,4 +1,5 @@
 """Payout request model — user-initiated withdrawal requests for referral earnings."""
+
 from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, Index, JSON
 from sqlalchemy.orm import relationship
 
@@ -19,8 +20,6 @@ class PayoutRequest(Base, PrimaryEntityMixin):
     requested_at = Column(DateTime(timezone=True), nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
-    __table_args__ = (
-        Index("ix_payout_requests_user_id", "user_id"),
-    )
+    __table_args__ = (Index("ix_payout_requests_user_id", "user_id"),)
 
     user = relationship("User")

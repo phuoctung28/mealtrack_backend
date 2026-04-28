@@ -1,4 +1,5 @@
 """Referral system API routes — code lookup, validation, application, stats, and payout."""
+
 import logging
 from typing import Dict, List, Optional
 
@@ -6,7 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
 
 from src.api.dependencies.auth import get_current_user_id
-from src.app.commands.referral.apply_referral_code_command import ApplyReferralCodeCommand
+from src.app.commands.referral.apply_referral_code_command import (
+    ApplyReferralCodeCommand,
+)
 from src.app.commands.referral.request_payout_command import RequestPayoutCommand
 from src.app.handlers.command_handlers.referral.apply_referral_code_handler import (
     ApplyReferralCodeCommandHandler,
@@ -25,7 +28,9 @@ from src.app.handlers.query_handlers.referral.validate_referral_code_handler imp
 )
 from src.app.queries.referral.get_my_referral_code_query import GetMyReferralCodeQuery
 from src.app.queries.referral.get_referral_stats_query import GetReferralStatsQuery
-from src.app.queries.referral.validate_referral_code_query import ValidateReferralCodeQuery
+from src.app.queries.referral.validate_referral_code_query import (
+    ValidateReferralCodeQuery,
+)
 from src.infra.database.uow import UnitOfWork
 
 router = APIRouter(prefix="/v1/referrals", tags=["Referrals"])
@@ -33,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── Request / Response Schemas ────────────────────────────────────────────────
+
 
 class ValidateCodeRequest(BaseModel):
     code: str
@@ -92,6 +98,7 @@ class PayoutRequest(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.post("/validate", response_model=ValidateCodeResponse)
 def validate_code(
     request: ValidateCodeRequest,
@@ -125,7 +132,9 @@ def apply_code(
                 uow,
             )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
     return {"success": True}
 
 
@@ -175,5 +184,7 @@ def request_payout(
                 uow,
             )
         except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            ) from exc
     return {"success": True}

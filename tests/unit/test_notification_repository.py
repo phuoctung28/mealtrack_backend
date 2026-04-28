@@ -1,6 +1,7 @@
 """
 Unit tests for NotificationRepository.
 """
+
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
@@ -9,11 +10,11 @@ import pytest
 from src.domain.model.notification import (
     UserFcmToken,
     NotificationPreferences,
-    DeviceType
+    DeviceType,
 )
 from src.infra.database.models.notification import (
     UserFcmTokenORM as DBUserFcmToken,
-    NotificationPreferencesORM as DBNotificationPreferences
+    NotificationPreferencesORM as DBNotificationPreferences,
 )
 from src.infra.repositories.notification_repository import NotificationRepository
 
@@ -24,7 +25,9 @@ TEST_TOKEN_ID_2 = "00000000-0000-0000-0000-000000000012"
 TEST_TOKEN_ID_123 = "00000000-0000-0000-0000-000000000123"
 
 # Mapper module path for patching
-_FCM_MAPPER = "src.infra.repositories.notification.fcm_token_operations.fcm_token_orm_to_domain"
+_FCM_MAPPER = (
+    "src.infra.repositories.notification.fcm_token_operations.fcm_token_orm_to_domain"
+)
 _PREFS_MAPPER = "src.infra.repositories.notification.notification_preferences_operations.notification_prefs_orm_to_domain"
 
 
@@ -60,7 +63,7 @@ class TestNotificationRepository:
             device_type=DeviceType.IOS,
             is_active=True,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
 
         # Mock query to return None (no existing token)
@@ -90,7 +93,7 @@ class TestNotificationRepository:
             device_type=DeviceType.IOS,
             is_active=True,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
 
         # Mock existing token
@@ -123,7 +126,7 @@ class TestNotificationRepository:
             device_type=DeviceType.IOS,
             is_active=True,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
 
         db_token = Mock(spec=DBUserFcmToken)
@@ -166,7 +169,7 @@ class TestNotificationRepository:
             device_type=DeviceType.IOS,
             is_active=True,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         token2 = UserFcmToken(
             token_id=TEST_TOKEN_ID_2,
@@ -175,7 +178,7 @@ class TestNotificationRepository:
             device_type=DeviceType.ANDROID,
             is_active=True,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
 
         db_token1 = Mock(spec=DBUserFcmToken)
@@ -311,7 +314,9 @@ class TestNotificationRepository:
             mock_db_session.commit.assert_called_once()
             assert existing_db_prefs.meal_reminders_enabled is False
 
-    def test_find_notification_preferences_by_user_exists(self, repository, mock_db_session):
+    def test_find_notification_preferences_by_user_exists(
+        self, repository, mock_db_session
+    ):
         """Test finding notification preferences that exist."""
         # Arrange
         prefs = NotificationPreferences.create_default(TEST_USER_ID)
@@ -332,7 +337,9 @@ class TestNotificationRepository:
             assert result is not None
             assert result.user_id == TEST_USER_ID
 
-    def test_find_notification_preferences_by_user_not_exists(self, repository, mock_db_session):
+    def test_find_notification_preferences_by_user_not_exists(
+        self, repository, mock_db_session
+    ):
         """Test finding notification preferences that don't exist."""
         # Arrange
         mock_query = Mock()
@@ -386,7 +393,9 @@ class TestNotificationRepository:
         mock_db_session.delete.assert_called_once_with(db_prefs)
         mock_db_session.commit.assert_called_once()
 
-    def test_delete_notification_preferences_not_exists(self, repository, mock_db_session):
+    def test_delete_notification_preferences_not_exists(
+        self, repository, mock_db_session
+    ):
         """Test deleting non-existent notification preferences."""
         # Arrange
         mock_query = Mock()
@@ -403,8 +412,12 @@ class TestNotificationRepository:
 
     # Utility Operations Tests
 
-    @patch('src.infra.repositories.notification.reminder_query_builder.ReminderQueryBuilder._active_token_users_subquery')
-    def test_find_users_for_meal_reminder_breakfast(self, mock_subquery_method, repository, mock_db_session):
+    @patch(
+        "src.infra.repositories.notification.reminder_query_builder.ReminderQueryBuilder._active_token_users_subquery"
+    )
+    def test_find_users_for_meal_reminder_breakfast(
+        self, mock_subquery_method, repository, mock_db_session
+    ):
         """Test finding users for breakfast reminder with timezone-aware query.
 
         Verifies the optimized query that includes time_field in initial query
@@ -412,18 +425,18 @@ class TestNotificationRepository:
         """
         # Arrange - patch subquery to return a real SQLAlchemy subquery with user_id
         from sqlalchemy import select, literal_column
-        mock_subquery_method.return_value = (
-            select(literal_column("'dummy'").label("user_id")).subquery()
-        )
+
+        mock_subquery_method.return_value = select(
+            literal_column("'dummy'").label("user_id")
+        ).subquery()
 
         # Main query mock returns tuples of (user_id, timezone, pref_minutes)
         mock_query = Mock()
         mock_query.join = Mock(return_value=mock_query)
         mock_query.filter = Mock(return_value=mock_query)
-        mock_query.all = Mock(return_value=[
-            ("user-1", "UTC", 480),
-            ("user-2", "UTC", 480)
-        ])
+        mock_query.all = Mock(
+            return_value=[("user-1", "UTC", 480), ("user-2", "UTC", 480)]
+        )
         mock_db_session.query = Mock(return_value=mock_query)
 
         # Act - 8:00 UTC = 8:00 AM local time (480 minutes) for UTC users
@@ -435,7 +448,9 @@ class TestNotificationRepository:
         assert "user-2" in result
         mock_db_session.query.assert_called_once()
 
-    def test_find_users_for_meal_reminder_invalid_meal_type(self, repository, mock_db_session):
+    def test_find_users_for_meal_reminder_invalid_meal_type(
+        self, repository, mock_db_session
+    ):
         """Test finding users for invalid meal type returns empty list."""
         # Act
         current_utc = datetime(2024, 12, 7, 8, 0, tzinfo=timezone.utc)
@@ -457,7 +472,7 @@ class TestNotificationRepository:
             device_type=DeviceType.IOS,
             is_active=True,
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
 
         mock_query = Mock()
@@ -472,7 +487,9 @@ class TestNotificationRepository:
 
         mock_db_session.rollback.assert_called_once()
 
-    def test_save_notification_preferences_error_rollback(self, repository, mock_db_session):
+    def test_save_notification_preferences_error_rollback(
+        self, repository, mock_db_session
+    ):
         """Test that errors during save trigger rollback."""
         # Arrange
         prefs = NotificationPreferences.create_default(TEST_USER_ID)
@@ -489,7 +506,9 @@ class TestNotificationRepository:
 
         mock_db_session.rollback.assert_called_once()
 
-    def test_delete_notification_preferences_error_rollback(self, repository, mock_db_session):
+    def test_delete_notification_preferences_error_rollback(
+        self, repository, mock_db_session
+    ):
         """Test that errors during delete trigger rollback."""
         # Arrange
         db_prefs = Mock(spec=DBNotificationPreferences)
@@ -526,7 +545,7 @@ class TestNotificationRepository:
         mock_query.first = Mock(return_value=None)
 
         # Mock the session's query method
-        with patch.object(test_session, 'query', return_value=mock_query):
+        with patch.object(test_session, "query", return_value=mock_query):
             repository = NotificationRepository(db=None)
 
             # Act

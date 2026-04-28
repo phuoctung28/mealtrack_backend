@@ -1,6 +1,7 @@
 """
 Weekly macro budget repository.
 """
+
 import uuid
 from datetime import date
 from typing import Optional
@@ -19,12 +20,18 @@ class WeeklyBudgetRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def find_by_user_and_week(self, user_id: str, week_start_date: date) -> Optional[WeeklyMacroBudget]:
+    def find_by_user_and_week(
+        self, user_id: str, week_start_date: date
+    ) -> Optional[WeeklyMacroBudget]:
         """Find a weekly budget by user and week start date."""
-        db_budget = self.db.query(WeeklyMacroBudgetORM).filter(
-            WeeklyMacroBudgetORM.user_id == user_id,
-            WeeklyMacroBudgetORM.week_start_date == week_start_date
-        ).first()
+        db_budget = (
+            self.db.query(WeeklyMacroBudgetORM)
+            .filter(
+                WeeklyMacroBudgetORM.user_id == user_id,
+                WeeklyMacroBudgetORM.week_start_date == week_start_date,
+            )
+            .first()
+        )
 
         if db_budget:
             return weekly_budget_orm_to_domain(db_budget)
@@ -68,10 +75,14 @@ class WeeklyBudgetRepository:
 
         # Re-fetch to return the persisted state (may have been updated by conflict)
         self.db.expire_all()
-        db_budget = self.db.query(WeeklyMacroBudgetORM).filter(
-            WeeklyMacroBudgetORM.user_id == budget.user_id,
-            WeeklyMacroBudgetORM.week_start_date == budget.week_start_date,
-        ).first()
+        db_budget = (
+            self.db.query(WeeklyMacroBudgetORM)
+            .filter(
+                WeeklyMacroBudgetORM.user_id == budget.user_id,
+                WeeklyMacroBudgetORM.week_start_date == budget.week_start_date,
+            )
+            .first()
+        )
         if db_budget is None:
             raise RuntimeError(
                 f"upsert succeeded but re-fetch returned None "
@@ -85,9 +96,11 @@ class WeeklyBudgetRepository:
 
     def update(self, budget: WeeklyMacroBudget) -> WeeklyMacroBudget:
         """Update an existing weekly budget."""
-        db_budget = self.db.query(WeeklyMacroBudgetORM).filter(
-            WeeklyMacroBudgetORM.weekly_budget_id == budget.weekly_budget_id
-        ).first()
+        db_budget = (
+            self.db.query(WeeklyMacroBudgetORM)
+            .filter(WeeklyMacroBudgetORM.weekly_budget_id == budget.weekly_budget_id)
+            .first()
+        )
 
         if db_budget:
             db_budget.target_calories = budget.target_calories
@@ -107,9 +120,11 @@ class WeeklyBudgetRepository:
 
     def delete(self, weekly_budget_id: str) -> bool:
         """Delete a weekly budget."""
-        db_budget = self.db.query(WeeklyMacroBudgetORM).filter(
-            WeeklyMacroBudgetORM.weekly_budget_id == weekly_budget_id
-        ).first()
+        db_budget = (
+            self.db.query(WeeklyMacroBudgetORM)
+            .filter(WeeklyMacroBudgetORM.weekly_budget_id == weekly_budget_id)
+            .first()
+        )
 
         if db_budget:
             self.db.delete(db_budget)

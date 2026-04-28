@@ -3,8 +3,17 @@ Food reference database model — canonical food catalog.
 Evolved from barcode_products to serve as the single source of truth
 for per-100g nutrition data across barcode scans, USDA, and FatSecret.
 """
+
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, Integer, JSON, String, Text, func,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    JSON,
+    String,
+    Text,
+    func,
 )
 
 from src.infra.database.config import Base

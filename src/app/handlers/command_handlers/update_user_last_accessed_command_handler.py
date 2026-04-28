@@ -2,6 +2,7 @@
 UpdateUserLastAccessedCommandHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
+
 import logging
 from typing import Dict, Any
 
@@ -15,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 @handles(UpdateUserLastAccessedCommand)
-class UpdateUserLastAccessedCommandHandler(EventHandler[UpdateUserLastAccessedCommand, Dict[str, Any]]):
+class UpdateUserLastAccessedCommandHandler(
+    EventHandler[UpdateUserLastAccessedCommand, Dict[str, Any]]
+):
     """Handler for updating user's last accessed timestamp."""
 
     async def handle(self, command: UpdateUserLastAccessedCommand) -> Dict[str, Any]:
@@ -25,7 +28,9 @@ class UpdateUserLastAccessedCommandHandler(EventHandler[UpdateUserLastAccessedCo
             user = await uow.users.find_by_firebase_uid(command.firebase_uid)
 
             if not user:
-                raise ResourceNotFoundException(f"User with Firebase UID {command.firebase_uid} not found")
+                raise ResourceNotFoundException(
+                    f"User with Firebase UID {command.firebase_uid} not found"
+                )
 
             # Update last_accessed timestamp
             last_accessed = command.last_accessed or utc_now()
@@ -38,5 +43,5 @@ class UpdateUserLastAccessedCommandHandler(EventHandler[UpdateUserLastAccessedCo
             "firebase_uid": command.firebase_uid,
             "updated": True,
             "message": "Last accessed timestamp updated successfully",
-            "timestamp": last_accessed
+            "timestamp": last_accessed,
         }

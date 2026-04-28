@@ -8,7 +8,7 @@ from src.domain.ports.user_repository_port import UserRepositoryPort
 class FakeUserRepository(UserRepositoryPort):
     def __init__(self):
         self.users = {}  # id -> user
-        self.profiles = {} # user_id -> profile
+        self.profiles = {}  # user_id -> profile
 
     async def save(self, user: UserDomainModel) -> UserDomainModel:
         self.users[user.id] = user
@@ -17,14 +17,18 @@ class FakeUserRepository(UserRepositoryPort):
     async def find_by_id(self, user_id: UUID) -> Optional[UserDomainModel]:
         return self.users.get(user_id)
 
-    async def find_by_firebase_uid(self, firebase_uid: str) -> Optional[UserDomainModel]:
+    async def find_by_firebase_uid(
+        self, firebase_uid: str
+    ) -> Optional[UserDomainModel]:
         """Find active user by Firebase UID."""
         for user in self.users.values():
             if user.firebase_uid == firebase_uid and user.is_active:
                 return user
         return None
 
-    async def find_deleted_by_firebase_uid(self, firebase_uid: str) -> Optional[UserDomainModel]:
+    async def find_deleted_by_firebase_uid(
+        self, firebase_uid: str
+    ) -> Optional[UserDomainModel]:
         """Find deleted (inactive) user by Firebase UID."""
         for user in self.users.values():
             if user.firebase_uid == firebase_uid and not user.is_active:
@@ -37,7 +41,9 @@ class FakeUserRepository(UserRepositoryPort):
                 return user
         return None
 
-    async def find_all(self, limit: int = 100, offset: int = 0) -> List[UserDomainModel]:
+    async def find_all(
+        self, limit: int = 100, offset: int = 0
+    ) -> List[UserDomainModel]:
         return list(self.users.values())[offset : offset + limit]
 
     async def delete(self, user_id: UUID) -> bool:
@@ -50,7 +56,9 @@ class FakeUserRepository(UserRepositoryPort):
     async def get_profile(self, user_id: UUID) -> Optional[UserProfileDomainModel]:
         return self.profiles.get(user_id)
 
-    async def update_profile(self, profile: UserProfileDomainModel) -> UserProfileDomainModel:
+    async def update_profile(
+        self, profile: UserProfileDomainModel
+    ) -> UserProfileDomainModel:
         self.profiles[profile.user_id] = profile
         return profile
 

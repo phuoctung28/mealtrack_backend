@@ -7,16 +7,19 @@ import logging
 import os
 import re
 import time
-from typing import Dict, Any, Optional
+from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.infra.adapters.meal_generation_json_utils import (
+    extract_json,
+    truncate,
+)
 from src.infra.services.ai.gemini_model_manager import (
     GeminiModelManager,
     GeminiModelPurpose,
 )
-from src.infra.adapters.meal_generation_json_utils import extract_json, truncate, clean_json_content
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +47,8 @@ class MealGenerationService(MealGenerationServicePort):
         response_type: str = "json",
         max_tokens: int = None,
         schema: type = None,
-        model_purpose: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        model_purpose: str | None = None,
+    ) -> dict[str, Any]:
         """
         Generate meal plan using provided prompt and system message.
         Single entry point for all meal generation.
@@ -81,9 +84,16 @@ class MealGenerationService(MealGenerationServicePort):
                 max_tokens = self._determine_optimal_tokens(prompt, system_message)
 
             # Get model name for logging (mirrors GeminiModelManager.get_model_for_purpose logic)
-            from src.infra.services.ai.gemini_model_config import PURPOSE_ENV_VARS, PURPOSE_MODEL_DEFAULTS
+            from src.infra.services.ai.gemini_model_config import (
+                PURPOSE_ENV_VARS,
+                PURPOSE_MODEL_DEFAULTS,
+            )
+
             env_var = PURPOSE_ENV_VARS.get(purpose, "GEMINI_MODEL")
-            model_name = os.getenv(env_var, PURPOSE_MODEL_DEFAULTS.get(purpose, self._model_manager.model_name))
+            model_name = os.getenv(
+                env_var,
+                PURPOSE_MODEL_DEFAULTS.get(purpose, self._model_manager.model_name),
+            )
 
             # Log request config with purpose
             logger.debug(
@@ -197,7 +207,7 @@ class MealGenerationService(MealGenerationServicePort):
                         raise ValueError(
                             f"Both structured output and legacy JSON mode failed for schema {schema.__name__}. "
                             f"Structured: None response. Legacy: {str(legacy_err)[:100]}"
-                        )
+                        ) from legacy_err
 
                 # Convert to dict for consistent interface
                 if hasattr(structured_response, "model_dump"):

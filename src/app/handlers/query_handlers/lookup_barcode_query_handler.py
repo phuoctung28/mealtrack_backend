@@ -2,6 +2,7 @@
 LookupBarcodeQueryHandler - Handle barcode lookup with cascade:
 DB -> FatSecret -> OpenFoodFacts -> Nutritionix -> Brave+AI -> AI estimate.
 """
+
 import logging
 from typing import Optional, Dict, Any
 
@@ -15,16 +16,26 @@ logger = logging.getLogger(__name__)
 
 # GS1 barcode prefixes → country of origin (common entries)
 GS1_COUNTRY_PREFIXES = {
-    "890": "Vietnam", "893": "Vietnam",
-    "880": "South Korea", "885": "Thailand",
-    "888": "Singapore", "884": "Cambodia",
-    "899": "Indonesia", "489": "Hong Kong",
-    "471": "Taiwan", "480": "Philippines",
-    "400": "Germany", "300": "France",
-    "500": "United Kingdom", "800": "Italy",
-    "450": "Japan", "840": "Spain",
-    "528": "Lebanon", "529": "Cyprus",
-    "460": "Russia", "470": "Kyrgyzstan",
+    "890": "Vietnam",
+    "893": "Vietnam",
+    "880": "South Korea",
+    "885": "Thailand",
+    "888": "Singapore",
+    "884": "Cambodia",
+    "899": "Indonesia",
+    "489": "Hong Kong",
+    "471": "Taiwan",
+    "480": "Philippines",
+    "400": "Germany",
+    "300": "France",
+    "500": "United Kingdom",
+    "800": "Italy",
+    "450": "Japan",
+    "840": "Spain",
+    "528": "Lebanon",
+    "529": "Cyprus",
+    "460": "Russia",
+    "470": "Kyrgyzstan",
 }
 
 
@@ -48,7 +59,9 @@ def _get_country_from_barcode(barcode: str) -> str:
 
 
 @handles(LookupBarcodeQuery)
-class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[str, Any]]]):
+class LookupBarcodeQueryHandler(
+    EventHandler[LookupBarcodeQuery, Optional[Dict[str, Any]]]
+):
     """Handler for looking up product by barcode with 6-step cascade."""
 
     def __init__(
@@ -84,69 +97,96 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
             return await self._maybe_translate(cached, query.language)
         if cached:
             partial_name = cached.get("name")
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 1 partial (name={partial_name}, no nutrition)")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 1 partial (name={partial_name}, no nutrition)"
+            )
 
         # Step 2: Try FatSecret
         region = LANGUAGE_TO_REGION.get(query.language, "US")
         fat_secret_result = await self.fat_secret.get_product(
-            query.barcode, region=region, language=query.language,
+            query.barcode,
+            region=region,
+            language=query.language,
         )
         if fat_secret_result and self._has_nutrition(fat_secret_result):
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 2 HIT (fatsecret): {fat_secret_result.get('name')}")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 2 HIT (fatsecret): {fat_secret_result.get('name')}"
+            )
             fat_secret_result["source"] = "fatsecret"
             self._cache_result(fat_secret_result)
             return await self._maybe_translate(fat_secret_result, query.language)
         if fat_secret_result:
             partial_name = partial_name or fat_secret_result.get("name")
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 2 partial (name={partial_name}, no nutrition)")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 2 partial (name={partial_name}, no nutrition)"
+            )
         else:
             logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 2 MISS (fatsecret)")
 
         # Step 3: Try OpenFoodFacts
         off_result = await self.off.get_product(query.barcode)
         if off_result and self._has_nutrition(off_result):
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 3 HIT (openfoodfacts): {off_result.get('name')}")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 3 HIT (openfoodfacts): {off_result.get('name')}"
+            )
             off_result["source"] = "openfoodfacts"
             self._cache_result(off_result)
             return await self._maybe_translate(off_result, query.language)
         if off_result:
             partial_name = partial_name or off_result.get("name")
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 3 partial (name={partial_name}, no nutrition)")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 3 partial (name={partial_name}, no nutrition)"
+            )
         else:
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 3 MISS (openfoodfacts)")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 3 MISS (openfoodfacts)"
+            )
 
         # Step 4: Try Nutritionix
         if self.nutritionix:
             nx_result = await self.nutritionix.get_product(query.barcode)
             if nx_result and self._has_nutrition(nx_result):
-                logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 4 HIT (nutritionix): {nx_result.get('name')}")
+                logger.debug(
+                    f"[BARCODE-CASCADE] {query.barcode} → step 4 HIT (nutritionix): {nx_result.get('name')}"
+                )
                 nx_result["source"] = "nutritionix"
                 self._cache_result(nx_result)
                 return await self._maybe_translate(nx_result, query.language)
             if nx_result:
                 partial_name = partial_name or nx_result.get("name")
         else:
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 4 SKIP (nutritionix not configured)")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 4 SKIP (nutritionix not configured)"
+            )
 
         # Step 5: Try Brave Search + Gemini extraction
         brave_name: Optional[str] = None
         if self.brave_search:
             brave_result = await self.brave_search.get_product(
-                query.barcode, query.language, product_name=partial_name,
+                query.barcode,
+                query.language,
+                product_name=partial_name,
             )
             if brave_result:
                 brave_name = brave_result.get("name")
                 partial_name = partial_name or brave_name
         else:
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 5 SKIP (brave not configured)")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 5 SKIP (brave not configured)"
+            )
 
         # Step 5b: If Brave found a product name, search FatSecret by name for verified nutrition
         if brave_name:
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 5b FatSecret name search: {brave_name}")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 5b FatSecret name search: {brave_name}"
+            )
             region = LANGUAGE_TO_REGION.get(query.language, "US")
             try:
                 fs_results = await self.fat_secret.search_foods(
-                    brave_name, max_results=3, region=region, language=query.language,
+                    brave_name,
+                    max_results=3,
+                    region=region,
+                    language=query.language,
                 )
                 if fs_results:
                     # Use first result with nutrition and a valid name
@@ -155,7 +195,9 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
                             # Ensure name is set (FatSecret search can return null names)
                             if not fs_item.get("name"):
                                 fs_item["name"] = brave_name
-                            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 5b HIT (fatsecret name): {fs_item.get('name')}")
+                            logger.debug(
+                                f"[BARCODE-CASCADE] {query.barcode} → step 5b HIT (fatsecret name): {fs_item.get('name')}"
+                            )
                             fs_item["source"] = "fatsecret"
                             fs_item["barcode"] = query.barcode
                             # Use brave_name as the display name (original brand name)
@@ -167,18 +209,26 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
 
         # Step 5c: Return Brave estimate if available (editable)
         if brave_result and self._has_nutrition(brave_result):
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 5c using Brave estimate: {brave_name}")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 5c using Brave estimate: {brave_name}"
+            )
             brave_result["source"] = "brave_search"
             brave_result["barcode"] = query.barcode
             self._cache_result(brave_result)
             return brave_result  # Don't translate — brand names should stay as-is
         elif brave_result:
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 5 MISS (brave, no nutrition)")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 5 MISS (brave, no nutrition)"
+            )
         else:
-            logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 5 MISS (brave search)")
+            logger.debug(
+                f"[BARCODE-CASCADE] {query.barcode} → step 5 MISS (brave search)"
+            )
 
         # Step 6: AI estimation (last resort — don't cache unreliable data)
-        logger.debug(f"[BARCODE-CASCADE] {query.barcode} → step 6 AI estimation (partial_name={partial_name})")
+        logger.debug(
+            f"[BARCODE-CASCADE] {query.barcode} → step 6 AI estimation (partial_name={partial_name})"
+        )
         estimate = await self._ai_estimate(query.barcode, query.language, partial_name)
         if estimate:
             return estimate
@@ -198,7 +248,10 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
         return False
 
     async def _ai_estimate(
-        self, barcode: str, language: str, partial_name: Optional[str] = None,
+        self,
+        barcode: str,
+        language: str,
+        partial_name: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Estimate nutrition via Gemini when all other sources fail."""
         if not self.meal_gen:
@@ -231,8 +284,11 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
                 f"partial_name={partial_name}, prompt_len={len(user_prompt)}"
             )
             result = self.meal_gen.generate_meal_plan(
-                user_prompt, system_prompt, response_type="json",
-                max_tokens=500, model_purpose="barcode",
+                user_prompt,
+                system_prompt,
+                response_type="json",
+                max_tokens=500,
+                model_purpose="barcode",
             )
             if not result or not isinstance(result, dict):
                 return None
@@ -275,7 +331,9 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, Optional[Dict[s
     def _cache_result(self, result: Dict[str, Any]) -> None:
         """Cache API result to food_reference table (fail silently on error)."""
         if not result.get("name"):
-            logger.warning(f"Skipping cache for barcode {result.get('barcode')}: name is required")
+            logger.warning(
+                f"Skipping cache for barcode {result.get('barcode')}: name is required"
+            )
             return
         try:
             self.repo.upsert(result)

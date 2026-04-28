@@ -1,6 +1,7 @@
 """
 PyMediator-based event bus implementation.
 """
+
 import asyncio
 import logging
 from typing import Any, Type, TypeVar, Dict, List
@@ -12,11 +13,12 @@ from .event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class EventRequest:
     """Wrapper to make our Events compatible with pymediator Request protocol."""
+
     def __init__(self, event: Event):
         self._event = event
 
@@ -34,7 +36,7 @@ class AsyncPyMediatorHandlerAdapter:
     async def handle(self, request: Any) -> Any:
         """Handle the request asynchronously."""
         # Extract the actual event from the wrapper
-        if hasattr(request, 'event'):
+        if hasattr(request, "event"):
             actual_event = request.event
         else:
             actual_event = request
@@ -69,9 +71,7 @@ class PyMediatorEventBus(EventBus):
         wrapper_class = type(
             f"{event_type.__name__}Request",
             (EventRequest,),
-            {
-                '__init__': lambda self, event: EventRequest.__init__(self, event)
-            }
+            {"__init__": lambda self, event: EventRequest.__init__(self, event)},
         )
 
         # Store the mapping
@@ -82,8 +82,10 @@ class PyMediatorEventBus(EventBus):
             f"{handler.__class__.__name__}AsyncAdapter",
             (AsyncPyMediatorHandlerAdapter,),
             {
-                '__init__': lambda self: AsyncPyMediatorHandlerAdapter.__init__(self, handler)
-            }
+                "__init__": lambda self: AsyncPyMediatorHandlerAdapter.__init__(
+                    self, handler
+                )
+            },
         )
 
         # Register with pymediator
@@ -110,6 +112,7 @@ class PyMediatorEventBus(EventBus):
 
             # Check if handler is async
             import inspect
+
             if inspect.iscoroutinefunction(handler.handle):
                 result = await handler.handle(event)
             else:
@@ -117,33 +120,43 @@ class PyMediatorEventBus(EventBus):
                 result = handler.handle(event)
 
             # Handle domain events if returned
-            if isinstance(result, list) and all(isinstance(e, DomainEvent) for e in result):
-                logger.debug(f"Publishing {len(result)} domain events from command result")
+            if isinstance(result, list) and all(
+                isinstance(e, DomainEvent) for e in result
+            ):
+                logger.debug(
+                    f"Publishing {len(result)} domain events from command result"
+                )
                 for domain_event in result:
                     await self.publish(domain_event)
-            elif isinstance(result, dict) and 'events' in result:
-                events = result.get('events', [])
-                logger.debug(f"Publishing {len(events)} domain events from command result")
+            elif isinstance(result, dict) and "events" in result:
+                events = result.get("events", [])
+                logger.debug(
+                    f"Publishing {len(events)} domain events from command result"
+                )
                 for domain_event in events:
                     if isinstance(domain_event, DomainEvent):
                         await self.publish(domain_event)
             return result
 
         except Exception as e:
-            logger.error(f"Error handling {event_type.__name__}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error handling {event_type.__name__}: {str(e)}", exc_info=True
+            )
             raise
-    
+
     async def publish(self, event: DomainEvent) -> None:
         """Publish a domain event to all subscribers."""
         event_type = type(event)
-        
+
         if event_type not in self._domain_event_subscribers:
             logger.debug(f"No subscribers for {event_type.__name__}")
             return
-        
+
         subscribers = self._domain_event_subscribers[event_type]
-        logger.debug(f"Publishing {event_type.__name__} to {len(subscribers)} subscribers")
-        
+        logger.debug(
+            f"Publishing {event_type.__name__} to {len(subscribers)} subscribers"
+        )
+
         # Execute subscribers concurrently
         tasks = []
         for subscriber in subscribers:
@@ -153,22 +166,25 @@ class PyMediatorEventBus(EventBus):
                 # Wrap sync handlers in async
                 async def async_wrapper(handler, evt):
                     return handler(evt)
+
                 tasks.append(async_wrapper(subscriber, event))
-        
+
         if tasks:
             # Execute all tasks in the background (fire-and-forget)
             async def run_tasks_in_background():
                 logger.debug(f"Starting background processing for {event_type.__name__}")
                 results = await asyncio.gather(*tasks, return_exceptions=True)
-                
+
                 # Log any exceptions
                 for i, result in enumerate(results):
                     if isinstance(result, Exception):
                         logger.error(
                             f"Subscriber {i} for {event_type.__name__} failed: {result}",
-                            exc_info=result
+                            exc_info=result,
                         )
-                logger.debug(f"Background processing completed for {event_type.__name__}")
+                logger.debug(
+                    f"Background processing completed for {event_type.__name__}"
+                )
 
             # Schedule the task to run in the background
             logger.debug(f"Scheduling background task for {event_type.__name__}")

@@ -1,15 +1,22 @@
 """
 Handler for editing meal ingredients.
 """
+
 import logging
 import uuid
 from typing import Any, Dict, Optional
 
-from src.api.exceptions import ValidationException, ResourceNotFoundException, AuthorizationException
+from src.api.exceptions import (
+    ValidationException,
+    ResourceNotFoundException,
+    AuthorizationException,
+)
 from src.app.commands.meal import EditMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import MealEditedEvent
-from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
+from src.app.events.meal.meal_cache_invalidation_required_event import (
+    MealCacheInvalidationRequiredEvent,
+)
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition import FoodItem, Macros
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
@@ -22,9 +29,7 @@ logger = logging.getLogger(__name__)
 class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
     """Handler for editing meal ingredients."""
 
-    def __init__(self,
-                 uow: UnitOfWorkPort,
-                 event_bus: Any):
+    def __init__(self, uow: UnitOfWorkPort, event_bus: Any):
         self.uow = uow
         self.event_bus = event_bus
 
@@ -39,7 +44,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
 
                 # 1a. Check ownership if user_id provided
                 if command.user_id and meal.user_id != command.user_id:
-                    raise AuthorizationException("You do not have permission to modify this meal")
+                    raise AuthorizationException(
+                        "You do not have permission to modify this meal"
+                    )
 
                 if meal.status != MealStatus.READY:
                     raise ValidationException("Meal must be in READY status to edit")
@@ -47,7 +54,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 # 2. Apply food item changes
                 updated_food_items = await self._apply_food_item_changes(
                     meal.nutrition.food_items if meal.nutrition else [],
-                    command.food_item_changes
+                    command.food_item_changes,
                 )
 
                 # 3. Recalculate nutrition
@@ -56,7 +63,7 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 # 4. Update meal
                 updated_meal = meal.mark_edited(
                     nutrition=updated_nutrition,
-                    dish_name=command.dish_name or meal.dish_name
+                    dish_name=command.dish_name or meal.dish_name,
                 )
 
                 # 5. Persist changes
@@ -64,17 +71,23 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 await uow.commit()
 
                 meal_date = (saved_meal.created_at or utc_now()).date()
-                await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
-                    aggregate_id=saved_meal.user_id,
-                    user_id=saved_meal.user_id,
-                    meal_date=meal_date,
-                ))
+                await self.event_bus.publish(
+                    MealCacheInvalidationRequiredEvent(
+                        aggregate_id=saved_meal.user_id,
+                        user_id=saved_meal.user_id,
+                        meal_date=meal_date,
+                    )
+                )
 
                 # 6. Calculate nutrition delta for event
-                nutrition_delta = self._calculate_nutrition_delta(meal.nutrition, updated_nutrition)
+                nutrition_delta = self._calculate_nutrition_delta(
+                    meal.nutrition, updated_nutrition
+                )
 
                 # 7. Generate changes summary
-                changes_summary = self._generate_changes_summary(command.food_item_changes)
+                changes_summary = self._generate_changes_summary(
+                    command.food_item_changes
+                )
 
                 return {
                     "success": True,
@@ -88,10 +101,12 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                         "carbs": updated_nutrition.macros.carbs,
                         "fat": updated_nutrition.macros.fat,
                     },
-                    "updated_food_items": [item.to_dict() for item in updated_food_items],
+                    "updated_food_items": [
+                        item.to_dict() for item in updated_food_items
+                    ],
                     "edit_metadata": {
                         "edit_count": saved_meal.edit_count,
-                        "changes_summary": changes_summary
+                        "changes_summary": changes_summary,
                     },
                     "events": [
                         MealEditedEvent(
@@ -101,9 +116,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                             edit_type="ingredients_updated",
                             changes_summary=changes_summary,
                             nutrition_delta=nutrition_delta,
-                            edit_count=saved_meal.edit_count
+                            edit_count=saved_meal.edit_count,
                         )
-                    ]
+                    ],
                 }
             except Exception as e:
                 await uow.rollback()
@@ -113,7 +128,9 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
     async def _apply_food_item_changes(self, current_food_items, changes):
         """Apply food item changes to current list using strategy pattern."""
         from src.domain.services import NutritionCalculationService
-        from src.domain.strategies.meal_edit_strategies import FoodItemChangeStrategyFactory
+        from src.domain.strategies.meal_edit_strategies import (
+            FoodItemChangeStrategyFactory,
+        )
 
         # Convert current items to dict for easier manipulation
         food_items_dict = {}
@@ -151,14 +168,14 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 "calories": new_nutrition.calories,
                 "protein": new_nutrition.macros.protein,
                 "carbs": new_nutrition.macros.carbs,
-                "fat": new_nutrition.macros.fat
+                "fat": new_nutrition.macros.fat,
             }
 
         return {
             "calories": new_nutrition.calories - old_nutrition.calories,
             "protein": new_nutrition.macros.protein - old_nutrition.macros.protein,
             "carbs": new_nutrition.macros.carbs - old_nutrition.macros.carbs,
-            "fat": new_nutrition.macros.fat - old_nutrition.macros.fat
+            "fat": new_nutrition.macros.fat - old_nutrition.macros.fat,
         }
 
     def _generate_changes_summary(self, changes):
@@ -173,4 +190,3 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 summary_parts.append("Updated portion")
 
         return "; ".join(summary_parts) if summary_parts else "Updated meal"
-

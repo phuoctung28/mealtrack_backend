@@ -58,7 +58,9 @@ async def get_daily_activities(
         # Send query with language and timezone support
         header_tz = request.headers.get("X-Timezone")
         query = GetDailyActivitiesQuery(
-            user_id=user_id, target_date=target_date, language=language,
+            user_id=user_id,
+            target_date=target_date,
+            language=language,
             header_timezone=header_tz,
         )
         activities = await event_bus.send(query)

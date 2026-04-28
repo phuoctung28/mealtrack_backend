@@ -1,12 +1,15 @@
 """
 Unit tests for RecipeSearchService.
 """
+
 import json
 from unittest.mock import Mock, patch
 
 import pytest
 
-from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchService
+from src.domain.services.meal_suggestion.recipe_search_service import (
+    RecipeSearchService,
+)
 from src.domain.ports.recipe_search_port import (
     RecipeSearchCriteria,
     RecipeSearchResult,
@@ -19,11 +22,8 @@ class TestRecipeSearchCriteria:
 
     def test_init_with_defaults(self):
         """Test initialization with default values."""
-        criteria = RecipeSearchCriteria(
-            meal_type="lunch",
-            target_calories=600
-        )
-        
+        criteria = RecipeSearchCriteria(meal_type="lunch", target_calories=600)
+
         assert criteria.meal_type == "lunch"
         assert criteria.target_calories == 600
         assert criteria.calorie_tolerance == 100
@@ -43,9 +43,9 @@ class TestRecipeSearchCriteria:
             dietary_preferences=["vegetarian"],
             allergies=["nuts"],
             ingredients=["chicken", "rice"],
-            exclude_ids=["recipe_1", "recipe_2"]
+            exclude_ids=["recipe_1", "recipe_2"],
         )
-        
+
         assert criteria.meal_type == "dinner"
         assert criteria.target_calories == 800
         assert criteria.calorie_tolerance == 150
@@ -86,7 +86,7 @@ class TestRecipeSearchService:
             target_calories=600,
             ingredients=["chicken", "rice"],
             dietary_preferences=["high-protein"],
-            allergies=["peanuts"]
+            allergies=["peanuts"],
         )
 
     def test_init_with_search_port(self, mock_search_port):
@@ -100,7 +100,9 @@ class TestRecipeSearchService:
         results = service_without_port.search_recipes(sample_criteria)
         assert results == []
 
-    def test_search_recipes_delegates_to_port(self, service_with_port, mock_search_port, sample_criteria):
+    def test_search_recipes_delegates_to_port(
+        self, service_with_port, mock_search_port, sample_criteria
+    ):
         """search_recipes should delegate to the injected search port."""
         expected = [
             RecipeSearchResult(
@@ -120,7 +122,9 @@ class TestRecipeSearchService:
         assert results == expected
         mock_search_port.search_recipes.assert_called_once_with(sample_criteria, 10)
 
-    def test_get_recipe_by_id_delegates_to_port(self, service_with_port, mock_search_port):
+    def test_get_recipe_by_id_delegates_to_port(
+        self, service_with_port, mock_search_port
+    ):
         """get_recipe_by_id should delegate to the injected search port."""
         expected = RecipeSearchResult(
             recipe_id="recipe_42",
@@ -143,4 +147,3 @@ class TestRecipeSearchService:
         # Since the adapter module doesn't exist, the import will fail and return None
         result = service_without_port.get_recipe_by_id("recipe_42")
         assert result is None
-

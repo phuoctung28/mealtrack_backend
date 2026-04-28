@@ -1,6 +1,7 @@
 """
 Save user onboarding command.
 """
+
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional, List
@@ -11,6 +12,7 @@ from src.app.events.base import Command
 @dataclass
 class SaveUserOnboardingCommand(Command):
     """Command to save user onboarding data."""
+
     user_id: str
     # Personal info
     age: int

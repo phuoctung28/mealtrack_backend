@@ -1,4 +1,5 @@
 """Tests for user description input sanitization."""
+
 import pytest
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 

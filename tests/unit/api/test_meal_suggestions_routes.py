@@ -1,4 +1,5 @@
 """Cover meal_suggestions routes with TestClient + rate limiter state."""
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

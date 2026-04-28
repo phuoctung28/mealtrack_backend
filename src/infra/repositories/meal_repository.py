@@ -69,7 +69,9 @@ class MealRepository(MealRepositoryPort):
             existing_meal = (
                 self.db.query(MealORM)
                 .options(
-                    selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items)
+                    selectinload(MealORM.nutrition).selectinload(
+                        NutritionORM.food_items
+                    )
                 )
                 .filter(MealORM.meal_id == meal.meal_id)
                 .first()
@@ -118,7 +120,9 @@ class MealRepository(MealRepositoryPort):
                 existing_meal = (
                     self.db.query(MealORM)
                     .options(
-                        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items)
+                        selectinload(MealORM.nutrition).selectinload(
+                            NutritionORM.food_items
+                        )
                     )
                     .filter(MealORM.meal_id == meal.meal_id)
                     .first()
@@ -152,7 +156,9 @@ class MealRepository(MealRepositoryPort):
                 db_meal = (
                     self.db.query(MealORM)
                     .options(
-                        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items)
+                        selectinload(MealORM.nutrition).selectinload(
+                            NutritionORM.food_items
+                        )
                     )
                     .filter(MealORM.meal_id == db_meal.meal_id)
                     .first()

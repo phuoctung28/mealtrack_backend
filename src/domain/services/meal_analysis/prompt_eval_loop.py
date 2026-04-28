@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from src.domain.parsers.gpt_response_parser import GPTResponseParser, GPTResponseParsingError
+from src.domain.parsers.gpt_response_parser import (
+    GPTResponseParser,
+    GPTResponseParsingError,
+)
 
 
 @dataclass(frozen=True)

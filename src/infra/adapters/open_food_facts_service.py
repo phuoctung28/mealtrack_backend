@@ -2,6 +2,7 @@
 OpenFoodFacts API HTTP client.
 Provides product lookup by barcode for packaged foods.
 """
+
 from typing import Dict, Any, Optional
 import re
 
@@ -14,7 +15,7 @@ class OpenFoodFactsService:
     BASE_URL = "https://world.openfoodfacts.org/api/v2"
 
     # Barcode validation pattern (8-14 digits)
-    BARCODE_PATTERN = re.compile(r'^\d{8,14}$')
+    BARCODE_PATTERN = re.compile(r"^\d{8,14}$")
 
     def __init__(self, client: Optional[httpx.AsyncClient] = None):
         self._client = client

@@ -1,4 +1,5 @@
 """Handler for unmarking a cheat day."""
+
 import logging
 from typing import Dict, Any, Optional
 
@@ -21,7 +22,9 @@ class UnmarkCheatDayCommandHandler(EventHandler[UnmarkCheatDayCommand, Dict[str,
         uow = self.uow or AsyncUnitOfWork()
         async with uow:
             try:
-                existing = await uow.cheat_days.find_by_user_and_date(command.user_id, command.date)
+                existing = await uow.cheat_days.find_by_user_and_date(
+                    command.user_id, command.date
+                )
                 if not existing:
                     raise ResourceNotFoundException(
                         message=f"No cheat day found for date {command.date}",

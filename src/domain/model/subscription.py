@@ -14,16 +14,18 @@ class Subscription(BaseDomainModel):
     expires_at: Optional[datetime] = None
     platform: Optional[str] = None
     original_transaction_id: Optional[str] = None
-    
+
     def is_active(self) -> bool:
         if self.status != "active":
             return False
         if self.expires_at and self.expires_at < utc_now():
             return False
         return True
-    
+
     def is_monthly(self) -> bool:
         return "monthly" in self.product_id.lower()
-        
+
     def is_yearly(self) -> bool:
-        return "yearly" in self.product_id.lower() or "annual" in self.product_id.lower()
+        return (
+            "yearly" in self.product_id.lower() or "annual" in self.product_id.lower()
+        )

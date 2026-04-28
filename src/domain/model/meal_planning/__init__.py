@@ -1,6 +1,7 @@
 """
 Meal Planning bounded context - Domain models for meal planning and generation.
 """
+
 from .macro_targets import SimpleMacroTargets
 from .meal_generation_request import (
     MealGenerationRequest,
@@ -9,13 +10,9 @@ from .meal_generation_request import (
     UserDietaryProfile,
     UserNutritionTargets,
     IngredientConstraints,
-    CalorieDistribution
+    CalorieDistribution,
 )
-from .meal_generation_response import (
-    DailyMealPlan,
-    GeneratedMeal,
-    NutritionSummary
-)
+from .meal_generation_response import DailyMealPlan, GeneratedMeal, NutritionSummary
 from .meal_plan import (
     PlannedMeal,
     DietaryPreference,
@@ -31,33 +28,32 @@ from .meal_suggestion import (
     Ingredient,
     RecipeStep,
     MacroEstimate,
-    MEAL_SIZE_PERCENTAGES
+    MEAL_SIZE_PERCENTAGES,
 )
 
 __all__ = [
-    'PlannedMeal',
-    'DietaryPreference',
-    'FitnessGoal',
-    'MealType',
-    'PlanDuration',
-    'UserPreferences',
-    'MealGenerationRequest',
-    'MealGenerationType',
-    'MealGenerationContext',
-    'UserDietaryProfile',
-    'UserNutritionTargets',
-    'IngredientConstraints',
-    'CalorieDistribution',
-    'DailyMealPlan',
-    'GeneratedMeal',
-    'NutritionSummary',
-    'SimpleMacroTargets',
-    'MealSuggestion',
-    'MealSize',
-    'SuggestionStatus',
-    'Ingredient',
-    'RecipeStep',
-    'MacroEstimate',
-    'MEAL_SIZE_PERCENTAGES',
+    "PlannedMeal",
+    "DietaryPreference",
+    "FitnessGoal",
+    "MealType",
+    "PlanDuration",
+    "UserPreferences",
+    "MealGenerationRequest",
+    "MealGenerationType",
+    "MealGenerationContext",
+    "UserDietaryProfile",
+    "UserNutritionTargets",
+    "IngredientConstraints",
+    "CalorieDistribution",
+    "DailyMealPlan",
+    "GeneratedMeal",
+    "NutritionSummary",
+    "SimpleMacroTargets",
+    "MealSuggestion",
+    "MealSize",
+    "SuggestionStatus",
+    "Ingredient",
+    "RecipeStep",
+    "MacroEstimate",
+    "MEAL_SIZE_PERCENTAGES",
 ]
-

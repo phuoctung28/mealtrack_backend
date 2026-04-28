@@ -4,6 +4,7 @@ Meal translation domain models.
 Stores translated content separately from original English to maintain
 data integrity and support multiple languages.
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -19,6 +20,7 @@ class FoodItemTranslation:
         name: Translated food name
         description: Optional translated description
     """
+
     food_item_id: str
     name: str
     description: Optional[str] = None
@@ -55,6 +57,7 @@ class MealTranslation:
         meal_instruction: Translated instructions as List[{instruction, duration_minutes}]
         meal_ingredients: Translated ingredient names as List[str] (same order as food items)
     """
+
     meal_id: str
     language: str
     dish_name: str
@@ -88,13 +91,13 @@ class MealTranslation:
             meal_id=data["meal_id"],
             language=data["language"],
             dish_name=data["dish_name"],
-            food_items=[
-                FoodItemTranslation.from_dict(fi) for fi in data["food_items"]
-            ],
+            food_items=[FoodItemTranslation.from_dict(fi) for fi in data["food_items"]],
             translated_at=datetime.fromisoformat(data["translated_at"]),
         )
 
-    def get_food_item_translation(self, food_item_id: str) -> Optional[FoodItemTranslation]:
+    def get_food_item_translation(
+        self, food_item_id: str
+    ) -> Optional[FoodItemTranslation]:
         """Get translation for a specific food item."""
         for fi in self.food_items:
             if fi.food_item_id == food_item_id:

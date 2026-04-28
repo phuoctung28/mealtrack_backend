@@ -1,6 +1,7 @@
 """
 Unit of Work pattern implementation for managing database transactions.
 """
+
 from typing import TypeVar
 
 from sqlalchemy.orm import Session
@@ -12,24 +13,26 @@ from src.infra.repositories.notification_repository import NotificationRepositor
 from src.infra.repositories.subscription_repository import SubscriptionRepository
 from src.infra.repositories.user_repository import UserRepository
 from src.infra.repositories.cheat_day_repository import CheatDayRepository
-from src.infra.repositories.saved_suggestion_db_repository import SavedSuggestionDbRepository
+from src.infra.repositories.saved_suggestion_db_repository import (
+    SavedSuggestionDbRepository,
+)
 from src.infra.repositories.weekly_budget_repository import WeeklyBudgetRepository
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class UnitOfWork(UnitOfWorkPort):
     """
     SQLAlchemy implementation of Unit of Work.
     """
-    
+
     def __init__(self, session: Session = None):
         self.session = session
         # Repositories are initialized in __enter__ if session is created there,
         # or here if session is passed.
         if self.session:
             self._init_repositories(self.session)
-            
+
     def _init_repositories(self, session: Session):
         self.users = UserRepository(session)
         self.subscriptions = SubscriptionRepository(session)
@@ -40,17 +43,18 @@ class UnitOfWork(UnitOfWorkPort):
         self.saved_suggestions_db = SavedSuggestionDbRepository(session)
         self.saved_suggestions = self.saved_suggestions_db
         self.cheat_days = CheatDayRepository(session)
-        
-    def __enter__(self) -> 'UnitOfWork':
+
+    def __enter__(self) -> "UnitOfWork":
         """Enter context - start transaction."""
         if not self.session:
             # Default session handling - import here to avoid circular imports
             from src.infra.database.config import SessionLocal
+
             self.session = SessionLocal()
             self._init_repositories(self.session)
-        
+
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Exit context - commit or rollback transaction."""
         try:
@@ -64,31 +68,31 @@ class UnitOfWork(UnitOfWorkPort):
                     raise
         finally:
             self.session.close()
-    
-    async def __aenter__(self) -> 'UnitOfWork':
+
+    async def __aenter__(self) -> "UnitOfWork":
         """Support async context manager for compatibility."""
         return self.__enter__()
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Support async context manager for compatibility."""
         return self.__exit__(exc_type, exc_val, exc_tb)
-    
+
     def commit(self):
         """Commit the transaction."""
         self.session.commit()
-    
+
     async def commit_async(self):
         """Async wrapper for commit."""
         self.commit()
-    
+
     def rollback(self):
         """Rollback the transaction."""
         self.session.rollback()
-    
+
     async def rollback_async(self):
         """Async wrapper for rollback."""
         self.rollback()
-    
+
     def refresh(self, obj):
         """Refresh an object from the database."""
         self.session.refresh(obj)

@@ -1,6 +1,7 @@
 """
 Model configuration constants and data structures for Gemini model management.
 """
+
 import time
 from dataclasses import dataclass, field
 from enum import Enum

@@ -1,6 +1,7 @@
 """
 Command to parse natural language meal text into structured food items.
 """
+
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 

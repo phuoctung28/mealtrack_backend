@@ -1,4 +1,5 @@
 """Mappers for converting between domain models and persistence models."""
+
 from src.domain.model.user import UserDomainModel, UserProfileDomainModel
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User

@@ -1,6 +1,7 @@
 """
 Command handler for updating user metrics.
 """
+
 import logging
 from datetime import date
 from typing import Optional
@@ -30,16 +31,26 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
 
     async def handle(self, command: UpdateUserMetricsCommand) -> None:
         # Validate at least one field is provided
-        if not any([command.weight_kg, command.job_type, command.training_days_per_week,
-                    command.training_minutes_per_session, command.body_fat_percent, command.fitness_goal,
-                    command.training_level]):
+        if not any(
+            [
+                command.weight_kg,
+                command.job_type,
+                command.training_days_per_week,
+                command.training_minutes_per_session,
+                command.body_fat_percent,
+                command.fitness_goal,
+                command.training_level,
+            ]
+        ):
             raise ValidationException("At least one metric must be provided")
 
         async with self.uow as uow:
             profile = await uow.users.get_profile(command.user_id)
 
             if not profile:
-                raise ResourceNotFoundException(f"User {command.user_id} not found. Profile required to update metrics.")
+                raise ResourceNotFoundException(
+                    f"User {command.user_id} not found. Profile required to update metrics."
+                )
 
             # Update provided fields only
             if command.weight_kg is not None:
@@ -49,28 +60,46 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
 
             if command.job_type is not None:
                 if command.job_type not in _VALID_JOB_TYPES:
-                    raise ValidationException(f"Job type must be one of: {', '.join(sorted(_VALID_JOB_TYPES))}")
+                    raise ValidationException(
+                        f"Job type must be one of: {', '.join(sorted(_VALID_JOB_TYPES))}"
+                    )
                 profile.job_type = command.job_type
 
             if command.training_days_per_week is not None:
-                if command.training_days_per_week < 0 or command.training_days_per_week > 7:
-                    raise ValidationException("Training days per week must be between 0 and 7")
+                if (
+                    command.training_days_per_week < 0
+                    or command.training_days_per_week > 7
+                ):
+                    raise ValidationException(
+                        "Training days per week must be between 0 and 7"
+                    )
                 profile.training_days_per_week = command.training_days_per_week
 
             if command.training_minutes_per_session is not None:
-                if command.training_minutes_per_session < 15 or command.training_minutes_per_session > 180:
-                    raise ValidationException("Training minutes per session must be between 15 and 180")
-                profile.training_minutes_per_session = command.training_minutes_per_session
+                if (
+                    command.training_minutes_per_session < 15
+                    or command.training_minutes_per_session > 180
+                ):
+                    raise ValidationException(
+                        "Training minutes per session must be between 15 and 180"
+                    )
+                profile.training_minutes_per_session = (
+                    command.training_minutes_per_session
+                )
 
             if command.body_fat_percent is not None:
                 if command.body_fat_percent < 0 or command.body_fat_percent > 70:
-                    raise ValidationException("Body fat percentage must be between 0 and 70")
+                    raise ValidationException(
+                        "Body fat percentage must be between 0 and 70"
+                    )
                 profile.body_fat_percentage = command.body_fat_percent
 
             # Handle fitness goal update with logging
             if command.fitness_goal is not None:
                 if command.fitness_goal not in _VALID_FITNESS_GOALS:
-                    raise ValidationException(f"Fitness goal must be one of: {', '.join(sorted(_VALID_FITNESS_GOALS))}")
+                    raise ValidationException(
+                        f"Fitness goal must be one of: {', '.join(sorted(_VALID_FITNESS_GOALS))}"
+                    )
 
                 # Log goal changes for analytics
                 if profile.fitness_goal != command.fitness_goal:
@@ -78,14 +107,16 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                         "Fitness goal changed for user %s: %s -> %s",
                         command.user_id,
                         profile.fitness_goal,
-                        command.fitness_goal
+                        command.fitness_goal,
                     )
                     profile.fitness_goal = command.fitness_goal
 
             # Handle training level update
             if command.training_level is not None:
                 if command.training_level not in _VALID_TRAINING_LEVELS:
-                    raise ValidationException(f"Training level must be one of: {sorted(_VALID_TRAINING_LEVELS)}")
+                    raise ValidationException(
+                        f"Training level must be one of: {sorted(_VALID_TRAINING_LEVELS)}"
+                    )
                 profile.training_level = command.training_level
 
             # Ensure this profile is marked as current

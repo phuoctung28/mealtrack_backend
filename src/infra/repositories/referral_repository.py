@@ -1,4 +1,5 @@
 """Repository for referral system persistence — codes, conversions, wallets, payouts."""
+
 import random
 import string
 from typing import List, Optional
@@ -22,9 +23,7 @@ class ReferralRepository:
 
     def get_code_by_user_id(self, user_id: str) -> Optional[ReferralCode]:
         return (
-            self.db.query(ReferralCode)
-            .filter(ReferralCode.user_id == user_id)
-            .first()
+            self.db.query(ReferralCode).filter(ReferralCode.user_id == user_id).first()
         )
 
     def get_code_by_code(self, code: str) -> Optional[ReferralCode]:
@@ -53,7 +52,9 @@ class ReferralRepository:
 
     # === Conversion Operations ===
 
-    def get_conversion_by_referred_user(self, user_id: str) -> Optional[ReferralConversion]:
+    def get_conversion_by_referred_user(
+        self, user_id: str
+    ) -> Optional[ReferralConversion]:
         return (
             self.db.query(ReferralConversion)
             .filter(ReferralConversion.referred_user_id == user_id)

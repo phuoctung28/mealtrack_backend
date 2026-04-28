@@ -1,10 +1,13 @@
 """Redis-backed meal suggestion repository (Phase 06)."""
+
 import json
 import logging
 from typing import List, Optional
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
-from src.domain.ports.meal_suggestion_repository_port import MealSuggestionRepositoryPort
+from src.domain.ports.meal_suggestion_repository_port import (
+    MealSuggestionRepositoryPort,
+)
 from src.infra.cache.redis_client import RedisClient
 
 logger = logging.getLogger(__name__)
@@ -49,9 +52,7 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
         logger.debug(f"Updated session {session.id}")
 
     async def save_session_with_suggestions(
-        self,
-        session: SuggestionSession,
-        suggestions: List[MealSuggestion]
+        self, session: SuggestionSession, suggestions: List[MealSuggestion]
     ) -> None:
         """
         Save session and all suggestions atomically using Redis pipeline.
@@ -131,25 +132,30 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
 
     def _serialize_session(self, session: SuggestionSession) -> str:
         """Serialize session to JSON string."""
-        return json.dumps({
-            "id": session.id,
-            "user_id": session.user_id,
-            "meal_type": session.meal_type,
-            "meal_portion_type": session.meal_portion_type,
-            "target_calories": session.target_calories,
-            "ingredients": session.ingredients,
-            "cooking_time_minutes": session.cooking_time_minutes,
-            "shown_suggestion_ids": session.shown_suggestion_ids,
-            "shown_meal_names": getattr(session, 'shown_meal_names', []),
-            "dietary_preferences": getattr(session, 'dietary_preferences', []),
-            "allergies": getattr(session, 'allergies', []),
-            "created_at": session.created_at.isoformat(),
-            "expires_at": session.expires_at.isoformat() if session.expires_at else None,
-        })
+        return json.dumps(
+            {
+                "id": session.id,
+                "user_id": session.user_id,
+                "meal_type": session.meal_type,
+                "meal_portion_type": session.meal_portion_type,
+                "target_calories": session.target_calories,
+                "ingredients": session.ingredients,
+                "cooking_time_minutes": session.cooking_time_minutes,
+                "shown_suggestion_ids": session.shown_suggestion_ids,
+                "shown_meal_names": getattr(session, "shown_meal_names", []),
+                "dietary_preferences": getattr(session, "dietary_preferences", []),
+                "allergies": getattr(session, "allergies", []),
+                "created_at": session.created_at.isoformat(),
+                "expires_at": (
+                    session.expires_at.isoformat() if session.expires_at else None
+                ),
+            }
+        )
 
     def _deserialize_session(self, data: str) -> SuggestionSession:
         """Deserialize JSON to session object."""
         from datetime import datetime
+
         obj = json.loads(data)
         return SuggestionSession(
             id=obj["id"],
@@ -164,37 +170,47 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
             dietary_preferences=obj.get("dietary_preferences", []),
             allergies=obj.get("allergies", []),
             created_at=datetime.fromisoformat(obj["created_at"]),
-            expires_at=datetime.fromisoformat(obj["expires_at"]) if obj.get("expires_at") else None,
+            expires_at=(
+                datetime.fromisoformat(obj["expires_at"])
+                if obj.get("expires_at")
+                else None
+            ),
         )
 
     def _serialize_suggestion(self, suggestion: MealSuggestion) -> str:
         """Serialize suggestion to JSON string."""
-        return json.dumps({
-            "id": suggestion.id,
-            "session_id": suggestion.session_id,
-            "user_id": suggestion.user_id,
-            "meal_name": suggestion.meal_name,
-            "description": suggestion.description,
-            "meal_type": suggestion.meal_type.value,
-            "macros": {
-                "calories": suggestion.macros.calories,
-                "protein": suggestion.macros.protein,
-                "carbs": suggestion.macros.carbs,
-                "fat": suggestion.macros.fat,
-            },
-            "ingredients": [
-                {"name": ing.name, "amount": ing.amount, "unit": ing.unit}
-                for ing in suggestion.ingredients
-            ],
-            "recipe_steps": [
-                {"step": step.step, "instruction": step.instruction, "duration_minutes": step.duration_minutes}
-                for step in suggestion.recipe_steps
-            ],
-            "prep_time_minutes": suggestion.prep_time_minutes,
-            "confidence_score": suggestion.confidence_score,
-            "status": suggestion.status.value,
-            "generated_at": suggestion.generated_at.isoformat(),
-        })
+        return json.dumps(
+            {
+                "id": suggestion.id,
+                "session_id": suggestion.session_id,
+                "user_id": suggestion.user_id,
+                "meal_name": suggestion.meal_name,
+                "description": suggestion.description,
+                "meal_type": suggestion.meal_type.value,
+                "macros": {
+                    "calories": suggestion.macros.calories,
+                    "protein": suggestion.macros.protein,
+                    "carbs": suggestion.macros.carbs,
+                    "fat": suggestion.macros.fat,
+                },
+                "ingredients": [
+                    {"name": ing.name, "amount": ing.amount, "unit": ing.unit}
+                    for ing in suggestion.ingredients
+                ],
+                "recipe_steps": [
+                    {
+                        "step": step.step,
+                        "instruction": step.instruction,
+                        "duration_minutes": step.duration_minutes,
+                    }
+                    for step in suggestion.recipe_steps
+                ],
+                "prep_time_minutes": suggestion.prep_time_minutes,
+                "confidence_score": suggestion.confidence_score,
+                "status": suggestion.status.value,
+                "generated_at": suggestion.generated_at.isoformat(),
+            }
+        )
 
     def _deserialize_suggestion(self, data: str) -> MealSuggestion:
         """Deserialize JSON to suggestion object."""

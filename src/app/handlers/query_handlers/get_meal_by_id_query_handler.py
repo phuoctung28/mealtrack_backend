@@ -2,6 +2,7 @@
 GetMealByIdQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
+
 import logging
 
 from src.api.exceptions import ResourceNotFoundException, AuthorizationException
@@ -27,10 +28,14 @@ class GetMealByIdQueryHandler(EventHandler[GetMealByIdQuery, Meal]):
             meal = await uow.meals.find_by_id(query.meal_id)
 
             if not meal:
-                raise ResourceNotFoundException(f"Meal with ID {query.meal_id} not found")
+                raise ResourceNotFoundException(
+                    f"Meal with ID {query.meal_id} not found"
+                )
 
             # Check ownership if user_id provided
             if query.user_id and meal.user_id != query.user_id:
-                raise AuthorizationException("You do not have permission to access this meal")
+                raise AuthorizationException(
+                    "You do not have permission to access this meal"
+                )
 
             return meal

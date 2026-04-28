@@ -4,6 +4,7 @@ Domain models for User and UserProfile.
 These models are plain Python objects that represent the core business logic
 and are independent of the database or any other infrastructure.
 """
+
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Optional, List
@@ -17,6 +18,7 @@ from src.domain.utils.timezone_utils import utc_now
 @dataclass(kw_only=True)
 class UserProfileDomainModel(BaseDomainModel):
     """Domain model for a user's profile."""
+
     user_id: UUID
     age: int
     gender: str
@@ -48,6 +50,7 @@ class UserProfileDomainModel(BaseDomainModel):
 @dataclass(kw_only=True)
 class UserDomainModel(BaseDomainModel):
     """Domain model for a User."""
+
     firebase_uid: str
     email: str
     username: str
@@ -56,7 +59,7 @@ class UserDomainModel(BaseDomainModel):
     is_active: bool = True
     onboarding_completed: bool = False
     last_accessed: datetime = field(default_factory=utc_now)
-    timezone: str = 'UTC'
+    timezone: str = "UTC"
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone_number: Optional[str] = None

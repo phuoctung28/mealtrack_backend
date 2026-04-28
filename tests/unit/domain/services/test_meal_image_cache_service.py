@@ -11,13 +11,19 @@ from tests.fakes.fake_embedding_adapter import FakeEmbeddingAdapter
 @pytest.mark.asyncio
 async def test_lookup_returns_hit_when_cosine_above_threshold():
     cache = AsyncMock()
-    cache.query_nearest_batch = AsyncMock(return_value=[
-        CachedImage(
-            meal_name="Grilled Salmon", name_slug="grilled-salmon",
-            image_url="https://cdn/a.jpg", thumbnail_url=None,
-            source="pexels", confidence=0.9, cosine=0.97,
-        ),
-    ])
+    cache.query_nearest_batch = AsyncMock(
+        return_value=[
+            CachedImage(
+                meal_name="Grilled Salmon",
+                name_slug="grilled-salmon",
+                image_url="https://cdn/a.jpg",
+                thumbnail_url=None,
+                source="pexels",
+                confidence=0.9,
+                cosine=0.97,
+            ),
+        ]
+    )
     svc = MealImageCacheService(cache, FakeEmbeddingAdapter(), dedup_threshold=0.95)
 
     results = await svc.lookup_batch(["Grilled Lemon Salmon"])
@@ -29,13 +35,19 @@ async def test_lookup_returns_hit_when_cosine_above_threshold():
 @pytest.mark.asyncio
 async def test_lookup_returns_none_when_below_threshold():
     cache = AsyncMock()
-    cache.query_nearest_batch = AsyncMock(return_value=[
-        CachedImage(
-            meal_name="Pizza", name_slug="pizza",
-            image_url="https://cdn/b.jpg", thumbnail_url=None,
-            source="pexels", confidence=0.8, cosine=0.80,
-        ),
-    ])
+    cache.query_nearest_batch = AsyncMock(
+        return_value=[
+            CachedImage(
+                meal_name="Pizza",
+                name_slug="pizza",
+                image_url="https://cdn/b.jpg",
+                thumbnail_url=None,
+                source="pexels",
+                confidence=0.8,
+                cosine=0.80,
+            ),
+        ]
+    )
     svc = MealImageCacheService(cache, FakeEmbeddingAdapter(), dedup_threshold=0.95)
     assert await svc.lookup_batch(["Salad"]) == [None]
 
@@ -70,18 +82,28 @@ async def test_lookup_empty_input_returns_empty():
 async def test_lookup_batch_uses_single_batch_query():
     """Verify batch lookup makes one query_nearest_batch call, not N query_nearest calls."""
     cache = AsyncMock()
-    cache.query_nearest_batch = AsyncMock(return_value=[
-        CachedImage(
-            meal_name="Salmon", name_slug="salmon",
-            image_url="https://cdn/a.jpg", thumbnail_url=None,
-            source="pexels", confidence=0.9, cosine=0.97,
-        ),
-        CachedImage(
-            meal_name="Salad", name_slug="salad",
-            image_url="https://cdn/b.jpg", thumbnail_url=None,
-            source="pexels", confidence=0.85, cosine=0.96,
-        ),
-    ])
+    cache.query_nearest_batch = AsyncMock(
+        return_value=[
+            CachedImage(
+                meal_name="Salmon",
+                name_slug="salmon",
+                image_url="https://cdn/a.jpg",
+                thumbnail_url=None,
+                source="pexels",
+                confidence=0.9,
+                cosine=0.97,
+            ),
+            CachedImage(
+                meal_name="Salad",
+                name_slug="salad",
+                image_url="https://cdn/b.jpg",
+                thumbnail_url=None,
+                source="pexels",
+                confidence=0.85,
+                cosine=0.96,
+            ),
+        ]
+    )
     svc = MealImageCacheService(cache, FakeEmbeddingAdapter(), dedup_threshold=0.95)
 
     results = await svc.lookup_batch(["Grilled Salmon", "Caesar Salad"])
