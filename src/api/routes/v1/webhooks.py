@@ -167,7 +167,7 @@ async def handle_purchase(uow, user, event):
     logger.info(f"User {user.id} purchased {subscription.product_id}")
 
     # Credit referrer if this user has a pending referral conversion
-    _credit_referral_on_purchase(uow, str(user.id))
+    await _credit_referral_on_purchase(uow, str(user.id))
 
 
 async def handle_renewal(uow, user, event):
@@ -239,18 +239,18 @@ async def handle_refund(uow, user, event):
         subscription.updated_at = utc_now()
         logger.info(f"User {user.id} subscription refunded")
 
-    _revoke_referral_on_refund(uow, str(user.id))
+    await _revoke_referral_on_refund(uow, str(user.id))
 
 
-def _credit_referral_on_purchase(uow, user_id: str) -> None:
+async def _credit_referral_on_purchase(uow, user_id: str) -> None:
     """Credit the referrer's wallet when a referred user completes their first purchase."""
     from src.infra.repositories.referral_repository import ReferralRepository
     repo = ReferralRepository(uow.session)
-    conversion = repo.get_conversion_by_referred_user(user_id)
+    conversion = await repo.get_conversion_by_referred_user(user_id)
     if conversion and conversion.status == "pending":
         conversion.status = "converted"
         conversion.converted_at = utc_now()
-        repo.credit_wallet(conversion.referrer_user_id, conversion.commission_amount)
+        await repo.credit_wallet(conversion.referrer_user_id, conversion.commission_amount)
         logger.info(
             "Referral credited: referrer=%s amount=%d",
             conversion.referrer_user_id,
@@ -258,15 +258,15 @@ def _credit_referral_on_purchase(uow, user_id: str) -> None:
         )
 
 
-def _revoke_referral_on_refund(uow, user_id: str) -> None:
+async def _revoke_referral_on_refund(uow, user_id: str) -> None:
     """Revoke the referrer's wallet credit when a referred user is refunded."""
     from src.infra.repositories.referral_repository import ReferralRepository
     repo = ReferralRepository(uow.session)
-    conversion = repo.get_conversion_by_referred_user(user_id)
+    conversion = await repo.get_conversion_by_referred_user(user_id)
     if conversion and conversion.status == "converted":
         conversion.status = "revoked"
         conversion.revoked_at = utc_now()
-        repo.revoke_from_wallet(conversion.referrer_user_id, conversion.commission_amount)
+        await repo.revoke_from_wallet(conversion.referrer_user_id, conversion.commission_amount)
         logger.info(
             "Referral revoked: referrer=%s amount=%d",
             conversion.referrer_user_id,
