@@ -181,8 +181,9 @@ class TestWebhookHandler:
             "environment": "PRODUCTION"
         }
 
-        # Mock no existing subscription (async)
-        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None):
+        # Mock no existing subscription (async) and referral credit side effect
+        with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None), \
+             patch('src.api.routes.v1.webhooks._credit_referral_on_purchase', new_callable=AsyncMock):
             await handle_purchase(mock_uow, user, event)
 
         # Verify subscription was added
