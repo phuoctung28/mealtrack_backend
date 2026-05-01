@@ -61,6 +61,9 @@ BarcodeProductModel = FoodReferenceModel
 # Referral system
 from .referral import ReferralCode, ReferralConversion, ReferralWallet, PayoutRequest
 
+# Weight tracking
+from .weight_entry import WeightEntryORM
+
 __all__ = [
     # Base
     "BaseMixin",
@@ -109,4 +112,6 @@ __all__ = [
     "ReferralConversion",
     "ReferralWallet",
     "PayoutRequest",
+    # Weight tracking
+    "WeightEntryORM",
 ]

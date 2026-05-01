@@ -45,6 +45,8 @@ class UserProfileDomainModel(BaseDomainModel):
     custom_protein_g: Optional[float] = None
     custom_carbs_g: Optional[float] = None
     custom_fat_g: Optional[float] = None
+    goal_start_weight_kg: Optional[float] = None
+    goal_started_at: Optional[datetime] = None
 
 
 @dataclass(kw_only=True)

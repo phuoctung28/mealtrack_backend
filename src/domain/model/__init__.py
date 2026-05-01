@@ -47,3 +47,4 @@ from .user import (
     UserMacros,
     MacroTargets,
 )
+from .weight import WeightEntry

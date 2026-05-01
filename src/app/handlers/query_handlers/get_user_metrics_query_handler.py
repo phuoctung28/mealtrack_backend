@@ -67,5 +67,7 @@ class GetUserMetricsQueryHandler(EventHandler[GetUserMetricsQuery, Dict[str, Any
                 "training_level": profile.training_level,
                 "fitness_goal": profile.fitness_goal,
                 "target_weight_kg": profile.target_weight_kg,
+                "goal_start_weight_kg": profile.goal_start_weight_kg,
+                "goal_started_at": profile.goal_started_at,
                 "updated_at": profile.updated_at,
             }

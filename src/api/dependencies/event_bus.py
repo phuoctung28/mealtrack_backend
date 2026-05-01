@@ -85,6 +85,24 @@ from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
 from src.app.handlers.query_handlers import GetSavedSuggestionsQueryHandler
 from src.app.commands.cheat_day import MarkCheatDayCommand, UnmarkCheatDayCommand
 from src.app.queries.cheat_day import GetCheatDaysQuery
+from src.app.commands.weight import (
+    AddWeightEntryCommand,
+    DeleteWeightEntryCommand,
+    SyncWeightEntriesCommand,
+)
+from src.app.queries.weight import GetWeightEntriesQuery
+from src.app.handlers.command_handlers.add_weight_entry_command_handler import (
+    AddWeightEntryCommandHandler,
+)
+from src.app.handlers.command_handlers.delete_weight_entry_command_handler import (
+    DeleteWeightEntryCommandHandler,
+)
+from src.app.handlers.command_handlers.sync_weight_entries_command_handler import (
+    SyncWeightEntriesCommandHandler,
+)
+from src.app.handlers.query_handlers.get_weight_entries_query_handler import (
+    GetWeightEntriesQueryHandler,
+)
 from src.app.handlers.command_handlers.mark_cheat_day_command_handler import (
     MarkCheatDayCommandHandler,
 )
@@ -486,6 +504,16 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(MarkCheatDayCommand, MarkCheatDayCommandHandler())
     event_bus.register_handler(UnmarkCheatDayCommand, UnmarkCheatDayCommandHandler())
     event_bus.register_handler(GetCheatDaysQuery, GetCheatDaysQueryHandler())
+
+    # Register weight entry handlers
+    event_bus.register_handler(AddWeightEntryCommand, AddWeightEntryCommandHandler())
+    event_bus.register_handler(
+        DeleteWeightEntryCommand, DeleteWeightEntryCommandHandler()
+    )
+    event_bus.register_handler(
+        SyncWeightEntriesCommand, SyncWeightEntriesCommandHandler()
+    )
+    event_bus.register_handler(GetWeightEntriesQuery, GetWeightEntriesQueryHandler())
 
     # Register saved suggestion handlers
     event_bus.register_handler(

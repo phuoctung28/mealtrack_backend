@@ -13,6 +13,7 @@ from sqlalchemy import (
     CheckConstraint,
     JSON,
     Date,
+    DateTime,
 )
 from sqlalchemy.orm import relationship
 
@@ -60,6 +61,10 @@ class UserProfile(Base, BaseMixin):
     custom_protein_g = Column(Float, nullable=True, default=None)
     custom_carbs_g = Column(Float, nullable=True, default=None)
     custom_fat_g = Column(Float, nullable=True, default=None)
+
+    # Goal progress tracking — tracks when user started current goal journey
+    goal_start_weight_kg = Column(Float, nullable=True, default=None)
+    goal_started_at = Column(DateTime, nullable=True, default=None)
 
     @property
     def has_custom_macros(self) -> bool:

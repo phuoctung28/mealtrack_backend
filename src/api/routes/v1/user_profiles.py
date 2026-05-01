@@ -183,8 +183,16 @@ async def update_user_metrics(
 
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
+    import logging
+    logger = logging.getLogger(__name__)
     try:
-        # Update metrics (including optional fitness goal)
+        # Debug: log incoming request values
+        logger.info(
+            f"update_user_metrics: goal={request.fitness_goal}, "
+            f"target_weight_kg={request.target_weight_kg}, "
+            f"weight_kg={request.weight_kg}"
+        )
+        # Update metrics (including optional fitness goal and target weight)
         command = UpdateUserMetricsCommand(
             user_id=user_id,
             weight_kg=request.weight_kg,
@@ -196,6 +204,9 @@ async def update_user_metrics(
             training_level=(
                 request.training_level.value if request.training_level else None
             ),
+            target_weight_kg=request.target_weight_kg,
+            goal_start_weight_kg=request.goal_start_weight_kg,
+            goal_started_at=request.goal_started_at,
         )
 
         await event_bus.send(command)
