@@ -20,6 +20,7 @@ from src.infra.repositories.notification_repository_async import (
 from src.infra.repositories.saved_suggestion_db_repository_async import (
     AsyncSavedSuggestionDbRepository,
 )
+from src.infra.repositories.weight_repository_async import AsyncWeightRepository
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
         self.saved_suggestions_db = (
             self.saved_suggestions
         )  # alias for handlers using this name
+        self.weight_entries = AsyncWeightRepository(session)
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         session = self.session

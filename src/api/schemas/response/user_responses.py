@@ -126,6 +126,12 @@ class UserMetricsResponse(BaseModel):
     target_weight_kg: Optional[float] = Field(
         None, description="Target weight in kilograms"
     )
+    goal_start_weight_kg: Optional[float] = Field(
+        None, description="Weight when goal journey started"
+    )
+    goal_started_at: Optional[datetime] = Field(
+        None, description="Timestamp when goal journey started"
+    )
     updated_at: datetime = Field(..., description="Last update timestamp")
 
 

@@ -40,6 +40,9 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 command.body_fat_percent,
                 command.fitness_goal,
                 command.training_level,
+                command.target_weight_kg,
+                command.goal_start_weight_kg,
+                command.goal_started_at,
             ]
         ):
             raise ValidationException("At least one metric must be provided")
@@ -118,6 +121,35 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                         f"Training level must be one of: {sorted(_VALID_TRAINING_LEVELS)}"
                     )
                 profile.training_level = command.training_level
+
+            # Handle target weight update
+            if command.target_weight_kg is not None:
+                if command.target_weight_kg <= 0:
+                    raise ValidationException("Target weight must be greater than 0")
+                logger.info(
+                    f"Updating target_weight_kg for user {command.user_id}: "
+                    f"{profile.target_weight_kg} -> {command.target_weight_kg}"
+                )
+                profile.target_weight_kg = command.target_weight_kg
+
+            # Handle goal start fields (for progress tracking reset)
+            if command.goal_start_weight_kg is not None:
+                if command.goal_start_weight_kg <= 0:
+                    raise ValidationException(
+                        "Goal start weight must be greater than 0"
+                    )
+                logger.info(
+                    f"Updating goal_start_weight_kg for user {command.user_id}: "
+                    f"{profile.goal_start_weight_kg} -> {command.goal_start_weight_kg}"
+                )
+                profile.goal_start_weight_kg = command.goal_start_weight_kg
+
+            if command.goal_started_at is not None:
+                logger.info(
+                    f"Updating goal_started_at for user {command.user_id}: "
+                    f"{profile.goal_started_at} -> {command.goal_started_at}"
+                )
+                profile.goal_started_at = command.goal_started_at
 
             # Ensure this profile is marked as current
             profile.is_current = True

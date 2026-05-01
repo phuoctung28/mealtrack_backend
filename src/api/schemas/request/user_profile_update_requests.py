@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -30,7 +31,7 @@ class UpdateFitnessGoalRequest(BaseModel):
 
 
 class UpdateMetricsRequest(BaseModel):
-    """Unified update for weight, job type, training, body fat, and fitness goal."""
+    """Unified update for weight, job type, training, body fat, fitness goal, and target weight."""
 
     weight_kg: float | None = Field(None, description="Weight in kg", gt=0)
     job_type: str | None = Field(None, description="Job type (desk, on_feet, physical)")
@@ -48,4 +49,13 @@ class UpdateMetricsRequest(BaseModel):
     )
     training_level: TrainingLevelEnum | None = Field(
         None, description="Training level (beginner, intermediate, advanced)"
+    )
+    target_weight_kg: float | None = Field(
+        None, description="Target weight in kg", gt=0
+    )
+    goal_start_weight_kg: float | None = Field(
+        None, description="Weight when goal journey started", gt=0
+    )
+    goal_started_at: datetime | None = Field(
+        None, description="Timestamp when goal journey started"
     )

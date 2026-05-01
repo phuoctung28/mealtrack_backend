@@ -60,6 +60,7 @@ class TestUpdateUserMetricsCommand:
             training_minutes_per_session=60,
             body_fat_percent=15.0,
             fitness_goal="cut",
+            target_weight_kg=70.0,
         )
 
         assert command.user_id == "test_user"
@@ -69,6 +70,7 @@ class TestUpdateUserMetricsCommand:
         assert command.training_minutes_per_session == 60
         assert command.body_fat_percent == 15.0
         assert command.fitness_goal == "cut"
+        assert command.target_weight_kg == 70.0
 
     def test_create_command_with_partial_fields(self):
         """Test creating command with only some metrics."""
@@ -81,6 +83,7 @@ class TestUpdateUserMetricsCommand:
         assert command.training_minutes_per_session is None
         assert command.body_fat_percent is None
         assert command.fitness_goal is None
+        assert command.target_weight_kg is None
 
 
 @pytest.mark.asyncio
@@ -239,3 +242,30 @@ class TestUpdateUserMetricsCommandHandler:
             await handler.handle(command)
 
         assert "Fitness goal must be one of" in str(exc_info.value)
+
+    async def test_update_target_weight(self):
+        """Test updating target weight."""
+        profile = _make_profile()
+        mock_uow = _make_mock_uow(profile)
+
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(user_id="test_user", target_weight_kg=65.0)
+
+        await handler.handle(command)
+
+        assert profile.target_weight_kg == 65.0
+        assert profile.is_current is True
+        mock_uow.users.update_profile.assert_called_once_with(profile)
+
+    async def test_invalid_target_weight(self):
+        """Test validation for invalid target weight."""
+        profile = _make_profile()
+        mock_uow = _make_mock_uow(profile)
+
+        handler = UpdateUserMetricsCommandHandler(uow=mock_uow)
+        command = UpdateUserMetricsCommand(user_id="test_user", target_weight_kg=-10.0)
+
+        with pytest.raises(ValidationException) as exc_info:
+            await handler.handle(command)
+
+        assert "Target weight must be greater than 0" in str(exc_info.value)
