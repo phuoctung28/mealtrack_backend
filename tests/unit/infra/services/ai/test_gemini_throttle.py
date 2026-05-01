@@ -81,3 +81,53 @@ class TestGeminiThrottleSemaphore:
         # Should be able to acquire again
         async with throttle.acquire():
             pass  # Success if we get here
+
+
+import time  # noqa: E402
+
+
+class TestGeminiThrottleCooldown:
+    """Tests for cooldown mechanism."""
+
+    @pytest.fixture(autouse=True)
+    def reset_throttle(self):
+        from src.infra.services.ai.gemini_throttle import GeminiThrottle
+        GeminiThrottle.reset()
+        yield
+        GeminiThrottle.reset()
+
+    @pytest.mark.asyncio
+    async def test_record_rate_limit_sets_cooldown(self):
+        from src.infra.services.ai.gemini_throttle import GeminiThrottle
+
+        throttle = GeminiThrottle.get_instance()
+
+        assert not throttle.is_in_cooldown()
+
+        throttle.record_rate_limit(retry_after=2)
+
+        assert throttle.is_in_cooldown()
+
+    @pytest.mark.asyncio
+    async def test_cooldown_blocks_acquire(self):
+        from src.infra.services.ai.gemini_throttle import GeminiThrottle
+
+        throttle = GeminiThrottle.get_instance()
+        throttle.record_rate_limit(retry_after=1)
+
+        start = time.time()
+        async with throttle.acquire():
+            elapsed = time.time() - start
+
+        assert elapsed >= 0.9, f"Should wait ~1s, waited {elapsed:.2f}s"
+
+    @pytest.mark.asyncio
+    async def test_cooldown_expires(self):
+        from src.infra.services.ai.gemini_throttle import GeminiThrottle
+
+        throttle = GeminiThrottle.get_instance()
+        throttle.record_rate_limit(retry_after=1)
+
+        await asyncio.sleep(1.1)
+
+        assert not throttle.is_in_cooldown()

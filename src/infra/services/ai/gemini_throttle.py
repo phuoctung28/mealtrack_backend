@@ -60,6 +60,29 @@ class GeminiThrottle:
         async with self._semaphore:
             yield
 
+    def record_rate_limit(
+        self, retry_after: int = DEFAULT_COOLDOWN_SECONDS
+    ) -> None:
+        """
+        Record that a rate limit was hit.
+        Sets cooldown to block new requests briefly.
+        """
+        new_cooldown = time.time() + retry_after
+        if new_cooldown > self._cooldown_until:
+            self._cooldown_until = new_cooldown
+            logger.warning(
+                f"[THROTTLE] Rate limit hit, cooldown for {retry_after}s"
+            )
+
+    def is_in_cooldown(self) -> bool:
+        """Check if currently in cooldown period."""
+        return time.time() < self._cooldown_until
+
+    def get_cooldown_remaining(self) -> float:
+        """Get seconds remaining in cooldown, or 0 if not in cooldown."""
+        remaining = self._cooldown_until - time.time()
+        return max(0, remaining)
+
     @classmethod
     def reset(cls) -> None:
         """Reset singleton (for testing)."""
