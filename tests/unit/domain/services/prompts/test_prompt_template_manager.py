@@ -28,14 +28,27 @@ class TestPromptConstants:
 
     def test_json_schemas_have_required_types(self):
         """All required schema types should exist."""
-        required_types = ["weekly_meal", "daily_meal", "single_meal", "suggestion_recipe"]
+        required_types = [
+            "weekly_meal",
+            "daily_meal",
+            "single_meal",
+            "suggestion_recipe",
+        ]
         for schema_type in required_types:
             assert schema_type in JSON_SCHEMAS
             assert len(JSON_SCHEMAS[schema_type]) > 50  # Non-empty schema
 
     def test_goal_guidance_covers_all_goals(self):
         """Goal guidance should cover all fitness goals."""
-        expected_goals = ["lose_weight", "gain_weight", "build_muscle", "maintain_weight", "cut", "bulk", "recomp"]
+        expected_goals = [
+            "lose_weight",
+            "gain_weight",
+            "build_muscle",
+            "maintain_weight",
+            "cut",
+            "bulk",
+            "recomp",
+        ]
         for goal in expected_goals:
             assert goal in GOAL_GUIDANCE
             assert len(GOAL_GUIDANCE[goal]) > 10
@@ -46,9 +59,16 @@ class TestPromptTemplateManager:
 
     def test_get_goal_guidance_returns_correct_guidance(self):
         """Goal guidance should return appropriate text."""
-        assert "protein" in PromptTemplateManager.get_goal_guidance("lose_weight").lower()
-        assert "calorie" in PromptTemplateManager.get_goal_guidance("gain_weight").lower()
-        assert "balance" in PromptTemplateManager.get_goal_guidance("maintain_weight").lower()
+        assert (
+            "protein" in PromptTemplateManager.get_goal_guidance("lose_weight").lower()
+        )
+        assert (
+            "calorie" in PromptTemplateManager.get_goal_guidance("gain_weight").lower()
+        )
+        assert (
+            "balance"
+            in PromptTemplateManager.get_goal_guidance("maintain_weight").lower()
+        )
 
     def test_get_goal_guidance_fallback(self):
         """Unknown goal should return maintain_weight guidance."""
@@ -71,12 +91,12 @@ class TestPromptTemplateManager:
             dietary_preferences=["vegetarian"],
             allergies=["peanuts"],
         )
-        
+
         # Should contain key info
         assert "chicken" in result
         assert "peanuts" in result
         assert "vegetarian" in result
-        
+
         # Should be reasonably compact
         assert len(result) < 300
 
@@ -84,7 +104,7 @@ class TestPromptTemplateManager:
         """Should limit ingredients to 8 for token savings."""
         long_list = [f"ingredient_{i}" for i in range(20)]
         result = PromptTemplateManager.build_base_requirements(ingredients=long_list)
-        
+
         # Should contain first 8, not all 20
         assert "ingredient_0" in result
         assert "ingredient_7" in result
@@ -99,7 +119,7 @@ class TestPromptTemplateManager:
             carbs=60.3,
             fat=15.7,
         )
-        
+
         assert "Breakfast" in result
         assert "500cal" in result
         assert "25g protein" in result
@@ -123,7 +143,7 @@ class TestSuggestionPrompts:
 
         # Should be compact (under 1800 chars, grew with EMOJI_RULES and detailed rules)
         assert len(result) < 1800
-        
+
         # Should contain essential info
         assert "lunch" in result
         assert "600" in result
@@ -138,7 +158,7 @@ class TestSuggestionPrompts:
             cooking_time_minutes=45,
             ingredients=["salmon", "asparagus"],
         )
-        
+
         assert len(result) < 400
         assert "dinner" in result
         assert "4" in result  # 4 different names
@@ -179,10 +199,10 @@ class TestTokenReduction:
             allergies=["dairy"],
             dietary_preferences=["vegetarian"],
         )
-        
+
         # Rough token estimate: ~4 chars per token
         estimated_tokens = len(prompt) / 4
-        
+
         # Target: under 450 tokens (grew with EMOJI_RULES and detailed ingredient rules)
         assert estimated_tokens < 450, f"Prompt too long: ~{estimated_tokens} tokens"
 

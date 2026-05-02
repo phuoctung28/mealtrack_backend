@@ -48,5 +48,4 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
           FIREBASE_CREDENTIALS: ""  # not needed for this script
-          MEAL_IMAGE_CACHE_ENABLED: "true"
         run: python scripts/resolve_pending_images.py

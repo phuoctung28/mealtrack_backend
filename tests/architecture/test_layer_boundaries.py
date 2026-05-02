@@ -2,6 +2,7 @@
 Architectural enforcement tests.
 Ensures layer boundaries are respected (Domain never imports Infra).
 """
+
 import ast
 from pathlib import Path
 from typing import List, Set, Tuple
@@ -9,11 +10,11 @@ from typing import List, Set, Tuple
 
 class ImportVisitor(ast.NodeVisitor):
     """AST visitor to collect import statements."""
-    
+
     def __init__(self):
         self.imports: Set[str] = set()
         self.in_type_checking = False
-    
+
     def visit_If(self, node):
         """Check if we're entering a TYPE_CHECKING block."""
         # Check if this is an `if TYPE_CHECKING:` block
@@ -25,14 +26,14 @@ class ImportVisitor(ast.NodeVisitor):
             self.in_type_checking = old_state
         else:
             self.generic_visit(node)
-    
+
     def visit_Import(self, node):
         # Skip imports inside TYPE_CHECKING blocks
         if not self.in_type_checking:
             for alias in node.names:
                 self.imports.add(alias.name)
         self.generic_visit(node)
-    
+
     def visit_ImportFrom(self, node):
         # Skip imports inside TYPE_CHECKING blocks
         if not self.in_type_checking and node.module:
@@ -65,37 +66,36 @@ def check_layer_violations(
 ) -> List[Tuple[str, str]]:
     """
     Check for forbidden imports in a layer.
-    
+
     Args:
         layer_path: Path to layer directory
         forbidden_prefixes: List of forbidden import prefixes
         exclude_deprecated: If True, exclude deprecated services from violations
-    
+
     Returns list of (filepath, import) tuples for violations.
     """
     violations = []
-    
+
     # Deprecated services that are allowed to violate boundaries temporarily
     deprecated_services = [
-        "daily_meal_suggestion_service.py",
-        "meal_plan_service.py", 
+        "meal_plan_service.py",
         "meal_plan_persistence_service.py",
         "user_profile_service.py",
         "recipe_search_service.py",
     ]
-    
+
     for filepath in get_python_files(layer_path):
         # Skip deprecated services if exclude_deprecated is True
         if exclude_deprecated:
             if any(deprecated in str(filepath) for deprecated in deprecated_services):
                 continue
-        
+
         imports = get_imports(filepath)
         for imp in imports:
             for forbidden in forbidden_prefixes:
                 if imp.startswith(forbidden):
                     violations.append((str(filepath), imp))
-    
+
     return violations
 
 
@@ -108,7 +108,7 @@ class TestDomainLayerBoundaries:
             "src/domain",
             ["src.infra", "infra."],
         )
-        
+
         assert not violations, (
             f"Domain layer imports infrastructure in {len(violations)} places:\n"
             + "\n".join(f"  {f}: {i}" for f, i in violations[:10])
@@ -120,10 +120,11 @@ class TestDomainLayerBoundaries:
             "src/domain",
             ["src.api", "api."],
         )
-        
-        assert not violations, (
-            f"Domain layer imports API in {len(violations)} places:\n"
-            + "\n".join(f"  {f}: {i}" for f, i in violations[:10])
+
+        assert (
+            not violations
+        ), f"Domain layer imports API in {len(violations)} places:\n" + "\n".join(
+            f"  {f}: {i}" for f, i in violations[:10]
         )
 
     def test_domain_does_not_import_sqlalchemy(self):
@@ -132,7 +133,7 @@ class TestDomainLayerBoundaries:
             "src/domain",
             ["sqlalchemy"],
         )
-        
+
         assert not violations, (
             f"Domain layer imports SQLAlchemy in {len(violations)} places:\n"
             + "\n".join(f"  {f}: {i}" for f, i in violations[:10])
@@ -144,10 +145,11 @@ class TestDomainLayerBoundaries:
             "src/domain",
             ["redis", "aioredis"],
         )
-        
-        assert not violations, (
-            f"Domain layer imports Redis in {len(violations)} places:\n"
-            + "\n".join(f"  {f}: {i}" for f, i in violations[:10])
+
+        assert (
+            not violations
+        ), f"Domain layer imports Redis in {len(violations)} places:\n" + "\n".join(
+            f"  {f}: {i}" for f, i in violations[:10]
         )
 
 
@@ -160,13 +162,14 @@ class TestApplicationLayerBoundaries:
             "src/app",
             ["src.api.routes", "src.api.schemas"],
         )
-        
+
         # Allow src.api.exceptions and src.api.dependencies
         filtered = [
-            (f, i) for f, i in violations
+            (f, i)
+            for f, i in violations
             if "exceptions" not in i and "dependencies" not in i
         ]
-        
+
         assert not filtered, (
             f"App layer imports API routes/schemas in {len(filtered)} places:\n"
             + "\n".join(f"  {f}: {i}" for f, i in filtered[:10])
@@ -179,18 +182,18 @@ class TestInfrastructureLayerBoundaries:
     def test_infra_implements_domain_ports(self):
         """Infrastructure repositories should implement domain ports."""
         from pathlib import Path
-        
+
         # Check that repository files exist and reference ports
         repo_path = Path("src/infra/repositories")
         port_path = Path("src/domain/ports")
-        
+
         assert repo_path.exists(), "Repository directory should exist"
         assert port_path.exists(), "Ports directory should exist"
-        
+
         # Count implementations
         repo_files = list(repo_path.glob("*_repository.py"))
         port_files = list(port_path.glob("*_repository_port.py"))
-        
+
         assert len(repo_files) > 0, "Should have repository implementations"
         assert len(port_files) > 0, "Should have repository ports"
 
@@ -201,15 +204,16 @@ class TestServiceConsolidation:
     def test_domain_services_count(self):
         """Domain services should be consolidated (target: ~25)."""
         services_path = Path("src/domain/services")
-        
+
         # Count .py files (excluding __init__.py and __pycache__)
         service_files = [
-            f for f in services_path.rglob("*.py")
+            f
+            for f in services_path.rglob("*.py")
             if "__init__" not in f.name and "__pycache__" not in str(f)
         ]
-        
+
         count = len(service_files)
-        
+
         # After consolidation, should be around 25 or fewer.
         # Allow up to 46 for gradual migration (old services still exist alongside new ones).
         assert count <= 46, (
@@ -220,7 +224,7 @@ class TestServiceConsolidation:
     def test_meal_services_consolidated(self):
         """Meal-related services should be in meal/ subdirectory."""
         meal_path = Path("src/domain/services/meal")
-        
+
         # After Phase 2, this directory should exist
         if meal_path.exists():
             files = list(meal_path.glob("*.py"))
@@ -229,7 +233,7 @@ class TestServiceConsolidation:
     def test_suggestion_services_consolidated(self):
         """Suggestion services should be in suggestion/ subdirectory."""
         suggestion_path = Path("src/domain/services/suggestion")
-        
+
         # After Phase 2, this directory should exist
         if suggestion_path.exists():
             files = list(suggestion_path.glob("*.py"))

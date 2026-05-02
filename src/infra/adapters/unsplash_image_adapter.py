@@ -7,6 +7,7 @@ Compliance: https://help.unsplash.com/en/articles/2511245-unsplash-api-guideline
 - Trigger download_location when user "saves" a photo
 - Attribute: "Photo by {name} on Unsplash" with linked profile + UTM
 """
+
 import logging
 from typing import Optional
 
@@ -52,7 +53,11 @@ class UnsplashImageAdapter(FoodImageSearchPort):
                 user = photo.get("user", {})
                 photographer = user.get("name")
                 username = user.get("username", "")
-                profile_url = f"https://unsplash.com/@{username}?{UTM_PARAMS}" if username else None
+                profile_url = (
+                    f"https://unsplash.com/@{username}?{UTM_PARAMS}"
+                    if username
+                    else None
+                )
 
                 # Required by Unsplash API guidelines — trigger when user saves/logs
                 download_location = photo.get("links", {}).get("download_location")
@@ -64,7 +69,9 @@ class UnsplashImageAdapter(FoodImageSearchPort):
                     photographer=photographer,
                     photographer_url=profile_url,
                     download_location=download_location,
-                    alt_text=photo.get("alt_description") or photo.get("description") or "",
+                    alt_text=photo.get("alt_description")
+                    or photo.get("description")
+                    or "",
                 )
 
         except Exception as e:

@@ -125,6 +125,7 @@ class ClipEmbeddingAdapter:
         the learned logit_scale and logit_bias are applied correctly.
         Scores range 0–1; matching food pairs typically score 0.75–0.90.
         """
+
         def _run():
             import torch
             from PIL import Image  # lazy

@@ -1,6 +1,7 @@
 """
 TDEE calculation API endpoints - Preview and calculation without authentication.
 """
+
 from fastapi import APIRouter, Depends
 
 from src.api.dependencies.event_bus import get_configured_event_bus
@@ -28,6 +29,7 @@ async def preview_tdee(
     """
     try:
         from src.api.dependencies.event_bus import get_configured_event_bus
+
         event_bus = get_configured_event_bus()
 
         query = PreviewTdeeQuery(
@@ -41,7 +43,9 @@ async def preview_tdee(
             goal=request.goal.value,
             body_fat_percentage=request.body_fat_percentage,
             unit_system=request.unit_system.value,
-            training_level=request.training_level.value if request.training_level else None,
+            training_level=(
+                request.training_level.value if request.training_level else None
+            ),
         )
 
         result = await event_bus.send(query)

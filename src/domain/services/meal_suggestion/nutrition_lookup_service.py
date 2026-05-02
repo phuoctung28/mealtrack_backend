@@ -2,13 +2,16 @@
 Three-tier nutrition lookup orchestration service.
 
 Tier resolution order per ingredient:
+  Redis — cached per-100g macros (24-hour TTL)
   T1 — exact match on food_reference.name_normalized (MySQL, no fuzzy)
   T2 — FatSecret via IngredientNutritionResolver (caches result to T1)
   T3 — AI single-ingredient estimate (last resort, logged as WARNING)
 
 Calories are ALWAYS derived: P×4 + (C−fiber)×4 + fiber×2 + F×9
 """
+
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -16,9 +19,24 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from src.domain.constants.food_density import get_density
-from src.domain.services.meal_suggestion.ingredient_name_normalizer import normalize_food_name
+from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
+    normalize_food_name,
+)
 
 logger = logging.getLogger(__name__)
+
+# Cache metrics for observability
+_cache_metrics = {
+    "redis_hits": 0,
+    "redis_misses": 0,
+    "t1_hits": 0,
+    "t2_hits": 0,
+    "t3_hits": 0,
+}
+
+NUTRITION_CACHE_TTL = 86400  # 24 hours
+T2_TIMEOUT = 2.0  # FatSecret timeout
+T3_TIMEOUT = 3.0  # AI estimate timeout
 
 # Volume conversions: unit → millilitres
 _VOLUME_TO_ML: Dict[str, float] = {"cup": 240.0, "tbsp": 15.0, "tsp": 5.0}
@@ -28,19 +46,20 @@ _VOLUME_TO_ML: Dict[str, float] = {"cup": 240.0, "tbsp": 15.0, "tsp": 5.0}
 # Output dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class IngredientMacros:
     """Calculated macros for a specific ingredient quantity."""
 
     name: str
     quantity_g: float
-    calories: float       # derived: P×4 + (C−fiber)×4 + fiber×2 + F×9
+    calories: float  # derived: P×4 + (C−fiber)×4 + fiber×2 + F×9
     protein: float
     carbs: float
     fat: float
     fiber: float
     sugar: float
-    source_tier: str      # "T1_food_reference" | "T2_fatsecret" | "T3_ai_estimate"
+    source_tier: str  # "T1_food_reference" | "T2_fatsecret" | "T3_ai_estimate"
     food_reference_id: Optional[int] = field(default=None)
 
 
@@ -55,14 +74,15 @@ class MealMacros:
     fiber: float
     sugar: float
     ingredients: List[IngredientMacros]
-    t1_count: int   # resolved via food_reference
-    t2_count: int   # resolved via FatSecret
-    t3_count: int   # resolved via AI fallback
+    t1_count: int  # resolved via food_reference
+    t2_count: int  # resolved via FatSecret
+    t3_count: int  # resolved via AI fallback
 
 
 # ---------------------------------------------------------------------------
 # Pydantic schema for T3 AI structured output
 # ---------------------------------------------------------------------------
+
 
 class SingleIngredientSchema(BaseModel):
     """Per-100g macros returned by the AI for a single ingredient."""
@@ -78,6 +98,7 @@ class SingleIngredientSchema(BaseModel):
 # Service
 # ---------------------------------------------------------------------------
 
+
 class NutritionLookupService:
     """Resolve macros for meal ingredients using three-tier lookup."""
 
@@ -86,10 +107,12 @@ class NutritionLookupService:
         food_ref_repo: Any,
         ingredient_nutrition_resolver: Any,
         generation_service: Any,
+        redis_client: Any = None,
     ) -> None:
         self._repo = food_ref_repo
         self._resolver = ingredient_nutrition_resolver
         self._gen = generation_service
+        self._redis = redis_client
 
     # ------------------------------------------------------------------
     # Public API
@@ -114,7 +137,11 @@ class NutritionLookupService:
             for ing in ingredients
         ]
         results: List[IngredientMacros] = await asyncio.gather(*tasks)
-        return self._aggregate(list(results))
+        meal = self._aggregate(list(results))
+        total = _cache_metrics["redis_hits"] + _cache_metrics["redis_misses"]
+        if total > 0 and total % 100 == 0:
+            self.log_cache_metrics()
+        return meal
 
     # ------------------------------------------------------------------
     # Three-tier lookup
@@ -123,20 +150,113 @@ class NutritionLookupService:
     async def _lookup_ingredient(
         self, name: str, quantity_g: float
     ) -> IngredientMacros:
-        """Resolve macros for one ingredient through T1 → T2 → T3."""
+        """Resolve macros for one ingredient: Redis → T1 → T2 → T3."""
+        normalized = normalize_food_name(name)
+        cache_key = f"nutrition:{normalized}"
+
+        # Check Redis cache first
+        if self._redis:
+            try:
+                cached = await self._redis.get(cache_key)
+                if cached:
+                    data = json.loads(cached)
+                    _cache_metrics["redis_hits"] += 1
+                    return self._build_from_cached(data, name, quantity_g)
+            except Exception as exc:
+                logger.warning("Redis get failed for %s: %s", cache_key, exc)
+
+        _cache_metrics["redis_misses"] += 1
 
         # T1: exact match on name_normalized
-        ref = self._repo.find_by_normalized_name(normalize_food_name(name))
+        ref = self._repo.find_by_normalized_name(normalized)
         if ref:
-            return self._calculate_from_ref(ref, name, quantity_g, "T1_food_reference")
+            _cache_metrics["t1_hits"] += 1
+            result = self._calculate_from_ref(
+                ref, name, quantity_g, "T1_food_reference"
+            )
+            await self._cache_result(cache_key, result)
+            return result
 
         # T2: FatSecret (resolver handles caching to food_reference)
-        per100 = await self._resolver.resolve(name)
+        try:
+            per100 = await asyncio.wait_for(
+                self._resolver.resolve(name), timeout=T2_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            logger.warning("T2 FatSecret timeout for %s", name)
+            per100 = None
         if per100 is not None:
-            return self._build_from_per100(per100, name, quantity_g, "T2_fatsecret")
+            _cache_metrics["t2_hits"] += 1
+            result = self._build_from_per100(per100, name, quantity_g, "T2_fatsecret")
+            await self._cache_result(cache_key, result)
+            return result
 
         # T3: AI estimate — last resort
-        return await self._ai_estimate(name, quantity_g)
+        _cache_metrics["t3_hits"] += 1
+        try:
+            result = await asyncio.wait_for(
+                self._ai_estimate(name, quantity_g), timeout=T3_TIMEOUT
+            )
+            await self._cache_result(cache_key, result)
+            return result
+        except asyncio.TimeoutError:
+            logger.warning("T3 AI timeout for %s", name)
+            return IngredientMacros(
+                name=name,
+                quantity_g=round(quantity_g, 1),
+                calories=0.0,
+                protein=0.0,
+                carbs=0.0,
+                fat=0.0,
+                fiber=0.0,
+                sugar=0.0,
+                source_tier="T3_ai_estimate",
+            )
+
+    # ------------------------------------------------------------------
+    # Redis cache helpers
+    # ------------------------------------------------------------------
+
+    def _build_from_cached(
+        self, data: Dict[str, Any], name: str, quantity_g: float
+    ) -> IngredientMacros:
+        """Build IngredientMacros from cached per-100g data."""
+        factor = quantity_g / 100.0
+        protein = data["protein"] * factor
+        carbs = data["carbs"] * factor
+        fat = data["fat"] * factor
+        fiber = data.get("fiber", 0.0) * factor
+        sugar = data.get("sugar", 0.0) * factor
+        calories = _derive_calories(protein, carbs, fat, fiber)
+        return IngredientMacros(
+            name=name,
+            quantity_g=round(quantity_g, 1),
+            calories=round(calories, 1),
+            protein=round(protein, 1),
+            carbs=round(carbs, 1),
+            fat=round(fat, 1),
+            fiber=round(fiber, 1),
+            sugar=round(sugar, 1),
+            source_tier=data.get("source_tier", "cached"),
+        )
+
+    async def _cache_result(self, key: str, result: IngredientMacros) -> None:
+        """Cache per-100g macros in Redis."""
+        if not self._redis:
+            return
+        try:
+            factor = 100.0 / result.quantity_g if result.quantity_g > 0 else 1.0
+            data = {
+                "protein": round(result.protein * factor, 2),
+                "carbs": round(result.carbs * factor, 2),
+                "fat": round(result.fat * factor, 2),
+                "fiber": round(result.fiber * factor, 2),
+                "sugar": round(result.sugar * factor, 2),
+                "source_tier": result.source_tier,
+            }
+            await self._redis.setex(key, NUTRITION_CACHE_TTL, json.dumps(data))
+        except Exception as exc:
+            logger.warning("Redis setex failed for %s: %s", key, exc)
 
     # ------------------------------------------------------------------
     # Calculation helpers
@@ -172,7 +292,7 @@ class NutritionLookupService:
 
     def _build_from_per100(
         self,
-        per100: Any,   # PerHundredGramsMacros from ingredient_nutrition_resolver
+        per100: Any,  # PerHundredGramsMacros from ingredient_nutrition_resolver
         name: str,
         quantity_g: float,
         tier: str,
@@ -198,9 +318,7 @@ class NutritionLookupService:
             food_reference_id=None,
         )
 
-    async def _ai_estimate(
-        self, name: str, quantity_g: float
-    ) -> IngredientMacros:
+    async def _ai_estimate(self, name: str, quantity_g: float) -> IngredientMacros:
         """T3 fallback: ask AI for per-100g macros. Never raises."""
         logger.warning("T3 AI estimate used for ingredient: %s", name)
 
@@ -227,12 +345,14 @@ class NutritionLookupService:
                 timeout=10.0,
             )
             # generate_meal_plan returns a dict when schema is provided
-            schema_data = SingleIngredientSchema(**raw) if isinstance(raw, dict) else raw
-            return self._build_from_per100(schema_data, name, quantity_g, "T3_ai_estimate")
-        except Exception as exc:
-            logger.error(
-                "T3 AI estimate failed for ingredient '%s': %s", name, exc
+            schema_data = (
+                SingleIngredientSchema(**raw) if isinstance(raw, dict) else raw
             )
+            return self._build_from_per100(
+                schema_data, name, quantity_g, "T3_ai_estimate"
+            )
+        except Exception as exc:
+            logger.error("T3 AI estimate failed for ingredient '%s': %s", name, exc)
             return IngredientMacros(
                 name=name,
                 quantity_g=round(quantity_g, 1),
@@ -352,9 +472,39 @@ class NutritionLookupService:
             fiber=round(total_fiber, 1),
             sugar=round(total_sugar, 1),
             ingredients=ingredients,
-            t1_count=sum(1 for i in ingredients if i.source_tier == "T1_food_reference"),
+            t1_count=sum(
+                1 for i in ingredients if i.source_tier == "T1_food_reference"
+            ),
             t2_count=sum(1 for i in ingredients if i.source_tier == "T2_fatsecret"),
             t3_count=sum(1 for i in ingredients if i.source_tier == "T3_ai_estimate"),
+        )
+
+    @staticmethod
+    def get_cache_metrics() -> dict:
+        """Return current cache metrics for monitoring."""
+        total = _cache_metrics["redis_hits"] + _cache_metrics["redis_misses"]
+        hit_rate = (
+            _cache_metrics["redis_hits"] / total * 100 if total > 0 else 0.0
+        )
+        return {
+            **_cache_metrics,
+            "total_lookups": total,
+            "redis_hit_rate_pct": round(hit_rate, 1),
+        }
+
+    @staticmethod
+    def log_cache_metrics() -> None:
+        """Log current cache metrics at INFO level."""
+        metrics = NutritionLookupService.get_cache_metrics()
+        logger.info(
+            "[NUTRITION-CACHE] hits=%d misses=%d hit_rate=%.1f%% | "
+            "T1=%d T2=%d T3=%d",
+            metrics["redis_hits"],
+            metrics["redis_misses"],
+            metrics["redis_hit_rate_pct"],
+            metrics["t1_hits"],
+            metrics["t2_hits"],
+            metrics["t3_hits"],
         )
 
 
@@ -362,9 +512,8 @@ class NutritionLookupService:
 # Module-level utility
 # ---------------------------------------------------------------------------
 
-def _derive_calories(
-    protein: float, carbs: float, fat: float, fiber: float
-) -> float:
+
+def _derive_calories(protein: float, carbs: float, fat: float, fiber: float) -> float:
     """Fiber-aware calorie derivation: P×4 + (C−fiber)×4 + fiber×2 + F×9."""
     net_carbs = max(carbs - fiber, 0.0)
     return protein * 4.0 + net_carbs * 4.0 + fiber * 2.0 + fat * 9.0

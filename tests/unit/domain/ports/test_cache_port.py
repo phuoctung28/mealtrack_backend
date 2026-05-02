@@ -7,6 +7,7 @@ from src.domain.ports.cache_port import CachePort
 
 def test_cache_port_is_abstract():
     from abc import ABC
+
     assert issubclass(CachePort, ABC)
 
 

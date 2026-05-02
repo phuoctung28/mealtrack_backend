@@ -2,6 +2,7 @@
 Unit tests for cache hit/miss behaviour on query handlers that use Redis.
 All tests use a mock CacheService — no real Redis required.
 """
+
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
@@ -15,7 +16,9 @@ class TestGetUserTdeeQueryHandlerCache:
     @pytest.mark.asyncio
     async def test_returns_cached_value_on_hit(self):
         """On a Redis cache hit the DB is never touched."""
-        from src.app.handlers.query_handlers.get_user_tdee_query_handler import GetUserTdeeQueryHandler
+        from src.app.handlers.query_handlers.get_user_tdee_query_handler import (
+            GetUserTdeeQueryHandler,
+        )
 
         cached_payload = {"user_id": "u1", "tdee": 2000.0, "bmr": 1700.0}
         cache_service = MagicMock()
@@ -34,7 +37,9 @@ class TestGetUserTdeeQueryHandlerCache:
     @pytest.mark.asyncio
     async def test_stores_result_in_cache_on_miss(self):
         """On a Redis cache miss the result is stored for next time."""
-        from src.app.handlers.query_handlers.get_user_tdee_query_handler import GetUserTdeeQueryHandler
+        from src.app.handlers.query_handlers.get_user_tdee_query_handler import (
+            GetUserTdeeQueryHandler,
+        )
 
         db_result = {"user_id": "u1", "tdee": 2000.0, "bmr": 1700.0, "macros": {}}
         cache_service = MagicMock()
@@ -44,7 +49,7 @@ class TestGetUserTdeeQueryHandlerCache:
         handler = GetUserTdeeQueryHandler(cache_service=cache_service)
         query = GetUserTdeeQuery(user_id="u1")
 
-        with patch.object(handler, '_compute_tdee', AsyncMock(return_value=db_result)):
+        with patch.object(handler, "_compute_tdee", AsyncMock(return_value=db_result)):
             result = await handler.handle(query)
 
         assert result == db_result
@@ -57,13 +62,15 @@ class TestGetUserTdeeQueryHandlerCache:
     @pytest.mark.asyncio
     async def test_works_without_cache_service(self):
         """Handler works normally when no cache_service provided."""
-        from src.app.handlers.query_handlers.get_user_tdee_query_handler import GetUserTdeeQueryHandler
+        from src.app.handlers.query_handlers.get_user_tdee_query_handler import (
+            GetUserTdeeQueryHandler,
+        )
 
         db_result = {"user_id": "u1", "tdee": 2000.0}
         handler = GetUserTdeeQueryHandler()  # no cache_service
         query = GetUserTdeeQuery(user_id="u1")
 
-        with patch.object(handler, '_compute_tdee', AsyncMock(return_value=db_result)):
+        with patch.object(handler, "_compute_tdee", AsyncMock(return_value=db_result)):
             result = await handler.handle(query)
 
         assert result == db_result
@@ -77,7 +84,9 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         """When a UoW is injected, handler should use it instead of creating a new one."""
         import zoneinfo
         from datetime import date
-        from src.app.handlers.query_handlers.get_weekly_budget_query_handler import GetWeeklyBudgetQueryHandler
+        from src.app.handlers.query_handlers.get_weekly_budget_query_handler import (
+            GetWeeklyBudgetQueryHandler,
+        )
         from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 
         cached_payload = {"week_start_date": "2024-01-01", "target_calories": 14000.0}
@@ -89,8 +98,12 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         injected_uow.__aenter__ = AsyncMock(return_value=injected_uow)
         injected_uow.__aexit__ = AsyncMock(return_value=False)
 
-        handler = GetWeeklyBudgetQueryHandler(uow=injected_uow, cache_service=cache_service)
-        query = GetWeeklyBudgetQuery(user_id="u1", target_date=date(2024, 1, 1), header_timezone="UTC")
+        handler = GetWeeklyBudgetQueryHandler(
+            uow=injected_uow, cache_service=cache_service
+        )
+        query = GetWeeklyBudgetQuery(
+            user_id="u1", target_date=date(2024, 1, 1), header_timezone="UTC"
+        )
 
         with patch(
             "src.app.handlers.query_handlers.get_weekly_budget_query_handler.AsyncUnitOfWork"
@@ -117,7 +130,9 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         """On a Redis cache hit find_by_user_and_week is never called."""
         import zoneinfo
         from datetime import date
-        from src.app.handlers.query_handlers.get_weekly_budget_query_handler import GetWeeklyBudgetQueryHandler
+        from src.app.handlers.query_handlers.get_weekly_budget_query_handler import (
+            GetWeeklyBudgetQueryHandler,
+        )
         from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 
         cached_payload = {"week_start_date": "2024-01-01", "target_calories": 14000.0}
@@ -130,7 +145,9 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         mock_uow.__aexit__ = AsyncMock(return_value=False)
 
         handler = GetWeeklyBudgetQueryHandler(cache_service=cache_service)
-        query = GetWeeklyBudgetQuery(user_id="u1", target_date=date(2024, 1, 1), header_timezone="UTC")
+        query = GetWeeklyBudgetQuery(
+            user_id="u1", target_date=date(2024, 1, 1), header_timezone="UTC"
+        )
 
         with patch(
             "src.app.handlers.query_handlers.get_weekly_budget_query_handler.AsyncUnitOfWork",
@@ -157,7 +174,9 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         """On a Redis cache miss the result is stored with the correct key and TTL."""
         import zoneinfo
         from datetime import date
-        from src.app.handlers.query_handlers.get_weekly_budget_query_handler import GetWeeklyBudgetQueryHandler
+        from src.app.handlers.query_handlers.get_weekly_budget_query_handler import (
+            GetWeeklyBudgetQueryHandler,
+        )
         from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 
         cache_service = MagicMock()
@@ -166,18 +185,40 @@ class TestGetWeeklyBudgetQueryHandlerCache:
 
         week_start = date(2024, 1, 1)
         mock_budget = MagicMock(
-            target_calories=14000.0, target_protein=490.0, target_carbs=1400.0, target_fat=490.0,
-            consumed_calories=0.0, consumed_protein=0.0, consumed_carbs=0.0, consumed_fat=0.0,
-            remaining_protein=490.0, remaining_carbs=1400.0, remaining_fat=490.0,
+            target_calories=14000.0,
+            target_protein=490.0,
+            target_carbs=1400.0,
+            target_fat=490.0,
+            consumed_calories=0.0,
+            consumed_protein=0.0,
+            consumed_carbs=0.0,
+            consumed_fat=0.0,
+            remaining_protein=490.0,
+            remaining_carbs=1400.0,
+            remaining_fat=490.0,
         )
 
         mock_effective = MagicMock()
         mock_effective.adjusted = MagicMock(
-            calories=2000.0, carbs=200.0, fat=70.0, protein=70.0,
-            bmr_floor_active=False, remaining_days=1,
+            calories=2000.0,
+            carbs=200.0,
+            fat=70.0,
+            protein=70.0,
+            bmr_floor_active=False,
+            remaining_days=1,
         )
-        mock_effective.consumed_before_today = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
-        mock_effective.consumed_total = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
+        mock_effective.consumed_before_today = {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0,
+        }
+        mock_effective.consumed_total = {
+            "calories": 0.0,
+            "protein": 0.0,
+            "carbs": 0.0,
+            "fat": 0.0,
+        }
         mock_effective.skipped_days = 0
         mock_effective.show_logging_prompt = False
         mock_effective.logged_past_days = 0
@@ -189,7 +230,9 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         mock_uow.weekly_budgets.find_by_user_and_week.return_value = mock_budget
 
         handler = GetWeeklyBudgetQueryHandler(cache_service=cache_service)
-        query = GetWeeklyBudgetQuery(user_id="u1", target_date=date(2024, 1, 1), header_timezone="UTC")
+        query = GetWeeklyBudgetQuery(
+            user_id="u1", target_date=date(2024, 1, 1), header_timezone="UTC"
+        )
 
         expected_key, expected_ttl = CacheKeys.weekly_budget("u1", week_start)
 
@@ -207,9 +250,13 @@ class TestGetWeeklyBudgetQueryHandlerCache:
             "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_user_monday",
             return_value=week_start,
         ), patch.object(
-            handler, "_sync_targets_if_stale", AsyncMock(return_value=(mock_budget, 1800.0))
+            handler,
+            "_sync_targets_if_stale",
+            AsyncMock(return_value=(mock_budget, 1800.0)),
         ), patch.object(
-            handler, "_get_effective_adjusted_daily_async", AsyncMock(return_value=mock_effective)
+            handler,
+            "_get_effective_adjusted_daily_async",
+            AsyncMock(return_value=mock_effective),
         ):
             result = await handler.handle(query)
 
@@ -222,7 +269,9 @@ class TestGetWeeklyBudgetQueryHandlerCache:
     async def test_passes_cache_service_to_tdee_handler(self):
         """_create_weekly_budget passes cache_service to GetUserTdeeQueryHandler."""
         from datetime import date
-        from src.app.handlers.query_handlers.get_weekly_budget_query_handler import GetWeeklyBudgetQueryHandler
+        from src.app.handlers.query_handlers.get_weekly_budget_query_handler import (
+            GetWeeklyBudgetQueryHandler,
+        )
         from src.infra.database.uow_async import AsyncUnitOfWork
 
         cache_service = MagicMock()
@@ -233,17 +282,21 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         handler = GetWeeklyBudgetQueryHandler(cache_service=cache_service)
 
         tdee_instance = MagicMock()
-        tdee_instance.handle = AsyncMock(return_value={
-            "target_calories": 2000,
-            "macros": {"protein": 70, "carbs": 200, "fat": 70},
-            "bmr": 1800,
-        })
+        tdee_instance.handle = AsyncMock(
+            return_value={
+                "target_calories": 2000,
+                "macros": {"protein": 70, "carbs": 200, "fat": 70},
+                "bmr": 1800,
+            }
+        )
 
         with patch(
             "src.app.handlers.query_handlers.get_user_tdee_query_handler.GetUserTdeeQueryHandler",
             return_value=tdee_instance,
         ) as MockTdeeClass:
-            await handler._create_weekly_budget(mock_uow, "u1", date(2024, 1, 1), date(2024, 1, 1))
+            await handler._create_weekly_budget(
+                mock_uow, "u1", date(2024, 1, 1), date(2024, 1, 1)
+            )
 
         MockTdeeClass.assert_called_once_with(cache_service=cache_service)
 
@@ -253,7 +306,9 @@ class TestGetStreakQueryHandlerCache:
 
     @pytest.mark.asyncio
     async def test_returns_cached_value_on_hit(self):
-        from src.app.handlers.query_handlers.get_streak_query_handler import GetStreakQueryHandler
+        from src.app.handlers.query_handlers.get_streak_query_handler import (
+            GetStreakQueryHandler,
+        )
         from src.app.queries.meal.get_streak_query import GetStreakQuery
 
         cached = {"current_streak": 5, "best_streak": 10}
@@ -270,7 +325,9 @@ class TestGetStreakQueryHandlerCache:
 
     @pytest.mark.asyncio
     async def test_stores_result_in_cache_on_miss(self):
-        from src.app.handlers.query_handlers.get_streak_query_handler import GetStreakQueryHandler
+        from src.app.handlers.query_handlers.get_streak_query_handler import (
+            GetStreakQueryHandler,
+        )
         from src.app.queries.meal.get_streak_query import GetStreakQuery
 
         db_result = {"current_streak": 3, "best_streak": 7}
@@ -295,7 +352,9 @@ class TestGetSavedSuggestionsQueryHandlerCache:
 
     @pytest.mark.asyncio
     async def test_returns_cached_value_on_hit(self):
-        from src.app.handlers.query_handlers.get_saved_suggestions_query_handler import GetSavedSuggestionsQueryHandler
+        from src.app.handlers.query_handlers.get_saved_suggestions_query_handler import (
+            GetSavedSuggestionsQueryHandler,
+        )
         from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
 
         cached = {"items": [], "count": 0}
@@ -312,7 +371,9 @@ class TestGetSavedSuggestionsQueryHandlerCache:
 
     @pytest.mark.asyncio
     async def test_stores_result_in_cache_on_miss(self):
-        from src.app.handlers.query_handlers.get_saved_suggestions_query_handler import GetSavedSuggestionsQueryHandler
+        from src.app.handlers.query_handlers.get_saved_suggestions_query_handler import (
+            GetSavedSuggestionsQueryHandler,
+        )
         from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
 
         db_result = {"items": [{"id": 1}], "count": 1}
@@ -337,7 +398,9 @@ class TestGetNotificationPreferencesQueryHandlerCache:
 
     @pytest.mark.asyncio
     async def test_returns_cached_value_on_hit(self):
-        from src.app.handlers.query_handlers.get_notification_preferences_query_handler import GetNotificationPreferencesQueryHandler
+        from src.app.handlers.query_handlers.get_notification_preferences_query_handler import (
+            GetNotificationPreferencesQueryHandler,
+        )
         from src.app.queries.notification import GetNotificationPreferencesQuery
 
         cached = {"push_enabled": True}
@@ -354,7 +417,9 @@ class TestGetNotificationPreferencesQueryHandlerCache:
 
     @pytest.mark.asyncio
     async def test_stores_result_in_cache_on_miss(self):
-        from src.app.handlers.query_handlers.get_notification_preferences_query_handler import GetNotificationPreferencesQueryHandler
+        from src.app.handlers.query_handlers.get_notification_preferences_query_handler import (
+            GetNotificationPreferencesQueryHandler,
+        )
         from src.app.queries.notification import GetNotificationPreferencesQuery
 
         db_result = {"push_enabled": False}
@@ -379,7 +444,9 @@ class TestGetUserMetricsQueryHandlerCache:
 
     @pytest.mark.asyncio
     async def test_returns_cached_value_on_hit(self):
-        from src.app.handlers.query_handlers.get_user_metrics_query_handler import GetUserMetricsQueryHandler
+        from src.app.handlers.query_handlers.get_user_metrics_query_handler import (
+            GetUserMetricsQueryHandler,
+        )
         from src.app.queries.user import GetUserMetricsQuery
 
         cached = {"user_id": "u1", "weight_kg": 75.0}
@@ -396,7 +463,9 @@ class TestGetUserMetricsQueryHandlerCache:
 
     @pytest.mark.asyncio
     async def test_stores_result_in_cache_on_miss(self):
-        from src.app.handlers.query_handlers.get_user_metrics_query_handler import GetUserMetricsQueryHandler
+        from src.app.handlers.query_handlers.get_user_metrics_query_handler import (
+            GetUserMetricsQueryHandler,
+        )
         from src.app.queries.user import GetUserMetricsQuery
 
         db_result = {"user_id": "u1", "weight_kg": 80.0}
@@ -422,7 +491,9 @@ class TestGetDailyActivitiesQueryHandlerCache:
     @pytest.mark.asyncio
     async def test_returns_cached_value_on_hit(self):
         from datetime import datetime, date
-        from src.app.handlers.query_handlers.get_daily_activities_query_handler import GetDailyActivitiesQueryHandler
+        from src.app.handlers.query_handlers.get_daily_activities_query_handler import (
+            GetDailyActivitiesQueryHandler,
+        )
         from src.app.queries.activity import GetDailyActivitiesQuery
 
         cached = [{"id": "m1", "type": "meal"}]
@@ -443,7 +514,9 @@ class TestGetDailyActivitiesQueryHandlerCache:
     @pytest.mark.asyncio
     async def test_stores_result_in_cache_on_miss(self):
         from datetime import datetime, date
-        from src.app.handlers.query_handlers.get_daily_activities_query_handler import GetDailyActivitiesQueryHandler
+        from src.app.handlers.query_handlers.get_daily_activities_query_handler import (
+            GetDailyActivitiesQueryHandler,
+        )
         from src.app.queries.activity import GetDailyActivitiesQuery
 
         cache_service = MagicMock()
@@ -456,8 +529,9 @@ class TestGetDailyActivitiesQueryHandlerCache:
 
         expected_key, _ = CacheKeys.daily_activities("u1", target_dt.date())
 
-        with patch.object(handler, "_get_meal_activities", return_value=[]), \
-             patch.object(handler, "_get_workout_activities", return_value=[]):
+        with patch.object(
+            handler, "_get_meal_activities", return_value=[]
+        ), patch.object(handler, "_get_workout_activities", return_value=[]):
             await handler.handle(query)
 
         cache_service.set_json.assert_awaited_once()

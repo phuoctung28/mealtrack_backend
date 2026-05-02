@@ -1,4 +1,5 @@
 """Fake subscription repository for testing."""
+
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -23,25 +24,27 @@ class FakeSubscriptionRepository(SubscriptionRepositoryPort):
 
     async def find_by_user_id(self, user_id: str) -> List[Subscription]:
         """Find all subscriptions for a user."""
-        return [
-            sub for sub in self._subscriptions.values()
-            if sub.user_id == user_id
-        ]
+        return [sub for sub in self._subscriptions.values() if sub.user_id == user_id]
 
     async def find_active_by_user_id(self, user_id: str) -> Optional[Subscription]:
         """Find active subscription for a user."""
         for sub in self._subscriptions.values():
-            if (sub.user_id == user_id and
-                sub.status == "active" and
-                (sub.expires_at is None or sub.expires_at > datetime.now())):
+            if (
+                sub.user_id == user_id
+                and sub.status == "active"
+                and (sub.expires_at is None or sub.expires_at > datetime.now())
+            ):
                 return sub
         return None
 
-    async def find_expiring_soon(self, days_until_expiry: int = 7) -> List[Subscription]:
+    async def find_expiring_soon(
+        self, days_until_expiry: int = 7
+    ) -> List[Subscription]:
         """Find subscriptions expiring within specified days."""
         cutoff = datetime.now() + timedelta(days=days_until_expiry)
         return [
-            sub for sub in self._subscriptions.values()
+            sub
+            for sub in self._subscriptions.values()
             if sub.expires_at and datetime.now() < sub.expires_at <= cutoff
         ]
 
@@ -62,10 +65,7 @@ class FakeSubscriptionRepository(SubscriptionRepositoryPort):
         return False
 
     async def update_payment_status(
-        self,
-        subscription_id: str,
-        payment_status: str,
-        payment_date: datetime = None
+        self, subscription_id: str, payment_status: str, payment_date: datetime = None
     ) -> bool:
         """Update payment status for a subscription."""
         if subscription_id in self._subscriptions:

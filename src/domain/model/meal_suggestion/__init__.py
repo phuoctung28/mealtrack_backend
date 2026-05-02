@@ -1,4 +1,5 @@
 """Meal suggestion domain models."""
+
 from .meal_suggestion import (
     MealSuggestion,
     MealType,

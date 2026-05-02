@@ -1,44 +1,31 @@
 #!/bin/bash
+#
+# Migration CLI wrapper
+#
+# Usage:
+#   ./scripts/development/migrate.sh generate "Add user preferences"
+#   ./scripts/development/migrate.sh upgrade
+#   ./scripts/development/migrate.sh downgrade
+#   ./scripts/development/migrate.sh test
+#   ./scripts/development/migrate.sh status
 
-echo "🚀 Starting MealTrack migration process..."
-
-# Set error handling
 set -e
 
-# Function to log messages
-log() {
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Function to check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
+cd "$PROJECT_ROOT"
 
-log "📦 Running database migrations..."
-
-# Use the unified migration runner
-if [ -f "migrations/run.py" ]; then
-    log "🐍 Running migrations with migration runner..."
-    python migrations/run.py
-    
-    if [ $? -eq 0 ]; then
-        log "✅ Migrations completed successfully"
-    else
-        log "❌ Migration failed"
-        exit 1
-    fi
-else
-    log "❌ migrations/run.py not found"
-    log "💡 Falling back to direct alembic..."
-    if command_exists alembic; then
-        alembic upgrade head
-        log "✅ Migrations completed successfully"
-    else
-        log "❌ Alembic not found, cannot run migrations"
-        log "💡 Install with: pip install alembic"
-        exit 1
-    fi
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <command> [args]"
+    echo ""
+    echo "Commands:"
+    echo "  generate <message>  Generate new migration"
+    echo "  upgrade             Apply pending migrations"
+    echo "  downgrade           Rollback last migration"
+    echo "  test                Test upgrade/downgrade cycle"
+    echo "  status              Show migration status"
+    exit 1
 fi
 
-log "🚀 Migration process completed"
+python migrations/cli.py "$@"

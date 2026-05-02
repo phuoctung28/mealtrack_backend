@@ -1,16 +1,18 @@
 """Reminder query builder for finding users due for notifications."""
-from datetime import datetime, timedelta
-from typing import List
 
+from datetime import datetime, timedelta
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.domain.utils.timezone_utils import (
-    utc_to_local_minutes,
-    DEFAULT_TIMEZONE
+from src.domain.utils.timezone_utils import DEFAULT_TIMEZONE, utc_to_local_minutes
+from src.infra.database.models.notification import (
+    NotificationPreferencesORM as DBNotificationPreferences,
 )
-from src.infra.database.models.notification import NotificationPreferencesORM as DBNotificationPreferences
 from src.infra.database.models.notification.notification import NotificationORM
-from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM as DBUserFcmToken
+from src.infra.database.models.notification.user_fcm_token import (
+    UserFcmTokenORM as DBUserFcmToken,
+)
 from src.infra.database.models.user.user import User
 
 
@@ -22,12 +24,14 @@ class ReminderQueryBuilder:
         """Subquery returning user_ids with at least one active FCM token."""
         return (
             db.query(DBUserFcmToken.user_id)
-            .filter(DBUserFcmToken.is_active == True)
+            .filter(DBUserFcmToken.is_active.is_(True))
             .subquery()
         )
 
     @staticmethod
-    def find_users_for_meal_reminder(db: Session, meal_type: str, current_utc: datetime) -> List[str]:
+    def find_users_for_meal_reminder(
+        db: Session, meal_type: str, current_utc: datetime
+    ) -> list[str]:
         """
         Find user IDs who should receive meal reminders at current UTC time.
 
@@ -53,16 +57,14 @@ class ReminderQueryBuilder:
         active_token_users = ReminderQueryBuilder._active_token_users_subquery(db)
 
         results = (
-            db.query(
-                DBNotificationPreferences.user_id,
-                User.timezone,
-                time_field
-            )
+            db.query(DBNotificationPreferences.user_id, User.timezone, time_field)
             .join(User, DBNotificationPreferences.user_id == User.id)
             .filter(
-                DBNotificationPreferences.meal_reminders_enabled == True,
+                DBNotificationPreferences.meal_reminders_enabled.is_(True),
                 time_field.isnot(None),
-                DBNotificationPreferences.user_id.in_(active_token_users)
+                DBNotificationPreferences.user_id.in_(
+                    select(active_token_users.c.user_id)
+                ),
             )
             .all()
         )
@@ -78,7 +80,7 @@ class ReminderQueryBuilder:
         return matching_users
 
     @staticmethod
-    def find_users_for_daily_summary(db: Session, current_utc: datetime) -> List[str]:
+    def find_users_for_daily_summary(db: Session, current_utc: datetime) -> list[str]:
         """
         Find users who should receive daily summary at 9PM local time.
 
@@ -97,12 +99,14 @@ class ReminderQueryBuilder:
             db.query(
                 DBNotificationPreferences.user_id,
                 DBNotificationPreferences.daily_summary_time_minutes,
-                User.timezone
+                User.timezone,
             )
             .join(User, DBNotificationPreferences.user_id == User.id)
             .filter(
-                DBNotificationPreferences.daily_summary_enabled == True,
-                DBNotificationPreferences.user_id.in_(active_token_users)
+                DBNotificationPreferences.daily_summary_enabled.is_(True),
+                DBNotificationPreferences.user_id.in_(
+                    select(active_token_users.c.user_id)
+                ),
             )
             .all()
         )
@@ -132,7 +136,7 @@ class ReminderQueryBuilder:
             db.query(NotificationORM)
             .filter(
                 NotificationORM.scheduled_for_utc <= window_end,
-                NotificationORM.status == 'pending',
+                NotificationORM.status == "pending",
             )
             .all()
         )

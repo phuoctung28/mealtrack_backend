@@ -1,6 +1,7 @@
 """
 Test user-specific daily activities functionality.
 """
+
 from datetime import datetime, date
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -9,6 +10,7 @@ import pytest
 from src.app.handlers.query_handlers import GetDailyActivitiesQueryHandler
 from src.app.queries.activity.get_daily_activities_query import GetDailyActivitiesQuery
 from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition
+
 
 @pytest.mark.asyncio
 class TestUserSpecificActivities:
@@ -26,16 +28,15 @@ class TestUserSpecificActivities:
                 image_id="123e4567-e89b-12d3-a456-426614174010",
                 format="jpeg",
                 size_bytes=100000,
-                url="https://example.com/img1.jpg"
+                url="https://example.com/img1.jpg",
             ),
             dish_name="User 1 Lunch",
             nutrition=Nutrition(
-
                 macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
                 food_items=[],
-                confidence_score=0.9
+                confidence_score=0.9,
             ),
-            ready_at=datetime(2024, 8, 15, 12, 5, 0)
+            ready_at=datetime(2024, 8, 15, 12, 5, 0),
         )
 
         user2_meal = Meal(
@@ -47,23 +48,24 @@ class TestUserSpecificActivities:
                 image_id="123e4567-e89b-12d3-a456-426614174020",
                 format="jpeg",
                 size_bytes=200000,
-                url="https://example.com/img2.jpg"
+                url="https://example.com/img2.jpg",
             ),
             dish_name="User 2 Lunch",
             nutrition=Nutrition(
-
                 macros=Macros(protein=35.0, carbs=60.0, fat=25.0),
                 food_items=[],
-                confidence_score=0.95
+                confidence_score=0.95,
             ),
-            ready_at=datetime(2024, 8, 15, 13, 5, 0)
+            ready_at=datetime(2024, 8, 15, 13, 5, 0),
         )
 
         # Create mock repository (async)
         mock_meals_repo = AsyncMock()
 
         # Configure repository to return different meals for different users
-        async def mock_find_by_date(target_date, user_id=None, limit=50, user_timezone=None):
+        async def mock_find_by_date(
+            target_date, user_id=None, limit=50, user_timezone=None
+        ):
             if user_id == "123e4567-e89b-12d3-a456-426614174100":
                 return [user1_meal]
             elif user_id == "123e4567-e89b-12d3-a456-426614174200":
@@ -86,11 +88,14 @@ class TestUserSpecificActivities:
         # Create handler and patch AsyncUnitOfWork
         handler = GetDailyActivitiesQueryHandler()
 
-        with patch('src.app.handlers.query_handlers.get_daily_activities_query_handler.AsyncUnitOfWork', return_value=mock_uow):
+        with patch(
+            "src.app.handlers.query_handlers.get_daily_activities_query_handler.AsyncUnitOfWork",
+            return_value=mock_uow,
+        ):
             # Test for user 1
             query_user1 = GetDailyActivitiesQuery(
                 user_id="123e4567-e89b-12d3-a456-426614174100",
-                target_date=datetime(2024, 8, 15)
+                target_date=datetime(2024, 8, 15),
             )
 
             activities_user1 = await handler.handle(query_user1)
@@ -103,7 +108,7 @@ class TestUserSpecificActivities:
             # Test for user 2
             query_user2 = GetDailyActivitiesQuery(
                 user_id="123e4567-e89b-12d3-a456-426614174200",
-                target_date=datetime(2024, 8, 15)
+                target_date=datetime(2024, 8, 15),
             )
 
             activities_user2 = await handler.handle(query_user2)
@@ -118,8 +123,12 @@ class TestUserSpecificActivities:
             assert len(actual_calls) == 2
 
             # Check that user_id was passed correctly
-            assert actual_calls[0][1]["user_id"] == "123e4567-e89b-12d3-a456-426614174100"
-            assert actual_calls[1][1]["user_id"] == "123e4567-e89b-12d3-a456-426614174200"
+            assert (
+                actual_calls[0][1]["user_id"] == "123e4567-e89b-12d3-a456-426614174100"
+            )
+            assert (
+                actual_calls[1][1]["user_id"] == "123e4567-e89b-12d3-a456-426614174200"
+            )
 
     async def test_empty_activities_for_user_with_no_meals(self):
         """Test that users with no meals get empty activities list."""
@@ -140,11 +149,14 @@ class TestUserSpecificActivities:
         # Create handler
         handler = GetDailyActivitiesQueryHandler()
 
-        with patch('src.app.handlers.query_handlers.get_daily_activities_query_handler.AsyncUnitOfWork', return_value=mock_uow):
+        with patch(
+            "src.app.handlers.query_handlers.get_daily_activities_query_handler.AsyncUnitOfWork",
+            return_value=mock_uow,
+        ):
             # Test query
             query = GetDailyActivitiesQuery(
                 user_id="123e4567-e89b-12d3-a456-426614174300",
-                target_date=datetime(2024, 8, 15)
+                target_date=datetime(2024, 8, 15),
             )
 
             activities = await handler.handle(query)

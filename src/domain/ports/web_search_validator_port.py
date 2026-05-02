@@ -1,4 +1,5 @@
 """Port for validating whether a URL hosts a usable food image."""
+
 from abc import ABC, abstractmethod
 
 from src.domain.model.meal_discovery.food_image import FoodImageResult

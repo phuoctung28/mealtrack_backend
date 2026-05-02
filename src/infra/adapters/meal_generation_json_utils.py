@@ -4,9 +4,9 @@ Handles parsing, cleaning, and recovery from malformed JSON.
 """
 
 import json
-import re
 import logging
-from typing import Dict, Any, List
+import re
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ def truncate(s: str, max_len: int = 200) -> str:
     return s[:max_len] + "..." if len(s) > max_len else s
 
 
-def extract_json(content: str) -> Dict[str, Any]:
+def extract_json(content: str) -> dict[str, Any]:
     """
     Extract and validate JSON from AI response with better error handling.
     """
@@ -50,7 +50,7 @@ def extract_json(content: str) -> Dict[str, Any]:
             )
             try:
                 result = json.loads(cleaned_content)
-                logger.info("[JSON-EXTRACT] cleaned parse success")
+                logger.debug("[JSON-EXTRACT] cleaned parse success")
                 return result
             except json.JSONDecodeError as e2:
                 logger.warning(
@@ -69,7 +69,7 @@ def extract_json(content: str) -> Dict[str, Any]:
             )
             try:
                 result = json.loads(json_content)
-                logger.info("[JSON-EXTRACT] markdown parse success")
+                logger.debug("[JSON-EXTRACT] markdown parse success")
                 return result
             except json.JSONDecodeError as e3:
                 logger.warning(
@@ -88,12 +88,10 @@ def extract_json(content: str) -> Dict[str, Any]:
                 cleaned_json = clean_json_content(json_content)
                 if cleaned_json:
                     result = json.loads(cleaned_json)
-                    logger.info("[JSON-EXTRACT] regex+clean parse success")
+                    logger.debug("[JSON-EXTRACT] regex+clean parse success")
                     return result
             except json.JSONDecodeError as e4:
-                logger.warning(
-                    f"[JSON-PARSE-FAIL-REGEX] error={e4.msg} | pos={e4.pos}"
-                )
+                logger.warning(f"[JSON-PARSE-FAIL-REGEX] error={e4.msg} | pos={e4.pos}")
 
         # Log the problematic content for debugging (truncated)
         content_preview = content[:500] + "..." if len(content) > 500 else content
@@ -101,7 +99,7 @@ def extract_json(content: str) -> Dict[str, Any]:
             f"[JSON-EXTRACT-FAILED] all parsing attempts failed | "
             f"content_preview={content_preview}"
         )
-        raise ValueError(f"Could not extract valid JSON from response: {str(e)}")
+        raise ValueError(f"Could not extract valid JSON from response: {str(e)}") from e
 
 
 def clean_json_content(content: str) -> str:
@@ -239,7 +237,7 @@ def clean_json_content(content: str) -> str:
         content = content[:last_complete_suggestion_end]
         # Close the suggestions array and root object
         content += "]}"
-        logger.info(
+        logger.debug(
             f"[JSON-CLEAN-RECOVERY] truncated {truncated_len} chars | "
             f"kept {last_complete_suggestion_end} chars | "
             f"preserved {complete_objects_count} complete objects | "

@@ -34,11 +34,11 @@ class ResolveMealImageJob:
         self,
         *,
         cache,
-        text_embedder,      # Gemini API — produces embeddings stored in pgvector
-        image_scorer,       # SigLIP — scores image/text relevance via sigmoid logits
-        http,               # object with `download(url) -> bytes`
-        cloudinary,         # object with `save(bytes, content_type) -> url`
-        ai_generator,       # Cloudflare Workers AI FLUX — fallback when no web candidate passes
+        text_embedder,  # Gemini API — produces embeddings stored in pgvector
+        image_scorer,  # SigLIP — scores image/text relevance via sigmoid logits
+        http,  # object with `download(url) -> bytes`
+        cloudinary,  # object with `save(bytes, content_type) -> url`
+        ai_generator,  # Cloudflare Workers AI FLUX — fallback when no web candidate passes
         event_bus,
         image_threshold: float,
         cache_hit_threshold: float,  # cosine similarity to consider a cache hit (e.g. 0.80)
@@ -60,7 +60,9 @@ class ResolveMealImageJob:
         existing = await self._cache.query_nearest(text_emb)
         if existing is not None and existing.cosine >= self._cache_hit_threshold:
             logger.info("already cached: %s", meal_name)
-            return ResolveResult(existing.image_url, existing.source, existing.confidence)
+            return ResolveResult(
+                existing.image_url, existing.source, existing.confidence
+            )
 
         # Step 2: score the candidate URL recorded at API time (if any).
         if item.candidate_image_url:
@@ -69,7 +71,9 @@ class ResolveMealImageJob:
                 score = await self._image_scorer.score_image_text(data, meal_name)
                 logger.info(
                     "candidate score for %s: %.3f  url=%s",
-                    meal_name, score, item.candidate_image_url,
+                    meal_name,
+                    score,
+                    item.candidate_image_url,
                 )
                 if score >= self._threshold:
                     final_url = self._cloudinary.save(data, "image/jpeg")
@@ -78,15 +82,20 @@ class ResolveMealImageJob:
                         item.candidate_source or "external",
                         float(score),
                     )
-                    await self._store(meal_name, text_emb, result, item.candidate_thumbnail_url)
+                    await self._store(
+                        meal_name, text_emb, result, item.candidate_thumbnail_url
+                    )
                     return result
                 else:
                     logger.info(
                         "candidate below threshold (%.3f < %.3f), falling back to AI",
-                        score, self._threshold,
+                        score,
+                        self._threshold,
                     )
             except Exception as e:  # noqa: BLE001
-                logger.warning("candidate download/score failed for %s: %s", meal_name, e)
+                logger.warning(
+                    "candidate download/score failed for %s: %s", meal_name, e
+                )
         else:
             # Step 3: no URL recorded — web search already failed at API time.
             logger.info("no candidate URL for %s, going straight to AI", meal_name)
@@ -96,7 +105,9 @@ class ResolveMealImageJob:
         try:
             ai_bytes = await self._ai_generator.generate(prompt)
         except Exception as e:  # noqa: BLE001
-            raise RuntimeError(f"AI image generation failed for {meal_name}: {e}") from e
+            raise RuntimeError(
+                f"AI image generation failed for {meal_name}: {e}"
+            ) from e
 
         ai_score: Optional[float] = None
         try:

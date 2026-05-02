@@ -1,6 +1,7 @@
 """
 Integration tests for activities API endpoints.
 """
+
 from unittest.mock import Mock, patch
 
 import pytest
@@ -21,54 +22,60 @@ def client(test_session):
         get_food_cache_service,
     )
     from src.api.dependencies.event_bus import get_configured_event_bus
-    
+
     # Reset event bus singleton before setting up client
     import src.api.dependencies.event_bus as event_bus_module
+
     event_bus_module._configured_event_bus = None
-    
+
     def override_get_db():
         try:
             yield test_session
         finally:
             pass
-    
+
     def override_get_current_user_id():
         return "test_user"
-    
+
     def override_get_suggestion_orchestration_service():
         # Mock the suggestion orchestration service to avoid Redis dependency
         return Mock()
-    
+
     def override_get_cache_service():
         # Return None to disable cache (or return a mock if needed)
         return None
-    
+
     def override_get_food_cache_service():
         # Mock food cache service to avoid Redis dependency
         from unittest.mock import AsyncMock
+
         mock_food_cache = Mock()
         mock_food_cache.get_cached_search = AsyncMock(return_value=None)
         mock_food_cache.cache_search = AsyncMock(return_value=None)
         mock_food_cache.get_cached_food = AsyncMock(return_value=None)
         mock_food_cache.cache_food = AsyncMock(return_value=None)
         return mock_food_cache
-    
+
     def override_get_configured_event_bus():
         # Create a mock event bus to avoid Redis initialization
         mock_bus = Mock()
         mock_bus.send = AsyncMock(return_value=[])
         return mock_bus
-    
+
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id
-    app.dependency_overrides[get_suggestion_orchestration_service] = override_get_suggestion_orchestration_service
+    app.dependency_overrides[get_suggestion_orchestration_service] = (
+        override_get_suggestion_orchestration_service
+    )
     app.dependency_overrides[get_cache_service] = override_get_cache_service
     app.dependency_overrides[get_food_cache_service] = override_get_food_cache_service
-    app.dependency_overrides[get_configured_event_bus] = override_get_configured_event_bus
-    
+    app.dependency_overrides[get_configured_event_bus] = (
+        override_get_configured_event_bus
+    )
+
     client = TestClient(app)
     yield client
-    
+
     # Cleanup
     app.dependency_overrides.clear()
     event_bus_module._configured_event_bus = None
@@ -83,17 +90,19 @@ class TestActivitiesAPI:
             {
                 "activity_id": "activity-1",
                 "type": "meal",
-                "timestamp": "2024-01-15T12:00:00Z"
+                "timestamp": "2024-01-15T12:00:00Z",
             }
         ]
-        
-        with patch('src.api.dependencies.event_bus.get_configured_event_bus') as mock_get_bus:
+
+        with patch(
+            "src.api.dependencies.event_bus.get_configured_event_bus"
+        ) as mock_get_bus:
             mock_bus = Mock()
             mock_bus.send = Mock(return_value=mock_activities)
             mock_get_bus.return_value = mock_bus
-            
+
             response = client.get("/v1/activities/daily?date=2024-01-15")
-            
+
             assert response.status_code == 200
             data = response.json()
             assert isinstance(data, list)
@@ -101,14 +110,16 @@ class TestActivitiesAPI:
     def test_get_daily_activities_without_date(self, client):
         """Test getting daily activities without date (defaults to today)."""
         mock_activities = []
-        
-        with patch('src.api.dependencies.event_bus.get_configured_event_bus') as mock_get_bus:
+
+        with patch(
+            "src.api.dependencies.event_bus.get_configured_event_bus"
+        ) as mock_get_bus:
             mock_bus = Mock()
             mock_bus.send = Mock(return_value=mock_activities)
             mock_get_bus.return_value = mock_bus
-            
+
             response = client.get("/v1/activities/daily")
-            
+
             assert response.status_code == 200
             data = response.json()
             assert isinstance(data, list)
@@ -116,7 +127,7 @@ class TestActivitiesAPI:
     def test_get_daily_activities_invalid_date_format(self, client):
         """Test getting daily activities with invalid date format."""
         response = client.get("/v1/activities/daily?date=invalid-date")
-        
+
         assert response.status_code == 400
         detail = response.json()["detail"]
         # Handle both string and dict detail formats
@@ -128,20 +139,19 @@ class TestActivitiesAPI:
     def test_get_daily_activities_error_handling(self, client):
         """Test activities endpoint error handling."""
         from src.api.dependencies.event_bus import get_configured_event_bus
-        
+
         mock_bus = Mock()
         mock_bus.send = Mock(side_effect=Exception("Query failed"))
-        
+
         def override_get_bus():
             return mock_bus
-        
+
         app.dependency_overrides[get_configured_event_bus] = override_get_bus
-        
+
         try:
             response = client.get("/v1/activities/daily")
-            
+
             # Should handle exception gracefully
             assert response.status_code in [400, 500]
         finally:
             app.dependency_overrides.pop(get_configured_event_bus, None)
-

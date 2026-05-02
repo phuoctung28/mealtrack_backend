@@ -4,6 +4,7 @@ Adds request ID tracking and timing for all API calls.
 Pure ASGI implementation — does not subclass BaseHTTPMiddleware, so it never
 buffers the request or response body.
 """
+
 import logging
 import time
 import uuid

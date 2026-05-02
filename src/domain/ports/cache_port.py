@@ -1,4 +1,5 @@
 """Abstract cache port — domain defines the contract, infra implements it."""
+
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 

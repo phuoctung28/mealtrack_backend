@@ -23,8 +23,11 @@ def _gen(handler, account_id="acct123", api_token="tok123"):
 @pytest.mark.asyncio
 async def test_generate_returns_bytes_from_json_response():
     """Real CF Workers AI path: JSON envelope with base64-encoded image."""
+
     async def handler(request):
-        assert "/acct123/ai/run/@cf/black-forest-labs/flux-1-schnell" in str(request.url)
+        assert "/acct123/ai/run/@cf/black-forest-labs/flux-1-schnell" in str(
+            request.url
+        )
         assert request.headers["authorization"] == "Bearer tok123"
         body = json.dumps({"result": {"image": _FAKE_B64}, "success": True})
         return httpx.Response(
@@ -38,6 +41,7 @@ async def test_generate_returns_bytes_from_json_response():
 @pytest.mark.asyncio
 async def test_generate_returns_bytes_from_raw_binary_response():
     """Fallback path: direct image/png bytes (some CF endpoints)."""
+
     async def handler(request):
         return httpx.Response(
             200, content=b"\x89PNGfake", headers={"content-type": "image/png"}
@@ -92,6 +96,7 @@ async def test_generate_raises_on_non_200():
 @pytest.mark.asyncio
 async def test_generate_raises_on_malformed_json_missing_image_key():
     """JSON response but result.image is absent — extract fails cleanly."""
+
     async def handler(request):
         body = json.dumps({"result": {"something_else": "oops"}, "success": True})
         return httpx.Response(
@@ -105,6 +110,7 @@ async def test_generate_raises_on_malformed_json_missing_image_key():
 @pytest.mark.asyncio
 async def test_generate_raises_on_unknown_content_type():
     """Non-image, non-JSON content-type raises with content-type in message."""
+
     async def handler(request):
         return httpx.Response(
             200, content=b"unexpected", headers={"content-type": "text/plain"}

@@ -1,4 +1,5 @@
 """Async subscription repository."""
+
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -59,7 +60,9 @@ class AsyncSubscriptionRepository:
         )
         return result.scalars().first()
 
-    async def find_by_revenuecat_id(self, revenuecat_subscriber_id: str) -> Optional[Subscription]:
+    async def find_by_revenuecat_id(
+        self, revenuecat_subscriber_id: str
+    ) -> Optional[Subscription]:
         """Find a subscription by RevenueCat subscriber ID."""
         result = await self.session.execute(
             select(Subscription).where(

@@ -56,4 +56,6 @@ class ActivityGoalMapper:
         """Map training level string to enum, with fallback to BEGINNER."""
         if not training_level:
             return TrainingLevel.BEGINNER
-        return cls.TRAINING_LEVEL_MAP.get(training_level.lower(), TrainingLevel.BEGINNER)
+        return cls.TRAINING_LEVEL_MAP.get(
+            training_level.lower(), TrainingLevel.BEGINNER
+        )

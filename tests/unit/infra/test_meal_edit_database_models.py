@@ -1,12 +1,20 @@
 """
 Unit tests for meal edit database model functionality.
 """
+
 import uuid
 from datetime import datetime
 
 import pytest
 
-from src.domain.model import Meal as DomainMeal, MealStatus, MealImage, Nutrition, FoodItem, Macros
+from src.domain.model import (
+    Meal as DomainMeal,
+    MealStatus,
+    MealImage,
+    Nutrition,
+    FoodItem,
+    Macros,
+)
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.meal.meal_image import MealImageORM
 from src.infra.database.models.nutrition.food_item import FoodItemORM
@@ -17,6 +25,7 @@ from src.infra.mappers.meal_mapper import (
     food_item_orm_to_domain,
     food_item_domain_to_orm,
 )
+
 
 @pytest.mark.unit
 class TestMealDatabaseModelEdit:
@@ -29,6 +38,7 @@ class TestMealDatabaseModelEdit:
         meal_model.meal_id = str(uuid.uuid4())
         meal_model.user_id = str(uuid.uuid4())
         from src.infra.database.models.enums import MealStatusEnum
+
         meal_model.status = MealStatusEnum.READY
         meal_model.created_at = datetime.now()
         meal_model.updated_at = datetime.now()
@@ -80,19 +90,19 @@ class TestMealDatabaseModelEdit:
                 image_id=str(uuid.uuid4()),
                 format="jpeg",
                 size_bytes=100000,
-                url="https://example.com/image.jpg"
+                url="https://example.com/image.jpg",
             ),
             dish_name="Test Meal",
             nutrition=Nutrition(
                 macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
                 food_items=[],
-                confidence_score=0.9
+                confidence_score=0.9,
             ),
             ready_at=datetime.now(),
             edit_count=2,
             is_manually_edited=True,
             last_edited_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
 
         # Act
@@ -116,14 +126,14 @@ class TestMealDatabaseModelEdit:
                 image_id=str(uuid.uuid4()),
                 format="jpeg",
                 size_bytes=100000,
-                url="https://example.com/image.jpg"
+                url="https://example.com/image.jpg",
             ),
             nutrition=Nutrition(
                 macros=Macros(protein=30.0, carbs=50.0, fat=20.0),
                 food_items=[],
-                confidence_score=0.9
+                confidence_score=0.9,
             ),
-            ready_at=datetime.now()
+            ready_at=datetime.now(),
             # Missing edit fields - should use defaults
         )
 
@@ -134,6 +144,7 @@ class TestMealDatabaseModelEdit:
         assert meal_model.edit_count == 0
         assert meal_model.is_manually_edited is False
         assert meal_model.last_edited_at is None
+
 
 @pytest.mark.unit
 class TestFoodItemDatabaseModelEdit:
@@ -179,7 +190,7 @@ class TestFoodItemDatabaseModelEdit:
             confidence=0.8,
             id=str(uuid.uuid4()),
             fdc_id=None,
-            is_custom=True
+            is_custom=True,
         )
 
         # Act
@@ -199,7 +210,7 @@ class TestFoodItemDatabaseModelEdit:
             quantity=100.0,
             unit="g",
             macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
-            confidence=0.9
+            confidence=0.9,
             # Missing edit fields - should use defaults
         )
 
@@ -235,6 +246,7 @@ class TestFoodItemDatabaseModelEdit:
         assert domain_food_item.fdc_id is None
         assert domain_food_item.is_custom is False
 
+
 @pytest.mark.unit
 class TestMealEditDatabaseIntegration:
     """Test meal edit database integration functionality."""
@@ -251,7 +263,7 @@ class TestMealEditDatabaseIntegration:
                 image_id=str(uuid.uuid4()),
                 format="jpeg",
                 size_bytes=100000,
-                url="https://example.com/image.jpg"
+                url="https://example.com/image.jpg",
             ),
             dish_name="Test Meal",
             nutrition=Nutrition(
@@ -264,16 +276,16 @@ class TestMealEditDatabaseIntegration:
                         macros=Macros(protein=10.0, carbs=20.0, fat=8.0),
                         id=str(uuid.uuid4()),
                         fdc_id=12345,
-                        is_custom=False
+                        is_custom=False,
                     )
                 ],
-                confidence_score=0.9
+                confidence_score=0.9,
             ),
             ready_at=datetime.now(),
             edit_count=3,
             is_manually_edited=True,
             last_edited_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
 
         # Act
@@ -294,8 +306,13 @@ class TestMealEditDatabaseIntegration:
         # Assert
         assert converted_domain_meal.meal_id == original_domain_meal.meal_id
         assert converted_domain_meal.edit_count == original_domain_meal.edit_count
-        assert converted_domain_meal.is_manually_edited == original_domain_meal.is_manually_edited
-        assert converted_domain_meal.last_edited_at == original_domain_meal.last_edited_at
+        assert (
+            converted_domain_meal.is_manually_edited
+            == original_domain_meal.is_manually_edited
+        )
+        assert (
+            converted_domain_meal.last_edited_at == original_domain_meal.last_edited_at
+        )
         assert converted_domain_meal.updated_at == original_domain_meal.updated_at
 
     def test_food_item_roundtrip_with_edit_fields(self):
@@ -309,17 +326,21 @@ class TestMealEditDatabaseIntegration:
             confidence=0.95,
             id=str(uuid.uuid4()),
             fdc_id=54321,
-            is_custom=True
+            is_custom=True,
         )
 
         # Act
-        food_item_model = food_item_domain_to_orm(original_domain_food_item, nutrition_id=1)
+        food_item_model = food_item_domain_to_orm(
+            original_domain_food_item, nutrition_id=1
+        )
         converted_domain_food_item = food_item_orm_to_domain(food_item_model)
 
         # Assert
         assert converted_domain_food_item.name == original_domain_food_item.name
         # ID conversion: string domain ID -> int DB ID -> string domain ID
         assert converted_domain_food_item.fdc_id == original_domain_food_item.fdc_id
-        assert converted_domain_food_item.is_custom == original_domain_food_item.is_custom
+        assert (
+            converted_domain_food_item.is_custom == original_domain_food_item.is_custom
+        )
         assert converted_domain_food_item.quantity == original_domain_food_item.quantity
         assert converted_domain_food_item.calories == original_domain_food_item.calories

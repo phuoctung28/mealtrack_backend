@@ -1,6 +1,7 @@
 """
 Command to sync user data from Firebase authentication.
 """
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -11,6 +12,7 @@ from src.domain.model.auth import AuthProviderEnum
 @dataclass
 class SyncUserCommand:
     """Command to sync user data from Firebase authentication."""
+
     firebase_uid: str
     email: str
     phone_number: Optional[str] = None
@@ -26,5 +28,6 @@ class SyncUserCommand:
 @dataclass
 class UpdateUserLastAccessedCommand:
     """Command to update user's last accessed timestamp."""
+
     firebase_uid: str
     last_accessed: Optional[datetime] = None

@@ -29,16 +29,12 @@ class Settings(BaseSettings):
     DB_NAME: str = Field(default="nutree")
 
     # Connection pool tuning
-    UVICORN_WORKERS: int = Field(
-        default=4, description="Number of worker processes"
-    )
+    UVICORN_WORKERS: int = Field(default=4, description="Number of worker processes")
     POOL_SIZE_PER_WORKER: int = Field(
         default=3, description="DB connections per worker"
     )
-    POOL_MAX_OVERFLOW: int = Field(
-        default=2, description="Max overflow connections"
-    )
-    POOL_TIMEOUT: int = Field(default=30)
+    POOL_MAX_OVERFLOW: int = Field(default=2, description="Max overflow connections")
+    POOL_TIMEOUT: int = Field(default=10)
     POOL_RECYCLE: int = Field(default=120)
     POOL_ECHO: bool = Field(default=False)
 
@@ -65,14 +61,26 @@ class Settings(BaseSettings):
     FIREBASE_SERVICE_ACCOUNT_PATH: str | None = Field(default=None)
 
     # External APIs & integrations
-    DEEPL_API_KEY: str | None = Field(default=None, description="DeepL API key for meal translation")
+    DEEPL_API_KEY: str | None = Field(
+        default=None, description="DeepL API key for meal translation"
+    )
     GOOGLE_API_KEY: str | None = Field(default=None)
     USDA_FDC_API_KEY: str | None = Field(default=None)
-    FATSECRET_CLIENT_ID: str | None = Field(default=None, description="FatSecret OAuth 2.0 client ID")
-    FATSECRET_CLIENT_SECRET: str | None = Field(default=None, description="FatSecret OAuth 2.0 client secret")
-    NUTRITIONIX_APP_ID: str | None = Field(default=None, description="Nutritionix API app ID")
-    NUTRITIONIX_API_KEY: str | None = Field(default=None, description="Nutritionix API key")
-    BRAVE_SEARCH_API_KEY: str | None = Field(default=None, description="Brave Search API key (free tier: 2K/mo)")
+    FATSECRET_CLIENT_ID: str | None = Field(
+        default=None, description="FatSecret OAuth 2.0 client ID"
+    )
+    FATSECRET_CLIENT_SECRET: str | None = Field(
+        default=None, description="FatSecret OAuth 2.0 client secret"
+    )
+    NUTRITIONIX_APP_ID: str | None = Field(
+        default=None, description="Nutritionix API app ID"
+    )
+    NUTRITIONIX_API_KEY: str | None = Field(
+        default=None, description="Nutritionix API key"
+    )
+    BRAVE_SEARCH_API_KEY: str | None = Field(
+        default=None, description="Brave Search API key (free tier: 2K/mo)"
+    )
 
     # LLM Provider configuration
     LLM_PROVIDER: str | None = Field(
@@ -102,8 +110,12 @@ class Settings(BaseSettings):
     )
 
     # Image search (meal discovery photos)
-    PEXELS_API_KEY: str | None = Field(default=None, description="Pexels API key for food photos")
-    UNSPLASH_ACCESS_KEY: str | None = Field(default=None, description="Unsplash Client-ID access key")
+    PEXELS_API_KEY: str | None = Field(
+        default=None, description="Pexels API key for food photos"
+    )
+    UNSPLASH_ACCESS_KEY: str | None = Field(
+        default=None, description="Unsplash Client-ID access key"
+    )
     REVENUECAT_SECRET_API_KEY: str | None = Field(default=None)
     REVENUECAT_WEBHOOK_SECRET: str | None = Field(default=None)
     CLOUDINARY_CLOUD_NAME: str | None = Field(default=None)
@@ -111,13 +123,23 @@ class Settings(BaseSettings):
     CLOUDINARY_API_SECRET: str | None = Field(default=None)
 
     # CORS
-    ALLOWED_ORIGINS: str = Field(default="", description="Comma-separated list of allowed CORS origins")
+    ALLOWED_ORIGINS: str = Field(
+        default="", description="Comma-separated list of allowed CORS origins"
+    )
 
     # Sentry error monitoring
-    SENTRY_DSN: str | None = Field(default=None, description="Sentry DSN; disables Sentry when unset")
-    SENTRY_TRACES_SAMPLE_RATE: float = Field(default=0.1, description="Performance trace sample rate (0.0-1.0)")
-    SENTRY_PROFILES_SAMPLE_RATE: float = Field(default=0.05, description="Profile sample rate (0.0-1.0)")
-    SENTRY_SEND_PII: bool = Field(default=False, description="Send user IP/headers to Sentry")
+    SENTRY_DSN: str | None = Field(
+        default=None, description="Sentry DSN; disables Sentry when unset"
+    )
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(
+        default=0.1, description="Performance trace sample rate (0.0-1.0)"
+    )
+    SENTRY_PROFILES_SAMPLE_RATE: float = Field(
+        default=0.05, description="Profile sample rate (0.0-1.0)"
+    )
+    SENTRY_SEND_PII: bool = Field(
+        default=False, description="Send user IP/headers to Sentry"
+    )
 
     # Feature flags / development toggles
     USE_MOCK_STORAGE: int = Field(default=0)
@@ -136,7 +158,6 @@ class Settings(BaseSettings):
     EMAIL_FROM_NAME: str | None = Field(default=None)
 
     # --- Meal image cache (nightly-fill vector cache) ---
-    MEAL_IMAGE_CACHE_ENABLED: bool = Field(default=False)
     TEXT_DEDUP_THRESHOLD: float = Field(default=0.65)
     IMAGE_MATCH_THRESHOLD: float = Field(default=0.65)
     MEAL_IMAGE_COSINE_HIT_THRESHOLD: float = Field(
@@ -150,9 +171,17 @@ class Settings(BaseSettings):
     CLIP_EMBEDDING_DIM: int = Field(default=768)
 
     # AI image generators — Cloudflare Workers AI (free tier: ~150-600 images/month)
-    CF_ACCOUNT_ID: str | None = Field(default=None, description="Cloudflare account ID (dash.cloudflare.com → right sidebar)")
-    CF_API_TOKEN: str | None = Field(default=None, description="Cloudflare API token with Workers AI permission")
-    CF_IMAGE_MODEL: str = Field(default="@cf/black-forest-labs/flux-1-schnell", description="CF Workers AI model for image generation")
+    CF_ACCOUNT_ID: str | None = Field(
+        default=None,
+        description="Cloudflare account ID (dash.cloudflare.com → right sidebar)",
+    )
+    CF_API_TOKEN: str | None = Field(
+        default=None, description="Cloudflare API token with Workers AI permission"
+    )
+    CF_IMAGE_MODEL: str = Field(
+        default="@cf/black-forest-labs/flux-1-schnell",
+        description="CF Workers AI model for image generation",
+    )
     AI_IMAGE_TIMEOUT_SECONDS: int = Field(default=60)
 
     # Nightly cron drain

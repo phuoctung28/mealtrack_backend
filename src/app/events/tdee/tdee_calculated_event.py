@@ -1,6 +1,7 @@
 """
 TDEE calculated event.
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any
@@ -12,6 +13,7 @@ from src.app.events.base import DomainEvent
 @dataclass
 class TdeeCalculatedEvent(DomainEvent):
     """Event raised when TDEE is calculated."""
+
     aggregate_id: str
     user_id: str
     bmr: float

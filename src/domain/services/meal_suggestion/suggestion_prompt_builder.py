@@ -1,4 +1,5 @@
 """Prompt building for meal suggestions using PromptTemplateManager."""
+
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 from src.domain.model.meal_planning import MealType, SimpleMacroTargets
@@ -7,7 +8,9 @@ from src.domain.services.prompts.prompt_constants import EMOJI_RULES, LANGUAGE_N
 
 if TYPE_CHECKING:
     from src.domain.model.meal_suggestion import SuggestionSession
-    from src.domain.services.meal_suggestion.recipe_search_service import RecipeSearchResult
+    from src.domain.services.meal_suggestion.recipe_search_service import (
+        RecipeSearchResult,
+    )
 
 
 class SuggestionPromptBuilder:
@@ -18,17 +21,17 @@ class SuggestionPromptBuilder:
         meal_type: MealType, calorie_target: float, user_preferences: Dict
     ) -> str:
         """Build prompt for single meal generation (uses PromptTemplateManager)."""
-        goal = user_preferences.get('goal', 'maintain_weight')
-        dietary_prefs = user_preferences.get('dietary_preferences', [])
-        health_conditions = user_preferences.get('health_conditions', [])
-        target_macros = user_preferences.get('target_macros', {})
+        goal = user_preferences.get("goal", "maintain_weight")
+        dietary_prefs = user_preferences.get("dietary_preferences", [])
+        health_conditions = user_preferences.get("health_conditions", [])
+        target_macros = user_preferences.get("target_macros", {})
 
         # Get job_type and training fields
-        job_type = user_preferences.get('job_type', 'desk')
-        training_days = user_preferences.get('training_days_per_week', 0)
-        training_minutes = user_preferences.get('training_minutes_per_session', 60)
+        job_type = user_preferences.get("job_type", "desk")
+        training_days = user_preferences.get("training_days_per_week", 0)
+        training_minutes = user_preferences.get("training_minutes_per_session", 60)
 
-        total_target_calories = user_preferences.get('target_calories')
+        total_target_calories = user_preferences.get("target_calories")
         if not total_target_calories:
             raise ValueError("target_calories is required in user_preferences")
 
@@ -39,9 +42,9 @@ class SuggestionPromptBuilder:
             carbs_target = target_macros.carbs * meal_percentage
             fat_target = target_macros.fat * meal_percentage
         else:
-            protein_target = target_macros.get('protein_grams', 50) * meal_percentage
-            carbs_target = target_macros.get('carbs_grams', 250) * meal_percentage
-            fat_target = target_macros.get('fat_grams', 65) * meal_percentage
+            protein_target = target_macros.get("protein_grams", 50) * meal_percentage
+            carbs_target = target_macros.get("carbs_grams", 250) * meal_percentage
+            fat_target = target_macros.get("fat_grams", 65) * meal_percentage
 
         dietary_str = ", ".join(dietary_prefs) if dietary_prefs else "none"
         health_str = ", ".join(health_conditions) if health_conditions else "none"
@@ -51,7 +54,7 @@ class SuggestionPromptBuilder:
         job_type_labels = {
             "desk": "Desk job (sitting)",
             "on_feet": "On feet (standing/walking)",
-            "physical": "Physical work (manual labor)"
+            "physical": "Physical work (manual labor)",
         }
         job_desc = job_type_labels.get(job_type, job_type)
         weekly_hours = (training_days * training_minutes) / 60.0
@@ -75,33 +78,37 @@ Requirements: Practical ingredients, reasonable cook time, respect restrictions.
         meal_distribution: Dict[MealType, float], user_preferences: Dict
     ) -> str:
         """Build unified prompt for daily meals (compressed)."""
-        goal = user_preferences.get('goal', 'maintain_weight')
-        dietary_prefs = user_preferences.get('dietary_preferences', [])
-        health_conditions = user_preferences.get('health_conditions', [])
-        target_macros = user_preferences.get('target_macros', {})
-        target_calories = user_preferences.get('target_calories', 2000)
-        
+        goal = user_preferences.get("goal", "maintain_weight")
+        dietary_prefs = user_preferences.get("dietary_preferences", [])
+        health_conditions = user_preferences.get("health_conditions", [])
+        target_macros = user_preferences.get("target_macros", {})
+        target_calories = user_preferences.get("target_calories", 2000)
+
         dietary_str = ", ".join(dietary_prefs) if dietary_prefs else "none"
         health_str = ", ".join(health_conditions) if health_conditions else "none"
         goal_guidance = PromptTemplateManager.get_goal_guidance(goal)
-        
+
         # Build compact meal targets
         meal_targets = []
         for meal_type, calorie_target in meal_distribution.items():
             meal_pct = calorie_target / target_calories
             if isinstance(target_macros, SimpleMacroTargets):
-                p, c, f = target_macros.protein * meal_pct, target_macros.carbs * meal_pct, target_macros.fat * meal_pct
+                p, c, f = (
+                    target_macros.protein * meal_pct,
+                    target_macros.carbs * meal_pct,
+                    target_macros.fat * meal_pct,
+                )
             else:
-                p = target_macros.get('protein_grams', 50) * meal_pct
-                c = target_macros.get('carbs_grams', 250) * meal_pct
-                f = target_macros.get('fat_grams', 65) * meal_pct
-            
+                p = target_macros.get("protein_grams", 50) * meal_pct
+                c = target_macros.get("carbs_grams", 250) * meal_pct
+                f = target_macros.get("fat_grams", 65) * meal_pct
+
             meal_targets.append(
                 PromptTemplateManager.build_meal_targets(
                     meal_type.value.title(), int(calorie_target), p, c, f
                 )
             )
-        
+
         return f"""Generate daily meal plan:
 
 Profile: {goal} ({goal_guidance})
@@ -127,14 +134,30 @@ def build_single_meal_prompt(
     Target: ~500 output tokens for fast generation.
     """
     ingredients_list = session.ingredients[:8] if session.ingredients else []
-    
+
     # Protein rotation hint
-    protein_keywords = ["chicken", "beef", "pork", "fish", "salmon", "tuna", "shrimp", "tofu", "egg", "lamb", "turkey"]
-    proteins = [ing for ing in ingredients_list if any(p in ing.lower() for p in protein_keywords)]
+    protein_keywords = [
+        "chicken",
+        "beef",
+        "pork",
+        "fish",
+        "salmon",
+        "tuna",
+        "shrimp",
+        "tofu",
+        "egg",
+        "lamb",
+        "turkey",
+    ]
+    proteins = [
+        ing
+        for ing in ingredients_list
+        if any(p in ing.lower() for p in protein_keywords)
+    ]
     protein_hint = ""
     if len(proteins) > 1:
         protein_hint = f"Feature {proteins[meal_index % len(proteins)]} as main protein"
-    
+
     return PromptTemplateManager.build_suggestion_prompt(
         meal_type=session.meal_type,
         target_calories=session.target_calories,

@@ -3,41 +3,60 @@ Meal suggestion API endpoints (Phase 06).
 Simplified to only include generation endpoint.
 """
 
+import asyncio
 import logging
+from typing import Any, Awaitable, Callable
 
-from fastapi import APIRouter, Depends, Query, Request
-from starlette.responses import Response
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.orm import Session
 
+from src.api.base_dependencies import get_db
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
-from src.api.middleware.accept_language import get_request_language
-from src.api.middleware.rate_limit import limiter
 from src.api.mappers.meal_suggestion_mapper import (
     to_suggestions_list_response,
-    to_discovery_batch_response,
 )
+from src.api.middleware.accept_language import get_request_language
+from src.api.middleware.rate_limit import limiter
 from src.api.schemas.request.meal_suggestion_requests import (
-    MealSuggestionRequest,
-    SaveMealSuggestionRequest,
     DiscoverMealsRequest,
     GenerateRecipesRequest,
+    MealSuggestionRequest,
+    SaveMealSuggestionRequest,
 )
 from src.api.schemas.response.meal_suggestion_responses import (
-    SuggestionsListResponse,
-    SaveMealSuggestionResponse,
     DiscoveryBatchResponse,
     RecipeBatchResponse,
-    FoodImageResponse,
+    SaveMealSuggestionResponse,
+    SuggestionsListResponse,
 )
-
-logger = logging.getLogger(__name__)
 from src.app.commands.meal_suggestion import (
     GenerateMealSuggestionsCommand,
-    SaveMealSuggestionCommand,
     IngredientItem,
+    SaveMealSuggestionCommand,
 )
 from src.infra.event_bus import EventBus
+
+logger = logging.getLogger(__name__)
+
+
+async def _fetch_images_parallel(
+    names: list[str],
+    search_fn: Callable[[str], Awaitable[Any]],
+    timeout: float = 3.0,
+) -> list[Any]:
+    """Fetch images in parallel with per-item timeout and error isolation."""
+
+    async def safe_fetch(name: str):
+        try:
+            return await asyncio.wait_for(search_fn(name), timeout=timeout)
+        except Exception as e:
+            logger.warning("Image fetch failed for %r: %s", name, e)
+            return None
+
+    return await asyncio.gather(*[safe_fetch(n) for n in names])
+
 
 router = APIRouter(prefix="/v1/meal-suggestions", tags=["Meal Suggestions"])
 
@@ -102,6 +121,7 @@ async def generate_suggestions(
     except Exception as e:
         raise handle_exception(e) from e
 
+
 @router.post("/discover", response_model=DiscoveryBatchResponse)
 @limiter.limit("5/minute")
 async def discover_meals(
@@ -109,6 +129,7 @@ async def discover_meals(
     body: DiscoverMealsRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
+    db: Session = Depends(get_db),
 ):
     """
     Lightweight discovery: single AI call → 6 meals with names + macros.
@@ -116,12 +137,13 @@ async def discover_meals(
     Supports pagination via session_id — previously shown meals are auto-excluded.
     """
     try:
-        import asyncio
         import uuid
+
         language = get_request_language(request)
         portion_type = body.get_effective_portion_type()
 
         from src.api.base_dependencies import get_suggestion_orchestration_service
+
         service = get_suggestion_orchestration_service()
 
         session, meals = await service.generate_discovery(
@@ -142,66 +164,78 @@ async def discover_meals(
             count=body.batch_size,
         )
 
-        # --- meal-image-cache integration ---
+        # --- meal-image-cache integration (always enabled) ---
         from src.api.dependencies.food_image import get_food_image_service
         from src.api.dependencies.meal_image_cache import (
-            get_meal_image_cache_service, get_pending_queue,
+            get_meal_image_cache_service,
+            get_pending_queue,
         )
         from src.domain.model.meal_image_cache import PendingItem
-        from src.domain.services.meal_image_cache.name_canonicalizer import slug as _slug
-        from src.infra.config.settings import get_settings as _get_settings
+        from src.domain.services.meal_image_cache.name_canonicalizer import (
+            slug as _slug,
+        )
 
         image_service = get_food_image_service()
-        cfg = _get_settings()
+        cache_svc = await get_meal_image_cache_service(session=db)
+        pending_repo = await get_pending_queue(session=db)
+        english_names = [m["english_name"] for m in meals]
+        cache_hits = await cache_svc.lookup_batch(english_names)
 
-        if cfg.MEAL_IMAGE_CACHE_ENABLED:
-            from src.api.base_dependencies import get_db as _get_db
-            _db = next(_get_db())
-            cache_svc = await get_meal_image_cache_service(session=_db)
-            pending_repo = await get_pending_queue(session=_db)
-            english_names = [m["english_name"] for m in meals]
-            try:
-                cache_hits = await cache_svc.lookup_batch(english_names)
-            except Exception as exc:
-                logger.warning("Cache lookup failed, rolling back: %s", exc)
-                cache_hits = [None] * len(meals)
-            finally:
-                # Rollback any aborted transaction state before proceeding to writes
-                _db.rollback()
-        else:
-            cache_hits = [None] * len(meals)
-            pending_repo = None
+        # Separate cache hits from misses
+        images_list: list = [None] * len(meals)
+        miss_indices: list[int] = []
+        miss_names: list[str] = []
 
-        images_list: list = []
-        misses: list[PendingItem] = []
         for i, m in enumerate(meals):
             hit = cache_hits[i]
             if hit is not None:
                 logger.info(
                     "image cache hit: meal=%r source=%s cosine=%.3f url=%s",
-                    m["english_name"], hit.source, hit.cosine, hit.image_url,
+                    m["english_name"],
+                    hit.source,
+                    hit.cosine,
+                    hit.image_url,
                 )
-                images_list.append(hit)
-                continue
-            img_result = await image_service.search_food_image(m["english_name"])
-            images_list.append(img_result)
-            misses.append(PendingItem(
-                meal_name=m["english_name"],
-                name_slug=_slug(m["english_name"]),
-                candidate_image_url=(img_result.url if img_result else None),
-                candidate_thumbnail_url=(img_result.thumbnail_url if img_result else None),
-                candidate_source=(img_result.source if img_result else None),
-            ))
+                images_list[i] = hit
+            else:
+                miss_indices.append(i)
+                miss_names.append(m["english_name"])
 
-        if cfg.MEAL_IMAGE_CACHE_ENABLED and pending_repo and misses:
+        # Fetch cache misses in parallel
+        if miss_names:
+            miss_results = await _fetch_images_parallel(
+                miss_names,
+                image_service.search_food_image,
+                timeout=3.0,
+            )
+            for idx, result in zip(miss_indices, miss_results):
+                images_list[idx] = result
+
+        # Build pending queue items for misses
+        misses: list[PendingItem] = []
+        for i in miss_indices:
+            img_result = images_list[i]
+            misses.append(
+                PendingItem(
+                    meal_name=meals[i]["english_name"],
+                    name_slug=_slug(meals[i]["english_name"]),
+                    candidate_image_url=(img_result.url if img_result else None),
+                    candidate_thumbnail_url=(
+                        img_result.thumbnail_url if img_result else None
+                    ),
+                    candidate_source=(img_result.source if img_result else None),
+                )
+            )
+
+        if pending_repo and misses:
             await pending_repo.enqueue_many(misses)
 
         images = images_list
         # --- end integration ---
 
-        # Translate names if non-English
+        # Translate meal names if non-English
         translated_names = [m["name"] for m in meals]
-        if language != "en":
+        if language and language != "en":
             from src.api.base_dependencies import get_deepl_suggestion_translation_service
             try:
                 translation_svc = get_deepl_suggestion_translation_service()
@@ -212,16 +246,24 @@ async def discover_meals(
                     if translated and len(translated) == len(meals):
                         translated_names = translated
             except Exception as e:
-                logger.warning(f"Name translation failed, using English: {e}")
+                logger.warning("Name translation failed, using English: %s", e)
 
         def _as_image_fields(x):
             """Accepts CachedImage (image_url attr) or FoodImageResult (url attr)."""
             if x is None:
-                return dict(image_url=None, thumbnail_url=None, image_source=None,
-                            photographer=None, photographer_url=None,
-                            unsplash_download_location=None, image_confidence=0.0)
+                return dict(
+                    image_url=None,
+                    thumbnail_url=None,
+                    image_source=None,
+                    photographer=None,
+                    photographer_url=None,
+                    unsplash_download_location=None,
+                    image_confidence=0.0,
+                )
             image_url = getattr(x, "image_url", None) or getattr(x, "url", None)
-            thumbnail_url = getattr(x, "thumbnail_url", None) or image_url  # fallback to full URL
+            thumbnail_url = (
+                getattr(x, "thumbnail_url", None) or image_url
+            )  # fallback to full URL
             return dict(
                 image_url=image_url,
                 thumbnail_url=thumbnail_url,
@@ -234,24 +276,28 @@ async def discover_meals(
 
         # Build response
         from src.api.schemas.response.meal_suggestion_responses import (
-            DiscoveryMealResponse, MacroEstimateResponse,
+            DiscoveryMealResponse,
+            MacroEstimateResponse,
         )
+
         response_meals = []
         for i, m in enumerate(meals):
-            img = images[i] if i < len(images) and not isinstance(images[i], Exception) else None
+            img = images[i] if i < len(images) else None
             meal_id = f"disc_{uuid.uuid4().hex[:12]}"
-            response_meals.append(DiscoveryMealResponse(
-                id=meal_id,
-                meal_name=translated_names[i],
-                english_name=m["english_name"],
-                macros=MacroEstimateResponse(
-                    calories=m["calories"],
-                    protein=m["protein"],
-                    carbs=m["carbs"],
-                    fat=m["fat"],
-                ),
-                **_as_image_fields(img),
-            ))
+            response_meals.append(
+                DiscoveryMealResponse(
+                    id=meal_id,
+                    meal_name=translated_names[i],
+                    english_name=m["english_name"],
+                    macros=MacroEstimateResponse(
+                        calories=m["calories"],
+                        protein=m["protein"],
+                        carbs=m["carbs"],
+                        fat=m["fat"],
+                    ),
+                    **_as_image_fields(img),
+                )
+            )
 
         shown_count = len(session.shown_meal_names)
         return DiscoveryBatchResponse(
@@ -278,13 +324,16 @@ async def generate_recipes(
     """
     try:
         import uuid
+
         language = get_request_language(request)
 
         from src.api.base_dependencies import get_suggestion_orchestration_service
+
         service = get_suggestion_orchestration_service()
 
         # Build a minimal session for recipe generation
         from src.domain.model.meal_suggestion import SuggestionSession
+
         session = SuggestionSession(
             id=f"recipe_{uuid.uuid4().hex[:16]}",
             user_id=user_id,
@@ -302,7 +351,9 @@ async def generate_recipes(
 
         # Reuse existing Phase 2 recipe generation for selected names
         recipes = await service._recipe_generator._phase2_generate_recipes(
-            session, body.meal_names, "English",
+            session,
+            body.meal_names,
+            "English",
             suggestion_count=len(body.meal_names),
             min_acceptable_override=1,
         )
@@ -316,37 +367,13 @@ async def generate_recipes(
 
         # Map to response
         from src.api.mappers.meal_suggestion_mapper import to_meal_suggestion_response
+
         return RecipeBatchResponse(
             recipes=[to_meal_suggestion_response(r) for r in recipes],
         )
 
     except Exception as e:
         raise handle_exception(e) from e
-
-
-@router.get("/image", response_model=FoodImageResponse)
-@limiter.limit("30/minute")
-async def get_food_image(
-    request: Request,
-    q: str = Query(..., min_length=2, max_length=100, description="English food search query"),
-    _user_id: str = Depends(get_current_user_id),
-):
-    """Search for a food image by query. Returns 200 with image data or 204 if not found."""
-    try:
-        from src.api.dependencies.food_image import get_food_image_service
-        image_service = get_food_image_service()
-        result = await image_service.search_food_image(q)
-        if result is None:
-            return Response(status_code=204)
-        return FoodImageResponse(
-            url=result.url,
-            thumbnail_url=result.thumbnail_url,
-            source=result.source,
-            photographer=result.photographer,
-        )
-    except Exception as e:
-        logger.warning(f"Food image search failed for query '{q}': {e}")
-        return Response(status_code=204)
 
 
 @router.post("/save", response_model=SaveMealSuggestionResponse)
@@ -367,7 +394,8 @@ async def save_meal_suggestion(
             suggestion_id=request.suggestion_id,
             name=request.name,
             meal_type=request.meal_type,
-            calories=request.calories or round(request.protein * 4 + request.carbs * 4 + request.fat * 9),
+            calories=request.calories
+            or round(request.protein * 4 + request.carbs * 4 + request.fat * 9),
             protein=request.protein,
             carbs=request.carbs,
             fat=request.fat,
@@ -386,7 +414,7 @@ async def save_meal_suggestion(
                 for i in request.ingredients
             ],
             instructions=[
-                i.model_dump() if hasattr(i, 'model_dump') else i
+                i.model_dump() if hasattr(i, "model_dump") else i
                 for i in request.instructions
             ],
             portion_multiplier=request.portion_multiplier,
@@ -403,15 +431,20 @@ async def save_meal_suggestion(
         if request.unsplash_download_location:
             import asyncio
             from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
+
             task = asyncio.create_task(
-                UnsplashImageAdapter.trigger_download(request.unsplash_download_location)
+                UnsplashImageAdapter.trigger_download(
+                    request.unsplash_download_location
+                )
             )
             task.add_done_callback(
-                lambda t: logger.warning(
-                    "Unsplash download trigger failed: %s", t.exception()
+                lambda t: (
+                    logger.warning(
+                        "Unsplash download trigger failed: %s", t.exception()
+                    )
+                    if t.exception()
+                    else None
                 )
-                if t.exception()
-                else None
             )
 
         return SaveMealSuggestionResponse(

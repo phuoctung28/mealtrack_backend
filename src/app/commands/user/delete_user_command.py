@@ -1,4 +1,5 @@
 """Delete user account command."""
+
 from dataclasses import dataclass
 
 

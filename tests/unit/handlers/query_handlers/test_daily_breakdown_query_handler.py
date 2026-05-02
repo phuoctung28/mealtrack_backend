@@ -42,10 +42,12 @@ async def test_uses_single_range_query_for_week():
     mock_uow = AsyncMock()
     mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
     mock_uow.__aexit__ = AsyncMock(return_value=False)
-    mock_uow.meals.find_by_date_range = AsyncMock(return_value=[
-        _meal(datetime(2026, 4, 13, 12, 0, tzinfo=timezone.utc), protein=20.0),
-        _meal(datetime(2026, 4, 15, 12, 0, tzinfo=timezone.utc), protein=30.0),
-    ])
+    mock_uow.meals.find_by_date_range = AsyncMock(
+        return_value=[
+            _meal(datetime(2026, 4, 13, 12, 0, tzinfo=timezone.utc), protein=20.0),
+            _meal(datetime(2026, 4, 15, 12, 0, tzinfo=timezone.utc), protein=30.0),
+        ]
+    )
     mock_uow.meals.find_by_date = AsyncMock()
 
     with patch(

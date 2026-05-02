@@ -25,4 +25,3 @@ def local_date_expr(session, dt_col, user_timezone: Optional[str]) -> object:
         return func.date(func.timezone(user_timezone, dt_col))
 
     return func.date(dt_col)
-

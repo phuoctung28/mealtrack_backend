@@ -17,11 +17,15 @@ class MealTranslationORM(Base):
     Stores translated dish_name for each language.
     """
 
-    __tablename__ = 'meal_translation'
+    __tablename__ = "meal_translation"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    meal_id = Column(String(36), ForeignKey("meal.meal_id"), nullable=True, index=True)  # Nullable to prevent cascade delete
-    language = Column(String(7), nullable=False)  # ISO 639-1: en, vi, es, fr, de, ja, zh
+    meal_id = Column(
+        String(36), ForeignKey("meal.meal_id"), nullable=True, index=True
+    )  # Nullable to prevent cascade delete
+    language = Column(
+        String(7), nullable=False
+    )  # ISO 639-1: en, vi, es, fr, de, ja, zh
     dish_name = Column(String(255), nullable=False)
     translated_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, nullable=False)
@@ -29,14 +33,14 @@ class MealTranslationORM(Base):
     meal_ingredients = Column(JSON, nullable=True)
 
     # Soft delete
-    is_deleted = Column(Boolean, default=False, nullable=False, server_default='false')
+    is_deleted = Column(Boolean, default=False, nullable=False, server_default="false")
 
     # Relationship to food item translations
     food_items = relationship(
         "FoodItemTranslationORM",
         back_populates="meal_translation",
         cascade="all, delete-orphan",
-        lazy="selectin"
+        lazy="selectin",
     )
 
     # Relationship back to meal

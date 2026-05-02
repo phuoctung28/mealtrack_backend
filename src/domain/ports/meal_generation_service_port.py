@@ -4,7 +4,7 @@ Single LLM service that handles different prompts and request data.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Any
 
 
 class MealGenerationServicePort(ABC):
@@ -16,10 +16,10 @@ class MealGenerationServicePort(ABC):
         prompt: str,
         system_message: str,
         response_type: str = "json",
-        max_tokens: int = None,
-        schema: type = None,
-        model_purpose: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        max_tokens: int | None = None,
+        schema: type | None = None,
+        model_purpose: str | None = None,
+    ) -> dict[str, Any]:
         """
         Generate meal plan using provided prompt and system message.
 

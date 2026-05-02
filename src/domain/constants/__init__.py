@@ -4,6 +4,7 @@ Domain constants and configuration values.
 This package centralizes all constants, magic numbers, and configuration
 values used throughout the domain layer.
 """
+
 from .meal_constants import (
     MealDistribution,
     NutritionConstants,
@@ -11,15 +12,15 @@ from .meal_constants import (
     GPTPromptConstants,
     MealPlanningConstants,
     TDEEConstants,
-    WeeklyBudgetConstants
+    WeeklyBudgetConstants,
 )
 
 __all__ = [
-    'MealDistribution',
-    'NutritionConstants',
-    'PortionUnits',
-    'GPTPromptConstants',
-    'MealPlanningConstants',
-    'TDEEConstants',
-    'WeeklyBudgetConstants'
+    "MealDistribution",
+    "NutritionConstants",
+    "PortionUnits",
+    "GPTPromptConstants",
+    "MealPlanningConstants",
+    "TDEEConstants",
+    "WeeklyBudgetConstants",
 ]

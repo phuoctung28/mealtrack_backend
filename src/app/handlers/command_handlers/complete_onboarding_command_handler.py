@@ -2,6 +2,7 @@
 CompleteOnboardingCommandHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
+
 import logging
 from typing import Dict, Any, Optional
 
@@ -17,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 @handles(CompleteOnboardingCommand)
-class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, Dict[str, Any]]):
+class CompleteOnboardingCommandHandler(
+    EventHandler[CompleteOnboardingCommand, Dict[str, Any]]
+):
     """Handler for marking user onboarding as completed."""
 
     def __init__(self, cache_service: Optional[CachePort] = None):
@@ -30,7 +33,9 @@ class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, D
             user = await uow.users.find_by_firebase_uid(command.firebase_uid)
 
             if not user:
-                raise ResourceNotFoundException(f"User with Firebase UID {command.firebase_uid} not found")
+                raise ResourceNotFoundException(
+                    f"User with Firebase UID {command.firebase_uid} not found"
+                )
 
             # Check if onboarding is already completed
             if user.onboarding_completed:
@@ -38,7 +43,7 @@ class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, D
                     "firebase_uid": command.firebase_uid,
                     "onboarding_completed": True,
                     "updated": False,
-                    "message": "Onboarding already completed"
+                    "message": "Onboarding already completed",
                 }
 
             # Set onboarding as completed
@@ -54,7 +59,7 @@ class CompleteOnboardingCommandHandler(EventHandler[CompleteOnboardingCommand, D
             "firebase_uid": command.firebase_uid,
             "onboarding_completed": True,
             "updated": True,
-            "message": "Onboarding marked as completed"
+            "message": "Onboarding marked as completed",
         }
 
     async def _invalidate_user_profile(self, user_id: str):

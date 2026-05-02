@@ -1,4 +1,5 @@
 """Async weekly budget repository."""
+
 import uuid
 from datetime import date
 from typing import Optional
@@ -18,10 +19,11 @@ class AsyncWeeklyBudgetRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def find_by_user_and_week(self, user_id: str, week_start_date: date) -> Optional[WeeklyMacroBudget]:
+    async def find_by_user_and_week(
+        self, user_id: str, week_start_date: date
+    ) -> Optional[WeeklyMacroBudget]:
         result = await self.session.execute(
-            select(WeeklyMacroBudgetORM)
-            .where(
+            select(WeeklyMacroBudgetORM).where(
                 WeeklyMacroBudgetORM.user_id == user_id,
                 WeeklyMacroBudgetORM.week_start_date == week_start_date,
             )
@@ -61,8 +63,7 @@ class AsyncWeeklyBudgetRepository:
         await self.session.flush()
 
         result = await self.session.execute(
-            select(WeeklyMacroBudgetORM)
-            .where(
+            select(WeeklyMacroBudgetORM).where(
                 WeeklyMacroBudgetORM.user_id == budget.user_id,
                 WeeklyMacroBudgetORM.week_start_date == budget.week_start_date,
             )
@@ -82,8 +83,9 @@ class AsyncWeeklyBudgetRepository:
     async def update(self, budget: WeeklyMacroBudget) -> WeeklyMacroBudget:
         """Update an existing weekly budget."""
         result = await self.session.execute(
-            select(WeeklyMacroBudgetORM)
-            .where(WeeklyMacroBudgetORM.weekly_budget_id == budget.weekly_budget_id)
+            select(WeeklyMacroBudgetORM).where(
+                WeeklyMacroBudgetORM.weekly_budget_id == budget.weekly_budget_id
+            )
         )
         db = result.scalars().first()
         if db:
@@ -103,8 +105,9 @@ class AsyncWeeklyBudgetRepository:
     async def delete(self, weekly_budget_id: str) -> bool:
         """Delete a weekly budget."""
         result = await self.session.execute(
-            select(WeeklyMacroBudgetORM)
-            .where(WeeklyMacroBudgetORM.weekly_budget_id == weekly_budget_id)
+            select(WeeklyMacroBudgetORM).where(
+                WeeklyMacroBudgetORM.weekly_budget_id == weekly_budget_id
+            )
         )
         db = result.scalars().first()
         if db:

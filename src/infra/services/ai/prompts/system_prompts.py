@@ -76,8 +76,5 @@ Guidelines:
                 "— the English name in parentheses is REQUIRED for database lookup"
             )
             example = SystemPrompts._EXAMPLE_BILINGUAL
-        prompt = SystemPrompts.MEAL_TEXT_PARSING.replace(
-            "{{json_example}}", example
-        )
+        prompt = SystemPrompts.MEAL_TEXT_PARSING.replace("{{json_example}}", example)
         return prompt.replace("{{language_instruction}}", instruction)
-
