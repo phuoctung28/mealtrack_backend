@@ -3,12 +3,27 @@ from unittest.mock import Mock
 
 import deepl
 
-from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
+from src.infra.adapters.deepl_translation_adapter import (
+    SOURCE_LANG,
+    DeepLTranslationAdapter,
+)
 
 
 def test_init_requires_api_key():
     with pytest.raises(ValueError):
         DeepLTranslationAdapter(api_key="")
+
+
+@pytest.mark.asyncio
+async def test_translate_texts_skips_api_when_target_is_english():
+    adapter = DeepLTranslationAdapter.__new__(DeepLTranslationAdapter)
+    adapter._translator = Mock()
+
+    result = await adapter.translate_texts(["keep", "me"], "en")
+    assert result == ["keep", "me"]
+    result_en = await adapter.translate_texts(["a"], "EN")
+    assert result_en == ["a"]
+    adapter._translator.translate_text.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -43,6 +58,7 @@ async def test_translate_texts_maps_language_and_flattens_list_results(monkeypat
     adapter._translator.translate_text.assert_called_once()
     _, kwargs = adapter._translator.translate_text.call_args
     assert kwargs["target_lang"] == "VI"
+    assert kwargs["source_lang"] == SOURCE_LANG
 
 
 @pytest.mark.asyncio
@@ -65,6 +81,7 @@ async def test_translate_texts_flattens_single_result(monkeypatch):
     assert result == ["only"]
     _, kwargs = adapter._translator.translate_text.call_args
     assert kwargs["target_lang"] == "PT-BR"
+    assert kwargs["source_lang"] == SOURCE_LANG
 
 
 @pytest.mark.asyncio
