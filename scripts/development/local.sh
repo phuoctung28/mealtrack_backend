@@ -21,8 +21,8 @@ if [ ! -x ".venv/bin/python" ] && [ ! -x ".venv/bin/python3" ]; then
     source .venv/bin/activate
 fi
 
-echo "Installing dependencies..."
-python3 -m pip install -r requirements.txt -q
+echo "Installing dependencies (dev/test)..."
+python3 -m pip install -r requirements-test.txt -q
 
 # ── 2. PostgreSQL (local Docker) ──────────────────────────────────────────────
 PG_CONTAINER="mealtrack_postgres"

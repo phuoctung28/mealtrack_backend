@@ -1,39 +1,57 @@
-# Backend — FastAPI
+# CLAUDE.md
 
-Monorepo submodule. 4-layer Clean + CQRS + PyMediator event bus.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Quick Reference
+## Project Overview
+
+FastAPI backend for MealTrack. 4-layer Clean Architecture + CQRS + PyMediator event bus.
 
 | Item | Value |
 |------|-------|
 | **Framework** | FastAPI 0.115+ / Python 3.11+ |
-| **Database** | PostgreSQL (Neon) + SQLAlchemy 2.0 async |
-| **Migrations** | Alembic |
+| **Database** | PostgreSQL (Neon) + SQLAlchemy 2.0 |
+| **Migrations** | Alembic (timestamp naming for new migrations) |
 | **Event Bus** | PyMediator (singleton) |
 | **AI** | Google Gemini (multi-model) |
 | **Auth** | Firebase JWT |
 | **Cache** | Redis (cache-aside) |
 
-## Critical Commands (Daily Use)
+## Commands
 
 ```bash
-# Development
+# Development server
 uvicorn src.api.main:app --reload
 
-# Database
-alembic upgrade head
-alembic revision --autogenerate -m "description"
+# Database migrations
+alembic upgrade head                              # Apply pending migrations
+alembic revision --autogenerate -m "description"  # Generate new migration
+alembic downgrade -1                              # Rollback one migration
+
+# Testing
+pytest                                    # Run all tests
+pytest tests/unit/                        # Unit tests only
+pytest tests/integration/                 # Integration tests only
+pytest tests/unit/domain/test_tdee.py -v  # Single test file
+pytest --cov=src --cov-report=term        # With coverage
 
 # Code quality (run before commit)
-black src/ tests/ && flake8 src/ && mypy src/ && pytest
+black src/ tests/ && ruff check src/ && mypy src/
 ```
 
-## MUST-Follow Rules (Non-Inferable)
+## Architecture (4-Layer Clean + CQRS)
 
-**Architecture**: 4-layer Clean + CQRS (see `docs/system-architecture.md`)
-- API layer → Application layer (commands/queries)
-- Application layer → Domain layer (services)
-- Domain layer has ZERO external dependencies
+```
+src/
+├── api/        # HTTP routing, Pydantic schemas, middleware
+├── app/        # CQRS: commands/, queries/, handlers/, events/
+├── domain/     # Business logic, services, ports (interfaces)
+└── infra/      # Database models, repositories, external adapters
+```
+
+**Layer rules** (see `docs/system-architecture.md`):
+- API → Application (commands/queries) → Domain (services)
+- Domain has ZERO external dependencies (uses ports)
+- Infrastructure implements ports
 
 **Event Bus**: PyMediator with singleton registry pattern (see `docs/cqrs-guide.md`)
 - Commands emit events (don't return data)
