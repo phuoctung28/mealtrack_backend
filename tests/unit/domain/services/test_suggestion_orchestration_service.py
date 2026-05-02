@@ -221,7 +221,7 @@ class TestSuggestionGenerationPipeline:
     def test_constants_are_set_correctly(self, recipe_generator):
         """Ensures performance-related constants are set to their expected optimized values."""
         assert recipe_generator.DEFAULT_SUGGESTIONS_COUNT == 3
-        assert recipe_generator.MIN_ACCEPTABLE_RESULTS == 2
+        assert recipe_generator.MIN_ACCEPTABLE_RESULTS == 1  # relaxed to allow partial results
         assert PARALLEL_SINGLE_MEAL_TIMEOUT == 35
 
 
