@@ -1,0 +1,109 @@
+#!/usr/bin/env python
+"""
+Migration CLI for generating, testing, and applying database migrations.
+
+Usage:
+    python migrations/cli.py generate "Add user preferences"
+    python migrations/cli.py upgrade
+    python migrations/cli.py downgrade
+    python migrations/cli.py test
+    python migrations/cli.py status
+"""
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from alembic.runtime.migration import MigrationContext
+from sqlalchemy import text
+
+from migrations.utils import migration_engine as engine, MIGRATION_URL
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
+ALEMBIC_CONFIG_PATH = "alembic.ini"
+
+
+def get_alembic_config() -> Config:
+    """Load Alembic configuration with database URL set."""
+    config_path = Path(ALEMBIC_CONFIG_PATH)
+    if not config_path.exists():
+        logger.error(f"Alembic config not found: {config_path.absolute()}")
+        sys.exit(1)
+
+    alembic_cfg = Config(str(config_path))
+    alembic_cfg.set_main_option("sqlalchemy.url", MIGRATION_URL)
+    return alembic_cfg
+
+
+def cmd_generate(args) -> int:
+    """Placeholder - implemented in Task 3."""
+    raise NotImplementedError("cmd_generate")
+
+
+def cmd_upgrade(args) -> int:
+    """Placeholder - implemented in Task 4."""
+    raise NotImplementedError("cmd_upgrade")
+
+
+def cmd_downgrade(args) -> int:
+    """Placeholder - implemented in Task 5."""
+    raise NotImplementedError("cmd_downgrade")
+
+
+def cmd_test(args) -> int:
+    """Placeholder - implemented in Task 6."""
+    raise NotImplementedError("cmd_test")
+
+
+def cmd_status(args) -> int:
+    """Placeholder - implemented in Task 7."""
+    raise NotImplementedError("cmd_status")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Migration CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # generate
+    gen_parser = subparsers.add_parser("generate", help="Generate new migration")
+    gen_parser.add_argument("message", help="Migration message")
+    gen_parser.set_defaults(func=cmd_generate)
+
+    # upgrade
+    up_parser = subparsers.add_parser("upgrade", help="Apply pending migrations")
+    up_parser.set_defaults(func=cmd_upgrade)
+
+    # downgrade
+    down_parser = subparsers.add_parser("downgrade", help="Rollback last migration")
+    down_parser.set_defaults(func=cmd_downgrade)
+
+    # test
+    test_parser = subparsers.add_parser("test", help="Test upgrade/downgrade cycle")
+    test_parser.set_defaults(func=cmd_test)
+
+    # status
+    status_parser = subparsers.add_parser("status", help="Show migration status")
+    status_parser.set_defaults(func=cmd_status)
+
+    args = parser.parse_args()
+    sys.exit(args.func(args))
+
+
+if __name__ == "__main__":
+    main()
