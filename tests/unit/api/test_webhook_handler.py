@@ -138,6 +138,10 @@ class TestWebhookHandler:
                 mock_uow.rollback = AsyncMock()
                 mock_uow_class.return_value = mock_uow
 
+                # Mock subscriptions repo (async)
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
+
                 # Mock user not found for all lookup strategies
                 mock_uow.session.execute = AsyncMock()
                 mock_result = MagicMock()
