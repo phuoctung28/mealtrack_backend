@@ -69,8 +69,39 @@ def cmd_test(args) -> int:
 
 
 def cmd_status(args) -> int:
-    """Placeholder - implemented in Task 7."""
-    raise NotImplementedError("cmd_status")
+    """Show current migration status."""
+    logger.info("Checking migration status...")
+
+    try:
+        alembic_cfg = get_alembic_config()
+        script_dir = ScriptDirectory.from_config(alembic_cfg)
+
+        # Get head revision
+        head_revision = script_dir.get_current_head()
+
+        # Get current revision from database
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            current_revision = context.get_current_revision()
+
+        logger.info(f"Current revision: {current_revision or '<none>'}")
+        logger.info(f"Head revision:    {head_revision or '<none>'}")
+
+        if current_revision == head_revision:
+            logger.info("Database is up to date")
+        elif current_revision is None:
+            logger.info("Database has no migrations applied")
+        else:
+            # Count pending migrations
+            revisions = list(script_dir.walk_revisions(head_revision, current_revision))
+            pending_count = len(revisions) - 1  # Exclude current
+            logger.info(f"Pending migrations: {pending_count}")
+
+        return 0
+
+    except Exception as e:
+        logger.error(f"Failed to check status: {e}")
+        return 1
 
 
 def main():
