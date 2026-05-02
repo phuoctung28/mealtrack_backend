@@ -87,6 +87,20 @@ async def revenuecat_webhook(
                     if user:
                         break
 
+        # Fallback: lookup via existing Subscription record (handles anonymous ID renewals)
+        if not user:
+            subscription = await uow.subscriptions.find_by_revenuecat_id(app_user_id)
+            if subscription:
+                result = await uow.session.execute(
+                    select(User).where(User.id == subscription.user_id)
+                )
+                user = result.scalars().first()
+                if user:
+                    logger.info(
+                        f"RevenueCat webhook: found user via subscription record — "
+                        f"app_user_id={app_user_id}, user_id={user.id}"
+                    )
+
         if not user:
             logger.error(
                 f"RevenueCat webhook: user not found — "
