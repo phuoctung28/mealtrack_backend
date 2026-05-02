@@ -129,6 +129,10 @@ class TestWebhookHandler:
                 mock_uow.__aexit__ = AsyncMock(return_value=False)
                 mock_uow.commit = AsyncMock()
                 mock_uow.rollback = AsyncMock()
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(
+                    return_value=None
+                )
                 mock_uow_class.return_value = mock_uow
 
                 # Mock user not found for all lookup strategies
