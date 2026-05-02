@@ -26,11 +26,13 @@ from contextlib import asynccontextmanager
 
 import firebase_admin
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from firebase_admin import credentials
 
+from src.api.exceptions import ExternalServiceException
 from src.api.base_dependencies import (
     initialize_cache_layer,
     initialize_scheduled_notification_service,
@@ -231,6 +233,25 @@ from slowapi.errors import RateLimitExceeded
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(ExternalServiceException)
+async def external_service_exception_handler(
+    request: Request, exc: ExternalServiceException
+) -> JSONResponse:
+    """Handle external service failures with Retry-After header."""
+    retry_after = exc.details.get("retry_after_seconds", 30)
+
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error_code": exc.error_code,
+            "message": exc.message,
+            "details": exc.details,
+        },
+        headers={"Retry-After": str(retry_after)},
+    )
+
 
 # Dev auth bypass: inject a fixed user during development
 add_dev_auth_bypass(app)
