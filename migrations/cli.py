@@ -89,8 +89,38 @@ def cmd_upgrade(args) -> int:
 
 
 def cmd_downgrade(args) -> int:
-    """Placeholder - implemented in Task 5."""
-    raise NotImplementedError("cmd_downgrade")
+    """Rollback last migration."""
+    logger.info("Downgrading database...")
+
+    try:
+        alembic_cfg = get_alembic_config()
+
+        # Show current state
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            before_rev = context.get_current_revision()
+
+        if before_rev is None:
+            logger.info("No migrations to rollback")
+            return 0
+
+        logger.info(f"Current revision: {before_rev}")
+
+        # Run downgrade by one step
+        command.downgrade(alembic_cfg, "-1")
+
+        # Show new state
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            after_rev = context.get_current_revision()
+
+        logger.info(f"Downgraded to: {after_rev or '<none>'}")
+        logger.info("Downgrade completed successfully")
+        return 0
+
+    except Exception as e:
+        logger.error(f"Downgrade failed: {e}")
+        return 1
 
 
 def cmd_test(args) -> int:
