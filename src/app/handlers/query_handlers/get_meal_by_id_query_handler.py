@@ -9,6 +9,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetMealByIdQuery
 from src.domain.model.meal import Meal
 from src.infra.database.uow_async import AsyncUnitOfWork
+from src.infra.repositories.meal_repository import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,9 @@ class GetMealByIdQueryHandler(EventHandler[GetMealByIdQuery, Meal]):
         """Get meal by ID."""
         # Use fresh AsyncUnitOfWork to get current data
         async with AsyncUnitOfWork() as uow:
-            meal = await uow.meals.find_by_id(query.meal_id)
+            meal = await uow.meals.find_by_id(
+                query.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
+            )
 
             if not meal:
                 raise ResourceNotFoundException(f"Meal with ID {query.meal_id} not found")
