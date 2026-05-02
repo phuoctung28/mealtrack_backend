@@ -21,8 +21,9 @@ from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
-# gemini-embedding-2-preview returns 512-d vectors natively.
+# gemini-embedding-2-preview defaults to 3072-d; constrain to 512 for pgvector.
 _GEMINI_EMBEDDING_MODEL = "gemini-embedding-2-preview"
+_OUTPUT_DIM = 512
 
 
 class GeminiTextEmbeddingAdapter:
@@ -40,6 +41,7 @@ class GeminiTextEmbeddingAdapter:
             model=model,
             google_api_key=api_key,
             task_type="semantic_similarity",
+            output_dimensionality=_OUTPUT_DIM,
         )
 
     async def embed_text(self, texts: list[str]) -> list[list[float]]:
