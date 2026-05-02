@@ -27,7 +27,7 @@ class GetDailyActivitiesQueryHandler(EventHandler[GetDailyActivitiesQuery, List[
     async def handle(self, query: GetDailyActivitiesQuery) -> List[Dict[str, Any]]:
         """Get all activities for the specified date."""
         target_date = query.target_date.date() if hasattr(query.target_date, "date") else query.target_date
-        cache_key, ttl = CacheKeys.daily_activities(query.user_id, target_date)
+        cache_key, ttl = CacheKeys.daily_activities(query.user_id, target_date, query.language or "en")
         if self.cache_service:
             cached = await self.cache_service.get_json(cache_key)
             if cached is not None:
