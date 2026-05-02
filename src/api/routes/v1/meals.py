@@ -37,7 +37,12 @@ from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
 )
-from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery, GetStreakQuery, GetDailyBreakdownQuery
+from src.app.queries.meal import (
+    GetMealByIdQuery,
+    GetDailyMacrosQuery,
+    GetStreakQuery,
+    GetDailyBreakdownQuery,
+)
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 from src.infra.event_bus import EventBus
@@ -156,7 +161,9 @@ async def analyze_meal_image_immediate(
         if meal.image:
             image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
-        return MealMapper.to_detailed_response(meal, image_url, target_language=language)
+        return MealMapper.to_detailed_response(
+            meal, image_url, target_language=language
+        )
 
     except Exception as e:
         raise handle_exception(e) from e
@@ -254,6 +261,7 @@ async def parse_meal_text(
         # Map app DTO to API response DTO
         from src.api.schemas.response.meal_responses import ParsedFoodItem
         from src.domain.model.nutrition.macros import Macros as MacrosModel
+
         api_items = [
             ParsedFoodItem(
                 name=item.name,
@@ -348,7 +356,7 @@ async def get_meal(
     meal_id: str,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
-    image_store = Depends(get_image_store),
+    image_store=Depends(get_image_store),
 ):
     """Get detailed information about a specific meal.
 
@@ -415,7 +423,9 @@ async def get_daily_macros(
         # Send query with user_id for TDEE targets
         header_tz = request.headers.get("X-Timezone")
         query = GetDailyMacrosQuery(
-            user_id=user_id, target_date=target_date, header_timezone=header_tz,
+            user_id=user_id,
+            target_date=target_date,
+            header_timezone=header_tz,
         )
         result = await event_bus.send(query)
 
@@ -489,7 +499,7 @@ async def get_weekly_budget(
     user_id: str = Depends(get_current_user_id),
     week_start: Optional[str] = Query(
         None,
-        description="Week start date in YYYY-MM-DD format (Monday). Defaults to current week."
+        description="Week start date in YYYY-MM-DD format (Monday). Defaults to current week.",
     ),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
@@ -506,7 +516,9 @@ async def get_weekly_budget(
 
         header_tz = request.headers.get("X-Timezone")
         query = GetWeeklyBudgetQuery(
-            user_id=user_id, target_date=target_date, header_timezone=header_tz,
+            user_id=user_id,
+            target_date=target_date,
+            header_timezone=header_tz,
         )
         result = await event_bus.send(query)
         return result

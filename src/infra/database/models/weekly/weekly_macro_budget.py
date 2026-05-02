@@ -1,6 +1,7 @@
 """
 Weekly macro budget database model.
 """
+
 from sqlalchemy import Column, String, Date, Float, UniqueConstraint, Index
 
 from src.infra.database.config import Base
@@ -10,7 +11,7 @@ from src.infra.database.models.base import TimestampMixin
 class WeeklyMacroBudgetORM(Base, TimestampMixin):
     """SQLAlchemy model for weekly_macro_budgets table."""
 
-    __tablename__ = 'weekly_macro_budgets'
+    __tablename__ = "weekly_macro_budgets"
 
     # Primary key
     weekly_budget_id = Column(String(36), primary_key=True)
@@ -35,6 +36,6 @@ class WeeklyMacroBudgetORM(Base, TimestampMixin):
 
     # Unique constraint and indexes
     __table_args__ = (
-        UniqueConstraint('user_id', 'week_start_date', name='uq_user_week'),
-        Index('ix_user_week', 'user_id', 'week_start_date'),
+        UniqueConstraint("user_id", "week_start_date", name="uq_user_week"),
+        Index("ix_user_week", "user_id", "week_start_date"),
     )

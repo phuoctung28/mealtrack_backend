@@ -1,4 +1,5 @@
 """Unit tests for nutrition domain value objects validation."""
+
 import pytest
 from src.domain.model.nutrition.macros import Macros
 from src.domain.model.nutrition.nutrition import Nutrition, FoodItem
@@ -36,7 +37,9 @@ class TestFoodItemValidation:
         """FoodItem no longer accepts calories= — it is a derived property."""
         macros = Macros(protein=10, carbs=10, fat=5)
         with pytest.raises(TypeError):
-            FoodItem(id="1", name="Test", quantity=10, unit="g", calories=10, macros=macros)
+            FoodItem(
+                id="1", name="Test", quantity=10, unit="g", calories=10, macros=macros
+            )
 
 
 class TestNutritionValidation:

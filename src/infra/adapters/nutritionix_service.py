@@ -2,6 +2,7 @@
 Nutritionix API HTTP client.
 Provides product lookup by barcode (UPC) for packaged foods.
 """
+
 import logging
 import re
 from typing import Any, Dict, Optional
@@ -15,7 +16,7 @@ class NutritionixService:
     """HTTP client for Nutritionix Track API."""
 
     BASE_URL = "https://trackapi.nutritionix.com/v2"
-    BARCODE_PATTERN = re.compile(r'^\d{8,14}$')
+    BARCODE_PATTERN = re.compile(r"^\d{8,14}$")
 
     def __init__(self, app_id: str, api_key: str):
         self._app_id = app_id
@@ -74,7 +75,9 @@ class NutritionixService:
             logger.warning("Nutritionix HTTP error for barcode %s: %s", barcode, exc)
             return None
         except Exception as exc:
-            logger.warning("Nutritionix unexpected error for barcode %s: %s", barcode, exc)
+            logger.warning(
+                "Nutritionix unexpected error for barcode %s: %s", barcode, exc
+            )
             return None
 
     def _map_product(self, item: dict, barcode: str) -> Dict[str, Any]:
@@ -119,6 +122,7 @@ def get_nutritionix_service() -> Optional[NutritionixService]:
         return _nutritionix_service
 
     from src.infra.config.settings import settings
+
     app_id = settings.NUTRITIONIX_APP_ID
     api_key = settings.NUTRITIONIX_API_KEY
     if not app_id or not api_key:

@@ -73,12 +73,14 @@ def test_analyze_with_strategy_compresses_before_encoding():
     large_bytes = _make_jpeg(2000, 1500)
 
     from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+
     strategy = AnalysisStrategyFactory.create_basic_strategy()
 
     service.analyze_with_strategy(large_bytes, strategy)
 
     # Extract the base64 payload sent to the model
     from langchain_core.messages import HumanMessage
+
     call_args = service.model.invoke.call_args[0][0]  # list of messages
     human_msg = next(m for m in call_args if isinstance(m, HumanMessage))
     image_block = next(b for b in human_msg.content if b.get("type") == "image_url")
@@ -86,6 +88,7 @@ def test_analyze_with_strategy_compresses_before_encoding():
     assert image_content.startswith("data:image/jpeg;base64,")
 
     import base64
+
     encoded = image_content.split(",", 1)[1]
     decoded = base64.b64decode(encoded)
     img = Image.open(BytesIO(decoded))

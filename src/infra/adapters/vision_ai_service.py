@@ -3,7 +3,7 @@ import json
 import logging
 import re
 from io import BytesIO
-from typing import Dict, Any, List
+from typing import Any
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -11,10 +11,9 @@ from PIL import Image
 
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.strategies.meal_analysis_strategy import (
+    AnalysisStrategyFactory,
     MealAnalysisStrategy,
-    AnalysisStrategyFactory
 )
-from src.infra.config.settings import get_settings
 from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
 # Load environment variables
@@ -22,18 +21,21 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+
 class VisionAIService(VisionAIServicePort):
     """
     Implementation of VisionAIServicePort using Google Gemini API.
-    
+
     This class implements US-2.1 - Call Vision AI to get nutrition estimate.
     """
-    
+
     def __init__(self):
         """Initialize the Gemini client using singleton manager."""
         self._model_manager = GeminiModelManager.get_instance()
         # Disable thinking tokens and cap output to reduce latency
-        self.model = self._model_manager.get_model(thinking_budget=0, max_output_tokens=2048)
+        self.model = self._model_manager.get_model(
+            thinking_budget=0, max_output_tokens=2048
+        )
         self._optimized_prompt_enabled = True
 
     def _compress_image(self, image_bytes: bytes) -> bytes:
@@ -41,7 +43,11 @@ class VisionAIService(VisionAIServicePort):
             img = Image.open(BytesIO(image_bytes))
             w, h = img.size
 
-            if img.format == "JPEG" and max(w, h) <= 768 and len(image_bytes) < 200 * 1024:  # already small JPEG
+            if (
+                img.format == "JPEG"
+                and max(w, h) <= 768
+                and len(image_bytes) < 200 * 1024
+            ):  # already small JPEG
                 return image_bytes
 
             if max(w, h) > 768:
@@ -60,7 +66,7 @@ class VisionAIService(VisionAIServicePort):
 
     def _analyze_image_reference(
         self, image_reference: str, strategy: MealAnalysisStrategy
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze an image reference (data URL or public URL) using strategy.
         """
@@ -107,9 +113,11 @@ class VisionAIService(VisionAIServicePort):
         except Exception as e:
             raise RuntimeError(
                 f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}"
-            )
+            ) from e
 
-    def analyze_with_strategy(self, image_bytes: bytes, strategy: MealAnalysisStrategy) -> Dict[str, Any]:
+    def analyze_with_strategy(
+        self, image_bytes: bytes, strategy: MealAnalysisStrategy
+    ) -> dict[str, Any]:
         """
         Analyze a food image using the provided analysis strategy.
 
@@ -130,13 +138,13 @@ class VisionAIService(VisionAIServicePort):
 
     def analyze_by_url_with_strategy(
         self, image_url: str, strategy: MealAnalysisStrategy
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze a food image by public URL using the provided analysis strategy.
         """
         return self._analyze_image_reference(image_url, strategy)
 
-    def _extract_json_from_response(self, content: str) -> Dict[str, Any]:
+    def _extract_json_from_response(self, content: str) -> dict[str, Any]:
         """
         Extract JSON from AI response, handling various formats.
 
@@ -156,7 +164,7 @@ class VisionAIService(VisionAIServicePort):
             pass
 
         # Try to find JSON in markdown code block (with closing ```)
-        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', content)
+        json_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
         if json_match:
             try:
                 return json.loads(json_match.group(1).strip())
@@ -164,7 +172,7 @@ class VisionAIService(VisionAIServicePort):
                 pass
 
         # Try to find any complete JSON object
-        json_match = re.search(r'\{[\s\S]*\}', content)
+        json_match = re.search(r"\{[\s\S]*\}", content)
         if json_match:
             try:
                 return json.loads(json_match.group(0))
@@ -172,7 +180,7 @@ class VisionAIService(VisionAIServicePort):
                 pass
 
         # Detect truncated response (has opening { but no closing })
-        if '{' in content and '}' not in content:
+        if "{" in content and "}" not in content:
             logger.error(f"Truncated JSON response detected: {content[:500]}")
             raise ValueError(
                 "AI response was truncated. Please try again with a simpler image."
@@ -183,8 +191,8 @@ class VisionAIService(VisionAIServicePort):
             "Could not extract JSON from AI response. "
             "Please try again or use a clearer image."
         )
-        
-    def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
+
+    def analyze(self, image_bytes: bytes) -> dict[str, Any]:
         """
         Analyze a food image to extract nutritional information.
 
@@ -202,7 +210,7 @@ class VisionAIService(VisionAIServicePort):
         )
         return self.analyze_with_strategy(image_bytes, strategy)
 
-    def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
+    def analyze_by_url(self, image_url: str) -> dict[str, Any]:
         """
         Analyze a food image from a public URL.
         """
@@ -213,7 +221,7 @@ class VisionAIService(VisionAIServicePort):
 
     def analyze_with_portion_context(
         self, image_bytes: bytes, portion_size: float, unit: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze a food image with specific portion size context.
 
@@ -229,8 +237,8 @@ class VisionAIService(VisionAIServicePort):
         return self.analyze_with_strategy(image_bytes, strategy)
 
     def analyze_with_ingredients_context(
-        self, image_bytes: bytes, ingredients: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, image_bytes: bytes, ingredients: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Analyze a food image with known ingredients context.
 
@@ -246,7 +254,7 @@ class VisionAIService(VisionAIServicePort):
 
     def analyze_with_weight_context(
         self, image_bytes: bytes, weight_grams: float
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze a food image with specific weight context for accurate nutrition.
 
@@ -258,4 +266,4 @@ class VisionAIService(VisionAIServicePort):
             JSON-compatible dictionary with the raw AI response
         """
         strategy = AnalysisStrategyFactory.create_weight_strategy(weight_grams)
-        return self.analyze_with_strategy(image_bytes, strategy) 
+        return self.analyze_with_strategy(image_bytes, strategy)

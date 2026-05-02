@@ -1,4 +1,5 @@
 """Async repository for persisted saved suggestions."""
+
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -44,8 +45,7 @@ class AsyncSavedSuggestionDbRepository:
     ) -> Optional[Dict[str, Any]]:
         """Find a specific saved suggestion by user + suggestion ID."""
         result = await self.session.execute(
-            select(SavedSuggestionModel)
-            .where(
+            select(SavedSuggestionModel).where(
                 SavedSuggestionModel.user_id == user_id,
                 SavedSuggestionModel.suggestion_id == suggestion_id,
             )
@@ -91,8 +91,7 @@ class AsyncSavedSuggestionDbRepository:
     ) -> bool:
         """Delete a saved suggestion. Returns True if deleted."""
         result = await self.session.execute(
-            select(SavedSuggestionModel)
-            .where(
+            select(SavedSuggestionModel).where(
                 SavedSuggestionModel.user_id == user_id,
                 SavedSuggestionModel.suggestion_id == suggestion_id,
             )
@@ -106,8 +105,10 @@ class AsyncSavedSuggestionDbRepository:
     async def count_by_user(self, user_id: str) -> int:
         """Count saved suggestions for a user."""
         from sqlalchemy import func
+
         result = await self.session.execute(
-            select(func.count()).select_from(SavedSuggestionModel)
+            select(func.count())
+            .select_from(SavedSuggestionModel)
             .where(SavedSuggestionModel.user_id == user_id)
         )
         return result.scalar_one()

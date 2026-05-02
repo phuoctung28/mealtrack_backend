@@ -1,6 +1,7 @@
 """
 Command for recognizing an ingredient from an image.
 """
+
 from dataclasses import dataclass
 
 from src.app.events.base import Command

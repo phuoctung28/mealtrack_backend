@@ -6,6 +6,7 @@ Each test runs in an isolated transaction that is rolled back after.
 
 We override root conftest fixtures that assume MySQL to prevent interference.
 """
+
 from __future__ import annotations
 
 import os

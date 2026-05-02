@@ -1,6 +1,7 @@
 """
 Meal nutrition updated event.
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any
@@ -12,6 +13,7 @@ from src.app.events.base import DomainEvent
 @dataclass
 class MealNutritionUpdatedEvent(DomainEvent):
     """Event raised when meal nutrition is updated."""
+
     aggregate_id: str
     meal_id: str
     old_weight: float

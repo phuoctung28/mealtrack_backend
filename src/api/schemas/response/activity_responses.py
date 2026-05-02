@@ -1,6 +1,7 @@
 """
 Response schemas for activity endpoints.
 """
+
 from typing import Optional
 
 from pydantic import BaseModel
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 
 class MacrosResponse(BaseModel):
     """Macronutrient information."""
+
     protein: float
     carbs: float
     fat: float
@@ -17,6 +19,7 @@ class MacrosResponse(BaseModel):
 
 class MealActivityResponse(BaseModel):
     """Response schema for meal activity."""
+
     id: str
     type: str = "meal"
     timestamp: str
@@ -32,6 +35,7 @@ class MealActivityResponse(BaseModel):
 
 class WorkoutActivityResponse(BaseModel):
     """Response schema for workout activity."""
+
     id: str
     type: str = "workout"
     timestamp: str
@@ -45,11 +49,12 @@ class WorkoutActivityResponse(BaseModel):
 
 class ActivityResponse(BaseModel):
     """Generic activity response that can be either meal or workout."""
+
     id: str
     type: str
     timestamp: str
     title: str
-    
+
     # Additional fields stored as dict for flexibility
     # This allows both meal and workout activities to use same response
     class Config:

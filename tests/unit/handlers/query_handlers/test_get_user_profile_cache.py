@@ -1,4 +1,5 @@
 """Unit tests: GetUserProfileQueryHandler cache hit/miss behaviour."""
+
 import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch

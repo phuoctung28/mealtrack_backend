@@ -12,6 +12,7 @@ Covers:
 - calculate_meal_macros runs lookups in parallel
 - _to_grams unit conversions
 """
+
 import asyncio
 import logging
 import pytest
@@ -27,10 +28,10 @@ from src.domain.services.meal_suggestion.ingredient_nutrition_resolver import (
     PerHundredGramsMacros,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_ref(
     protein: float = 23.0,
@@ -80,6 +81,7 @@ def _make_service(
 # _derive_calories
 # ---------------------------------------------------------------------------
 
+
 def test_derive_calories_fiber_aware():
     """protein=30, carbs=50, fiber=10, fat=5 @ factor 1.0 → 345."""
     # P=30: 30×4=120; net_carbs=40: 40×4=160; fiber=10: 10×2=20; F=5: 5×9=45 → 345
@@ -104,6 +106,7 @@ def test_derive_calories_fiber_cannot_exceed_carbs():
 # T1 hit
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_t1_hit_returns_correct_macros():
     """T1: food_reference exact match → correct IngredientMacros."""
@@ -114,7 +117,7 @@ async def test_t1_hit_returns_correct_macros():
 
     assert result.source_tier == "T1_food_reference"
     assert result.food_reference_id == 7
-    assert result.protein == pytest.approx(34.5)    # 23 * 1.5
+    assert result.protein == pytest.approx(34.5)  # 23 * 1.5
     assert result.fat == pytest.approx(3.8, abs=0.1)  # 2.5 * 1.5 = 3.75 → rounded
     # Calories: P×4 + C×4 + F×9 (no fiber)
     expected_cal = _derive_calories(34.5, 0.0, 3.75, 0.0)
@@ -127,18 +130,21 @@ async def test_t1_hit_returns_correct_macros():
 # T1 miss → T2 hit
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_t1_miss_t2_hit_returns_fatsecret_macros():
     """T1 miss → T2 (FatSecret resolver) hit → correct macros, tier T2."""
-    per100 = PerHundredGramsMacros(protein=25.0, carbs=0.0, fat=3.0, fiber=0.0, sugar=0.0)
+    per100 = PerHundredGramsMacros(
+        protein=25.0, carbs=0.0, fat=3.0, fiber=0.0, sugar=0.0
+    )
     svc = _make_service(ref_result=None, resolver_result=per100)
 
     result = await svc._lookup_ingredient("turkey breast", 200.0)
 
     assert result.source_tier == "T2_fatsecret"
     assert result.food_reference_id is None
-    assert result.protein == pytest.approx(50.0)   # 25 * 2.0
-    assert result.fat == pytest.approx(6.0)        # 3 * 2.0
+    assert result.protein == pytest.approx(50.0)  # 25 * 2.0
+    assert result.fat == pytest.approx(6.0)  # 3 * 2.0
     expected_cal = _derive_calories(50.0, 0.0, 6.0, 0.0)
     assert result.calories == pytest.approx(round(expected_cal, 1))
 
@@ -147,13 +153,17 @@ async def test_t1_miss_t2_hit_returns_fatsecret_macros():
 # T1 + T2 miss → T3 AI fallback
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_t1_t2_miss_uses_t3_ai_fallback(caplog):
     """T1+T2 miss → AI fallback, WARNING logged, source_tier T3."""
     gen_data = {"protein": 10.0, "carbs": 20.0, "fat": 5.0, "fiber": 2.0, "sugar": 1.0}
     svc = _make_service(ref_result=None, resolver_result=None, gen_result=gen_data)
 
-    with caplog.at_level(logging.WARNING, logger="src.domain.services.meal_suggestion.nutrition_lookup_service"):
+    with caplog.at_level(
+        logging.WARNING,
+        logger="src.domain.services.meal_suggestion.nutrition_lookup_service",
+    ):
         result = await svc._lookup_ingredient("exotic mushroom blend", 100.0)
 
     assert result.source_tier == "T3_ai_estimate"
@@ -166,6 +176,7 @@ async def test_t1_t2_miss_uses_t3_ai_fallback(caplog):
 # ---------------------------------------------------------------------------
 # T3 AI failure → zero macros, no exception
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_t3_ai_failure_returns_zero_macros_no_exception():
@@ -186,14 +197,23 @@ async def test_t3_ai_failure_returns_zero_macros_no_exception():
 # _aggregate
 # ---------------------------------------------------------------------------
 
+
 def test_aggregate_sums_and_counts_tiers():
     """_aggregate sums macros and counts tiers correctly."""
     svc = _make_service()
     ingredients = [
-        IngredientMacros("rice", 200.0, 260.0, 4.0, 52.0, 0.5, 0.5, 0.0, "T1_food_reference", 1),
-        IngredientMacros("chicken", 150.0, 172.5, 34.5, 0.0, 3.75, 0.0, 0.0, "T1_food_reference", 2),
-        IngredientMacros("sriracha", 15.0, 15.0, 0.5, 3.0, 0.3, 0.0, 1.0, "T2_fatsecret"),
-        IngredientMacros("exotic spice", 5.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, "T3_ai_estimate"),
+        IngredientMacros(
+            "rice", 200.0, 260.0, 4.0, 52.0, 0.5, 0.5, 0.0, "T1_food_reference", 1
+        ),
+        IngredientMacros(
+            "chicken", 150.0, 172.5, 34.5, 0.0, 3.75, 0.0, 0.0, "T1_food_reference", 2
+        ),
+        IngredientMacros(
+            "sriracha", 15.0, 15.0, 0.5, 3.0, 0.3, 0.0, 1.0, "T2_fatsecret"
+        ),
+        IngredientMacros(
+            "exotic spice", 5.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, "T3_ai_estimate"
+        ),
     ]
     meal = svc._aggregate(ingredients)
 
@@ -215,6 +235,7 @@ def test_aggregate_sums_and_counts_tiers():
 # ---------------------------------------------------------------------------
 # calculate_meal_macros — parallel execution
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_calculate_meal_macros_runs_lookups_in_parallel():
@@ -240,12 +261,15 @@ async def test_calculate_meal_macros_runs_lookups_in_parallel():
     )
 
     import time
+
     start = time.monotonic()
-    meal = await svc.calculate_meal_macros([
-        {"name": "item_a", "amount": 100.0, "unit": "g"},
-        {"name": "item_b", "amount": 100.0, "unit": "g"},
-        {"name": "item_c", "amount": 100.0, "unit": "g"},
-    ])
+    meal = await svc.calculate_meal_macros(
+        [
+            {"name": "item_a", "amount": 100.0, "unit": "g"},
+            {"name": "item_b", "amount": 100.0, "unit": "g"},
+            {"name": "item_c", "amount": 100.0, "unit": "g"},
+        ]
+    )
     elapsed = time.monotonic() - start
 
     # 3 serial 50ms sleeps = 150ms; parallel ≈ 50ms with tolerance
@@ -259,6 +283,7 @@ async def test_calculate_meal_macros_runs_lookups_in_parallel():
 # ---------------------------------------------------------------------------
 # _to_grams
 # ---------------------------------------------------------------------------
+
 
 def test_to_grams_identity_for_grams():
     svc = _make_service()
@@ -305,6 +330,7 @@ def test_to_grams_unknown_unit_assumes_grams(caplog):
 # C2/C3: T3 _ai_estimate uses asyncio.to_thread + wait_for
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_t3_ai_estimate_does_not_block_event_loop():
     """C2: _ai_estimate wraps generate_meal_plan in asyncio.to_thread.
@@ -345,7 +371,9 @@ async def test_t3_ai_estimate_does_not_block_event_loop():
     )
 
     # concurrent_task must have run (proves event loop was NOT blocked)
-    assert slow_completed, "Concurrent task was blocked — _ai_estimate is not using to_thread"
+    assert (
+        slow_completed
+    ), "Concurrent task was blocked — _ai_estimate is not using to_thread"
 
 
 @pytest.mark.asyncio
@@ -361,7 +389,13 @@ async def test_t3_ai_estimate_respects_10s_timeout():
     resolver = MagicMock()
     resolver.resolve = AsyncMock(return_value=None)
     gen = MagicMock()
-    gen.generate_meal_plan.return_value = {"protein": 5.0, "carbs": 5.0, "fat": 1.0, "fiber": 0.0, "sugar": 0.0}
+    gen.generate_meal_plan.return_value = {
+        "protein": 5.0,
+        "carbs": 5.0,
+        "fat": 1.0,
+        "fiber": 0.0,
+        "sugar": 0.0,
+    }
 
     svc = NutritionLookupService(
         food_ref_repo=repo,
@@ -389,7 +423,9 @@ async def test_t3_ai_estimate_respects_10s_timeout():
 @pytest.mark.asyncio
 async def test_t3_ai_estimate_passes_correct_positional_args():
     """C3: generate_meal_plan called with (prompt, system_message, 'json', 256, schema, None)."""
-    from src.domain.services.meal_suggestion.nutrition_lookup_service import SingleIngredientSchema
+    from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+        SingleIngredientSchema,
+    )
 
     repo = MagicMock()
     repo.find_by_normalized_name.return_value = None
@@ -397,7 +433,11 @@ async def test_t3_ai_estimate_passes_correct_positional_args():
     resolver.resolve = AsyncMock(return_value=None)
     gen = MagicMock()
     gen.generate_meal_plan.return_value = {
-        "protein": 8.0, "carbs": 3.0, "fat": 1.0, "fiber": 0.0, "sugar": 0.0
+        "protein": 8.0,
+        "carbs": 3.0,
+        "fat": 1.0,
+        "fiber": 0.0,
+        "sugar": 0.0,
     }
 
     svc = NutritionLookupService(
@@ -411,15 +451,16 @@ async def test_t3_ai_estimate_passes_correct_positional_args():
     gen.generate_meal_plan.assert_called_once()
     args = gen.generate_meal_plan.call_args[0]  # positional args passed to to_thread
     assert len(args) == 6, f"Expected 6 positional args, got {len(args)}: {args}"
-    assert args[2] == "json"          # response_type
-    assert args[3] == 256             # max_tokens
+    assert args[2] == "json"  # response_type
+    assert args[3] == 256  # max_tokens
     assert args[4] is SingleIngredientSchema  # schema
-    assert args[5] is None            # model_purpose
+    assert args[5] is None  # model_purpose
 
 
 # ---------------------------------------------------------------------------
 # Integration-ish: chicken fried rice fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_chicken_fried_rice_realistic_totals():
@@ -460,13 +501,15 @@ async def test_chicken_fried_rice_realistic_totals():
         generation_service=gen,
     )
 
-    meal = await svc.calculate_meal_macros([
-        {"name": "cooked rice", "amount": 400.0, "unit": "g"},
-        {"name": "chicken breast", "amount": 300.0, "unit": "g"},
-        {"name": "egg", "amount": 100.0, "unit": "g"},
-        {"name": "vegetable oil", "amount": 30.0, "unit": "g"},
-        {"name": "soy sauce", "amount": 30.0, "unit": "g"},
-    ])
+    meal = await svc.calculate_meal_macros(
+        [
+            {"name": "cooked rice", "amount": 400.0, "unit": "g"},
+            {"name": "chicken breast", "amount": 300.0, "unit": "g"},
+            {"name": "egg", "amount": 100.0, "unit": "g"},
+            {"name": "vegetable oil", "amount": 30.0, "unit": "g"},
+            {"name": "soy sauce", "amount": 30.0, "unit": "g"},
+        ]
+    )
 
     # All T1 hits
     assert meal.t1_count == 5

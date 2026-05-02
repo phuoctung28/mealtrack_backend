@@ -11,4 +11,9 @@ class VectorCachePort(Protocol):
     async def query_nearest(
         self, text_embedding: list[float]
     ) -> Optional[CachedImage]: ...
+
+    async def query_nearest_batch(
+        self, text_embeddings: list[list[float]]
+    ) -> list[Optional[CachedImage]]: ...
+
     async def upsert(self, record: CachedImageUpsert) -> None: ...

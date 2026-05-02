@@ -1,4 +1,5 @@
 """Referral wallet model — tracks user balance and lifetime payout totals."""
+
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 

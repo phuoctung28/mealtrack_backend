@@ -2,6 +2,7 @@
 SearchFoodsQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
+
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -78,10 +79,15 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
         # Step 1: Try FatSecret with localized region — cache and return immediately if anything found
         try:
             results = await self.fat_secret_service.search_foods(
-                query, max_results=limit, region=region, language=language,
+                query,
+                max_results=limit,
+                region=region,
+                language=language,
             )
             if results:
-                logger.debug(f"FatSecret region={region} returned {len(results)} results")
+                logger.debug(
+                    f"FatSecret region={region} returned {len(results)} results"
+                )
                 await self.cache_service.cache_search(cache_key, results)
                 return results
         except Exception:
@@ -90,14 +96,18 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
         # Step 2: Translation fallback — only on true empty response from localized search
         if not self.translation_service:
             try:
-                results = await self.fat_secret_service.search_foods(query, max_results=limit)
+                results = await self.fat_secret_service.search_foods(
+                    query, max_results=limit
+                )
                 if results:
                     await self.cache_service.cache_search(cache_key, results)
                 return results
             except Exception:
                 return []
 
-        translated_query = await self.translation_service.translate_query(query, language)
+        translated_query = await self.translation_service.translate_query(
+            query, language
+        )
         if not translated_query:
             translated_query = query
 
@@ -118,7 +128,9 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
         await self.cache_service.cache_search(cache_key, results)
         return results
 
-    def _process_search_results(self, raw_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _process_search_results(
+        self, raw_results: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """Process search results: deduplicate and capitalize names."""
         if not raw_results:
             return raw_results
@@ -145,16 +157,26 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
             return name
 
         parts = []
-        for part in name.split(','):
+        for part in name.split(","):
             words = []
             for word in part.strip().split():
                 word_lower = word.lower()
-                if word_lower in ['and', 'or', 'with', 'in', 'on', 'of', 'the', 'a', 'an']:
+                if word_lower in [
+                    "and",
+                    "or",
+                    "with",
+                    "in",
+                    "on",
+                    "of",
+                    "the",
+                    "a",
+                    "an",
+                ]:
                     words.append(word_lower if words else word.capitalize())
                 else:
                     words.append(word.capitalize())
 
             if words:
-                parts.append(' '.join(words))
+                parts.append(" ".join(words))
 
-        return ', '.join(parts)
+        return ", ".join(parts)

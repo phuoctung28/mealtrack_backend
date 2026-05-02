@@ -22,7 +22,9 @@ def _valid_payload() -> dict:
 
 
 def _invalid_payload() -> dict:
-    return {"structured_data": {"dish_name": "Broken", "foods": [{"name": "No macros"}]}}
+    return {
+        "structured_data": {"dish_name": "Broken", "foods": [{"name": "No macros"}]}
+    }
 
 
 def test_rank_candidates_prefers_higher_parse_success_then_lower_token_cost():
@@ -74,7 +76,9 @@ def test_enforce_thresholds_raises_on_regression():
     result = loop.rank_candidates(candidates, cases)[0]
 
     try:
-        loop.enforce_thresholds(result, min_parse_success_rate=0.9, max_prompt_tokens=100)
+        loop.enforce_thresholds(
+            result, min_parse_success_rate=0.9, max_prompt_tokens=100
+        )
         assert False, "Expected threshold validation to fail"
     except ValueError as exc:
         message = str(exc)

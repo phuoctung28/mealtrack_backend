@@ -1,0 +1,134 @@
+name: Release Pipeline (Production)
+
+on:
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  unit-tests:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Run unit tests
+        run: pytest tests/unit -v --cov=src --cov-fail-under=65
+
+  trigger-e2e:
+    name: 🚀 E2E Tests
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger mealtrack-e2e workflow
+        uses: peter-evans/repository-dispatch@ff4da817e31db7f9deb889f7ef7a042d694ff76a
+        with:
+          token: ${{ secrets.E2E_REPO_PAT }}
+          repository: phuoctung28/mealtrack-e2e
+          event-type: run-e2e
+          client-payload: '{"ref": "${{ github.sha }}", "triggered_by": "release-pipeline"}'
+
+      - name: Wait for E2E to complete
+        env:
+          GH_TOKEN: ${{ secrets.E2E_REPO_PAT }}
+        run: |
+          echo "Waiting for E2E workflow to start..."
+          sleep 30
+
+          # Get the latest workflow run triggered by repository_dispatch
+          for i in {1..60}; do
+            RUN_ID=$(gh api repos/phuoctung28/mealtrack-e2e/actions/runs \
+              --jq '.workflow_runs[] | select(.event=="repository_dispatch") | .id' \
+              | head -1)
+
+            if [ -n "$RUN_ID" ]; then
+              echo "Found E2E run: $RUN_ID"
+              break
+            fi
+            echo "Waiting for E2E run to appear... ($i/60)"
+            sleep 10
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "E2E workflow did not start"
+            exit 1
+          fi
+
+          # Poll for completion
+          echo "Polling E2E run status..."
+          for i in {1..60}; do
+            STATUS=$(gh api repos/phuoctung28/mealtrack-e2e/actions/runs/$RUN_ID --jq '.status')
+            CONCLUSION=$(gh api repos/phuoctung28/mealtrack-e2e/actions/runs/$RUN_ID --jq '.conclusion')
+
+            echo "Status: $STATUS, Conclusion: $CONCLUSION"
+
+            if [ "$STATUS" = "completed" ]; then
+              if [ "$CONCLUSION" = "success" ]; then
+                echo "✅ E2E tests passed!"
+                exit 0
+              else
+                echo "❌ E2E tests failed with conclusion: $CONCLUSION"
+                exit 1
+              fi
+            fi
+
+            echo "Waiting for E2E to complete... ($i/60)"
+            sleep 30
+          done
+
+          echo "E2E workflow timed out"
+          exit 1
+
+  approval:
+    name: ✅ Manual Approval
+    needs: trigger-e2e
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: |
+          echo "## ✅ Release Approved" >> $GITHUB_STEP_SUMMARY
+          echo "E2E tests passed. Ready to build production image." >> $GITHUB_STEP_SUMMARY
+
+  build-prod-image:
+    name: 📦 Build Production Image
+    needs: approval
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push production image
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main .
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: 📊 Image Summary
+        run: |
+          echo "## 🐳 Production Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Tags Published" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY

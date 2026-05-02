@@ -1,6 +1,7 @@
 """
 Handler for getting notification preferences.
 """
+
 import logging
 from typing import Any, Dict, Optional
 
@@ -15,9 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 @handles(GetNotificationPreferencesQuery)
-class GetNotificationPreferencesQueryHandler(EventHandler[GetNotificationPreferencesQuery, Dict[str, Any]]):
+class GetNotificationPreferencesQueryHandler(
+    EventHandler[GetNotificationPreferencesQuery, Dict[str, Any]]
+):
     """Handler for getting notification preferences."""
-    
+
     def __init__(self, cache_service: Optional[CachePort] = None):
         self.cache_service = cache_service
 
@@ -42,19 +45,25 @@ class GetNotificationPreferencesQueryHandler(EventHandler[GetNotificationPrefere
         try:
             async with AsyncUnitOfWork() as uow:
                 # Get preferences for user
-                preferences = await uow.notifications.find_notification_preferences_by_user(
-                    query.user_id
+                preferences = (
+                    await uow.notifications.find_notification_preferences_by_user(
+                        query.user_id
+                    )
                 )
 
                 if not preferences:
                     # Create and return default preferences
-                    default_prefs = NotificationPreferences.create_default(query.user_id)
+                    default_prefs = NotificationPreferences.create_default(
+                        query.user_id
+                    )
                     saved_prefs = await uow.notifications.save_notification_preferences(
                         default_prefs
                     )
                     await uow.commit()
 
-                    logger.info(f"Created default notification preferences for user {query.user_id}")
+                    logger.info(
+                        f"Created default notification preferences for user {query.user_id}"
+                    )
                     return saved_prefs.to_dict()
                 else:
                     return preferences.to_dict()

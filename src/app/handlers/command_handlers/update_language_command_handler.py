@@ -1,4 +1,5 @@
 """Handler for updating user language preference."""
+
 import logging
 from typing import Dict, Any
 

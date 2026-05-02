@@ -1,13 +1,18 @@
 """
 Integration tests for timezone-aware notification queries.
 """
+
 import uuid
 from datetime import datetime, timezone
 
 import pytest
 
-from src.domain.model.notification import NotificationPreferences as DomainNotificationPreferences
-from src.infra.database.models.notification.notification_preferences import NotificationPreferencesORM as NotificationPreferences
+from src.domain.model.notification import (
+    NotificationPreferences as DomainNotificationPreferences,
+)
+from src.infra.database.models.notification.notification_preferences import (
+    NotificationPreferencesORM as NotificationPreferences,
+)
 from src.infra.database.models.user.user import User
 from src.infra.repositories.notification_repository import NotificationRepository
 
@@ -15,7 +20,7 @@ from src.infra.repositories.notification_repository import NotificationRepositor
 @pytest.mark.integration
 class TestTimezoneAwareMealReminders:
     """Test timezone-aware meal reminder queries."""
-    
+
     def test_find_users_for_meal_reminder_vietnam_timezone(self, test_session):
         """Test meal reminder matching with Vietnam timezone."""
         # Create user in Vietnam timezone
@@ -28,11 +33,11 @@ class TestTimezoneAwareMealReminders:
             password_hash="dummy_hash",
             timezone="Asia/Ho_Chi_Minh",
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         test_session.add(user)
         test_session.commit()
-        
+
         # Create notification preferences with breakfast at 9:00 AM (540 minutes)
         prefs = DomainNotificationPreferences.create_default(user_id)
         prefs.breakfast_time_minutes = 540  # 9:00 AM
@@ -51,18 +56,18 @@ class TestTimezoneAwareMealReminders:
             last_water_reminder_at=prefs.last_water_reminder_at,
             sleep_reminder_time_minutes=prefs.sleep_reminder_time_minutes,
             created_at=prefs.created_at,
-            updated_at=prefs.updated_at
+            updated_at=prefs.updated_at,
         )
         test_session.add(db_prefs)
         test_session.commit()
-        
+
         # Test: 2:00 UTC = 9:00 AM Vietnam (should match)
         repository = NotificationRepository(db=test_session)
         current_utc = datetime(2024, 12, 7, 2, 0, tzinfo=timezone.utc)
         user_ids = repository.find_users_for_meal_reminder("breakfast", current_utc)
-        
+
         assert user_id in user_ids
-    
+
     def test_find_users_for_meal_reminder_us_pacific_timezone(self, test_session):
         """Test meal reminder matching with US Pacific timezone."""
         # Create user in US Pacific timezone
@@ -75,11 +80,11 @@ class TestTimezoneAwareMealReminders:
             password_hash="dummy_hash",
             timezone="America/Los_Angeles",
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         test_session.add(user)
         test_session.commit()
-        
+
         # Create notification preferences with breakfast at 9:00 AM (540 minutes)
         prefs = DomainNotificationPreferences.create_default(user_id)
         prefs.breakfast_time_minutes = 540  # 9:00 AM
@@ -98,19 +103,21 @@ class TestTimezoneAwareMealReminders:
             last_water_reminder_at=prefs.last_water_reminder_at,
             sleep_reminder_time_minutes=prefs.sleep_reminder_time_minutes,
             created_at=prefs.created_at,
-            updated_at=prefs.updated_at
+            updated_at=prefs.updated_at,
         )
         test_session.add(db_prefs)
         test_session.commit()
-        
+
         # Test: 17:00 UTC = 9:00 AM Pacific (should match)
         repository = NotificationRepository(db=test_session)
         current_utc = datetime(2024, 12, 7, 17, 0, tzinfo=timezone.utc)
         user_ids = repository.find_users_for_meal_reminder("breakfast", current_utc)
-        
+
         assert user_id in user_ids
-    
-    def test_find_users_for_meal_reminder_different_timezones_same_preference(self, test_session):
+
+    def test_find_users_for_meal_reminder_different_timezones_same_preference(
+        self, test_session
+    ):
         """Test that same preference time in different timezones triggers at different UTC times."""
         # Create user 1 in Vietnam
         user1_id = str(uuid.uuid4())
@@ -122,10 +129,10 @@ class TestTimezoneAwareMealReminders:
             password_hash="dummy_hash",
             timezone="Asia/Ho_Chi_Minh",
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         test_session.add(user1)
-        
+
         # Create user 2 in US Pacific
         user2_id = str(uuid.uuid4())
         user2 = User(
@@ -136,11 +143,11 @@ class TestTimezoneAwareMealReminders:
             password_hash="dummy_hash",
             timezone="America/Los_Angeles",
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         test_session.add(user2)
         test_session.commit()
-        
+
         # Both want breakfast at 9:00 AM local time
         for uid in [user1_id, user2_id]:
             prefs = DomainNotificationPreferences.create_default(uid)
@@ -160,19 +167,19 @@ class TestTimezoneAwareMealReminders:
                 last_water_reminder_at=prefs.last_water_reminder_at,
                 sleep_reminder_time_minutes=prefs.sleep_reminder_time_minutes,
                 created_at=prefs.created_at,
-                updated_at=prefs.updated_at
+                updated_at=prefs.updated_at,
             )
             test_session.add(db_prefs)
         test_session.commit()
-        
+
         repository = NotificationRepository(db=test_session)
-        
+
         # 2:00 UTC = 9:00 AM Vietnam (user1 should match)
         current_utc = datetime(2024, 12, 7, 2, 0, tzinfo=timezone.utc)
         user_ids = repository.find_users_for_meal_reminder("breakfast", current_utc)
         assert user1_id in user_ids
         assert user2_id not in user_ids
-        
+
         # 17:00 UTC = 9:00 AM Pacific (user2 should match)
         current_utc = datetime(2024, 12, 7, 17, 0, tzinfo=timezone.utc)
         user_ids = repository.find_users_for_meal_reminder("breakfast", current_utc)
@@ -183,7 +190,7 @@ class TestTimezoneAwareMealReminders:
 @pytest.mark.integration
 class TestTimezoneAwareSleepReminders:
     """Test timezone-aware sleep reminder queries."""
-    
+
     def test_find_users_for_sleep_reminder_timezone_aware(self, test_session):
         """Test sleep reminder matching with timezone conversion."""
         # Create user in Vietnam timezone
@@ -196,11 +203,11 @@ class TestTimezoneAwareSleepReminders:
             password_hash="dummy_hash",
             timezone="Asia/Ho_Chi_Minh",
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         test_session.add(user)
         test_session.commit()
-        
+
         # Create notification preferences with sleep reminder at 10:00 PM (1320 minutes)
         prefs = DomainNotificationPreferences.create_default(user_id)
         prefs.sleep_reminder_time_minutes = 1320  # 10:00 PM
@@ -219,23 +226,23 @@ class TestTimezoneAwareSleepReminders:
             last_water_reminder_at=prefs.last_water_reminder_at,
             sleep_reminder_time_minutes=prefs.sleep_reminder_time_minutes,
             created_at=prefs.created_at,
-            updated_at=prefs.updated_at
+            updated_at=prefs.updated_at,
         )
         test_session.add(db_prefs)
         test_session.commit()
-        
+
         # Test: 15:00 UTC = 10:00 PM Vietnam (should match)
         repository = NotificationRepository(db=test_session)
         current_utc = datetime(2024, 12, 7, 15, 0, tzinfo=timezone.utc)
         user_ids = repository.find_users_for_sleep_reminder(current_utc)
-        
+
         assert user_id in user_ids
 
 
 @pytest.mark.integration
 class TestWaterReminderInterval:
     """Test water reminder interval logic."""
-    
+
     def test_update_last_water_reminder(self, test_session):
         """Test updating last water reminder timestamp."""
         # Create user
@@ -248,11 +255,11 @@ class TestWaterReminderInterval:
             password_hash="dummy_hash",
             timezone="UTC",
             created_at=datetime.now(),
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
         )
         test_session.add(user)
         test_session.commit()
-        
+
         # Create notification preferences
         prefs = DomainNotificationPreferences.create_default(user_id)
         db_prefs = NotificationPreferences(
@@ -270,20 +277,19 @@ class TestWaterReminderInterval:
             last_water_reminder_at=None,
             sleep_reminder_time_minutes=prefs.sleep_reminder_time_minutes,
             created_at=prefs.created_at,
-            updated_at=prefs.updated_at
+            updated_at=prefs.updated_at,
         )
         test_session.add(db_prefs)
         test_session.commit()
-        
+
         # Test update
         repository = NotificationRepository(db=test_session)
         sent_at = datetime(2024, 12, 7, 12, 0, tzinfo=timezone.utc)
         result = repository.update_last_water_reminder(user_id, sent_at)
-        
+
         assert result is True
         test_session.refresh(db_prefs)
         # MySQL may return naive datetime, so compare without timezone
         stored_time = db_prefs.last_water_reminder_at
         expected_time = sent_at.replace(tzinfo=None)
         assert stored_time.replace(tzinfo=None) == expected_time
-

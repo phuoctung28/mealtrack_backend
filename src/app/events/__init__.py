@@ -1,12 +1,8 @@
 """
 Event-driven architecture components.
 """
-from .base import DomainEvent
 
-# Daily meal events
-from .daily_meal import (
-    DailyMealsGeneratedEvent,
-)
+from .base import DomainEvent
 
 # Meal events
 from .meal import (
@@ -30,19 +26,13 @@ from .user import (
 __all__ = [
     # Base
     "DomainEvent",
-    
-    # Daily meal events
-    "DailyMealsGeneratedEvent",
-    
     # Meal events
     "MealAnalysisStartedEvent",
     "MealImageUploadedEvent",
     "MealNutritionUpdatedEvent",
     "MealEditedEvent",
-
     # TDEE events
     "TdeeCalculatedEvent",
-    
     # User events
     "UserOnboardedEvent",
     "UserProfileUpdatedEvent",

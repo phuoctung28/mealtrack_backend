@@ -2,6 +2,7 @@
 GetFoodDetailsQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
+
 from typing import Any, Dict
 
 from src.app.events.base import EventHandler, handles
@@ -13,7 +14,9 @@ from src.domain.services.food_mapping_service import FoodMappingService
 class GetFoodDetailsQueryHandler(EventHandler[GetFoodDetailsQuery, Dict[str, Any]]):
     """Handler for getting food details by FDC ID."""
 
-    def __init__(self, food_data_service, cache_service, mapping_service: FoodMappingService):
+    def __init__(
+        self, food_data_service, cache_service, mapping_service: FoodMappingService
+    ):
         self.food_data_service = food_data_service
         self.cache_service = cache_service
         self.mapping_service = mapping_service

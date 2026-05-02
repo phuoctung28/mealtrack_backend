@@ -26,7 +26,7 @@ class TestTdeeMapper:
             training_days_per_week=0,
             training_minutes_per_session=15,
             goal="recomp",
-            unit_system="metric"
+            unit_system="metric",
         )
 
         domain = self.mapper.to_domain(dto)
@@ -55,7 +55,7 @@ class TestTdeeMapper:
             training_days_per_week=2,
             training_minutes_per_session=45,
             goal="cut",
-            unit_system="imperial"
+            unit_system="imperial",
         )
 
         domain = self.mapper.to_domain(dto)
@@ -80,7 +80,7 @@ class TestTdeeMapper:
             training_days_per_week=0,
             training_minutes_per_session=15,  # Schema requires min 15
             goal="recomp",
-            unit_system="metric"
+            unit_system="metric",
         )
         domain = self.mapper.to_domain(dto)
         assert domain.job_type.value == "desk"
@@ -99,7 +99,7 @@ class TestTdeeMapper:
                 training_days_per_week=training_days,
                 training_minutes_per_session=training_minutes,
                 goal="recomp",
-                unit_system="metric"
+                unit_system="metric",
             )
             domain = self.mapper.to_domain(dto)
             assert domain.training_days_per_week == training_days
@@ -108,7 +108,7 @@ class TestTdeeMapper:
     def test_to_domain_all_goals(self):
         """Test converting DTO with all goals."""
         goals = ["cut", "bulk", "recomp"]
-        
+
         for goal in goals:
             dto = TdeeCalculationRequest(
                 age=30,
@@ -120,25 +120,25 @@ class TestTdeeMapper:
                 training_days_per_week=4,
                 training_minutes_per_session=60,
                 goal=goal,
-                unit_system="metric"
+                unit_system="metric",
             )
-            
+
             domain = self.mapper.to_domain(dto)
             assert domain.goal.value == goal
 
     def test_to_response_dto(self):
         """Test converting domain model to response DTO."""
         from src.domain.model.user import Goal
-        
+
         domain = TdeeResponse(
             bmr=1700.0,
             tdee=2200.0,
             macros=MacroTargets(calories=2200, protein=165, carbs=220, fat=73),
-            goal=Goal.RECOMP
+            goal=Goal.RECOMP,
         )
-        
+
         dto = self.mapper.to_response_dto(domain)
-        
+
         assert dto.bmr == 1700.0
         assert dto.tdee == 2200.0
         assert dto.macros.calories == 2200
@@ -159,11 +159,11 @@ class TestTdeeMapper:
             training_days_per_week=4,
             training_minutes_per_session=60,
             goal="recomp",
-            unit_system="metric"
+            unit_system="metric",
         )
-        
+
         profile_dict = TdeeMapper.map_to_profile_dict(dto)
-        
+
         assert profile_dict["age"] == 30
         assert profile_dict["gender"] == "male"
         assert profile_dict["height_cm"] == 175
@@ -182,11 +182,11 @@ class TestTdeeMapper:
             training_days_per_week=4,
             training_minutes_per_session=60,
             goal="recomp",
-            unit_system="imperial"
+            unit_system="imperial",
         )
-        
+
         profile_dict = TdeeMapper.map_to_profile_dict(dto)
-        
+
         assert profile_dict["age"] == 30
         assert profile_dict["gender"] == "male"
         # 70 inches * 2.54 = 177.8 cm
@@ -194,4 +194,3 @@ class TestTdeeMapper:
         # 154 pounds * 0.453592 = 69.85 kg
         assert abs(profile_dict["weight_kg"] - 69.85) < 0.1
         assert profile_dict["body_fat_percentage"] == 15.0
-

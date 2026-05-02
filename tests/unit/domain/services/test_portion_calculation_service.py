@@ -1,4 +1,5 @@
 """Tests for PortionCalculationService."""
+
 from src.domain.services.portion_calculation_service import PortionCalculationService
 
 

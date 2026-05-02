@@ -1,4 +1,5 @@
 """Async cheat day repository."""
+
 from datetime import date
 from typing import List, Optional
 
@@ -7,7 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.model.cheat_day import CheatDay
 from src.infra.database.models.cheat_day.cheat_day import CheatDayORM
-from src.infra.mappers.cheat_day_mapper import cheat_day_orm_to_domain, cheat_day_domain_to_orm
+from src.infra.mappers.cheat_day_mapper import (
+    cheat_day_orm_to_domain,
+    cheat_day_domain_to_orm,
+)
 
 
 class AsyncCheatDayRepository:
@@ -21,10 +25,11 @@ class AsyncCheatDayRepository:
         self.session.add(db)
         await self.session.flush()
 
-    async def find_by_user_and_date(self, user_id: str, target_date: date) -> Optional[CheatDay]:
+    async def find_by_user_and_date(
+        self, user_id: str, target_date: date
+    ) -> Optional[CheatDay]:
         result = await self.session.execute(
-            select(CheatDayORM)
-            .where(
+            select(CheatDayORM).where(
                 CheatDayORM.user_id == user_id,
                 CheatDayORM.date == target_date,
             )

@@ -1,6 +1,7 @@
 """
 Ingredient recognition response DTOs.
 """
+
 from enum import Enum
 from typing import Optional
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 
 class IngredientCategoryEnum(str, Enum):
     """Category of identified ingredient."""
+
     VEGETABLE = "vegetable"
     FRUIT = "fruit"
     PROTEIN = "protein"
@@ -22,26 +24,17 @@ class IngredientRecognitionResponse(BaseModel):
     """Response from ingredient recognition."""
 
     name: Optional[str] = Field(
-        None,
-        description="Identified ingredient name in English (lowercase)"
+        None, description="Identified ingredient name in English (lowercase)"
     )
     confidence: float = Field(
-        0.0,
-        ge=0.0,
-        le=1.0,
-        description="Confidence score between 0 and 1"
+        0.0, ge=0.0, le=1.0, description="Confidence score between 0 and 1"
     )
     category: Optional[IngredientCategoryEnum] = Field(
-        None,
-        description="Category of the identified ingredient"
+        None, description="Category of the identified ingredient"
     )
-    success: bool = Field(
-        True,
-        description="Whether recognition was successful"
-    )
+    success: bool = Field(True, description="Whether recognition was successful")
     message: Optional[str] = Field(
-        None,
-        description="Additional message (e.g., error details)"
+        None, description="Additional message (e.g., error details)"
     )
 
     class Config:
@@ -51,6 +44,6 @@ class IngredientRecognitionResponse(BaseModel):
                 "confidence": 0.92,
                 "category": "protein",
                 "success": True,
-                "message": None
+                "message": None,
             }
         }

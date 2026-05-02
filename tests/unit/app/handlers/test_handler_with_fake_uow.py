@@ -2,15 +2,19 @@
 Unit tests demonstrating FakeUoW pattern for handler testing.
 These tests show how handlers can be tested without a database.
 """
+
 import pytest
 from unittest.mock import AsyncMock, Mock, MagicMock, patch
 from uuid import uuid4
 
 from src.app.commands.meal import DeleteMealCommand
-from src.app.handlers.command_handlers.delete_meal_command_handler import DeleteMealCommandHandler
+from src.app.handlers.command_handlers.delete_meal_command_handler import (
+    DeleteMealCommandHandler,
+)
 from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.utils.timezone_utils import utc_now
 from tests.fixtures.fakes.fake_uow import FakeUnitOfWork
+
 
 class TestDeleteMealWithFakeUoW:
     """Test DeleteMealCommandHandler using Mock UoW (handler requires session access)."""
@@ -27,17 +31,16 @@ class TestDeleteMealWithFakeUoW:
                 image_id=str(uuid4()),
                 format="jpeg",
                 size_bytes=100000,
-                url="https://example.com/image.jpg"
-            )
+                url="https://example.com/image.jpg",
+            ),
         )
         from src.domain.model.nutrition import Nutrition, Macros
+
         meal = meal.mark_ready(
             nutrition=Nutrition(
-
-                macros=Macros(protein=30, carbs=50, fat=20),
-                food_items=[]
+                macros=Macros(protein=30, carbs=50, fat=20), food_items=[]
             ),
-            dish_name="Test Meal"
+            dish_name="Test Meal",
         )
 
         # Build a mock UoW — handler now delegates deletion to uow.meals.delete()
@@ -60,7 +63,9 @@ class TestDeleteMealWithFakeUoW:
         assert "deleted" in result["message"].lower()
         mock_uow.meals.delete.assert_called_once_with(meal.meal_id)
 
+
 # Removed TestSyncUserWithFakeUoW - SyncUserCommand not in scope for this demo
+
 
 class TestFakeUoWTransactionBehavior:
     """Test FakeUnitOfWork transaction behavior."""

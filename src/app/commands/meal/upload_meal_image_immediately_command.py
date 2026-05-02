@@ -1,6 +1,7 @@
 """
 Command for immediate meal image upload and analysis.
 """
+
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
@@ -16,6 +17,7 @@ class UploadMealImageImmediatelyCommand(Command):
     This command combines upload and analysis in a single synchronous operation,
     returning complete nutritional analysis without background processing.
     """
+
     user_id: str
     file_contents: bytes
     content_type: str

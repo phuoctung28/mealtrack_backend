@@ -1,6 +1,7 @@
 """
 Simple cache metrics collector.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -54,4 +55,3 @@ class CacheMonitor:
     def reset(self) -> None:
         self.metrics = CacheMetrics()
         self.last_reset = utc_now()
-

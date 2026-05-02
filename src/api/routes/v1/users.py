@@ -2,34 +2,48 @@
 Users API endpoints - Firebase integration for user management.
 Handles user authentication sync, profile retrieval, and status management.
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 
+from src.api.dependencies.auth import (
+    get_current_user_id,
+    verify_firebase_token,
+    verify_firebase_uid_ownership,
+)
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.schemas.request.user_requests import (
     UserSyncRequest,
-    UserUpdateLastAccessedRequest
+    UserUpdateLastAccessedRequest,
 )
-from pydantic import BaseModel
 from src.api.schemas.response.user_responses import (
-    UserSyncResponse,
+    OnboardingCompletionResponse,
+    UserDeleteResponse,
     UserProfileResponse,
     UserStatusResponse,
+    UserSyncResponse,
     UserUpdateResponse,
-    OnboardingCompletionResponse,
-    UserDeleteResponse
 )
-from src.app.commands.user import CompleteOnboardingCommand, DeleteUserCommand, UpdateLanguageCommand, UpdateTimezoneCommand
+from src.app.commands.user import (
+    CompleteOnboardingCommand,
+    DeleteUserCommand,
+    UpdateLanguageCommand,
+    UpdateTimezoneCommand,
+)
 from src.app.commands.user.sync_user_command import (
     SyncUserCommand,
-    UpdateUserLastAccessedCommand
+    UpdateUserLastAccessedCommand,
 )
-from src.app.queries.user.get_user_by_firebase_uid_query import GetUserByFirebaseUidQuery
-from src.app.queries.user.get_user_onboarding_status_query import GetUserOnboardingStatusQuery
+from src.app.queries.user.get_user_by_firebase_uid_query import (
+    GetUserByFirebaseUidQuery,
+)
+from src.app.queries.user.get_user_onboarding_status_query import (
+    GetUserOnboardingStatusQuery,
+)
 from src.infra.event_bus import EventBus
-from src.api.dependencies.auth import get_current_user_id, verify_firebase_token, verify_firebase_uid_ownership
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/users", tags=["Users"])
@@ -37,11 +51,13 @@ router = APIRouter(prefix="/v1/users", tags=["Users"])
 
 class UpdateLanguageRequest(BaseModel):
     """Request body for language preference update."""
+
     language_code: str
 
 
 class UpdateTimezoneRequest(BaseModel):
     """Request body for timezone update."""
+
     timezone: str
 
 
@@ -50,14 +66,14 @@ async def sync_user_from_firebase(
     request: UserSyncRequest,
     http_request: Request,
     token: dict = Depends(verify_firebase_token),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Sync user data from Firebase authentication.
-    
+
     Creates a new user if they don't exist, or updates existing user data.
     This endpoint is called automatically when a user signs in through Firebase.
-    
+
     - **firebase_uid**: Firebase user unique identifier
     - **email**: User email address
     - **phone_number**: User phone number (optional)
@@ -77,8 +93,8 @@ async def sync_user_from_firebase(
             "firebase_uid": request.firebase_uid,
             "provider": request.provider,
             "has_email": bool(request.email),
-            "has_phone": bool(request.phone_number)
-        }
+            "has_phone": bool(request.phone_number),
+        },
     )
     try:
         # Create sync command
@@ -98,131 +114,133 @@ async def sync_user_from_firebase(
             last_name=request.last_name,
             language_code=language_code,
         )
-        
+
         # Send command
         result = await event_bus.send(command)
-        
+
         # Map result to response
         user_data = result["user"]
-        
+
         logger.info(
             f"User sync completed for firebase_uid: {request.firebase_uid}",
             extra={
                 "firebase_uid": request.firebase_uid,
                 "user_created": result["created"],
-                "user_updated": result["updated"]
-            }
+                "user_updated": result["updated"],
+            },
         )
 
         return UserSyncResponse(
             user=UserProfileResponse(**user_data),
             created=result["created"],
             updated=result["updated"],
-            message=result["message"]
+            message=result["message"],
         )
-        
+
     except Exception as e:
         logger.error(
             f"User sync failed for firebase_uid: {request.firebase_uid}",
             extra={
                 "firebase_uid": request.firebase_uid,
                 "provider": request.provider,
-                "exception_type": type(e).__name__
-            }
+                "exception_type": type(e).__name__,
+            },
         )
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.get("/firebase/{firebase_uid}", response_model=UserProfileResponse)
 async def get_user_by_firebase_uid(
     firebase_uid: str = Depends(verify_firebase_uid_ownership),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Get user profile by Firebase UID.
-    
+
     Retrieves complete user profile information using Firebase UID.
     This is the primary way to get user data after Firebase authentication.
-    
+
     - **firebase_uid**: Firebase user unique identifier
     """
     try:
         # Create query
         query = GetUserByFirebaseUidQuery(firebase_uid=firebase_uid)
-        
+
         # Send query
         result = await event_bus.send(query)
-        
+
         # Return user profile response
         return UserProfileResponse(**result)
-        
+
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.get("/firebase/{firebase_uid}/status", response_model=UserStatusResponse)
 async def get_user_onboarding_status(
     firebase_uid: str = Depends(verify_firebase_uid_ownership),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Get user's onboarding status by Firebase UID.
-    
+
     Returns minimal user status information for onboarding flow decisions.
     Used by the mobile app to determine if user needs to complete onboarding.
-    
+
     - **firebase_uid**: Firebase user unique identifier
     """
     try:
         # Create query
         query = GetUserOnboardingStatusQuery(firebase_uid=firebase_uid)
-        
+
         # Send query
         result = await event_bus.send(query)
-        
+
         # Return status response
         return UserStatusResponse(**result)
-        
+
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.put("/firebase/{firebase_uid}/last-accessed", response_model=UserUpdateResponse)
 async def update_user_last_accessed(
     request: UserUpdateLastAccessedRequest,
     firebase_uid: str = Depends(verify_firebase_uid_ownership),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Update user's last accessed timestamp.
-    
+
     Updates the last_accessed field for activity tracking and analytics.
     Called periodically by the mobile app to track user engagement.
-    
+
     - **firebase_uid**: Firebase user unique identifier
     - **last_accessed**: Timestamp of last access (optional, defaults to now)
     """
     try:
         # Create command
         command = UpdateUserLastAccessedCommand(
-            firebase_uid=firebase_uid,
-            last_accessed=request.last_accessed
+            firebase_uid=firebase_uid, last_accessed=request.last_accessed
         )
-        
+
         # Send command
         result = await event_bus.send(command)
-        
+
         # Return update response
         return UserUpdateResponse(**result)
-        
+
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
-@router.put("/firebase/{firebase_uid}/onboarding/complete", response_model=OnboardingCompletionResponse)
+@router.put(
+    "/firebase/{firebase_uid}/onboarding/complete",
+    response_model=OnboardingCompletionResponse,
+)
 async def complete_onboarding(
     firebase_uid: str = Depends(verify_firebase_uid_ownership),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Mark user onboarding as completed.
@@ -243,14 +261,14 @@ async def complete_onboarding(
         return OnboardingCompletionResponse(**result)
 
     except Exception as e:
-        raise handle_exception(e)
+        raise handle_exception(e) from e
 
 
 @router.put("/timezone")
 async def update_timezone(
     request: UpdateTimezoneRequest,
     user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Update user's timezone. Called on app open/resume for accurate meal type detection.
@@ -269,7 +287,7 @@ async def update_timezone(
 async def update_language(
     request: UpdateLanguageRequest,
     user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Update user's preferred language.
@@ -289,7 +307,7 @@ async def update_language(
 @router.delete("/firebase/{firebase_uid}", response_model=UserDeleteResponse)
 async def delete_user_account(
     firebase_uid: str = Depends(verify_firebase_uid_ownership),
-    event_bus: EventBus = Depends(get_configured_event_bus)
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Delete user account (soft delete in DB, hard delete in Firebase).
@@ -306,7 +324,7 @@ async def delete_user_account(
     """
     logger.info(
         f"Starting account deletion for firebase_uid: {firebase_uid}",
-        extra={"firebase_uid": firebase_uid}
+        extra={"firebase_uid": firebase_uid},
     )
     try:
         # Create delete command
@@ -317,10 +335,7 @@ async def delete_user_account(
 
         logger.info(
             f"Account deletion completed for firebase_uid: {firebase_uid}",
-            extra={
-                "firebase_uid": firebase_uid,
-                "deleted": result["deleted"]
-            }
+            extra={"firebase_uid": firebase_uid, "deleted": result["deleted"]},
         )
 
         # Return deletion response
@@ -329,9 +344,6 @@ async def delete_user_account(
     except Exception as e:
         logger.error(
             f"Account deletion failed for firebase_uid: {firebase_uid}",
-            extra={
-                "firebase_uid": firebase_uid,
-                "exception_type": type(e).__name__
-            }
+            extra={"firebase_uid": firebase_uid, "exception_type": type(e).__name__},
         )
-        raise handle_exception(e)
+        raise handle_exception(e) from e

@@ -1,4 +1,5 @@
 """Notification repository implementation."""
+
 from datetime import datetime
 from typing import List, Optional
 
@@ -8,8 +9,12 @@ from src.domain.model.notification import UserFcmToken, NotificationPreferences
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
 from src.infra.database.config import ScopedSession
 from src.infra.repositories.notification.fcm_token_operations import FcmTokenOperations
-from src.infra.repositories.notification.notification_preferences_operations import NotificationPreferencesOperations
-from src.infra.repositories.notification.reminder_query_builder import ReminderQueryBuilder
+from src.infra.repositories.notification.notification_preferences_operations import (
+    NotificationPreferencesOperations,
+)
+from src.infra.repositories.notification.reminder_query_builder import (
+    ReminderQueryBuilder,
+)
 
 
 class NotificationRepository(NotificationRepositoryPort):
@@ -76,7 +81,9 @@ class NotificationRepository(NotificationRepositoryPort):
             self._close_db_if_created(db)
 
     # Notification Preferences operations
-    def save_notification_preferences(self, preferences: NotificationPreferences) -> NotificationPreferences:
+    def save_notification_preferences(
+        self, preferences: NotificationPreferences
+    ) -> NotificationPreferences:
         """Save notification preferences to the database."""
         db = self._get_db()
         try:
@@ -84,7 +91,9 @@ class NotificationRepository(NotificationRepositoryPort):
         finally:
             self._close_db_if_created(db)
 
-    def find_notification_preferences_by_user(self, user_id: str) -> Optional[NotificationPreferences]:
+    def find_notification_preferences_by_user(
+        self, user_id: str
+    ) -> Optional[NotificationPreferences]:
         """Find notification preferences by user ID."""
         db = self._get_db()
         try:
@@ -92,7 +101,9 @@ class NotificationRepository(NotificationRepositoryPort):
         finally:
             self._close_db_if_created(db)
 
-    def update_notification_preferences(self, user_id: str, preferences: NotificationPreferences) -> NotificationPreferences:
+    def update_notification_preferences(
+        self, user_id: str, preferences: NotificationPreferences
+    ) -> NotificationPreferences:
         """Update notification preferences for a user."""
         return self.save_notification_preferences(preferences)
 
@@ -105,11 +116,15 @@ class NotificationRepository(NotificationRepositoryPort):
             self._close_db_if_created(db)
 
     # Utility operations
-    def find_users_for_meal_reminder(self, meal_type: str, current_utc: datetime) -> List[str]:
+    def find_users_for_meal_reminder(
+        self, meal_type: str, current_utc: datetime
+    ) -> List[str]:
         """Find user IDs who should receive meal reminders at current UTC time."""
         db = self._get_db()
         try:
-            return self.query_builder.find_users_for_meal_reminder(db, meal_type, current_utc)
+            return self.query_builder.find_users_for_meal_reminder(
+                db, meal_type, current_utc
+            )
         finally:
             self._close_db_if_created(db)
 
@@ -120,4 +135,3 @@ class NotificationRepository(NotificationRepositoryPort):
             return self.query_builder.find_users_for_daily_summary(db, current_utc)
         finally:
             self._close_db_if_created(db)
-

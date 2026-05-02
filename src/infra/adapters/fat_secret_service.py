@@ -2,6 +2,7 @@
 FatSecret API HTTP client.
 Provides product lookup by barcode and food search using OAuth 2.0.
 """
+
 from typing import Dict, Any, Optional, List
 import logging
 import time
@@ -19,7 +20,7 @@ FATSECRET_TOKEN_URL = "https://oauth.fatsecret.com/connect/token"
 FATSECRET_API_BASE = "https://platform.fatsecret.com/rest/v1"
 
 # Barcode validation pattern (8-14 digits)
-BARCODE_PATTERN = re.compile(r'^\d{8,14}$')
+BARCODE_PATTERN = re.compile(r"^\d{8,14}$")
 
 # Map language code to FatSecret region for localized search
 LANGUAGE_TO_REGION = {
@@ -127,8 +128,10 @@ class FatSecretService:
             return None
 
     async def get_product(
-        self, barcode: str,
-        region: str = "US", language: str = "en",
+        self,
+        barcode: str,
+        region: str = "US",
+        language: str = "en",
     ) -> Optional[Dict[str, Any]]:
         """Fetch product by barcode from FatSecret."""
         # Validate barcode format
@@ -155,8 +158,11 @@ class FatSecretService:
 
             # Get food details
             detail_params = {
-                "method": "food.get", "food_id": food_id, "format": "json",
-                "region": region, "language": language,
+                "method": "food.get",
+                "food_id": food_id,
+                "format": "json",
+                "region": region,
+                "language": language,
             }
             food_details = await self._api_request("GET", "", detail_params)
             if not food_details:
@@ -168,8 +174,11 @@ class FatSecretService:
             return None
 
     async def search_foods(
-        self, query: str, max_results: int = 10,
-        region: str = "US", language: str = "en",
+        self,
+        query: str,
+        max_results: int = 10,
+        region: str = "US",
+        language: str = "en",
     ) -> List[Dict[str, Any]]:
         """Search foods by query string with nutrition data."""
         try:
@@ -191,17 +200,13 @@ class FatSecretService:
             if not foods:
                 # OAuth 2.0 format: {"foods_search": {"results": {"food": [...]}}}
                 foods = (
-                    result.get("foods_search", {})
-                    .get("results", {})
-                    .get("food", [])
+                    result.get("foods_search", {}).get("results", {}).get("food", [])
                 )
             if not foods:
                 # Log error details if present
                 error = result.get("error")
                 if error:
-                    logger.error(
-                        f"FatSecret API error for '{query}': {error}"
-                    )
+                    logger.error(f"FatSecret API error for '{query}': {error}")
                 else:
                     logger.warning(
                         f"FatSecret returned no foods for '{query}'. "
@@ -221,8 +226,11 @@ class FatSecretService:
                 if food_id:
                     try:
                         detail_params = {
-                            "method": "food.get", "food_id": food_id, "format": "json",
-                            "region": region, "language": language,
+                            "method": "food.get",
+                            "food_id": food_id,
+                            "format": "json",
+                            "region": region,
+                            "language": language,
                         }
                         details = await self._api_request("GET", "", detail_params)
                         if details:
@@ -254,11 +262,13 @@ class FatSecretService:
             unit = s.get("measurement_description")
             gram_weight = self._safe_float(s.get("metric_serving_amount"))
             if unit and gram_weight and gram_weight > 0:
-                units.append({
-                    "unit": unit,
-                    "gram_weight": gram_weight,
-                    "description": s.get("serving_description", ""),
-                })
+                units.append(
+                    {
+                        "unit": unit,
+                        "gram_weight": gram_weight,
+                        "description": s.get("serving_description", ""),
+                    }
+                )
 
         # Always include "g" as base unit
         if not any(u["unit"].lower() == "g" for u in units):
@@ -282,9 +292,13 @@ class FatSecretService:
         metric_amount = self._safe_float(serving.get("metric_serving_amount")) or 100
 
         return {
-            "calories_100g": self._calc_per_100g(serving.get("calories"), metric_amount),
+            "calories_100g": self._calc_per_100g(
+                serving.get("calories"), metric_amount
+            ),
             "protein_100g": self._calc_per_100g(serving.get("protein"), metric_amount),
-            "carbs_100g": self._calc_per_100g(serving.get("carbohydrate"), metric_amount),
+            "carbs_100g": self._calc_per_100g(
+                serving.get("carbohydrate"), metric_amount
+            ),
             "fat_100g": self._calc_per_100g(serving.get("fat"), metric_amount),
             "serving_description": serving.get("serving_description"),
             "allowed_units": self._extract_serving_units(food),
@@ -321,9 +335,13 @@ class FatSecretService:
             "name": food.get("food_name", ""),
             "brand": food.get("brand_name"),
             "barcode": barcode,
-            "calories_100g": self._calc_per_100g(serving.get("calories"), metric_amount),
+            "calories_100g": self._calc_per_100g(
+                serving.get("calories"), metric_amount
+            ),
             "protein_100g": self._calc_per_100g(serving.get("protein"), metric_amount),
-            "carbs_100g": self._calc_per_100g(serving.get("carbohydrate"), metric_amount),
+            "carbs_100g": self._calc_per_100g(
+                serving.get("carbohydrate"), metric_amount
+            ),
             "fat_100g": self._calc_per_100g(serving.get("fat"), metric_amount),
             "serving_size": serving.get("serving_description"),
             "image_url": food.get("food_url"),
@@ -348,7 +366,9 @@ class FatSecretService:
             "brand": food.get("brand_name"),
             "food_description": food.get("food_description", ""),
             "source": "fatsecret",
-            "food_id": food.get("food_id"),  # FatSecret's internal ID for getting details
+            "food_id": food.get(
+                "food_id"
+            ),  # FatSecret's internal ID for getting details
             "allowed_units": self._default_allowed_units(),  # Will be enriched with details
         }
 

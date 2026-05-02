@@ -1,6 +1,7 @@
 """
 Mapper for meal-related DTOs and domain models.
 """
+
 from typing import List, Optional
 
 from src.api.schemas.response import (
@@ -8,7 +9,7 @@ from src.api.schemas.response import (
     DetailedMealResponse,
     MealListResponse,
     FoodItemResponse,
-    NutritionResponse
+    NutritionResponse,
 )
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
@@ -17,24 +18,24 @@ from src.domain.model.nutrition import FoodItem, Nutrition, Macros, Micros
 # Status mapping from domain to API
 STATUS_MAPPING = {
     "PROCESSING": "pending",
-    "ANALYZING": "analyzing", 
+    "ANALYZING": "analyzing",
     "ENRICHING": "analyzing",
     "READY": "ready",
-    "FAILED": "failed"
+    "FAILED": "failed",
 }
 
 
 class MealMapper:
     """Mapper for meal data transformation."""
-    
+
     @staticmethod
     def to_simple_response(meal: Meal) -> SimpleMealResponse:
         """
         Convert Meal domain model to SimpleMealResponse DTO.
-        
+
         Args:
             meal: Meal domain model
-            
+
         Returns:
             SimpleMealResponse DTO
         """
@@ -46,9 +47,9 @@ class MealMapper:
             meal_type=meal.meal_type,
             ready_at=meal.ready_at,
             error_message=meal.error_message,
-            created_at=meal.created_at
+            created_at=meal.created_at,
         )
-    
+
     @staticmethod
     def to_detailed_response(
         meal: Meal,
@@ -83,7 +84,7 @@ class MealMapper:
             total_calories = meal.nutrition.calories
 
             # Map total nutrition macros
-            if hasattr(meal.nutrition, 'macros') and meal.nutrition.macros:
+            if hasattr(meal.nutrition, "macros") and meal.nutrition.macros:
                 total_nutrition = MacrosResponse(
                     protein=meal.nutrition.macros.protein,
                     carbs=meal.nutrition.macros.carbs,
@@ -92,7 +93,7 @@ class MealMapper:
                     sugar=meal.nutrition.macros.sugar,
                 )
             # Handle legacy structure where nutrition has direct properties
-            elif hasattr(meal.nutrition, 'protein'):
+            elif hasattr(meal.nutrition, "protein"):
                 total_nutrition = MacrosResponse(
                     protein=meal.nutrition.protein,
                     carbs=meal.nutrition.carbs,
@@ -103,7 +104,7 @@ class MealMapper:
             if meal.nutrition.food_items:
                 for item in meal.nutrition.food_items:
                     nutrition_dto = None
-                    if hasattr(item, 'macros') and item.macros:
+                    if hasattr(item, "macros") and item.macros:
                         nutrition_dto = NutritionResponse(
                             nutrition_id=str(item.name),
                             calories=item.calories,
@@ -116,13 +117,25 @@ class MealMapper:
 
                     # Calculate per-100g custom nutrition if custom ingredient
                     custom_nutrition_dto = None
-                    if hasattr(item, 'is_custom') and item.is_custom and item.quantity > 0:
+                    if (
+                        hasattr(item, "is_custom")
+                        and item.is_custom
+                        and item.quantity > 0
+                    ):
                         scale_factor = 100.0 / item.quantity
                         custom_nutrition_dto = CustomNutritionResponse(
                             calories_per_100g=item.calories * scale_factor,
-                            protein_per_100g=item.macros.protein * scale_factor if item.macros else 0.0,
-                            carbs_per_100g=item.macros.carbs * scale_factor if item.macros else 0.0,
-                            fat_per_100g=item.macros.fat * scale_factor if item.macros else 0.0,
+                            protein_per_100g=(
+                                item.macros.protein * scale_factor
+                                if item.macros
+                                else 0.0
+                            ),
+                            carbs_per_100g=(
+                                item.macros.carbs * scale_factor if item.macros else 0.0
+                            ),
+                            fat_per_100g=(
+                                item.macros.fat * scale_factor if item.macros else 0.0
+                            ),
                         )
 
                     food_item_dto = FoodItemResponse(
@@ -134,20 +147,18 @@ class MealMapper:
                         description=None,
                         nutrition=nutrition_dto,
                         custom_nutrition=custom_nutrition_dto,
-                        fdc_id=getattr(item, 'fdc_id', None),
-                        is_custom=getattr(item, 'is_custom', False)
+                        fdc_id=getattr(item, "fdc_id", None),
+                        is_custom=getattr(item, "is_custom", False),
                     )
                     food_items.append(food_item_dto)
 
         # --- Apply DeepL translation if available ---
         dish_name = meal.dish_name
-        instructions = MealMapper._normalize_instructions(getattr(meal, 'instructions', None))
+        instructions = MealMapper._normalize_instructions(
+            getattr(meal, "instructions", None)
+        )
 
-        if (
-            target_language
-            and target_language != "en"
-            and meal.translations
-        ):
+        if target_language and target_language != "en" and meal.translations:
             tr = meal.translations.get(target_language)
             if tr and tr.is_fully_cached():
                 dish_name = tr.dish_name
@@ -191,17 +202,19 @@ class MealMapper:
             food_items=food_items,
             image_url=image_url,
             total_calories=total_calories,
-            total_weight_grams=meal.weight_grams if hasattr(meal, 'weight_grams') else None,
+            total_weight_grams=(
+                meal.weight_grams if hasattr(meal, "weight_grams") else None
+            ),
             total_nutrition=total_nutrition,
             translations=translations_response,
-            description=getattr(meal, 'description', None),
+            description=getattr(meal, "description", None),
             instructions=instructions,
-            prep_time_min=getattr(meal, 'prep_time_min', None),
-            cook_time_min=getattr(meal, 'cook_time_min', None),
-            cuisine_type=getattr(meal, 'cuisine_type', None),
-            origin_country=getattr(meal, 'origin_country', None),
+            prep_time_min=getattr(meal, "prep_time_min", None),
+            cook_time_min=getattr(meal, "cook_time_min", None),
+            cuisine_type=getattr(meal, "cuisine_type", None),
+            origin_country=getattr(meal, "origin_country", None),
         )
-    
+
     @staticmethod
     def _normalize_instructions(instructions: Optional[list]) -> Optional[list]:
         """Normalize instructions to structured format.
@@ -221,83 +234,76 @@ class MealMapper:
 
     @staticmethod
     def to_meal_list_response(
-        meals: List[Meal], 
+        meals: List[Meal],
         total: int,
         page: int = 1,
         page_size: int = 10,
-        image_urls: Optional[dict] = None
+        image_urls: Optional[dict] = None,
     ) -> MealListResponse:
         """
         Convert list of Meal domain models to MealListResponse DTO.
-        
+
         Args:
             meals: List of Meal domain models
             total: Total count of meals
             page: Current page number
             page_size: Items per page
             image_urls: Optional dict mapping meal_id to image URLs
-            
+
         Returns:
             MealListResponse DTO
         """
         image_urls = image_urls or {}
-        
+
         meal_responses = []
         for meal in meals:
             if meal.nutrition and meal.nutrition.food_items:  # Has detailed info
                 response = MealMapper.to_detailed_response(
-                    meal, 
-                    image_urls.get(meal.meal_id)
+                    meal, image_urls.get(meal.meal_id)
                 )
             else:  # Simple response
                 response = MealMapper.to_simple_response(meal)
             meal_responses.append(response)
-        
+
         return MealListResponse(
             meals=meal_responses,
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=(total + page_size - 1) // page_size
+            total_pages=(total + page_size - 1) // page_size,
         )
-    
+
     @staticmethod
     def map_nutrition_from_dict(nutrition_dict: dict) -> Nutrition:
         """
         Create Nutrition domain model from dictionary.
-        
+
         Args:
             nutrition_dict: Dictionary with nutrition data
-            
+
         Returns:
             Nutrition domain model
         """
         macros = Macros(
             protein=nutrition_dict.get("protein_g", 0),
             carbs=nutrition_dict.get("carbs_g", 0),
-            fat=nutrition_dict.get("fat_g", 0)
+            fat=nutrition_dict.get("fat_g", 0),
         )
-        
+
         micros = None
         if "sodium_mg" in nutrition_dict:
-            micros = Micros(
-                sodium=nutrition_dict.get("sodium_mg", 0)
-            )
-        
-        return Nutrition(
-            macros=macros,
-            micros=micros,
-            food_items=[]
-        )
-    
+            micros = Micros(sodium=nutrition_dict.get("sodium_mg", 0))
+
+        return Nutrition(macros=macros, micros=micros, food_items=[])
+
     @staticmethod
     def map_food_item_from_dict(item_dict: dict) -> FoodItem:
         """
         Create FoodItem domain model from dictionary.
-        
+
         Args:
             item_dict: Dictionary with food item data
-            
+
         Returns:
             FoodItem domain model
         """
@@ -305,18 +311,18 @@ class MealMapper:
         calories = item_dict.get("calories", 0)
         macros = Macros(protein=0, carbs=0, fat=0)
         micros = None
-        
+
         if "nutrition" in item_dict and item_dict["nutrition"]:
             nutrition_data = item_dict["nutrition"]
             calories = nutrition_data.get("calories", 0)
             macros = Macros(
                 protein=nutrition_data.get("protein_g", 0),
                 carbs=nutrition_data.get("carbs_g", 0),
-                fat=nutrition_data.get("fat_g", 0)
+                fat=nutrition_data.get("fat_g", 0),
             )
             if "sodium_mg" in nutrition_data:
                 micros = Micros(sodium=nutrition_data.get("sodium_mg", 0))
-        
+
         return FoodItem(
             id=item_dict.get("id", ""),
             name=item_dict.get("name", ""),
@@ -326,9 +332,9 @@ class MealMapper:
             micros=micros,
             confidence=item_dict.get("confidence", 1.0),
             fdc_id=item_dict.get("fdc_id"),
-            is_custom=item_dict.get("is_custom", False)
+            is_custom=item_dict.get("is_custom", False),
         )
-    
+
     @staticmethod
     def to_daily_nutrition_response(daily_macros_data: dict) -> DailyNutritionResponse:
         """
@@ -354,8 +360,8 @@ class MealMapper:
                 error_code="TDEE_DATA_NOT_FOUND",
                 details={
                     "user_id": daily_macros_data.get("user_id"),
-                    "reason": "User has not completed onboarding or TDEE calculation is missing"
-                }
+                    "reason": "User has not completed onboarding or TDEE calculation is missing",
+                },
             )
 
         target_macros = MacrosResponse(
@@ -382,10 +388,26 @@ class MealMapper:
 
         # Calculate completion percentages
         completion_percentage = {
-            "calories": (consumed_calories / target_calories * 100) if target_calories > 0 else 0,
-            "protein": (consumed_macros.protein / target_macros.protein * 100) if target_macros.protein > 0 else 0,
-            "carbs": (consumed_macros.carbs / target_macros.carbs * 100) if target_macros.carbs > 0 else 0,
-            "fat": (consumed_macros.fat / target_macros.fat * 100) if target_macros.fat > 0 else 0
+            "calories": (
+                (consumed_calories / target_calories * 100)
+                if target_calories > 0
+                else 0
+            ),
+            "protein": (
+                (consumed_macros.protein / target_macros.protein * 100)
+                if target_macros.protein > 0
+                else 0
+            ),
+            "carbs": (
+                (consumed_macros.carbs / target_macros.carbs * 100)
+                if target_macros.carbs > 0
+                else 0
+            ),
+            "fat": (
+                (consumed_macros.fat / target_macros.fat * 100)
+                if target_macros.fat > 0
+                else 0
+            ),
         }
 
         # Parse weekly context if present
@@ -394,8 +416,12 @@ class MealMapper:
         if daily_macros_data.get("weekly_context"):
             wc = daily_macros_data["weekly_context"]
             weekly_context = WeeklyContextResponse(
-                adjusted_target_calories=wc.get("adjusted_target_calories", target_calories),
-                adjusted_target_carbs=wc.get("adjusted_target_carbs", target_macros.carbs),
+                adjusted_target_calories=wc.get(
+                    "adjusted_target_calories", target_calories
+                ),
+                adjusted_target_carbs=wc.get(
+                    "adjusted_target_carbs", target_macros.carbs
+                ),
                 adjusted_target_fat=wc.get("adjusted_target_fat", target_macros.fat),
                 daily_protein=wc.get("daily_protein", target_macros.protein),
                 bmr_floor_active=wc.get("bmr_floor_active", False),

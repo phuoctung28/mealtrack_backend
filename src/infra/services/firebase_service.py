@@ -168,7 +168,7 @@ class FirebaseService:
                             badge=1,
                             alert=messaging.ApsAlert(title=title, body=body),
                         )
-                    )
+                    ),
                 ),
             )
 
@@ -253,7 +253,7 @@ class FirebaseService:
                             badge=1,
                             alert=messaging.ApsAlert(title=title, body=body),
                         )
-                    )
+                    ),
                 ),
             )
 

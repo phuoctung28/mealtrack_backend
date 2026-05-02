@@ -1,4 +1,5 @@
 """Tests for vision response schema validation."""
+
 import pytest
 from pydantic import ValidationError
 

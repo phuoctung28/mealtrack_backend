@@ -4,6 +4,7 @@ Integration tests for Meal Suggestions API endpoints.
 Tests use mocked 3rd party services (AI generation, Redis) from conftest.
 Real application handlers and domain services process the requests.
 """
+
 import pytest
 
 
@@ -11,30 +12,34 @@ import pytest
 @pytest.mark.api
 class TestMealSuggestionsAPI:
     """Integration tests for Meal Suggestions API.
-    
+
     3rd party services (AI, Redis) are mocked in conftest.
     Real handlers and domain services process requests.
     """
-    
+
     # POST /v1/meal-suggestions/generate
-    def test_generate_suggestions_initial(self, authenticated_client, test_user_with_profile, test_session):
+    def test_generate_suggestions_initial(
+        self, authenticated_client, test_user_with_profile, test_session
+    ):
         """Test initial suggestion generation (no session).
-        
+
         Uses mocked suggestion service from conftest (AI + Redis are 3rd party).
         """
         user, profile = test_user_with_profile
-        
+
         payload = {
             "meal_type": "lunch",
             "meal_portion_type": "main",
             "cooking_time_minutes": 20,
             "ingredients": ["chicken", "rice"],
-            "language": "en"
+            "language": "en",
         }
-        
+
         # Act: POST generate - uses mocked suggestion service from conftest
-        response = authenticated_client.post("/v1/meal-suggestions/generate", json=payload)
-        
+        response = authenticated_client.post(
+            "/v1/meal-suggestions/generate", json=payload
+        )
+
         # Assert: Returns 3 suggestions + session_id (from real service with mocked AI)
         assert response.status_code == 200
         data = response.json()
@@ -43,28 +48,32 @@ class TestMealSuggestionsAPI:
         assert len(data["suggestions"]) == 3
         # Response uses "meal_name" not "name"
         assert data["suggestions"][0]["meal_name"] == "Grilled Chicken Salad"
-    
-    def test_generate_suggestions_regenerate(self, authenticated_client, test_user_with_profile, test_session):
+
+    def test_generate_suggestions_regenerate(
+        self, authenticated_client, test_user_with_profile, test_session
+    ):
         """Test regeneration with session_id (excludes previous).
-        
+
         Uses mocked suggestion service from conftest (AI + Redis are 3rd party).
         Note: For regeneration, we need to create a session first, then regenerate.
         """
         user, profile = test_user_with_profile
-        
+
         # First, create an initial session
         initial_payload = {
             "meal_type": "lunch",
             "meal_portion_type": "main",
             "cooking_time_minutes": 20,
             "ingredients": ["chicken", "rice"],
-            "language": "en"
+            "language": "en",
         }
-        initial_response = authenticated_client.post("/v1/meal-suggestions/generate", json=initial_payload)
+        initial_response = authenticated_client.post(
+            "/v1/meal-suggestions/generate", json=initial_payload
+        )
         assert initial_response.status_code == 200
         initial_data = initial_response.json()
         session_id = initial_data["session_id"]
-        
+
         # Now regenerate with that session_id
         payload = {
             "meal_type": "lunch",
@@ -72,45 +81,53 @@ class TestMealSuggestionsAPI:
             "cooking_time_minutes": 20,
             "session_id": session_id,
             "ingredients": ["chicken", "rice"],
-            "language": "en"
+            "language": "en",
         }
-        
+
         # Act: POST with session_id - uses mocked suggestion service from conftest
-        response = authenticated_client.post("/v1/meal-suggestions/generate", json=payload)
-        
+        response = authenticated_client.post(
+            "/v1/meal-suggestions/generate", json=payload
+        )
+
         # Assert: Returns suggestions (from conftest mock)
         assert response.status_code == 200
         data = response.json()
         assert "session_id" in data
         assert len(data["suggestions"]) == 3
-    
-    def test_generate_suggestions_with_ingredients(self, authenticated_client, test_user_with_profile):
+
+    def test_generate_suggestions_with_ingredients(
+        self, authenticated_client, test_user_with_profile
+    ):
         """Test suggestions with ingredient constraints.
-        
+
         Uses mocked suggestion service from conftest (AI + Redis are 3rd party).
         """
         user, profile = test_user_with_profile
-        
+
         payload = {
             "meal_type": "dinner",
             "meal_portion_type": "main",
             "cooking_time_minutes": 30,
             "ingredients": ["chicken", "rice", "broccoli"],
-            "language": "en"
+            "language": "en",
         }
-        
+
         # Act: POST with ingredients - uses mocked suggestion service from conftest
-        response = authenticated_client.post("/v1/meal-suggestions/generate", json=payload)
-        
+        response = authenticated_client.post(
+            "/v1/meal-suggestions/generate", json=payload
+        )
+
         # Assert: Returns suggestions (from conftest mock)
         assert response.status_code == 200
         data = response.json()
         assert len(data["suggestions"]) == 3
-    
+
     # POST /v1/meal-suggestions/save
-    def test_save_suggestion_to_meal(self, authenticated_client, test_user, test_session):
+    def test_save_suggestion_to_meal(
+        self, authenticated_client, test_user, test_session
+    ):
         """Test converting suggestion to actual meal.
-        
+
         Uses real handlers (Redis is mocked in conftest).
         """
         payload = {
@@ -126,12 +143,12 @@ class TestMealSuggestionsAPI:
             "ingredients_list": ["Chicken", "Lettuce", "Tomato"],
             "instructions": ["Grill chicken", "Serve over salad"],
             "portion_multiplier": 1,
-            "meal_date": "2024-12-25"
+            "meal_date": "2024-12-25",
         }
-        
+
         # Act: POST save - uses real handler
         response = authenticated_client.post("/v1/meal-suggestions/save", json=payload)
-        
+
         # Assert: Meal created from suggestion (real handler response)
         assert response.status_code == 200
         data = response.json()

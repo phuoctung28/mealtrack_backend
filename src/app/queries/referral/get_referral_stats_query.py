@@ -1,4 +1,5 @@
 """Query and result dataclasses for retrieving a user's full referral stats and wallet."""
+
 from dataclasses import dataclass, field
 from typing import List
 

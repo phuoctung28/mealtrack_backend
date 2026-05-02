@@ -2,6 +2,7 @@
 TDEE calculation helpers for SuggestionOrchestrationService.
 Builds TdeeRequest from user profile and fetches adjusted daily target from weekly budget.
 """
+
 import logging
 from datetime import date
 from typing import Any
@@ -62,7 +63,9 @@ async def get_adjusted_daily_target(
         bmr = tdee_result.bmr
 
         if uow is None:
-            logger.info(f"No UoW provided for user {user_id}, using raw TDEE: {base_calories}")
+            logger.info(
+                f"No UoW provided for user {user_id}, using raw TDEE: {base_calories}"
+            )
             return base_calories
 
         user_tz = await resolve_user_timezone_async(user_id, uow)
@@ -71,19 +74,24 @@ async def get_adjusted_daily_target(
         weekly_budget = await uow.weekly_budgets.find_by_user_and_week(user_id, week_start)
 
         if not weekly_budget:
-            logger.info(f"No weekly budget for user {user_id}, using raw TDEE: {base_calories}")
+            logger.info(
+                f"No weekly budget for user {user_id}, using raw TDEE: {base_calories}"
+            )
             return base_calories
 
         # Use async shared method: recalculates consumed, applies skip/redistribute
         effective = await WeeklyBudgetService.get_effective_adjusted_daily_async(
-            uow=uow, user_id=user_id,
-            week_start=week_start, target_date=today,
+            uow=uow,
+            user_id=user_id,
+            week_start=week_start,
+            target_date=today,
             weekly_budget=weekly_budget,
             base_daily_cal=base_calories,
             base_daily_protein=tdee_result.macros.protein,
             base_daily_carbs=tdee_result.macros.carbs,
             base_daily_fat=tdee_result.macros.fat,
-            bmr=bmr, user_timezone=user_tz,
+            bmr=bmr,
+            user_timezone=user_tz,
         )
         logger.info(
             f"Adjusted daily target for user {user_id}: "
@@ -93,5 +101,7 @@ async def get_adjusted_daily_target(
         return effective.adjusted.calories
 
     except Exception as e:
-        logger.warning(f"Failed to get adjusted daily target: {e}. Falling back to raw TDEE.")
+        logger.warning(
+            f"Failed to get adjusted daily target: {e}. Falling back to raw TDEE."
+        )
         return calculate_daily_tdee(tdee_service, profile)

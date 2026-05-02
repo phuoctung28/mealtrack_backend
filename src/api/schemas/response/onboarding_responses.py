@@ -14,6 +14,7 @@ class OnboardingFieldResponse(BaseModel):
     validation: Optional[Dict[str, Any]] = None
     default_value: Optional[Union[str, int, float, bool]] = None
 
+
 class OnboardingSectionResponse(BaseModel):
     section_id: str
     title: str
@@ -25,9 +26,11 @@ class OnboardingSectionResponse(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
+
 class OnboardingSectionsResponse(BaseModel):
     sections: List[OnboardingSectionResponse]
     total_sections: int
+
 
 class OnboardingResponseResponse(BaseModel):
     response_id: str
@@ -40,6 +43,7 @@ class OnboardingResponseResponse(BaseModel):
 
 class OnboardingResponse(BaseModel):
     """Response for successful onboarding data save."""
+
     message: str
     user_id: str
     profile_id: str

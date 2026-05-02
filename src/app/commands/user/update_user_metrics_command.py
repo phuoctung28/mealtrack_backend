@@ -1,13 +1,16 @@
 """
 Command to update user metrics (weight, job type, training, body fat).
 """
+
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 
 @dataclass
 class UpdateUserMetricsCommand:
-    """Update user metrics (including fitness goal) and trigger TDEE recalculation."""
+    """Update user metrics (including fitness goal and target weight) and trigger TDEE recalculation."""
+
     user_id: str
     weight_kg: Optional[float] = None
     job_type: Optional[str] = None
@@ -17,4 +20,5 @@ class UpdateUserMetricsCommand:
     fitness_goal: Optional[str] = None
     training_level: Optional[str] = None
     target_weight_kg: Optional[float] = None
-
+    goal_start_weight_kg: Optional[float] = None
+    goal_started_at: Optional[datetime] = None

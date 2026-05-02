@@ -1,17 +1,22 @@
 """
 Unit tests for GetMealsByDateQueryHandler.
 """
+
 import uuid
 from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from src.app.handlers.query_handlers.get_meals_by_date_query_handler import GetMealsByDateQueryHandler
+from src.app.handlers.query_handlers.get_meals_by_date_query_handler import (
+    GetMealsByDateQueryHandler,
+)
 from src.app.queries.meal import GetMealsByDateQuery
 from src.domain.model import Meal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 
-_UOW_PATCH = "src.app.handlers.query_handlers.get_meals_by_date_query_handler.AsyncUnitOfWork"
+_UOW_PATCH = (
+    "src.app.handlers.query_handlers.get_meals_by_date_query_handler.AsyncUnitOfWork"
+)
 
 
 def _make_uow_mock():

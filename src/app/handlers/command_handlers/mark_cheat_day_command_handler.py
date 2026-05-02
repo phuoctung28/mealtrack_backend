@@ -1,4 +1,5 @@
 """Handler for marking a cheat day."""
+
 import logging
 import uuid
 from datetime import date
@@ -9,7 +10,11 @@ from src.app.commands.cheat_day import MarkCheatDayCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.cheat_day import CheatDay
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.domain.utils.timezone_utils import utc_now, resolve_user_timezone_async, user_today
+from src.domain.utils.timezone_utils import (
+    utc_now,
+    resolve_user_timezone_async,
+    user_today,
+)
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -35,7 +40,9 @@ class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, Dict[str, Any
                         error_code="PAST_DATE_NOT_ALLOWED",
                     )
 
-                existing = await uow.cheat_days.find_by_user_and_date(command.user_id, target_date)
+                existing = await uow.cheat_days.find_by_user_and_date(
+                    command.user_id, target_date
+                )
                 if existing:
                     raise ValidationException(
                         message=f"Date {target_date} is already marked as cheat day",

@@ -56,7 +56,9 @@ async def test_translate_meal_suggestion_skips_english(service, suggestion, deep
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestion_translates_all_fields(service, suggestion, deepl_port):
+async def test_translate_meal_suggestion_translates_all_fields(
+    service, suggestion, deepl_port
+):
     # Layout: [meal_name, description, *ingredient_names, *step_instructions]
     deepl_port.translate_texts.return_value = [
         "Gà nướng",
@@ -81,7 +83,9 @@ async def test_translate_meal_suggestion_translates_all_fields(service, suggesti
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestion_pads_when_deepl_returns_short(service, suggestion, deepl_port):
+async def test_translate_meal_suggestion_pads_when_deepl_returns_short(
+    service, suggestion, deepl_port
+):
     # Return fewer items than requested to exercise padding behavior.
     deepl_port.translate_texts.return_value = ["Gà nướng"]
 
@@ -94,28 +98,36 @@ async def test_translate_meal_suggestion_pads_when_deepl_returns_short(service, 
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestion_returns_original_on_exception(service, suggestion, deepl_port):
+async def test_translate_meal_suggestion_returns_original_on_exception(
+    service, suggestion, deepl_port
+):
     deepl_port.translate_texts.side_effect = Exception("DeepL down")
     result = await service.translate_meal_suggestion(suggestion, "vi")
     assert result == suggestion
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestions_batch_skips_english(service, suggestion, deepl_port):
+async def test_translate_meal_suggestions_batch_skips_english(
+    service, suggestion, deepl_port
+):
     result = await service.translate_meal_suggestions_batch([suggestion], "en")
     assert result == [suggestion]
     deepl_port.translate_texts.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestions_batch_translates_each_item(service, suggestion, deepl_port):
+async def test_translate_meal_suggestions_batch_translates_each_item(
+    service, suggestion, deepl_port
+):
     other = MealSuggestion(
         **{
             **suggestion.__dict__,
             "id": "sug_2",
             "meal_name": "Baked Salmon",
             "ingredients": [Ingredient(name="salmon", amount=100.0, unit="g")],
-            "recipe_steps": [RecipeStep(step=1, instruction="Bake", duration_minutes=10)],
+            "recipe_steps": [
+                RecipeStep(step=1, instruction="Bake", duration_minutes=10)
+            ],
         }
     )
 
@@ -133,7 +145,9 @@ async def test_translate_meal_suggestions_batch_translates_each_item(service, su
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_suggestions_batch_falls_back_per_item(service, suggestion, deepl_port):
+async def test_translate_meal_suggestions_batch_falls_back_per_item(
+    service, suggestion, deepl_port
+):
     other = MealSuggestion(
         **{
             **suggestion.__dict__,
@@ -153,36 +167,3 @@ async def test_translate_meal_suggestions_batch_falls_back_per_item(service, sug
 
     assert result[0] == suggestion  # failed item falls back
     assert result[1].meal_name.startswith("ok:")
-
-
-@pytest.mark.asyncio
-async def test_translate_names_skips_english(service, deepl_port):
-    names = ["Grilled Chicken", "Baked Salmon"]
-    result = await service.translate_names(names, "en")
-    assert result == names
-    deepl_port.translate_texts.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_translate_names_skips_empty_list(service, deepl_port):
-    result = await service.translate_names([], "vi")
-    assert result == []
-    deepl_port.translate_texts.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_translate_names_translates_successfully(service, deepl_port):
-    deepl_port.translate_texts.return_value = ["Gà nướng", "Cá hồi nướng"]
-    names = ["Grilled Chicken", "Baked Salmon"]
-    result = await service.translate_names(names, "vi")
-    assert result == ["Gà nướng", "Cá hồi nướng"]
-    deepl_port.translate_texts.assert_awaited_once_with(names, "vi")
-
-
-@pytest.mark.asyncio
-async def test_translate_names_returns_originals_on_exception(service, deepl_port):
-    deepl_port.translate_texts.side_effect = Exception("DeepL error")
-    names = ["Grilled Chicken", "Baked Salmon"]
-    result = await service.translate_names(names, "vi")
-    assert result == names
-

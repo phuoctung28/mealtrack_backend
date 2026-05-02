@@ -3,6 +3,7 @@ Weekly macro budget domain entity.
 
 This entity tracks weekly macro consumption against budget targets.
 """
+
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
@@ -70,4 +71,3 @@ class WeeklyMacroBudget:
         self.consumed_protein += protein
         self.consumed_carbs += carbs
         self.consumed_fat += fat
-

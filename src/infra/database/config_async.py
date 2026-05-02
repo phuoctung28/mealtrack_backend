@@ -1,4 +1,5 @@
 """Async database engine, session factory, and FastAPI dependency."""
+
 import logging
 import os
 from typing import Optional, Tuple
@@ -11,6 +12,7 @@ from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
 
 def _sanitize_asyncpg_url_and_connect_args(url: str) -> Tuple[str, dict]:
     """
@@ -42,11 +44,14 @@ def _sanitize_asyncpg_url_and_connect_args(url: str) -> Tuple[str, dict]:
             return url, connect_args
 
         new_query = urlencode(filtered)
-        sanitized = urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+        sanitized = urlunsplit(
+            (parts.scheme, parts.netloc, parts.path, new_query, parts.fragment)
+        )
         return sanitized, connect_args
     except Exception:  # noqa: BLE001
         # If parsing fails, keep original URL; engine init will surface any issues.
         return url, {}
+
 
 _raw_url = (
     os.getenv("DATABASE_URL_DIRECT")
@@ -66,20 +71,27 @@ if _raw_url.startswith("postgres://"):
 elif _raw_url.startswith("postgresql://") and "+asyncpg" not in _raw_url:
     ASYNC_DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 elif _raw_url.startswith("postgresql+psycopg2://"):
-    ASYNC_DATABASE_URL = _raw_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    ASYNC_DATABASE_URL = _raw_url.replace(
+        "postgresql+psycopg2://", "postgresql+asyncpg://", 1
+    )
 else:
     ASYNC_DATABASE_URL = _raw_url
 
 # Render/Neon style URLs may include libpq params (sslmode/channel_binding),
 # which must be translated/removed for asyncpg.
-ASYNC_DATABASE_URL, _connect_args = _sanitize_asyncpg_url_and_connect_args(ASYNC_DATABASE_URL)
+ASYNC_DATABASE_URL, _connect_args = _sanitize_asyncpg_url_and_connect_args(
+    ASYNC_DATABASE_URL
+)
 
 # Detect Neon pooler — use NullPool (PgBouncer manages connections)
-_IS_NEON_POOLER = "-pooler" in ASYNC_DATABASE_URL and os.getenv("DATABASE_URL_DIRECT") is None
+_IS_NEON_POOLER = (
+    "-pooler" in ASYNC_DATABASE_URL and os.getenv("DATABASE_URL_DIRECT") is None
+)
 
 _UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
 _ASYNC_POOL_SIZE = int(os.getenv("ASYNC_POOL_SIZE_PER_WORKER", "3"))
 _ASYNC_POOL_OVERFLOW = int(os.getenv("ASYNC_POOL_MAX_OVERFLOW", "2"))
+_ASYNC_POOL_TIMEOUT = int(os.getenv("POOL_TIMEOUT", "10"))
 
 try:
     if _IS_NEON_POOLER:
@@ -98,7 +110,7 @@ try:
             pool_size=_UVICORN_WORKERS * _ASYNC_POOL_SIZE,
             max_overflow=_ASYNC_POOL_OVERFLOW,
             pool_recycle=120,
-            pool_timeout=30,
+            pool_timeout=_ASYNC_POOL_TIMEOUT,
             connect_args=_connect_args,
         )
         logger.info(

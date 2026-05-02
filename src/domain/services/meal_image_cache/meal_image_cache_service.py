@@ -31,7 +31,7 @@ class MealImageCacheService:
         self._threshold = dedup_threshold
 
     async def lookup_batch(self, names: list[str]) -> list[Optional[CachedImage]]:
-        """Embed names via Gemini API → pgvector ANN search.
+        """Embed names via Gemini API → single pgvector batch ANN search.
 
         Always returns exactly len(names) items. Individual failures
         yield None so the caller can fall through to the normal image search.
@@ -45,21 +45,25 @@ class MealImageCacheService:
             logger.warning("embed_text failed, returning all misses: %s", exc)
             return [None] * len(names)
 
-        out: list[Optional[CachedImage]] = []
-        for i, name in enumerate(names):
-            if i >= len(embeddings):
-                out.append(None)
-                continue
-            try:
-                hit = await self._cache.query_nearest(embeddings[i])
-                if hit is not None and hit.cosine >= self._threshold:
-                    out.append(hit)
-                else:
-                    out.append(None)
-            except Exception as exc:
-                logger.warning("query_nearest failed for %r: %s", name, exc)
-                out.append(None)
-        return out
+        if len(embeddings) != len(names):
+            logger.warning(
+                "Embedding count mismatch: got %d, expected %d",
+                len(embeddings),
+                len(names),
+            )
+            return [None] * len(names)
+
+        try:
+            hits = await self._cache.query_nearest_batch(embeddings)
+        except Exception as exc:
+            logger.warning("query_nearest_batch failed: %s", exc)
+            return [None] * len(names)
+
+        # Apply threshold filter
+        return [
+            hit if hit is not None and hit.cosine >= self._threshold else None
+            for hit in hits
+        ]
 
     async def store(
         self,

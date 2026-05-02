@@ -1,6 +1,7 @@
 """
 Nutrition model for overall nutritional information of a meal.
 """
+
 from sqlalchemy import Column, Float, Text, String, ForeignKey
 from sqlalchemy.orm import relationship
 
@@ -11,7 +12,7 @@ from src.infra.database.models.base import SecondaryEntityMixin
 class NutritionORM(Base, SecondaryEntityMixin):
     """Database model for nutrition data."""
 
-    __tablename__ = 'nutrition'
+    __tablename__ = "nutrition"
 
     confidence_score = Column(Float, nullable=True)
     raw_ai_response = Column(Text, nullable=True)
@@ -24,10 +25,12 @@ class NutritionORM(Base, SecondaryEntityMixin):
     sugar = Column(Float, default=0, nullable=False)
 
     # Relationships
-    food_items = relationship("FoodItemORM",
-                             back_populates="nutrition",
-                             cascade="all, delete-orphan",
-                             order_by="FoodItemORM.order_index",
-                             lazy="raise")
+    food_items = relationship(
+        "FoodItemORM",
+        back_populates="nutrition",
+        cascade="all, delete-orphan",
+        order_by="FoodItemORM.order_index",
+        lazy="raise",
+    )
     meal_id = Column(String(36), ForeignKey("meal.meal_id"), nullable=False)
     meal = relationship("MealORM", back_populates="nutrition")

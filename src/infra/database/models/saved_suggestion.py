@@ -1,4 +1,5 @@
 """Saved suggestion database model for user-bookmarked meal suggestions."""
+
 from sqlalchemy import Column, String, Integer, DateTime, JSON, UniqueConstraint, Index
 
 from src.infra.database.config import Base
@@ -19,6 +20,6 @@ class SavedSuggestionModel(Base):
     created_at = Column(DateTime, nullable=False)
 
     __table_args__ = (
-        UniqueConstraint('user_id', 'suggestion_id', name='uq_user_suggestion'),
-        Index('idx_user_saved', 'user_id', 'saved_at'),
+        UniqueConstraint("user_id", "suggestion_id", name="uq_user_suggestion"),
+        Index("idx_user_saved", "user_id", "saved_at"),
     )

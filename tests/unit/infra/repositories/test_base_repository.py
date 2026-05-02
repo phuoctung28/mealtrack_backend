@@ -75,4 +75,3 @@ async def test_async_wrappers_delegate():
 
     assert await repo.get_async("1") == "x"
     assert await repo.add_async(_Model()) == "y"
-

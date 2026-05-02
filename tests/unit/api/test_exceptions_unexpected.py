@@ -1,4 +1,5 @@
 """Cover handle_exception generic Exception branch (unexpected errors)."""
+
 from fastapi import HTTPException, status
 
 from src.api.exceptions import handle_exception

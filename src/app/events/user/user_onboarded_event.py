@@ -1,6 +1,7 @@
 """
 User onboarded event.
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import uuid4
@@ -11,6 +12,7 @@ from src.app.events.base import DomainEvent
 @dataclass
 class UserOnboardedEvent(DomainEvent):
     """Event raised when user completes onboarding."""
+
     aggregate_id: str
     user_id: str
     profile_id: str

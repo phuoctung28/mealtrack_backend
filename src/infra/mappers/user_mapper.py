@@ -1,4 +1,5 @@
 """Mappers for converting between domain models and persistence models."""
+
 from src.domain.model.user import UserDomainModel, UserProfileDomainModel
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
@@ -89,6 +90,8 @@ class UserProfileMapper:
             custom_protein_g=profile_entity.custom_protein_g,
             custom_carbs_g=profile_entity.custom_carbs_g,
             custom_fat_g=profile_entity.custom_fat_g,
+            goal_start_weight_kg=profile_entity.goal_start_weight_kg,
+            goal_started_at=profile_entity.goal_started_at,
             created_at=profile_entity.created_at,
             updated_at=profile_entity.updated_at,
         )
@@ -124,4 +127,6 @@ class UserProfileMapper:
             custom_protein_g=profile_domain.custom_protein_g,
             custom_carbs_g=profile_domain.custom_carbs_g,
             custom_fat_g=profile_domain.custom_fat_g,
+            goal_start_weight_kg=profile_domain.goal_start_weight_kg,
+            goal_started_at=profile_domain.goal_started_at,
         )
