@@ -54,8 +54,38 @@ def cmd_generate(args) -> int:
 
 
 def cmd_upgrade(args) -> int:
-    """Placeholder - implemented in Task 4."""
-    raise NotImplementedError("cmd_upgrade")
+    """Apply pending migrations."""
+    logger.info("Upgrading database...")
+
+    try:
+        alembic_cfg = get_alembic_config()
+
+        # Show current state
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            before_rev = context.get_current_revision()
+
+        logger.info(f"Current revision: {before_rev or '<none>'}")
+
+        # Run upgrade
+        command.upgrade(alembic_cfg, "head")
+
+        # Show new state
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            after_rev = context.get_current_revision()
+
+        if before_rev == after_rev:
+            logger.info("No pending migrations")
+        else:
+            logger.info(f"Upgraded to: {after_rev}")
+
+        logger.info("Upgrade completed successfully")
+        return 0
+
+    except Exception as e:
+        logger.error(f"Upgrade failed: {e}")
+        return 1
 
 
 def cmd_downgrade(args) -> int:
