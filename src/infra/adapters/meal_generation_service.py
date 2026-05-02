@@ -20,6 +20,13 @@ from src.infra.services.ai.gemini_model_manager import (
     GeminiModelManager,
     GeminiModelPurpose,
 )
+from src.api.exceptions import ExternalServiceException
+from src.infra.services.ai.gemini_error_utils import is_rate_limit_error
+
+try:
+    from google.api_core.exceptions import ResourceExhausted
+except ImportError:
+    ResourceExhausted = None
 
 logger = logging.getLogger(__name__)
 
@@ -224,8 +231,30 @@ class MealGenerationService(MealGenerationServicePort):
                 HumanMessage(content=prompt),
             ]
 
-            # Generate response
-            response = llm.invoke(messages)
+            # Generate response with retry on rate limit errors
+            max_attempts = 2
+            for attempt in range(max_attempts):
+                try:
+                    response = llm.invoke(messages)
+                    break
+                except Exception as invoke_err:
+                    if is_rate_limit_error(invoke_err):
+                        if attempt < max_attempts - 1:
+                            logger.warning(
+                                f"[AI-RATE-LIMIT] attempt={attempt + 1} | "
+                                f"Sleeping 1s before retry | "
+                                f"error={str(invoke_err)[:100]}"
+                            )
+                            time.sleep(1)
+                        else:
+                            raise ExternalServiceException(
+                                message="Gemini API rate limit exceeded after retry",
+                                error_code="AI_RATE_LIMITED",
+                                details={"retry_after_seconds": 5},
+                            )
+                    else:
+                        raise
+
             content = response.content
             elapsed = time.time() - start_time
 
