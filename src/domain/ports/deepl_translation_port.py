@@ -1,7 +1,6 @@
 """
 Port (interface) for DeepL translation service.
 """
-
 from abc import ABC, abstractmethod
 from typing import List
 

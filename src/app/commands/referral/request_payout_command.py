@@ -1,5 +1,4 @@
 """Command dataclass for initiating a referral wallet withdrawal request."""
-
 from dataclasses import dataclass
 from typing import Dict
 

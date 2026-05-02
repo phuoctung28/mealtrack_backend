@@ -52,9 +52,7 @@ def client(monkeypatch) -> TestClient:
 
     main.app.dependency_overrides[get_current_user_id] = lambda: "user_1"
     main.app.dependency_overrides[verify_firebase_token] = lambda: {"uid": "firebase_1"}
-    main.app.dependency_overrides[verify_firebase_uid_ownership] = (
-        lambda firebase_uid="firebase_1": firebase_uid
-    )
+    main.app.dependency_overrides[verify_firebase_uid_ownership] = lambda firebase_uid="firebase_1": firebase_uid
     main.app.dependency_overrides[get_image_store] = lambda: _DummyImageStore()
 
     # The specific send() behavior is set per-test by overriding get_configured_event_bus.
@@ -152,12 +150,7 @@ def test_user_profiles_get_tdee(monkeypatch, client: TestClient):
             "bmr": 1700.0,
             "tdee": 2400.0,
             "profile_data": {"fitness_goal": "cut"},
-            "macros": {
-                "calories": 2400.0,
-                "protein": 120.0,
-                "carbs": 250.0,
-                "fat": 70.0,
-            },
+            "macros": {"calories": 2400.0, "protein": 120.0, "carbs": 250.0, "fat": 70.0},
             "activity_multiplier": 1.4,
             "formula_used": "Mifflin-St Jeor",
             "is_custom": False,
@@ -202,9 +195,7 @@ def test_meals_parse_text_happy_path(monkeypatch, client: TestClient):
 
     main.app.dependency_overrides[get_configured_event_bus] = lambda: _Bus(send)
 
-    r = client.post(
-        "/v1/meals/parse-text", json={"text": "2 eggs and toast", "current_items": []}
-    )
+    r = client.post("/v1/meals/parse-text", json={"text": "2 eggs and toast", "current_items": []})
     assert r.status_code == 200
     body = r.json()
     assert body["emoji"] == "🍳"
@@ -226,15 +217,7 @@ def test_meals_manual_invalid_date_does_not_call_bus(monkeypatch, client: TestCl
     payload = {
         "dish_name": "Manual meal",
         "meal_type": "lunch",
-        "items": [
-            {
-                "fdc_id": 1,
-                "name": "x",
-                "quantity": 100,
-                "unit": "g",
-                "custom_nutrition": None,
-            }
-        ],
+        "items": [{"fdc_id": 1, "name": "x", "quantity": 100, "unit": "g", "custom_nutrition": None}],
         "target_date": "2024-99-99",
         "source": "manual",
         "emoji": "🥗",
@@ -242,3 +225,4 @@ def test_meals_manual_invalid_date_does_not_call_bus(monkeypatch, client: TestCl
     r = client.post("/v1/meals/manual", json=payload)
     assert r.status_code == 400
     assert called["send"] == 0
+

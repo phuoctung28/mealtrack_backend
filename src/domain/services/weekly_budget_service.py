@@ -154,6 +154,53 @@ class WeeklyBudgetService:
         }
 
     @staticmethod
+    async def calculate_weekly_consumed_async(
+        uow: Any,
+        user_id: str,
+        week_start: date,
+        exclude_date: Optional[date] = None,
+        exclude_dates: Optional[List[date]] = None,
+        user_timezone: Optional[str] = None,
+    ) -> Dict[str, float]:
+        """Async version of calculate_weekly_consumed for AsyncUnitOfWork."""
+        week_end = week_start + timedelta(days=6)
+        tz = get_zone_info(user_timezone) if user_timezone else None
+
+        meals = await uow.meals.find_by_date_range(
+            user_id, week_start, week_end, user_timezone=user_timezone,
+        )
+
+        total_calories = 0.0
+        total_protein = 0.0
+        total_carbs = 0.0
+        total_fat = 0.0
+
+        exclude_dates_set = set(exclude_dates) if exclude_dates else set()
+        for meal in meals:
+            if meal.status == MealStatus.READY and meal.nutrition:
+                if (exclude_date or exclude_dates_set) and meal.created_at:
+                    aware_dt = ensure_utc(meal.created_at)
+                    meal_local_date = (
+                        aware_dt.astimezone(tz).date() if tz
+                        else aware_dt.date()
+                    )
+                    if exclude_date and meal_local_date == exclude_date:
+                        continue
+                    if meal_local_date in exclude_dates_set:
+                        continue
+                total_calories += meal.nutrition.calories or 0
+                total_protein += meal.nutrition.macros.protein or 0
+                total_carbs += meal.nutrition.macros.carbs or 0
+                total_fat += meal.nutrition.macros.fat or 0
+
+        return {
+            "calories": total_calories,
+            "protein": total_protein,
+            "carbs": total_carbs,
+            "fat": total_fat,
+        }
+
+    @staticmethod
     def get_effective_adjusted_daily(
         uow: Any,
         user_id: str,

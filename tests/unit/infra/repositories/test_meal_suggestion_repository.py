@@ -146,12 +146,8 @@ async def test_save_session_with_suggestions_uses_pipeline(session, suggestion):
 
 @pytest.mark.asyncio
 async def test_get_suggestion_searches_keys_and_deserializes(session, suggestion):
-    client = SimpleNamespace(
-        keys=AsyncMock(return_value=[f"suggestion:{session.id}:{suggestion.id}"])
-    )
-    serialized = MealSuggestionRepository(SimpleNamespace())._serialize_suggestion(
-        suggestion
-    )
+    client = SimpleNamespace(keys=AsyncMock(return_value=[f"suggestion:{session.id}:{suggestion.id}"]))
+    serialized = MealSuggestionRepository(SimpleNamespace())._serialize_suggestion(suggestion)
     redis = SimpleNamespace(
         set=AsyncMock(),
         get=AsyncMock(return_value=serialized),
@@ -178,3 +174,4 @@ async def test_delete_session_deletes_session_key_and_pattern(session):
     await repo.delete_session(session.id)
     redis.delete.assert_awaited_once()
     redis.delete_pattern.assert_awaited_once()
+

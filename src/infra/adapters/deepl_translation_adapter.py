@@ -8,7 +8,6 @@ Every call uses a fixed English source (source_lang=EN) and the given
 target — no source auto-detection. If the target is English, the API
 is not called and inputs are returned unchanged.
 """
-
 import asyncio
 import logging
 from typing import List

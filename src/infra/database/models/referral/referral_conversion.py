@@ -1,5 +1,4 @@
 """Referral conversion model — tracks each referred user and their commission status."""
-
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
 

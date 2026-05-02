@@ -1,7 +1,6 @@
 """
 Unit tests for TDEE helper functions in suggestion_tdee_helpers.py.
 """
-
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -66,97 +65,57 @@ class TestGetAdjustedDailyTarget:
     """Test get_adjusted_daily_target helper function."""
 
     @pytest.mark.asyncio
-    async def test_returns_adjusted_when_budget_exists(
-        self, mock_tdee_service, mock_profile
-    ):
+    async def test_returns_adjusted_when_budget_exists(self, mock_tdee_service, mock_profile):
         """Should return adjusted calories when weekly budget exists."""
         from datetime import date
-        from src.domain.services.weekly_budget_service import (
-            EffectiveAdjustedResult,
-            AdjustedDailyTargets,
-        )
+        from src.domain.services.weekly_budget_service import EffectiveAdjustedResult, AdjustedDailyTargets
 
         mock_budget = Mock()
         mock_adjusted = AdjustedDailyTargets(
-            calories=2100.0,
-            carbs=200,
-            fat=70,
-            protein=70,
-            bmr_floor_active=False,
-            remaining_days=5,
+            calories=2100.0, carbs=200, fat=70, protein=70,
+            bmr_floor_active=False, remaining_days=5,
         )
         mock_effective = EffectiveAdjustedResult(
             adjusted=mock_adjusted,
             consumed_before_today={"calories": 0, "protein": 0, "carbs": 0, "fat": 0},
             consumed_total={"calories": 0, "protein": 0, "carbs": 0, "fat": 0},
-            logged_past_days=0,
-            skipped_days=0,
-            show_logging_prompt=False,
+            logged_past_days=0, skipped_days=0, show_logging_prompt=False,
         )
 
         mock_uow = Mock()
         mock_uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=mock_budget)
 
-        with patch(
-            "src.domain.services.meal_suggestion.suggestion_tdee_helpers.WeeklyBudgetService"
-        ) as mock_budget_svc, patch(
-            "src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday_async",
-            new_callable=AsyncMock,
-            return_value=date(2026, 3, 9),
-        ), patch(
-            "src.domain.services.meal_suggestion.suggestion_tdee_helpers.resolve_user_timezone_async",
-            new_callable=AsyncMock,
-            return_value="UTC",
-        ), patch(
-            "src.domain.services.meal_suggestion.suggestion_tdee_helpers.user_today",
-            return_value=date(2026, 3, 13),
-        ):
+        with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.WeeklyBudgetService") as mock_budget_svc, \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday_async", new_callable=AsyncMock, return_value=date(2026, 3, 9)), \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.resolve_user_timezone_async", new_callable=AsyncMock, return_value="UTC"), \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.user_today", return_value=date(2026, 3, 13)):
 
             mock_budget_svc.get_effective_adjusted_daily_async = AsyncMock(return_value=mock_effective)
 
-            result = await get_adjusted_daily_target(
-                mock_tdee_service, "user123", mock_profile, uow=mock_uow
-            )
+            result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile, uow=mock_uow)
 
         assert result == 2100.0
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_raw_tdee_when_no_budget(
-        self, mock_tdee_service, mock_profile
-    ):
+    async def test_falls_back_to_raw_tdee_when_no_budget(self, mock_tdee_service, mock_profile):
         """Should fall back to raw TDEE when no weekly budget found."""
         from datetime import date
 
         mock_uow = Mock()
         mock_uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=None)
 
-        with patch(
-            "src.domain.services.meal_suggestion.suggestion_tdee_helpers.resolve_user_timezone_async",
-            new_callable=AsyncMock,
-            return_value="UTC",
-        ), patch(
-            "src.domain.services.meal_suggestion.suggestion_tdee_helpers.user_today",
-            return_value=date(2026, 3, 13),
-        ), patch(
-            "src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday_async",
-            new_callable=AsyncMock,
-            return_value=date(2026, 3, 9),
-        ):
+        with patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.resolve_user_timezone_async", new_callable=AsyncMock, return_value="UTC"), \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.user_today", return_value=date(2026, 3, 13)), \
+             patch("src.domain.services.meal_suggestion.suggestion_tdee_helpers.get_user_monday_async", new_callable=AsyncMock, return_value=date(2026, 3, 9)):
 
-            result = await get_adjusted_daily_target(
-                mock_tdee_service, "user123", mock_profile, uow=mock_uow
-            )
+            result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile, uow=mock_uow)
 
         assert result == 2200.0
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_raw_tdee_when_no_uow(
-        self, mock_tdee_service, mock_profile
-    ):
+    async def test_falls_back_to_raw_tdee_when_no_uow(self, mock_tdee_service, mock_profile):
         """Should fall back to raw TDEE when no UoW provided."""
-        result = await get_adjusted_daily_target(
-            mock_tdee_service, "user123", mock_profile
-        )
+        result = await get_adjusted_daily_target(mock_tdee_service, "user123", mock_profile)
         assert result == 2200.0
 
     @pytest.mark.asyncio
@@ -165,9 +124,7 @@ class TestGetAdjustedDailyTarget:
         failing_service = Mock()
         failing_service.calculate_tdee.side_effect = [Exception("TDEE error")]
 
-        result = await get_adjusted_daily_target(
-            failing_service, "user123", mock_profile
-        )
+        result = await get_adjusted_daily_target(failing_service, "user123", mock_profile)
 
         assert result == 2000.0
 

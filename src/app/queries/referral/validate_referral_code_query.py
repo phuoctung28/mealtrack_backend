@@ -1,5 +1,4 @@
 """Query and result dataclass for validating a referral code before it is applied."""
-
 from dataclasses import dataclass
 from typing import Optional
 

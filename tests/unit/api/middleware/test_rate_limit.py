@@ -36,3 +36,4 @@ def test_get_user_id_or_ip_falls_back_to_ip_on_bad_token():
 def test_get_user_id_or_ip_falls_back_to_ip_when_missing_auth():
     req = _Req(auth=None, ip="9.9.9.9")
     assert get_user_id_or_ip(req) == "9.9.9.9"
+
