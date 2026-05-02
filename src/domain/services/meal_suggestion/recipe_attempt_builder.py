@@ -24,6 +24,8 @@ from src.domain.services.meal_suggestion.macro_validation_service import (
 from src.domain.services.meal_suggestion.nutrition_lookup_service import (
     NutritionLookupService,
 )
+from src.infra.services.ai.gemini_throttle import GeminiThrottle
+from src.api.exceptions import ExternalServiceException
 
 logger = logging.getLogger(__name__)
 
@@ -62,19 +64,22 @@ async def attempt_recipe_generation(
         is_retry: Whether this is a retry attempt on an alternate model
     """
     marker = "[RETRY]" if is_retry else ""
+    throttle = GeminiThrottle.get_instance()
+
     try:
-        raw = await asyncio.wait_for(
-            asyncio.to_thread(
-                generation_service.generate_meal_plan,
-                prompt,
-                recipe_system,
-                "json",
-                PARALLEL_SINGLE_MEAL_TOKENS,
-                None,
-                model_purpose,
-            ),
-            timeout=PARALLEL_SINGLE_MEAL_TIMEOUT,
-        )
+        async with throttle.acquire():
+            raw = await asyncio.wait_for(
+                asyncio.to_thread(
+                    generation_service.generate_meal_plan,
+                    prompt,
+                    recipe_system,
+                    "json",
+                    PARALLEL_SINGLE_MEAL_TOKENS,
+                    None,
+                    model_purpose,
+                ),
+                timeout=PARALLEL_SINGLE_MEAL_TIMEOUT,
+            )
 
         ingredients: List[Dict] = raw.get("ingredients", [])
         recipe_steps: List[Dict] = raw.get("recipe_steps", [])
@@ -157,6 +162,14 @@ async def attempt_recipe_generation(
             english_name=meal_name,
         )
 
+    except ExternalServiceException:
+        # Rate limit after retry in MealGenerationService - record cooldown
+        throttle.record_rate_limit(retry_after=3)
+        logger.warning(
+            f"[PHASE-2-RATE-LIMIT]{marker} index={index} | "
+            f"model_purpose={model_purpose} | meal_name={meal_name}"
+        )
+        return None
     except asyncio.TimeoutError:
         logger.warning(
             f"[PHASE-2-TIMEOUT]{marker} index={index} | "
