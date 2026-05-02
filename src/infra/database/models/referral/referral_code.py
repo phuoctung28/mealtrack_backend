@@ -1,5 +1,4 @@
 """Referral code model — one unique invite code per user."""
-
 from sqlalchemy import Column, String, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
 
@@ -13,6 +12,8 @@ class ReferralCode(Base):
     code = Column(String(6), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False)
 
-    __table_args__ = (Index("ix_referral_codes_code", "code", unique=True),)
+    __table_args__ = (
+        Index("ix_referral_codes_code", "code", unique=True),
+    )
 
     user = relationship("User", back_populates="referral_code")

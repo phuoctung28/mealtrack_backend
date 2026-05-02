@@ -96,6 +96,11 @@ def test_get_configured_event_bus_is_singleton(monkeypatch):
         "GetStreakQueryHandler",
         "GetDailyBreakdownQueryHandler",
         "GetDailyActivitiesQueryHandler",
+        "GenerateDailyMealSuggestionsCommandHandler",
+        "GenerateSingleMealCommandHandler",
+        "GetMealSuggestionsForProfileQueryHandler",
+        "GetSingleMealForProfileQueryHandler",
+        "GetMealPlanningSummaryQueryHandler",
         "GetMealsByDateQueryHandler",
         "GenerateMealSuggestionsCommandHandler",
         "SaveMealSuggestionCommandHandler",
@@ -142,3 +147,4 @@ def test_get_configured_event_bus_is_singleton(monkeypatch):
     # Sanity: lots of registrations should have happened.
     assert len(bus1.handlers) > 10
     assert len(bus1.subscriptions) == 2
+

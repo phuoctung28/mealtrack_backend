@@ -37,9 +37,7 @@ def client(monkeypatch) -> TestClient:
 
     class _DummyBus:
         async def send(self, msg):
-            raise AssertionError(
-                "event_bus.send should not be called in these smoke tests"
-            )
+            raise AssertionError("event_bus.send should not be called in these smoke tests")
 
     class _DummyImageStore:
         def get_url(self, image_id: str) -> str:
@@ -137,3 +135,4 @@ def test_users_sync_forbidden_when_token_uid_mismatch(client: TestClient):
     }
     r = client.post("/v1/users/sync", json=payload)
     assert r.status_code == 403
+

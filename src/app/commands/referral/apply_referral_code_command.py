@@ -1,5 +1,4 @@
 """Command dataclass for recording a referred user's code application (pre-purchase)."""
-
 from dataclasses import dataclass
 
 

@@ -1,5 +1,4 @@
 """Thin v1 routers: foods, activities, cheat_days, ingredients — mocked buses / auth."""
-
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
