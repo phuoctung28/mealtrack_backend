@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger mealtrack-e2e workflow
-        uses: peter-evans/repository-dispatch@ff4da817e31db7f9deb889f7ef7a042d694ff76a
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.E2E_REPO_PAT }}
           repository: phuoctung28/mealtrack-e2e
