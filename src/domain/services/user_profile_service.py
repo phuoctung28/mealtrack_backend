@@ -62,7 +62,7 @@ class UserProfileService:
             return {
                 "dietary_preferences": profile.dietary_preferences or [],
                 "allergies": profile.allergies or [],
-                "target_calories": tdee_result.macros.calories,
+                "target_calories": tdee_result.macros.total_calories,
                 "target_protein": tdee_result.macros.protein,
                 "target_carbs": tdee_result.macros.carbs,
                 "target_fat": tdee_result.macros.fat,
