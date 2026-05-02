@@ -44,8 +44,8 @@ Existing migrations (001-058) remain unchanged.
 If this is a new database:
 
 ```bash
-# Run ONCE to mark database at baseline
-./scripts/init_migrations.sh
+# Run ONCE to initialize the database
+python scripts/init_postgres_db.py
 ```
 
 ## Production Deployment

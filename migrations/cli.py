@@ -237,7 +237,7 @@ def cmd_status(args) -> int:
         else:
             # Count pending migrations
             revisions = list(script_dir.walk_revisions(head_revision, current_revision))
-            pending_count = len(revisions) - 1  # Exclude current
+            pending_count = len(revisions)
             logger.info(f"Pending migrations: {pending_count}")
 
         return 0
