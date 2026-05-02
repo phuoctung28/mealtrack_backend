@@ -97,6 +97,8 @@ def meal_translation_orm_to_domain(orm: MealTranslationORM) -> DomainMealTransla
             for fi in orm.food_items
         ],
         translated_at=orm.translated_at,
+        meal_instruction=orm.meal_instruction,
+        meal_ingredients=orm.meal_ingredients,
     )
 
 
