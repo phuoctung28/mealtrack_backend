@@ -148,8 +148,60 @@ def cmd_downgrade(args) -> int:
 
 
 def cmd_test(args) -> int:
-    """Placeholder - implemented in Task 6."""
-    raise NotImplementedError("cmd_test")
+    """Test migration cycle: upgrade -> downgrade -> upgrade."""
+    logger.info("Testing migration cycle...")
+
+    try:
+        alembic_cfg = get_alembic_config()
+
+        # Get initial state
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            initial_rev = context.get_current_revision()
+
+        script_dir = ScriptDirectory.from_config(alembic_cfg)
+        head_revision = script_dir.get_current_head()
+
+        logger.info(f"Initial revision: {initial_rev or '<none>'}")
+        logger.info(f"Head revision:    {head_revision or '<none>'}")
+
+        # Step 1: Upgrade
+        logger.info("Step 1/3: Upgrading...")
+        command.upgrade(alembic_cfg, "head")
+
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            after_upgrade = context.get_current_revision()
+        logger.info(f"After upgrade: {after_upgrade}")
+
+        # Step 2: Downgrade
+        logger.info("Step 2/3: Downgrading...")
+        command.downgrade(alembic_cfg, "-1")
+
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            after_downgrade = context.get_current_revision()
+        logger.info(f"After downgrade: {after_downgrade or '<none>'}")
+
+        # Step 3: Upgrade again
+        logger.info("Step 3/3: Upgrading again...")
+        command.upgrade(alembic_cfg, "head")
+
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            final_rev = context.get_current_revision()
+        logger.info(f"Final revision: {final_rev}")
+
+        if final_rev == head_revision:
+            logger.info("Migration test PASSED")
+            return 0
+        else:
+            logger.error(f"Migration test FAILED: expected {head_revision}, got {final_rev}")
+            return 1
+
+    except Exception as e:
+        logger.error(f"Migration test FAILED: {e}")
+        return 1
 
 
 def cmd_status(args) -> int:
