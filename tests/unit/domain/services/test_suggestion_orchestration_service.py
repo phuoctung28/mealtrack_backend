@@ -222,7 +222,7 @@ class TestSuggestionGenerationPipeline:
         """Ensures performance-related constants are set to their expected optimized values."""
         assert recipe_generator.DEFAULT_SUGGESTIONS_COUNT == 3
         assert recipe_generator.MIN_ACCEPTABLE_RESULTS == 1  # relaxed to allow partial results
-        assert PARALLEL_SINGLE_MEAL_TIMEOUT == 35
+        assert PARALLEL_SINGLE_MEAL_TIMEOUT == 20  # reduced from 35 for faster timeouts
 
 
 # -----------------------------------------------------------------------------
