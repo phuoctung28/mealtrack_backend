@@ -3,6 +3,10 @@ DeepL translation adapter.
 
 Wraps the official deepl Python SDK and maps ISO 639-1 language codes
 to the codes expected by the DeepL API v2.
+
+Every call uses a fixed English source (source_lang=EN) and the given
+target — no source auto-detection. If the target is English, the API
+is not called and inputs are returned unchanged.
 """
 import asyncio
 import logging
@@ -34,9 +38,12 @@ _LANG_MAP: dict = {
     "id": "ID",
 }
 
+# API source language: all strings are treated as English (not auto-detected).
+SOURCE_LANG: str = "EN"
+
 
 class DeepLTranslationAdapter(DeepLTranslationPort):
-    """Translates text via the DeepL API."""
+    """Translates from English to the target language via the DeepL API (no auto-detect)."""
 
     def __init__(self, api_key: str) -> None:
         if not api_key:
@@ -47,11 +54,20 @@ class DeepLTranslationAdapter(DeepLTranslationPort):
         """
         Translate a batch of strings with a single DeepL API call.
 
+        Always translates from English to ``target_lang`` (``source_lang`` is
+        fixed; there is no source auto-detect). Callers must supply English
+        text. If ``target_lang`` is English, returns a copy of ``texts`` and
+        does not call the API.
+
         Uses asyncio.to_thread so the blocking SDK call does not stall the
         event loop.
         """
         if not texts:
             return []
+
+        # English → English: no DeepL call (callers usually skip; this keeps the contract safe).
+        if target_lang.lower() == "en":
+            return list(texts)
 
         deepl_lang = _LANG_MAP.get(target_lang.lower(), target_lang.upper())
 
@@ -60,6 +76,7 @@ class DeepLTranslationAdapter(DeepLTranslationPort):
                 self._translator.translate_text,
                 texts,
                 target_lang=deepl_lang,
+                source_lang=SOURCE_LANG,
             )
             # SDK returns a single TextResult when given a single string,
             # or a list when given a list.
