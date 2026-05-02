@@ -21,9 +21,6 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from alembic.runtime.migration import MigrationContext
-from sqlalchemy import text
-
-from migrations.utils import migration_engine as engine, MIGRATION_URL
 
 # Configure logging
 logging.basicConfig(
@@ -38,6 +35,8 @@ ALEMBIC_CONFIG_PATH = "alembic.ini"
 
 def get_alembic_config() -> Config:
     """Load Alembic configuration with database URL set."""
+    from migrations.utils import MIGRATION_URL
+
     config_path = Path(ALEMBIC_CONFIG_PATH)
     if not config_path.exists():
         logger.error(f"Alembic config not found: {config_path.absolute()}")
@@ -79,6 +78,8 @@ def cmd_generate(args) -> int:
 
 def cmd_upgrade(args) -> int:
     """Apply pending migrations."""
+    from migrations.utils import migration_engine as engine
+
     logger.info("Upgrading database...")
 
     try:
@@ -114,6 +115,8 @@ def cmd_upgrade(args) -> int:
 
 def cmd_downgrade(args) -> int:
     """Rollback last migration."""
+    from migrations.utils import migration_engine as engine
+
     logger.info("Downgrading database...")
 
     try:
@@ -149,6 +152,8 @@ def cmd_downgrade(args) -> int:
 
 def cmd_test(args) -> int:
     """Test migration cycle: upgrade -> downgrade -> upgrade."""
+    from migrations.utils import migration_engine as engine
+
     logger.info("Testing migration cycle...")
 
     try:
@@ -206,6 +211,8 @@ def cmd_test(args) -> int:
 
 def cmd_status(args) -> int:
     """Show current migration status."""
+    from migrations.utils import migration_engine as engine
+
     logger.info("Checking migration status...")
 
     try:
