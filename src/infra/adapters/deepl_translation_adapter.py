@@ -59,6 +59,7 @@ class DeepLTranslationAdapter(DeepLTranslationPort):
             results = await asyncio.to_thread(
                 self._translator.translate_text,
                 texts,
+                source_lang="EN",
                 target_lang=deepl_lang,
             )
             # SDK returns a single TextResult when given a single string,
