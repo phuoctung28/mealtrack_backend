@@ -32,10 +32,17 @@ class CacheInvalidationEventHandler(
         weekly_key, _ = CacheKeys.weekly_budget(user_id, week_start)
         breakdown_key, _ = CacheKeys.daily_breakdown(user_id, week_start)
         streak_key, _ = CacheKeys.user_streak(user_id)
-        activities_key, _ = CacheKeys.daily_activities(user_id, meal_date)
 
-        for key in (daily_key, weekly_key, breakdown_key, streak_key, activities_key):
+        # Invalidate specific keys
+        for key in (daily_key, weekly_key, breakdown_key, streak_key):
             try:
                 await self.cache.invalidate(key)
             except Exception as exc:
                 logger.warning("Cache invalidation failed for key=%s: %s", key, exc)
+
+        # Invalidate all language variants of daily activities using pattern
+        activities_pattern = f"user:{user_id}:activities:{meal_date.isoformat()}:*"
+        try:
+            await self.cache.invalidate_pattern(activities_pattern)
+        except Exception as exc:
+            logger.warning("Cache pattern invalidation failed for %s: %s", activities_pattern, exc)

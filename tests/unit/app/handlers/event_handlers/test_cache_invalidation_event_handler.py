@@ -14,6 +14,7 @@ from src.domain.cache.cache_keys import CacheKeys
 def cache_mock():
     mock = AsyncMock()
     mock.invalidate = AsyncMock()
+    mock.invalidate_pattern = AsyncMock(return_value=1)
     return mock
 
 
@@ -70,6 +71,8 @@ async def test_invalidates_streak_and_activities(handler, cache_mock):
     )
     await handler.handle(event)
     streak_key, _ = CacheKeys.user_streak("user-123")
-    activities_key, _ = CacheKeys.daily_activities("user-123", date(2026, 4, 18))
     cache_mock.invalidate.assert_any_await(streak_key)
-    cache_mock.invalidate.assert_any_await(activities_key)
+    # Activities now uses pattern invalidation to clear all language variants
+    cache_mock.invalidate_pattern.assert_any_await(
+        "user:user-123:activities:2026-04-18:*"
+    )

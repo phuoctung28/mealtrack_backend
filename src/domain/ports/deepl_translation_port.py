@@ -12,11 +12,16 @@ class DeepLTranslationPort(ABC):
     @abstractmethod
     async def translate_texts(self, texts: List[str], target_lang: str) -> List[str]:
         """
-        Translate a list of strings to the target language in one batch.
+        Translate a list of strings from English to the target language in one batch.
+
+        Implementations must call DeepL with a fixed English source (no
+        auto-detect). Non-English inputs are invalid for this port.
 
         Args:
-            texts: Strings to translate.
-            target_lang: ISO 639-1 language code (e.g. 'vi', 'fr').
+            texts: English strings to translate.
+            target_lang: ISO 639-1 target code (e.g. 'vi', 'fr'). Use 'en' only
+                when the desired output is unchanged English (implementations
+                may skip the API).
 
         Returns:
             Translated strings in the same order as the input.

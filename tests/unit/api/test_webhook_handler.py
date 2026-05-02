@@ -136,6 +136,10 @@ class TestWebhookHandler:
                 mock_uow.__aexit__ = AsyncMock(return_value=False)
                 mock_uow.commit = AsyncMock()
                 mock_uow.rollback = AsyncMock()
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(
+                    return_value=None
+                )
                 mock_uow_class.return_value = mock_uow
 
                 # Mock subscriptions repo (async)
@@ -147,6 +151,10 @@ class TestWebhookHandler:
                 mock_result = MagicMock()
                 mock_result.scalars.return_value.first.return_value = None
                 mock_uow.session.execute.return_value = mock_result
+
+                # Mock subscriptions repository (fallback lookup path)
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
 
                 with pytest.raises(HTTPException) as exc_info:
                     await revenuecat_webhook(mock_request, authorization="test_secret")
