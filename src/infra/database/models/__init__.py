@@ -64,6 +64,7 @@ from .referral import ReferralCode, ReferralConversion, ReferralWallet, PayoutRe
 # Weight tracking
 from .weight_entry import WeightEntryORM
 
+
 __all__ = [
     # Base
     "BaseMixin",

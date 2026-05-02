@@ -151,6 +151,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 )
                 profile.goal_started_at = command.goal_started_at
 
+
             # Ensure this profile is marked as current
             profile.is_current = True
 

@@ -48,6 +48,7 @@ class Subscription(Base, BaseMixin):
     expires_at = Column(DateTime(timezone=True), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
 
+
     # Store metadata
     store_transaction_id = Column(String(255), nullable=True)
     is_sandbox = Column(Boolean, default=False, nullable=False)

@@ -51,6 +51,7 @@ class ImageStore(ImageStorePort):
         if image_id is None:
             image_id = str(uuid.uuid4())
 
+
         # For development, save locally
         extension = "jpg" if content_type == "image/jpeg" else "png"
         file_path = os.path.join(UPLOAD_DIR, f"{image_id}.{extension}")

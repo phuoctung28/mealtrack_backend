@@ -71,6 +71,7 @@ class User(Base, BaseMixin):
         "ReferralWallet", back_populates="user", uselist=False
     )
 
+
     @property
     def current_profile(self):
         """Get the current active profile."""

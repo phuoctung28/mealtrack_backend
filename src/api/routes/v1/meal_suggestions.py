@@ -236,16 +236,12 @@ async def discover_meals(
         # Translate meal names if non-English
         translated_names = [m["name"] for m in meals]
         if language and language != "en":
+            from src.api.base_dependencies import get_deepl_suggestion_translation_service
             try:
-                from src.infra.adapters.deepl_translation_adapter import (
-                    DeepLTranslationAdapter,
-                )
-                from src.infra.config.settings import settings
-
-                if settings.DEEPL_API_KEY:
-                    adapter = DeepLTranslationAdapter(settings.DEEPL_API_KEY)
-                    translated = await adapter.translate_texts(
-                        [m["name"] for m in meals], language.upper()
+                translation_svc = get_deepl_suggestion_translation_service()
+                if translation_svc:
+                    translated = await translation_svc.translate_names(
+                        [m["name"] for m in meals], language
                     )
                     if translated and len(translated) == len(meals):
                         translated_names = translated
@@ -362,17 +358,12 @@ async def generate_recipes(
             min_acceptable_override=1,
         )
 
-        # Translate if non-English
+        # Translate if non-English (pass ISO code like "vi", not full name)
         if language != "en" and recipes:
-            from src.domain.services.meal_suggestion.parallel_recipe_generator import (
-                get_language_name,
-            )
-
-            recipes, _ = await service._recipe_generator._phase3_translate(
-                session,
-                recipes,
-                get_language_name(language),
-            )
+            if service._recipe_generator._translation_service:
+                recipes = await service._recipe_generator._translation_service.translate_meal_suggestions_batch(
+                    recipes, language
+                )
 
         # Map to response
         from src.api.mappers.meal_suggestion_mapper import to_meal_suggestion_response

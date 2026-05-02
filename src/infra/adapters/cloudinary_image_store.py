@@ -79,6 +79,7 @@ class CloudinaryImageStore(ImageStorePort):
         else:
             logger.debug(f"Using provided image_id: {image_id}")
 
+
         # Determine file extension from content type
         if content_type == "image/jpeg":
             file_extension = "jpg"

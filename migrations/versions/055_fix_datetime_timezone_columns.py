@@ -6,14 +6,14 @@ timestamp columns in the schema use TIMESTAMP WITH TIME ZONE. This converts
 them consistently so asyncpg can accept timezone-aware datetimes without
 the _to_naive_utc() workaround.
 
-Revision ID: 052
-Revises: 051
+Revision ID: 055
+Revises: 054
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = '052'
-down_revision = '051'
+revision = '055'
+down_revision = '054'
 branch_labels = None
 depends_on = None
 

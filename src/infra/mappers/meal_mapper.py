@@ -1,6 +1,6 @@
 """Meal cluster ORM <-> domain mapping functions."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional
 
 from src.domain.model.meal.meal import Meal as DomainMeal
@@ -24,6 +24,16 @@ from src.infra.database.models.meal.food_item_translation_model import (
 from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.mappers.status_mapper import MealStatusMapper
+
+
+def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Convert aware datetime to naive UTC for TIMESTAMP WITHOUT TIME ZONE columns."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
 
 # ---------------------------------------------------------------------------
 # ORM -> Domain
@@ -98,6 +108,8 @@ def meal_translation_orm_to_domain(orm: MealTranslationORM) -> DomainMealTransla
         dish_name=orm.dish_name,
         food_items=[food_item_translation_orm_to_domain(fi) for fi in orm.food_items],
         translated_at=orm.translated_at,
+        meal_instruction=orm.meal_instruction,
+        meal_ingredients=orm.meal_ingredients,
     )
 
 
@@ -206,8 +218,10 @@ def meal_translation_domain_to_orm(domain: DomainMealTranslation) -> MealTransla
         meal_id=domain.meal_id,
         language=domain.language,
         dish_name=domain.dish_name,
-        translated_at=domain.translated_at or now,
-        created_at=now,
+        translated_at=_to_naive_utc(domain.translated_at or now),
+        created_at=_to_naive_utc(now),
+        meal_instruction=domain.meal_instruction,
+        meal_ingredients=domain.meal_ingredients,
     )
     for fi in domain.food_items:
         translation.food_items.append(

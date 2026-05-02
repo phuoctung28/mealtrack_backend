@@ -37,6 +37,9 @@ from src.infra.services.scheduled_notification_service import (
 if TYPE_CHECKING:
     from src.domain.ports.subscription_service_port import SubscriptionServicePort
 
+if TYPE_CHECKING:
+    from src.domain.ports.subscription_service_port import SubscriptionServicePort
+
 # Note: Old handler imports removed - using event-driven architecture now
 # from src.app.handlers.activity_handler import ActivityHandler
 # ... etc
