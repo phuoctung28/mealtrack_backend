@@ -49,8 +49,32 @@ def get_alembic_config() -> Config:
 
 
 def cmd_generate(args) -> int:
-    """Placeholder - implemented in Task 3."""
-    raise NotImplementedError("cmd_generate")
+    """Generate new migration with autogenerate."""
+    message = args.message.strip()
+
+    if not message:
+        logger.error("Migration message cannot be empty")
+        return 1
+
+    logger.info(f"Generating migration: {message}")
+
+    try:
+        alembic_cfg = get_alembic_config()
+
+        # Generate migration with autogenerate
+        command.revision(
+            alembic_cfg,
+            message=message,
+            autogenerate=True,
+        )
+
+        logger.info("Migration generated successfully")
+        logger.info("Review the generated file in migrations/versions/")
+        return 0
+
+    except Exception as e:
+        logger.error(f"Failed to generate migration: {e}")
+        return 1
 
 
 def cmd_upgrade(args) -> int:
