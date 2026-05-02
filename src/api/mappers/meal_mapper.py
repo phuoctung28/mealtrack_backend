@@ -149,8 +149,11 @@ class MealMapper:
             and meal.translations
         ):
             tr = meal.translations.get(target_language)
-            if tr and tr.is_fully_cached():
-                dish_name = tr.dish_name
+            if tr:
+                # Apply each translated field independently if it exists
+                # (lenient check - scanned meals may not have instructions)
+                if tr.dish_name:
+                    dish_name = tr.dish_name
                 if tr.meal_instruction:
                     instructions = tr.meal_instruction
                 if tr.meal_ingredients and len(tr.meal_ingredients) == len(food_items):
