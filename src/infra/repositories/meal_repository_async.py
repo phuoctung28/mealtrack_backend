@@ -138,7 +138,8 @@ class AsyncMealRepository(MealRepositoryPort):
         result = await self.session.execute(
             select(MealORM).options(*_PROJECTION_OPTS[projection]).where(MealORM.meal_id == meal_id)
         )
-        db_meal = result.scalars().first()
+        # .unique() required for joinedload to properly consolidate joined rows
+        db_meal = result.unique().scalars().first()
         return meal_orm_to_domain(db_meal) if db_meal else None
 
     async def find_by_status(self, status: MealStatus, limit: int = 10) -> List[Meal]:
