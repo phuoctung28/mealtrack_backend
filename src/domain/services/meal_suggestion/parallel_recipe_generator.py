@@ -11,6 +11,8 @@ from typing import List, Optional
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.infra.services.ai.gemini_throttle import GeminiThrottle
+from src.api.exceptions import ExternalServiceException
 from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
     DeepLSuggestionTranslationService,
 )
@@ -170,19 +172,25 @@ class ParallelRecipeGenerator:
             fat_target=getattr(session, "fat_target", None),
         )
 
+        throttle = GeminiThrottle.get_instance()
         try:
-            raw = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._generation.generate_meal_plan,
-                    prompt,
-                    system,
-                    "json",
-                    1000,
-                    discovery_schema,
-                    "meal_names",
-                ),
-                timeout=self.DISCOVERY_TIMEOUT,
-            )
+            async with throttle.acquire():
+                raw = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self._generation.generate_meal_plan,
+                        prompt,
+                        system,
+                        "json",
+                        1000,
+                        discovery_schema,
+                        "meal_names",
+                    ),
+                    timeout=self.DISCOVERY_TIMEOUT,
+                )
+        except ExternalServiceException:
+            throttle.record_rate_limit(retry_after=3)
+            logger.error(f"[DISCOVERY-RATE-LIMIT] session={session.id}")
+            raise RuntimeError("Rate limit exceeded during discovery")
         except Exception as e:
             logger.error(
                 f"[DISCOVERY-FAILED] session={session.id} | {type(e).__name__}: {e}"
@@ -267,22 +275,24 @@ class ParallelRecipeGenerator:
         seen: set = set()
         meal_names: list = []
         max_attempts = 2
+        throttle = GeminiThrottle.get_instance()
         try:
             for attempt in range(1, max_attempts + 1):
-                names_raw = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        self._generation.generate_meal_plan,
-                        build_meal_names_prompt(
-                            session, exclude_meal_names, names_to_generate
+                async with throttle.acquire():
+                    names_raw = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            self._generation.generate_meal_plan,
+                            build_meal_names_prompt(
+                                session, exclude_meal_names, names_to_generate
+                            ),
+                            names_system,
+                            "json",
+                            1000,
+                            meal_names_schema,
+                            "meal_names",
                         ),
-                        names_system,
-                        "json",
-                        1000,
-                        meal_names_schema,
-                        "meal_names",
-                    ),
-                    timeout=self.PHASE1_TIMEOUT,
-                )
+                        timeout=self.PHASE1_TIMEOUT,
+                    )
                 for n in names_raw.get("meal_names", []):
                     if n.lower() not in seen:
                         seen.add(n.lower())
@@ -300,6 +310,12 @@ class ParallelRecipeGenerator:
                 )
             logger.debug(f"[PHASE-1-COMPLETE] session={session.id} | names={meal_names}")
             return meal_names
+        except ExternalServiceException:
+            throttle.record_rate_limit(retry_after=3)
+            logger.error(f"[PHASE-1-RATE-LIMIT] session={session.id}")
+            raise RuntimeError(
+                "Rate limit exceeded during meal name generation"
+            )
         except Exception as e:
             logger.error(
                 f"[PHASE-1-FAILED] session={session.id} | {type(e).__name__}: {e}"
