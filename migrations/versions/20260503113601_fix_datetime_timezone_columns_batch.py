@@ -3,7 +3,7 @@
 Standardizes all datetime columns to TIMESTAMP WITH TIME ZONE for consistency
 with utc_now() which returns timezone-aware datetimes.
 
-Tables affected:
+Tables affected (if they exist):
 - cheat_days.marked_at
 - weight_entries.recorded_at
 - feature_flags.created_at, updated_at
@@ -18,6 +18,7 @@ Create Date: 2026-05-03 11:36:01
 from typing import Sequence, Union
 
 from alembic import op
+from sqlalchemy import inspect
 import sqlalchemy as sa
 
 revision: str = '20260503113601'
@@ -39,8 +40,19 @@ COLUMNS_TO_FIX = [
 ]
 
 
+def get_existing_tables():
+    """Get set of tables that exist in the database."""
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    return set(inspector.get_table_names())
+
+
 def upgrade() -> None:
+    existing_tables = get_existing_tables()
     for table, column, nullable in COLUMNS_TO_FIX:
+        if table not in existing_tables:
+            print(f"Skipping {table}.{column} - table does not exist")
+            continue
         op.alter_column(
             table, column,
             type_=sa.DateTime(timezone=True),
@@ -51,7 +63,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    existing_tables = get_existing_tables()
     for table, column, nullable in COLUMNS_TO_FIX:
+        if table not in existing_tables:
+            print(f"Skipping {table}.{column} - table does not exist")
+            continue
         op.alter_column(
             table, column,
             type_=sa.DateTime(timezone=False),
