@@ -27,8 +27,8 @@ class MealTranslationORM(Base):
         String(7), nullable=False
     )  # ISO 639-1: en, vi, es, fr, de, ja, zh
     dish_name = Column(String(255), nullable=False)
-    translated_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, nullable=False)
+    translated_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
     meal_instruction = Column(JSON, nullable=True)
     meal_ingredients = Column(JSON, nullable=True)
 

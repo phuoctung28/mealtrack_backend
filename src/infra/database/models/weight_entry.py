@@ -14,7 +14,7 @@ class WeightEntryORM(Base, BaseMixin):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     weight_kg = Column(Float, nullable=False)
-    recorded_at = Column(DateTime, nullable=False)
+    recorded_at = Column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
         UniqueConstraint("user_id", "recorded_at", name="uq_user_recorded_at"),

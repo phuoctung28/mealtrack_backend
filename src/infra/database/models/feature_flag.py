@@ -16,5 +16,5 @@ class FeatureFlag(Base):
     name = Column(String(255), primary_key=True, index=True)
     enabled = Column(Boolean, nullable=False, default=False)
     description = Column(String(500), nullable=True)
-    created_at = Column(DateTime, default=utc_now, nullable=False)
-    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)

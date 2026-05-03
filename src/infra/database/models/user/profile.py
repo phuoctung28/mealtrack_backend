@@ -64,7 +64,7 @@ class UserProfile(Base, BaseMixin):
 
     # Goal progress tracking — tracks when user started current goal journey
     goal_start_weight_kg = Column(Float, nullable=True, default=None)
-    goal_started_at = Column(DateTime, nullable=True, default=None)
+    goal_started_at = Column(DateTime(timezone=True), nullable=True, default=None)
 
     @property
     def has_custom_macros(self) -> bool:
