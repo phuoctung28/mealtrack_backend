@@ -53,5 +53,5 @@ class FoodReferenceModel(Base):
     source = Column(String(50), nullable=False, default="fatsecret")
     is_verified = Column(Boolean, nullable=False, default=False)
     image_url = Column(Text, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
