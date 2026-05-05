@@ -11,7 +11,7 @@ Tables affected:
 - food_reference.created_at, updated_at
 - user_profiles.goal_started_at
 
-Revision ID: 059
+Revision ID: 20260503113601
 Revises: 058
 Create Date: 2026-05-03 11:36:01
 """
@@ -20,7 +20,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = '059'
+revision: str = '20260503113601'
 down_revision: Union[str, None] = '058'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
