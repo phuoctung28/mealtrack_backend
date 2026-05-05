@@ -41,6 +41,27 @@ _LANG_MAP: dict = {
 # API source language: all strings are treated as English (not auto-detected).
 SOURCE_LANG: str = "EN"
 
+# Map from ISO 639-1 to DeepL source-language codes.
+# DeepL source codes don't distinguish regional variants.
+_SOURCE_LANG_MAP: dict = {
+    "en": "EN",
+    "vi": "VI",
+    "es": "ES",
+    "fr": "FR",
+    "de": "DE",
+    "ja": "JA",
+    "zh": "ZH",
+    "ko": "KO",
+    "pt": "PT",
+    "ru": "RU",
+    "it": "IT",
+    "nl": "NL",
+    "pl": "PL",
+    "tr": "TR",
+    "uk": "UK",
+    "id": "ID",
+}
+
 
 class DeepLTranslationAdapter(DeepLTranslationPort):
     """Translates from English to the target language via the DeepL API (no auto-detect)."""
@@ -85,4 +106,34 @@ class DeepLTranslationAdapter(DeepLTranslationPort):
             return [results.text]
         except deepl.DeepLException as exc:
             logger.error("DeepL API error (lang=%s): %s", deepl_lang, exc)
+            raise
+
+    async def translate_to_english(self, texts: List[str], source_lang: str) -> List[str]:
+        """
+        Translate a batch of strings to English with a single DeepL API call.
+
+        Uses explicit source language if mapped, otherwise auto-detect.
+        """
+        if not texts:
+            return []
+
+        # English → English: no DeepL call needed
+        if source_lang.lower() == "en":
+            return list(texts)
+
+        # Map source language; use None for auto-detect if unknown
+        deepl_source = _SOURCE_LANG_MAP.get(source_lang.lower())
+
+        try:
+            results = await asyncio.to_thread(
+                self._translator.translate_text,
+                texts,
+                target_lang="EN-US",
+                source_lang=deepl_source,  # None triggers auto-detect
+            )
+            if isinstance(results, list):
+                return [r.text for r in results]
+            return [results.text]
+        except deepl.DeepLException as exc:
+            logger.error("DeepL API error (to EN from %s): %s", source_lang, exc)
             raise
