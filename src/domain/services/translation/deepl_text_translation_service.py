@@ -4,6 +4,7 @@ DeepL-backed text translation service.
 Provides simple text translation for food search, ingredient recognition,
 barcode lookup, and meal text parsing flows.
 """
+
 import logging
 from typing import Any, Dict, List
 
@@ -23,9 +24,7 @@ class DeepLTextTranslationService:
     def __init__(self, deepl_port: DeepLTranslationPort) -> None:
         self._deepl = deepl_port
 
-    async def translate_texts(
-        self, texts: List[str], target_lang: str
-    ) -> List[str]:
+    async def translate_texts(self, texts: List[str], target_lang: str) -> List[str]:
         """Translate texts from English to target language."""
         if not texts or target_lang == "en":
             return list(texts) if texts else []
@@ -33,7 +32,9 @@ class DeepLTextTranslationService:
         try:
             return await self._deepl.translate_texts(texts, target_lang)
         except Exception as exc:
-            logger.warning("DeepL translate_texts failed (lang=%s): %s", target_lang, exc)
+            logger.warning(
+                "DeepL translate_texts failed (lang=%s): %s", target_lang, exc
+            )
             return list(texts)
 
     async def translate_to_english(
@@ -46,7 +47,9 @@ class DeepLTextTranslationService:
         try:
             return await self._deepl.translate_to_english(texts, source_lang)
         except Exception as exc:
-            logger.warning("DeepL translate_to_english failed (lang=%s): %s", source_lang, exc)
+            logger.warning(
+                "DeepL translate_to_english failed (lang=%s): %s", source_lang, exc
+            )
             return list(texts)
 
     async def translate_food_names(
@@ -94,5 +97,7 @@ class DeepLTextTranslationService:
             return foods
 
         except Exception as exc:
-            logger.warning("DeepL translate_food_names failed (lang=%s): %s", target_lang, exc)
+            logger.warning(
+                "DeepL translate_food_names failed (lang=%s): %s", target_lang, exc
+            )
             return foods

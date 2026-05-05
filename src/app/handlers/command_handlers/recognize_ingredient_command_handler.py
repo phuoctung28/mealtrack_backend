@@ -34,7 +34,9 @@ class RecognizeIngredientCommandHandler(
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
         self.vision_service = kwargs.get("vision_service", self.vision_service)
-        self.translation_service = kwargs.get("translation_service", self.translation_service)
+        self.translation_service = kwargs.get(
+            "translation_service", self.translation_service
+        )
 
     async def handle(self, command: RecognizeIngredientCommand) -> Dict[str, Any]:
         """

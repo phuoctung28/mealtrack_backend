@@ -117,7 +117,9 @@ class ParseMealTextHandler(
                 )
             # Step 2: Translate any remaining English names using DeepL
             if self._translation_service:
-                await self._translate_english_names_deepl(enhanced_items, command.language)
+                await self._translate_english_names_deepl(
+                    enhanced_items, command.language
+                )
 
         # Build response items
         items = [
