@@ -2,6 +2,7 @@
 Status mapper utility to convert between domain and database enums.
 Centralizes status mapping logic to avoid duplication.
 """
+
 from src.domain.model.meal import MealStatus
 from src.infra.database.models.enums import MealStatusEnum
 

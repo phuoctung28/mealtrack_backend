@@ -21,10 +21,14 @@ class SuggestionSession:
     servings: int = 1  # Number of servings (1-4), scales ingredient amounts
     language: str = "en"  # ISO 639-1 language code (en, vi, es, fr, de, ja, zh)
     shown_suggestion_ids: List[str] = field(default_factory=list)
-    shown_meal_names: List[str] = field(default_factory=list)  # Track meal names for exclusion
+    shown_meal_names: List[str] = field(
+        default_factory=list
+    )  # Track meal names for exclusion
     dietary_preferences: List[str] = field(default_factory=list)
     allergies: List[str] = field(default_factory=list)
-    cooking_equipment: List[str] = field(default_factory=list)  # Available cooking equipment
+    cooking_equipment: List[str] = field(
+        default_factory=list
+    )  # Available cooking equipment
     cuisine_region: Optional[str] = None  # User's preferred cuisine region
     protein_target: Optional[float] = None  # Macro override: protein grams
     carbs_target: Optional[float] = None  # Macro override: carbs grams
@@ -35,7 +39,7 @@ class SuggestionSession:
     def add_shown_ids(self, ids: List[str]) -> None:
         """Add newly shown suggestion IDs to exclusion list."""
         self.shown_suggestion_ids.extend(ids)
-    
+
     def add_shown_meals(self, meal_names: List[str]) -> None:
         """Add newly shown meal names to exclusion list."""
         self.shown_meal_names.extend(meal_names)

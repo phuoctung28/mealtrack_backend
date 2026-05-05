@@ -4,6 +4,7 @@ Searches Brave for the meal name and scores how well the stock photo
 alt text matches web descriptions of that meal.
 Gracefully degrades: returns 0.5 (neutral) on any error.
 """
+
 import logging
 from typing import Optional, Set
 
@@ -45,9 +46,7 @@ class WebSearchImageValidator(WebSearchValidatorPort):
         except Exception:
             return False
 
-    async def score(
-        self, meal_name: str, image: FoodImageResult
-    ) -> float:
+    async def score(self, meal_name: str, image: FoodImageResult) -> float:
         """Return 0.0–1.0 score of how well image matches the meal per web search.
 
         Scoring:
@@ -130,17 +129,39 @@ class WebSearchImageValidator(WebSearchValidatorPort):
 
             # Remove overly generic words
             generic = {
-                "recipe", "recipes", "food", "dish", "best", "easy",
-                "simple", "make", "how", "home", "cook", "cooking",
-                "minute", "minutes", "time", "step", "steps",
-                "the", "and", "with", "for", "this", "that",
-                "from", "your", "you", "are", "will", "can",
+                "recipe",
+                "recipes",
+                "food",
+                "dish",
+                "best",
+                "easy",
+                "simple",
+                "make",
+                "how",
+                "home",
+                "cook",
+                "cooking",
+                "minute",
+                "minutes",
+                "time",
+                "step",
+                "steps",
+                "the",
+                "and",
+                "with",
+                "for",
+                "this",
+                "that",
+                "from",
+                "your",
+                "you",
+                "are",
+                "will",
+                "can",
             }
             keywords -= generic
 
-            logger.debug(
-                f"Web keywords for '{meal_name}': {list(keywords)[:15]}"
-            )
+            logger.debug(f"Web keywords for '{meal_name}': {list(keywords)[:15]}")
             return keywords
 
         except Exception as e:

@@ -1,4 +1,5 @@
 """Handler for getting cheat days for a week."""
+
 import logging
 from datetime import date, timedelta
 from typing import Dict, Any, Optional

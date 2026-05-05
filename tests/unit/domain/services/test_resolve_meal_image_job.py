@@ -65,8 +65,13 @@ def job(deps):
 @pytest.mark.asyncio
 async def test_short_circuits_when_already_cached(job, deps):
     deps["cache"].query_nearest.return_value = CachedImage(
-        meal_name="x", name_slug="x", image_url="u",
-        thumbnail_url=None, source="pexels", confidence=0.9, cosine=0.999,
+        meal_name="x",
+        name_slug="x",
+        image_url="u",
+        thumbnail_url=None,
+        source="pexels",
+        confidence=0.9,
+        cosine=0.999,
     )
     result = await job.run(_item_with_url())
     assert result.source == "pexels"

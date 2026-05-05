@@ -1,4 +1,5 @@
 """Handler for retrieving a user's saved suggestions."""
+
 import logging
 from typing import Any, Dict, Optional
 
@@ -12,7 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 @handles(GetSavedSuggestionsQuery)
-class GetSavedSuggestionsQueryHandler(EventHandler[GetSavedSuggestionsQuery, Dict[str, Any]]):
+class GetSavedSuggestionsQueryHandler(
+    EventHandler[GetSavedSuggestionsQuery, Dict[str, Any]]
+):
     """Return all saved suggestions for a user, newest first."""
 
     def __init__(self, cache_service: Optional[CachePort] = None):

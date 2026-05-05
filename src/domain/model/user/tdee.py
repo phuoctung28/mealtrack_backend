@@ -10,6 +10,7 @@ class Sex(Enum):
 
 class JobType(Enum):
     """Job type based on daily movement requirements."""
+
     DESK = "desk"
     ON_FEET = "on_feet"
     PHYSICAL = "physical"
@@ -29,6 +30,7 @@ class TrainingLevel(Enum):
     - INTERMEDIATE: 1-3 years consistent training (moderate protein needs)
     - ADVANCED: 3+ years consistent training (higher protein for muscle retention)
     """
+
     BEGINNER = "beginner"
     INTERMEDIATE = "intermediate"
     ADVANCED = "advanced"

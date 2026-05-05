@@ -1,6 +1,7 @@
 """
 Factory for creating test nutrition data.
 """
+
 from uuid import uuid4
 from typing import Optional, List, Dict, Any
 
@@ -24,11 +25,7 @@ class NutritionFactory:
         # Remove any stale calories= kwarg so callers don't break
         overrides.pop("calories", None)
         defaults = {
-            "macros": Macros(
-                protein=30.0,
-                carbs=50.0,
-                fat=15.0
-            ),
+            "macros": Macros(protein=30.0, carbs=50.0, fat=15.0),
             "food_items": [
                 NutritionFactory.create_food_item(
                     name="Chicken Breast",
@@ -65,11 +62,7 @@ class NutritionFactory:
             "name": "Test Food",
             "quantity": 100.0,
             "unit": "g",
-            "macros": Macros(
-                protein=10.0,
-                carbs=15.0,
-                fat=5.0
-            ),
+            "macros": Macros(protein=10.0, carbs=15.0, fat=5.0),
             "micros": None,
             "confidence": 0.95,
         }

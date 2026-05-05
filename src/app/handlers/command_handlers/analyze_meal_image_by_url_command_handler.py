@@ -1,6 +1,7 @@
 """
 Handler for immediate meal image analysis using pre-uploaded image URL.
 """
+
 import logging
 import time
 from typing import Any, Optional
@@ -8,7 +9,9 @@ from uuid import uuid4
 
 from src.app.commands.meal import AnalyzeMealImageByUrlCommand
 from src.app.events.base import EventHandler, handles
-from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
+from src.app.events.meal.meal_cache_invalidation_required_event import (
+    MealCacheInvalidationRequiredEvent,
+)
 from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
@@ -31,9 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 @handles(AnalyzeMealImageByUrlCommand)
-class AnalyzeMealImageByUrlHandler(
-    EventHandler[AnalyzeMealImageByUrlCommand, Meal]
-):
+class AnalyzeMealImageByUrlHandler(EventHandler[AnalyzeMealImageByUrlCommand, Meal]):
     """Handler for immediate meal image analysis from URL."""
 
     def __init__(
@@ -174,13 +175,17 @@ class AnalyzeMealImageByUrlHandler(
                 )
 
             async with self.uow as uow:
-                final_meal = await uow.meals.find_by_id(meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS)
+                final_meal = await uow.meals.find_by_id(
+                    meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
+                )
 
-            await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
-                aggregate_id=command.user_id,
-                user_id=command.user_id,
-                meal_date=meal_date,
-            ))
+            await self.event_bus.publish(
+                MealCacheInvalidationRequiredEvent(
+                    aggregate_id=command.user_id,
+                    user_id=command.user_id,
+                    meal_date=meal_date,
+                )
+            )
             return final_meal
         except Exception as e:
             logger.error("Failed to analyze meal by URL: %s", str(e))

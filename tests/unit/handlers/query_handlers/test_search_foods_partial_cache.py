@@ -1,9 +1,12 @@
 """Tests that food search caches partial localized results and skips the fallback."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.app.handlers.query_handlers.search_foods_query_handler import SearchFoodsQueryHandler
+from src.app.handlers.query_handlers.search_foods_query_handler import (
+    SearchFoodsQueryHandler,
+)
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
 
 
@@ -14,20 +17,26 @@ def _make_handler(localized_results=None, fallback_results=None):
 
     fat_secret = MagicMock()
     # First call: localized; second call: English fallback
-    fat_secret.search_foods = AsyncMock(side_effect=[
-        localized_results or [],
-        fallback_results or [],
-    ])
+    fat_secret.search_foods = AsyncMock(
+        side_effect=[
+            localized_results or [],
+            fallback_results or [],
+        ]
+    )
 
     mapping = MagicMock()
     mapping.map_search_item.side_effect = lambda x: x
 
-    return SearchFoodsQueryHandler(
-        cache_service=cache,
-        mapping_service=mapping,
-        fat_secret_service=fat_secret,
-        translation_service=None,
-    ), fat_secret, cache
+    return (
+        SearchFoodsQueryHandler(
+            cache_service=cache,
+            mapping_service=mapping,
+            fat_secret_service=fat_secret,
+            translation_service=None,
+        ),
+        fat_secret,
+        cache,
+    )
 
 
 @pytest.mark.asyncio
@@ -39,9 +48,9 @@ async def test_partial_localized_result_skips_fallback():
     query = SearchFoodsQuery(query="pho", language="vi", limit=10)
     await handler.handle(query)
 
-    assert fat_secret.search_foods.call_count == 1, (
-        f"Expected 1 FatSecret call (localized only), got {fat_secret.search_foods.call_count}"
-    )
+    assert (
+        fat_secret.search_foods.call_count == 1
+    ), f"Expected 1 FatSecret call (localized only), got {fat_secret.search_foods.call_count}"
 
 
 @pytest.mark.asyncio
@@ -63,7 +72,9 @@ async def test_partial_localized_result_is_cached():
 async def test_empty_localized_result_runs_fallback():
     """When localized search returns empty, the fallback path still runs."""
     fallback_results = [{"description": "Noodle soup", "source": "fatsecret"}]
-    handler, fat_secret, _ = _make_handler(localized_results=[], fallback_results=fallback_results)
+    handler, fat_secret, _ = _make_handler(
+        localized_results=[], fallback_results=fallback_results
+    )
 
     query = SearchFoodsQuery(query="pho", language="vi", limit=10)
     await handler.handle(query)

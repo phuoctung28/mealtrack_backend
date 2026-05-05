@@ -1,15 +1,26 @@
 """
 Async Redis client with connection pooling.
 """
+
 from __future__ import annotations
 
 import logging
 from typing import Optional
+from urllib.parse import urlparse
 
 import redis.asyncio as redis
 from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_redis_log_label(url: str) -> str:
+    """Return scheme + host + port for logs; never userinfo (password)."""
+    parsed = urlparse(url)
+    host = parsed.hostname or "unknown"
+    port = f":{parsed.port}" if parsed.port else ""
+    scheme = parsed.scheme or "redis"
+    return f"{scheme}://{host}{port}"
 
 
 class RedisClient:
@@ -40,9 +51,13 @@ class RedisClient:
         self.client = redis.Redis(connection_pool=self.pool)
         try:
             await self.client.ping()
-            logger.info("Redis connected (%s)", self._redis_url)
+            logger.info("Redis connected (%s)", _safe_redis_log_label(self._redis_url))
         except RedisError as exc:  # pragma: no cover - connection errors logged
-            logger.error("Failed to connect to Redis: %s", exc)
+            logger.error(
+                "Failed to connect to Redis (%s): %s",
+                _safe_redis_log_label(self._redis_url),
+                exc,
+            )
             raise
 
     async def disconnect(self) -> None:
@@ -156,4 +171,3 @@ class RedisClient:
         except RedisError as exc:
             logger.warning("Redis batch HGETALL pipeline error: %s", exc)
             return [{} for _ in keys]
-

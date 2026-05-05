@@ -1,4 +1,5 @@
 """Tests that upload_meal_image handler uses the injected UoW (no direct UnitOfWork() instantiation)."""
+
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 

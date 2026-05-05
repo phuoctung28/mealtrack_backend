@@ -1,4 +1,5 @@
 """Tests that get_daily_macros handler opens AsyncUnitOfWork once on cache miss."""
+
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -45,13 +46,15 @@ async def test_cache_miss_opens_uow_once():
             "src.app.handlers.query_handlers.get_user_tdee_query_handler.GetUserTdeeQueryHandler"
         ) as mock_tdee_cls:
             mock_tdee = MagicMock()
-            mock_tdee.handle = AsyncMock(return_value={"target_calories": 2000, "macros": {}, "bmr": 1800})
+            mock_tdee.handle = AsyncMock(
+                return_value={"target_calories": 2000, "macros": {}, "bmr": 1800}
+            )
             mock_tdee_cls.return_value = mock_tdee
             await handler.handle(query)
 
-    assert mock_cls.call_count == 1, (
-        f"Expected 1 UoW open on cache miss, got {mock_cls.call_count}"
-    )
+    assert (
+        mock_cls.call_count == 1
+    ), f"Expected 1 UoW open on cache miss, got {mock_cls.call_count}"
 
 
 @pytest.mark.asyncio
@@ -88,7 +91,9 @@ async def test_weekly_budget_fetched_in_shared_uow():
             "src.app.handlers.query_handlers.get_user_tdee_query_handler.GetUserTdeeQueryHandler"
         ) as mock_tdee_cls:
             mock_tdee = MagicMock()
-            mock_tdee.handle = AsyncMock(return_value={"target_calories": 2000, "macros": {}, "bmr": 1800})
+            mock_tdee.handle = AsyncMock(
+                return_value={"target_calories": 2000, "macros": {}, "bmr": 1800}
+            )
             mock_tdee_cls.return_value = mock_tdee
             await handler.handle(query)
 

@@ -3,6 +3,7 @@ Unit tests for SuggestionPromptBuilder (Phase 1 & 2).
 Tests that prompts request 4 names, no description, and generate in English.
 Translation happens in Phase 3 post-generation.
 """
+
 import pytest
 
 from src.domain.model.meal_suggestion import SuggestionSession
@@ -89,28 +90,44 @@ class TestBuildMealNamesPrompt:
         prompt = build_meal_names_prompt(session)
 
         # Should mention dietary info if present
-        assert "vegan" in prompt.lower() or "gluten-free" in prompt.lower() or "vegetarian" not in prompt.lower()
+        assert (
+            "vegan" in prompt.lower()
+            or "gluten-free" in prompt.lower()
+            or "vegetarian" not in prompt.lower()
+        )
 
     def test_includes_allergies(self, mock_session):
         """Prompt should mention allergies to avoid."""
         prompt = build_meal_names_prompt(mock_session)
 
         # Should mention avoiding allergies
-        assert "peanut" in prompt.lower() or "allerg" in prompt.lower() or "avoid" in prompt.lower()
+        assert (
+            "peanut" in prompt.lower()
+            or "allerg" in prompt.lower()
+            or "avoid" in prompt.lower()
+        )
 
     def test_no_long_examples(self, mock_session):
         """Prompt should show bad examples of long names to discourage them."""
         prompt = build_meal_names_prompt(mock_session)
 
         # Should have guidance on name length
-        assert "max" in prompt.lower() or "word" in prompt.lower() or "char" in prompt.lower()
+        assert (
+            "max" in prompt.lower()
+            or "word" in prompt.lower()
+            or "char" in prompt.lower()
+        )
 
     def test_includes_good_examples(self, mock_session):
         """Prompt should have name guidelines."""
         prompt = build_meal_names_prompt(mock_session)
 
         # Should have guidelines for naming (concise, max words)
-        assert "max" in prompt.lower() or "word" in prompt.lower() or "natural" in prompt.lower()
+        assert (
+            "max" in prompt.lower()
+            or "word" in prompt.lower()
+            or "natural" in prompt.lower()
+        )
 
 
 class TestBuildRecipeDetailsPrompt:
@@ -147,7 +164,11 @@ class TestBuildRecipeDetailsPrompt:
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
         # Should mention cooking time
-        assert "cooking" in prompt.lower() or "time" in prompt.lower() or "minute" in prompt.lower()
+        assert (
+            "cooking" in prompt.lower()
+            or "time" in prompt.lower()
+            or "minute" in prompt.lower()
+        )
 
     def test_includes_ingredients(self, mock_session):
         """Prompt should list available ingredients."""
@@ -194,7 +215,11 @@ class TestBuildRecipeDetailsPrompt:
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
         # Should mention portion sizing or amounts
-        assert "portion" in prompt.lower() or "amount" in prompt.lower() or "gram" in prompt.lower()
+        assert (
+            "portion" in prompt.lower()
+            or "amount" in prompt.lower()
+            or "gram" in prompt.lower()
+        )
 
     def test_includes_ingredient_list(self, mock_session):
         """Prompt should include list of available ingredients."""
@@ -208,7 +233,10 @@ class TestBuildRecipeDetailsPrompt:
         prompt = build_recipe_details_prompt("Test Meal", mock_session)
 
         # Should mention units or amounts
-        assert any(unit in prompt for unit in ["g", "ml", "tbsp", "tsp", "cup", "amount", "gram"])
+        assert any(
+            unit in prompt
+            for unit in ["g", "ml", "tbsp", "tsp", "cup", "amount", "gram"]
+        )
 
     def test_requests_recipe_steps_with_duration(self, mock_session):
         """Prompt should request recipe steps with duration for each step."""
@@ -216,7 +244,11 @@ class TestBuildRecipeDetailsPrompt:
 
         # Should mention steps and duration
         assert "step" in prompt.lower()
-        assert "duration" in prompt.lower() or "minute" in prompt.lower() or "time" in prompt.lower()
+        assert (
+            "duration" in prompt.lower()
+            or "minute" in prompt.lower()
+            or "time" in prompt.lower()
+        )
 
     def test_does_not_include_macro_fields_in_prompt(self, mock_session):
         """Prompt must not include macro field requests (protein/carbs/fat/macros).
@@ -237,7 +269,11 @@ class TestBuildRecipeDetailsPrompt:
 
         # Should request exact match with the meal name
         assert meal_name in prompt
-        assert "exactly" in prompt.lower() or "match" in prompt.lower() or "must" in prompt.lower()
+        assert (
+            "exactly" in prompt.lower()
+            or "match" in prompt.lower()
+            or "must" in prompt.lower()
+        )
 
 
 class TestSessionEdgeCases:

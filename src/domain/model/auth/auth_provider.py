@@ -1,16 +1,18 @@
 """
 Authentication provider domain model.
 """
+
 from enum import Enum
 
 
 class AuthProvider(str, Enum):
     """Authentication provider enumeration."""
+
     GOOGLE = "google"
     APPLE = "apple"
-    
+
     @classmethod
-    def from_string(cls, value: str) -> 'AuthProvider':
+    def from_string(cls, value: str) -> "AuthProvider":
         """Convert string to AuthProvider with validation."""
         try:
             return cls(value.lower())

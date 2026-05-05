@@ -1,6 +1,7 @@
 """
 Query to get weekly macro budget status.
 """
+
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional

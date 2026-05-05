@@ -1,6 +1,7 @@
 """
 Unit tests for enhanced cache decorators.
 """
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -26,24 +27,21 @@ def mock_cache_service():
 
 class MockService:
     """Test service for decorator testing."""
-    
+
     def __init__(self, cache_service):
         self.cache_service = cache_service
         self.call_count = 0
-    
-    @cached(
-        key_func=lambda self, user_id: f"user:{user_id}",
-        ttl=3600
-    )
+
+    @cached(key_func=lambda self, user_id: f"user:{user_id}", ttl=3600)
     async def get_user(self, user_id: str) -> dict:
         self.call_count += 1
         return {"id": user_id, "name": "Test User"}
-    
+
     @cached_method(prefix="data", ttl=CacheTTL.MEDIUM)
     async def get_data(self, key: str) -> dict:
         self.call_count += 1
         return {"key": key, "value": "test"}
-    
+
     @invalidate_on_write(
         key_patterns=lambda self, user_id, *args, **kwargs: [f"user:{user_id}"]
     )
@@ -59,10 +57,10 @@ class TestCachedDecorator:
     async def test_cache_hit_returns_cached_value(self, mock_cache_service):
         """Should return cached value on cache hit."""
         mock_cache_service.get_json.return_value = {"id": "123", "cached": True}
-        
+
         service = MockService(mock_cache_service)
         result = await service.get_user("123")
-        
+
         assert result == {"id": "123", "cached": True}
         assert service.call_count == 0  # Method not called
         mock_cache_service.get_json.assert_called_once()
@@ -71,10 +69,10 @@ class TestCachedDecorator:
     async def test_cache_miss_calls_method(self, mock_cache_service):
         """Should call method on cache miss."""
         mock_cache_service.get_json.return_value = None
-        
+
         service = MockService(mock_cache_service)
         result = await service.get_user("123")
-        
+
         assert result == {"id": "123", "name": "Test User"}
         assert service.call_count == 1
         mock_cache_service.set_json.assert_called_once()
@@ -83,10 +81,10 @@ class TestCachedDecorator:
     async def test_cache_miss_stores_result(self, mock_cache_service):
         """Should store result in cache on miss."""
         mock_cache_service.get_json.return_value = None
-        
+
         service = MockService(mock_cache_service)
         await service.get_user("123")
-        
+
         # Verify set_json was called with correct key and TTL
         call_args = mock_cache_service.set_json.call_args
         assert call_args[0][0] == "user:123"
@@ -97,7 +95,7 @@ class TestCachedDecorator:
         """Should call method directly if no cache service."""
         service = MockService(cache_service=None)
         result = await service.get_user("123")
-        
+
         assert result == {"id": "123", "name": "Test User"}
         assert service.call_count == 1
 
@@ -109,10 +107,10 @@ class TestCachedMethodDecorator:
     async def test_auto_generates_cache_key(self, mock_cache_service):
         """Should auto-generate cache key from args."""
         mock_cache_service.get_json.return_value = None
-        
+
         service = MockService(mock_cache_service)
         await service.get_data("test_key")
-        
+
         # Key should start with prefix
         call_args = mock_cache_service.set_json.call_args
         assert call_args[0][0].startswith("data:")
@@ -121,11 +119,11 @@ class TestCachedMethodDecorator:
     async def test_different_args_different_keys(self, mock_cache_service):
         """Different args should generate different cache keys."""
         mock_cache_service.get_json.return_value = None
-        
+
         service = MockService(mock_cache_service)
         await service.get_data("key1")
         await service.get_data("key2")
-        
+
         # Should have different keys
         calls = mock_cache_service.set_json.call_args_list
         key1 = calls[0][0][0]
@@ -141,7 +139,7 @@ class TestInvalidateOnWrite:
         """Should invalidate cache after write operation."""
         service = MockService(mock_cache_service)
         result = await service.update_user("123", {"name": "Updated"})
-        
+
         assert result is True
         assert service.call_count == 1
         mock_cache_service.invalidate.assert_called_once_with("user:123")
@@ -150,10 +148,10 @@ class TestInvalidateOnWrite:
     async def test_write_succeeds_even_if_invalidation_fails(self, mock_cache_service):
         """Write should succeed even if cache invalidation fails."""
         mock_cache_service.invalidate.side_effect = Exception("Redis error")
-        
+
         service = MockService(mock_cache_service)
         result = await service.update_user("123", {"name": "Updated"})
-        
+
         assert result is True  # Write succeeded
 
 

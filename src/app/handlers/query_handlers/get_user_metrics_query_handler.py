@@ -2,6 +2,7 @@
 GetUserMetricsQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
+
 import logging
 from typing import Dict, Any, Optional
 
@@ -15,6 +16,7 @@ from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
+
 
 @handles(GetUserMetricsQuery)
 class GetUserMetricsQueryHandler(EventHandler[GetUserMetricsQuery, Dict[str, Any]]):
@@ -48,7 +50,9 @@ class GetUserMetricsQueryHandler(EventHandler[GetUserMetricsQuery, Dict[str, Any
             profile = result.scalars().first()
 
             if not profile:
-                raise ResourceNotFoundException(f"Current profile for user {query.user_id} not found")
+                raise ResourceNotFoundException(
+                    f"Current profile for user {query.user_id} not found"
+                )
 
             return {
                 "user_id": query.user_id,
@@ -63,5 +67,7 @@ class GetUserMetricsQueryHandler(EventHandler[GetUserMetricsQuery, Dict[str, Any
                 "training_level": profile.training_level,
                 "fitness_goal": profile.fitness_goal,
                 "target_weight_kg": profile.target_weight_kg,
+                "goal_start_weight_kg": profile.goal_start_weight_kg,
+                "goal_started_at": profile.goal_started_at,
                 "updated_at": profile.updated_at,
             }

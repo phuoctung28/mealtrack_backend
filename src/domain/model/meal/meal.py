@@ -2,25 +2,27 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
 
-from src.domain.utils.timezone_utils import utc_now, format_iso_utc
-from .meal_image import MealImage
+from src.domain.utils.timezone_utils import format_iso_utc, utc_now
+
 from ..nutrition import Nutrition
+from .meal_image import MealImage
 from .meal_translation_domain_models import MealTranslation
 
 
 class MealStatus(Enum):
     """Status of a meal in the analysis pipeline."""
+
     PROCESSING = "PROCESSING"  # Initial state, waiting for analysis
-    ANALYZING = "ANALYZING"    # AI analysis in progress
-    ENRICHING = "ENRICHING"    # Enrichment with food database in progress
-    READY = "READY"            # Final state, analysis complete
-    FAILED = "FAILED"          # Analysis failed
-    INACTIVE = "INACTIVE"      # Soft-deleted by user; ignored in UI/macros
-    
+    ANALYZING = "ANALYZING"  # AI analysis in progress
+    ENRICHING = "ENRICHING"  # Enrichment with food database in progress
+    READY = "READY"  # Final state, analysis complete
+    FAILED = "FAILED"  # Analysis failed
+    INACTIVE = "INACTIVE"  # Soft-deleted by user; ignored in UI/macros
+
     def __str__(self):
         return self.value
+
 
 @dataclass
 class Meal:
@@ -28,82 +30,85 @@ class Meal:
     Aggregate root representing a meal with its image and nutritional information.
     This is the main entity in the domain.
     """
+
     meal_id: str  # UUID as string
     user_id: str  # UUID as string - identifies the user who owns this meal
     status: MealStatus
     created_at: datetime
     image: MealImage
-    dish_name: Optional[str] = None
-    nutrition: Optional[Nutrition] = None
-    ready_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    raw_gpt_json: Optional[str] = None
+    dish_name: str | None = None
+    nutrition: Nutrition | None = None
+    ready_at: datetime | None = None
+    error_message: str | None = None
+    raw_gpt_json: str | None = None
     # Edit tracking fields
-    updated_at: Optional[datetime] = None
-    last_edited_at: Optional[datetime] = None
+    updated_at: datetime | None = None
+    last_edited_at: datetime | None = None
     edit_count: int = 0
     is_manually_edited: bool = False
-    meal_type: Optional[str] = None
-    translations: Optional[Dict[str, MealTranslation]] = None
+    meal_type: str | None = None
+    translations: dict[str, MealTranslation] | None = None
     # Source tracking (scanner, prompt, food_search, manual)
-    source: Optional[str] = None
+    source: str | None = None
     # Recipe details (populated for AI suggestions)
-    description: Optional[str] = None
-    instructions: Optional[list] = None  # List[str] (legacy) or List[dict] with {instruction, duration_minutes}
-    prep_time_min: Optional[int] = None
-    cook_time_min: Optional[int] = None
-    cuisine_type: Optional[str] = None
-    origin_country: Optional[str] = None
-    emoji: Optional[str] = None  # AI-assigned food emoji, stored once on creation
+    description: str | None = None
+    instructions: list | None = (
+        None  # List[str] (legacy) or List[dict] with {instruction, duration_minutes}
+    )
+    prep_time_min: int | None = None
+    cook_time_min: int | None = None
+    cuisine_type: str | None = None
+    origin_country: str | None = None
+    emoji: str | None = None  # AI-assigned food emoji, stored once on creation
 
     def __post_init__(self):
         """Validate invariants."""
         # Validate UUID formats
         try:
             uuid.UUID(self.meal_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for meal_id: {self.meal_id}")
-        
+        except ValueError as e:
+            raise ValueError(f"Invalid UUID format for meal_id: {self.meal_id}") from e
+
         try:
             uuid.UUID(self.user_id)
-        except ValueError:
-            raise ValueError(f"Invalid UUID format for user_id: {self.user_id}")
-        
+        except ValueError as e:
+            raise ValueError(f"Invalid UUID format for user_id: {self.user_id}") from e
+
         # Status-based validations
         if self.status == MealStatus.READY and self.nutrition is None:
             raise ValueError("Meal with READY status must have nutrition data")
-            
+
         if self.status == MealStatus.READY and self.ready_at is None:
             raise ValueError("Meal with READY status must have ready_at timestamp")
-            
+
         if self.status == MealStatus.FAILED and self.error_message is None:
             raise ValueError("Meal with FAILED status must have error_message")
         # INACTIVE has no additional constraints
-    
+
     @classmethod
-    def create_new_processing(cls, user_id: str, image: MealImage) -> 'Meal':
+    def create_new_processing(cls, user_id: str, image: MealImage) -> "Meal":
         """Factory method to create a new meal in PROCESSING status."""
         return cls(
             meal_id=str(uuid.uuid4()),
             user_id=user_id,
             status=MealStatus.PROCESSING,
             created_at=utc_now(),
-            image=image
-        )
-    
-    def _recipe_fields(self) -> dict:
-        """Return recipe fields dict for state transitions."""
-        return dict(
-            description=self.description,
-            instructions=self.instructions,
-            prep_time_min=self.prep_time_min,
-            cook_time_min=self.cook_time_min,
-            cuisine_type=self.cuisine_type,
-            origin_country=self.origin_country,
-            emoji=self.emoji,
+            image=image,
         )
 
-    def mark_analyzing(self) -> 'Meal':
+    def _recipe_fields(self) -> dict:
+        """Return recipe fields dict for state transitions."""
+        return {
+            "description": self.description,
+            "instructions": self.instructions,
+            "prep_time_min": self.prep_time_min,
+            "cook_time_min": self.cook_time_min,
+            "cuisine_type": self.cuisine_type,
+            "origin_country": self.origin_country,
+            "emoji": self.emoji,
+        }
+
+    def mark_analyzing(self) -> "Meal":
         """Transition to ANALYZING state."""
         return Meal(
             meal_id=self.meal_id,
@@ -123,10 +128,10 @@ class Meal:
             meal_type=self.meal_type,
             translations=self.translations,
             source=self.source,
-            **self._recipe_fields()
+            **self._recipe_fields(),
         )
 
-    def mark_enriching(self, raw_gpt_json: str) -> 'Meal':
+    def mark_enriching(self, raw_gpt_json: str) -> "Meal":
         """Transition to ENRICHING state with GPT response."""
         return Meal(
             meal_id=self.meal_id,
@@ -146,12 +151,16 @@ class Meal:
             meal_type=self.meal_type,
             translations=self.translations,
             source=self.source,
-            **self._recipe_fields()
+            **self._recipe_fields(),
         )
 
-    def mark_ready(self, nutrition: Nutrition, dish_name: str,
-                   raw_gpt_json: Optional[str] = None,
-                   emoji: Optional[str] = None) -> 'Meal':
+    def mark_ready(
+        self,
+        nutrition: Nutrition,
+        dish_name: str,
+        raw_gpt_json: str | None = None,
+        emoji: str | None = None,
+    ) -> "Meal":
         """Transition to READY state with final nutrition data."""
         return Meal(
             meal_id=self.meal_id,
@@ -163,7 +172,9 @@ class Meal:
             nutrition=nutrition,
             ready_at=utc_now(),
             error_message=self.error_message,
-            raw_gpt_json=raw_gpt_json if raw_gpt_json is not None else self.raw_gpt_json,
+            raw_gpt_json=(
+                raw_gpt_json if raw_gpt_json is not None else self.raw_gpt_json
+            ),
             updated_at=self.updated_at,
             last_edited_at=self.last_edited_at,
             edit_count=self.edit_count,
@@ -180,7 +191,7 @@ class Meal:
             emoji=emoji if emoji is not None else self.emoji,
         )
 
-    def mark_failed(self, error_message: str) -> 'Meal':
+    def mark_failed(self, error_message: str) -> "Meal":
         """Transition to FAILED state with error message."""
         return Meal(
             meal_id=self.meal_id,
@@ -200,10 +211,10 @@ class Meal:
             meal_type=self.meal_type,
             translations=self.translations,
             source=self.source,
-            **self._recipe_fields()
+            **self._recipe_fields(),
         )
 
-    def mark_edited(self, nutrition: Nutrition, dish_name: str) -> 'Meal':
+    def mark_edited(self, nutrition: Nutrition, dish_name: str) -> "Meal":
         """Mark meal as edited with updated nutrition."""
         return Meal(
             meal_id=self.meal_id,
@@ -223,10 +234,10 @@ class Meal:
             meal_type=self.meal_type,
             translations=self.translations,
             source=self.source,
-            **self._recipe_fields()
+            **self._recipe_fields(),
         )
 
-    def mark_inactive(self) -> 'Meal':
+    def mark_inactive(self) -> "Meal":
         """Mark meal as INACTIVE (soft delete)."""
         return Meal(
             meal_id=self.meal_id,
@@ -246,9 +257,9 @@ class Meal:
             meal_type=self.meal_type,
             translations=self.translations,
             source=self.source,
-            **self._recipe_fields()
+            **self._recipe_fields(),
         )
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary format."""
         result = {
@@ -256,7 +267,7 @@ class Meal:
             "user_id": self.user_id,
             "status": str(self.status),
             "created_at": format_iso_utc(self.created_at),
-            "image": self.image.to_dict()
+            "image": self.image.to_dict(),
         }
 
         if self.dish_name is not None:
@@ -273,8 +284,7 @@ class Meal:
 
         if self.translations is not None:
             result["translations"] = {
-                lang: trans.to_dict()
-                for lang, trans in self.translations.items()
+                lang: trans.to_dict() for lang, trans in self.translations.items()
             }
 
         if self.description is not None:

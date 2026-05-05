@@ -1,6 +1,7 @@
 """
 Handler - Calculate TPreviewTdeeQueryDEE preview without saving.
 """
+
 import logging
 from typing import Dict, Any
 
@@ -37,7 +38,9 @@ class PreviewTdeeQueryHandler(EventHandler[PreviewTdeeQuery, Dict[str, Any]]):
         sex = Sex.MALE if query.sex.lower() == "male" else Sex.FEMALE
         job_type = JobType(query.job_type)
         goal = ActivityGoalMapper.map_goal(query.goal)
-        unit_system = UnitSystem.METRIC if query.unit_system == "metric" else UnitSystem.IMPERIAL
+        unit_system = (
+            UnitSystem.METRIC if query.unit_system == "metric" else UnitSystem.IMPERIAL
+        )
 
         # Map training level if provided
         training_level = None
@@ -64,7 +67,9 @@ class PreviewTdeeQueryHandler(EventHandler[PreviewTdeeQuery, Dict[str, Any]]):
 
         # Calculate activity multiplier for response
         base = JOB_TYPE_MULTIPLIERS.get(job_type.value, 1.2)
-        weekly_hours = (query.training_days_per_week * query.training_minutes_per_session) / 60.0
+        weekly_hours = (
+            query.training_days_per_week * query.training_minutes_per_session
+        ) / 60.0
         exercise_add = weekly_hours * EXERCISE_MULTIPLIER_PER_HOUR
         activity_multiplier = base + exercise_add
 

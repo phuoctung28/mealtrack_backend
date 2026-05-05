@@ -3,6 +3,7 @@ Subscription access validation middleware.
 
 Uses RevenueCat as source of truth, with local cache for performance.
 """
+
 import logging
 import os
 from typing import Optional
@@ -33,12 +34,11 @@ async def require_subscription(request: Request):
         async def subscription_feature():
             return {"data": "subscription content"}
     """
-    user = getattr(request.state, 'user', None)
+    user = getattr(request.state, "user", None)
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
         )
 
     # Quick check: Local database cache
@@ -56,17 +56,21 @@ async def require_subscription(request: Request):
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 "message": "Standard subscription required",
-                "error_code": "SUBSCRIPTION_REQUIRED"
-            }
+                "error_code": "SUBSCRIPTION_REQUIRED",
+            },
         )
 
     subscription_service = _get_subscription_service()
-    has_subscription = await subscription_service.has_active_subscription(app_user_id=user.firebase_uid)
+    has_subscription = await subscription_service.has_active_subscription(
+        app_user_id=user.firebase_uid
+    )
 
     if has_subscription:
         # User has subscription in RevenueCat but not in local cache
         # This can happen if webhook failed or is delayed
-        logger.warning(f"User {user.id} has subscription in RevenueCat but not in cache")
+        logger.warning(
+            f"User {user.id} has subscription in RevenueCat but not in cache"
+        )
         # Allow access - webhook will sync eventually
         return
 
@@ -75,8 +79,8 @@ async def require_subscription(request: Request):
         status_code=status.HTTP_402_PAYMENT_REQUIRED,
         detail={
             "message": "Standard subscription required",
-            "error_code": "SUBSCRIPTION_REQUIRED"
-        }
+            "error_code": "SUBSCRIPTION_REQUIRED",
+        },
     )
 
 
@@ -92,14 +96,10 @@ async def get_subscription_status(request: Request) -> dict:
             else:
                 return {"data": "basic"}
     """
-    user = getattr(request.state, 'user', None)
+    user = getattr(request.state, "user", None)
 
     if not user:
-        return {
-            "has_subscription": False,
-            "subscription": None,
-            "source": "no_user"
-        }
+        return {"has_subscription": False, "subscription": None, "source": "no_user"}
 
     # Check local cache
     subscription = user.get_active_subscription()
@@ -109,11 +109,15 @@ async def get_subscription_status(request: Request) -> dict:
             "has_subscription": True,
             "subscription": {
                 "product_id": subscription.product_id,
-                "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None,
+                "expires_at": (
+                    subscription.expires_at.isoformat()
+                    if subscription.expires_at
+                    else None
+                ),
                 "is_monthly": subscription.is_monthly(),
-                "is_yearly": subscription.is_yearly()
+                "is_yearly": subscription.is_yearly(),
             },
-            "source": "cache"
+            "source": "cache",
         }
 
     # Check RevenueCat if configured
@@ -126,11 +130,7 @@ async def get_subscription_status(request: Request) -> dict:
             return {
                 "has_subscription": True,
                 "subscription": sub_info,
-                "source": "revenuecat_api"
+                "source": "revenuecat_api",
             }
 
-    return {
-        "has_subscription": False,
-        "subscription": None,
-        "source": "none"
-    }
+    return {"has_subscription": False, "subscription": None, "source": "none"}

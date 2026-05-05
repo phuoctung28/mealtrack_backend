@@ -1,6 +1,7 @@
 """
 Unit tests for meal translation domain models.
 """
+
 import pytest
 from datetime import datetime
 
@@ -18,7 +19,7 @@ class TestFoodItemTranslation:
         translation = FoodItemTranslation(
             food_item_id="item-123",
             name="Gà nướng",
-            description="Thịt gà được nướng với gia vị"
+            description="Thịt gà được nướng với gia vị",
         )
 
         assert translation.food_item_id == "item-123"
@@ -28,9 +29,7 @@ class TestFoodItemTranslation:
     def test_food_item_translation_to_dict(self):
         """Test serialization to dictionary."""
         translation = FoodItemTranslation(
-            food_item_id="item-456",
-            name="Bún bò",
-            description=None
+            food_item_id="item-456", name="Bún bò", description=None
         )
 
         result = translation.to_dict()
@@ -44,7 +43,7 @@ class TestFoodItemTranslation:
         data = {
             "food_item_id": "item-789",
             "name": "Phở",
-            "description": "Bún phở truyền thống Việt Nam"
+            "description": "Bún phở truyền thống Việt Nam",
         }
 
         translation = FoodItemTranslation.from_dict(data)
@@ -61,22 +60,16 @@ class TestMealTranslation:
         """Test creating a meal translation."""
         food_items = [
             FoodItemTranslation(
-                food_item_id="item-1",
-                name="Gạo",
-                description="Gạo trắng"
+                food_item_id="item-1", name="Gạo", description="Gạo trắng"
             ),
-            FoodItemTranslation(
-                food_item_id="item-2",
-                name="Cá",
-                description="Cá hồi"
-            ),
+            FoodItemTranslation(food_item_id="item-2", name="Cá", description="Cá hồi"),
         ]
 
         translation = MealTranslation(
             meal_id="meal-123",
             language="vi",
             dish_name="Cơm cá hồi",
-            food_items=food_items
+            food_items=food_items,
         )
 
         assert translation.meal_id == "meal-123"
@@ -88,9 +81,7 @@ class TestMealTranslation:
         """Test serialization to dictionary."""
         food_items = [
             FoodItemTranslation(
-                food_item_id="item-1",
-                name="Chicken",
-                description="Grilled chicken"
+                food_item_id="item-1", name="Chicken", description="Grilled chicken"
             ),
         ]
 
@@ -99,7 +90,7 @@ class TestMealTranslation:
             language="es",
             dish_name="Pollo a la parrilla",
             food_items=food_items,
-            translated_at=datetime(2026, 1, 28, 12, 0, 0)
+            translated_at=datetime(2026, 1, 28, 12, 0, 0),
         )
 
         result = translation.to_dict()
@@ -117,13 +108,9 @@ class TestMealTranslation:
             "language": "zh",
             "dish_name": "炒饭",
             "food_items": [
-                {
-                    "food_item_id": "item-1",
-                    "name": "米饭",
-                    "description": "白米饭"
-                }
+                {"food_item_id": "item-1", "name": "米饭", "description": "白米饭"}
             ],
-            "translated_at": "2026-01-28T10:00:00"
+            "translated_at": "2026-01-28T10:00:00",
         }
 
         translation = MealTranslation.from_dict(data)
@@ -142,10 +129,7 @@ class TestMealTranslation:
         ]
 
         translation = MealTranslation(
-            meal_id="meal-001",
-            language="vi",
-            dish_name="Cơm gà",
-            food_items=food_items
+            meal_id="meal-001", language="vi", dish_name="Cơm gà", food_items=food_items
         )
 
         result = translation.get_food_item_translation("item-2")
@@ -156,10 +140,7 @@ class TestMealTranslation:
     def test_get_food_item_translation_not_found(self):
         """Test getting a non-existent food item translation."""
         translation = MealTranslation(
-            meal_id="meal-002",
-            language="en",
-            dish_name="Salad",
-            food_items=[]
+            meal_id="meal-002", language="en", dish_name="Salad", food_items=[]
         )
 
         result = translation.get_food_item_translation("non-existent")

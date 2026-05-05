@@ -2,9 +2,11 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+
 @pytest.mark.asyncio
 async def test_hset_with_ttl_pipelines_hset_and_expire():
     from src.infra.cache.redis_client import RedisClient
+
     client = RedisClient.__new__(RedisClient)
     mock_pipe = AsyncMock()
     mock_pipe.__aenter__ = AsyncMock(return_value=mock_pipe)
@@ -23,6 +25,7 @@ async def test_hset_with_ttl_pipelines_hset_and_expire():
 @pytest.mark.asyncio
 async def test_hset_batch_writes_all_items():
     from src.infra.cache.redis_client import RedisClient
+
     client = RedisClient.__new__(RedisClient)
     mock_pipe = AsyncMock()
     mock_pipe.__aenter__ = AsyncMock(return_value=mock_pipe)
@@ -41,6 +44,7 @@ async def test_hset_batch_writes_all_items():
 @pytest.mark.asyncio
 async def test_hgetall_batch_returns_list_of_dicts():
     from src.infra.cache.redis_client import RedisClient
+
     client = RedisClient.__new__(RedisClient)
     mock_pipe = AsyncMock()
     mock_pipe.__aenter__ = AsyncMock(return_value=mock_pipe)

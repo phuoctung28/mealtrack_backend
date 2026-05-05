@@ -1,6 +1,7 @@
 """
 Unit tests for MealMapper.
 """
+
 import uuid
 from datetime import datetime
 
@@ -9,22 +10,23 @@ import pytest
 from src.api.mappers.meal_mapper import MealMapper, STATUS_MAPPING
 from src.domain.model import Meal, MealStatus, MealImage, Nutrition, FoodItem, Macros
 
+
 class TestMealMapper:
     """Test suite for MealMapper."""
 
     def test_to_simple_response(self):
         """Test converting Meal to SimpleMealResponse."""
         meal_id = str(uuid.uuid4())
-        
+
         image = MealImage(
             url="https://example.com/meal.jpg",
             image_id=str(uuid.uuid4()),
             format="jpeg",
             size_bytes=1024,
             width=800,
-            height=600
+            height=600,
         )
-        
+
         meal = Meal(
             meal_id=meal_id,
             user_id=str(uuid.uuid4()),
@@ -34,14 +36,12 @@ class TestMealMapper:
             ready_at=datetime(2025, 1, 15, 12, 30),
             created_at=datetime(2025, 1, 15, 12, 0),
             nutrition=Nutrition(
-
-                macros=Macros(protein=30, carbs=50, fat=15),
-                food_items=[]
-            )
+                macros=Macros(protein=30, carbs=50, fat=15), food_items=[]
+            ),
         )
-        
+
         result = MealMapper.to_simple_response(meal)
-        
+
         assert result.meal_id == meal_id
         assert result.status == "ready"
         assert result.dish_name == "Chicken Bowl"
@@ -52,16 +52,16 @@ class TestMealMapper:
     def test_to_simple_response_with_error(self):
         """Test converting failed meal to SimpleMealResponse."""
         meal_id = str(uuid.uuid4())
-        
+
         image = MealImage(
             url="https://example.com/failed.jpg",
             image_id=str(uuid.uuid4()),
             format="jpeg",
             size_bytes=1024,
             width=800,
-            height=600
+            height=600,
         )
-        
+
         meal = Meal(
             meal_id=meal_id,
             user_id=str(uuid.uuid4()),
@@ -69,11 +69,11 @@ class TestMealMapper:
             image=image,
             dish_name="Failed Meal",
             created_at=datetime(2025, 1, 15, 13, 0),
-            error_message="Analysis failed"
+            error_message="Analysis failed",
         )
-        
+
         result = MealMapper.to_simple_response(meal)
-        
+
         assert result.status == "failed"
         assert result.error_message == "Analysis failed"
 
@@ -93,42 +93,38 @@ class TestMealMapper:
                 name="Chicken Breast",
                 quantity=200,
                 unit="g",
-
                 macros=Macros(protein=40, carbs=0, fat=5),
                 confidence=0.95,
                 fdc_id=123456,
-                is_custom=False
+                is_custom=False,
             ),
             FoodItem(
                 id="item-2",
                 name="Rice",
                 quantity=150,
                 unit="g",
-
                 macros=Macros(protein=4, carbs=43, fat=0.4),
                 confidence=0.90,
                 fdc_id=789012,
-                is_custom=False
-            )
+                is_custom=False,
+            ),
         ]
-        
-        nutrition = Nutrition(
 
-            macros=Macros(protein=44, carbs=43, fat=5.4),
-            food_items=food_items
+        nutrition = Nutrition(
+            macros=Macros(protein=44, carbs=43, fat=5.4), food_items=food_items
         )
-        
+
         image = MealImage(
             url="https://example.com/detailed.jpg",
             image_id=str(uuid.uuid4()),
             format="jpeg",
             size_bytes=1024,
             width=800,
-            height=600
+            height=600,
         )
-        
+
         meal_id = str(uuid.uuid4())
-        
+
         meal = Meal(
             meal_id=meal_id,
             user_id=str(uuid.uuid4()),
@@ -137,11 +133,13 @@ class TestMealMapper:
             dish_name="Chicken and Rice",
             ready_at=datetime(2025, 1, 15, 14, 0),
             created_at=datetime(2025, 1, 15, 13, 30),
-            nutrition=nutrition
+            nutrition=nutrition,
         )
-        
-        result = MealMapper.to_detailed_response(meal, image_url="https://example.com/image.jpg")
-        
+
+        result = MealMapper.to_detailed_response(
+            meal, image_url="https://example.com/image.jpg"
+        )
+
         assert result.meal_id == meal_id
         assert result.dish_name == "Chicken and Rice"
         assert result.total_calories == pytest.approx(396.6)  # derived: 44*4+43*4+5.4*9
@@ -164,29 +162,26 @@ class TestMealMapper:
                 name="Homemade Sauce",
                 quantity=50,
                 unit="g",
-
                 macros=Macros(protein=1, carbs=8, fat=2),
                 confidence=1.0,
                 fdc_id=None,
-                is_custom=True
+                is_custom=True,
             )
         ]
-        
-        nutrition = Nutrition(
 
-            macros=Macros(protein=1, carbs=8, fat=2),
-            food_items=food_items
+        nutrition = Nutrition(
+            macros=Macros(protein=1, carbs=8, fat=2), food_items=food_items
         )
-        
+
         image = MealImage(
             url="https://example.com/custom.jpg",
             image_id=str(uuid.uuid4()),
             format="jpeg",
             size_bytes=1024,
             width=800,
-            height=600
+            height=600,
         )
-        
+
         meal = Meal(
             meal_id=str(uuid.uuid4()),
             user_id=str(uuid.uuid4()),
@@ -195,16 +190,18 @@ class TestMealMapper:
             dish_name="Custom Meal",
             ready_at=datetime(2025, 1, 15, 15, 0),
             created_at=datetime(2025, 1, 15, 14, 30),
-            nutrition=nutrition
+            nutrition=nutrition,
         )
-        
+
         result = MealMapper.to_detailed_response(meal)
-        
+
         assert len(result.food_items) == 1
         assert result.food_items[0].is_custom is True
         assert result.food_items[0].fdc_id is None
         assert result.food_items[0].custom_nutrition is not None
-        assert result.food_items[0].custom_nutrition.calories_per_100g == pytest.approx(108.0)  # derived: (1*4+8*4+2*9) * (100/50)
+        assert result.food_items[0].custom_nutrition.calories_per_100g == pytest.approx(
+            108.0
+        )  # derived: (1*4+8*4+2*9) * (100/50)
 
     def test_to_detailed_response_without_nutrition(self):
         """Test detailed response when nutrition is None."""
@@ -214,20 +211,20 @@ class TestMealMapper:
             format="jpeg",
             size_bytes=1024,
             width=800,
-            height=600
+            height=600,
         )
-        
+
         meal = Meal(
             meal_id=str(uuid.uuid4()),
             user_id=str(uuid.uuid4()),
             status=MealStatus.PROCESSING,
             image=image,
             dish_name="Processing Meal",
-            created_at=datetime(2025, 1, 15, 16, 0)
+            created_at=datetime(2025, 1, 15, 16, 0),
         )
-        
+
         result = MealMapper.to_detailed_response(meal)
-        
+
         assert result.total_calories == 0
         assert result.food_items == []
         assert result.total_nutrition is None
@@ -240,18 +237,18 @@ class TestMealMapper:
             format="jpeg",
             size_bytes=1024,
             width=800,
-            height=600
+            height=600,
         )
-        
+
         image2 = MealImage(
             url="https://example.com/meal2.jpg",
             image_id=str(uuid.uuid4()),
             format="jpeg",
             size_bytes=1024,
             width=800,
-            height=600
+            height=600,
         )
-        
+
         meals = [
             Meal(
                 meal_id=str(uuid.uuid4()),
@@ -262,7 +259,6 @@ class TestMealMapper:
                 ready_at=datetime(2025, 1, 15, 12, 0),
                 created_at=datetime(2025, 1, 15, 11, 30),
                 nutrition=Nutrition(
-
                     macros=Macros(protein=30, carbs=40, fat=10),
                     food_items=[
                         FoodItem(
@@ -270,12 +266,11 @@ class TestMealMapper:
                             name="Item 1",
                             quantity=100,
                             unit="g",
-
                             macros=Macros(protein=30, carbs=40, fat=10),
-                            confidence=0.9
+                            confidence=0.9,
                         )
-                    ]
-                )
+                    ],
+                ),
             ),
             Meal(
                 meal_id=str(uuid.uuid4()),
@@ -283,18 +278,18 @@ class TestMealMapper:
                 status=MealStatus.PROCESSING,
                 image=image2,
                 dish_name="Meal 2",
-                created_at=datetime(2025, 1, 15, 13, 0)
-            )
+                created_at=datetime(2025, 1, 15, 13, 0),
+            ),
         ]
-        
+
         result = MealMapper.to_meal_list_response(
             meals=meals,
             total=10,
             page=1,
             page_size=2,
-            image_urls={"meal-1": "https://example.com/meal1.jpg"}
+            image_urls={"meal-1": "https://example.com/meal1.jpg"},
         )
-        
+
         assert result.total == 10
         assert result.page == 1
         assert result.page_size == 2
@@ -309,11 +304,11 @@ class TestMealMapper:
             "carbs_g": 55,
             "fat_g": 15,
             "sugar_g": 10,
-            "sodium_mg": 400
+            "sodium_mg": 400,
         }
-        
+
         result = MealMapper.map_nutrition_from_dict(nutrition_dict)
-        
+
         # calories is derived: 35*4 + 55*4 + 15*9 = 495.0
         assert result.calories == pytest.approx(495.0)
         assert result.macros.protein == 35
@@ -338,12 +333,12 @@ class TestMealMapper:
                 "carbs_g": 0,
                 "fat_g": 20,
                 "sugar_g": 0,
-                "sodium_mg": 80
-            }
+                "sodium_mg": 80,
+            },
         }
-        
+
         result = MealMapper.map_food_item_from_dict(item_dict)
-        
+
         assert result.id == "item-456"
         assert result.name == "Salmon"
         assert result.quantity == 180
@@ -360,19 +355,15 @@ class TestMealMapper:
             "date": "2025-01-15",
             "user_id": "user-123",
             "target_calories": 2000.0,
-            "target_macros": {
-                "protein": 150.0,
-                "carbs": 250.0,
-                "fat": 67.0
-            },
+            "target_macros": {"protein": 150.0, "carbs": 250.0, "fat": 67.0},
             "total_calories": 1500.0,
             "total_protein": 100.0,
             "total_carbs": 180.0,
-            "total_fat": 50.0
+            "total_fat": 50.0,
         }
-        
+
         result = MealMapper.to_daily_nutrition_response(daily_macros_data)
-        
+
         assert result.date == "2025-01-15"
         assert result.target_calories == 2000.0
         assert result.target_macros.protein == 150.0
@@ -385,10 +376,8 @@ class TestMealMapper:
 
     def test_to_daily_nutrition_response_missing_target_calories(self):
         """Test error when target_calories is missing."""
-        daily_macros_data = {
-            "target_macros": {"protein": 150, "carbs": 250, "fat": 67}
-        }
-        
+        daily_macros_data = {"target_macros": {"protein": 150, "carbs": 250, "fat": 67}}
+
         with pytest.raises(Exception, match="User profile not found"):
             MealMapper.to_daily_nutrition_response(daily_macros_data)
 
@@ -398,19 +387,15 @@ class TestMealMapper:
             "date": "2025-01-16",
             "user_id": "user-456",
             "target_calories": 2000.0,
-            "target_macros": {
-                "protein": 150.0,
-                "carbs": 250.0,
-                "fat": 67.0
-            },
+            "target_macros": {"protein": 150.0, "carbs": 250.0, "fat": 67.0},
             "total_calories": 2500.0,
             "total_protein": 180.0,
             "total_carbs": 300.0,
-            "total_fat": 80.0
+            "total_fat": 80.0,
         }
-        
+
         result = MealMapper.to_daily_nutrition_response(daily_macros_data)
-        
+
         assert result.remaining_calories == 0  # Should not be negative
         assert result.remaining_macros.protein == 0
         assert result.completion_percentage["calories"] == 125.0
@@ -419,20 +404,18 @@ class TestMealMapper:
         """Test detailed response with legacy nutrition structure (direct properties)."""
         # Create nutrition with direct protein/carbs/fat properties
         nutrition = Nutrition(
-
-            macros=Macros(protein=30, carbs=45, fat=12),
-            food_items=[]
+            macros=Macros(protein=30, carbs=45, fat=12), food_items=[]
         )
-        
+
         image = MealImage(
             url="https://example.com/legacy.jpg",
             image_id=str(uuid.uuid4()),
             format="jpeg",
             size_bytes=1024,
             width=800,
-            height=600
+            height=600,
         )
-        
+
         meal = Meal(
             meal_id=str(uuid.uuid4()),
             user_id=str(uuid.uuid4()),
@@ -441,13 +424,12 @@ class TestMealMapper:
             dish_name="Legacy Meal",
             ready_at=datetime(2025, 1, 15, 17, 0),
             created_at=datetime(2025, 1, 15, 16, 30),
-            nutrition=nutrition
+            nutrition=nutrition,
         )
-        
+
         result = MealMapper.to_detailed_response(meal)
-        
+
         assert result.total_nutrition is not None
         assert result.total_nutrition.protein == 30
         assert result.total_nutrition.carbs == 45
         assert result.total_nutrition.fat == 12
-

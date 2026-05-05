@@ -11,6 +11,7 @@ Covers:
 - Scaled ingredients count equals input count
 - Scaled calories are re-derived via fiber-aware formula (not simple multiply)
 """
+
 import logging
 from unittest.mock import MagicMock
 
@@ -23,10 +24,10 @@ from src.domain.services.meal_suggestion.nutrition_lookup_service import (
     _derive_calories,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_service() -> NutritionLookupService:
     repo = MagicMock()
@@ -102,6 +103,7 @@ def _make_meal(
 # 520 kcal recipe scaled to 600 → factor ≈ 1.154
 # ---------------------------------------------------------------------------
 
+
 def test_scale_within_range_returns_scaled_macros():
     """520 kcal recipe, target 600 → scale ≈ 1.154; all macros × scale."""
     svc = _make_service()
@@ -137,13 +139,19 @@ def test_scale_within_range_returns_scaled_macros():
 # 1200 kcal recipe, target 600 → scale 0.5 → None
 # ---------------------------------------------------------------------------
 
+
 def test_scale_factor_below_07_returns_none(caplog):
     """1200 kcal recipe, target 600 → scale=0.5 < 0.7 → None + WARNING logged."""
     svc = _make_service()
     ing = _make_ingredient(protein=300.0, carbs=0.0, fat=0.0, quantity_g=300.0)
-    meal = _make_meal(calories=1200.0, protein=300.0, carbs=0.0, fat=0.0, ingredients=[ing])
+    meal = _make_meal(
+        calories=1200.0, protein=300.0, carbs=0.0, fat=0.0, ingredients=[ing]
+    )
 
-    with caplog.at_level(logging.WARNING, logger="src.domain.services.meal_suggestion.nutrition_lookup_service"):
+    with caplog.at_level(
+        logging.WARNING,
+        logger="src.domain.services.meal_suggestion.nutrition_lookup_service",
+    ):
         result = svc.scale_to_target(meal, 600)
 
     assert result is None
@@ -154,13 +162,19 @@ def test_scale_factor_below_07_returns_none(caplog):
 # 300 kcal recipe, target 600 → scale 2.0 → None
 # ---------------------------------------------------------------------------
 
+
 def test_scale_factor_above_14_returns_none(caplog):
     """300 kcal recipe, target 600 → scale=2.0 > 1.4 → None + WARNING logged."""
     svc = _make_service()
     ing = _make_ingredient(protein=75.0, carbs=0.0, fat=0.0, quantity_g=75.0)
-    meal = _make_meal(calories=300.0, protein=75.0, carbs=0.0, fat=0.0, ingredients=[ing])
+    meal = _make_meal(
+        calories=300.0, protein=75.0, carbs=0.0, fat=0.0, ingredients=[ing]
+    )
 
-    with caplog.at_level(logging.WARNING, logger="src.domain.services.meal_suggestion.nutrition_lookup_service"):
+    with caplog.at_level(
+        logging.WARNING,
+        logger="src.domain.services.meal_suggestion.nutrition_lookup_service",
+    ):
         result = svc.scale_to_target(meal, 600)
 
     assert result is None
@@ -171,11 +185,14 @@ def test_scale_factor_above_14_returns_none(caplog):
 # Exact scale 1.0 → macros unchanged
 # ---------------------------------------------------------------------------
 
+
 def test_scale_factor_10_returns_unchanged_macros():
     """600 kcal recipe, target 600 → scale=1.0; macros within float tolerance."""
     svc = _make_service()
     ing = _make_ingredient(protein=150.0, carbs=0.0, fat=0.0, quantity_g=150.0)
-    meal = _make_meal(calories=600.0, protein=150.0, carbs=0.0, fat=0.0, ingredients=[ing])
+    meal = _make_meal(
+        calories=600.0, protein=150.0, carbs=0.0, fat=0.0, ingredients=[ing]
+    )
 
     result = svc.scale_to_target(meal, 600)
 
@@ -189,6 +206,7 @@ def test_scale_factor_10_returns_unchanged_macros():
 # C4: 0 calorie recipe → None returned (recipe rejected), warning logged
 # ---------------------------------------------------------------------------
 
+
 def test_zero_calorie_recipe_returns_none(caplog):
     """0 kcal recipe → all T3 lookups failed; scale_to_target returns None to reject recipe."""
     svc = _make_service()
@@ -196,7 +214,10 @@ def test_zero_calorie_recipe_returns_none(caplog):
     ing.calories = 0.0
     meal = _make_meal(calories=0.0, protein=0.0, carbs=0.0, fat=0.0, ingredients=[ing])
 
-    with caplog.at_level(logging.WARNING, logger="src.domain.services.meal_suggestion.nutrition_lookup_service"):
+    with caplog.at_level(
+        logging.WARNING,
+        logger="src.domain.services.meal_suggestion.nutrition_lookup_service",
+    ):
         result = svc.scale_to_target(meal, 600)
 
     assert result is None
@@ -207,13 +228,19 @@ def test_zero_calorie_recipe_returns_none(caplog):
 # target_calories=0 → returned unchanged, warning logged
 # ---------------------------------------------------------------------------
 
+
 def test_zero_target_calories_returns_unchanged(caplog):
     """target_calories=0 → original MealMacros returned + WARNING logged."""
     svc = _make_service()
     ing = _make_ingredient(protein=50.0, carbs=0.0, fat=0.0, quantity_g=50.0)
-    meal = _make_meal(calories=200.0, protein=50.0, carbs=0.0, fat=0.0, ingredients=[ing])
+    meal = _make_meal(
+        calories=200.0, protein=50.0, carbs=0.0, fat=0.0, ingredients=[ing]
+    )
 
-    with caplog.at_level(logging.WARNING, logger="src.domain.services.meal_suggestion.nutrition_lookup_service"):
+    with caplog.at_level(
+        logging.WARNING,
+        logger="src.domain.services.meal_suggestion.nutrition_lookup_service",
+    ):
         result = svc.scale_to_target(meal, 0)
 
     assert result is meal
@@ -223,6 +250,7 @@ def test_zero_target_calories_returns_unchanged(caplog):
 # ---------------------------------------------------------------------------
 # Scaled ingredients count equals input count
 # ---------------------------------------------------------------------------
+
 
 def test_scaled_ingredients_count_matches_input():
     """Output MealMacros.ingredients has same count as input."""
@@ -264,6 +292,7 @@ def test_scaled_ingredients_count_matches_input():
 # Scaled calories are re-derived via fiber-aware formula, not simple multiply
 # ---------------------------------------------------------------------------
 
+
 def test_scaled_calories_re_derived_via_fiber_aware_formula():
     """Verify that scaled meal calories = P×4 + (C−fiber)×4 + fiber×2 + F×9.
 
@@ -300,7 +329,9 @@ def test_scaled_calories_re_derived_via_fiber_aware_formula():
     scaled_carbs = round(30.0 * 1.2, 1)
     scaled_fat = round(5.0 * 1.2, 1)
     scaled_fiber = round(10.0 * 1.2, 1)
-    expected_cal = _derive_calories(scaled_protein, scaled_carbs, scaled_fat, scaled_fiber)
+    expected_cal = _derive_calories(
+        scaled_protein, scaled_carbs, scaled_fat, scaled_fiber
+    )
     assert result.calories == pytest.approx(round(expected_cal, 1), rel=0.01)
 
     # Cross-check: calories != simple multiply (225 × 1.2 = 270)

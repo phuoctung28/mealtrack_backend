@@ -1,6 +1,7 @@
 """
 Command for saving a meal suggestion as a regular meal.
 """
+
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -54,15 +55,18 @@ class SaveMealSuggestionCommand(Command):
         valid_meal_types = ["breakfast", "lunch", "dinner", "snack"]
         if self.meal_type not in valid_meal_types:
             raise ValueError(f"meal_type must be one of {valid_meal_types}")
-        
+
         if self.calories <= 0:
             raise ValueError("calories must be greater than 0")
-        
+
         if self.protein < 0 or self.carbs < 0 or self.fat < 0:
             raise ValueError("macros must be non-negative")
-        
+
         if self.portion_multiplier < 1:
             raise ValueError("portion_multiplier must be at least 1")
-        
-        if self.estimated_cook_time_minutes is not None and self.estimated_cook_time_minutes < 0:
+
+        if (
+            self.estimated_cook_time_minutes is not None
+            and self.estimated_cook_time_minutes < 0
+        ):
             raise ValueError("estimated_cook_time_minutes must be non-negative")

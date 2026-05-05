@@ -2,6 +2,7 @@
 GetMealsByDateQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
+
 import logging
 from typing import List
 
@@ -24,7 +25,7 @@ class GetMealsByDateQueryHandler(EventHandler[GetMealsByDateQuery, List[Meal]]):
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
-        self.meal_repository = kwargs.get('meal_repository', self.meal_repository)
+        self.meal_repository = kwargs.get("meal_repository", self.meal_repository)
 
     async def handle(self, event: GetMealsByDateQuery) -> List[Meal]:
         """Get meals for a specific date and user."""
@@ -36,5 +37,7 @@ class GetMealsByDateQueryHandler(EventHandler[GetMealsByDateQuery, List[Meal]]):
             user_tz = await resolve_user_timezone_async(event.user_id, uow)
 
         return self.meal_repository.find_by_date(
-            event.meal_date, user_id=event.user_id, user_timezone=user_tz,
+            event.meal_date,
+            user_id=event.user_id,
+            user_timezone=user_tz,
         )

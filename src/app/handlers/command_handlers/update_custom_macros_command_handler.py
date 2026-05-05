@@ -1,4 +1,5 @@
 """Handler for updating custom macro targets."""
+
 import logging
 from typing import Optional
 
@@ -23,6 +24,7 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
     async def handle(self, command: UpdateCustomMacrosCommand) -> None:
         async with AsyncUnitOfWork() as uow:
             from sqlalchemy import select
+
             result = await uow.session.execute(
                 select(UserProfile).where(
                     UserProfile.user_id == command.user_id,
@@ -60,6 +62,7 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
             # Invalidate both the server's current week and adjacent week to cover
             # timezone skew: server UTC date may differ from user's local date.
             from datetime import date, timedelta
+
             today = date.today()
             this_week_start = today - timedelta(days=today.weekday())
             next_week_start = this_week_start + timedelta(weeks=1)

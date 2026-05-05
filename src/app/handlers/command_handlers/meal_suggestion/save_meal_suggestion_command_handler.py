@@ -1,6 +1,7 @@
 """
 SaveMealSuggestionCommandHandler - Handler for saving meal suggestions as regular meals.
 """
+
 import logging
 from datetime import datetime
 from typing import Any, List, Optional
@@ -8,18 +9,22 @@ from uuid import uuid4
 
 from src.app.commands.meal_suggestion import IngredientItem, SaveMealSuggestionCommand
 from src.app.events.base import EventHandler, handles
-from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
+from src.app.events.meal.meal_cache_invalidation_required_event import (
+    MealCacheInvalidationRequiredEvent,
+)
 from src.domain.model import FoodItem, Meal, MealImage, MealStatus, Nutrition, Macros
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.domain.utils.timezone_utils import utc_now, noon_utc_for_date, resolve_user_timezone_async
+from src.domain.utils.timezone_utils import (
+    utc_now,
+    noon_utc_for_date,
+    resolve_user_timezone_async,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @handles(SaveMealSuggestionCommand)
-class SaveMealSuggestionCommandHandler(
-    EventHandler[SaveMealSuggestionCommand, str]
-):
+class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, str]):
     """
     Handler for saving meal suggestions as regular meals.
 
@@ -98,7 +103,7 @@ class SaveMealSuggestionCommandHandler(
             is_manually_edited=False,
             meal_type=command.meal_type,
             translations=None,
-            source='ai_suggestion',
+            source="ai_suggestion",
             description=command.description,
             instructions=command.instructions if command.instructions else None,
             cook_time_min=command.estimated_cook_time_minutes,
@@ -110,11 +115,13 @@ class SaveMealSuggestionCommandHandler(
         async with self.uow as uow:
             saved_meal = await uow.meals.save(meal)
 
-        await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
-            aggregate_id=command.user_id,
-            user_id=command.user_id,
-            meal_date=meal_date,
-        ))
+        await self.event_bus.publish(
+            MealCacheInvalidationRequiredEvent(
+                aggregate_id=command.user_id,
+                user_id=command.user_id,
+                meal_date=meal_date,
+            )
+        )
 
         logger.info(
             f"Saved meal suggestion {command.suggestion_id} as meal {saved_meal.meal_id} "
@@ -162,9 +169,15 @@ class SaveMealSuggestionCommandHandler(
                 )
 
         # Distribute meal-level totals when all items have 0 calories (derived from macros)
-        if items and total_protein + total_carbs + total_fat > 0 and all(
-            item.macros.protein == 0 and item.macros.carbs == 0 and item.macros.fat == 0
-            for item in items
+        if (
+            items
+            and total_protein + total_carbs + total_fat > 0
+            and all(
+                item.macros.protein == 0
+                and item.macros.carbs == 0
+                and item.macros.fat == 0
+                for item in items
+            )
         ):
             items = self._distribute_nutrition(
                 items, total_protein, total_carbs, total_fat
@@ -176,8 +189,15 @@ class SaveMealSuggestionCommandHandler(
     def _estimate_weight_grams(quantity: float, unit: str) -> float:
         """Estimate weight in grams for proportional distribution."""
         conversions = {
-            'g': 1.0, 'kg': 1000.0, 'oz': 28.35, 'lb': 453.6,
-            'ml': 1.0, 'l': 1000.0, 'cup': 240.0, 'tbsp': 15.0, 'tsp': 5.0,
+            "g": 1.0,
+            "kg": 1000.0,
+            "oz": 28.35,
+            "lb": 453.6,
+            "ml": 1.0,
+            "l": 1000.0,
+            "cup": 240.0,
+            "tbsp": 15.0,
+            "tsp": 5.0,
         }
         return quantity * conversions.get(unit.lower().strip(), 1.0)
 
@@ -198,18 +218,19 @@ class SaveMealSuggestionCommandHandler(
         distributed = []
         for item in items:
             ratio = self._estimate_weight_grams(item.quantity, item.unit) / total_weight
-            distributed.append(FoodItem(
-                id=item.id,
-                name=item.name,
-                quantity=item.quantity,
-                unit=item.unit,
-                macros=Macros(
-                    protein=round(total_protein * ratio, 1),
-                    carbs=round(total_carbs * ratio, 1),
-                    fat=round(total_fat * ratio, 1),
-                ),
-                confidence=0.8,
-                is_custom=True,
-            ))
+            distributed.append(
+                FoodItem(
+                    id=item.id,
+                    name=item.name,
+                    quantity=item.quantity,
+                    unit=item.unit,
+                    macros=Macros(
+                        protein=round(total_protein * ratio, 1),
+                        carbs=round(total_carbs * ratio, 1),
+                        fat=round(total_fat * ratio, 1),
+                    ),
+                    confidence=0.8,
+                    is_custom=True,
+                )
+            )
         return distributed
-

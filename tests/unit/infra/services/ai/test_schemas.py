@@ -2,6 +2,7 @@
 Unit tests for meal generation schemas (Phase 01 & 02 optimization).
 Tests validate 6-name generation and removal of description field.
 """
+
 import pytest
 from pydantic import ValidationError
 
@@ -24,7 +25,7 @@ class TestMealNamesResponse:
                 "Garlic Butter Salmon",
                 "Spicy Thai Basil Chicken",
                 "Mediterranean Lamb Bowl",
-                "Teriyaki Beef Stir-fry"
+                "Teriyaki Beef Stir-fry",
             ]
         )
         assert len(response.meal_names) == 4
@@ -33,42 +34,34 @@ class TestMealNamesResponse:
     def test_rejects_3_names(self):
         """Invalid: only 3 names (need 4)."""
         with pytest.raises(ValidationError) as exc_info:
-            MealNamesResponse(
-                meal_names=["Meal 1", "Meal 2", "Meal 3"]
-            )
+            MealNamesResponse(meal_names=["Meal 1", "Meal 2", "Meal 3"])
         # Verify min_length validation error
         assert "at least 4 items" in str(exc_info.value).lower()
 
     def test_rejects_5_names(self):
         """Invalid: 5 names (one more than 4)."""
         with pytest.raises(ValidationError):
-            MealNamesResponse(
-                meal_names=["M1", "M2", "M3", "M4", "M5"]
-            )
+            MealNamesResponse(meal_names=["M1", "M2", "M3", "M4", "M5"])
 
     def test_rejects_2_names(self):
         """Invalid: 2 names (two short of 4)."""
         with pytest.raises(ValidationError):
-            MealNamesResponse(
-                meal_names=["M1", "M2"]
-            )
+            MealNamesResponse(meal_names=["M1", "M2"])
 
     def test_truncates_long_names(self):
         """Long names are truncated to 60 chars."""
         long_name = "X" * 100  # Well over 60 chars
-        response = MealNamesResponse(
-            meal_names=[long_name] * 4
-        )
+        response = MealNamesResponse(meal_names=[long_name] * 4)
         # Should truncate to max 60 chars with "..." suffix
         assert len(response.meal_names[0]) <= 60
 
     def test_accepts_diverse_cuisines(self):
         """Accepts diverse cuisine types."""
         diverse_names = [
-            "Thai Green Curry Chicken",      # Asian
-            "Mediterranean Feta Salad",      # Mediterranean
-            "Mexican Chipotle Bowl",         # Latin
-            "Indian Tandoori Fish"           # Indian
+            "Thai Green Curry Chicken",  # Asian
+            "Mediterranean Feta Salad",  # Mediterranean
+            "Mexican Chipotle Bowl",  # Latin
+            "Indian Tandoori Fish",  # Indian
         ]
         response = MealNamesResponse(meal_names=diverse_names)
         assert len(response.meal_names) == 4
@@ -94,9 +87,11 @@ class TestRecipeDetailsResponse:
             calories=450,
             protein=45.5,
             carbs=25.0,
-            fat=18.0
+            fat=18.0,
         )
-        assert not hasattr(response, 'description'), "Response should not have description field"
+        assert not hasattr(
+            response, "description"
+        ), "Response should not have description field"
         assert len(response.ingredients) == 3
         assert len(response.recipe_steps) == 3
         assert response.prep_time_minutes == 20
@@ -113,7 +108,7 @@ class TestRecipeDetailsResponse:
                 recipe_steps=[
                     RecipeStepItem(step=1, instruction="Test", duration_minutes=5),
                 ],
-                prep_time_minutes=15
+                prep_time_minutes=15,
             )
 
     def test_rejects_missing_recipe_steps(self):
@@ -124,7 +119,7 @@ class TestRecipeDetailsResponse:
                     IngredientItem(name="Chicken", amount=200, unit="g"),
                 ],
                 recipe_steps=[],  # Empty
-                prep_time_minutes=15
+                prep_time_minutes=15,
             )
 
     def test_validates_ingredient_count_min_3(self):
@@ -139,7 +134,7 @@ class TestRecipeDetailsResponse:
                 recipe_steps=[
                     RecipeStepItem(step=1, instruction="Mix", duration_minutes=5),
                 ],
-                prep_time_minutes=10
+                prep_time_minutes=10,
             )
 
     def test_validates_ingredient_count_max_8(self):
@@ -154,7 +149,7 @@ class TestRecipeDetailsResponse:
                 recipe_steps=[
                     RecipeStepItem(step=1, instruction="Mix all", duration_minutes=10),
                 ],
-                prep_time_minutes=20
+                prep_time_minutes=20,
             )
 
     def test_validates_recipe_step_count_min_2(self):
@@ -168,9 +163,11 @@ class TestRecipeDetailsResponse:
                     IngredientItem(name="C", amount=3, unit="g"),
                 ],
                 recipe_steps=[
-                    RecipeStepItem(step=1, instruction="Do something", duration_minutes=5),
+                    RecipeStepItem(
+                        step=1, instruction="Do something", duration_minutes=5
+                    ),
                 ],
-                prep_time_minutes=10
+                prep_time_minutes=10,
             )
 
     def test_validates_recipe_step_count_max_6(self):
@@ -186,7 +183,7 @@ class TestRecipeDetailsResponse:
                     RecipeStepItem(step=i, instruction=f"Step {i}", duration_minutes=5)
                     for i in range(1, 8)  # 7 steps
                 ],
-                prep_time_minutes=30
+                prep_time_minutes=30,
             )
 
     def test_validates_prep_time_min_5(self):
@@ -202,7 +199,7 @@ class TestRecipeDetailsResponse:
                     RecipeStepItem(step=1, instruction="Mix", duration_minutes=2),
                     RecipeStepItem(step=2, instruction="Cook", duration_minutes=2),
                 ],
-                prep_time_minutes=4  # Too short
+                prep_time_minutes=4,  # Too short
             )
 
     def test_validates_prep_time_max_120(self):
@@ -218,7 +215,7 @@ class TestRecipeDetailsResponse:
                     RecipeStepItem(step=1, instruction="Mix", duration_minutes=60),
                     RecipeStepItem(step=2, instruction="Cook", duration_minutes=60),
                 ],
-                prep_time_minutes=121  # Too long
+                prep_time_minutes=121,  # Too long
             )
 
     def test_valid_edge_case_min_values(self):
@@ -237,7 +234,7 @@ class TestRecipeDetailsResponse:
             calories=50,
             protein=1.0,
             carbs=2.0,
-            fat=0.5
+            fat=0.5,
         )
         assert len(response.ingredients) == 3
         assert len(response.recipe_steps) == 2
@@ -260,7 +257,7 @@ class TestRecipeDetailsResponse:
             calories=2800,
             protein=180.0,
             carbs=350.0,
-            fat=95.0
+            fat=95.0,
         )
         assert len(response.ingredients) == 8
         assert len(response.recipe_steps) == 6
@@ -274,11 +271,7 @@ class TestIngredientItem:
 
     def test_valid_ingredient(self):
         """Valid ingredient with name, amount, unit."""
-        item = IngredientItem(
-            name="Chicken breast",
-            amount=200,
-            unit="g"
-        )
+        item = IngredientItem(name="Chicken breast", amount=200, unit="g")
         assert item.name == "Chicken breast"
         assert item.amount == 200
         assert item.unit == "g"
@@ -304,11 +297,7 @@ class TestRecipeStepItem:
 
     def test_valid_step(self):
         """Valid recipe step."""
-        item = RecipeStepItem(
-            step=1,
-            instruction="Heat the pan",
-            duration_minutes=5
-        )
+        item = RecipeStepItem(step=1, instruction="Heat the pan", duration_minutes=5)
         assert item.step == 1
         assert item.instruction == "Heat the pan"
         assert item.duration_minutes == 5

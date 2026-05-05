@@ -3,6 +3,7 @@ Translation service for food search queries and results.
 Translates user queries to English for FatSecret lookup,
 then translates food names back to user's language.
 """
+
 import asyncio
 import json
 import logging
@@ -20,9 +21,7 @@ class FoodSearchTranslationService:
     def __init__(self, generation_service: MealGenerationServicePort) -> None:
         self._generation_service = generation_service
 
-    async def translate_query(
-        self, query: str, source_language: str
-    ) -> Optional[str]:
+    async def translate_query(self, query: str, source_language: str) -> Optional[str]:
         """Translate a food search query to English.
         Returns None on failure (caller should use original query).
         """
@@ -35,15 +34,15 @@ class FoodSearchTranslationService:
             f'Return ONLY a JSON object {{"translation": "..."}}.\n'
             f'Query: "{query}"'
         )
-        system_message = (
-            "Food terminology translator. Return ONLY valid JSON."
-        )
+        system_message = "Food terminology translator. Return ONLY valid JSON."
 
         try:
             result = await asyncio.to_thread(
                 self._generation_service.generate_meal_plan,
-                prompt, system_message,
-                response_type="json", max_tokens=256,
+                prompt,
+                system_message,
+                response_type="json",
+                max_tokens=256,
             )
             translated = result.get("translation", "")
             if isinstance(translated, str) and translated.strip():
@@ -93,17 +92,17 @@ class FoodSearchTranslationService:
         try:
             result = await asyncio.to_thread(
                 self._generation_service.generate_meal_plan,
-                prompt, system_message,
-                response_type="json", max_tokens=2048,
+                prompt,
+                system_message,
+                response_type="json",
+                max_tokens=2048,
             )
             translations: List[str] = result.get("translations", [])
 
             # Pad missing entries with originals
             if len(translations) < n:
-                logger.warning(
-                    f"Got {len(translations)}/{n} translations, padding"
-                )
-                translations.extend(names[len(translations):])
+                logger.warning(f"Got {len(translations)}/{n} translations, padding")
+                translations.extend(names[len(translations) :])
 
             # Build lookup
             name_map = dict(zip(names, translations))

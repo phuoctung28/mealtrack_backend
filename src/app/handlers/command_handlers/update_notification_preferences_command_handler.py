@@ -1,6 +1,7 @@
 """
 Handler for updating notification preferences.
 """
+
 import logging
 from typing import Any, Dict, Optional
 
@@ -15,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 @handles(UpdateNotificationPreferencesCommand)
-class UpdateNotificationPreferencesCommandHandler(EventHandler[UpdateNotificationPreferencesCommand, Dict[str, Any]]):
+class UpdateNotificationPreferencesCommandHandler(
+    EventHandler[UpdateNotificationPreferencesCommand, Dict[str, Any]]
+):
     """Handler for updating notification preferences."""
 
     def __init__(self, cache_service: Optional[CachePort] = None):
@@ -25,15 +28,25 @@ class UpdateNotificationPreferencesCommandHandler(EventHandler[UpdateNotificatio
         """Set dependencies for dependency injection."""
         pass
 
-    async def handle(self, command: UpdateNotificationPreferencesCommand) -> Dict[str, Any]:
+    async def handle(
+        self, command: UpdateNotificationPreferencesCommand
+    ) -> Dict[str, Any]:
         """Handle notification preferences update."""
         try:
             async with AsyncUnitOfWork() as uow:
-                existing_prefs = await uow.notifications.find_notification_preferences_by_user(command.user_id)
+                existing_prefs = (
+                    await uow.notifications.find_notification_preferences_by_user(
+                        command.user_id
+                    )
+                )
 
                 if not existing_prefs:
-                    existing_prefs = NotificationPreferences.create_default(command.user_id)
-                    saved_prefs = await uow.notifications.save_notification_preferences(existing_prefs)
+                    existing_prefs = NotificationPreferences.create_default(
+                        command.user_id
+                    )
+                    saved_prefs = await uow.notifications.save_notification_preferences(
+                        existing_prefs
+                    )
                 else:
                     saved_prefs = existing_prefs
 
@@ -47,10 +60,14 @@ class UpdateNotificationPreferencesCommandHandler(EventHandler[UpdateNotificatio
                     language=command.language,
                 )
 
-                final_prefs = await uow.notifications.save_notification_preferences(updated_prefs)
+                final_prefs = await uow.notifications.save_notification_preferences(
+                    updated_prefs
+                )
                 await uow.commit()
 
-                logger.info(f"Notification preferences updated for user {command.user_id}")
+                logger.info(
+                    f"Notification preferences updated for user {command.user_id}"
+                )
                 result = {"success": True, "preferences": final_prefs.to_dict()}
 
         except Exception as e:

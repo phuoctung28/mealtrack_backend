@@ -61,7 +61,7 @@ class CloudflareImageGenerator:
             "Content-Type": "application/json",
         }
 
-        logger.info("requesting CF Workers AI image for prompt: %s", prompt[:80])
+        logger.debug("requesting CF Workers AI image for prompt: %s", prompt[:80])
 
         async with httpx.AsyncClient(
             timeout=self._timeout, transport=self._transport
@@ -103,7 +103,7 @@ class CloudflareImageGenerator:
                 f"{resp.content[:200]!r}"
             )
 
-        logger.info(
+        logger.debug(
             "CF image generated: model=%s size=%d bytes", self._model, len(image_bytes)
         )
         return image_bytes

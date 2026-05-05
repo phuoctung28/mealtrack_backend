@@ -7,16 +7,19 @@ import logging
 import os
 import re
 import time
-from typing import Dict, Any, Optional
+from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.infra.adapters.meal_generation_json_utils import (
+    extract_json,
+    truncate,
+)
 from src.infra.services.ai.gemini_model_manager import (
     GeminiModelManager,
     GeminiModelPurpose,
 )
-from src.infra.adapters.meal_generation_json_utils import extract_json, truncate, clean_json_content
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +47,8 @@ class MealGenerationService(MealGenerationServicePort):
         response_type: str = "json",
         max_tokens: int = None,
         schema: type = None,
-        model_purpose: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        model_purpose: str | None = None,
+    ) -> dict[str, Any]:
         """
         Generate meal plan using provided prompt and system message.
         Single entry point for all meal generation.
@@ -81,12 +84,19 @@ class MealGenerationService(MealGenerationServicePort):
                 max_tokens = self._determine_optimal_tokens(prompt, system_message)
 
             # Get model name for logging (mirrors GeminiModelManager.get_model_for_purpose logic)
-            from src.infra.services.ai.gemini_model_config import PURPOSE_ENV_VARS, PURPOSE_MODEL_DEFAULTS
+            from src.infra.services.ai.gemini_model_config import (
+                PURPOSE_ENV_VARS,
+                PURPOSE_MODEL_DEFAULTS,
+            )
+
             env_var = PURPOSE_ENV_VARS.get(purpose, "GEMINI_MODEL")
-            model_name = os.getenv(env_var, PURPOSE_MODEL_DEFAULTS.get(purpose, self._model_manager.model_name))
+            model_name = os.getenv(
+                env_var,
+                PURPOSE_MODEL_DEFAULTS.get(purpose, self._model_manager.model_name),
+            )
 
             # Log request config with purpose
-            logger.info(
+            logger.debug(
                 f"[AI-REQUEST] purpose={purpose.value} | model={model_name} | "
                 f"max_tokens={max_tokens} | "
                 f"prompt_len={len(prompt)} | "
@@ -109,7 +119,7 @@ class MealGenerationService(MealGenerationServicePort):
 
             # Use structured output if schema provided (guarantees valid format)
             if schema:
-                logger.info(f"[STRUCTURED-OUTPUT] using schema={schema.__name__}")
+                logger.debug(f"[STRUCTURED-OUTPUT] using schema={schema.__name__}")
                 # NOTE: with_structured_output uses function calling, incompatible with response_mime_type
                 # Use include_raw=True to get raw response as fallback when parsing fails
                 llm_with_structure = llm.with_structured_output(
@@ -132,7 +142,7 @@ class MealGenerationService(MealGenerationServicePort):
                 )
                 raw_response = result.get("raw") if isinstance(result, dict) else None
 
-                logger.info(
+                logger.debug(
                     f"[STRUCTURED-RESPONSE] elapsed={elapsed:.2f}s | "
                     f"schema={schema.__name__} | "
                     f"parsed_type={type(structured_response).__name__} | "
@@ -151,7 +161,7 @@ class MealGenerationService(MealGenerationServicePort):
                         # Try legacy JSON parsing as fallback
                         try:
                             fallback_data = extract_json(raw_content)
-                            logger.info(
+                            logger.debug(
                                 "[STRUCTURED-OUTPUT-FALLBACK-SUCCESS] Parsed raw JSON successfully"
                             )
                             return fallback_data
@@ -178,14 +188,14 @@ class MealGenerationService(MealGenerationServicePort):
                         legacy_response = legacy_llm.invoke(messages)
                         legacy_elapsed = time.time() - start_time
 
-                        logger.info(
+                        logger.debug(
                             f"[E2-LEGACY-RESPONSE] elapsed={legacy_elapsed:.2f}s | "
                             f"content_len={len(legacy_response.content)}"
                         )
 
                         # Parse legacy JSON response
                         legacy_data = extract_json(legacy_response.content)
-                        logger.info(
+                        logger.debug(
                             "[E2-LEGACY-SUCCESS] Successfully parsed legacy JSON response"
                         )
                         return legacy_data
@@ -197,7 +207,7 @@ class MealGenerationService(MealGenerationServicePort):
                         raise ValueError(
                             f"Both structured output and legacy JSON mode failed for schema {schema.__name__}. "
                             f"Structured: None response. Legacy: {str(legacy_err)[:100]}"
-                        )
+                        ) from legacy_err
 
                 # Convert to dict for consistent interface
                 if hasattr(structured_response, "model_dump"):
@@ -220,7 +230,7 @@ class MealGenerationService(MealGenerationServicePort):
             elapsed = time.time() - start_time
 
             # Log response details
-            logger.info(
+            logger.debug(
                 f"[AI-RESPONSE] elapsed={elapsed:.2f}s | "
                 f"content_len={len(content)} chars (~{len(content)//4} tokens) | "
                 f"starts_with={truncate(content[:50], 50)} | "

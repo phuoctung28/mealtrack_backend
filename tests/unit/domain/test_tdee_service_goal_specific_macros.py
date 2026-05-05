@@ -7,6 +7,7 @@ Tests the refactored _calculate_all_macro_targets method to verify:
 3. Carbs calculated as remainder calories
 4. Min/max bounds enforcement
 """
+
 import pytest
 
 from src.domain.constants import TDEEConstants
@@ -16,7 +17,7 @@ from src.domain.model.user import (
     JobType,
     Goal,
     UnitSystem,
-    TrainingLevel
+    TrainingLevel,
 )
 from src.domain.services.tdee_service import TdeeCalculationService
 
@@ -43,7 +44,7 @@ class TestTdeeServiceGoalSpecificMacros:
             training_days_per_week=4,
             training_minutes_per_session=60,
             goal=Goal.RECOMP,
-            unit_system=UnitSystem.METRIC
+            unit_system=UnitSystem.METRIC,
         )
 
     @pytest.fixture
@@ -243,12 +244,12 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_goal_enum_has_recomp(self):
         """Verify Goal enum contains RECOMP value."""
-        assert hasattr(Goal, 'RECOMP')
+        assert hasattr(Goal, "RECOMP")
         assert Goal.RECOMP.value == "recomp"
 
     def test_goal_enum_has_all_required_goals(self):
         """Verify Goal enum has all required goal types."""
-        required_goals = {'CUT', 'BULK', 'RECOMP'}
+        required_goals = {"CUT", "BULK", "RECOMP"}
         available_goals = {g.name for g in Goal}
         assert required_goals.issubset(available_goals)
 
@@ -260,10 +261,10 @@ class TestTdeeServiceGoalSpecificMacros:
         macro_targets = response.macros
 
         # Verify all required fields exist and are floats
-        assert hasattr(macro_targets, 'calories')
-        assert hasattr(macro_targets, 'protein')
-        assert hasattr(macro_targets, 'fat')
-        assert hasattr(macro_targets, 'carbs')
+        assert hasattr(macro_targets, "calories")
+        assert hasattr(macro_targets, "protein")
+        assert hasattr(macro_targets, "fat")
+        assert hasattr(macro_targets, "carbs")
 
         assert isinstance(macro_targets.calories, (int, float))
         assert isinstance(macro_targets.protein, (int, float))
@@ -332,9 +333,9 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_tdee_constants_have_goal_adjustments(self):
         """Verify TDEEConstants defines goal adjustments."""
-        assert hasattr(TDEEConstants, 'CUTTING_DEFICIT')
-        assert hasattr(TDEEConstants, 'BULKING_SURPLUS')
-        assert hasattr(TDEEConstants, 'RECOMP_ADJUSTMENT')
+        assert hasattr(TDEEConstants, "CUTTING_DEFICIT")
+        assert hasattr(TDEEConstants, "BULKING_SURPLUS")
+        assert hasattr(TDEEConstants, "RECOMP_ADJUSTMENT")
 
         assert TDEEConstants.CUTTING_DEFICIT == 500
         assert TDEEConstants.BULKING_SURPLUS == 300
@@ -342,39 +343,39 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_tdee_constants_have_weight_based_multipliers(self):
         """Verify TDEEConstants defines weight-based multipliers."""
-        assert hasattr(TDEEConstants, 'PROTEIN_PER_KG')
-        assert hasattr(TDEEConstants, 'FAT_PER_KG')
-        assert hasattr(TDEEConstants, 'FAT_MIN_PERCENT')
-        assert hasattr(TDEEConstants, 'MIN_CARBS_PER_KG')
+        assert hasattr(TDEEConstants, "PROTEIN_PER_KG")
+        assert hasattr(TDEEConstants, "FAT_PER_KG")
+        assert hasattr(TDEEConstants, "FAT_MIN_PERCENT")
+        assert hasattr(TDEEConstants, "MIN_CARBS_PER_KG")
 
-        required_goals = {'bulk', 'cut', 'recomp'}
+        required_goals = {"bulk", "cut", "recomp"}
         assert required_goals.issubset(set(TDEEConstants.PROTEIN_PER_KG.keys()))
         assert required_goals.issubset(set(TDEEConstants.FAT_PER_KG.keys()))
         assert required_goals.issubset(set(TDEEConstants.FAT_MIN_PERCENT.keys()))
 
         # Verify correct protein values
-        assert TDEEConstants.PROTEIN_PER_KG['cut'] == 2.2
-        assert TDEEConstants.PROTEIN_PER_KG['recomp'] == 2.0
-        assert TDEEConstants.PROTEIN_PER_KG['bulk'] == 2.0
-        assert TDEEConstants.FAT_PER_KG['cut'] == 0.8
-        assert TDEEConstants.FAT_PER_KG['recomp'] == 0.9
-        assert TDEEConstants.FAT_PER_KG['bulk'] == 1.0
+        assert TDEEConstants.PROTEIN_PER_KG["cut"] == 2.2
+        assert TDEEConstants.PROTEIN_PER_KG["recomp"] == 2.0
+        assert TDEEConstants.PROTEIN_PER_KG["bulk"] == 2.0
+        assert TDEEConstants.FAT_PER_KG["cut"] == 0.8
+        assert TDEEConstants.FAT_PER_KG["recomp"] == 0.9
+        assert TDEEConstants.FAT_PER_KG["bulk"] == 1.0
 
         # Verify fat min percent values
-        assert TDEEConstants.FAT_MIN_PERCENT['cut'] == 0.20
-        assert TDEEConstants.FAT_MIN_PERCENT['recomp'] == 0.25
-        assert TDEEConstants.FAT_MIN_PERCENT['bulk'] == 0.25
+        assert TDEEConstants.FAT_MIN_PERCENT["cut"] == 0.20
+        assert TDEEConstants.FAT_MIN_PERCENT["recomp"] == 0.25
+        assert TDEEConstants.FAT_MIN_PERCENT["bulk"] == 0.25
 
         # Verify min carbs per kg
         assert TDEEConstants.MIN_CARBS_PER_KG == 2.5
 
     def test_tdee_constants_have_min_max_bounds(self):
         """Verify TDEEConstants defines min/max bounds for macros."""
-        assert hasattr(TDEEConstants, 'MIN_PROTEIN_G')
-        assert hasattr(TDEEConstants, 'MAX_PROTEIN_G')
-        assert hasattr(TDEEConstants, 'MIN_FAT_G')
-        assert hasattr(TDEEConstants, 'MAX_FAT_G')
-        assert hasattr(TDEEConstants, 'MIN_CARBS_G')
+        assert hasattr(TDEEConstants, "MIN_PROTEIN_G")
+        assert hasattr(TDEEConstants, "MAX_PROTEIN_G")
+        assert hasattr(TDEEConstants, "MIN_FAT_G")
+        assert hasattr(TDEEConstants, "MAX_FAT_G")
+        assert hasattr(TDEEConstants, "MIN_CARBS_G")
 
         assert TDEEConstants.MIN_PROTEIN_G == 60
         assert TDEEConstants.MAX_PROTEIN_G == 300
@@ -386,11 +387,7 @@ class TestTdeeServiceGoalSpecificMacros:
 
     def test_macro_targets_consistent_across_job_types(self, service, base_request):
         """Verify macro calculation logic works across different job types."""
-        job_types = [
-            JobType.DESK,
-            JobType.ON_FEET,
-            JobType.PHYSICAL
-        ]
+        job_types = [JobType.DESK, JobType.ON_FEET, JobType.PHYSICAL]
 
         base_request.goal = Goal.BULK
 
@@ -476,10 +473,16 @@ class TestTrainingLevelProtein:
     def test_beginner_recomp_gets_lower_protein(self, service):
         """Beginner recomp: 1.8 g/kg (better MPS response)."""
         request = TdeeRequest(
-            age=25, sex=Sex.MALE, height=180, weight=80,
-            body_fat_pct=None, job_type=JobType.DESK,
-            training_days_per_week=4, training_minutes_per_session=60,
-            goal=Goal.RECOMP, training_level=TrainingLevel.BEGINNER
+            age=25,
+            sex=Sex.MALE,
+            height=180,
+            weight=80,
+            body_fat_pct=None,
+            job_type=JobType.DESK,
+            training_days_per_week=4,
+            training_minutes_per_session=60,
+            goal=Goal.RECOMP,
+            training_level=TrainingLevel.BEGINNER,
         )
         response = service.calculate_tdee(request)
         assert response.macros.protein == pytest.approx(80 * 1.8, abs=1)
@@ -487,10 +490,16 @@ class TestTrainingLevelProtein:
     def test_intermediate_recomp_gets_default_protein(self, service):
         """Intermediate recomp: 2.0 g/kg (same as Phase 1 default)."""
         request = TdeeRequest(
-            age=25, sex=Sex.MALE, height=180, weight=80,
-            body_fat_pct=None, job_type=JobType.DESK,
-            training_days_per_week=4, training_minutes_per_session=60,
-            goal=Goal.RECOMP, training_level=TrainingLevel.INTERMEDIATE
+            age=25,
+            sex=Sex.MALE,
+            height=180,
+            weight=80,
+            body_fat_pct=None,
+            job_type=JobType.DESK,
+            training_days_per_week=4,
+            training_minutes_per_session=60,
+            goal=Goal.RECOMP,
+            training_level=TrainingLevel.INTERMEDIATE,
         )
         response = service.calculate_tdee(request)
         assert response.macros.protein == pytest.approx(80 * 2.0, abs=1)
@@ -498,10 +507,16 @@ class TestTrainingLevelProtein:
     def test_advanced_recomp_gets_higher_protein(self, service):
         """Advanced recomp: 2.2 g/kg (maximum MPS requirement)."""
         request = TdeeRequest(
-            age=25, sex=Sex.MALE, height=180, weight=80,
-            body_fat_pct=None, job_type=JobType.DESK,
-            training_days_per_week=4, training_minutes_per_session=60,
-            goal=Goal.RECOMP, training_level=TrainingLevel.ADVANCED
+            age=25,
+            sex=Sex.MALE,
+            height=180,
+            weight=80,
+            body_fat_pct=None,
+            job_type=JobType.DESK,
+            training_days_per_week=4,
+            training_minutes_per_session=60,
+            goal=Goal.RECOMP,
+            training_level=TrainingLevel.ADVANCED,
         )
         response = service.calculate_tdee(request)
         assert response.macros.protein == pytest.approx(80 * 2.2, abs=1)
@@ -510,10 +525,16 @@ class TestTrainingLevelProtein:
         """Cut always uses 2.2 g/kg regardless of training level."""
         for level in TrainingLevel:
             request = TdeeRequest(
-                age=25, sex=Sex.MALE, height=180, weight=80,
-                body_fat_pct=None, job_type=JobType.DESK,
-                training_days_per_week=4, training_minutes_per_session=60,
-                goal=Goal.CUT, training_level=level
+                age=25,
+                sex=Sex.MALE,
+                height=180,
+                weight=80,
+                body_fat_pct=None,
+                job_type=JobType.DESK,
+                training_days_per_week=4,
+                training_minutes_per_session=60,
+                goal=Goal.CUT,
+                training_level=level,
             )
             response = service.calculate_tdee(request)
             assert response.macros.protein == pytest.approx(80 * 2.2, abs=1)
@@ -521,10 +542,16 @@ class TestTrainingLevelProtein:
     def test_none_training_level_uses_default(self, service):
         """None training level falls back to PROTEIN_PER_KG defaults."""
         request = TdeeRequest(
-            age=25, sex=Sex.MALE, height=180, weight=80,
-            body_fat_pct=None, job_type=JobType.DESK,
-            training_days_per_week=4, training_minutes_per_session=60,
-            goal=Goal.RECOMP, training_level=None
+            age=25,
+            sex=Sex.MALE,
+            height=180,
+            weight=80,
+            body_fat_pct=None,
+            job_type=JobType.DESK,
+            training_days_per_week=4,
+            training_minutes_per_session=60,
+            goal=Goal.RECOMP,
+            training_level=None,
         )
         response = service.calculate_tdee(request)
         # Falls back to PROTEIN_PER_KG["recomp"] = 2.0
@@ -533,10 +560,16 @@ class TestTrainingLevelProtein:
     def test_bulk_beginner_gets_1_8_protein(self, service):
         """Bulk beginner: 1.8 g/kg."""
         request = TdeeRequest(
-            age=25, sex=Sex.MALE, height=180, weight=80,
-            body_fat_pct=None, job_type=JobType.DESK,
-            training_days_per_week=4, training_minutes_per_session=60,
-            goal=Goal.BULK, training_level=TrainingLevel.BEGINNER
+            age=25,
+            sex=Sex.MALE,
+            height=180,
+            weight=80,
+            body_fat_pct=None,
+            job_type=JobType.DESK,
+            training_days_per_week=4,
+            training_minutes_per_session=60,
+            goal=Goal.BULK,
+            training_level=TrainingLevel.BEGINNER,
         )
         response = service.calculate_tdee(request)
         assert response.macros.protein == pytest.approx(80 * 1.8, abs=1)
@@ -544,10 +577,16 @@ class TestTrainingLevelProtein:
     def test_bulk_intermediate_gets_2_0_protein(self, service):
         """Bulk intermediate: 2.0 g/kg."""
         request = TdeeRequest(
-            age=25, sex=Sex.MALE, height=180, weight=80,
-            body_fat_pct=None, job_type=JobType.DESK,
-            training_days_per_week=4, training_minutes_per_session=60,
-            goal=Goal.BULK, training_level=TrainingLevel.INTERMEDIATE
+            age=25,
+            sex=Sex.MALE,
+            height=180,
+            weight=80,
+            body_fat_pct=None,
+            job_type=JobType.DESK,
+            training_days_per_week=4,
+            training_minutes_per_session=60,
+            goal=Goal.BULK,
+            training_level=TrainingLevel.INTERMEDIATE,
         )
         response = service.calculate_tdee(request)
         assert response.macros.protein == pytest.approx(80 * 2.0, abs=1)
@@ -555,10 +594,16 @@ class TestTrainingLevelProtein:
     def test_bulk_advanced_gets_2_2_protein(self, service):
         """Bulk advanced: 2.2 g/kg."""
         request = TdeeRequest(
-            age=25, sex=Sex.MALE, height=180, weight=80,
-            body_fat_pct=None, job_type=JobType.DESK,
-            training_days_per_week=4, training_minutes_per_session=60,
-            goal=Goal.BULK, training_level=TrainingLevel.ADVANCED
+            age=25,
+            sex=Sex.MALE,
+            height=180,
+            weight=80,
+            body_fat_pct=None,
+            job_type=JobType.DESK,
+            training_days_per_week=4,
+            training_minutes_per_session=60,
+            goal=Goal.BULK,
+            training_level=TrainingLevel.ADVANCED,
         )
         response = service.calculate_tdee(request)
         assert response.macros.protein == pytest.approx(80 * 2.2, abs=1)
@@ -585,4 +630,3 @@ class TestTrainingLevelProtein:
         assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["bulk"]["beginner"] == 1.8
         assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["bulk"]["intermediate"] == 2.0
         assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["bulk"]["advanced"] == 2.2
-

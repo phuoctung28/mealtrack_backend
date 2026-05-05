@@ -9,14 +9,15 @@ Test layers:
    verify C5 fixes: pg_insert ON DUPLICATE KEY UPDATE used in the update
    path, and .scalars().first() used in find_by_normalized_name (C5 defensive).
 """
+
 from typing import Dict, Any, Optional
 from unittest.mock import MagicMock, patch, call, PropertyMock
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # In-memory stub that mirrors the two new repository methods
 # ---------------------------------------------------------------------------
+
 
 class InMemoryFoodReferenceStore:
     """Minimal in-memory backing store used to drive stub assertions."""
@@ -81,6 +82,7 @@ class InMemoryFoodReferenceStore:
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def store():
     return InMemoryFoodReferenceStore()
@@ -108,6 +110,7 @@ def _upsert(store: InMemoryFoodReferenceStore, **overrides) -> Optional[Dict[str
 # find_by_normalized_name
 # ---------------------------------------------------------------------------
 
+
 class TestFindByNormalizedName:
     def test_returns_none_when_not_found(self, store):
         assert store.find_by_normalized_name("nonexistent") is None
@@ -127,6 +130,7 @@ class TestFindByNormalizedName:
 # ---------------------------------------------------------------------------
 # upsert_by_normalized_name — creates new entry
 # ---------------------------------------------------------------------------
+
 
 class TestUpsertCreatesNew:
     def test_creates_entry_when_none_exists(self, store):
@@ -148,7 +152,9 @@ class TestUpsertCreatesNew:
 
     def test_multiple_distinct_entries_created(self, store):
         _upsert(store, name="chicken breast", name_normalized="chicken breast")
-        _upsert(store, name="white rice", name_normalized="white rice", protein_100g=2.7)
+        _upsert(
+            store, name="white rice", name_normalized="white rice", protein_100g=2.7
+        )
         assert store.find_by_normalized_name("chicken breast") is not None
         assert store.find_by_normalized_name("white rice") is not None
 
@@ -156,6 +162,7 @@ class TestUpsertCreatesNew:
 # ---------------------------------------------------------------------------
 # upsert_by_normalized_name — updates existing unverified entry
 # ---------------------------------------------------------------------------
+
 
 class TestUpsertUpdatesUnverified:
     def test_updates_existing_unverified_entry(self, store):
@@ -179,13 +186,16 @@ class TestUpsertUpdatesUnverified:
 # upsert_by_normalized_name — preserves is_verified=True entries
 # ---------------------------------------------------------------------------
 
+
 class TestUpsertPreservesVerifiedEntries:
     def test_does_not_overwrite_verified_with_unverified(self, store):
         # Seed a verified (curated) entry
         _upsert(store, protein_100g=31.0, is_verified=True, source="usda_curated")
 
         # Automated FatSecret lookup with lower-quality data attempts overwrite
-        result = _upsert(store, protein_100g=20.0, is_verified=False, source="fatsecret")
+        result = _upsert(
+            store, protein_100g=20.0, is_verified=False, source="fatsecret"
+        )
 
         # Original curated values must be preserved
         assert result["protein_100g"] == pytest.approx(31.0)
@@ -224,7 +234,9 @@ class TestUpsertPreservesVerifiedEntries:
     def test_unverified_can_be_promoted_to_verified(self, store):
         """An unverified entry can be upgraded to verified by a curated import."""
         _upsert(store, protein_100g=20.0, is_verified=False, source="fatsecret")
-        result = _upsert(store, protein_100g=31.0, is_verified=True, source="usda_curated")
+        result = _upsert(
+            store, protein_100g=31.0, is_verified=True, source="usda_curated"
+        )
         assert result["is_verified"] is True
         assert result["protein_100g"] == pytest.approx(31.0)
 
@@ -232,6 +244,7 @@ class TestUpsertPreservesVerifiedEntries:
 # ---------------------------------------------------------------------------
 # C5: Real repo uses ON DUPLICATE KEY UPDATE (atomic, race-safe)
 # ---------------------------------------------------------------------------
+
 
 class TestUniqueConstraintBehavior:
     """Verify the real FoodReferenceRepository C5 fixes without a live DB."""
@@ -263,7 +276,9 @@ class TestUniqueConstraintBehavior:
 
     def test_find_by_normalized_name_uses_scalars_first(self):
         """C5: find_by_normalized_name must use .scalars().first() not scalar_one_or_none()."""
-        from src.infra.repositories.food_reference_repository import FoodReferenceRepository
+        from src.infra.repositories.food_reference_repository import (
+            FoodReferenceRepository,
+        )
 
         mock_model = self._make_model("chicken breast")
         mock_scalars = MagicMock()
@@ -275,8 +290,10 @@ class TestUniqueConstraintBehavior:
         mock_session = MagicMock()
         mock_session.execute.return_value = mock_execute
 
-        with patch("src.infra.repositories.food_reference_repository.SessionLocal",
-                   return_value=mock_session):
+        with patch(
+            "src.infra.repositories.food_reference_repository.SessionLocal",
+            return_value=mock_session,
+        ):
             repo = FoodReferenceRepository()
             result = repo.find_by_normalized_name("chicken breast")
 
@@ -287,7 +304,9 @@ class TestUniqueConstraintBehavior:
 
     def test_upsert_by_normalized_name_uses_on_conflict_do_update_for_new_entry(self):
         """C5: insert path uses pg_insert().values().on_conflict_do_update() — not session.add()."""
-        from src.infra.repositories.food_reference_repository import FoodReferenceRepository
+        from src.infra.repositories.food_reference_repository import (
+            FoodReferenceRepository,
+        )
 
         # First SELECT returns None (no existing row)
         mock_scalars_select = MagicMock()
@@ -319,10 +338,14 @@ class TestUniqueConstraintBehavior:
         fluent_stmt.values.return_value = fluent_stmt
         fluent_stmt.on_conflict_do_update.return_value = fluent_stmt
 
-        with patch("src.infra.repositories.food_reference_repository.SessionLocal",
-                   return_value=mock_session):
-            with patch("src.infra.repositories.food_reference_repository.pg_insert",
-                       return_value=fluent_stmt):
+        with patch(
+            "src.infra.repositories.food_reference_repository.SessionLocal",
+            return_value=mock_session,
+        ):
+            with patch(
+                "src.infra.repositories.food_reference_repository.pg_insert",
+                return_value=fluent_stmt,
+            ):
                 repo = FoodReferenceRepository()
                 repo.upsert_by_normalized_name(
                     name="chicken breast",
@@ -344,7 +367,9 @@ class TestUniqueConstraintBehavior:
 
     def test_upsert_verified_protection_skips_atomic_upsert(self):
         """C5: verified protection must short-circuit before the ON DUPLICATE KEY UPDATE."""
-        from src.infra.repositories.food_reference_repository import FoodReferenceRepository
+        from src.infra.repositories.food_reference_repository import (
+            FoodReferenceRepository,
+        )
 
         verified_model = self._make_model("chicken breast", is_verified=True)
         mock_scalars = MagicMock()
@@ -356,9 +381,13 @@ class TestUniqueConstraintBehavior:
         mock_session = MagicMock()
         mock_session.execute.return_value = mock_execute
 
-        with patch("src.infra.repositories.food_reference_repository.SessionLocal",
-                   return_value=mock_session):
-            with patch("src.infra.repositories.food_reference_repository.pg_insert") as mock_insert:
+        with patch(
+            "src.infra.repositories.food_reference_repository.SessionLocal",
+            return_value=mock_session,
+        ):
+            with patch(
+                "src.infra.repositories.food_reference_repository.pg_insert"
+            ) as mock_insert:
                 repo = FoodReferenceRepository()
                 result = repo.upsert_by_normalized_name(
                     name="chicken breast",

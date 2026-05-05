@@ -1,11 +1,10 @@
 """
 Unit tests for meal command handlers.
 """
+
 import pytest
 
-from src.app.commands.meal import (
-    UploadMealImageImmediatelyCommand
-)
+from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.domain.model import MealStatus
 
 
@@ -14,13 +13,15 @@ class TestUploadMealImageImmediatelyHandler:
     """Test UploadMealImageImmediatelyCommand handler."""
 
     @pytest.mark.asyncio
-    async def test_upload_and_analyze_immediately_success(self, event_bus, sample_image_bytes, test_session):
+    async def test_upload_and_analyze_immediately_success(
+        self, event_bus, sample_image_bytes, test_session
+    ):
         """Test successful immediate upload and analysis."""
         # Arrange
         command = UploadMealImageImmediatelyCommand(
             user_id="550e8400-e29b-41d4-a716-446655440001",
             file_contents=sample_image_bytes,
-            content_type="image/jpeg"
+            content_type="image/jpeg",
         )
 
         # Act - handler now receives UoW via constructor injection (test_uow in event_bus fixture)
@@ -44,7 +45,7 @@ class TestUploadMealImageImmediatelyHandler:
         command = UploadMealImageImmediatelyCommand(
             user_id="550e8400-e29b-41d4-a716-446655440001",
             file_contents=sample_image_bytes,
-            content_type="image/jpeg"
+            content_type="image/jpeg",
         )
 
         # Act - handler now receives UoW via constructor injection (test_uow in event_bus fixture)

@@ -1,4 +1,5 @@
 """Unit tests for FoodImageSearchService — caching, validation, and adapter chain."""
+
 from unittest.mock import AsyncMock
 
 import pytest

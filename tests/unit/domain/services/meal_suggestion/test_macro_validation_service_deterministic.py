@@ -6,21 +6,24 @@ Verifies:
   - Logs ERROR on zero or negative calories
   - Returns input MealMacros unchanged (pass-through validator)
 """
+
 import logging
 from unittest.mock import patch
 
 import pytest
 
-from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+from src.domain.services.meal_suggestion.macro_validation_service import (
+    MacroValidationService,
+)
 from src.domain.services.meal_suggestion.nutrition_lookup_service import (
     IngredientMacros,
     MealMacros,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_ingredient(name: str, tier: str) -> IngredientMacros:
     return IngredientMacros(
@@ -65,6 +68,7 @@ def _make_meal_macros(
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestValidateDeterministic:
     def setup_method(self):
         self.service = MacroValidationService()
@@ -92,7 +96,9 @@ class TestValidateDeterministic:
             self.service.validate_deterministic(meal_macros)
 
         assert any(
-            "T1=3" in record.message and "T2=1" in record.message and "T3=2" in record.message
+            "T1=3" in record.message
+            and "T2=1" in record.message
+            and "T3=2" in record.message
             for record in caplog.records
         ), f"Expected tier distribution log. Got: {[r.message for r in caplog.records]}"
 
@@ -124,7 +130,9 @@ class TestValidateDeterministic:
             self.service.validate_deterministic(meal_macros)
 
         error_logs = [r for r in caplog.records if r.levelno == logging.ERROR]
-        assert not error_logs, f"Unexpected ERROR logs: {[r.message for r in error_logs]}"
+        assert (
+            not error_logs
+        ), f"Unexpected ERROR logs: {[r.message for r in error_logs]}"
 
     def test_all_t3_logs_tier_correctly(self, caplog):
         """Meals resolved entirely via AI fallback (T3) should log T3>0."""
@@ -134,6 +142,5 @@ class TestValidateDeterministic:
             self.service.validate_deterministic(meal_macros)
 
         assert any(
-            "T3=3" in record.message
-            for record in caplog.records
+            "T3=3" in record.message for record in caplog.records
         ), "Expected T3 count in log"

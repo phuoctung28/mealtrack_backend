@@ -1,10 +1,13 @@
 """Tests for B8: translation pipelining in ParallelRecipeGenerator."""
+
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
-from src.domain.services.meal_suggestion.parallel_recipe_generator import ParallelRecipeGenerator
+from src.domain.services.meal_suggestion.parallel_recipe_generator import (
+    ParallelRecipeGenerator,
+)
 
 
 def _make_suggestion(name: str) -> MealSuggestion:
@@ -15,6 +18,7 @@ def _make_suggestion(name: str) -> MealSuggestion:
 
 def _make_generator() -> tuple:
     from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
+
     translate_svc = MagicMock()
     translate_svc.translate_meal_suggestions_batch = AsyncMock(
         side_effect=lambda batch, lang: batch
@@ -49,7 +53,9 @@ async def test_pipeline_translates_per_recipe_not_batch():
 
     meal_names = ["Meal 0", "Meal 1", "Meal 2"]
 
-    with patch.object(gen, "_generate_with_retry", side_effect=fake_generate_with_retry):
+    with patch.object(
+        gen, "_generate_with_retry", side_effect=fake_generate_with_retry
+    ):
         with patch(
             "src.domain.services.meal_suggestion.suggestion_prompt_builder.build_recipe_details_prompt",
             side_effect=lambda name, sess: f"prompt:{name}",

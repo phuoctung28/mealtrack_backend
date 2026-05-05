@@ -2,6 +2,7 @@
 Pydantic schemas for structured meal generation output.
 Used with LangChain's with_structured_output() for guaranteed valid responses.
 """
+
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -13,7 +14,7 @@ class MealNamesResponse(BaseModel):
     meal_names: List[str] = Field(
         description="List of exactly 4 diverse, concise meal names (max 60 chars each) with different cuisines and cooking styles",
         min_length=4,
-        max_length=4
+        max_length=4,
     )
 
     # B2 FIX: Validate each meal name is reasonably short
@@ -32,7 +33,9 @@ class MealNamesResponse(BaseModel):
 class DiscoveryMealItem(BaseModel):
     """Single meal in lightweight discovery response — name + macros only."""
 
-    name: str = Field(description="Concise meal name in English (max 60 chars)", max_length=60)
+    name: str = Field(
+        description="Concise meal name in English (max 60 chars)", max_length=60
+    )
     calories: float = Field(description="Total calories (kcal)", ge=50, le=3000)
     protein: float = Field(description="Protein grams", ge=0, le=300)
     carbs: float = Field(description="Carbohydrate grams", ge=0, le=500)
@@ -56,9 +59,13 @@ class IngredientItem(BaseModel):
     # Recipe details are parsed from raw JSON dicts in recipe_attempt_builder.py.
     """
 
-    name: str = Field(description="Ingredient name (e.g., 'chicken breast', 'broccoli')")
+    name: str = Field(
+        description="Ingredient name (e.g., 'chicken breast', 'broccoli')"
+    )
     amount: float = Field(description="Quantity amount (e.g., 200, 1.5)", gt=0)
-    unit: str = Field(description="Unit of measurement (e.g., 'g', 'ml', 'tbsp', 'tsp', 'cup')")
+    unit: str = Field(
+        description="Unit of measurement (e.g., 'g', 'ml', 'tbsp', 'tsp', 'cup')"
+    )
 
 
 class RecipeStepItem(BaseModel):
@@ -83,20 +90,24 @@ class RecipeDetailsResponse(BaseModel):
     ingredients: List[IngredientItem] = Field(
         description="List of 3-8 ingredients with exact amounts",
         min_length=3,
-        max_length=8
+        max_length=8,
     )
     recipe_steps: List[RecipeStepItem] = Field(
         description="List of 2-6 recipe steps with instructions and durations",
         min_length=2,
-        max_length=6
+        max_length=6,
     )
     prep_time_minutes: int = Field(
-        description="Total preparation and cooking time in minutes",
-        ge=5,
-        le=120
+        description="Total preparation and cooking time in minutes", ge=5, le=120
     )
     # Macros optional — ignored if present; computed deterministically from ingredients
-    calories: Optional[int] = Field(default=None, description="AI-reported calories (ignored)")
-    protein: Optional[float] = Field(default=None, description="AI-reported protein (ignored)")
-    carbs: Optional[float] = Field(default=None, description="AI-reported carbs (ignored)")
+    calories: Optional[int] = Field(
+        default=None, description="AI-reported calories (ignored)"
+    )
+    protein: Optional[float] = Field(
+        default=None, description="AI-reported protein (ignored)"
+    )
+    carbs: Optional[float] = Field(
+        default=None, description="AI-reported carbs (ignored)"
+    )
     fat: Optional[float] = Field(default=None, description="AI-reported fat (ignored)")

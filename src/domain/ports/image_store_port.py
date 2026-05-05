@@ -6,7 +6,9 @@ class ImageStorePort(ABC):
     """Port interface for image storage operations."""
 
     @abstractmethod
-    def save(self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None) -> str:
+    def save(
+        self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None
+    ) -> str:
         """
         Saves image bytes to storage.
 

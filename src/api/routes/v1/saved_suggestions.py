@@ -1,4 +1,5 @@
 """Saved suggestions API endpoints — bookmark/unbookmark meal suggestions."""
+
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/v1/saved-suggestions", tags=["Saved Suggestions"])
 
 class SaveSuggestionRequest(BaseModel):
     """Validated request body for saving a suggestion."""
+
     suggestion_id: str = Field(..., min_length=1, max_length=64)
     meal_type: str = Field(..., min_length=1, max_length=20)
     portion_multiplier: int = Field(default=1, ge=1)

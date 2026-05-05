@@ -1,6 +1,7 @@
 """
 Domain service for determining required meal types based on user preferences.
 """
+
 from datetime import datetime
 from typing import List
 
@@ -31,7 +32,9 @@ def determine_meal_type_from_timestamp(created_at: datetime) -> str:
 class MealTypeDeterminationService:
     """Service for determining what meal types to generate."""
 
-    def determine_meal_types(self, meals_per_day: int, include_snacks: bool) -> List[MealType]:
+    def determine_meal_types(
+        self, meals_per_day: int, include_snacks: bool
+    ) -> List[MealType]:
         """Determine what meal types to generate based on user preferences."""
         meal_types = [MealType.BREAKFAST, MealType.LUNCH, MealType.DINNER]
 

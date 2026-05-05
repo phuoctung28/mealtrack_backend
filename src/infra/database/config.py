@@ -91,7 +91,7 @@ else:
     UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
     POOL_SIZE_PER_WORKER = int(os.getenv("POOL_SIZE_PER_WORKER", "3"))
     POOL_MAX_OVERFLOW = int(os.getenv("POOL_MAX_OVERFLOW", "2"))
-    POOL_TIMEOUT = int(os.getenv("POOL_TIMEOUT", "30"))
+    POOL_TIMEOUT = int(os.getenv("POOL_TIMEOUT", "10"))
     POOL_RECYCLE = int(os.getenv("POOL_RECYCLE", "120"))
 
     POOL_SIZE = max(1, UVICORN_WORKERS * POOL_SIZE_PER_WORKER)

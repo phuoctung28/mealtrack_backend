@@ -2,6 +2,7 @@
 MealService - Domain service for meal operations.
 Provides shared meal editing and management logic.
 """
+
 import logging
 from typing import List
 from uuid import uuid4
@@ -18,70 +19,71 @@ class MealService:
     """Service for meal operations."""
 
     def apply_food_item_changes(
-        self,
-        meal: Meal,
-        food_item_changes: List[FoodItemChange]
+        self, meal: Meal, food_item_changes: List[FoodItemChange]
     ) -> Meal:
         """Apply food item changes to a meal."""
         # Ensure meal.nutrition exists and food_items list is initialized
         if meal.nutrition is None:
             from src.domain.model.nutrition.macros import Macros
+
             meal.nutrition = Nutrition(
-                macros=Macros(protein=0.0, carbs=0.0, fat=0.0),
-                food_items=[]
+                macros=Macros(protein=0.0, carbs=0.0, fat=0.0), food_items=[]
             )
-        
+
         # Ensure food_items list exists
         if meal.nutrition.food_items is None:
             meal.nutrition.food_items = []
-        
+
         for change in food_item_changes:
             if change.action == "add":
                 # Add new food item
                 from src.domain.model.nutrition.macros import Macros
-                
+
                 # Calculate calories and macros from custom_nutrition if provided
                 if change.custom_nutrition:
-                    scale_factor = change.quantity / 100.0  # Custom nutrition is per 100g
+                    scale_factor = (
+                        change.quantity / 100.0
+                    )  # Custom nutrition is per 100g
                     macros = Macros(
                         protein=change.custom_nutrition.protein_per_100g * scale_factor,
                         carbs=change.custom_nutrition.carbs_per_100g * scale_factor,
-                        fat=change.custom_nutrition.fat_per_100g * scale_factor
+                        fat=change.custom_nutrition.fat_per_100g * scale_factor,
                     )
                 else:
                     # Default values when no custom nutrition provided
                     macros = Macros(protein=0.0, carbs=0.0, fat=0.0)
-                
+
                 new_food_item = FoodItem(
                     id=str(uuid4()),
                     name=change.name,
                     quantity=change.quantity,
                     unit=change.unit,
                     macros=macros,
-                    is_custom=change.custom_nutrition is not None
+                    is_custom=change.custom_nutrition is not None,
                 )
                 meal.nutrition.food_items.append(new_food_item)
                 logger.info(f"Added food item: {change.name}")
-            
+
             elif change.action == "remove":
                 # Remove food item
                 if change.id:
                     meal.nutrition.food_items = [
-                        item for item in meal.nutrition.food_items
+                        item
+                        for item in meal.nutrition.food_items
                         if item.id != change.id
                     ]
                     logger.info(f"Removed food item: {change.id}")
                 else:
                     logger.warning("Remove action requires food item id")
-            
+
             elif change.action == "update":
                 # Update existing food item
                 from src.domain.model.nutrition.macros import Macros
-                
+
                 if not change.id:
                     logger.warning("Update action requires food item id")
                     continue
-                
+
                 for item in meal.nutrition.food_items:
                     if item.id == change.id:
                         if change.name is not None:
@@ -94,18 +96,22 @@ class MealService:
                             # Recalculate macros from custom nutrition (calories derived automatically)
                             scale_factor = (change.quantity or item.quantity) / 100.0
                             item.macros = Macros(
-                                protein=change.custom_nutrition.protein_per_100g * scale_factor,
-                                carbs=change.custom_nutrition.carbs_per_100g * scale_factor,
-                                fat=change.custom_nutrition.fat_per_100g * scale_factor
+                                protein=change.custom_nutrition.protein_per_100g
+                                * scale_factor,
+                                carbs=change.custom_nutrition.carbs_per_100g
+                                * scale_factor,
+                                fat=change.custom_nutrition.fat_per_100g * scale_factor,
                             )
                             item.is_custom = True
                         logger.info(f"Updated food item: {change.id}")
                         break
-        
+
         # Recalculate total nutrition from food items
         from src.domain.services import NutritionCalculationService
+
         nutrition_service = NutritionCalculationService()
-        meal.nutrition = nutrition_service.calculate_meal_total(meal.nutrition.food_items)
-        
+        meal.nutrition = nutrition_service.calculate_meal_total(
+            meal.nutrition.food_items
+        )
+
         return meal
-    

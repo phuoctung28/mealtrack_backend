@@ -2,6 +2,7 @@
 Food reference repository — CRUD for canonical food catalog.
 Replaces barcode_product_repository with extended functionality.
 """
+
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -37,9 +38,7 @@ class FoodReferenceRepository:
         """Get food reference by ID."""
         session: Session = SessionLocal()
         try:
-            stmt = select(FoodReferenceModel).where(
-                FoodReferenceModel.id == ref_id
-            )
+            stmt = select(FoodReferenceModel).where(FoodReferenceModel.id == ref_id)
             result = session.execute(stmt).scalar_one_or_none()
             return self._to_dict(result) if result else None
         except Exception as e:
@@ -52,9 +51,7 @@ class FoodReferenceRepository:
         """Get food reference by USDA FDC ID."""
         session: Session = SessionLocal()
         try:
-            stmt = select(FoodReferenceModel).where(
-                FoodReferenceModel.fdc_id == fdc_id
-            )
+            stmt = select(FoodReferenceModel).where(FoodReferenceModel.fdc_id == fdc_id)
             result = session.execute(stmt).scalar_one_or_none()
             return self._to_dict(result) if result else None
         except Exception as e:
@@ -72,9 +69,7 @@ class FoodReferenceRepository:
             stmt = (
                 select(FoodReferenceModel)
                 .where(FoodReferenceModel.name.ilike(f"%{query}%"))
-                .where(
-                    FoodReferenceModel.region.in_([region, "global"])
-                )
+                .where(FoodReferenceModel.region.in_([region, "global"]))
                 .limit(limit)
             )
             results = session.execute(stmt).scalars().all()
@@ -125,10 +120,25 @@ class FoodReferenceRepository:
 
     # Columns safe to set via upsert_seed (excludes SQLAlchemy internals)
     _SEED_COLUMNS = {
-        "barcode", "name", "name_vi", "brand", "category", "region", "fdc_id",
-        "protein_100g", "carbs_100g", "fat_100g", "fiber_100g", "sugar_100g",
-        "extra_nutrients", "serving_sizes", "density", "serving_size",
-        "source", "is_verified", "image_url",
+        "barcode",
+        "name",
+        "name_vi",
+        "brand",
+        "category",
+        "region",
+        "fdc_id",
+        "protein_100g",
+        "carbs_100g",
+        "fat_100g",
+        "fiber_100g",
+        "sugar_100g",
+        "extra_nutrients",
+        "serving_sizes",
+        "density",
+        "serving_size",
+        "source",
+        "is_verified",
+        "image_url",
     }
 
     def upsert_seed(self, data: Dict[str, Any]) -> str:
@@ -136,19 +146,27 @@ class FoodReferenceRepository:
         session: Session = SessionLocal()
         try:
             if data.get("barcode"):
-                existing = session.execute(
-                    select(FoodReferenceModel).where(
-                        FoodReferenceModel.barcode == data["barcode"]
+                existing = (
+                    session.execute(
+                        select(FoodReferenceModel).where(
+                            FoodReferenceModel.barcode == data["barcode"]
+                        )
                     )
-                ).scalars().first()
+                    .scalars()
+                    .first()
+                )
             else:
-                existing = session.execute(
-                    select(FoodReferenceModel).where(
-                        FoodReferenceModel.name_vi == data.get("name_vi"),
-                        FoodReferenceModel.source == data.get("source"),
-                        FoodReferenceModel.region == data.get("region", "VN"),
+                existing = (
+                    session.execute(
+                        select(FoodReferenceModel).where(
+                            FoodReferenceModel.name_vi == data.get("name_vi"),
+                            FoodReferenceModel.source == data.get("source"),
+                            FoodReferenceModel.region == data.get("region", "VN"),
+                        )
                     )
-                ).scalars().first()
+                    .scalars()
+                    .first()
+                )
 
             safe_data = {k: v for k, v in data.items() if k in self._SEED_COLUMNS}
             # Exclude None barcode — DB may reject NULL on unique column
@@ -169,9 +187,39 @@ class FoodReferenceRepository:
                 session.commit()
                 return "inserted"
         except Exception as e:
-            logger.error(f"Error upserting seed '{data.get('name_vi', data.get('name'))}': {e}")
+            logger.error(
+                f"Error upserting seed '{data.get('name_vi', data.get('name'))}': {e}"
+            )
             session.rollback()
             return "skipped"
+        finally:
+            session.close()
+
+    def find_batch_by_normalized_names(
+        self, names_normalized: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Batch lookup by normalized ingredient names.
+
+        Returns dict keyed by name_normalized for O(1) lookup.
+        Missing names are simply absent from the result.
+        """
+        if not names_normalized:
+            return {}
+
+        session: Session = SessionLocal()
+        try:
+            stmt = select(FoodReferenceModel).where(
+                FoodReferenceModel.name_normalized.in_(names_normalized)
+            )
+            results = session.execute(stmt).scalars().all()
+            return {
+                r.name_normalized: self._to_dict(r)
+                for r in results
+                if r.name_normalized is not None
+            }
+        except Exception as e:
+            logger.error(f"Error batch lookup for {len(names_normalized)} names: {e}")
+            return {}
         finally:
             session.close()
 
@@ -187,7 +235,9 @@ class FoodReferenceRepository:
             result = session.execute(stmt).scalars().first()
             return self._to_dict(result) if result else None
         except Exception as e:
-            logger.error(f"Error finding food by normalized name '{name_normalized}': {e}")
+            logger.error(
+                f"Error finding food by normalized name '{name_normalized}': {e}"
+            )
             return None
         finally:
             session.close()
@@ -219,11 +269,15 @@ class FoodReferenceRepository:
         session: Session = SessionLocal()
         try:
             # Step 1: check is_verified protection
-            existing = session.execute(
-                select(FoodReferenceModel).where(
-                    FoodReferenceModel.name_normalized == name_normalized
+            existing = (
+                session.execute(
+                    select(FoodReferenceModel).where(
+                        FoodReferenceModel.name_normalized == name_normalized
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
 
             if existing is not None and existing.is_verified and not is_verified:
                 # Preserve curated entry — never overwrite with unverified data
@@ -242,9 +296,7 @@ class FoodReferenceRepository:
                 "is_verified": is_verified,
                 "region": "global",
             }
-            update_fields = {
-                k: v for k, v in values.items() if k != "name_normalized"
-            }
+            update_fields = {k: v for k, v in values.items() if k != "name_normalized"}
             stmt = pg_insert(FoodReferenceModel).values(**values)
             stmt = stmt.on_conflict_do_update(
                 index_elements=["name_normalized"],
@@ -254,11 +306,15 @@ class FoodReferenceRepository:
             session.commit()
 
             # Re-fetch to return the authoritative persisted row
-            refreshed = session.execute(
-                select(FoodReferenceModel).where(
-                    FoodReferenceModel.name_normalized == name_normalized
+            refreshed = (
+                session.execute(
+                    select(FoodReferenceModel).where(
+                        FoodReferenceModel.name_normalized == name_normalized
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             return self._to_dict(refreshed) if refreshed else None
         except Exception as e:
             logger.error(

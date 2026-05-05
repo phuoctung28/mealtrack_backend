@@ -1,6 +1,7 @@
 """
 Unit tests for food database feature: search, details, and manual meal creation.
 """
+
 from typing import List, Optional, Dict, Any
 
 import pytest
@@ -8,14 +9,16 @@ import pytest
 
 # Stub service and cache for tests
 class StubFoodDataService:
-    async def search_foods(self, query: str, limit: int = 20, max_results: int = 20) -> List[Dict[str, Any]]:
+    async def search_foods(
+        self, query: str, limit: int = 20, max_results: int = 20
+    ) -> List[Dict[str, Any]]:
         return [
             {
                 "fdcId": 12345,
                 "description": "Chicken, breast, grilled",
                 "brandOwner": None,
                 "dataType": "Foundation",
-                "publishedDate": "2020-01-01"
+                "publishedDate": "2020-01-01",
             }
         ]
 
@@ -28,13 +31,33 @@ class StubFoodDataService:
             "servingSize": 100.0,
             "servingSizeUnit": "g",
             "foodNutrients": [
-                {"nutrient": {"id": 1008, "name": "Energy", "unitName": "cal"}, "amount": 165.0},
-                {"nutrient": {"id": 1003, "name": "Protein", "unitName": "g"}, "amount": 31.0},
-                {"nutrient": {"id": 1005, "name": "Carbohydrate", "unitName": "g"}, "amount": 0.0},
-                {"nutrient": {"id": 1004, "name": "Total lipid (fat)", "unitName": "g"}, "amount": 3.6},
+                {
+                    "nutrient": {"id": 1008, "name": "Energy", "unitName": "cal"},
+                    "amount": 165.0,
+                },
+                {
+                    "nutrient": {"id": 1003, "name": "Protein", "unitName": "g"},
+                    "amount": 31.0,
+                },
+                {
+                    "nutrient": {"id": 1005, "name": "Carbohydrate", "unitName": "g"},
+                    "amount": 0.0,
+                },
+                {
+                    "nutrient": {
+                        "id": 1004,
+                        "name": "Total lipid (fat)",
+                        "unitName": "g",
+                    },
+                    "amount": 3.6,
+                },
             ],
             "foodPortions": [
-                {"measureUnit": {"name": "g"}, "gramWeight": 100.0, "modifier": "serving"},
+                {
+                    "measureUnit": {"name": "g"},
+                    "gramWeight": 100.0,
+                    "modifier": "serving",
+                },
             ],
         }
 
@@ -43,13 +66,17 @@ class NoopFoodCacheService:
     async def get_cached_search(self, query: str) -> Optional[List[Dict[str, Any]]]:
         return None
 
-    async def cache_search(self, query: str, results: List[Dict[str, Any]], ttl: int = 3600):
+    async def cache_search(
+        self, query: str, results: List[Dict[str, Any]], ttl: int = 3600
+    ):
         return None
 
     async def get_cached_food(self, fdc_id: int) -> Optional[Dict[str, Any]]:
         return None
 
-    async def cache_food(self, fdc_id: int, food_data: Dict[str, Any], ttl: int = 86400):
+    async def cache_food(
+        self, fdc_id: int, food_data: Dict[str, Any], ttl: int = 86400
+    ):
         return None
 
 
@@ -120,8 +147,14 @@ async def test_get_food_details_query_handler_maps_nutrients():
 async def test_create_manual_meal_command_handler_aggregates_items(monkeypatch):
     # Arrange
     from unittest.mock import AsyncMock, MagicMock
-    from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand, ManualMealItem, CustomNutrition
-    from src.app.handlers.command_handlers.create_manual_meal_command_handler import CreateManualMealCommandHandler
+    from src.app.commands.meal.create_manual_meal_command import (
+        CreateManualMealCommand,
+        ManualMealItem,
+        CustomNutrition,
+    )
+    from src.app.handlers.command_handlers.create_manual_meal_command_handler import (
+        CreateManualMealCommandHandler,
+    )
     from src.domain.model import MealStatus
 
     mock_uow = MagicMock()
@@ -148,8 +181,20 @@ async def test_create_manual_meal_command_handler_aggregates_items(monkeypatch):
     )
 
     items = [
-        ManualMealItem(fdc_id=12345, name="Chicken breast", quantity=150.0, unit="g", custom_nutrition=chicken_nutrition),  # 1.5x of 100g base
-        ManualMealItem(fdc_id=12345, name="Chicken breast", quantity=50.0, unit="g", custom_nutrition=chicken_nutrition),   # 0.5x of 100g base
+        ManualMealItem(
+            fdc_id=12345,
+            name="Chicken breast",
+            quantity=150.0,
+            unit="g",
+            custom_nutrition=chicken_nutrition,
+        ),  # 1.5x of 100g base
+        ManualMealItem(
+            fdc_id=12345,
+            name="Chicken breast",
+            quantity=50.0,
+            unit="g",
+            custom_nutrition=chicken_nutrition,
+        ),  # 0.5x of 100g base
     ]
     command = CreateManualMealCommand(
         user_id="550e8400-e29b-41d4-a716-446655440001",
@@ -167,7 +212,9 @@ async def test_create_manual_meal_command_handler_aggregates_items(monkeypatch):
     assert meal.nutrition is not None
 
     # Total quantity = 200g => 2x 100g base => calories and macros doubled
-    assert meal.nutrition.calories == pytest.approx(312.8)  # derived: (31*4 + 0*4 + 3.6*9) * 2
+    assert meal.nutrition.calories == pytest.approx(
+        312.8
+    )  # derived: (31*4 + 0*4 + 3.6*9) * 2
     assert meal.nutrition.macros.protein == pytest.approx(62.0)
     assert meal.nutrition.macros.carbs == pytest.approx(0.0)
     assert meal.nutrition.macros.fat == pytest.approx(7.2)

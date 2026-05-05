@@ -1,4 +1,5 @@
 """Command to mark a date as cheat day."""
+
 from dataclasses import dataclass
 from datetime import date
 

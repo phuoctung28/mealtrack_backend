@@ -8,6 +8,7 @@ Architecture:
           read calories_consumed from Redis → render messages →
           batch FCM send → mark sent.
 """
+
 import asyncio
 import logging
 from collections import defaultdict
@@ -23,8 +24,12 @@ from src.domain.services.notification_service import DEACTIVATABLE_FCM_ERRORS
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.redis_client import RedisClient
 from src.infra.database.uow import UnitOfWork
-from src.infra.repositories.notification.reminder_query_builder import ReminderQueryBuilder
-from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
+from src.infra.repositories.notification.reminder_query_builder import (
+    ReminderQueryBuilder,
+)
+from src.infra.services.daily_context_precompute_service import (
+    DailyContextPrecomputeService,
+)
 from src.infra.services.firebase_service import FirebaseService
 from src.infra.services.scheduler_leader_lock import SchedulerLeaderLock
 
@@ -74,7 +79,9 @@ class ScheduledNotificationService:
             return
         self._leader_acquired = True
         self._running = True
-        self._distinct_timezones = await asyncio.to_thread(self._fetch_distinct_timezones)
+        self._distinct_timezones = await asyncio.to_thread(
+            self._fetch_distinct_timezones
+        )
         self._tasks.append(asyncio.create_task(self._scheduling_loop()))
         self._tasks.append(asyncio.create_task(self._startup_catchup()))
         logger.info("Scheduled notification service started (leader)")
@@ -126,7 +133,9 @@ class ScheduledNotificationService:
                 await self._precompute.precompute_for_timezone(tz_name, today)
             except Exception as exc:
                 logger.error("Startup catch-up failed for %s: %s", tz_name, exc)
-        logger.info("Startup catch-up complete for %d timezones", len(self._distinct_timezones))
+        logger.info(
+            "Startup catch-up complete for %d timezones", len(self._distinct_timezones)
+        )
 
     # ── Phase 1: Midnight pre-compute ─────────────────────────────────────────
 
@@ -145,6 +154,7 @@ class ScheduledNotificationService:
 
     async def _send_due_notifications(self, now: datetime) -> None:
         """Fetch due rows, pull consumed from Redis, render, batch FCM, mark sent."""
+
         def _fetch_due():
             with UnitOfWork() as uow:
                 return ReminderQueryBuilder.find_due_notifications(uow.session, now)
@@ -181,15 +191,22 @@ class ScheduledNotificationService:
             else:
                 # Use Redis for meal reminders (fresher, ~30 min stale)
                 if not redis_ctx:
-                    logger.warning("Redis cache miss for user %s — using calorie_goal only", notif.user_id)
+                    logger.warning(
+                        "Redis cache miss for user %s — using calorie_goal only",
+                        notif.user_id,
+                    )
                     calories_consumed = 0
                 else:
                     calories_consumed = int(redis_ctx.get("calories_consumed", 0))
 
             remaining = max(0, calorie_goal - calories_consumed)
             title, body = _render_message(
-                notif.notification_type, remaining, gender, lang,
-                calories_consumed=calories_consumed, calorie_goal=calorie_goal,
+                notif.notification_type,
+                remaining,
+                gender,
+                lang,
+                calories_consumed=calories_consumed,
+                calorie_goal=calorie_goal,
             )
             for tok in tokens:
                 groups[(notif.notification_type, title, body)].append(tok)
@@ -221,14 +238,16 @@ class ScheduledNotificationService:
         with UnitOfWork() as uow:
             if sent_ids:
                 uow.session.execute(
-                    text("UPDATE notifications SET status = 'sent' WHERE id IN :ids")
-                    .bindparams(bindparam("ids", expanding=True)),
+                    text(
+                        "UPDATE notifications SET status = 'sent' WHERE id IN :ids"
+                    ).bindparams(bindparam("ids", expanding=True)),
                     {"ids": sent_ids},
                 )
             if failed_ids:
                 uow.session.execute(
-                    text("UPDATE notifications SET status = 'failed' WHERE id IN :ids")
-                    .bindparams(bindparam("ids", expanding=True)),
+                    text(
+                        "UPDATE notifications SET status = 'failed' WHERE id IN :ids"
+                    ).bindparams(bindparam("ids", expanding=True)),
                     {"ids": failed_ids},
                 )
 
@@ -241,8 +260,12 @@ class ScheduledNotificationService:
 
     async def _handle_failed_tokens(self, failed_tokens: list[dict]) -> None:
         to_deactivate = [
-            ft["token"] for ft in failed_tokens
-            if any(code in str(ft.get("error", "")).upper() for code in DEACTIVATABLE_FCM_ERRORS)
+            ft["token"]
+            for ft in failed_tokens
+            if any(
+                code in str(ft.get("error", "")).upper()
+                for code in DEACTIVATABLE_FCM_ERRORS
+            )
         ]
         if to_deactivate:
             await asyncio.to_thread(self._deactivate_tokens, to_deactivate)
@@ -250,8 +273,9 @@ class ScheduledNotificationService:
     def _deactivate_tokens(self, tokens: list[str]) -> None:
         with UnitOfWork() as uow:
             uow.session.execute(
-                text("UPDATE user_fcm_tokens SET is_active = false WHERE fcm_token IN :tokens")
-                .bindparams(bindparam("tokens", expanding=True)),
+                text(
+                    "UPDATE user_fcm_tokens SET is_active = false WHERE fcm_token IN :tokens"
+                ).bindparams(bindparam("tokens", expanding=True)),
                 {"tokens": tokens},
             )
 
@@ -271,13 +295,16 @@ class ScheduledNotificationService:
     def _get_tokens_for_user(self, user_id: str) -> list[str]:
         with UnitOfWork() as uow:
             rows = uow.session.execute(
-                text("SELECT fcm_token FROM user_fcm_tokens WHERE user_id = :uid AND is_active = true"),
+                text(
+                    "SELECT fcm_token FROM user_fcm_tokens WHERE user_id = :uid AND is_active = true"
+                ),
                 {"uid": user_id},
             ).fetchall()
             return [r.fcm_token for r in rows]
 
 
 # ── Module-level helpers ───────────────────────────────────────────────────────
+
 
 def _render_message(
     notification_type: str,
@@ -309,16 +336,22 @@ def _render_message(
             return cfg["title"], cfg["body_template"].format(percentage=int(pct))
         elif pct < 95:
             cfg = summary["under_goal"]
-            return cfg["title"], cfg["body_template"].format(deficit=int(calorie_goal - calories_consumed))
+            return cfg["title"], cfg["body_template"].format(
+                deficit=int(calorie_goal - calories_consumed)
+            )
         elif pct <= 120:
             cfg = summary["slightly_over"]
-            return cfg["title"], cfg["body_template"].format(excess=int(calories_consumed - calorie_goal))
+            return cfg["title"], cfg["body_template"].format(
+                excess=int(calories_consumed - calorie_goal)
+            )
         else:
             cfg = summary["way_over"]
-            return cfg["title"], cfg["body_template"].format(excess=int(calories_consumed - calorie_goal))
+            return cfg["title"], cfg["body_template"].format(
+                excess=int(calories_consumed - calorie_goal)
+            )
     return "Notification", ""
 
 
 def _chunked(lst: list, size: int):
     for i in range(0, len(lst), size):
-        yield lst[i: i + size]
+        yield lst[i : i + size]

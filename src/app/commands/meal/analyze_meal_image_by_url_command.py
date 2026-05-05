@@ -1,6 +1,7 @@
 """
 Command for meal image analysis when image is already uploaded.
 """
+
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional

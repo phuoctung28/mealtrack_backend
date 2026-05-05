@@ -2,6 +2,7 @@
 Consolidated suggestion service.
 Merges daily_meal_suggestion_service.py and meal_suggestion_service.py.
 """
+
 import logging
 from datetime import datetime, date, time
 from typing import List, Optional, Dict, Any
@@ -93,19 +94,22 @@ class SuggestionService:
     ) -> Dict[str, Any]:
         """
         Get context for daily meal suggestions.
-        
+
         Args:
             user_id: User ID
             target_date: Target date (defaults to today)
             daily_calories: Daily calorie target
-            
+
         Returns:
             Context dictionary with meal distributions
         """
         if target_date is None:
             from src.domain.utils.timezone_utils import user_today
-            target_date = user_today()  # UTC fallback; caller should pass user-local date
-        
+
+            target_date = (
+                user_today()
+            )  # UTC fallback; caller should pass user-local date
+
         # Determine current meal type based on time
         current_type = self.get_recommended_meal_type()
 
@@ -117,12 +121,10 @@ class SuggestionService:
         remaining_calories = daily_calories
 
         for meal_type in remaining_meals:
-            target = self._get_calorie_target_for_meal(
-                meal_type, daily_calories
-            )
+            target = self._get_calorie_target_for_meal(meal_type, daily_calories)
             distributions[meal_type] = min(target, remaining_calories)
             remaining_calories -= target
-        
+
         return {
             "user_id": user_id,
             "date": target_date.isoformat(),
@@ -175,33 +177,29 @@ class SuggestionService:
     ) -> List[MealSuggestion]:
         """
         Filter suggestions based on user preferences.
-        
+
         Args:
             suggestions: List of suggestions to filter
             dietary_preferences: User dietary preferences
             allergies: User allergies
             max_prep_time: Maximum preparation time in minutes
-            
+
         Returns:
             Filtered list of suggestions
         """
         filtered = suggestions
-        
+
         # Filter by prep time
         if max_prep_time:
-            filtered = [
-                s for s in filtered 
-                if s.prep_time_minutes <= max_prep_time
-            ]
-        
+            filtered = [s for s in filtered if s.prep_time_minutes <= max_prep_time]
+
         # Filter by allergies
         if allergies:
             allergy_set = {a.lower() for a in allergies}
             filtered = [
-                s for s in filtered
-                if not self._contains_allergen(s, allergy_set)
+                s for s in filtered if not self._contains_allergen(s, allergy_set)
             ]
-        
+
         # Filter by dietary preferences (e.g., vegetarian)
         if dietary_preferences:
             pref_set = {p.lower() for p in dietary_preferences}
@@ -209,7 +207,7 @@ class SuggestionService:
                 filtered = [s for s in filtered if self._is_vegetarian_safe(s)]
             if "vegan" in pref_set:
                 filtered = [s for s in filtered if self._is_vegan_safe(s)]
-        
+
         return filtered
 
     def _contains_allergen(
@@ -230,8 +228,18 @@ class SuggestionService:
     def _is_vegetarian_safe(self, suggestion: MealSuggestion) -> bool:
         """Check if suggestion is vegetarian-safe."""
         meat_keywords = [
-            "chicken", "beef", "pork", "lamb", "turkey", "fish",
-            "salmon", "tuna", "shrimp", "bacon", "ham", "sausage"
+            "chicken",
+            "beef",
+            "pork",
+            "lamb",
+            "turkey",
+            "fish",
+            "salmon",
+            "tuna",
+            "shrimp",
+            "bacon",
+            "ham",
+            "sausage",
         ]
         for ingredient in suggestion.ingredients:
             name_lower = ingredient.name.lower()
@@ -243,10 +251,17 @@ class SuggestionService:
         """Check if suggestion is vegan-safe."""
         if not self._is_vegetarian_safe(suggestion):
             return False
-        
+
         animal_keywords = [
-            "egg", "milk", "cheese", "yogurt", "butter", "cream",
-            "honey", "whey", "casein"
+            "egg",
+            "milk",
+            "cheese",
+            "yogurt",
+            "butter",
+            "cream",
+            "honey",
+            "whey",
+            "casein",
         ]
         for ingredient in suggestion.ingredients:
             name_lower = ingredient.name.lower()
@@ -262,23 +277,23 @@ class SuggestionService:
     ) -> float:
         """
         Calculate a relevance score for a suggestion.
-        
+
         Args:
             suggestion: The meal suggestion
             target_calories: Target calorie count
             preferences: Optional user preferences
-            
+
         Returns:
             Score from 0.0 to 1.0
         """
         score = suggestion.confidence_score or 0.5
-        
+
         # Adjust for calorie match
         if target_calories > 0:
             calorie_diff = abs(suggestion.macros.calories - target_calories)
             calorie_score = max(0, 1 - (calorie_diff / target_calories))
             score = (score + calorie_score) / 2
-        
+
         # Adjust for prep time preference
         if preferences and "max_prep_time" in preferences:
             max_time = preferences["max_prep_time"]
@@ -286,5 +301,5 @@ class SuggestionService:
                 score += 0.1
             else:
                 score -= 0.2
-        
+
         return max(0.0, min(1.0, score))

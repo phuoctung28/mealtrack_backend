@@ -6,6 +6,7 @@ Each test runs in an isolated transaction that is rolled back after.
 
 We override root conftest fixtures that assume MySQL to prevent interference.
 """
+
 from __future__ import annotations
 
 import os
@@ -86,6 +87,7 @@ def test_session(db_session):
 # ---------------------------------------------------------------------------
 # Async fixtures (asyncpg) — used by test_meal_repository_async.py
 # ---------------------------------------------------------------------------
+
 
 def _make_async_pg_url() -> str:
     url = os.environ.get("DATABASE_URL_DIRECT") or os.environ.get("DATABASE_URL", "")

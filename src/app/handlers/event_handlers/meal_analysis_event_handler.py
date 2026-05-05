@@ -1,6 +1,7 @@
 """
 Event handler for meal analysis events.
 """
+
 import logging
 from typing import Optional
 
@@ -11,7 +12,9 @@ from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_analysis.deepl_meal_translation_service import DeepLMealTranslationService
+from src.domain.services.meal_analysis.deepl_meal_translation_service import (
+    DeepLMealTranslationService,
+)
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.config.settings import get_settings
@@ -30,7 +33,7 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         image_store: ImageStorePort = None,
-        meal_translation_service: Optional[DeepLMealTranslationService] = None
+        meal_translation_service: Optional[DeepLMealTranslationService] = None,
     ):
         self.uow = uow
         self.vision_service = vision_service or VisionAIService()
@@ -40,16 +43,20 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
-        self.uow = kwargs.get('uow', self.uow)
-        self.vision_service = kwargs.get('vision_service', self.vision_service)
-        self.gpt_parser = kwargs.get('gpt_parser', self.gpt_parser)
-        self.image_store = kwargs.get('image_store', self.image_store)
-        self.meal_translation_service = kwargs.get('meal_translation_service', self.meal_translation_service)
-    
+        self.uow = kwargs.get("uow", self.uow)
+        self.vision_service = kwargs.get("vision_service", self.vision_service)
+        self.gpt_parser = kwargs.get("gpt_parser", self.gpt_parser)
+        self.image_store = kwargs.get("image_store", self.image_store)
+        self.meal_translation_service = kwargs.get(
+            "meal_translation_service", self.meal_translation_service
+        )
+
     async def handle(self, event: MealImageUploadedEvent) -> None:
         """Handle meal image uploaded event by triggering background analysis."""
-        logger.info(f"EVENT HANDLER CALLED: Received MealImageUploadedEvent for meal {event.meal_id}")
-        
+        logger.info(
+            f"EVENT HANDLER CALLED: Received MealImageUploadedEvent for meal {event.meal_id}"
+        )
+
         # Use provided UoW or create default
         uow = self.uow or AsyncUnitOfWork()
 
@@ -60,12 +67,16 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
                 # Get the meal from repository
                 meal = await uow.meals.find_by_id(event.meal_id)
                 if not meal:
-                    logger.error(f"Meal {event.meal_id} not found for background analysis")
+                    logger.error(
+                        f"Meal {event.meal_id} not found for background analysis"
+                    )
                     return
 
                 # Skip if already processed
                 if meal.status != MealStatus.PROCESSING:
-                    logger.info(f"Meal {event.meal_id} already processed with status {meal.status}")
+                    logger.info(
+                        f"Meal {event.meal_id} already processed with status {meal.status}"
+                    )
                     return
 
                 # Update status to ANALYZING
@@ -73,21 +84,24 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
                 await uow.meals.save(meal)
                 await uow.commit()
                 logger.info(f"Updated meal {event.meal_id} status to ANALYZING")
-                
+
                 # Try to perform real analysis if we can get image contents
                 # Otherwise fall back to mock analysis
                 await self._perform_analysis(meal, uow, language=event.language)
-                
+
             except Exception as e:
                 await uow.rollback()
-                logger.error(f"Error processing meal image upload event for meal {event.meal_id}: {str(e)}")
+                logger.error(
+                    f"Error processing meal image upload event for meal {event.meal_id}: {str(e)}"
+                )
                 await self._mark_meal_as_failed(event.meal_id, str(e))
-    
+
     async def _perform_analysis(self, meal, uow: UnitOfWorkPort, language: str = "en"):
         """Perform real AI analysis using the same logic as UploadMealImageImmediatelyHandler."""
         try:
             # Add small delay to simulate processing time
             import asyncio
+
             await asyncio.sleep(1)
 
             # Get image contents from the image store
@@ -95,7 +109,9 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             image_contents = self.image_store.load(meal.image.image_id)
 
             if not image_contents:
-                raise Exception(f"Could not load image contents for image_id: {meal.image.image_id}")
+                raise Exception(
+                    f"Could not load image contents for image_id: {meal.image.image_id}"
+                )
 
             logger.info(f"Performing real AI analysis for meal {meal.meal_id}")
 
@@ -115,13 +131,19 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             )
 
             # Translation (if non-English)
-            if language and language != "en" and self.meal_translation_service and nutrition and nutrition.food_items:
+            if (
+                language
+                and language != "en"
+                and self.meal_translation_service
+                and nutrition
+                and nutrition.food_items
+            ):
                 try:
                     translation = await self.meal_translation_service.translate_meal(
                         meal=meal,
                         dish_name=meal.dish_name,
                         food_items=nutrition.food_items,
-                        target_language=language
+                        target_language=language,
                     )
                     if translation:
                         logger.info(
@@ -139,7 +161,7 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
         except Exception as e:
             logger.error(f"Analysis failed for meal {meal.meal_id}: {str(e)}")
             await self._mark_meal_as_failed(meal.meal_id, str(e))
-    
+
     async def _mark_meal_as_failed(self, meal_id: str, error_message: str):
         """Mark a meal as failed with error message."""
         uow = self.uow or AsyncUnitOfWork()
@@ -154,4 +176,6 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
                     logger.info(f"Marked meal {meal_id} as failed")
             except Exception as save_error:
                 await uow.rollback()
-                logger.error(f"Failed to update meal status to failed: {str(save_error)}")
+                logger.error(
+                    f"Failed to update meal status to failed: {str(save_error)}"
+                )

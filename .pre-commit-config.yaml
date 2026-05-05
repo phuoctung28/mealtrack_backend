@@ -1,0 +1,27 @@
+# Pre-commit hooks for MealTrack backend
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Ruff - fast linter + import sorter (replaces flake8 + isort)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: ["--fix", "--exit-non-zero-on-fix"]
+      - id: ruff-format  # replaces black
+
+  # General file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: check-merge-conflict
+      - id: debug-statements
+
+# Note: mypy excluded from pre-commit (too many existing issues).
+# Run separately: mypy src/ --ignore-missing-imports

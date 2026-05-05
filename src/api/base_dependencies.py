@@ -17,7 +17,10 @@ from src.domain.services.notification_service import NotificationService
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.food_cache_service import FoodCacheService
 from src.infra.adapters.food_data_service import FoodDataService
-from src.infra.adapters.open_food_facts_service import OpenFoodFactsService, get_open_food_facts_service
+from src.infra.adapters.open_food_facts_service import (
+    OpenFoodFactsService,
+    get_open_food_facts_service,
+)
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.cache.cache_service import CacheService
 from src.infra.cache.metrics import CacheMonitor
@@ -27,7 +30,12 @@ from src.infra.database.config import get_db as get_db_from_config
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
 from src.infra.services.firebase_service import FirebaseService
-from src.infra.services.scheduled_notification_service import ScheduledNotificationService
+from src.infra.services.scheduled_notification_service import (
+    ScheduledNotificationService,
+)
+
+if TYPE_CHECKING:
+    from src.domain.ports.subscription_service_port import SubscriptionServicePort
 
 if TYPE_CHECKING:
     from src.domain.ports.subscription_service_port import SubscriptionServicePort
@@ -46,6 +54,7 @@ _cache_monitor = CacheMonitor()
 # Singleton service instances (initialized once, reused across requests)
 _image_store: Optional[ImageStorePort] = None
 _vision_service: Optional[VisionAIServicePort] = None
+
 
 async def initialize_cache_layer() -> None:
     """Initialize Redis cache if enabled."""
@@ -85,10 +94,10 @@ async def shutdown_cache_layer() -> None:
 def get_db():
     """
     Get a database session.
-    
+
     Uses scoped session from config for request isolation.
     This allows singleton services to safely access the current request's session.
-    
+
     Yields:
         Session: SQLAlchemy database session
     """
@@ -114,10 +123,10 @@ def get_image_store() -> ImageStorePort:
 def get_meal_repository(db: Session = Depends(get_db)) -> MealRepositoryPort:
     """
     Get the meal repository instance.
-    
+
     Args:
         db: Database session
-        
+
     Returns:
         MealRepositoryPort: The meal repository
     """
@@ -142,7 +151,7 @@ def get_vision_service() -> VisionAIServicePort:
 def get_gpt_parser() -> GPTResponseParser:
     """
     Get the GPT response parser instance.
-    
+
     Returns:
         GPTResponseParser: The parser instance
     """
@@ -153,7 +162,7 @@ def get_gpt_parser() -> GPTResponseParser:
 def get_food_cache_service() -> FoodCacheServicePort:
     """
     Get the food cache service instance.
-    
+
     Returns:
         FoodCacheServicePort: The food cache service
     """
@@ -168,6 +177,7 @@ def get_cache_service() -> Optional[CacheService]:
 def get_cache_monitor() -> CacheMonitor:
     """Return shared cache monitor for metrics."""
     return _cache_monitor
+
 
 # Food Mapping Service
 def get_food_mapping_service() -> FoodMappingServicePort:
@@ -201,6 +211,7 @@ def get_open_food_facts_service_instance():
 def get_fat_secret_service_instance():
     """Get the FatSecret service instance."""
     from src.infra.adapters.fat_secret_service import get_fat_secret_service
+
     return get_fat_secret_service()
 
 
@@ -212,7 +223,10 @@ def get_food_reference_repository():
     """Get the food reference repository singleton."""
     global _food_reference_repository
     if _food_reference_repository is None:
-        from src.infra.repositories.food_reference_repository import FoodReferenceRepository
+        from src.infra.repositories.food_reference_repository import (
+            FoodReferenceRepository,
+        )
+
         _food_reference_repository = FoodReferenceRepository()
     return _food_reference_repository
 
@@ -222,13 +236,15 @@ get_barcode_product_repository = get_food_reference_repository
 
 
 # Notification Repository
-def get_notification_repository(db: Session = Depends(get_db)) -> NotificationRepositoryPort:
+def get_notification_repository(
+    db: Session = Depends(get_db),
+) -> NotificationRepositoryPort:
     """
     Get the notification repository instance.
-    
+
     Args:
         db: Database session
-        
+
     Returns:
         NotificationRepositoryPort: The notification repository
     """
@@ -238,10 +254,11 @@ def get_notification_repository(db: Session = Depends(get_db)) -> NotificationRe
 # Firebase Service (singleton pattern - create once and reuse)
 _firebase_service = None
 
+
 def get_firebase_service() -> FirebaseService:
     """
     Get the Firebase service instance (singleton).
-    
+
     Returns:
         FirebaseService: The Firebase service
     """
@@ -253,16 +270,18 @@ def get_firebase_service() -> FirebaseService:
 
 # Notification Service
 def get_notification_service(
-    notification_repository: NotificationRepositoryPort = Depends(get_notification_repository),
-    firebase_service: FirebaseService = Depends(get_firebase_service)
+    notification_repository: NotificationRepositoryPort = Depends(
+        get_notification_repository
+    ),
+    firebase_service: FirebaseService = Depends(get_firebase_service),
 ) -> NotificationService:
     """
     Get the notification service instance.
-    
+
     Args:
         notification_repository: Notification repository
         firebase_service: Firebase service
-        
+
     Returns:
         NotificationService: The notification service
     """
@@ -272,11 +291,12 @@ def get_notification_service(
 # Scheduled Notification Service (singleton pattern - create once and reuse)
 _scheduled_notification_service = None
 
+
 def get_scheduled_notification_service() -> ScheduledNotificationService:
     """
     Get the scheduled notification service instance (singleton).
     This is created during application startup in the lifespan function.
-    
+
     Returns:
         ScheduledNotificationService: The scheduled notification service
     """
@@ -286,7 +306,7 @@ def get_scheduled_notification_service() -> ScheduledNotificationService:
 def initialize_scheduled_notification_service() -> ScheduledNotificationService:
     """
     Initialize the scheduled notification service during application startup.
-    
+
     Returns:
         ScheduledNotificationService: The initialized scheduled notification service
     """
@@ -308,9 +328,14 @@ def get_redis_client() -> Optional[RedisClient]:
 
 def get_meal_suggestion_repository():
     """Get meal suggestion repository (Phase 06)."""
-    from src.infra.repositories.meal_suggestion_repository import MealSuggestionRepository
+    from src.infra.repositories.meal_suggestion_repository import (
+        MealSuggestionRepository,
+    )
+
     if _redis_client is None:
-        raise RuntimeError("Redis client not initialized. Ensure cache layer is initialized.")
+        raise RuntimeError(
+            "Redis client not initialized. Ensure cache layer is initialized."
+        )
     return MealSuggestionRepository(_redis_client)
 
 
@@ -351,7 +376,9 @@ def get_suggestion_orchestration_service():
     This service uses ScopedSession internally to access the current request's
     database session, making it safe to use as a singleton in the event bus.
     """
-    from src.domain.services.meal_suggestion.suggestion_orchestration_service import SuggestionOrchestrationService
+    from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
+        SuggestionOrchestrationService,
+    )
     from src.infra.adapters.meal_generation_service import MealGenerationService
     from src.infra.database.config import SessionLocal
     from src.infra.repositories.user_repository import UserRepository
@@ -406,8 +433,12 @@ def get_deepl_meal_translation_service():
         return None
 
     from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
-    from src.infra.repositories.meal_translation_repository import MealTranslationRepository
-    from src.domain.services.meal_analysis.deepl_meal_translation_service import DeepLMealTranslationService
+    from src.infra.repositories.meal_translation_repository import (
+        MealTranslationRepository,
+    )
+    from src.domain.services.meal_analysis.deepl_meal_translation_service import (
+        DeepLMealTranslationService,
+    )
 
     _deepl_meal_translation_service = DeepLMealTranslationService(
         translation_repo=MealTranslationRepository(),
@@ -428,6 +459,7 @@ def get_ingredient_nutrition_resolver():
         from src.domain.services.meal_suggestion.ingredient_nutrition_resolver import (
             IngredientNutritionResolver,
         )
+
         _ingredient_nutrition_resolver = IngredientNutritionResolver(
             fatsecret=get_fat_secret_service_instance(),
             food_ref_repo=get_food_reference_repository(),
@@ -447,10 +479,12 @@ def get_nutrition_lookup_service():
             NutritionLookupService,
         )
         from src.infra.adapters.meal_generation_service import MealGenerationService
+
         _nutrition_lookup_service = NutritionLookupService(
             food_ref_repo=get_food_reference_repository(),
             ingredient_nutrition_resolver=get_ingredient_nutrition_resolver(),
             generation_service=MealGenerationService(),
+            redis_client=_redis_client,
         )
     return _nutrition_lookup_service
 
@@ -470,6 +504,7 @@ def get_subscription_service() -> "SubscriptionServicePort":
 
     if _subscription_service is None:
         from src.infra.adapters.revenuecat_adapter import RevenueCatAdapter
+
         api_key = os.getenv("REVENUECAT_SECRET_API_KEY", "")
         _subscription_service = RevenueCatAdapter(api_key=api_key)
 

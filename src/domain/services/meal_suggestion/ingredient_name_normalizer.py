@@ -4,19 +4,38 @@ Ingredient name normalizer — single source of truth for food name normalizatio
 Used when populating food_reference.name_normalized and when matching
 AI-generated ingredient names against the food reference table.
 """
+
 import re
 
 _QUALIFIERS = [
-    "raw", "cooked", "boiled", "fried", "grilled", "baked", "roasted",
-    "boneless", "skinless", "fresh", "frozen", "canned", "dried",
-    "organic", "large", "medium", "small", "whole", "sliced", "diced",
-    "chopped", "minced",
+    "raw",
+    "cooked",
+    "boiled",
+    "fried",
+    "grilled",
+    "baked",
+    "roasted",
+    "boneless",
+    "skinless",
+    "fresh",
+    "frozen",
+    "canned",
+    "dried",
+    "organic",
+    "large",
+    "medium",
+    "small",
+    "whole",
+    "sliced",
+    "diced",
+    "chopped",
+    "minced",
 ]
 
 # Compiled once at module load: word-boundary anchored, case-insensitive.
 # Using \b ensures "raw" matches standalone "raw" but NOT "Strawberry" or "Freshwater".
 _QUAL_RE = re.compile(
-    r'\b(' + '|'.join(map(re.escape, _QUALIFIERS)) + r')\b',
+    r"\b(" + "|".join(map(re.escape, _QUALIFIERS)) + r")\b",
     re.IGNORECASE,
 )
 
@@ -38,6 +57,6 @@ def normalize_food_name(name: str) -> str:
         Normalized form, e.g. "chicken breast".
     """
     name = name.lower().strip()
-    name = _QUAL_RE.sub(' ', name)
-    name = re.sub(r'[^a-z0-9\s]', ' ', name)   # strip punctuation
-    return ' '.join(name.split())
+    name = _QUAL_RE.sub(" ", name)
+    name = re.sub(r"[^a-z0-9\s]", " ", name)  # strip punctuation
+    return " ".join(name.split())

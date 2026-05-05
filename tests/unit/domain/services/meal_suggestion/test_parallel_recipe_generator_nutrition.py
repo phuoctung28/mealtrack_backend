@@ -6,6 +6,7 @@ Verifies:
   - AI-returned macro fields are ignored when NutritionLookupService returns valid data
   - MacroValidationService.validate_deterministic is called (via side-effect check)
 """
+
 import asyncio
 import uuid
 from typing import List
@@ -14,18 +15,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.domain.model.meal_suggestion import MealType, SuggestionSession
-from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
+from src.domain.services.meal_suggestion.macro_validation_service import (
+    MacroValidationService,
+)
 from src.domain.services.meal_suggestion.nutrition_lookup_service import (
     IngredientMacros,
     MealMacros,
     NutritionLookupService,
 )
-from src.domain.services.meal_suggestion.recipe_attempt_builder import attempt_recipe_generation
-
+from src.domain.services.meal_suggestion.recipe_attempt_builder import (
+    attempt_recipe_generation,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_session() -> SuggestionSession:
     return SuggestionSession(
@@ -48,7 +53,9 @@ def _make_session() -> SuggestionSession:
     )
 
 
-def _make_ingredient_macros(name: str, tier: str = "T1_food_reference") -> IngredientMacros:
+def _make_ingredient_macros(
+    name: str, tier: str = "T1_food_reference"
+) -> IngredientMacros:
     return IngredientMacros(
         name=name,
         quantity_g=100.0,
@@ -89,8 +96,16 @@ def _make_ai_raw_response() -> dict:
             {"name": "rice", "amount": 200.0, "unit": "g"},
         ],
         "recipe_steps": [
-            {"step": 1, "instruction": "Cook chicken breast in pan.", "duration_minutes": 10},
-            {"step": 2, "instruction": "Steam rice until fluffy.", "duration_minutes": 20},
+            {
+                "step": 1,
+                "instruction": "Cook chicken breast in pan.",
+                "duration_minutes": 10,
+            },
+            {
+                "step": 2,
+                "instruction": "Steam rice until fluffy.",
+                "duration_minutes": 20,
+            },
         ],
         "prep_time_minutes": 30,
         "origin_country": "International",
@@ -106,6 +121,7 @@ def _make_ai_raw_response() -> dict:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_attempt_recipe_generation_uses_deterministic_macros():
@@ -160,10 +176,16 @@ async def test_attempt_recipe_generation_ignores_ai_macro_fields():
     # Stub scale_to_target to return macros unchanged so this test stays focused
     # on "deterministic macros, not AI values" rather than the scaling behaviour.
     det_macros = MealMacros(
-        calories=300.0, protein=30.0, carbs=25.0, fat=5.0,
-        fiber=2.0, sugar=1.0,
+        calories=300.0,
+        protein=30.0,
+        carbs=25.0,
+        fat=5.0,
+        fiber=2.0,
+        sugar=1.0,
         ingredients=[_make_ingredient_macros("egg", "T1_food_reference")],
-        t1_count=1, t2_count=0, t3_count=0,
+        t1_count=1,
+        t2_count=0,
+        t3_count=0,
     )
 
     generation_service = MagicMock()
@@ -258,7 +280,9 @@ async def test_attempt_recipe_generation_returns_none_on_nutrition_lookup_error(
     generation_service.generate_meal_plan.return_value = _make_ai_raw_response()
 
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
-    nutrition_lookup.calculate_meal_macros.side_effect = RuntimeError("DB connection failed")
+    nutrition_lookup.calculate_meal_macros.side_effect = RuntimeError(
+        "DB connection failed"
+    )
 
     result = await attempt_recipe_generation(
         generation_service=generation_service,
@@ -279,6 +303,7 @@ async def test_attempt_recipe_generation_returns_none_on_nutrition_lookup_error(
 # Phase 5: Calorie target scaling scenarios
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_attempt_recipe_generation_scale_within_range_returns_scaled_suggestion():
     """Scale factor within 0.7–1.4: MealSuggestion.macros matches scaled values."""
@@ -289,7 +314,10 @@ async def test_attempt_recipe_generation_scale_within_range_returns_scaled_sugge
 
     # Deterministic macros: 520 kcal (scale = 600/520 ≈ 1.154 → within range)
     # Use a simple pure-protein ingredient so calorie math is exact
-    from src.domain.services.meal_suggestion.nutrition_lookup_service import _derive_calories
+    from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+        _derive_calories,
+    )
+
     raw_protein = 130.0
     raw_calories = _derive_calories(raw_protein, 0.0, 0.0, 0.0)  # 520.0
     raw_macros = MealMacros(
@@ -319,6 +347,7 @@ async def test_attempt_recipe_generation_scale_within_range_returns_scaled_sugge
 
     # Use a real NutritionLookupService (with mocked deps) so scale_to_target runs for real
     from unittest.mock import MagicMock as MM
+
     repo = MM()
     repo.find_by_normalized_name.return_value = None
     resolver = MM()
@@ -344,7 +373,9 @@ async def test_attempt_recipe_generation_scale_within_range_returns_scaled_sugge
         session=session,
     )
 
-    assert result is not None, "Scale factor ≈1.15 is within range; recipe should be accepted"
+    assert (
+        result is not None
+    ), "Scale factor ≈1.15 is within range; recipe should be accepted"
 
     scale = 600 / raw_calories
     # Verify macros reflect scaling (validate_deterministic passes through valid values)
@@ -361,7 +392,10 @@ async def test_attempt_recipe_generation_scale_out_of_range_returns_none():
     generation_service.generate_meal_plan.return_value = _make_ai_raw_response()
 
     # Deterministic macros: 1400 kcal → scale = 600/1400 ≈ 0.43 → rejected
-    from src.domain.services.meal_suggestion.nutrition_lookup_service import _derive_calories
+    from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+        _derive_calories,
+    )
+
     raw_protein = 350.0
     raw_calories = _derive_calories(raw_protein, 0.0, 0.0, 0.0)  # 1400.0
     raw_macros = MealMacros(
@@ -390,6 +424,7 @@ async def test_attempt_recipe_generation_scale_out_of_range_returns_none():
     )
 
     from unittest.mock import MagicMock as MM
+
     repo = MM()
     repo.find_by_normalized_name.return_value = None
     resolver = MM()
@@ -414,4 +449,6 @@ async def test_attempt_recipe_generation_scale_out_of_range_returns_none():
     )
 
     # Scale factor ≈0.43 is out of range → rejected → None
-    assert result is None, "Scale factor out of range should return None for upstream retry"
+    assert (
+        result is None
+    ), "Scale factor out of range should return None for upstream retry"

@@ -2,6 +2,7 @@
 Integration tests for delete account API endpoint.
 Tests the complete flow from API request to database changes.
 """
+
 from unittest.mock import patch
 
 import pytest
@@ -27,21 +28,27 @@ class TestDeleteAccountIntegration:
             first_name="Integration",
             last_name="Test",
             phone_number="+1234567890",
-            is_active=True
+            is_active=True,
         )
         test_session.add(user)
         test_session.commit()
         test_session.refresh(user)
 
         # Verify user is active
-        active_user = test_session.query(User).filter(
-            User.firebase_uid == "firebase_integration_123",
-            User.is_active == True
-        ).first()
+        active_user = (
+            test_session.query(User)
+            .filter(
+                User.firebase_uid == "firebase_integration_123",
+                User.is_active.is_(True),
+            )
+            .first()
+        )
         assert active_user is not None
         assert active_user.email == "integration_test@example.com"
 
-        with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+        with patch(
+            "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+        ) as mock_firebase:
             mock_firebase.return_value = True
 
             # Act - execute delete command
@@ -53,17 +60,19 @@ class TestDeleteAccountIntegration:
             assert result["firebase_uid"] == "firebase_integration_123"
 
             # Verify user is now inactive
-            deleted_user = test_session.query(User).filter(
-                User.id == user.id
-            ).first()
+            deleted_user = test_session.query(User).filter(User.id == user.id).first()
             assert deleted_user.is_active is False
             assert "deleted_" in deleted_user.email
 
             # Verify user cannot be found by active query
-            cannot_find = test_session.query(User).filter(
-                User.firebase_uid == "firebase_integration_123",
-                User.is_active == True
-            ).first()
+            cannot_find = (
+                test_session.query(User)
+                .filter(
+                    User.firebase_uid == "firebase_integration_123",
+                    User.is_active.is_(True),
+                )
+                .first()
+            )
             assert cannot_find is None
 
     @pytest.mark.asyncio
@@ -79,14 +88,16 @@ class TestDeleteAccountIntegration:
             last_name="Name",
             phone_number="+1987654321",
             display_name="Test User",
-            is_active=True
+            is_active=True,
         )
         test_session.add(user)
         test_session.commit()
         test_session.refresh(user)
         user_id = user.id
 
-        with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+        with patch(
+            "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+        ) as mock_firebase:
             mock_firebase.return_value = True
 
             # Act
@@ -115,14 +126,14 @@ class TestDeleteAccountIntegration:
             username="user1_int",
             password_hash="pwd1",
             firebase_uid="firebase_user1_int",
-            is_active=True
+            is_active=True,
         )
         user2 = User(
             email="user2_integration@example.com",
             username="user2_int",
             password_hash="pwd2",
             firebase_uid="firebase_user2_int",
-            is_active=True
+            is_active=True,
         )
         test_session.add_all([user1, user2])
         test_session.commit()
@@ -132,7 +143,9 @@ class TestDeleteAccountIntegration:
         user1_id = user1.id
         user2_id = user2.id
 
-        with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+        with patch(
+            "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+        ) as mock_firebase:
             mock_firebase.return_value = True
 
             # Act - delete only user1
@@ -142,7 +155,9 @@ class TestDeleteAccountIntegration:
 
             # Assert
             deleted_user1 = test_session.query(User).filter(User.id == user1_id).first()
-            unaffected_user2 = test_session.query(User).filter(User.id == user2_id).first()
+            unaffected_user2 = (
+                test_session.query(User).filter(User.id == user2_id).first()
+            )
 
             assert deleted_user1.is_active is False
             assert unaffected_user2.is_active is True
@@ -157,7 +172,7 @@ class TestDeleteAccountIntegration:
             username="audit_user_int",
             password_hash="hash",
             firebase_uid="firebase_audit_int",
-            is_active=True
+            is_active=True,
         )
         test_session.add(user)
         test_session.commit()
@@ -166,7 +181,9 @@ class TestDeleteAccountIntegration:
         original_id = user.id
         original_created = user.created_at
 
-        with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+        with patch(
+            "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+        ) as mock_firebase:
             mock_firebase.return_value = True
 
             # Act
@@ -174,13 +191,17 @@ class TestDeleteAccountIntegration:
             await event_bus.send(command)
 
             # Assert - ID and creation time preserved
-            deleted_user = test_session.query(User).filter(User.id == original_id).first()
+            deleted_user = (
+                test_session.query(User).filter(User.id == original_id).first()
+            )
             assert deleted_user.id == original_id
             assert deleted_user.created_at == original_created
             assert deleted_user.is_active is False
 
     @pytest.mark.asyncio
-    async def test_firebase_failure_does_not_prevent_soft_delete(self, test_session, event_bus):
+    async def test_firebase_failure_does_not_prevent_soft_delete(
+        self, test_session, event_bus
+    ):
         """Test that database soft delete succeeds even if Firebase deletion fails."""
         # Arrange
         user = User(
@@ -188,13 +209,15 @@ class TestDeleteAccountIntegration:
             username="firebase_fail_user",
             password_hash="hash",
             firebase_uid="firebase_fail_int",
-            is_active=True
+            is_active=True,
         )
         test_session.add(user)
         test_session.commit()
         test_session.refresh(user)
 
-        with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+        with patch(
+            "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+        ) as mock_firebase:
             mock_firebase.side_effect = Exception("Firebase unavailable")
 
             # Act
@@ -218,13 +241,15 @@ class TestDeleteAccountIntegration:
             username="filter_user",
             password_hash="hash",
             firebase_uid="firebase_filter_int",
-            is_active=True
+            is_active=True,
         )
         test_session.add(user)
         test_session.commit()
         test_session.refresh(user)
 
-        with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+        with patch(
+            "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+        ) as mock_firebase:
             mock_firebase.return_value = True
 
             # Act - delete user
@@ -232,16 +257,21 @@ class TestDeleteAccountIntegration:
             await event_bus.send(command)
 
             # Assert - simulate auth check (only find active users)
-            active_user = test_session.query(User).filter(
-                User.firebase_uid == "firebase_filter_int",
-                User.is_active == True
-            ).first()
+            active_user = (
+                test_session.query(User)
+                .filter(
+                    User.firebase_uid == "firebase_filter_int", User.is_active.is_(True)
+                )
+                .first()
+            )
             assert active_user is None
 
             # But deleted user still exists in database
-            all_user = test_session.query(User).filter(
-                User.firebase_uid == "firebase_filter_int"
-            ).first()
+            all_user = (
+                test_session.query(User)
+                .filter(User.firebase_uid == "firebase_filter_int")
+                .first()
+            )
             assert all_user is not None
             assert all_user.is_active is False
 
@@ -254,13 +284,15 @@ class TestDeleteAccountIntegration:
             username="idem_user",
             password_hash="hash",
             firebase_uid="firebase_idem_int",
-            is_active=True
+            is_active=True,
         )
         test_session.add(user)
         test_session.commit()
         test_session.refresh(user)
 
-        with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+        with patch(
+            "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+        ) as mock_firebase:
             # Simulate Firebase not found (already deleted)
             mock_firebase.side_effect = UserNotFoundError("User not found in Firebase")
 

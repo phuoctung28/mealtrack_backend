@@ -1,4 +1,5 @@
 """Domain model package."""
+
 # flake8: noqa
 from .base import BaseDomainModel
 from .meal import (
@@ -46,3 +47,4 @@ from .user import (
     UserMacros,
     MacroTargets,
 )
+from .weight import WeightEntry

@@ -1,4 +1,5 @@
 """Unit test: weekly_budget_repository.upsert is idempotent under concurrent calls."""
+
 import uuid
 from datetime import date
 from unittest.mock import MagicMock, patch

@@ -50,7 +50,9 @@ class GeminiModelManager:
         self._models: Dict[str, CachedModel] = {}
         self._model_lock = threading.Lock()
 
-        self.max_cache_size = int(os.getenv("GEMINI_MAX_CACHE_SIZE", DEFAULT_MAX_CACHE_SIZE))
+        self.max_cache_size = int(
+            os.getenv("GEMINI_MAX_CACHE_SIZE", DEFAULT_MAX_CACHE_SIZE)
+        )
         self.ttl_seconds = int(os.getenv("GEMINI_CACHE_TTL", DEFAULT_TTL_SECONDS))
         self.memory_warning_threshold_mb = int(
             os.getenv("MEMORY_WARNING_THRESHOLD_MB", MEMORY_WARNING_THRESHOLD_MB)
@@ -69,38 +71,73 @@ class GeminiModelManager:
                 cls._instance = None
                 logger.info("GeminiModelManager singleton reset")
 
-    def _get_config_key(self, model_name: str = None, temperature: float = 0.7,
-                        max_output_tokens: Optional[int] = None,
-                        response_mime_type: Optional[str] = None, **kwargs) -> str:
+    def _get_config_key(
+        self,
+        model_name: str = None,
+        temperature: float = 0.7,
+        max_output_tokens: Optional[int] = None,
+        response_mime_type: Optional[str] = None,
+        **kwargs,
+    ) -> str:
         """Generate a deterministic cache key from model configuration."""
         model = model_name or self.model_name
         key_parts = [
-            f"model={model}", f"temp={temperature:.1f}",
-            f"max_tokens={max_output_tokens}" if max_output_tokens else "max_tokens=None",
-            f"mime_type={response_mime_type}" if response_mime_type else "mime_type=None",
+            f"model={model}",
+            f"temp={temperature:.1f}",
+            (
+                f"max_tokens={max_output_tokens}"
+                if max_output_tokens
+                else "max_tokens=None"
+            ),
+            (
+                f"mime_type={response_mime_type}"
+                if response_mime_type
+                else "mime_type=None"
+            ),
         ]
         skip = {"google_api_key", "model", "convert_system_message_to_human"}
         key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()) if k not in skip)
         return "|".join(key_parts)
 
-    def _create_model(self, temperature: float, max_output_tokens: Optional[int],
-                      response_mime_type: Optional[str], model_name: str = None, **kwargs):
+    def _create_model(
+        self,
+        temperature: float,
+        max_output_tokens: Optional[int],
+        response_mime_type: Optional[str],
+        model_name: str = None,
+        **kwargs,
+    ):
         """Create a new ChatGoogleGenerativeAI instance."""
         from langchain_google_genai import ChatGoogleGenerativeAI
-        cfg = {"model": model_name or self.model_name, "temperature": temperature,
-               "google_api_key": self.api_key, "convert_system_message_to_human": True}
+
+        cfg = {
+            "model": model_name or self.model_name,
+            "temperature": temperature,
+            "google_api_key": self.api_key,
+            "convert_system_message_to_human": True,
+        }
         if max_output_tokens is not None:
             cfg["max_output_tokens"] = max_output_tokens
         if response_mime_type is not None:
             cfg["response_mime_type"] = response_mime_type
-        cfg.update({k: v for k, v in kwargs.items() if k not in ("google_api_key", "model")})
+        cfg.update(
+            {k: v for k, v in kwargs.items() if k not in ("google_api_key", "model")}
+        )
         return ChatGoogleGenerativeAI(**cfg)
 
-    def _get_or_create_model(self, config_key: str, model_name: str, temperature: float,
-                              max_output_tokens: Optional[int], response_mime_type: Optional[str],
-                              **kwargs):
+    def _get_or_create_model(
+        self,
+        config_key: str,
+        model_name: str,
+        temperature: float,
+        max_output_tokens: Optional[int],
+        response_mime_type: Optional[str],
+        **kwargs,
+    ):
         """Cache lookup then create. Caller must hold _model_lock."""
-        cache_handler.check_memory_and_evict(self._models, self.memory_warning_threshold_mb)
+        cache_handler.check_memory_and_evict(
+            self._models, self.memory_warning_threshold_mb
+        )
         cache_handler.evict_expired(self._models, self.ttl_seconds)
         if config_key in self._models:
             cached = self._models[config_key]
@@ -111,19 +148,37 @@ class GeminiModelManager:
             del self._models[config_key]
         if len(self._models) >= self.max_cache_size:
             cache_handler.evict_lru(self._models)
-        model = self._create_model(temperature, max_output_tokens, response_mime_type, model_name, **kwargs)
+        model = self._create_model(
+            temperature, max_output_tokens, response_mime_type, model_name, **kwargs
+        )
         self._models[config_key] = CachedModel(model=model)
-        logger.info(f"Created ChatGoogleGenerativeAI: {config_key} ({len(self._models)}/{self.max_cache_size})")
+        logger.info(
+            f"Created ChatGoogleGenerativeAI: {config_key} ({len(self._models)}/{self.max_cache_size})"
+        )
         return model
 
-    def get_model(self, temperature: float = 0.7, max_output_tokens: Optional[int] = None,
-                  response_mime_type: Optional[str] = None, **kwargs):
+    def get_model(
+        self,
+        temperature: float = 0.7,
+        max_output_tokens: Optional[int] = None,
+        response_mime_type: Optional[str] = None,
+        **kwargs,
+    ):
         """Get a model instance with the specified configuration."""
-        config_key = self._get_config_key(temperature=temperature, max_output_tokens=max_output_tokens,
-                                           response_mime_type=response_mime_type, **kwargs)
+        config_key = self._get_config_key(
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            response_mime_type=response_mime_type,
+            **kwargs,
+        )
         with self._model_lock:
             return self._get_or_create_model(
-                config_key, self.model_name, temperature, max_output_tokens, response_mime_type, **kwargs
+                config_key,
+                self.model_name,
+                temperature,
+                max_output_tokens,
+                response_mime_type,
+                **kwargs,
             )
 
     def get_model_for_purpose(
@@ -136,9 +191,15 @@ class GeminiModelManager:
     ):
         """Get model instance configured for specific purpose."""
         env_var = PURPOSE_ENV_VARS.get(purpose, "GEMINI_MODEL")
-        model_name = os.getenv(env_var, PURPOSE_MODEL_DEFAULTS.get(purpose, self.model_name))
+        model_name = os.getenv(
+            env_var, PURPOSE_MODEL_DEFAULTS.get(purpose, self.model_name)
+        )
 
-        if purpose in (GeminiModelPurpose.RECIPE_PRIMARY, GeminiModelPurpose.RECIPE_SECONDARY, GeminiModelPurpose.BARCODE):
+        if purpose in (
+            GeminiModelPurpose.RECIPE_PRIMARY,
+            GeminiModelPurpose.RECIPE_SECONDARY,
+            GeminiModelPurpose.BARCODE,
+        ):
             kwargs.setdefault("thinking_budget", 0)
 
         config_key = self._get_config_key(
@@ -150,7 +211,12 @@ class GeminiModelManager:
         )
         with self._model_lock:
             return self._get_or_create_model(
-                config_key, model_name, temperature, max_output_tokens, response_mime_type, **kwargs
+                config_key,
+                model_name,
+                temperature,
+                max_output_tokens,
+                response_mime_type,
+                **kwargs,
             )
 
     def clear_cache(self) -> int:
@@ -166,7 +232,9 @@ class GeminiModelManager:
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get detailed cache statistics."""
         with self._model_lock:
-            return cache_handler.get_cache_stats(self._models, self.max_cache_size, self.ttl_seconds)
+            return cache_handler.get_cache_stats(
+                self._models, self.max_cache_size, self.ttl_seconds
+            )
 
     def get_memory_usage_mb(self) -> Optional[float]:
         """Get current process memory usage in MB."""

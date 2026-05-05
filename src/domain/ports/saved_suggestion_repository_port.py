@@ -1,4 +1,5 @@
 """Port interface for saved suggestion persistence operations."""
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
@@ -35,9 +36,7 @@ class SavedSuggestionRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def delete_by_user_and_suggestion(
-        self, user_id: str, suggestion_id: str
-    ) -> bool:
+    def delete_by_user_and_suggestion(self, user_id: str, suggestion_id: str) -> bool:
         """Delete a saved suggestion. Returns True if deleted."""
         pass
 

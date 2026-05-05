@@ -4,10 +4,6 @@ Event bus dependency for FastAPI with proper type registrations.
 
 from typing import Optional
 
-from src.app.commands.daily_meal import (
-    GenerateDailyMealSuggestionsCommand,
-    GenerateSingleMealCommand,
-)
 from src.app.commands.ingredient import RecognizeIngredientCommand
 
 # Import all commands
@@ -54,8 +50,6 @@ from src.app.handlers.command_handlers import (
     UpdateUserLastAccessedCommandHandler,
     CompleteOnboardingCommandHandler,
     DeleteUserCommandHandler,
-    GenerateDailyMealSuggestionsCommandHandler,
-    GenerateSingleMealCommandHandler,
     CreateManualMealCommandHandler,
     UpdateUserMetricsCommandHandler,
     AnalyzeMealImageByUrlHandler,
@@ -91,6 +85,24 @@ from src.app.queries.saved_suggestion import GetSavedSuggestionsQuery
 from src.app.handlers.query_handlers import GetSavedSuggestionsQueryHandler
 from src.app.commands.cheat_day import MarkCheatDayCommand, UnmarkCheatDayCommand
 from src.app.queries.cheat_day import GetCheatDaysQuery
+from src.app.commands.weight import (
+    AddWeightEntryCommand,
+    DeleteWeightEntryCommand,
+    SyncWeightEntriesCommand,
+)
+from src.app.queries.weight import GetWeightEntriesQuery
+from src.app.handlers.command_handlers.add_weight_entry_command_handler import (
+    AddWeightEntryCommandHandler,
+)
+from src.app.handlers.command_handlers.delete_weight_entry_command_handler import (
+    DeleteWeightEntryCommandHandler,
+)
+from src.app.handlers.command_handlers.sync_weight_entries_command_handler import (
+    SyncWeightEntriesCommandHandler,
+)
+from src.app.handlers.query_handlers.get_weight_entries_query_handler import (
+    GetWeightEntriesQueryHandler,
+)
 from src.app.handlers.command_handlers.mark_cheat_day_command_handler import (
     MarkCheatDayCommandHandler,
 )
@@ -124,19 +136,11 @@ from src.app.handlers.query_handlers import (
     GetUserOnboardingStatusQueryHandler,
     GetDailyActivitiesQueryHandler,
     GetMealsByDateQueryHandler,
-    GetMealSuggestionsForProfileQueryHandler,
-    GetSingleMealForProfileQueryHandler,
-    GetMealPlanningSummaryQueryHandler,
     GetUserMetricsQueryHandler,
     GetStreakQueryHandler,
     GetDailyBreakdownQueryHandler,
 )
 from src.app.queries.activity import GetDailyActivitiesQuery
-from src.app.queries.daily_meal import (
-    GetMealSuggestionsForProfileQuery,
-    GetSingleMealForProfileQuery,
-    GetMealPlanningSummaryQuery,
-)
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
@@ -410,25 +414,6 @@ def get_configured_event_bus() -> EventBus:
         GetDailyActivitiesQueryHandler(cache_service=cache_service),
     )
 
-    # Register daily meal handlers
-    event_bus.register_handler(
-        GenerateDailyMealSuggestionsCommand,
-        GenerateDailyMealSuggestionsCommandHandler(),
-    )
-    event_bus.register_handler(
-        GenerateSingleMealCommand, GenerateSingleMealCommandHandler()
-    )
-    event_bus.register_handler(
-        GetMealSuggestionsForProfileQuery,
-        GetMealSuggestionsForProfileQueryHandler(),
-    )
-    event_bus.register_handler(
-        GetSingleMealForProfileQuery, GetSingleMealForProfileQueryHandler()
-    )
-    event_bus.register_handler(
-        GetMealPlanningSummaryQuery, GetMealPlanningSummaryQueryHandler()
-    )
-
     event_bus.register_handler(GetMealsByDateQuery, GetMealsByDateQueryHandler())
 
     # Register meal suggestion handlers
@@ -459,7 +444,9 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         UpdateUserMetricsCommand,
-        UpdateUserMetricsCommandHandler(uow=AsyncUnitOfWork(), cache_service=cache_service),
+        UpdateUserMetricsCommandHandler(
+            uow=AsyncUnitOfWork(), cache_service=cache_service
+        ),
     )
     event_bus.register_handler(
         UpdateTimezoneCommand,
@@ -518,10 +505,22 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(UnmarkCheatDayCommand, UnmarkCheatDayCommandHandler())
     event_bus.register_handler(GetCheatDaysQuery, GetCheatDaysQueryHandler())
 
+    # Register weight entry handlers
+    event_bus.register_handler(AddWeightEntryCommand, AddWeightEntryCommandHandler())
+    event_bus.register_handler(
+        DeleteWeightEntryCommand, DeleteWeightEntryCommandHandler()
+    )
+    event_bus.register_handler(
+        SyncWeightEntriesCommand, SyncWeightEntriesCommandHandler()
+    )
+    event_bus.register_handler(GetWeightEntriesQuery, GetWeightEntriesQueryHandler())
+
     # Register saved suggestion handlers
     event_bus.register_handler(
         SaveSuggestionCommand,
-        SaveSuggestionCommandHandler(uow=AsyncUnitOfWork(), cache_service=cache_service),
+        SaveSuggestionCommandHandler(
+            uow=AsyncUnitOfWork(), cache_service=cache_service
+        ),
     )
     event_bus.register_handler(
         DeleteSavedSuggestionCommand,

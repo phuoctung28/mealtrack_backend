@@ -73,14 +73,13 @@ package-lock.json
 firebase-service-account.json
 *-firebase-adminsdk-*.json
 
-# ClaudeKit
-plans/
+# ClaudeKit (docs/superpowers/specs and plans are now tracked)
 .claude/
 
 # Local profiling artifacts
 profile*.txt
 profile*.svg
 
-docs/superpowers/
+# docs/superpowers/ specs are now tracked
 # Git worktrees
 .worktrees/
