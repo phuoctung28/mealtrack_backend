@@ -112,7 +112,15 @@ class DeepLTranslationAdapter(DeepLTranslationPort):
         """
         Translate a batch of strings to English with a single DeepL API call.
 
-        Uses explicit source language if mapped, otherwise auto-detect.
+        If ``source_lang`` is ``"en"`` (case-insensitive) the input list is
+        returned unchanged and the DeepL API is not called (English short-circuit).
+
+        ``source_lang`` is looked up in ``_SOURCE_LANG_MAP``.  When the code is
+        not found in the map ``deepl_source`` is set to ``None``, which causes
+        the DeepL SDK to auto-detect the source language for that request.
+
+        Uses ``asyncio.to_thread`` so the blocking SDK call does not stall the
+        event loop.
         """
         if not texts:
             return []
@@ -123,6 +131,9 @@ class DeepLTranslationAdapter(DeepLTranslationPort):
 
         # Map source language; use None for auto-detect if unknown
         deepl_source = _SOURCE_LANG_MAP.get(source_lang.lower())
+
+        if deepl_source is None:
+            logger.debug("source_lang %r not in map; using DeepL auto-detect", source_lang)
 
         try:
             results = await asyncio.to_thread(
@@ -135,5 +146,5 @@ class DeepLTranslationAdapter(DeepLTranslationPort):
                 return [r.text for r in results]
             return [results.text]
         except deepl.DeepLException as exc:
-            logger.error("DeepL API error (to EN from %s): %s", source_lang, exc)
+            logger.error("DeepL API error (to EN from %s, mapped=%s): %s", source_lang, deepl_source, exc)
             raise
