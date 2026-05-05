@@ -2,7 +2,8 @@
 DeepL-backed meal translation service.
 
 Translates dish_name, instructions, and ingredient names for a meal using DeepL.
-Checks the meal_translation table first; only calls the DeepL API when a fully-
+Uses the core DeepLTextTranslationService internally for actual API calls.
+Checks the meal_translation table first; only calls DeepL when a fully-
 cached translation does not yet exist.
 """
 import logging
@@ -10,8 +11,10 @@ from typing import List, Optional
 
 from src.domain.model.meal import Meal, MealTranslation
 from src.domain.model.nutrition import FoodItem
-from src.domain.ports.deepl_translation_port import DeepLTranslationPort
 from src.domain.ports.meal_translation_repository_port import MealTranslationRepositoryPort
+from src.domain.services.translation.deepl_text_translation_service import (
+    DeepLTextTranslationService,
+)
 from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -21,25 +24,17 @@ class DeepLMealTranslationService:
     """
     Translates meal content (name, instructions, ingredients) via DeepL.
 
-    Caching strategy
-    ----------------
-    A translation row is considered fully cached when all three of
-    dish_name, meal_instruction, and meal_ingredients are non-None.
-    If a cached row exists, the DeepL API is not called.
-    If no row exists or the row is partially cached, DeepL is called and
-    the result is upserted.
-
-    On any error the method logs a warning and returns None so the caller
-    can fall back to English without blocking the meal response.
+    Uses DeepLTextTranslationService for actual translation calls.
+    Adds meal-specific caching logic on top.
     """
 
     def __init__(
         self,
         translation_repo: MealTranslationRepositoryPort,
-        deepl_port: DeepLTranslationPort,
+        text_translation_service: DeepLTextTranslationService,
     ) -> None:
         self._repo = translation_repo
-        self._deepl = deepl_port
+        self._text_service = text_translation_service
 
     async def translate_meal(
         self,
@@ -91,7 +86,9 @@ class DeepLMealTranslationService:
             # Layout: [dish_name, *ingredient_names, *instruction_texts]
             strings_to_translate = [dish_name] + ingredient_names + instruction_texts
 
-            translated = await self._deepl.translate_texts(strings_to_translate, target_language)
+            translated = await self._text_service.translate_texts(
+                strings_to_translate, target_language
+            )
 
             # Pad result to the expected length in case DeepL returns fewer items.
             while len(translated) < len(strings_to_translate):
