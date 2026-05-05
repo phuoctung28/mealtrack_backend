@@ -448,6 +448,36 @@ def get_deepl_meal_translation_service():
     return _deepl_meal_translation_service
 
 
+_deepl_text_translation_service = None
+
+
+def get_deepl_text_translation_service():
+    """Get DeepL-backed text translation service (singleton).
+
+    Used for ingredient recognition, food search, barcode lookup, and meal text parsing.
+    Returns None if DEEPL_API_KEY is not configured.
+    """
+    global _deepl_text_translation_service
+
+    if _deepl_text_translation_service is not None:
+        return _deepl_text_translation_service
+
+    if not settings.DEEPL_API_KEY:
+        logger.warning("DEEPL_API_KEY not set – text translation will be skipped")
+        return None
+
+    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
+    from src.domain.services.translation.deepl_text_translation_service import (
+        DeepLTextTranslationService,
+    )
+
+    _deepl_text_translation_service = DeepLTextTranslationService(
+        deepl_port=DeepLTranslationAdapter(settings.DEEPL_API_KEY),
+    )
+    logger.info("DeepL text translation service initialised")
+    return _deepl_text_translation_service
+
+
 # IngredientNutritionResolver (singleton — reuses FatSecret + FoodReferenceRepository singletons)
 _ingredient_nutrition_resolver = None
 
