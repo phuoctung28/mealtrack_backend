@@ -4,11 +4,14 @@ Handler for ingredient recognition command.
 
 import base64
 import logging
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
 from src.app.commands.ingredient import RecognizeIngredientCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
+from src.domain.services.translation.deepl_text_translation_service import (
+    DeepLTextTranslationService,
+)
 from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
 
 logger = logging.getLogger(__name__)
@@ -23,12 +26,15 @@ class RecognizeIngredientCommandHandler(
     def __init__(
         self,
         vision_service: VisionAIServicePort = None,
+        translation_service: Optional[DeepLTextTranslationService] = None,
     ):
         self.vision_service = vision_service
+        self.translation_service = translation_service
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
         self.vision_service = kwargs.get("vision_service", self.vision_service)
+        self.translation_service = kwargs.get("translation_service", self.translation_service)
 
     async def handle(self, command: RecognizeIngredientCommand) -> Dict[str, Any]:
         """
@@ -89,6 +95,23 @@ class RecognizeIngredientCommandHandler(
                 f"Ingredient recognition completed: name={name}, "
                 f"confidence={confidence:.2f}, category={category}"
             )
+
+            # Translate ingredient name if non-English
+            if (
+                success
+                and name
+                and command.language != "en"
+                and self.translation_service
+            ):
+                try:
+                    translated = await self.translation_service.translate_texts(
+                        [name], command.language
+                    )
+                    if translated and translated[0]:
+                        name = translated[0]
+                        logger.debug(f"Translated ingredient name to: {name}")
+                except Exception as e:
+                    logger.warning(f"Ingredient name translation failed: {e}")
 
             return {
                 "name": name,
