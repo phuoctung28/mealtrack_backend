@@ -345,7 +345,6 @@ _deepl_suggestion_translation_service = None
 def get_deepl_suggestion_translation_service():
     """Get DeepL-backed suggestion translation service (singleton).
 
-    Replaces the Gemini-based TranslationService for meal suggestions.
     Returns None if DEEPL_API_KEY is not set (generation still works, just in English).
     """
     global _deepl_suggestion_translation_service
@@ -353,17 +352,18 @@ def get_deepl_suggestion_translation_service():
     if _deepl_suggestion_translation_service is not None:
         return _deepl_suggestion_translation_service
 
-    if not settings.DEEPL_API_KEY:
+    # Requires text translation service
+    text_service = get_deepl_text_translation_service()
+    if text_service is None:
         logger.warning("DEEPL_API_KEY not set – suggestion translation will be skipped")
         return None
 
-    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
     from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
         DeepLSuggestionTranslationService,
     )
 
     _deepl_suggestion_translation_service = DeepLSuggestionTranslationService(
-        deepl_port=DeepLTranslationAdapter(settings.DEEPL_API_KEY),
+        text_translation_service=text_service,
     )
     logger.info("DeepL suggestion translation service initialised")
     return _deepl_suggestion_translation_service
