@@ -78,7 +78,11 @@ class DeepLSuggestionTranslationService:
         """Translate a list of meal names. Returns originals on failure."""
         if target_language == "en" or not names:
             return names
-        return await self._text_service.translate_texts(names, target_language)
+        try:
+            return await self._text_service.translate_texts(names, target_language)
+        except Exception as exc:
+            logger.warning("translate_names failed: %s", exc)
+            return names
 
     # ------------------------------------------------------------------
     # Internal
