@@ -84,3 +84,5 @@ profile*.svg
 # Git worktrees
 .worktrees/
 docs/superpowers/
+
+plans/
