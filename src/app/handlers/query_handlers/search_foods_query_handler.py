@@ -9,6 +9,9 @@ from typing import Any, Dict, List, Optional
 from src.app.events.base import EventHandler, handles
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
 from src.domain.services.food_mapping_service import FoodMappingService
+from src.domain.services.translation.deepl_text_translation_service import (
+    DeepLTextTranslationService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +25,7 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
         cache_service,
         mapping_service: FoodMappingService,
         fat_secret_service: Optional[Any] = None,
-        translation_service: Optional[Any] = None,
+        translation_service: Optional[DeepLTextTranslationService] = None,
     ):
         self.cache_service = cache_service
         self.mapping_service = mapping_service
@@ -105,11 +108,10 @@ class SearchFoodsQueryHandler(EventHandler[SearchFoodsQuery, Dict[str, Any]]):
             except Exception:
                 return []
 
-        translated_query = await self.translation_service.translate_query(
-            query, language
+        translated_queries = await self.translation_service.translate_to_english(
+            [query], language
         )
-        if not translated_query:
-            translated_query = query
+        translated_query = translated_queries[0] if translated_queries else query
 
         logger.info(f"Translation fallback: '{query}' -> '{translated_query}'")
 

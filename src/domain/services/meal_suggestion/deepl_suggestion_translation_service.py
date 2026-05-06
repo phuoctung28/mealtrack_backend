@@ -1,9 +1,9 @@
 """
 DeepL-backed translation service for meal suggestions.
 
-Drop-in replacement for the Gemini-based TranslationService.
+Uses the core DeepLTextTranslationService internally.
 Translates meal_name, description, ingredient names, and recipe step
-instructions using a single batched DeepL API call per suggestion.
+instructions using batched calls per suggestion.
 """
 import asyncio
 import logging
@@ -11,7 +11,9 @@ from dataclasses import replace as dataclasses_replace
 from typing import List
 
 from src.domain.model.meal_suggestion import MealSuggestion
-from src.domain.ports.deepl_translation_port import DeepLTranslationPort
+from src.domain.services.translation.deepl_text_translation_service import (
+    DeepLTextTranslationService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,22 +22,12 @@ class DeepLSuggestionTranslationService:
     """
     Translates MealSuggestion objects via DeepL.
 
-    Compatible with the SuggestionOrchestrationService interface —
-    exposes the same two public methods as the Gemini TranslationService:
-      • translate_meal_suggestion()
-      • translate_meal_suggestions_batch()
-
-    For each suggestion the translatable strings are batched into ONE DeepL
-    API call in this order:
-      [meal_name, description, *ingredient_names, *step_instructions]
-
-    Multiple suggestions are translated concurrently with asyncio.gather.
-    On any failure the original (English) suggestion is returned so the
-    response is never blocked.
+    Uses DeepLTextTranslationService for actual translation calls.
+    Adds suggestion-specific dataclass handling on top.
     """
 
-    def __init__(self, deepl_port: DeepLTranslationPort) -> None:
-        self._deepl = deepl_port
+    def __init__(self, text_translation_service: DeepLTextTranslationService) -> None:
+        self._text_service = text_translation_service
 
     # ------------------------------------------------------------------
     # Public interface (matches TranslationService)
@@ -87,9 +79,9 @@ class DeepLSuggestionTranslationService:
         if target_language == "en" or not names:
             return names
         try:
-            return await self._deepl.translate_texts(names, target_language)
+            return await self._text_service.translate_texts(names, target_language)
         except Exception as exc:
-            logger.warning("DeepL name translation failed: %s", exc)
+            logger.warning("translate_names failed: %s", exc)
             return names
 
     # ------------------------------------------------------------------
@@ -111,7 +103,7 @@ class DeepLSuggestionTranslationService:
         strings.extend(ing.name for ing in suggestion.ingredients)
         strings.extend(step.instruction for step in suggestion.recipe_steps)
 
-        translated = await self._deepl.translate_texts(strings, target_language)
+        translated = await self._text_service.translate_texts(strings, target_language)
 
         # Pad in case DeepL returns fewer items than requested.
         while len(translated) < len(strings):
