@@ -1,24 +1,12 @@
 from io import BytesIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from PIL import Image
 
 from src.infra.adapters.vision_ai_service import VisionAIService
 
-_MGR_PATCH = "src.infra.adapters.vision_ai_service.GeminiModelManager"
-
-
-def test_vision_service_disables_thinking_and_caps_output():
-    with patch(_MGR_PATCH) as mock_cls:
-        mock_mgr = MagicMock()
-        mock_cls.get_instance.return_value = mock_mgr
-
-        VisionAIService()
-
-        mock_cls.get_instance.assert_called_once()
-        mock_mgr.get_model.assert_called_once_with(
-            thinking_budget=0, max_output_tokens=2048
-        )
+_MGR_PATCH = "src.infra.adapters.vision_ai_service.AIModelManager"
 
 
 def _make_jpeg(width: int, height: int, quality: int = 95) -> bytes:
@@ -29,8 +17,24 @@ def _make_jpeg(width: int, height: int, quality: int = 95) -> bytes:
 
 
 def _make_service() -> VisionAIService:
-    with patch(_MGR_PATCH):
+    with patch(_MGR_PATCH) as mock_cls:
+        mock_manager = MagicMock()
+        mock_manager.generate_with_vision = AsyncMock(
+            return_value={"dish_name": "test", "ingredients": []}
+        )
+        mock_cls.get_instance.return_value = mock_manager
         return VisionAIService()
+
+
+def test_vision_service_uses_ai_model_manager():
+    with patch(_MGR_PATCH) as mock_cls:
+        mock_manager = MagicMock()
+        mock_manager.generate_with_vision = AsyncMock(return_value={})
+        mock_cls.get_instance.return_value = mock_manager
+
+        VisionAIService()
+
+        mock_cls.get_instance.assert_called_once()
 
 
 def test_compress_image_resizes_large_image():
@@ -63,12 +67,8 @@ def test_compress_image_fallback_on_corrupt_bytes():
     assert result == corrupt
 
 
-def test_analyze_with_strategy_compresses_before_encoding():
+def test_analyze_with_strategy_compresses_before_sending():
     service = _make_service()
-    service.model = MagicMock()
-    service.model.invoke.return_value = MagicMock(
-        content='{"dish_name": "test", "ingredients": []}'
-    )
 
     large_bytes = _make_jpeg(2000, 1500)
 
@@ -78,18 +78,10 @@ def test_analyze_with_strategy_compresses_before_encoding():
 
     service.analyze_with_strategy(large_bytes, strategy)
 
-    # Extract the base64 payload sent to the model
-    from langchain_core.messages import HumanMessage
+    # Verify generate_with_vision was called with compressed image data
+    call_kwargs = service._ai_manager.generate_with_vision.call_args
+    image_data = call_kwargs.kwargs["image_data"]
 
-    call_args = service.model.invoke.call_args[0][0]  # list of messages
-    human_msg = next(m for m in call_args if isinstance(m, HumanMessage))
-    image_block = next(b for b in human_msg.content if b.get("type") == "image_url")
-    image_content = image_block["image_url"]["url"]
-    assert image_content.startswith("data:image/jpeg;base64,")
-
-    import base64
-
-    encoded = image_content.split(",", 1)[1]
-    decoded = base64.b64decode(encoded)
-    img = Image.open(BytesIO(decoded))
+    # The image should be compressed (smaller than 2000x1500)
+    img = Image.open(BytesIO(image_data))
     assert max(img.size) <= 768
