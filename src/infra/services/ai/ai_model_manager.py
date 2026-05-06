@@ -11,7 +11,6 @@ from src.infra.services.ai.provider_circuit_breaker import (
     ProviderCircuitBreaker,
 )
 from src.infra.services.ai.providers.gemini_provider import GeminiProvider
-from src.infra.services.ai.providers.mistral_provider import MistralProvider
 
 logger = logging.getLogger(__name__)
 
@@ -31,29 +30,15 @@ class ModelPurpose(Enum):
 
 
 FALLBACK_CHAINS: Dict[ModelPurpose, List[str]] = {
-    # ==========================================================================
-    # VISION TASKS (critical): Gemini first → Mistral-large as emergency fallback
-    # Gemini is reliable; Mistral-large ($2/$6 per 1M) only if Gemini fails
-    # ==========================================================================
-    ModelPurpose.MEAL_SCAN: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "mistral-large-latest"],
-    ModelPurpose.INGREDIENT_SCAN: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-large-latest"],
-
-    # ==========================================================================
-    # TEXT TASKS: Mistral-small first (cheaper: $0.15/$0.60) → Gemini as fallback
-    # Mistral-small is 2x cheaper on input, 4x cheaper on output than Gemini Flash
-    # ==========================================================================
-    ModelPurpose.PARSE_TEXT: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.BARCODE: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.MEAL_NAMES: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.DISCOVERY: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.GENERAL: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-
-    # ==========================================================================
-    # RECIPE TASKS: Gemini first (quality) → Gemini-lite fallback (no Mistral-large)
-    # Recipe generation needs quality; Mistral-large too expensive for fallback
-    # ==========================================================================
+    ModelPurpose.MEAL_SCAN: ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    ModelPurpose.INGREDIENT_SCAN: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.PARSE_TEXT: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.BARCODE: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.MEAL_NAMES: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
     ModelPurpose.RECIPE_PRIMARY: ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
     ModelPurpose.RECIPE_SECONDARY: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.DISCOVERY: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.GENERAL: ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
 }
 
 
@@ -86,17 +71,7 @@ class AIModelManager:
     def __init__(self) -> None:
         self._circuit_breaker = ProviderCircuitBreaker()
         self._gemini = GeminiProvider()
-        self._mistral = MistralProvider()
-        self._providers = {
-            "gemini": self._gemini,
-            "mistral": self._mistral,
-        }
-
-        # Log provider availability
-        if self._mistral.is_available():
-            logger.info("[AI-MANAGER] Mistral provider available as fallback")
-        else:
-            logger.warning("[AI-MANAGER] Mistral provider not configured (MISTRAL_API_KEY missing)")
+        self._providers = {"gemini": self._gemini}
 
     def get_fallback_chain(self, purpose: ModelPurpose) -> List[str]:
         """Get fallback chain for a purpose."""
@@ -106,11 +81,6 @@ class AIModelManager:
         """Get provider that owns a model."""
         if model.startswith("gemini"):
             return self._gemini
-        if model.startswith("mistral"):
-            if self._mistral.is_available():
-                return self._mistral
-            logger.debug(f"[SKIP-MISTRAL] model={model} | reason=not configured")
-            return None
         return None
 
     async def generate(
