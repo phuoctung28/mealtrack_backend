@@ -41,3 +41,15 @@ def test_ai_partial_result_error_stores_results():
     assert err.failed == failed
     assert len(err.successful) == 2
     assert len(err.failed) == 1
+
+
+def test_ai_unavailable_error_default_values():
+    err = AIUnavailableError("failed")
+    assert err.attempted_models == []
+    assert err.last_error is None
+
+
+def test_ai_partial_result_error_default_values():
+    err = AIPartialResultError("partial")
+    assert err.successful == []
+    assert err.failed == []
