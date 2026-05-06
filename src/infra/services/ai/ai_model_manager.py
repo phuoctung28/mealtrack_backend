@@ -31,18 +31,29 @@ class ModelPurpose(Enum):
 
 
 FALLBACK_CHAINS: Dict[ModelPurpose, List[str]] = {
-    # Vision tasks: Gemini flash → flash-lite → Mistral large (supports vision)
+    # ==========================================================================
+    # VISION TASKS (critical): Gemini first → Mistral-large as emergency fallback
+    # Gemini is reliable; Mistral-large ($2/$6 per 1M) only if Gemini fails
+    # ==========================================================================
     ModelPurpose.MEAL_SCAN: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "mistral-large-latest"],
     ModelPurpose.INGREDIENT_SCAN: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-large-latest"],
-    # Text generation: Gemini → Mistral small (fast, cheap)
-    ModelPurpose.PARSE_TEXT: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-small-latest"],
-    ModelPurpose.BARCODE: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-small-latest"],
-    ModelPurpose.MEAL_NAMES: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-small-latest"],
-    # Recipe generation: Gemini → Mistral large (more capable)
-    ModelPurpose.RECIPE_PRIMARY: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "mistral-large-latest"],
-    ModelPurpose.RECIPE_SECONDARY: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-large-latest"],
-    ModelPurpose.DISCOVERY: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-small-latest"],
-    ModelPurpose.GENERAL: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "mistral-small-latest"],
+
+    # ==========================================================================
+    # TEXT TASKS: Mistral-small first (cheaper: $0.15/$0.60) → Gemini as fallback
+    # Mistral-small is 2x cheaper on input, 4x cheaper on output than Gemini Flash
+    # ==========================================================================
+    ModelPurpose.PARSE_TEXT: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.BARCODE: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.MEAL_NAMES: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.DISCOVERY: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.GENERAL: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
+
+    # ==========================================================================
+    # RECIPE TASKS: Gemini first (quality) → Gemini-lite fallback (no Mistral-large)
+    # Recipe generation needs quality; Mistral-large too expensive for fallback
+    # ==========================================================================
+    ModelPurpose.RECIPE_PRIMARY: ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    ModelPurpose.RECIPE_SECONDARY: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
 }
 
 
