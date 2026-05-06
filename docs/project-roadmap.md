@@ -75,10 +75,11 @@
 ---
 
 ## Current Priorities (Q2 2026)
-1. **Performance**: Optimize suggestion generation (target <10s from ~45s).
-2. **Rate Limiting**: Tune rate limits on meal_suggestions endpoints (discover, generate).
-3. **Security**: Restrict CORS in production, implement request body logging with PII redaction.
-4. **Testing**: Increase coverage for new meal discovery and notification dedup logic.
+1. **Performance**: Optimize suggestion generation (target <10s from ~45s) — in progress.
+2. **Security**: Restrict CORS in production (`allow_origins=["*"]` currently wide open), add PII redaction to request logging — open.
+3. **Rate Limiting**: Tune rate limits on `meal_suggestions` endpoints (discover, generate) — open.
+4. **Testing**: Increase coverage for meal discovery and notification dedup logic — open.
+5. **Premium Gating**: Apply `require_premium` dependency to premium-only routes — open.
 
 ---
 

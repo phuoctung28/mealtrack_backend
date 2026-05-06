@@ -1,7 +1,7 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
 **Version:** 0.6.1
-**Last Updated:** April 17, 2026
+**Last Updated:** May 6, 2026
 **Status:** Production-ready. 430 Python files, ~38.5K LOC across 4 layers. 681+ tests, 70%+ coverage. Latest: Sentry monitoring, meal discovery endpoint, notification deduplication, onboarding redesign (challenge_duration, training_types).
 
 ---
@@ -33,19 +33,24 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 - Gemini 2.5 Flash with strategy pattern for flexible context handling.
 - Returns results in <3 seconds through state machine (PROCESSING → ANALYZING → READY/FAILED).
 
-### 2. RESTful API (50+ Endpoints across 12 Route Modules)
-- **Meals**: image/analyze (POST), manual (POST), /{id} (GET/DELETE), ingredients (PUT), daily/macros (GET), streak, daily-breakdown.
-- **User Profiles**: POST/GET/PUT profiles, TDEE calculation.
-- **Meal Plans**: Weekly ingredient-based generation, meal retrieval by date.
-- **Meal Suggestions**: Session-based with 4h TTL, portion multipliers (1-4x), rejection feedback, discovery endpoint (6 meals).
-- **Chat**: Threads + Messages (REST + WebSocket), streaming AI responses via MessageOrchestrationService and AIResponseCoordinator.
-- **Notifications**: FCM token management, deduplication (notification_sent_log), preferences with timezone-aware scheduling.
-- **Foods**: USDA FDC search, barcode lookup with 6-step cascade (Nutritionix → Brave Search → AI fallback).
+### 2. RESTful API (60+ Endpoints across 17 Route Modules)
+- **Meals**: image/analyze, manual, parse-text, streak, weekly/daily-breakdown, weekly/budget, daily/macros, /{id} (GET/DELETE), ingredients (PUT).
+- **User Profiles**: create, metrics (GET/POST), TDEE, custom-macros.
+- **Users**: sync, Firebase UID lookups, metrics, timezone, language, delete.
+- **Meal Suggestions**: generate (3/session, 4h TTL), discover (6 meals + images), recipes, save.
+- **Saved Suggestions**: list, save, delete.
+- **Foods**: USDA FDC search, details by FDC ID, barcode lookup (6-step cascade).
+- **Ingredients**: image-based recognition.
+- **TDEE**: preview calculation.
+- **Weight Entries**: list, log, delete, sync.
+- **Activities**: daily activities.
+- **Notifications**: FCM token management, deduplication (notification_sent_log), preferences.
+- **Referrals**: validate, apply, my-code, stats, payout.
+- **Cheat Days**: list, mark, delete.
+- **Feature Flags**: CRUD for feature toggles.
 - **Webhooks**: RevenueCat subscription sync.
-- **Activities**: Activity tracking and management.
-- **Ingredients**: Ingredient recognition and analysis.
-- **Monitoring**: Health checks, Sentry error/performance tracking, observability endpoints.
-- **Feature Flags**: Feature toggle management.
+- **Monitoring**: cache metrics.
+- **Health**: health, db-pool, db-connections, notifications.
 
 ### 3. Session-Based Meal Suggestions & Discovery
 - Generates 3 personalized suggestions per session with Redis 4h TTL.

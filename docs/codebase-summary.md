@@ -1,12 +1,8 @@
 # Backend Codebase Summary
 
-**Generated:** April 17, 2026  
+**Generated:** May 6, 2026  
 **Status:** Production-ready (430 files, ~38.5K LOC, 681+ tests, 70%+ coverage)  
 **Language:** Python 3.11+ | **Framework:** FastAPI 0.115+ + SQLAlchemy 2.0
-
----
-
-## Quick Stats
 
 ---
 
@@ -23,7 +19,7 @@
 | Test Files | 92 files |
 | Total Test Cases | 681+ tests |
 | Test Coverage | 70%+ maintained |
-| API Endpoints | 50+ REST endpoints across 12 route modules |
+| API Endpoints | 60+ REST endpoints across 17 route modules |
 | CQRS Commands | 30 commands across 11 domains |
 | CQRS Queries | 31 query definitions |
 | Domain Events | 19 event definitions |
@@ -43,7 +39,7 @@
 
 | Directory | Files | Purpose |
 |-----------|-------|---------|
-| `src/api/routes/v1/` | 12 | 50+ REST endpoints |
+| `src/api/routes/v1/` | 17 | 60+ REST endpoints |
 | `src/api/schemas/` | 34 | Pydantic DTOs |
 | `src/app/commands/` | 30 | Write operations |
 | `src/app/queries/` | 31 | Read operations |
