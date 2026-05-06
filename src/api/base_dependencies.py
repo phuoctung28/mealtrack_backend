@@ -23,6 +23,7 @@ from src.infra.adapters.open_food_facts_service import (
 )
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.cache.cache_service import CacheService
+from src.infra.services.ai.ai_model_manager import AIModelManager
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
 from src.infra.config.settings import get_settings, settings
@@ -54,6 +55,7 @@ _cache_monitor = CacheMonitor()
 # Singleton service instances (initialized once, reused across requests)
 _image_store: Optional[ImageStorePort] = None
 _vision_service: Optional[VisionAIServicePort] = None
+_ai_model_manager: Optional[AIModelManager] = None
 
 
 async def initialize_cache_layer() -> None:
@@ -145,6 +147,20 @@ def get_vision_service() -> VisionAIServicePort:
     if _vision_service is None:
         _vision_service = VisionAIService()
     return _vision_service
+
+
+# AI Model Manager (singleton pattern)
+def get_ai_model_manager() -> AIModelManager:
+    """
+    Get the AI model manager instance (singleton).
+
+    Returns:
+        AIModelManager: The AI model manager with circuit breaker and fallback support
+    """
+    global _ai_model_manager
+    if _ai_model_manager is None:
+        _ai_model_manager = AIModelManager.get_instance()
+    return _ai_model_manager
 
 
 # GPT Parser
