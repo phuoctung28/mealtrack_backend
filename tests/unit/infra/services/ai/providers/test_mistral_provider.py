@@ -39,7 +39,6 @@ class TestProviderInterface:
         models = provider_with_key.get_available_models()
         assert "mistral-small-latest" in models
         assert "mistral-large-latest" in models
-        assert "pixtral-12b-2409" in models
 
     def test_is_available_with_key(self, provider_with_key):
         assert provider_with_key.is_available() is True
@@ -102,7 +101,7 @@ class TestGenerate:
 
 class TestVision:
     @pytest.mark.asyncio
-    async def test_generate_with_vision_uses_pixtral(self, provider_with_key):
+    async def test_generate_with_vision_uses_mistral_large(self, provider_with_key):
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = '{"food": "pizza"}'
@@ -119,7 +118,7 @@ class TestVision:
             )
 
             call_kwargs = mock_client.chat.complete.call_args[1]
-            assert call_kwargs["model"] == "pixtral-12b-2409"
+            assert call_kwargs["model"] == "mistral-large-latest"
             assert result["food"] == "pizza"
 
 

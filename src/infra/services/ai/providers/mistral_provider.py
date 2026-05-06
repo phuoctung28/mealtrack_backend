@@ -19,12 +19,15 @@ class MistralProvider(AIProviderPort):
     Uses OpenAI-compatible API for simplicity.
     """
 
-    # Model options - using latest aliases for auto-updates
+    # Model options - pinned versions for stability
+    # See: https://docs.mistral.ai/getting-started/models
     AVAILABLE_MODELS = [
         "mistral-small-latest",   # Fast, good for simple tasks
-        "mistral-large-latest",   # Most capable
-        "pixtral-12b-2409",       # Vision model
+        "mistral-large-latest",   # Most capable, also supports vision
     ]
+
+    # Vision-capable models (mistral-large supports vision as of Dec 2025)
+    VISION_MODELS = ["mistral-large-latest"]
 
     def __init__(self) -> None:
         self._api_key = os.getenv("MISTRAL_API_KEY")
@@ -118,8 +121,8 @@ class MistralProvider(AIProviderPort):
 
         client = Mistral(api_key=self._api_key)
 
-        # Use Pixtral for vision tasks
-        vision_model = "pixtral-12b-2409"
+        # Use mistral-large for vision tasks (pixtral-12b deprecated Dec 2025)
+        vision_model = "mistral-large-latest"
 
         # Encode image
         image_b64 = base64.b64encode(image_data).decode("utf-8")

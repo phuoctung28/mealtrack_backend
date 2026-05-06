@@ -31,9 +31,9 @@ class ModelPurpose(Enum):
 
 
 FALLBACK_CHAINS: Dict[ModelPurpose, List[str]] = {
-    # Critical paths: Gemini flash → flash-lite → Mistral
-    ModelPurpose.MEAL_SCAN: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "pixtral-12b-2409"],
-    ModelPurpose.INGREDIENT_SCAN: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "pixtral-12b-2409"],
+    # Vision tasks: Gemini flash → flash-lite → Mistral large (supports vision)
+    ModelPurpose.MEAL_SCAN: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "mistral-large-latest"],
+    ModelPurpose.INGREDIENT_SCAN: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-large-latest"],
     # Text generation: Gemini → Mistral small (fast, cheap)
     ModelPurpose.PARSE_TEXT: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-small-latest"],
     ModelPurpose.BARCODE: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-small-latest"],
@@ -95,7 +95,7 @@ class AIModelManager:
         """Get provider that owns a model."""
         if model.startswith("gemini"):
             return self._gemini
-        if model.startswith("mistral") or model.startswith("pixtral"):
+        if model.startswith("mistral"):
             if self._mistral.is_available():
                 return self._mistral
             logger.debug(f"[SKIP-MISTRAL] model={model} | reason=not configured")
