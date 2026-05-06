@@ -28,3 +28,20 @@ class DeepLTranslationPort(ABC):
         Raises:
             Exception: On any API-level failure (caller decides how to handle).
         """
+
+    @abstractmethod
+    async def translate_to_english(self, texts: List[str], source_lang: str) -> List[str]:
+        """
+        Translate a list of strings from source language to English.
+
+        Args:
+            texts: Strings in source language to translate.
+            source_lang: ISO 639-1 source code (e.g. 'vi', 'fr'). If unknown,
+                implementation may use auto-detect.
+
+        Returns:
+            Translated English strings in the same order as input.
+
+        Raises:
+            Exception: On any API-level failure.
+        """

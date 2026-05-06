@@ -120,6 +120,10 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                         )
                     ],
                 }
+            except ValueError as e:
+                await uow.rollback()
+                logger.warning(f"Validation error editing meal: {str(e)}")
+                raise ValidationException(str(e)) from None
             except Exception as e:
                 await uow.rollback()
                 logger.error(f"Error editing meal: {str(e)}")

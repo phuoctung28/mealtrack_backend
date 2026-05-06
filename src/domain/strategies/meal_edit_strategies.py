@@ -16,6 +16,16 @@ from src.domain.services.nutrition_calculation_service import convert_quantity_t
 
 logger = logging.getLogger(__name__)
 
+MAX_QUANTITY_GRAMS = 10000.0  # 10kg max per food item
+
+
+def _validate_quantity_grams(quantity_grams: float, quantity: float, unit: str) -> None:
+    """Raise ValueError if quantity in grams exceeds the realistic limit."""
+    if quantity_grams > MAX_QUANTITY_GRAMS:
+        raise ValueError(
+            f"Quantity {quantity} {unit} ({quantity_grams:.0f}g) exceeds maximum allowed ({MAX_QUANTITY_GRAMS:.0f}g)"
+        )
+
 
 class FoodItemChangeStrategy(ABC):
     """Base strategy for applying food item changes."""
@@ -72,6 +82,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
             quantity_grams = convert_quantity_to_grams(
                 new_quantity, new_unit, existing_item.name
             )
+            _validate_quantity_grams(quantity_grams, new_quantity, new_unit)
             scale_factor = quantity_grams / 100.0
             food_items_dict[change.id] = FoodItem(
                 id=existing_item.id,
@@ -149,6 +160,7 @@ class UpdateFoodItemStrategy(FoodItemChangeStrategy):
         new_quantity_grams = convert_quantity_to_grams(
             new_quantity, new_unit, existing_item.name
         )
+        _validate_quantity_grams(new_quantity_grams, new_quantity, new_unit)
 
         # Convert existing quantity to grams (existing item's nutrition is already in grams)
         existing_quantity_grams = convert_quantity_to_grams(
@@ -255,6 +267,7 @@ class AddFoodItemStrategy(FoodItemChangeStrategy):
     ) -> FoodItem:
         """Create food item from custom nutrition data."""
         quantity_grams = convert_quantity_to_grams(quantity, unit, name)
+        _validate_quantity_grams(quantity_grams, quantity, unit)
         scale_factor = quantity_grams / 100.0  # Custom nutrition is per 100g
 
         return FoodItem(

@@ -191,12 +191,9 @@ def get_food_search_event_bus() -> EventBus:
         get_open_food_facts_service_instance,
         get_fat_secret_service_instance,
         get_food_reference_repository,
+        get_deepl_text_translation_service,
     )
 
-    from src.infra.adapters.meal_generation_service import MealGenerationService
-    from src.domain.services.food_search_translation_service import (
-        FoodSearchTranslationService,
-    )
     from src.infra.adapters.nutritionix_service import get_nutritionix_service
     from src.infra.adapters.brave_search_nutrition_service import (
         get_brave_search_nutrition_service,
@@ -215,13 +212,14 @@ def get_food_search_event_bus() -> EventBus:
     fat_secret_service = get_fat_secret_service_instance()
     food_reference_repository = get_food_reference_repository()
 
-    # Translation service for localized food search
-    meal_generation_service = MealGenerationService()
-    food_translation_service = FoodSearchTranslationService(meal_generation_service)
+    # Translation service for localized food search (DeepL-backed)
+    text_translation_service = get_deepl_text_translation_service()
 
     # Barcode cascade: Nutritionix + Brave Search (optional — None if keys not set)
     nutritionix_service = get_nutritionix_service()
     macro_validation_service = MacroValidationService()
+    from src.infra.adapters.meal_generation_service import MealGenerationService
+    meal_generation_service = MealGenerationService()
     brave_search_service = get_brave_search_nutrition_service(
         meal_generation_service=meal_generation_service,
         macro_validation_service=macro_validation_service,
@@ -233,7 +231,7 @@ def get_food_search_event_bus() -> EventBus:
             food_cache_service,
             food_mapping_service,
             fat_secret_service=fat_secret_service,
-            translation_service=food_translation_service,
+            translation_service=text_translation_service,
         ),
     )
     event_bus.register_handler(
@@ -248,7 +246,7 @@ def get_food_search_event_bus() -> EventBus:
             open_food_facts_service=open_food_facts_service,
             fat_secret_service=fat_secret_service,
             food_reference_repository=food_reference_repository,
-            translation_service=food_translation_service,
+            translation_service=text_translation_service,
             nutritionix_service=nutritionix_service,
             brave_search_service=brave_search_service,
             meal_generation_service=meal_generation_service,
@@ -290,6 +288,7 @@ def get_configured_event_bus() -> EventBus:
         get_cache_service,
         get_suggestion_orchestration_service,
         get_deepl_meal_translation_service,
+        get_deepl_text_translation_service,
     )
 
     image_store = get_image_store()
@@ -364,10 +363,13 @@ def get_configured_event_bus() -> EventBus:
         ),
     )
 
+    # Get text translation service
+    text_translation_service = get_deepl_text_translation_service()
+
     # Register meal text parsing command handler
     event_bus.register_handler(
         ParseMealTextCommand,
-        ParseMealTextHandler(),
+        ParseMealTextHandler(translation_service=text_translation_service),
     )
 
     # Register food database query handlers
@@ -497,6 +499,7 @@ def get_configured_event_bus() -> EventBus:
         RecognizeIngredientCommand,
         RecognizeIngredientCommandHandler(
             vision_service=vision_service,
+            translation_service=text_translation_service,
         ),
     )
 

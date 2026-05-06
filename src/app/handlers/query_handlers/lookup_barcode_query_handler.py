@@ -11,6 +11,9 @@ from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.infra.adapters.open_food_facts_service import OpenFoodFactsService
 from src.infra.adapters.fat_secret_service import FatSecretService, LANGUAGE_TO_REGION
 from src.infra.repositories.food_reference_repository import FoodReferenceRepository
+from src.domain.services.translation.deepl_text_translation_service import (
+    DeepLTextTranslationService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +72,7 @@ class LookupBarcodeQueryHandler(
         open_food_facts_service: OpenFoodFactsService,
         fat_secret_service: FatSecretService,
         food_reference_repository: FoodReferenceRepository,
-        translation_service: Optional[Any] = None,
+        translation_service: Optional[DeepLTextTranslationService] = None,
         nutritionix_service: Optional[Any] = None,
         brave_search_service: Optional[Any] = None,
         meal_generation_service: Optional[Any] = None,
