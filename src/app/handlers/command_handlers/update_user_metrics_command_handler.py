@@ -160,7 +160,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
         await self._invalidate_user_profile(command.user_id)
 
     async def _invalidate_user_profile(self, user_id: str):
-        """Invalidate user profile, TDEE, metrics, and daily macros cache."""
+        """Invalidate user profile, TDEE, metrics, and ALL daily macros cache."""
         if not self.cache_service:
             return
 
@@ -176,6 +176,18 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
         metrics_key, _ = CacheKeys.user_metrics(user_id)
         await self.cache_service.invalidate(metrics_key)
 
-        # Invalidate today's daily macros (contains target goals from TDEE)
-        daily_macros_key, _ = CacheKeys.daily_macros(user_id, date.today())
-        await self.cache_service.invalidate(daily_macros_key)
+        # Invalidate ALL cached daily macros for this user (not just today)
+        # TDEE changes affect targets for all dates
+        macros_pattern = f"user:{user_id}:macros:*"
+        try:
+            await self.cache_service.invalidate_pattern(macros_pattern)
+        except Exception as e:
+            logger.warning(f"Failed to invalidate macros pattern for user {user_id}: {e}")
+
+        # Invalidate ALL weekly budgets for this user
+        # TDEE changes affect weekly targets
+        weekly_pattern = f"user:{user_id}:weekly_budget:*"
+        try:
+            await self.cache_service.invalidate_pattern(weekly_pattern)
+        except Exception as e:
+            logger.warning(f"Failed to invalidate weekly budget pattern for user {user_id}: {e}")

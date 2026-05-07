@@ -140,6 +140,12 @@ from src.app.handlers.query_handlers import (
     GetStreakQueryHandler,
     GetDailyBreakdownQueryHandler,
 )
+from src.app.handlers.query_handlers.get_nutrition_bulk_query_handler import (
+    GetNutritionBulkQueryHandler,
+)
+from src.app.handlers.query_handlers.get_activities_presence_query_handler import (
+    GetActivitiesPresenceQueryHandler,
+)
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
@@ -155,6 +161,7 @@ from src.app.queries.meal import (
 )
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.app.queries.notification import GetNotificationPreferencesQuery
+from src.app.queries.nutrition import GetNutritionBulkQuery, GetActivitiesPresenceQuery
 from src.app.queries.tdee import GetUserTdeeQuery, PreviewTdeeQuery
 from src.app.queries.user import GetUserProfileQuery, GetUserMetricsQuery
 from src.app.queries.user.get_user_by_firebase_uid_query import (
@@ -408,6 +415,16 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         GetDailyBreakdownQuery,
         GetDailyBreakdownQueryHandler(cache_service=cache_service),
+    )
+
+    # Register bulk nutrition query handlers
+    event_bus.register_handler(
+        GetNutritionBulkQuery,
+        GetNutritionBulkQueryHandler(cache_service=cache_service),
+    )
+    event_bus.register_handler(
+        GetActivitiesPresenceQuery,
+        GetActivitiesPresenceQueryHandler(cache_service=cache_service),
     )
 
     # Register activity query handlers

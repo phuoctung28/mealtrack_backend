@@ -1,7 +1,7 @@
 """Centralised cache invalidation — handles MealCacheInvalidationRequiredEvent."""
 
 import logging
-from datetime import timedelta
+from datetime import date, timedelta
 
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal.meal_cache_invalidation_required_event import (
@@ -11,6 +11,11 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.ports.cache_port import CachePort
 
 logger = logging.getLogger(__name__)
+
+
+def _get_week_start(d: date) -> date:
+    """Get Monday of the week containing the given date."""
+    return d - timedelta(days=d.weekday())
 
 
 @handles(MealCacheInvalidationRequiredEvent)
@@ -26,15 +31,29 @@ class CacheInvalidationEventHandler(
         user_id = event.user_id
         meal_date = event.meal_date
 
-        week_start = meal_date - timedelta(days=meal_date.weekday())
+        meal_week_start = _get_week_start(meal_date)
+        current_week_start = _get_week_start(date.today())
 
         daily_key, _ = CacheKeys.daily_macros(user_id, meal_date)
-        weekly_key, _ = CacheKeys.weekly_budget(user_id, week_start)
-        breakdown_key, _ = CacheKeys.daily_breakdown(user_id, week_start)
+        weekly_key, _ = CacheKeys.weekly_budget(user_id, meal_week_start)
+        breakdown_key, _ = CacheKeys.daily_breakdown(user_id, meal_week_start)
         streak_key, _ = CacheKeys.user_streak(user_id)
 
+        keys_to_invalidate = [daily_key, weekly_key, breakdown_key, streak_key]
+
+        # If meal is in a different week than current, also invalidate current week
+        # This handles backdated meal logging
+        if meal_week_start != current_week_start:
+            current_weekly_key, _ = CacheKeys.weekly_budget(user_id, current_week_start)
+            current_breakdown_key, _ = CacheKeys.daily_breakdown(user_id, current_week_start)
+            keys_to_invalidate.extend([current_weekly_key, current_breakdown_key])
+            logger.debug(
+                "Meal in different week: invalidating both meal_week=%s and current_week=%s",
+                meal_week_start, current_week_start
+            )
+
         # Invalidate specific keys
-        for key in (daily_key, weekly_key, breakdown_key, streak_key):
+        for key in keys_to_invalidate:
             try:
                 await self.cache.invalidate(key)
             except Exception as exc:
