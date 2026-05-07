@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, delivery]
   pull_request:
-    branches: [main]
+    branches: [main, delivery]
 
 env:
   PYTHON_VERSION: "3.11"
