@@ -2,6 +2,7 @@
 GetUserTdeeQueryHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
+
 import logging
 from typing import Dict, Any, Optional
 
@@ -25,7 +26,11 @@ logger = logging.getLogger(__name__)
 class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
     """Handler for getting user's TDEE calculation."""
 
-    def __init__(self, tdee_service: TdeeCalculationService = None, cache_service: Optional[CachePort] = None):
+    def __init__(
+        self,
+        tdee_service: TdeeCalculationService = None,
+        cache_service: Optional[CachePort] = None,
+    ):
         self.tdee_service = tdee_service or TdeeCalculationService()
         self.cache_service = cache_service
 
@@ -53,7 +58,9 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
             profile = result.scalars().first()
 
             if not profile:
-                raise ResourceNotFoundException(f"Current profile for user {query.user_id} not found")
+                raise ResourceNotFoundException(
+                    f"Current profile for user {query.user_id} not found"
+                )
 
             # Check for custom macro overrides first
             if profile.has_custom_macros:
@@ -65,7 +72,9 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
             # Map training level if profile has it
             training_level = None
             if profile.training_level:
-                training_level = ActivityGoalMapper.map_training_level(profile.training_level)
+                training_level = ActivityGoalMapper.map_training_level(
+                    profile.training_level
+                )
 
             tdee_request = TdeeRequest(
                 age=profile.age,
@@ -85,8 +94,12 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
             result = self.tdee_service.calculate_tdee(tdee_request)
 
             # Calculate total multiplier for response
-            base_multiplier = TDEEConstants.JOB_TYPE_MULTIPLIERS.get(profile.job_type, 1.2)
-            weekly_hours = (profile.training_days_per_week * profile.training_minutes_per_session) / 60.0
+            base_multiplier = TDEEConstants.JOB_TYPE_MULTIPLIERS.get(
+                profile.job_type, 1.2
+            )
+            weekly_hours = (
+                profile.training_days_per_week * profile.training_minutes_per_session
+            ) / 60.0
             exercise_add = weekly_hours * TDEEConstants.EXERCISE_MULTIPLIER_PER_HOUR
             total_multiplier = base_multiplier + exercise_add
 
@@ -117,7 +130,9 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
                 },
             }
 
-    def _build_custom_macros_response(self, query: GetUserTdeeQuery, profile) -> Dict[str, Any]:
+    def _build_custom_macros_response(
+        self, query: GetUserTdeeQuery, profile
+    ) -> Dict[str, Any]:
         """Build response using custom macro overrides, still calculating BMR/TDEE for reference."""
         custom_calories = (
             profile.custom_protein_g * NutritionConstants.CALORIES_PER_GRAM_PROTEIN
@@ -129,7 +144,9 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
         sex = Sex.MALE if profile.gender.lower() == "male" else Sex.FEMALE
         training_level = None
         if profile.training_level:
-            training_level = ActivityGoalMapper.map_training_level(profile.training_level)
+            training_level = ActivityGoalMapper.map_training_level(
+                profile.training_level
+            )
 
         tdee_request = TdeeRequest(
             age=profile.age,
@@ -147,7 +164,9 @@ class GetUserTdeeQueryHandler(EventHandler[GetUserTdeeQuery, Dict[str, Any]]):
         result = self.tdee_service.calculate_tdee(tdee_request)
 
         base_multiplier = TDEEConstants.JOB_TYPE_MULTIPLIERS.get(profile.job_type, 1.2)
-        weekly_hours = (profile.training_days_per_week * profile.training_minutes_per_session) / 60.0
+        weekly_hours = (
+            profile.training_days_per_week * profile.training_minutes_per_session
+        ) / 60.0
         exercise_add = weekly_hours * TDEEConstants.EXERCISE_MULTIPLIER_PER_HOUR
         total_multiplier = base_multiplier + exercise_add
 

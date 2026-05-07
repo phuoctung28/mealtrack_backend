@@ -1,4 +1,5 @@
 """WeeklyMacroBudget ORM <-> domain mapping functions."""
+
 from src.domain.model.weekly import WeeklyMacroBudget
 from src.infra.database.models.weekly.weekly_macro_budget import WeeklyMacroBudgetORM
 

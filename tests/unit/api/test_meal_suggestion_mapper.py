@@ -1,13 +1,20 @@
 """
 Unit tests for meal suggestion mappers.
 """
+
 from datetime import datetime, timedelta
 
 from src.api.mappers.meal_suggestion_mapper import (
     to_meal_suggestion_response,
     to_suggestions_list_response,
 )
-from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession, MacroEstimate, Ingredient, RecipeStep
+from src.domain.model.meal_suggestion import (
+    MealSuggestion,
+    SuggestionSession,
+    MacroEstimate,
+    Ingredient,
+    RecipeStep,
+)
 
 
 class TestMealSuggestionMapper:
@@ -16,7 +23,7 @@ class TestMealSuggestionMapper:
     def test_to_meal_suggestion_response(self):
         """Test converting MealSuggestion to API response."""
         from src.domain.model.meal_suggestion import MealType
-        
+
         suggestion = MealSuggestion(
             id="suggestion-123",
             session_id="session-456",
@@ -27,18 +34,20 @@ class TestMealSuggestionMapper:
             macros=MacroEstimate(calories=500, protein=50, carbs=20, fat=15),
             ingredients=[
                 Ingredient(name="Chicken Breast", amount=200, unit="g"),
-                Ingredient(name="Olive Oil", amount=10, unit="ml")
+                Ingredient(name="Olive Oil", amount=10, unit="ml"),
             ],
             recipe_steps=[
                 RecipeStep(step=1, instruction="Season chicken", duration_minutes=5),
-                RecipeStep(step=2, instruction="Grill for 10 minutes", duration_minutes=10)
+                RecipeStep(
+                    step=2, instruction="Grill for 10 minutes", duration_minutes=10
+                ),
             ],
             prep_time_minutes=15,
-            confidence_score=0.95
+            confidence_score=0.95,
         )
-        
+
         result = to_meal_suggestion_response(suggestion)
-        
+
         assert result.id == "suggestion-123"
         assert result.meal_name == "Grilled Chicken"
         assert result.description == "Healthy grilled chicken"
@@ -61,11 +70,11 @@ class TestMealSuggestionMapper:
             target_calories=600,
             ingredients=[],
             cooking_time_minutes=30,
-            expires_at=datetime.now() + timedelta(hours=4)
+            expires_at=datetime.now() + timedelta(hours=4),
         )
-        
+
         from src.domain.model.meal_suggestion import MealType
-        
+
         suggestions = [
             MealSuggestion(
                 id="suggestion-1",
@@ -78,7 +87,7 @@ class TestMealSuggestionMapper:
                 ingredients=[],
                 recipe_steps=[],
                 prep_time_minutes=20,
-                confidence_score=0.9
+                confidence_score=0.9,
             ),
             MealSuggestion(
                 id="suggestion-2",
@@ -91,7 +100,7 @@ class TestMealSuggestionMapper:
                 ingredients=[],
                 recipe_steps=[],
                 prep_time_minutes=25,
-                confidence_score=0.85
+                confidence_score=0.85,
             ),
             MealSuggestion(
                 id="suggestion-3",
@@ -104,12 +113,12 @@ class TestMealSuggestionMapper:
                 ingredients=[],
                 recipe_steps=[],
                 prep_time_minutes=30,
-                confidence_score=0.88
-            )
+                confidence_score=0.88,
+            ),
         ]
-        
+
         result = to_suggestions_list_response(session, suggestions)
-        
+
         assert result.session_id == "session-123"
         assert result.meal_type == "main"
         assert result.meal_portion_type == "regular"
@@ -131,7 +140,7 @@ class TestMealSuggestionMapper:
             target_calories=500,
             ingredients=[],
             cooking_time_minutes=20,
-            expires_at=datetime.now() + timedelta(hours=4)
+            expires_at=datetime.now() + timedelta(hours=4),
         )
 
         from src.domain.model.meal_suggestion import MealType
@@ -149,7 +158,7 @@ class TestMealSuggestionMapper:
                 ingredients=[],
                 recipe_steps=[],
                 prep_time_minutes=20,
-                confidence_score=0.9
+                confidence_score=0.9,
             ),
             MealSuggestion(
                 id="suggestion-2",
@@ -162,7 +171,7 @@ class TestMealSuggestionMapper:
                 ingredients=[],
                 recipe_steps=[],
                 prep_time_minutes=25,
-                confidence_score=0.85
+                confidence_score=0.85,
             ),
         ]
 
@@ -173,5 +182,3 @@ class TestMealSuggestionMapper:
         assert result.suggestion_count == 2
         assert result.suggestions[0].id == "suggestion-1"
         assert result.suggestions[1].id == "suggestion-2"
-
-

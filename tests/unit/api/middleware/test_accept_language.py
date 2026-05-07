@@ -1,4 +1,5 @@
 """Tests for Accept-Language middleware."""
+
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -46,8 +47,7 @@ class TestAcceptLanguageMiddleware:
     def test_parses_multiple_languages_takes_first(self, client):
         """Test parsing multiple languages, takes first."""
         response = client.get(
-            "/test",
-            headers={"Accept-Language": "vi,en;q=0.9,fr;q=0.8"}
+            "/test", headers={"Accept-Language": "vi,en;q=0.9,fr;q=0.8"}
         )
         assert response.json()["language"] == "vi"
 
@@ -80,8 +80,7 @@ class TestAcceptLanguageMiddleware:
     def test_parses_quality_factor_correctly(self, client):
         """Test parsing language with quality factor."""
         response = client.get(
-            "/test",
-            headers={"Accept-Language": "en-US,en;q=0.9,vi;q=0.8"}
+            "/test", headers={"Accept-Language": "en-US,en;q=0.9,vi;q=0.8"}
         )
         # Should take first language (en-US -> en after stripping region)
         assert response.json()["language"] == "en"
@@ -89,6 +88,7 @@ class TestAcceptLanguageMiddleware:
     def test_middleware_is_not_base_http_middleware(self):
         """AcceptLanguageMiddleware must be a pure ASGI callable, not BaseHTTPMiddleware."""
         from starlette.middleware.base import BaseHTTPMiddleware
+
         assert not issubclass(AcceptLanguageMiddleware, BaseHTTPMiddleware), (
             "AcceptLanguageMiddleware must not subclass BaseHTTPMiddleware — "
             "it buffers the full request body which breaks large file uploads."
@@ -100,13 +100,15 @@ class TestGetRequestLanguage:
 
     def test_returns_default_when_no_state(self):
         """Test returns default when request has no state."""
+
         class MockRequest:
-            state = type('state', (), {})()
+            state = type("state", (), {})()
 
         assert get_request_language(MockRequest()) == DEFAULT_LANGUAGE
 
     def test_returns_language_from_state(self):
         """Test returns language from request state."""
+
         class MockRequest:
             class state:
                 language = "vi"

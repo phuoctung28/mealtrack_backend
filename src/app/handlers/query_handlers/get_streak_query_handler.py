@@ -1,6 +1,7 @@
 """
 GetStreakQueryHandler — computes current and best logging streak.
 """
+
 from __future__ import annotations
 
 import logging
@@ -51,7 +52,12 @@ class GetStreakQueryHandler(EventHandler[GetStreakQuery, Dict[str, Any]]):
             scan_count = await uow.meals.count_by_source(query.user_id, "scanner")
 
         if not dates:
-            return {"current_streak": 0, "best_streak": 0, "last_logged_date": None, "scan_count": scan_count}
+            return {
+                "current_streak": 0,
+                "best_streak": 0,
+                "last_logged_date": None,
+                "scan_count": scan_count,
+            }
 
         last_logged = dates[0]
 

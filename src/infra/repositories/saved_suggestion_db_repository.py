@@ -1,4 +1,5 @@
 """Repository for persisted saved suggestions."""
+
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -6,7 +7,9 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from src.domain.ports.saved_suggestion_repository_port import SavedSuggestionRepositoryPort
+from src.domain.ports.saved_suggestion_repository_port import (
+    SavedSuggestionRepositoryPort,
+)
 from src.infra.database.models.saved_suggestion import SavedSuggestionModel
 
 logger = logging.getLogger(__name__)
@@ -87,9 +90,7 @@ class SavedSuggestionDbRepository(SavedSuggestionRepositoryPort):
         self.db.refresh(model)
         return model
 
-    def delete_by_user_and_suggestion(
-        self, user_id: str, suggestion_id: str
-    ) -> bool:
+    def delete_by_user_and_suggestion(self, user_id: str, suggestion_id: str) -> bool:
         """Delete a saved suggestion. Returns True if deleted."""
         row = (
             self.db.query(SavedSuggestionModel)

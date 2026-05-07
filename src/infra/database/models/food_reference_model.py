@@ -3,8 +3,17 @@ Food reference database model — canonical food catalog.
 Evolved from barcode_products to serve as the single source of truth
 for per-100g nutrition data across barcode scans, USDA, and FatSecret.
 """
+
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, Integer, JSON, String, Text, func,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    JSON,
+    String,
+    Text,
+    func,
 )
 
 from src.infra.database.config import Base
@@ -44,5 +53,5 @@ class FoodReferenceModel(Base):
     source = Column(String(50), nullable=False, default="fatsecret")
     is_verified = Column(Boolean, nullable=False, default=False)
     image_url = Column(Text, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

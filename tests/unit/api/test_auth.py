@@ -338,7 +338,9 @@ class TestGetCurrentUserId:
         mock_cache.set = AsyncMock()
 
         result = await get_current_user_id(
-            {"uid": "firebase_uid_123"}, async_db=mock_async_db, cache_service=mock_cache
+            {"uid": "firebase_uid_123"},
+            async_db=mock_async_db,
+            cache_service=mock_cache,
         )
 
         assert result == "user_db_id_123"

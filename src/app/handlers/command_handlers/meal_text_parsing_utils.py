@@ -2,6 +2,7 @@
 Utility functions for meal text parsing.
 Extracted from parse_meal_text_handler.py for better organization.
 """
+
 import json
 import logging
 import re
@@ -33,7 +34,7 @@ def extract_json_from_response(content: str) -> List[Dict[str, Any]]:
         pass
 
     # Try to find JSON in markdown code block
-    json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', content)
+    json_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
     if json_match:
         try:
             result = json.loads(json_match.group(1).strip())
@@ -44,7 +45,7 @@ def extract_json_from_response(content: str) -> List[Dict[str, Any]]:
             pass
 
     # Try to find JSON array (non-greedy to handle multiple bracket groups)
-    json_match = re.search(r'\[[\s\S]*?\]', content)
+    json_match = re.search(r"\[[\s\S]*?\]", content)
     if json_match:
         try:
             return json.loads(json_match.group(0))
@@ -53,13 +54,13 @@ def extract_json_from_response(content: str) -> List[Dict[str, Any]]:
 
     # Try stripping leading/trailing non-JSON chars and re-parse
     stripped = content.strip()
-    if stripped.startswith('['):
+    if stripped.startswith("["):
         try:
             return json.loads(stripped)
         except json.JSONDecodeError:
             pass
     # Try finding the array after stripping
-    match = re.search(r'\[[\s\S]*\]', stripped)
+    match = re.search(r"\[[\s\S]*\]", stripped)
     if match:
         try:
             return json.loads(match.group(0))
@@ -102,19 +103,19 @@ def parse_fatsecret_nutrition(food: Dict[str, Any]) -> Dict[str, float]:
         for part in desc.split("|"):
             part = part.strip().lower()
             if "calories" in part or "cal" in part:
-                val = re.search(r'([\d.]+)', part)
+                val = re.search(r"([\d.]+)", part)
                 if val:
                     result["calories"] = float(val.group(1))
             elif "fat" in part:
-                val = re.search(r'([\d.]+)', part)
+                val = re.search(r"([\d.]+)", part)
                 if val:
                     result["fat"] = float(val.group(1))
             elif "carb" in part:
-                val = re.search(r'([\d.]+)', part)
+                val = re.search(r"([\d.]+)", part)
                 if val:
                     result["carbs"] = float(val.group(1))
             elif "protein" in part:
-                val = re.search(r'([\d.]+)', part)
+                val = re.search(r"([\d.]+)", part)
                 if val:
                     result["protein"] = float(val.group(1))
     except Exception as e:

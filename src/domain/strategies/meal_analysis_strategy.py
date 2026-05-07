@@ -90,6 +90,7 @@ class MealAnalysisStrategy(ABC):
         """
         pass
 
+
 class BasicAnalysisStrategy(MealAnalysisStrategy):
     """
     Basic meal analysis strategy without additional context.
@@ -137,6 +138,7 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
 
     def get_strategy_name(self) -> str:
         return "BasicAnalysis"
+
 
 class PortionAwareAnalysisStrategy(MealAnalysisStrategy):
     """
@@ -198,6 +200,7 @@ Consider the visual portion size in the image and scale the nutrition values to 
     def get_strategy_name(self) -> str:
         return f"PortionAware({self.portion_size}{self.unit})"
 
+
 class IngredientAwareAnalysisStrategy(MealAnalysisStrategy):
     """
     Ingredient-aware meal analysis strategy.
@@ -205,7 +208,9 @@ class IngredientAwareAnalysisStrategy(MealAnalysisStrategy):
 
     def __init__(self, ingredients: List[Dict[str, Any]]):
         self.ingredients = ingredients
-        logger.info(f"Created IngredientAwareAnalysisStrategy with {len(ingredients)} ingredients")
+        logger.info(
+            f"Created IngredientAwareAnalysisStrategy with {len(ingredients)} ingredients"
+        )
 
     def get_analysis_prompt(self) -> str:
         return """
@@ -252,10 +257,10 @@ class IngredientAwareAnalysisStrategy(MealAnalysisStrategy):
         ingredient_lines = []
         for ing in self.ingredients:
             line = f"- {ing['name']}: {ing['quantity']} {ing['unit']}"
-            if ing.get('calories'):
+            if ing.get("calories"):
                 line += f" ({ing['calories']} calories)"
-            if ing.get('macros'):
-                macros = ing['macros']
+            if ing.get("macros"):
+                macros = ing["macros"]
                 line += f" [P:{macros.get('protein', 0)}g, C:{macros.get('carbs', 0)}g, F:{macros.get('fat', 0)}g]"
             ingredient_lines.append(line)
 
@@ -272,6 +277,7 @@ Account for how these ingredients combine and any cooking methods that might aff
 
     def get_strategy_name(self) -> str:
         return f"IngredientAware({len(self.ingredients)}ingredients)"
+
 
 class WeightAwareAnalysisStrategy(MealAnalysisStrategy):
     """
@@ -452,9 +458,7 @@ class AnalysisStrategyFactory:
         optimized_prompt_enabled: Optional[bool] = None,
     ) -> MealAnalysisStrategy:
         """Create a basic analysis strategy."""
-        return BasicAnalysisStrategy(
-            optimized_prompt_enabled=optimized_prompt_enabled
-        )
+        return BasicAnalysisStrategy(optimized_prompt_enabled=optimized_prompt_enabled)
 
     @staticmethod
     def create_portion_strategy(portion_size: float, unit: str) -> MealAnalysisStrategy:
@@ -462,7 +466,9 @@ class AnalysisStrategyFactory:
         return PortionAwareAnalysisStrategy(portion_size, unit)
 
     @staticmethod
-    def create_ingredient_strategy(ingredients: List[Dict[str, Any]]) -> MealAnalysisStrategy:
+    def create_ingredient_strategy(
+        ingredients: List[Dict[str, Any]],
+    ) -> MealAnalysisStrategy:
         """Create an ingredient-aware analysis strategy."""
         return IngredientAwareAnalysisStrategy(ingredients)
 
@@ -492,7 +498,7 @@ class AnalysisStrategyFactory:
     def create_combined_strategy(
         portion_size: Optional[float] = None,
         unit: Optional[str] = None,
-        ingredients: Optional[List[Dict[str, Any]]] = None
+        ingredients: Optional[List[Dict[str, Any]]] = None,
     ) -> MealAnalysisStrategy:
         """
         Create a combined strategy with both portion and ingredient context.
@@ -507,7 +513,9 @@ class AnalysisStrategyFactory:
         """
         if portion_size and unit and ingredients:
             # TODO: Implement CombinedAnalysisStrategy for future use
-            logger.info("Combined strategy requested - using ingredient strategy for now")
+            logger.info(
+                "Combined strategy requested - using ingredient strategy for now"
+            )
             return IngredientAwareAnalysisStrategy(ingredients)
         elif portion_size and unit:
             return PortionAwareAnalysisStrategy(portion_size, unit)

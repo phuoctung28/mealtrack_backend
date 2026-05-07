@@ -8,7 +8,9 @@ from src.infra.adapters.pollinations_image_generator import PollinationsImageGen
 async def test_generate_returns_bytes():
     async def handler(request):
         assert "grilled%20salmon" in str(request.url).lower()
-        return httpx.Response(200, content=b"\x89PNGfake", headers={"content-type": "image/png"})
+        return httpx.Response(
+            200, content=b"\x89PNGfake", headers={"content-type": "image/png"}
+        )
 
     gen = PollinationsImageGenerator(
         base_url="https://image.pollinations.ai/prompt",

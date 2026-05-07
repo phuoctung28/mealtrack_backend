@@ -1,4 +1,5 @@
 """Unit tests: timezone update handler skips DB write when tz is unchanged."""
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -17,7 +18,9 @@ async def test_skips_db_write_when_timezone_unchanged():
     mock_uow = MagicMock()
     mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
     mock_uow.__aexit__ = AsyncMock(return_value=False)
-    mock_uow.users.get_user_timezone = AsyncMock(return_value="Asia/Ho_Chi_Minh")  # same
+    mock_uow.users.get_user_timezone = AsyncMock(
+        return_value="Asia/Ho_Chi_Minh"
+    )  # same
     mock_uow.users.update_user_timezone = AsyncMock()
 
     with patch(
@@ -51,7 +54,9 @@ async def test_writes_db_when_timezone_changed():
         result = await handler.handle(command)
 
     assert result["success"] is True
-    mock_uow.users.update_user_timezone.assert_called_once_with("user-1", "America/New_York")
+    mock_uow.users.update_user_timezone.assert_called_once_with(
+        "user-1", "America/New_York"
+    )
 
 
 @pytest.mark.asyncio
@@ -74,4 +79,6 @@ async def test_writes_db_when_no_stored_timezone():
         result = await handler.handle(command)
 
     assert result["success"] is True
-    mock_uow.users.update_user_timezone.assert_called_once_with("user-1", "Asia/Ho_Chi_Minh")
+    mock_uow.users.update_user_timezone.assert_called_once_with(
+        "user-1", "Asia/Ho_Chi_Minh"
+    )

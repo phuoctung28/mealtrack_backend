@@ -106,7 +106,6 @@
 - [ ] Refactor hardcoded values (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) to config
 
 ### Medium Priority
-- [ ] Enable `daily_meals_router` (currently commented out in main.py) or deprecate
 - [ ] Add monitoring for Gemini API quota and Cloudinary storage limits
 - [ ] Consider using DI for CloudinaryImageStore instead of direct instantiation in routes
 - [ ] Tune rate limiting thresholds for meal_suggestions endpoints based on usage patterns

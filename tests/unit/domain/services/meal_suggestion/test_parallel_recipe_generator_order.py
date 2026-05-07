@@ -5,6 +5,7 @@ when preserve_order=True (the default used by the /recipes endpoint).
 Regression test for: asyncio.as_completed yielding results in completion-time
 order, causing mobile index-based pairing to mismatch meal names with recipes.
 """
+
 import asyncio
 import uuid
 from typing import Optional
@@ -21,12 +22,14 @@ from src.domain.model.meal_suggestion.meal_suggestion import (
     SuggestionStatus,
 )
 from src.domain.model.meal_suggestion.suggestion_session import SuggestionSession
-from src.domain.services.meal_suggestion.parallel_recipe_generator import ParallelRecipeGenerator
-
+from src.domain.services.meal_suggestion.parallel_recipe_generator import (
+    ParallelRecipeGenerator,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_session() -> SuggestionSession:
     return SuggestionSession(
@@ -59,6 +62,7 @@ def make_meal_suggestion(meal_name: str, index: int) -> MealSuggestion:
 def make_generator() -> ParallelRecipeGenerator:
     """Build a ParallelRecipeGenerator with mock dependencies."""
     from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
+
     generation_service = MagicMock()
     translation_service = MagicMock()
     macro_validator = MagicMock()
@@ -77,6 +81,7 @@ def make_generator() -> ParallelRecipeGenerator:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestPhase2PreservesSubmissionOrder:
     """_phase2_generate_recipes with preserve_order=True must return results in
     submission order regardless of which task completes first."""
@@ -94,9 +99,13 @@ class TestPhase2PreservesSubmissionOrder:
         # Delays simulate: index=1 fastest, index=2 middle, index=0 slowest.
         delays = {0: 0.05, 1: 0.01, 2: 0.03}
 
-        async def fake_generate_with_retry(prompt: str, meal_name: str, index: int,
-                                            recipe_system: str, session: SuggestionSession
-                                            ) -> Optional[MealSuggestion]:
+        async def fake_generate_with_retry(
+            prompt: str,
+            meal_name: str,
+            index: int,
+            recipe_system: str,
+            session: SuggestionSession,
+        ) -> Optional[MealSuggestion]:
             await asyncio.sleep(delays[index])
             return make_meal_suggestion(meal_name, index)
 
@@ -111,7 +120,9 @@ class TestPhase2PreservesSubmissionOrder:
                 return_value="mock-prompt",
             ):
                 results = await generator._phase2_generate_recipes(
-                    session, meal_names, "English",
+                    session,
+                    meal_names,
+                    "English",
                     suggestion_count=3,
                     preserve_order=True,
                 )
@@ -130,9 +141,13 @@ class TestPhase2PreservesSubmissionOrder:
         # Reverse completion order: index=2 fastest, index=0 slowest.
         delays = {0: 0.06, 1: 0.03, 2: 0.01}
 
-        async def fake_generate_with_retry(prompt: str, meal_name: str, index: int,
-                                            recipe_system: str, session: SuggestionSession
-                                            ) -> Optional[MealSuggestion]:
+        async def fake_generate_with_retry(
+            prompt: str,
+            meal_name: str,
+            index: int,
+            recipe_system: str,
+            session: SuggestionSession,
+        ) -> Optional[MealSuggestion]:
             await asyncio.sleep(delays[index])
             return make_meal_suggestion(meal_name, index)
 
@@ -147,15 +162,17 @@ class TestPhase2PreservesSubmissionOrder:
                 return_value="mock-prompt",
             ):
                 results = await generator._phase2_generate_recipes(
-                    session, meal_names, "English",
+                    session,
+                    meal_names,
+                    "English",
                     suggestion_count=3,
                     preserve_order=True,
                 )
 
         for i, (result, expected_name) in enumerate(zip(results, meal_names)):
-            assert result.meal_name == expected_name, (
-                f"Index {i}: expected '{expected_name}', got '{result.meal_name}'"
-            )
+            assert (
+                result.meal_name == expected_name
+            ), f"Index {i}: expected '{expected_name}', got '{result.meal_name}'"
 
     @pytest.mark.asyncio
     async def test_none_results_filtered_out_and_order_preserved(self):
@@ -163,9 +180,13 @@ class TestPhase2PreservesSubmissionOrder:
         meal_names = ["Burger", "Salad", "Soup"]
         session = make_session()
 
-        async def fake_generate_with_retry(prompt: str, meal_name: str, index: int,
-                                            recipe_system: str, session: SuggestionSession
-                                            ) -> Optional[MealSuggestion]:
+        async def fake_generate_with_retry(
+            prompt: str,
+            meal_name: str,
+            index: int,
+            recipe_system: str,
+            session: SuggestionSession,
+        ) -> Optional[MealSuggestion]:
             if index == 1:
                 return None  # Salad generation fails
             return make_meal_suggestion(meal_name, index)
@@ -181,7 +202,9 @@ class TestPhase2PreservesSubmissionOrder:
                 return_value="mock-prompt",
             ):
                 results = await generator._phase2_generate_recipes(
-                    session, meal_names, "English",
+                    session,
+                    meal_names,
+                    "English",
                     suggestion_count=3,
                     min_acceptable_override=1,
                     preserve_order=True,
@@ -197,9 +220,13 @@ class TestPhase2PreservesSubmissionOrder:
         meal_names = ["Steak", "Ramen", "Tacos"]
         session = make_session()
 
-        async def fake_generate_with_retry(prompt: str, meal_name: str, index: int,
-                                            recipe_system: str, session: SuggestionSession
-                                            ) -> Optional[MealSuggestion]:
+        async def fake_generate_with_retry(
+            prompt: str,
+            meal_name: str,
+            index: int,
+            recipe_system: str,
+            session: SuggestionSession,
+        ) -> Optional[MealSuggestion]:
             if index == 0:
                 raise ValueError("AI service timeout")
             return make_meal_suggestion(meal_name, index)
@@ -215,7 +242,9 @@ class TestPhase2PreservesSubmissionOrder:
                 return_value="mock-prompt",
             ):
                 results = await generator._phase2_generate_recipes(
-                    session, meal_names, "English",
+                    session,
+                    meal_names,
+                    "English",
                     suggestion_count=3,
                     min_acceptable_override=1,
                     preserve_order=True,
@@ -229,13 +258,18 @@ class TestPhase2PreservesSubmissionOrder:
     @pytest.mark.asyncio
     async def test_preserve_order_false_does_not_guarantee_order(self):
         """preserve_order=False (discovery flow) uses as_completed — order is non-deterministic.
-        This test just verifies the path executes without error and returns correct count."""
+        This test just verifies the path executes without error and returns correct count.
+        """
         meal_names = ["Meal A", "Meal B", "Meal C", "Meal D"]
         session = make_session()
 
-        async def fake_generate_with_retry(prompt: str, meal_name: str, index: int,
-                                            recipe_system: str, session: SuggestionSession
-                                            ) -> Optional[MealSuggestion]:
+        async def fake_generate_with_retry(
+            prompt: str,
+            meal_name: str,
+            index: int,
+            recipe_system: str,
+            session: SuggestionSession,
+        ) -> Optional[MealSuggestion]:
             return make_meal_suggestion(meal_name, index)
 
         generator = make_generator()
@@ -249,7 +283,9 @@ class TestPhase2PreservesSubmissionOrder:
                 return_value="mock-prompt",
             ):
                 results = await generator._phase2_generate_recipes(
-                    session, meal_names, "English",
+                    session,
+                    meal_names,
+                    "English",
                     suggestion_count=3,
                     preserve_order=False,
                 )

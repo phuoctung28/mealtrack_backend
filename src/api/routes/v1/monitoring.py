@@ -1,6 +1,7 @@
 """
 Monitoring endpoints for cache metrics.
 """
+
 from fastapi import APIRouter, Depends
 
 from src.api.base_dependencies import get_cache_monitor
@@ -13,4 +14,3 @@ router = APIRouter(prefix="/v1/monitoring", tags=["Monitoring"])
 async def cache_metrics(cache_monitor: CacheMonitor = Depends(get_cache_monitor)):
     """Return cache hit/miss statistics."""
     return cache_monitor.snapshot()
-

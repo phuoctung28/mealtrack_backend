@@ -1,4 +1,5 @@
 """Handler for updating user timezone."""
+
 import logging
 from typing import Dict, Any
 

@@ -9,10 +9,12 @@ from src.infra.repositories.pending_meal_image_repository import (
 @pytest.mark.asyncio
 async def test_enqueue_is_idempotent_by_slug(db_session):
     repo = PendingMealImageRepository(db_session)
-    await repo.enqueue_many([
-        PendingItem(meal_name="Grilled Salmon", name_slug="grilled-salmon"),
-        PendingItem(meal_name="Grilled Salmon", name_slug="grilled-salmon"),  # dup
-    ])
+    await repo.enqueue_many(
+        [
+            PendingItem(meal_name="Grilled Salmon", name_slug="grilled-salmon"),
+            PendingItem(meal_name="Grilled Salmon", name_slug="grilled-salmon"),  # dup
+        ]
+    )
     claimed = await repo.claim_batch(10)
     assert [c.name_slug for c in claimed] == ["grilled-salmon"]
 
@@ -20,8 +22,9 @@ async def test_enqueue_is_idempotent_by_slug(db_session):
 @pytest.mark.asyncio
 async def test_claim_batch_returns_in_enqueue_order(db_session):
     repo = PendingMealImageRepository(db_session)
-    await repo.enqueue_many([PendingItem("A", "a"), PendingItem("B", "b"),
-                             PendingItem("C", "c")])
+    await repo.enqueue_many(
+        [PendingItem("A", "a"), PendingItem("B", "b"), PendingItem("C", "c")]
+    )
     claimed = await repo.claim_batch(2)
     assert [c.name_slug for c in claimed] == ["a", "b"]
 

@@ -2,6 +2,7 @@
 Input sanitization for user-provided descriptions in LLM prompts.
 Prevents prompt injection and abuse.
 """
+
 import logging
 import re
 from typing import Optional
@@ -13,16 +14,16 @@ MAX_DESCRIPTION_LENGTH = 500
 
 # Patterns that indicate prompt injection attempts
 INJECTION_PATTERNS = [
-    r'(ignore|forget|disregard|override|bypass)\s+(all\s+)?(previous|above|prior)?\s*(instruction|prompt|rule|system)s?',
-    r'(you\s+are|act\s+as|pretend|roleplay|imagine)\s+(now\s+)?a?\s*(?!nutrition|food)',
-    r'(new\s+)?instruction[s]?\s*:',
-    r'system\s*(prompt|message)\s*:',
-    r'\[.*?(system|admin|root|sudo).*?\]',
-    r'<.*?(script|system|admin).*?>',
+    r"(ignore|forget|disregard|override|bypass)\s+(all\s+)?(previous|above|prior)?\s*(instruction|prompt|rule|system)s?",
+    r"(you\s+are|act\s+as|pretend|roleplay|imagine)\s+(now\s+)?a?\s*(?!nutrition|food)",
+    r"(new\s+)?instruction[s]?\s*:",
+    r"system\s*(prompt|message)\s*:",
+    r"\[.*?(system|admin|root|sudo).*?\]",
+    r"<.*?(script|system|admin).*?>",
 ]
 
 # Characters to remove (control chars, dangerous markup)
-FORBIDDEN_CHARS = r'[<>{}[\]|\\`]'
+FORBIDDEN_CHARS = r"[<>{}[\]|\\`]"
 
 
 def sanitize_user_description(text: Optional[str]) -> Optional[str]:
@@ -54,17 +55,15 @@ def sanitize_user_description(text: Optional[str]) -> Optional[str]:
     text = text[:MAX_DESCRIPTION_LENGTH]
 
     # Remove forbidden characters
-    text = re.sub(FORBIDDEN_CHARS, '', text)
+    text = re.sub(FORBIDDEN_CHARS, "", text)
 
     # Check for injection patterns (case-insensitive)
     for pattern in INJECTION_PATTERNS:
         if re.search(pattern, text, re.IGNORECASE):
-            logger.warning(
-                f"Prompt injection attempt blocked: {text[:50]}..."
-            )
+            logger.warning(f"Prompt injection attempt blocked: {text[:50]}...")
             return None  # Block the entire description
 
     # Normalize whitespace
-    text = ' '.join(text.split())
+    text = " ".join(text.split())
 
     return text if text else None

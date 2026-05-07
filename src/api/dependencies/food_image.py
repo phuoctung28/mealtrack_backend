@@ -1,7 +1,10 @@
 """Singleton factory for FoodImageSearchService (API layer)."""
+
 from typing import Optional
 
-from src.domain.services.meal_discovery.food_image_search_service import FoodImageSearchService
+from src.domain.services.meal_discovery.food_image_search_service import (
+    FoodImageSearchService,
+)
 
 _instance: Optional[FoodImageSearchService] = None
 
@@ -23,6 +26,7 @@ def get_food_image_service() -> FoodImageSearchService:
             from src.infra.adapters.web_search_image_validator import (
                 WebSearchImageValidator,
             )
+
             web_validator = WebSearchImageValidator(settings.BRAVE_SEARCH_API_KEY)
 
         _instance = FoodImageSearchService(

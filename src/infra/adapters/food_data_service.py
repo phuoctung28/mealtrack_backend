@@ -1,6 +1,7 @@
 """
 USDA FoodData Central HTTP client. Real implementation would call external API; this is a thin wrapper.
 """
+
 import os
 from typing import Dict, Any, List, Optional
 
@@ -12,7 +13,9 @@ from src.domain.ports.food_data_service_port import FoodDataServicePort
 class FoodDataService(FoodDataServicePort):
     BASE_URL = "https://api.nal.usda.gov/fdc/v1"
 
-    def __init__(self, api_key: Optional[str] = None, session: Optional[requests.Session] = None):
+    def __init__(
+        self, api_key: Optional[str] = None, session: Optional[requests.Session] = None
+    ):
         self.api_key = api_key or os.getenv("USDA_FDC_API_KEY", "")
         self.session = session or requests.Session()
 

@@ -1,6 +1,7 @@
 """
 Unit tests for Subscription model.
 """
+
 from datetime import datetime, timedelta, timezone
 
 from src.infra.database.models.subscription import Subscription
@@ -8,7 +9,7 @@ from src.infra.database.models.subscription import Subscription
 
 class TestSubscriptionModel:
     """Test suite for Subscription model."""
-    
+
     def test_subscription_is_active_when_status_active_and_not_expired(self):
         """Test that subscription is active when status is active and not expired."""
         now = datetime.now(timezone.utc)
@@ -20,7 +21,7 @@ class TestSubscriptionModel:
             platform="ios",
             status="active",
             purchased_at=now,
-            expires_at=now + timedelta(days=30)
+            expires_at=now + timedelta(days=30),
         )
 
         assert subscription.is_active() is True
@@ -36,7 +37,7 @@ class TestSubscriptionModel:
             platform="ios",
             status="active",
             purchased_at=now - timedelta(days=31),
-            expires_at=now - timedelta(days=1)
+            expires_at=now - timedelta(days=1),
         )
 
         assert subscription.is_active() is False
@@ -52,11 +53,11 @@ class TestSubscriptionModel:
             platform="ios",
             status="cancelled",
             purchased_at=now,
-            expires_at=now + timedelta(days=30)
+            expires_at=now + timedelta(days=30),
         )
 
         assert subscription.is_active() is False
-    
+
     def test_subscription_is_monthly(self):
         """Test monthly subscription detection."""
         subscription = Subscription(
@@ -66,12 +67,12 @@ class TestSubscriptionModel:
             product_id="premium_monthly",
             platform="ios",
             status="active",
-            purchased_at=datetime.now()
+            purchased_at=datetime.now(),
         )
-        
+
         assert subscription.is_monthly() is True
         assert subscription.is_yearly() is False
-    
+
     def test_subscription_is_yearly(self):
         """Test yearly subscription detection."""
         subscription = Subscription(
@@ -81,12 +82,12 @@ class TestSubscriptionModel:
             product_id="premium_yearly",
             platform="ios",
             status="active",
-            purchased_at=datetime.now()
+            purchased_at=datetime.now(),
         )
-        
+
         assert subscription.is_yearly() is True
         assert subscription.is_monthly() is False
-    
+
     def test_subscription_is_yearly_with_annual_keyword(self):
         """Test yearly subscription detection with 'annual' keyword."""
         subscription = Subscription(
@@ -96,12 +97,12 @@ class TestSubscriptionModel:
             product_id="premium_annual",
             platform="ios",
             status="active",
-            purchased_at=datetime.now()
+            purchased_at=datetime.now(),
         )
-        
+
         assert subscription.is_yearly() is True
         assert subscription.is_monthly() is False
-    
+
     def test_subscription_with_no_expiry_is_active(self):
         """Test that subscription with no expiry date is active if status is active."""
         subscription = Subscription(
@@ -112,7 +113,7 @@ class TestSubscriptionModel:
             platform="ios",
             status="active",
             purchased_at=datetime.now(),
-            expires_at=None  # Lifetime subscription
+            expires_at=None,  # Lifetime subscription
         )
-        
+
         assert subscription.is_active() is True

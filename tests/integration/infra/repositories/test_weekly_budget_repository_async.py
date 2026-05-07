@@ -1,8 +1,11 @@
 """Integration tests for AsyncWeeklyBudgetRepository."""
+
 import pytest
 import uuid
 from datetime import date
-from src.infra.repositories.weekly_budget_repository_async import AsyncWeeklyBudgetRepository
+from src.infra.repositories.weekly_budget_repository_async import (
+    AsyncWeeklyBudgetRepository,
+)
 from src.domain.model.weekly import WeeklyMacroBudget
 
 

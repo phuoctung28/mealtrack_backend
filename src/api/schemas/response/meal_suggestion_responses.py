@@ -70,8 +70,12 @@ class MealSuggestionResponse(BaseModel):
     confidence_score: float = Field(
         default=0.9, ge=0.0, le=1.0, description="AI confidence score (0.0-1.0)"
     )
-    origin_country: Optional[str] = Field(None, description="Country of origin (e.g., Vietnam, Italy)")
-    cuisine_type: Optional[str] = Field(None, description="Cuisine type (e.g., Asian, Mediterranean)")
+    origin_country: Optional[str] = Field(
+        None, description="Country of origin (e.g., Vietnam, Italy)"
+    )
+    cuisine_type: Optional[str] = Field(
+        None, description="Cuisine type (e.g., Asian, Mediterranean)"
+    )
 
 
 # Alias for backward compatibility
@@ -95,7 +99,10 @@ class SuggestionsListResponse(BaseModel):
         ..., description="Calculated target calories for this portion type"
     )
     suggestions: List[MealSuggestionResponse] = Field(
-        ..., min_length=1, max_length=3, description="1-3 meal suggestions (may be partial if generation fails)"
+        ...,
+        min_length=1,
+        max_length=3,
+        description="1-3 meal suggestions (may be partial if generation fails)",
     )
     suggestion_count: int = Field(
         ..., ge=1, le=3, description="Number of suggestions returned (1-3)"
@@ -113,7 +120,9 @@ class RecipeBatchResponse(BaseModel):
     """Response containing full recipes for 1-3 selected discovery meals."""
 
     recipes: List[MealSuggestionResponse] = Field(
-        ..., min_length=1, max_length=3,
+        ...,
+        min_length=1,
+        max_length=3,
         description="Full recipe details for selected meals",
     )
 
@@ -123,22 +132,38 @@ class DiscoveryMealResponse(BaseModel):
 
     id: str
     meal_name: str
-    english_name: Optional[str] = Field(None, description="Original English name for recipe generation")
+    english_name: Optional[str] = Field(
+        None, description="Original English name for recipe generation"
+    )
     macros: MacroEstimateResponse
     # Fields below are optional — not returned in lightweight discovery
     emoji: Optional[str] = None
     description: Optional[str] = None
-    ingredient_names: Optional[List[str]] = Field(default=None, description="Ingredient names (only in full response)")
+    ingredient_names: Optional[List[str]] = Field(
+        default=None, description="Ingredient names (only in full response)"
+    )
     prep_time_minutes: Optional[int] = None
     cuisine_type: Optional[str] = None
     origin_country: Optional[str] = None
-    image_url: Optional[str] = Field(None, description="Food photo URL (hotlinked from Pexels/Unsplash)")
+    image_url: Optional[str] = Field(
+        None, description="Food photo URL (hotlinked from Pexels/Unsplash)"
+    )
     thumbnail_url: Optional[str] = Field(None, description="Thumbnail URL")
-    image_source: Optional[str] = Field(None, description="Image provider: pexels | unsplash")
-    photographer: Optional[str] = Field(None, description="Photographer name for attribution")
-    photographer_url: Optional[str] = Field(None, description="Photographer profile URL with UTM params")
-    unsplash_download_location: Optional[str] = Field(None, description="Unsplash download trigger URL (pass back on save)")
-    image_confidence: float = Field(default=0.0, description="0.0–1.0 how well the image matches the meal name")
+    image_source: Optional[str] = Field(
+        None, description="Image provider: pexels | unsplash"
+    )
+    photographer: Optional[str] = Field(
+        None, description="Photographer name for attribution"
+    )
+    photographer_url: Optional[str] = Field(
+        None, description="Photographer profile URL with UTM params"
+    )
+    unsplash_download_location: Optional[str] = Field(
+        None, description="Unsplash download trigger URL (pass back on save)"
+    )
+    image_confidence: float = Field(
+        default=0.0, description="0.0–1.0 how well the image matches the meal name"
+    )
 
 
 class DiscoveryBatchResponse(BaseModel):
@@ -146,23 +171,17 @@ class DiscoveryBatchResponse(BaseModel):
 
     session_id: str
     meals: List[DiscoveryMealResponse]
-    has_more: bool = Field(default=True, description="Whether more batches can be loaded")
+    has_more: bool = Field(
+        default=True, description="Whether more batches can be loaded"
+    )
     meal_count: int
-
-
-class FoodImageResponse(BaseModel):
-    """Food image search result."""
-
-    url: str = Field(..., description="Full-size image URL")
-    thumbnail_url: str = Field(..., description="Thumbnail URL")
-    source: str = Field(..., description="Image provider (pexels/unsplash)")
-    photographer: Optional[str] = Field(None, description="Photographer name")
 
 
 class SaveMealSuggestionResponse(BaseModel):
     """
     Response schema for saving a meal suggestion as a regular meal.
     """
+
     meal_id: str = Field(..., description="ID of the created meal")
     message: str = Field(..., description="Success message")
     meal_date: str = Field(..., description="Date the meal was saved for (YYYY-MM-DD)")
@@ -172,6 +191,6 @@ class SaveMealSuggestionResponse(BaseModel):
             "example": {
                 "meal_id": "meal_123",
                 "message": "Meal suggestion saved successfully",
-                "meal_date": "2024-01-15"
+                "meal_date": "2024-01-15",
             }
         }

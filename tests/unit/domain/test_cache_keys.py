@@ -1,4 +1,5 @@
 """Tests for new CacheKeys static methods."""
+
 from datetime import date
 from src.domain.cache.cache_keys import CacheKeys
 

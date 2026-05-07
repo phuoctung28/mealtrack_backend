@@ -1,6 +1,7 @@
 """
 Factory for creating test users and profiles.
 """
+
 from uuid import uuid4
 from datetime import datetime
 from typing import Optional, Tuple
@@ -13,16 +14,16 @@ from src.infra.database.models.user.profile import UserProfile
 
 class UserFactory:
     """Factory for creating test users."""
-    
+
     @staticmethod
     def create_user(session: Session, **overrides) -> User:
         """
         Create a user with sensible defaults.
-        
+
         Args:
             session: Database session
             **overrides: Override any default user attributes
-            
+
         Returns:
             User: Created user instance
         """
@@ -40,30 +41,29 @@ class UserFactory:
             "timezone": "UTC",
         }
         defaults.update(overrides)
-        
+
         user = User(**defaults)
         session.add(user)
         session.flush()
         session.commit()
         return user
-    
+
     @staticmethod
     def create_user_with_profile(
-        session: Session,
-        **user_overrides
+        session: Session, **user_overrides
     ) -> Tuple[User, UserProfile]:
         """
         Create user with profile.
-        
+
         Args:
             session: Database session
             **user_overrides: Override any default user attributes
-            
+
         Returns:
             Tuple of (User, UserProfile)
         """
         user = UserFactory.create_user(session, **user_overrides)
-        
+
         profile_defaults = {
             "user_id": user.id,
             "age": 30,
@@ -83,10 +83,10 @@ class UserFactory:
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
         }
-        
+
         profile = UserProfile(**profile_defaults)
         session.add(profile)
         session.flush()
         session.commit()
-        
+
         return user, profile

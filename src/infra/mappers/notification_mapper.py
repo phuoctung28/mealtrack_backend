@@ -1,19 +1,22 @@
 """Notification ORM <-> domain mapping functions."""
+
 from src.domain.model.notification import (
     UserFcmToken,
     NotificationPreferences,
     DeviceType,
 )
 from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM
-from src.infra.database.models.notification.notification_preferences import NotificationPreferencesORM
-
+from src.infra.database.models.notification.notification_preferences import (
+    NotificationPreferencesORM,
+)
 
 # ---------------------------------------------------------------------------
 # UserFcmToken
 # ---------------------------------------------------------------------------
 
+
 def fcm_token_orm_to_domain(orm: UserFcmTokenORM) -> UserFcmToken:
-    device_type = DeviceType.IOS if orm.device_type == 'ios' else DeviceType.ANDROID
+    device_type = DeviceType.IOS if orm.device_type == "ios" else DeviceType.ANDROID
 
     return UserFcmToken(
         token_id=orm.id,
@@ -30,7 +33,10 @@ def fcm_token_orm_to_domain(orm: UserFcmTokenORM) -> UserFcmToken:
 # NotificationPreferences
 # ---------------------------------------------------------------------------
 
-def notification_prefs_orm_to_domain(orm: NotificationPreferencesORM) -> NotificationPreferences:
+
+def notification_prefs_orm_to_domain(
+    orm: NotificationPreferencesORM,
+) -> NotificationPreferences:
     return NotificationPreferences(
         preferences_id=orm.id,
         user_id=orm.user_id,

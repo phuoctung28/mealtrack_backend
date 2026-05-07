@@ -1,4 +1,5 @@
 """Query to get cheat days for a week."""
+
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional

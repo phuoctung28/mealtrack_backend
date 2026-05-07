@@ -5,7 +5,6 @@ Enables semantic search for recipes without depending on specific implementation
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional
 
 
 @dataclass
@@ -15,11 +14,11 @@ class RecipeSearchCriteria:
     meal_type: str
     target_calories: int
     calorie_tolerance: int = 100  # ±100 cal
-    max_cook_time: Optional[int] = None
-    dietary_preferences: List[str] = None
-    allergies: List[str] = None
-    ingredients: List[str] = None
-    exclude_ids: List[str] = None
+    max_cook_time: int | None = None
+    dietary_preferences: list[str] | None = None
+    allergies: list[str] | None = None
+    ingredients: list[str] | None = None
+    exclude_ids: list[str] | None = None
 
     def __post_init__(self):
         """Initialize default values for list fields."""
@@ -41,8 +40,8 @@ class RecipeSearchResult:
     name: str
     calories: int
     cook_time: int
-    ingredients: List[str]
-    instructions: List[str]
+    ingredients: list[str]
+    instructions: list[str]
     score: float  # Relevance score
 
 
@@ -52,7 +51,7 @@ class RecipeSearchPort(ABC):
     @abstractmethod
     def search_recipes(
         self, criteria: RecipeSearchCriteria, limit: int = 5
-    ) -> List[RecipeSearchResult]:
+    ) -> list[RecipeSearchResult]:
         """
         Search for recipes matching the criteria.
 
@@ -66,7 +65,7 @@ class RecipeSearchPort(ABC):
         pass
 
     @abstractmethod
-    def get_recipe_by_id(self, recipe_id: str) -> Optional[RecipeSearchResult]:
+    def get_recipe_by_id(self, recipe_id: str) -> RecipeSearchResult | None:
         """
         Get a specific recipe by ID.
 

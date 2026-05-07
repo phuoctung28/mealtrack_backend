@@ -7,7 +7,6 @@ Provides Firebase token verification and user extraction.
 import asyncio
 import logging
 import os
-from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.params import Depends as DependsMarker
@@ -29,7 +28,7 @@ security = HTTPBearer(auto_error=False)
 
 async def verify_firebase_token(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> dict:
     """
     Verify Firebase ID token and return decoded token.
@@ -150,7 +149,7 @@ async def verify_firebase_uid_ownership(
 async def get_current_user_id(
     token: dict = Depends(verify_firebase_token),
     async_db: AsyncSession = Depends(get_async_db),
-    cache_service: Optional[CachePort] = Depends(get_cache_service),
+    cache_service: CachePort | None = Depends(get_cache_service),
 ) -> str:
     """
     Extract the authenticated user's database ID from the verified Firebase token.
@@ -208,7 +207,7 @@ async def get_current_user_id(
     result = await async_db.execute(
         select(User).where(
             User.firebase_uid == firebase_uid,
-            User.is_active == True,
+            User.is_active.is_(True),
         )
     )
     user = result.scalars().first()
@@ -231,7 +230,7 @@ async def get_current_user_id(
 
 async def get_current_user_email(
     token: dict = Depends(verify_firebase_token),
-) -> Optional[str]:
+) -> str | None:
     """
     Extract the authenticated user's email from the verified Firebase token.
 
@@ -245,10 +244,10 @@ async def get_current_user_email(
 
 
 async def optional_authentication(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(
+    credentials: HTTPAuthorizationCredentials | None = Depends(
         HTTPBearer(auto_error=False)
     ),
-) -> Optional[dict]:
+) -> dict | None:
     """
     Optional authentication dependency for endpoints that work with or without auth.
 

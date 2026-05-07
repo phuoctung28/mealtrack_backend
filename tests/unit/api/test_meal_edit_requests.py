@@ -1,6 +1,7 @@
 """
 Unit tests for meal edit request validation.
 """
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,14 +9,14 @@ from src.api.schemas.request.meal_requests import (
     FoodItemChangeRequest,
     CustomNutritionRequest,
     EditMealIngredientsRequest,
-    AddCustomIngredientRequest
+    AddCustomIngredientRequest,
 )
 
 
 @pytest.mark.unit
 class TestFoodItemChangeRequest:
     """Test FoodItemChangeRequest validation."""
-    
+
     def test_valid_add_request(self):
         """Test valid add request."""
         # Arrange & Act
@@ -28,7 +29,7 @@ class TestFoodItemChangeRequest:
                 protein_per_100g=10.0,
                 carbs_per_100g=20.0,
                 fat_per_100g=8.0,
-            )
+            ),
         )
 
         # Assert
@@ -38,68 +39,53 @@ class TestFoodItemChangeRequest:
         assert request.unit == "g"
         # Derived: 10*4 + 20*4 + 8*9 = 192
         assert request.custom_nutrition.calories_per_100g == 192.0
-    
+
     def test_valid_update_request(self):
         """Test valid update request."""
         # Arrange & Act
         request = FoodItemChangeRequest(
-            action="update",
-            id="test-food-item-id",
-            quantity=150.0,
-            unit="g"
+            action="update", id="test-food-item-id", quantity=150.0, unit="g"
         )
-        
+
         # Assert
         assert request.action == "update"
         assert request.id == "test-food-item-id"
         assert request.quantity == 150.0
         assert request.unit == "g"
-    
+
     def test_valid_remove_request(self):
         """Test valid remove request."""
         # Arrange & Act
-        request = FoodItemChangeRequest(
-            action="remove",
-            id="test-food-item-id"
-        )
-        
+        request = FoodItemChangeRequest(action="remove", id="test-food-item-id")
+
         # Assert
         assert request.action == "remove"
         assert request.id == "test-food-item-id"
-    
+
     def test_invalid_action(self):
         """Test invalid action value."""
         # Arrange & Act & Assert
         with pytest.raises(ValidationError):
             FoodItemChangeRequest(
-                action="invalid_action",
-                name="Test Food",
-                quantity=100.0,
-                unit="g"
+                action="invalid_action", name="Test Food", quantity=100.0, unit="g"
             )
-    
+
     def test_negative_quantity(self):
         """Test negative quantity validation."""
         # Arrange & Act & Assert
         with pytest.raises(ValidationError):
             FoodItemChangeRequest(
-                action="add",
-                name="Test Food",
-                quantity=-50.0,
-                unit="g"
+                action="add", name="Test Food", quantity=-50.0, unit="g"
             )
-    
+
     def test_zero_quantity(self):
         """Test zero quantity validation."""
         # Arrange & Act & Assert
         with pytest.raises(ValidationError):
             FoodItemChangeRequest(
-                action="add",
-                name="Test Food",
-                quantity=0.0,
-                unit="g"
+                action="add", name="Test Food", quantity=0.0, unit="g"
             )
-    
+
     def test_quantity_too_large(self):
         """Test quantity too large validation."""
         # Arrange & Act & Assert
@@ -108,20 +94,15 @@ class TestFoodItemChangeRequest:
                 action="add",
                 name="Test Food",
                 quantity=15000.0,  # Over 10000 limit
-                unit="g"
+                unit="g",
             )
-    
+
     def test_empty_name(self):
         """Test empty name validation."""
         # Arrange & Act & Assert
         with pytest.raises(ValidationError):
-            FoodItemChangeRequest(
-                action="add",
-                name="",
-                quantity=100.0,
-                unit="g"
-            )
-    
+            FoodItemChangeRequest(action="add", name="", quantity=100.0, unit="g")
+
     def test_name_too_long(self):
         """Test name too long validation."""
         # Arrange & Act & Assert
@@ -130,20 +111,17 @@ class TestFoodItemChangeRequest:
                 action="add",
                 name="a" * 201,  # Over 200 character limit
                 quantity=100.0,
-                unit="g"
+                unit="g",
             )
-    
+
     def test_empty_unit(self):
         """Test empty unit validation."""
         # Arrange & Act & Assert
         with pytest.raises(ValidationError):
             FoodItemChangeRequest(
-                action="add",
-                name="Test Food",
-                quantity=100.0,
-                unit=""
+                action="add", name="Test Food", quantity=100.0, unit=""
             )
-    
+
     def test_unit_too_long(self):
         """Test unit too long validation."""
         # Arrange & Act & Assert
@@ -152,14 +130,14 @@ class TestFoodItemChangeRequest:
                 action="add",
                 name="Test Food",
                 quantity=100.0,
-                unit="a" * 21  # Over 20 character limit
+                unit="a" * 21,  # Over 20 character limit
             )
 
 
 @pytest.mark.unit
 class TestCustomNutritionRequest:
     """Test CustomNutritionRequest validation."""
-    
+
     def test_valid_nutrition_request(self):
         """Test valid nutrition request with derived calories."""
         # Arrange & Act
@@ -180,9 +158,7 @@ class TestCustomNutritionRequest:
         # Arrange & Act & Assert
         with pytest.raises(ValidationError):
             CustomNutritionRequest(
-                protein_per_100g=-5.0,
-                carbs_per_100g=25.0,
-                fat_per_100g=8.0
+                protein_per_100g=-5.0, carbs_per_100g=25.0, fat_per_100g=8.0
             )
 
     def test_protein_too_high(self):
@@ -192,14 +168,14 @@ class TestCustomNutritionRequest:
             CustomNutritionRequest(
                 protein_per_100g=150.0,  # Over 100 limit
                 carbs_per_100g=25.0,
-                fat_per_100g=8.0
+                fat_per_100g=8.0,
             )
 
 
 @pytest.mark.unit
 class TestEditMealIngredientsRequest:
     """Test EditMealIngredientsRequest validation."""
-    
+
     def test_valid_edit_request(self):
         """Test valid edit meal ingredients request."""
         # Arrange & Act
@@ -212,45 +188,38 @@ class TestEditMealIngredientsRequest:
                     quantity=100.0,
                     unit="g",
                     custom_nutrition=CustomNutritionRequest(
-                        protein_per_100g=10.0,
-                        carbs_per_100g=20.0,
-                        fat_per_100g=8.0
-                    )
+                        protein_per_100g=10.0, carbs_per_100g=20.0, fat_per_100g=8.0
+                    ),
                 )
-            ]
+            ],
         )
-        
+
         # Assert
         assert request.dish_name == "Updated Meal Name"
         assert len(request.food_item_changes) == 1
         assert request.food_item_changes[0].action == "add"
-    
+
     def test_valid_edit_request_without_dish_name(self):
         """Test valid edit request without dish name."""
         # Arrange & Act
         request = EditMealIngredientsRequest(
             food_item_changes=[
                 FoodItemChangeRequest(
-                    action="update",
-                    id="test-id",
-                    quantity=150.0,
-                    unit="g"
+                    action="update", id="test-id", quantity=150.0, unit="g"
                 )
             ]
         )
-        
+
         # Assert
         assert request.dish_name is None
         assert len(request.food_item_changes) == 1
-    
+
     def test_empty_food_item_changes(self):
         """Test empty food item changes validation."""
         # Arrange & Act & Assert
         with pytest.raises(ValidationError):
-            EditMealIngredientsRequest(
-                food_item_changes=[]
-            )
-    
+            EditMealIngredientsRequest(food_item_changes=[])
+
     def test_dish_name_too_long(self):
         """Test dish name too long validation."""
         # Arrange & Act & Assert
@@ -259,14 +228,11 @@ class TestEditMealIngredientsRequest:
                 dish_name="a" * 201,  # Over 200 character limit
                 food_item_changes=[
                     FoodItemChangeRequest(
-                        action="add",
-                        name="Test Food",
-                        quantity=100.0,
-                        unit="g"
+                        action="add", name="Test Food", quantity=100.0, unit="g"
                     )
-                ]
+                ],
             )
-    
+
     def test_empty_dish_name(self):
         """Test empty dish name validation."""
         # Arrange & Act & Assert
@@ -275,19 +241,16 @@ class TestEditMealIngredientsRequest:
                 dish_name="",
                 food_item_changes=[
                     FoodItemChangeRequest(
-                        action="add",
-                        name="Test Food",
-                        quantity=100.0,
-                        unit="g"
+                        action="add", name="Test Food", quantity=100.0, unit="g"
                     )
-                ]
+                ],
             )
 
 
 @pytest.mark.unit
 class TestAddCustomIngredientRequest:
     """Test AddCustomIngredientRequest validation."""
-    
+
     def test_valid_custom_ingredient_request(self):
         """Test valid custom ingredient request."""
         # Arrange & Act
@@ -300,16 +263,16 @@ class TestAddCustomIngredientRequest:
                 protein_per_100g=2.0,
                 carbs_per_100g=10.0,
                 fat_per_100g=12.0,
-            )
+            ),
         )
-        
+
         # Assert
         assert request.name == "Homemade Sauce"
         assert request.quantity == 50.0
         assert request.unit == "ml"
         # Derived: 2*4 + 10*4 + 12*9 = 156
         assert request.nutrition.calories_per_100g == 156.0
-    
+
     def test_empty_name(self):
         """Test empty name validation."""
         # Arrange & Act & Assert
@@ -319,12 +282,10 @@ class TestAddCustomIngredientRequest:
                 quantity=50.0,
                 unit="ml",
                 nutrition=CustomNutritionRequest(
-                    protein_per_100g=2.0,
-                    carbs_per_100g=10.0,
-                    fat_per_100g=12.0
-                )
+                    protein_per_100g=2.0, carbs_per_100g=10.0, fat_per_100g=12.0
+                ),
             )
-    
+
     def test_name_too_long(self):
         """Test name too long validation."""
         # Arrange & Act & Assert
@@ -334,12 +295,10 @@ class TestAddCustomIngredientRequest:
                 quantity=50.0,
                 unit="ml",
                 nutrition=CustomNutritionRequest(
-                    protein_per_100g=2.0,
-                    carbs_per_100g=10.0,
-                    fat_per_100g=12.0
-                )
+                    protein_per_100g=2.0, carbs_per_100g=10.0, fat_per_100g=12.0
+                ),
             )
-    
+
     def test_negative_quantity(self):
         """Test negative quantity validation."""
         # Arrange & Act & Assert
@@ -349,12 +308,10 @@ class TestAddCustomIngredientRequest:
                 quantity=-25.0,
                 unit="ml",
                 nutrition=CustomNutritionRequest(
-                    protein_per_100g=2.0,
-                    carbs_per_100g=10.0,
-                    fat_per_100g=12.0
-                )
+                    protein_per_100g=2.0, carbs_per_100g=10.0, fat_per_100g=12.0
+                ),
             )
-    
+
     def test_quantity_too_large(self):
         """Test quantity too large validation."""
         # Arrange & Act & Assert
@@ -364,12 +321,10 @@ class TestAddCustomIngredientRequest:
                 quantity=15000.0,  # Over 10000 limit
                 unit="ml",
                 nutrition=CustomNutritionRequest(
-                    protein_per_100g=2.0,
-                    carbs_per_100g=10.0,
-                    fat_per_100g=12.0
-                )
+                    protein_per_100g=2.0, carbs_per_100g=10.0, fat_per_100g=12.0
+                ),
             )
-    
+
     def test_empty_unit(self):
         """Test empty unit validation."""
         # Arrange & Act & Assert
@@ -379,9 +334,6 @@ class TestAddCustomIngredientRequest:
                 quantity=50.0,
                 unit="",
                 nutrition=CustomNutritionRequest(
-                    protein_per_100g=2.0,
-                    carbs_per_100g=10.0,
-                    fat_per_100g=12.0
-                )
+                    protein_per_100g=2.0, carbs_per_100g=10.0, fat_per_100g=12.0
+                ),
             )
-

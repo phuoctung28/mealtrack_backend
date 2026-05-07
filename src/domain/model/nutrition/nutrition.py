@@ -8,6 +8,7 @@ from .micros import Micros
 @dataclass
 class FoodItem:
     """Represents a single food item in a meal with nutritional information."""
+
     id: str
     name: str
     quantity: float
@@ -23,7 +24,9 @@ class FoodItem:
         if not self.name or not self.name.strip():
             raise ValueError("Food item name cannot be empty")
         if len(self.name) > 200:
-            raise ValueError(f"Food item name too long (max 200 chars): {len(self.name)}")
+            raise ValueError(
+                f"Food item name too long (max 200 chars): {len(self.name)}"
+            )
         if self.quantity <= 0 or self.quantity > 10000:
             raise ValueError(f"Quantity must be between 0 and 10000: {self.quantity}")
         if not 0 <= self.confidence <= 1:
@@ -48,7 +51,7 @@ class FoodItem:
             "calories": self.calories,
             "macros": self.macros.to_dict(),
             "confidence": self.confidence,
-            "is_custom": self.is_custom
+            "is_custom": self.is_custom,
         }
         if self.micros:
             result["micros"] = self.micros.to_dict()
@@ -56,9 +59,11 @@ class FoodItem:
             result["fdc_id"] = self.fdc_id
         return result
 
+
 @dataclass
 class Nutrition:
     """Value object representing full nutritional information for a meal."""
+
     macros: Macros
     micros: Optional[Micros] = None
     food_items: Optional[List[FoodItem]] = None
@@ -67,12 +72,16 @@ class Nutrition:
     def __post_init__(self):
         """Validate invariants."""
         if not 0 <= self.confidence_score <= 1:
-            raise ValueError(f"Confidence score must be between 0 and 1: {self.confidence_score}")
+            raise ValueError(
+                f"Confidence score must be between 0 and 1: {self.confidence_score}"
+            )
 
         # Validate food items
         if self.food_items:
             if len(self.food_items) > 50:
-                raise ValueError(f"Too many ingredients (max 50): {len(self.food_items)}")
+                raise ValueError(
+                    f"Too many ingredients (max 50): {len(self.food_items)}"
+                )
 
     @property
     def calories(self) -> float:
@@ -84,7 +93,7 @@ class Nutrition:
         result = {
             "calories": self.calories,
             "macros": self.macros.to_dict(),
-            "confidence_score": self.confidence_score
+            "confidence_score": self.confidence_score,
         }
 
         if self.micros:

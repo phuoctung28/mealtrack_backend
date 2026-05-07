@@ -4,19 +4,28 @@ Handles session tracking and portion target calculation.
 Generation logic: parallel_recipe_generator.py
 TDEE helpers: suggestion_tdee_helpers.py
 """
+
 import logging
 import uuid
 from typing import List, Optional, Tuple, Callable, Any, AsyncGenerator, Dict
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.domain.ports.meal_suggestion_repository_port import MealSuggestionRepositoryPort
-from src.domain.services.meal_suggestion.macro_validation_service import MacroValidationService
-from src.domain.services.meal_suggestion.nutrition_lookup_service import NutritionLookupService
+from src.domain.ports.meal_suggestion_repository_port import (
+    MealSuggestionRepositoryPort,
+)
+from src.domain.services.meal_suggestion.macro_validation_service import (
+    MacroValidationService,
+)
+from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+    NutritionLookupService,
+)
 from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
     DeepLSuggestionTranslationService,
 )
-from src.domain.services.meal_suggestion.parallel_recipe_generator import ParallelRecipeGenerator
+from src.domain.services.meal_suggestion.parallel_recipe_generator import (
+    ParallelRecipeGenerator,
+)
 from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
     get_adjusted_daily_target,
 )
@@ -98,7 +107,9 @@ class SuggestionOrchestrationService:
         )
 
         suggestions = await self._recipe_generator.generate(
-            session=session, exclude_meal_names=exclude_names, suggestion_count=suggestion_count,
+            session=session,
+            exclude_meal_names=exclude_names,
+            suggestion_count=suggestion_count,
         )
 
         await self._persist_generation_result(
@@ -192,11 +203,23 @@ class SuggestionOrchestrationService:
             try:
                 return await self._load_existing_session(session_id, user_id, language)
             except ValueError:
-                logger.info(f"Session {session_id} not found, creating new session for user {user_id}")
+                logger.info(
+                    f"Session {session_id} not found, creating new session for user {user_id}"
+                )
         return await self._create_new_session(
-            user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
-            language, servings, cooking_equipment, cuisine_region,
-            calorie_target_override, protein_target, carbs_target, fat_target,
+            user_id,
+            meal_type,
+            meal_portion_type,
+            ingredients,
+            cooking_time_minutes,
+            language,
+            servings,
+            cooking_equipment,
+            cuisine_region,
+            calorie_target_override,
+            protein_target,
+            carbs_target,
+            fat_target,
         )
 
     async def _persist_generation_result(
@@ -219,15 +242,21 @@ class SuggestionOrchestrationService:
     ) -> Tuple[SuggestionSession, List[str]]:
         session = await self._repo.get_session(session_id)
         if not session:
-            logger.warning(f"Session {session_id} not found or expired. Creating new for user {user_id}")
+            logger.warning(
+                f"Session {session_id} not found or expired. Creating new for user {user_id}"
+            )
             raise ValueError(f"Session {session_id} not found")
         if session.user_id != user_id:
-            logger.warning(f"Session {session_id} user mismatch: expected {user_id}, got {session.user_id}")
+            logger.warning(
+                f"Session {session_id} user mismatch: expected {user_id}, got {session.user_id}"
+            )
             raise ValueError(f"Session {session_id} belongs to a different user")
         if session.language != language:
             logger.info(f"Updating session language: {session.language} -> {language}")
             session.language = language
-        logger.info(f"Regenerating for session {session_id}, excluding {len(session.shown_meal_names)} meals")
+        logger.info(
+            f"Regenerating for session {session_id}, excluding {len(session.shown_meal_names)} meals"
+        )
         return session, session.shown_meal_names
 
     async def _create_new_session(
@@ -247,7 +276,9 @@ class SuggestionOrchestrationService:
         fat_target: Optional[float] = None,
     ) -> Tuple[SuggestionSession, List[str]]:
         if not self._profile_provider:
-            raise RuntimeError("Profile provider not configured for SuggestionOrchestrationService")
+            raise RuntimeError(
+                "Profile provider not configured for SuggestionOrchestrationService"
+            )
         profile = self._profile_provider(user_id)
         if not profile:
             raise ValueError(f"User {user_id} profile not found")
@@ -255,9 +286,13 @@ class SuggestionOrchestrationService:
         if self._uow_factory:
             uow_ctx = self._uow_factory()
             async with uow_ctx as uow:
-                daily_tdee = await get_adjusted_daily_target(self._tdee_service, user_id, profile, uow=uow)
+                daily_tdee = await get_adjusted_daily_target(
+                    self._tdee_service, user_id, profile, uow=uow
+                )
         else:
-            daily_tdee = await get_adjusted_daily_target(self._tdee_service, user_id, profile)
+            daily_tdee = await get_adjusted_daily_target(
+                self._tdee_service, user_id, profile
+            )
         meals_per_day = getattr(profile, "meals_per_day", 3)
 
         if calorie_target_override:
@@ -313,23 +348,47 @@ class SuggestionOrchestrationService:
         is_existing = False
         if session_id:
             try:
-                session, exclude_names = await self._load_existing_session(session_id, user_id, language)
+                session, exclude_names = await self._load_existing_session(
+                    session_id, user_id, language
+                )
                 is_existing = True
             except ValueError:
                 session, exclude_names = await self._create_new_session(
-                    user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
-                    language, 1, [], cuisine_region,
-                    calorie_target_override, protein_target, carbs_target, fat_target,
+                    user_id,
+                    meal_type,
+                    meal_portion_type,
+                    ingredients,
+                    cooking_time_minutes,
+                    language,
+                    1,
+                    [],
+                    cuisine_region,
+                    calorie_target_override,
+                    protein_target,
+                    carbs_target,
+                    fat_target,
                 )
         else:
             session, exclude_names = await self._create_new_session(
-                user_id, meal_type, meal_portion_type, ingredients, cooking_time_minutes,
-                language, 1, [], cuisine_region,
-                calorie_target_override, protein_target, carbs_target, fat_target,
+                user_id,
+                meal_type,
+                meal_portion_type,
+                ingredients,
+                cooking_time_minutes,
+                language,
+                1,
+                [],
+                cuisine_region,
+                calorie_target_override,
+                protein_target,
+                carbs_target,
+                fat_target,
             )
 
         meals = await self._recipe_generator.generate_discovery(
-            session=session, exclude_meal_names=exclude_names, count=count,
+            session=session,
+            exclude_meal_names=exclude_names,
+            count=count,
         )
 
         # Track shown names for "load more" exclusion

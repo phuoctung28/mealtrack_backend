@@ -5,6 +5,7 @@ Two roles:
   validate_and_correct — AI macro sanity check (discovery path, legacy scan/parsing paths)
   validate_deterministic — sanity check + tier logging for deterministic recipe macros
 """
+
 import logging
 from typing import TYPE_CHECKING
 

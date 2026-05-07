@@ -1,6 +1,7 @@
 """
 Unit tests for DeleteUserCommandHandler.
 """
+
 from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
@@ -16,8 +17,12 @@ from src.infra.database.config import Base
 from src.infra.database.models.user import User
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.notification.notification_preferences import NotificationPreferencesORM as NotificationPreferences
-from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM as UserFcmToken
+from src.infra.database.models.notification.notification_preferences import (
+    NotificationPreferencesORM as NotificationPreferences,
+)
+from src.infra.database.models.notification.user_fcm_token import (
+    UserFcmTokenORM as UserFcmToken,
+)
 from src.infra.repositories.user_repository import UserRepository
 
 
@@ -141,7 +146,7 @@ def active_user(db_session):
         last_name="User",
         phone_number="+1234567890",
         display_name="Active User",
-        is_active=True
+        is_active=True,
     )
     db_session.add(user)
     db_session.commit()
@@ -157,7 +162,7 @@ def inactive_user(db_session):
         username="deleted_user_123",
         password_hash="DELETED",
         firebase_uid="firebase_deleted_123",
-        is_active=False
+        is_active=False,
     )
     db_session.add(user)
     db_session.commit()
@@ -169,7 +174,9 @@ class TestDeleteUserCommandHandler:
     """Test suite for DeleteUserCommandHandler."""
 
     @pytest.mark.asyncio
-    async def test_delete_active_user_successfully(self, delete_handler, active_user, db_session):
+    async def test_delete_active_user_successfully(
+        self, delete_handler, active_user, db_session
+    ):
         """Test successfully deleting an active user."""
         # Arrange
         command = DeleteUserCommand(firebase_uid=active_user.firebase_uid)
@@ -178,7 +185,9 @@ class TestDeleteUserCommandHandler:
             "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
-            with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+            with patch(
+                "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+            ) as mock_firebase:
                 mock_firebase.return_value = True
 
                 # Act
@@ -190,14 +199,16 @@ class TestDeleteUserCommandHandler:
                 assert result["message"] == "Account successfully deleted"
 
                 # Verify user is soft deleted
-                deleted_user = db_session.query(User).filter(
-                    User.id == active_user.id
-                ).first()
+                deleted_user = (
+                    db_session.query(User).filter(User.id == active_user.id).first()
+                )
                 assert deleted_user.is_active is False
                 mock_firebase.assert_called_once_with(active_user.firebase_uid)
 
     @pytest.mark.asyncio
-    async def test_anonymize_user_data_on_deletion(self, delete_handler, active_user, db_session):
+    async def test_anonymize_user_data_on_deletion(
+        self, delete_handler, active_user, db_session
+    ):
         """Test that user data is anonymized during deletion."""
         # Arrange
         command = DeleteUserCommand(firebase_uid=active_user.firebase_uid)
@@ -207,16 +218,16 @@ class TestDeleteUserCommandHandler:
             "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
-            with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+            with patch(
+                "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+            ) as mock_firebase:
                 mock_firebase.return_value = True
 
                 # Act
                 await delete_handler.handle(command)
 
                 # Assert - verify data anonymization
-                deleted_user = db_session.query(User).filter(
-                    User.id == user_id
-                ).first()
+                deleted_user = db_session.query(User).filter(User.id == user_id).first()
                 assert deleted_user.email == f"deleted_{user_id}@deleted.local"
                 assert deleted_user.username == f"deleted_user_{user_id}"
                 assert deleted_user.first_name is None
@@ -227,7 +238,9 @@ class TestDeleteUserCommandHandler:
                 assert deleted_user.password_hash == "DELETED"
 
     @pytest.mark.asyncio
-    async def test_delete_inactive_user_raises_not_found(self, delete_handler, inactive_user, db_session):
+    async def test_delete_inactive_user_raises_not_found(
+        self, delete_handler, inactive_user, db_session
+    ):
         """Test that deleting an inactive user raises ResourceNotFoundException."""
         # Arrange
         command = DeleteUserCommand(firebase_uid=inactive_user.firebase_uid)
@@ -241,7 +254,9 @@ class TestDeleteUserCommandHandler:
                 await delete_handler.handle(command)
 
     @pytest.mark.asyncio
-    async def test_delete_nonexistent_user_raises_not_found(self, delete_handler, db_session):
+    async def test_delete_nonexistent_user_raises_not_found(
+        self, delete_handler, db_session
+    ):
         """Test that deleting a non-existent user raises ResourceNotFoundException."""
         # Arrange
         command = DeleteUserCommand(firebase_uid="nonexistent_firebase_uid")
@@ -255,7 +270,9 @@ class TestDeleteUserCommandHandler:
                 await delete_handler.handle(command)
 
     @pytest.mark.asyncio
-    async def test_firebase_deletion_failure_does_not_rollback_db(self, delete_handler, active_user, db_session):
+    async def test_firebase_deletion_failure_does_not_rollback_db(
+        self, delete_handler, active_user, db_session
+    ):
         """Test that Firebase deletion failure doesn't rollback database changes."""
         # Arrange
         command = DeleteUserCommand(firebase_uid=active_user.firebase_uid)
@@ -265,7 +282,9 @@ class TestDeleteUserCommandHandler:
             "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
-            with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+            with patch(
+                "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+            ) as mock_firebase:
                 mock_firebase.side_effect = Exception("Firebase service unavailable")
 
                 # Act
@@ -273,9 +292,7 @@ class TestDeleteUserCommandHandler:
 
                 # Assert - database changes should persist
                 assert result["deleted"] is True
-                deleted_user = db_session.query(User).filter(
-                    User.id == user_id
-                ).first()
+                deleted_user = db_session.query(User).filter(User.id == user_id).first()
                 assert deleted_user.is_active is False
                 assert deleted_user.email == f"deleted_{user_id}@deleted.local"
 
@@ -293,7 +310,9 @@ class TestDeleteUserCommandHandler:
                 await delete_handler.handle(command)
 
     @pytest.mark.asyncio
-    async def test_delete_user_preserves_user_id_in_anonymized_email(self, delete_handler, active_user, db_session):
+    async def test_delete_user_preserves_user_id_in_anonymized_email(
+        self, delete_handler, active_user, db_session
+    ):
         """Test that anonymized email preserves user ID for audit trail."""
         # Arrange
         command = DeleteUserCommand(firebase_uid=active_user.firebase_uid)
@@ -303,29 +322,33 @@ class TestDeleteUserCommandHandler:
             "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
-            with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+            with patch(
+                "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+            ) as mock_firebase:
                 mock_firebase.return_value = True
 
                 # Act
                 await delete_handler.handle(command)
 
                 # Assert - verify user ID is in anonymized email for audit trail
-                deleted_user = db_session.query(User).filter(
-                    User.id == user_id
-                ).first()
+                deleted_user = db_session.query(User).filter(User.id == user_id).first()
                 assert str(user_id) in deleted_user.email
                 assert str(user_id) in deleted_user.username
 
     @pytest.mark.asyncio
-    async def test_delete_handles_exception_and_logs(self, delete_handler, active_user, db_session):
+    async def test_delete_handles_exception_and_logs(
+        self, delete_handler, active_user, db_session
+    ):
         """Test that exceptions are properly handled and logged."""
         # Arrange
         command = DeleteUserCommand(firebase_uid=active_user.firebase_uid)
 
-        with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+        with patch(
+            "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+        ) as mock_firebase:
             # Simulate unexpected database error
             mock_firebase.return_value = True
-            
+
             # Patch UnitOfWork to raise during commit
             class FailingUnitOfWork(DummyUnitOfWork):
                 async def commit(self):
@@ -354,7 +377,7 @@ class TestDeleteUserCommandHandlerIntegration:
             first_name="Integration",
             last_name="Test",
             phone_number="+1987654321",
-            is_active=True
+            is_active=True,
         )
         db_session.add(user)
         db_session.commit()
@@ -367,7 +390,9 @@ class TestDeleteUserCommandHandlerIntegration:
             "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
-            with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+            with patch(
+                "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+            ) as mock_firebase:
                 mock_firebase.return_value = True
 
                 # Act
@@ -391,14 +416,14 @@ class TestDeleteUserCommandHandlerIntegration:
             username="user1",
             password_hash="pwd1",
             firebase_uid="firebase_1",
-            is_active=True
+            is_active=True,
         )
         user2 = User(
             email="user2@example.com",
             username="user2",
             password_hash="pwd2",
             firebase_uid="firebase_2",
-            is_active=True
+            is_active=True,
         )
         db_session.add_all([user1, user2])
         db_session.commit()
@@ -409,7 +434,9 @@ class TestDeleteUserCommandHandlerIntegration:
             "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
-            with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+            with patch(
+                "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+            ) as mock_firebase:
                 mock_firebase.return_value = True
 
                 # Act - delete only user1
@@ -434,7 +461,7 @@ class TestDeleteUserCommandHandlerIntegration:
             firebase_uid="firebase_audit",
             first_name="Audit",
             last_name="Test",
-            is_active=True
+            is_active=True,
         )
         db_session.add(user)
         db_session.commit()
@@ -449,7 +476,9 @@ class TestDeleteUserCommandHandlerIntegration:
             "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
-            with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+            with patch(
+                "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+            ) as mock_firebase:
                 mock_firebase.return_value = True
 
                 # Act
@@ -470,7 +499,7 @@ class TestDeleteUserCommandHandlerIntegration:
             username="timestamp_user",
             password_hash="hashed_password",
             firebase_uid="firebase_timestamp_123",
-            is_active=True
+            is_active=True,
         )
         db_session.add(user)
         db_session.commit()
@@ -484,7 +513,9 @@ class TestDeleteUserCommandHandlerIntegration:
             "src.app.handlers.command_handlers.delete_user_command_handler.AsyncUnitOfWork",
             MagicMock(return_value=DummyUnitOfWork(db_session)),
         ):
-            with patch('src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user') as mock_firebase:
+            with patch(
+                "src.app.handlers.command_handlers.delete_user_command_handler.FirebaseAuthService.delete_firebase_user"
+            ) as mock_firebase:
                 mock_firebase.return_value = True
 
                 # Act

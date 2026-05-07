@@ -2,6 +2,7 @@
 Centralized prompt template manager for meal generation.
 Reduces prompt tokens through template compression and reuse.
 """
+
 from typing import List, Optional
 
 from .prompt_constants import (
@@ -64,37 +65,37 @@ class PromptTemplateManager:
     ) -> str:
         """
         Build compressed base requirements section.
-        
+
         Args:
             ingredients: Available ingredients list
             seasonings: Available seasonings list
             dietary_preferences: User dietary preferences
             allergies: User allergies
-            
+
         Returns:
             Compressed requirements string
         """
         parts = []
-        
+
         # Ingredients (limit to 8 for token savings)
         ing_str = ", ".join(ingredients[:8]) if ingredients else "common ingredients"
         parts.append(f"Ingredients: {ing_str}")
-        
+
         # Seasonings (optional)
         if seasonings:
             seas_str = ", ".join(seasonings[:5])
             parts.append(f"Seasonings: {seas_str}")
-        
+
         # Constraints
         constraints = []
         if allergies:
             constraints.append(f"AVOID: {', '.join(allergies)}")
         if dietary_preferences:
             constraints.append(f"Diet: {', '.join(dietary_preferences)}")
-        
+
         if constraints:
             parts.append(" | ".join(constraints))
-        
+
         return "\n".join(parts)
 
     @classmethod
@@ -306,7 +307,11 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
 
         # Add explicit macro targets when overrides provided
         macro_target_str = ""
-        if protein_target is not None and carbs_target is not None and fat_target is not None:
+        if (
+            protein_target is not None
+            and carbs_target is not None
+            and fat_target is not None
+        ):
             macro_target_str = f"\nMacro targets: ~{int(protein_target)}g protein, ~{int(carbs_target)}g carbs, ~{int(fat_target)}g fat"
 
         time_str = f" | ≤{cooking_time_minutes} min" if cooking_time_minutes else ""

@@ -1,25 +1,19 @@
 """
 Mapper for TDEE calculation DTOs and domain models.
 """
+
 from src.api.mappers.base_mapper import BaseMapper
 from src.api.schemas.request import TdeeCalculationRequest
-from src.api.schemas.response import (
-    TdeeCalculationResponse,
-    MacroTargetsResponse
-)
+from src.api.schemas.response import TdeeCalculationResponse, MacroTargetsResponse
 from src.domain.mappers.activity_goal_mapper import ActivityGoalMapper
-from src.domain.model.user import (
-    TdeeRequest,
-    TdeeResponse,
-    Sex,
-    Goal,
-    UnitSystem
-)
+from src.domain.model.user import TdeeRequest, TdeeResponse, Sex, Goal, UnitSystem
 
 
-class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculationResponse]):
+class TdeeMapper(
+    BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculationResponse]
+):
     """Mapper for TDEE calculation data transformation."""
-    
+
     def to_domain(self, dto: TdeeCalculationRequest) -> TdeeRequest:
         """
         Convert TdeeCalculationRequest DTO to TdeeRequest domain model.
@@ -31,7 +25,7 @@ class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculation
             TdeeRequest domain model
         """
         # Map string values to enums using centralized mapper
-        sex = Sex.MALE if dto.sex.lower() == 'male' else Sex.FEMALE
+        sex = Sex.MALE if dto.sex.lower() == "male" else Sex.FEMALE
 
         return TdeeRequest(
             age=dto.age,
@@ -43,16 +37,20 @@ class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculation
             training_days_per_week=dto.training_days_per_week,
             training_minutes_per_session=dto.training_minutes_per_session,
             goal=ActivityGoalMapper.map_goal(dto.goal.value),
-            unit_system=UnitSystem.METRIC if dto.unit_system.value == 'metric' else UnitSystem.IMPERIAL
+            unit_system=(
+                UnitSystem.METRIC
+                if dto.unit_system.value == "metric"
+                else UnitSystem.IMPERIAL
+            ),
         )
-    
+
     def to_response_dto(self, domain: TdeeResponse) -> TdeeCalculationResponse:
         """
         Convert TdeeResponse domain model to TdeeCalculationResponse DTO.
-        
+
         Args:
             domain: TDEE response domain model
-            
+
         Returns:
             TdeeCalculationResponse DTO
         """
@@ -61,16 +59,16 @@ class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculation
             calories=domain.macros.calories,
             protein=domain.macros.protein,
             fat=domain.macros.fat,
-            carbs=domain.macros.carbs
+            carbs=domain.macros.carbs,
         )
-        
+
         return TdeeCalculationResponse(
             bmr=domain.bmr,
             tdee=domain.tdee,
             macros=macros_dto,
-            goal=domain.goal.value  # Convert enum to string
+            goal=domain.goal.value,  # Convert enum to string
         )
-    
+
     @staticmethod
     def map_to_profile_dict(dto: TdeeCalculationRequest) -> dict:
         """
@@ -85,8 +83,14 @@ class TdeeMapper(BaseMapper[TdeeRequest, TdeeCalculationRequest, TdeeCalculation
         return {
             "age": dto.age,
             "gender": dto.sex,
-            "height_cm": dto.height if dto.unit_system.value == "metric" else dto.height * 2.54,
-            "weight_kg": dto.weight if dto.unit_system.value == "metric" else dto.weight * 0.453592,
+            "height_cm": (
+                dto.height if dto.unit_system.value == "metric" else dto.height * 2.54
+            ),
+            "weight_kg": (
+                dto.weight
+                if dto.unit_system.value == "metric"
+                else dto.weight * 0.453592
+            ),
             "body_fat_percentage": dto.body_fat_percentage,
             "job_type": dto.job_type.value,
             "training_days_per_week": dto.training_days_per_week,

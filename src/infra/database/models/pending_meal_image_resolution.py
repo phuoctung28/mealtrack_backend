@@ -1,4 +1,5 @@
 """ORM model for the pending-resolution queue."""
+
 from __future__ import annotations
 
 from sqlalchemy import Column, DateTime, Integer, Text, func
@@ -14,7 +15,8 @@ class PendingMealImageResolutionModel(Base):
     candidate_image_url = Column(Text, nullable=True)
     candidate_thumbnail_url = Column(Text, nullable=True)
     candidate_source = Column(Text, nullable=True)
-    enqueued_at = Column(DateTime(timezone=True),
-                         server_default=func.now(), nullable=False)
+    enqueued_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     attempts = Column(Integer, nullable=False, server_default="0")
     last_error = Column(Text, nullable=True)

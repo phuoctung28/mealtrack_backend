@@ -1,9 +1,12 @@
 """
 Unit tests for ingredient_name_normalizer.normalize_food_name.
 """
+
 import pytest
 
-from src.domain.services.meal_suggestion.ingredient_name_normalizer import normalize_food_name
+from src.domain.services.meal_suggestion.ingredient_name_normalizer import (
+    normalize_food_name,
+)
 
 
 @pytest.mark.unit

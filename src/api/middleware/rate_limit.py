@@ -1,4 +1,5 @@
 """Rate limiting middleware using slowapi."""
+
 from __future__ import annotations
 
 import base64

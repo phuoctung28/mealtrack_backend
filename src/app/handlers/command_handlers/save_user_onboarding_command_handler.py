@@ -2,6 +2,7 @@
 SaveUserOnboardingCommandHandler - Individual handler file.
 Auto-extracted for better maintainability.
 """
+
 import logging
 from typing import Optional
 from uuid import UUID
@@ -22,7 +23,11 @@ logger = logging.getLogger(__name__)
 class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, None]):
     """Handler for saving user onboarding data."""
 
-    def __init__(self, uow: Optional[UnitOfWorkPort] = None, cache_service: Optional[CachePort] = None):
+    def __init__(
+        self,
+        uow: Optional[UnitOfWorkPort] = None,
+        cache_service: Optional[CachePort] = None,
+    ):
         self.uow = uow
         self.cache_service = cache_service
 
@@ -46,7 +51,9 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                 # Get existing user
                 user = await uow.users.find_by_id(UUID(command.user_id))
                 if not user:
-                    raise ResourceNotFoundException(f"User {command.user_id} not found. User must be created before onboarding.")
+                    raise ResourceNotFoundException(
+                        f"User {command.user_id} not found. User must be created before onboarding."
+                    )
 
                 # Get or create user profile
                 profile = await uow.users.get_profile(UUID(command.user_id))
@@ -83,7 +90,9 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     profile.body_fat_percentage = command.body_fat_percentage
                     profile.job_type = command.job_type
                     profile.training_days_per_week = command.training_days_per_week
-                    profile.training_minutes_per_session = command.training_minutes_per_session
+                    profile.training_minutes_per_session = (
+                        command.training_minutes_per_session
+                    )
                     profile.fitness_goal = command.fitness_goal
                     profile.meals_per_day = command.meals_per_day
                     if command.pain_points is not None:
@@ -100,7 +109,11 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
                     profile.training_types = command.training_types
 
                 # Save custom macro overrides if all three provided
-                custom_values = [command.custom_protein_g, command.custom_carbs_g, command.custom_fat_g]
+                custom_values = [
+                    command.custom_protein_g,
+                    command.custom_carbs_g,
+                    command.custom_fat_g,
+                ]
                 if all(v is not None for v in custom_values):
                     profile.custom_protein_g = command.custom_protein_g
                     profile.custom_carbs_g = command.custom_carbs_g

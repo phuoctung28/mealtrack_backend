@@ -1,6 +1,7 @@
 """
 Handler for deleting FCM tokens.
 """
+
 import logging
 from typing import Any, Dict
 
@@ -26,18 +27,17 @@ class DeleteFcmTokenCommandHandler(EventHandler[DeleteFcmTokenCommand, Dict[str,
         """Handle FCM token deletion."""
         try:
             async with AsyncUnitOfWork() as uow:
-                existing_token = await uow.notifications.find_fcm_token_by_token(command.fcm_token)
+                existing_token = await uow.notifications.find_fcm_token_by_token(
+                    command.fcm_token
+                )
 
                 if not existing_token:
-                    return {
-                        "success": False,
-                        "message": "Token not found"
-                    }
+                    return {"success": False, "message": "Token not found"}
 
                 if existing_token.user_id != command.user_id:
                     return {
                         "success": False,
-                        "message": "Token does not belong to user"
+                        "message": "Token does not belong to user",
                     }
 
                 deleted = await uow.notifications.delete_fcm_token(command.fcm_token)
@@ -45,15 +45,9 @@ class DeleteFcmTokenCommandHandler(EventHandler[DeleteFcmTokenCommand, Dict[str,
 
                 if deleted:
                     logger.info(f"FCM token deleted for user {command.user_id}")
-                    return {
-                        "success": True,
-                        "message": "Token deleted successfully"
-                    }
+                    return {"success": True, "message": "Token deleted successfully"}
                 else:
-                    return {
-                        "success": False,
-                        "message": "Failed to delete token"
-                    }
+                    return {"success": False, "message": "Failed to delete token"}
         except Exception as e:
             logger.error(f"Error deleting FCM token: {e}")
             raise e

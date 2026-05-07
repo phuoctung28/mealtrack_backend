@@ -3,6 +3,7 @@ Unit tests for IngredientNutritionResolver.
 
 All FatSecret interactions are mocked — no real API calls.
 """
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,10 +12,10 @@ from src.domain.services.meal_suggestion.ingredient_nutrition_resolver import (
     PerHundredGramsMacros,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_generic_result(
     food_id: str = "fs-1",
@@ -73,8 +74,11 @@ def resolver(mock_fatsecret, mock_repo):
 # resolve() — happy path
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
-async def test_resolve_chicken_breast_returns_macros(resolver, mock_fatsecret, mock_repo):
+async def test_resolve_chicken_breast_returns_macros(
+    resolver, mock_fatsecret, mock_repo
+):
     """resolve('chicken breast') with mocked generic result returns PerHundredGramsMacros."""
     mock_fatsecret.search_foods.return_value = [_make_generic_result()]
 
@@ -104,7 +108,9 @@ async def test_resolve_calls_upsert_on_hit(resolver, mock_fatsecret, mock_repo):
 
 
 @pytest.mark.asyncio
-async def test_resolve_passes_normalized_name_to_upsert(resolver, mock_fatsecret, mock_repo):
+async def test_resolve_passes_normalized_name_to_upsert(
+    resolver, mock_fatsecret, mock_repo
+):
     """name_normalized passed to upsert is the normalize_food_name() output."""
     mock_fatsecret.search_foods.return_value = [_make_generic_result()]
 
@@ -120,8 +126,11 @@ async def test_resolve_passes_normalized_name_to_upsert(resolver, mock_fatsecret
 # resolve() — empty / no results
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
-async def test_resolve_returns_none_on_empty_results(resolver, mock_fatsecret, mock_repo):
+async def test_resolve_returns_none_on_empty_results(
+    resolver, mock_fatsecret, mock_repo
+):
     """resolve() returns None when FatSecret finds nothing."""
     mock_fatsecret.search_foods.return_value = []
 
@@ -135,8 +144,11 @@ async def test_resolve_returns_none_on_empty_results(resolver, mock_fatsecret, m
 # resolve() — rate limit / network exception
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
-async def test_resolve_returns_none_on_fatsecret_exception(resolver, mock_fatsecret, mock_repo):
+async def test_resolve_returns_none_on_fatsecret_exception(
+    resolver, mock_fatsecret, mock_repo
+):
     """FatSecret exception (network/rate-limit) returns None gracefully."""
     mock_fatsecret.search_foods.side_effect = Exception("429 Too Many Requests")
 
@@ -165,10 +177,17 @@ async def test_resolve_logs_warning_on_fatsecret_exception(
 # resolve() — missing macro fields in FatSecret result
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
-async def test_resolve_returns_none_when_macros_missing(resolver, mock_fatsecret, mock_repo):
+async def test_resolve_returns_none_when_macros_missing(
+    resolver, mock_fatsecret, mock_repo
+):
     """If FatSecret result is missing required macro fields, returns None."""
-    incomplete = {"food_id": "fs-2", "food_type": "Generic", "description": "Mystery food"}
+    incomplete = {
+        "food_id": "fs-2",
+        "food_type": "Generic",
+        "description": "Mystery food",
+    }
     mock_fatsecret.search_foods.return_value = [incomplete]
 
     result = await resolver.resolve("mystery food")
@@ -180,6 +199,7 @@ async def test_resolve_returns_none_when_macros_missing(resolver, mock_fatsecret
 # ---------------------------------------------------------------------------
 # _pick_generic()
 # ---------------------------------------------------------------------------
+
 
 class TestPickGeneric:
     """Unit tests for the generic-preference filter."""
@@ -229,6 +249,7 @@ class TestPickGeneric:
 # ---------------------------------------------------------------------------
 # upsert failure is non-fatal
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_resolve_returns_macros_even_if_upsert_fails(

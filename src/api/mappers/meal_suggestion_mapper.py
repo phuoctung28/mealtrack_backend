@@ -91,10 +91,7 @@ def to_discovery_batch_response(
     images = meal_images or {}
     return DiscoveryBatchResponse(
         session_id=session.id,
-        meals=[
-            to_discovery_meal_response(s, images.get(s.id))
-            for s in suggestions
-        ],
+        meals=[to_discovery_meal_response(s, images.get(s.id)) for s in suggestions],
         has_more=has_more,
         meal_count=len(suggestions),
     )
@@ -114,5 +111,3 @@ def to_suggestions_list_response(
         suggestion_count=len(suggestions),
         expires_at=session.expires_at,
     )
-
-

@@ -2,8 +2,8 @@
 Centralized prompt constants with compressed templates.
 Reduces prompt tokens by ~40-60% through deduplication.
 """
-from typing import Dict
 
+from typing import Dict
 
 # =============================================================================
 # INGREDIENT RULES (Compressed)
@@ -99,7 +99,7 @@ EMOJI_RULES = (
 # JSON SCHEMAS (Compressed - No inline comments)
 # =============================================================================
 JSON_SCHEMAS: Dict[str, str] = {
-    "weekly_meal": '''{
+    "weekly_meal": """{
   "week": [{
     "day": "Monday",
     "meals": [{
@@ -122,9 +122,8 @@ JSON_SCHEMAS: Dict[str, str] = {
       "cuisine_type": "International"
     }]
   }]
-}''',
-    
-    "daily_meal": '''{
+}""",
+    "daily_meal": """{
   "meals": [{
     "meal_type": "breakfast",
     "name": "Name",
@@ -144,9 +143,8 @@ JSON_SCHEMAS: Dict[str, str] = {
     "is_gluten_free": false,
     "cuisine_type": "International"
   }]
-}''',
-
-    "single_meal": '''{
+}""",
+    "single_meal": """{
   "name": "Name",
   "emoji": "🍳",
   "description": "Description",
@@ -163,9 +161,8 @@ JSON_SCHEMAS: Dict[str, str] = {
   "is_vegan": false,
   "is_gluten_free": false,
   "cuisine_type": "International"
-}''',
-
-    "suggestion_recipe": '''{
+}""",
+    "suggestion_recipe": """{
   "name": "Dish Name",
   "emoji": "🍜",
   "description": "Brief description",
@@ -180,7 +177,7 @@ JSON_SCHEMAS: Dict[str, str] = {
     {"step": 2, "instruction": "Action", "duration_minutes": 10}
   ],
   "prep_time_minutes": 20
-}'''
+}""",
 }
 
 
@@ -193,8 +190,8 @@ GOAL_GUIDANCE = {
     "build_muscle": "High protein, complete amino acids",
     "maintain_weight": "Balanced portions",
     "cut": "High-volume, low-calorie, fiber-rich, high-protein",
-    "bulk": "Calorie-dense, healthy fats, complex carbs", 
-    "recomp": "Balanced macros, moderate deficit"
+    "bulk": "Calorie-dense, healthy fats, complex carbs",
+    "recomp": "Balanced macros, moderate deficit",
 }
 
 
@@ -227,7 +224,7 @@ LANGUAGE_NAMES = {
 # =============================================================================
 def get_fallback_meal_name(language: str, meal_type: str, index: int) -> str:
     """Get English fallback meal name.
-    
+
     Note: Always returns English names. Translation happens in Phase 3 if needed.
 
     Args:

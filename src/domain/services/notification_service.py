@@ -157,8 +157,11 @@ class NotificationService:
     ) -> Dict[str, Any]:
         """Send daily summary with gender-aware tone."""
         title, body = self._get_summary_message(
-            calories_consumed, calorie_goal, meals_logged,
-            language=language, gender=gender,
+            calories_consumed,
+            calorie_goal,
+            meals_logged,
+            language=language,
+            gender=gender,
         )
 
         return await self.send_notification(
@@ -175,8 +178,12 @@ class NotificationService:
         )
 
     def _get_summary_message(
-        self, consumed: float, goal: float, meals_logged: int,
-        language: str = "en", gender: str = "male",
+        self,
+        consumed: float,
+        goal: float,
+        meals_logged: int,
+        language: str = "en",
+        gender: str = "male",
     ) -> tuple[str, str]:
         """Get title and body for summary based on consumption level, language, and gender."""
         summary = get_messages(language, gender)["daily_summary"]

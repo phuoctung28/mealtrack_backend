@@ -1,4 +1,5 @@
 """Tests for GPTResponseParser behavior."""
+
 import pytest
 
 

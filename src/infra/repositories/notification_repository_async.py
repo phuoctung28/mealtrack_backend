@@ -5,6 +5,7 @@ Background-task methods (find_users_for_meal_reminder,
 find_users_for_daily_summary) remain on the sync NotificationRepository
 and will be migrated in Phase 3b.
 """
+
 import logging
 from typing import List, Optional
 
@@ -13,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.model.notification import UserFcmToken, NotificationPreferences
 from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM
-from src.infra.database.models.notification.notification_preferences import NotificationPreferencesORM
+from src.infra.database.models.notification.notification_preferences import (
+    NotificationPreferencesORM,
+)
 from src.infra.mappers.notification_mapper import (
     fcm_token_orm_to_domain,
     notification_prefs_orm_to_domain,

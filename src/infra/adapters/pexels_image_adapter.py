@@ -2,6 +2,7 @@
 Pexels image search adapter for food photos (NM-72).
 Uses Pexels API v1 — returns landscape photos ≥400px wide.
 """
+
 import logging
 from typing import Optional
 
@@ -24,7 +25,9 @@ class PexelsImageAdapter(FoodImageSearchPort):
         results = await self.search_multiple(query, count=1)
         return results[0] if results else None
 
-    async def search_multiple(self, query: str, count: int = 5) -> list[FoodImageResult]:
+    async def search_multiple(
+        self, query: str, count: int = 5
+    ) -> list[FoodImageResult]:
         """Return up to `count` candidates for SigLIP scoring.
 
         Prefixes the query with "food" so Pexels biases toward food photography.
@@ -42,7 +45,11 @@ class PexelsImageAdapter(FoodImageSearchPort):
                 response = await client.get(
                     PEXELS_API_URL,
                     headers={"Authorization": api_key},
-                    params={"query": food_query, "per_page": count, "orientation": "landscape"},
+                    params={
+                        "query": food_query,
+                        "per_page": count,
+                        "orientation": "landscape",
+                    },
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -58,14 +65,16 @@ class PexelsImageAdapter(FoodImageSearchPort):
                 if not url or not alt or width < MIN_WIDTH:
                     continue
 
-                results.append(FoodImageResult(
-                    url=url,
-                    thumbnail_url=thumbnail or url,
-                    source="pexels",
-                    photographer=photo.get("photographer"),
-                    photographer_url=photo.get("photographer_url"),
-                    alt_text=alt,
-                ))
+                results.append(
+                    FoodImageResult(
+                        url=url,
+                        thumbnail_url=thumbnail or url,
+                        source="pexels",
+                        photographer=photo.get("photographer"),
+                        photographer_url=photo.get("photographer_url"),
+                        alt_text=alt,
+                    )
+                )
 
             return results
 

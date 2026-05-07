@@ -1,4 +1,5 @@
 """Handler for saving a meal suggestion to user's bookmarks."""
+
 import logging
 from typing import Any, Dict, Optional
 
@@ -35,7 +36,9 @@ class SaveSuggestionCommandHandler(EventHandler[SaveSuggestionCommand, Dict[str,
                 portion_multiplier=command.portion_multiplier,
                 suggestion_data=command.suggestion_data,
             )
-            logger.info(f"Saved suggestion {command.suggestion_id} for user {command.user_id}")
+            logger.info(
+                f"Saved suggestion {command.suggestion_id} for user {command.user_id}"
+            )
 
         if self.cache_service:
             cache_key, _ = CacheKeys.saved_suggestions(command.user_id)

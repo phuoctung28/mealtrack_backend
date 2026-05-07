@@ -7,3 +7,8 @@ Comprehensive guides for specific features and implementation details.
 ### Meal Suggestions
 
 - [Multilingual Support (Phase 01)](./meal-suggestions-multilingual.md) - Language support for 7 languages (en, vi, es, fr, de, ja, zh) with validation and fallback handling.
+
+## Deployment
+
+- [Render CD Flow](./render-cd.md) - Build, pre-deploy migrations, web startup, and emergency recovery for Render services.
+- [Neon to Render PostgreSQL Migration](./neon-to-render-migration.md) - Database migration checklist for moving PostgreSQL hosting.

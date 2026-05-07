@@ -4,6 +4,7 @@ Search chain: adapter list (injected) → first hit wins.
 Cache: 7-day TTL, max 5000 entries with LRU eviction.
 Confidence scoring: measures how well the image describes the meal name.
 """
+
 import logging
 import time
 from collections import OrderedDict
@@ -23,38 +24,150 @@ CACHE_MAX_ENTRIES = 5_000
 MIN_ACCEPT_CONFIDENCE = 0.3
 
 # Words too generic to be useful for matching
-_STOP_WORDS = frozenset({
-    "a", "an", "the", "with", "and", "or", "of", "in", "on", "for",
-    "style", "type", "dish", "food", "meal", "recipe", "plate",
-    "fresh", "delicious", "served", "background", "white", "black",
-    "wooden", "table", "bowl", "top", "view", "close",
-})
+_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "with",
+        "and",
+        "or",
+        "of",
+        "in",
+        "on",
+        "for",
+        "style",
+        "type",
+        "dish",
+        "food",
+        "meal",
+        "recipe",
+        "plate",
+        "fresh",
+        "delicious",
+        "served",
+        "background",
+        "white",
+        "black",
+        "wooden",
+        "table",
+        "bowl",
+        "top",
+        "view",
+        "close",
+    }
+)
 
 # Food-related words that confirm an image is about food
-_FOOD_SIGNALS = frozenset({
-    "chicken", "beef", "pork", "fish", "shrimp", "salmon", "tuna",
-    "rice", "pasta", "noodle", "bread", "salad", "soup", "steak",
-    "grilled", "roasted", "fried", "baked", "steamed", "sauteed",
-    "vegetable", "tomato", "potato", "onion", "garlic", "pepper",
-    "cheese", "egg", "butter", "cream", "sauce", "curry",
-    "caesar", "mediterranean", "thai", "mexican", "italian",
-    "tofu", "lamb", "duck", "crab", "lobster", "oyster", "sushi",
-    "ramen", "pho", "taco", "burrito", "pizza", "burger",
-    "pancake", "waffle", "omelette", "sandwich", "wrap",
-    "smoothie", "juice", "yogurt", "granola", "cereal",
-    "avocado", "broccoli", "spinach", "kale", "mushroom",
-    "lentil", "bean", "chickpea", "hummus", "falafel",
-    "risotto", "biryani", "paella", "gnocchi", "lasagna",
-    "kebab", "satay", "tempeh", "miso", "teriyaki",
-})
+_FOOD_SIGNALS = frozenset(
+    {
+        "chicken",
+        "beef",
+        "pork",
+        "fish",
+        "shrimp",
+        "salmon",
+        "tuna",
+        "rice",
+        "pasta",
+        "noodle",
+        "bread",
+        "salad",
+        "soup",
+        "steak",
+        "grilled",
+        "roasted",
+        "fried",
+        "baked",
+        "steamed",
+        "sauteed",
+        "vegetable",
+        "tomato",
+        "potato",
+        "onion",
+        "garlic",
+        "pepper",
+        "cheese",
+        "egg",
+        "butter",
+        "cream",
+        "sauce",
+        "curry",
+        "caesar",
+        "mediterranean",
+        "thai",
+        "mexican",
+        "italian",
+        "tofu",
+        "lamb",
+        "duck",
+        "crab",
+        "lobster",
+        "oyster",
+        "sushi",
+        "ramen",
+        "pho",
+        "taco",
+        "burrito",
+        "pizza",
+        "burger",
+        "pancake",
+        "waffle",
+        "omelette",
+        "sandwich",
+        "wrap",
+        "smoothie",
+        "juice",
+        "yogurt",
+        "granola",
+        "cereal",
+        "avocado",
+        "broccoli",
+        "spinach",
+        "kale",
+        "mushroom",
+        "lentil",
+        "bean",
+        "chickpea",
+        "hummus",
+        "falafel",
+        "risotto",
+        "biryani",
+        "paella",
+        "gnocchi",
+        "lasagna",
+        "kebab",
+        "satay",
+        "tempeh",
+        "miso",
+        "teriyaki",
+    }
+)
 
 # Non-food visual signals — strong indicator the image is wrong
-_NEGATIVE_SIGNALS = frozenset({
-    "building", "architecture", "skyline", "city", "street",
-    "car", "vehicle", "mountain", "landscape", "sunset",
-    "portrait", "selfie", "office", "computer", "phone",
-    "abstract", "pattern", "texture", "wallpaper",
-})
+_NEGATIVE_SIGNALS = frozenset(
+    {
+        "building",
+        "architecture",
+        "skyline",
+        "city",
+        "street",
+        "car",
+        "vehicle",
+        "mountain",
+        "landscape",
+        "sunset",
+        "portrait",
+        "selfie",
+        "office",
+        "computer",
+        "phone",
+        "abstract",
+        "pattern",
+        "texture",
+        "wallpaper",
+    }
+)
 
 
 class FoodImageSearchService:

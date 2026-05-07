@@ -4,6 +4,7 @@ Extracts language preference and stores in request.state for route handlers.
 Pure ASGI implementation — does not subclass BaseHTTPMiddleware, so it never
 buffers the request or response body.
 """
+
 import logging
 
 from fastapi import Request

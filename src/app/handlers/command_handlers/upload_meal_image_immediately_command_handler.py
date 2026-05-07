@@ -1,6 +1,7 @@
 """
 Handler for immediate meal image upload and analysis.
 """
+
 import asyncio
 import logging
 import time
@@ -10,7 +11,9 @@ from uuid import uuid4
 
 from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.app.events.base import EventHandler, handles
-from src.app.events.meal.meal_cache_invalidation_required_event import MealCacheInvalidationRequiredEvent
+from src.app.events.meal.meal_cache_invalidation_required_event import (
+    MealCacheInvalidationRequiredEvent,
+)
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal import MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
@@ -18,9 +21,18 @@ from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_analysis.fast_path_policy import MealAnalyzeFastPathPolicy
-from src.domain.services.meal_analysis.deepl_meal_translation_service import DeepLMealTranslationService
-from src.domain.services.meal_type_determination_service import determine_meal_type_from_timestamp
-from src.domain.utils.timezone_utils import utc_now, get_zone_info, is_valid_timezone, noon_utc_for_date
+from src.domain.services.meal_analysis.deepl_meal_translation_service import (
+    DeepLMealTranslationService,
+)
+from src.domain.services.meal_type_determination_service import (
+    determine_meal_type_from_timestamp,
+)
+from src.domain.utils.timezone_utils import (
+    utc_now,
+    get_zone_info,
+    is_valid_timezone,
+    noon_utc_for_date,
+)
 from src.infra.repositories.meal_repository import MealProjection
 from src.infra.config.settings import get_settings
 
@@ -28,7 +40,9 @@ logger = logging.getLogger(__name__)
 
 
 @handles(UploadMealImageImmediatelyCommand)
-class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyCommand, Meal]):
+class UploadMealImageImmediatelyHandler(
+    EventHandler[UploadMealImageImmediatelyCommand, Meal]
+):
     """Handler for immediate meal image upload and analysis."""
 
     def __init__(
@@ -48,7 +62,9 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         self.gpt_parser = gpt_parser
         self.meal_translation_service = meal_translation_service
         if fast_path_policy is None:
-            self._fast_path_policy = MealAnalyzeFastPathPolicy.from_settings(get_settings())
+            self._fast_path_policy = MealAnalyzeFastPathPolicy.from_settings(
+                get_settings()
+            )
         else:
             self._fast_path_policy = fast_path_policy
 
@@ -61,14 +77,21 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         for attempt in range(1, max_attempts + 1):
             try:
                 if command.user_description:
-                    from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+                    from src.domain.strategies.meal_analysis_strategy import (
+                        AnalysisStrategyFactory,
+                    )
+
                     logger.info(
                         f"[PHASE-1-START] meal={meal_id} | "
                         f"vision analysis with user context | "
                         f"attempt={attempt}/{max_attempts}"
                     )
-                    strategy = AnalysisStrategyFactory.create_user_context_strategy(command.user_description)
-                    return self.vision_service.analyze_with_strategy(command.file_contents, strategy)
+                    strategy = AnalysisStrategyFactory.create_user_context_strategy(
+                        command.user_description
+                    )
+                    return self.vision_service.analyze_with_strategy(
+                        command.file_contents, strategy
+                    )
 
                 logger.info(
                     f"[PHASE-1-START] meal={meal_id} | "
@@ -88,12 +111,21 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             raise last_error
         raise RuntimeError("Vision analysis failed without a captured exception.")
 
-    def _run_vision_once(self, command: UploadMealImageImmediatelyCommand, meal_id: str) -> Any:
+    def _run_vision_once(
+        self, command: UploadMealImageImmediatelyCommand, meal_id: str
+    ) -> Any:
         """Single-attempt vision call used by the parallel path (no retries to preserve latency budget)."""
         if command.user_description:
-            from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
-            strategy = AnalysisStrategyFactory.create_user_context_strategy(command.user_description)
-            return self.vision_service.analyze_with_strategy(command.file_contents, strategy)
+            from src.domain.strategies.meal_analysis_strategy import (
+                AnalysisStrategyFactory,
+            )
+
+            strategy = AnalysisStrategyFactory.create_user_context_strategy(
+                command.user_description
+            )
+            return self.vision_service.analyze_with_strategy(
+                command.file_contents, strategy
+            )
         return self.vision_service.analyze(command.file_contents)
 
     async def _handle_parallel_upload(
@@ -133,7 +165,9 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
             )
             saved_meal = await uow.meals.save(meal)
             await uow.commit()
-            logger.info(f"[PARALLEL] Created meal {saved_meal.meal_id} with ANALYZING status")
+            logger.info(
+                f"[PARALLEL] Created meal {saved_meal.meal_id} with ANALYZING status"
+            )
 
         logger.info(f"[PHASE-UPLOAD-START] meal={saved_meal.meal_id}")
         logger.info(f"[PHASE-ANALYSIS-START] meal={saved_meal.meal_id}")
@@ -141,27 +175,43 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
         loop = asyncio.get_event_loop()
         start = time.time()
         upload_task = loop.run_in_executor(
-            None, self.image_store.save, command.file_contents, command.content_type, placeholder_image_id
+            None,
+            self.image_store.save,
+            command.file_contents,
+            command.content_type,
+            placeholder_image_id,
         )
         analysis_task = loop.run_in_executor(
             None, self._run_vision_once, command, saved_meal.meal_id
         )
-        results = await asyncio.gather(upload_task, analysis_task, return_exceptions=True)
+        results = await asyncio.gather(
+            upload_task, analysis_task, return_exceptions=True
+        )
         total_elapsed = time.time() - start
 
         upload_result, analysis_result = results
         upload_error = upload_result if isinstance(upload_result, Exception) else None
-        analysis_error = analysis_result if isinstance(analysis_result, Exception) else None
+        analysis_error = (
+            analysis_result if isinstance(analysis_result, Exception) else None
+        )
 
         if upload_error:
-            logger.warning(f"[PHASE-UPLOAD-FAIL] meal={saved_meal.meal_id} | error={upload_error}")
+            logger.warning(
+                f"[PHASE-UPLOAD-FAIL] meal={saved_meal.meal_id} | error={upload_error}"
+            )
         else:
-            logger.info(f"[PHASE-UPLOAD-COMPLETE] meal={saved_meal.meal_id} | elapsed={total_elapsed:.2f}s")
+            logger.info(
+                f"[PHASE-UPLOAD-COMPLETE] meal={saved_meal.meal_id} | elapsed={total_elapsed:.2f}s"
+            )
 
         if analysis_error:
-            logger.warning(f"[PHASE-ANALYSIS-FAIL] meal={saved_meal.meal_id} | error={analysis_error}")
+            logger.warning(
+                f"[PHASE-ANALYSIS-FAIL] meal={saved_meal.meal_id} | error={analysis_error}"
+            )
         else:
-            logger.info(f"[PHASE-ANALYSIS-COMPLETE] meal={saved_meal.meal_id} | elapsed={total_elapsed:.2f}s")
+            logger.info(
+                f"[PHASE-ANALYSIS-COMPLETE] meal={saved_meal.meal_id} | elapsed={total_elapsed:.2f}s"
+            )
 
         if upload_error or analysis_error:
             meal.status = MealStatus.FAILED
@@ -224,7 +274,9 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                     food_items=nutrition.food_items,
                     target_language=command.language,
                 )
-                logger.info(f"[TRANSLATION] meal={meal.meal_id} translated to {command.language}")
+                logger.info(
+                    f"[TRANSLATION] meal={meal.meal_id} translated to {command.language}"
+                )
             except Exception as e:
                 logger.warning(f"[TRANSLATION] failed for meal={meal.meal_id}: {e}")
 
@@ -239,11 +291,13 @@ class UploadMealImageImmediatelyHandler(EventHandler[UploadMealImageImmediatelyC
                 meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
             )
 
-        await self.event_bus.publish(MealCacheInvalidationRequiredEvent(
-            aggregate_id=command.user_id,
-            user_id=command.user_id,
-            meal_date=meal_date,
-        ))
+        await self.event_bus.publish(
+            MealCacheInvalidationRequiredEvent(
+                aggregate_id=command.user_id,
+                user_id=command.user_id,
+                meal_date=meal_date,
+            )
+        )
 
         return final_meal
 

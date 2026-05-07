@@ -1,6 +1,7 @@
 """
 Meal queries.
 """
+
 from .get_daily_breakdown_query import GetDailyBreakdownQuery
 from .get_daily_macros_query import GetDailyMacrosQuery
 from .get_meal_by_id_query import GetMealByIdQuery

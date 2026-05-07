@@ -1,41 +1,63 @@
-# Migrations Setup
+# Migrations
 
-## First Time Setup (Existing Database)
+Database migrations using Alembic with timestamp-based naming.
 
-Since your database already has tables, initialize migrations with:
-
-```bash
-# Run ONCE to mark database at baseline
-./scripts/init_migrations.sh
-```
-
-This tells Alembic "the database already has all tables" without creating them.
-
-## Daily Workflow
-
-After changing models:
+## Quick Start
 
 ```bash
-# 1. Generate migration
-./scripts/migrate.sh generate "Add user preferences"
+# Check current status
+./scripts/development/migrate.sh status
 
-# 2. Review generated file in migrations/versions/
+# Generate new migration after model changes
+./scripts/development/migrate.sh generate "Add user preferences"
 
-# 3. Apply migration
-./scripts/migrate.sh upgrade
+# Test migration locally (upgrade -> downgrade -> upgrade)
+./scripts/development/migrate.sh test
+
+# Apply migrations
+./scripts/development/migrate.sh upgrade
+
+# Rollback last migration
+./scripts/development/migrate.sh downgrade
 ```
 
 ## Commands
 
-- `./scripts/migrate.sh check` - Check status and detect changes
-- `./scripts/migrate.sh generate "msg"` - Create new migration
-- `./scripts/migrate.sh upgrade` - Apply pending migrations
-- `./scripts/migrate.sh downgrade` - Rollback last migration
-- `./scripts/migrate.sh history` - View migration history
+| Command | Description |
+|---------|-------------|
+| `status` | Show current revision and pending migrations |
+| `generate <msg>` | Create new migration with autogenerate |
+| `upgrade` | Apply all pending migrations |
+| `downgrade` | Rollback the last migration |
+| `test` | Run upgrade -> downgrade -> upgrade cycle |
+
+## Migration File Naming
+
+New migrations use timestamp format: `YYYYMMDDHHMMSS_slug.py`
+
+Example: `20260502143022_add_user_preferences.py`
+
+Existing migrations (001-058) remain unchanged.
+
+## First Time Setup
+
+If this is a new database:
+
+```bash
+# Run ONCE to initialize the database
+python scripts/init_postgres_db.py
+```
+
+## Production Deployment
+
+For production, use the deployment runner which includes retry logic:
+
+```bash
+python migrations/run.py
+```
 
 ## Important Notes
 
-- The baseline migration (001) is empty because tables already exist
-- Only run `init_migrations.sh` ONCE per database
-- Future migrations will only contain incremental changes
 - Always review generated migrations before applying
+- Run `test` command locally before deploying
+- The baseline migration (001) is empty because tables already existed

@@ -2,6 +2,7 @@
 Base classes for event-driven architecture.
 Defined in domain so both app and infra layers can import without layer violations.
 """
+
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -10,24 +11,27 @@ from typing import TypeVar, Generic
 logger = logging.getLogger(__name__)
 
 # Type variable for event
-TEvent = TypeVar('TEvent', bound='Event')
-TResult = TypeVar('TResult')
+TEvent = TypeVar("TEvent", bound="Event")
+TResult = TypeVar("TResult")
 
 
 class Event(ABC):
     """Base class for all events."""
+
     pass
 
 
 @dataclass
 class Command(Event):
     """Base class for commands (events that change state)."""
+
     pass
 
 
 @dataclass
 class Query(Event):
     """Base class for queries (events that read state)."""
+
     pass
 
 
@@ -44,6 +48,7 @@ class DomainEvent(Event):
        - timestamp: datetime = field(default_factory=datetime.now)
        - correlation_id: str = field(default_factory=lambda: str(uuid4()))
     """
+
     pass
 
 
@@ -62,7 +67,9 @@ class EventHandler(ABC, Generic[TEvent, TResult]):
 
 def handles(event_type: type):
     """Decorator to mark which event type a handler handles."""
+
     def decorator(handler_class):
         handler_class._handles = event_type
         return handler_class
+
     return decorator

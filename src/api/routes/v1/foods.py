@@ -4,6 +4,7 @@ Foods API routes: search and details via USDA, barcode lookup via OpenFoodFacts.
 Uses a lightweight singleton event bus to avoid re-initializing
 heavy services (Cloudinary, Gemini, etc.) on every request.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from src.api.dependencies.auth import get_current_user_id
@@ -30,7 +31,7 @@ async def search_foods(
         query = SearchFoodsQuery(query=q, limit=limit, language=language)
         return await event_bus.send(query)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{fdc_id}/details")
@@ -43,7 +44,7 @@ async def get_food_details(
         query = GetFoodDetailsQuery(fdc_id=fdc_id)
         return await event_bus.send(query)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/barcode/{barcode}", response_model=BarcodeProductResponse)
@@ -66,4 +67,4 @@ async def lookup_barcode(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

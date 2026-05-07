@@ -21,10 +21,7 @@ class RegisterFcmTokenCommandHandler(
 ):
     """Handler for registering FCM tokens."""
 
-    def __init__(
-        self,
-        notification_repository: NotificationRepositoryPort = None
-    ):
+    def __init__(self, notification_repository: NotificationRepositoryPort = None):
         self.notification_repository = notification_repository
 
     async def handle(self, command: RegisterFcmTokenCommand) -> Dict[str, Any]:
@@ -48,9 +45,7 @@ class RegisterFcmTokenCommandHandler(
                     old_token.device_type == device_type
                     and old_token.fcm_token != command.fcm_token
                 ):
-                    await notification_repo.deactivate_fcm_token(
-                        old_token.fcm_token
-                    )
+                    await notification_repo.deactivate_fcm_token(old_token.fcm_token)
                     deactivated_count += 1
                     logger.info(f"Deactivated old FCM token for user {command.user_id}")
 
@@ -67,10 +62,12 @@ class RegisterFcmTokenCommandHandler(
             if command.timezone and is_valid_timezone(command.timezone):
                 canonical_tz = normalize_timezone(command.timezone)
                 await uow.users.update_user_timezone(command.user_id, canonical_tz)
-                logger.info(f"Updated timezone for user {command.user_id}: {canonical_tz}")
+                logger.info(
+                    f"Updated timezone for user {command.user_id}: {canonical_tz}"
+                )
 
             # UoW auto-commits on exit
-            
+
         logger.info(
             f"FCM token registered for user {command.user_id}, "
             f"deactivated {deactivated_count} old tokens"

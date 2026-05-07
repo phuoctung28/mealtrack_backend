@@ -2,6 +2,7 @@
 Cache eviction and memory monitoring utilities for GeminiModelManager.
 Handles LRU eviction, TTL expiry, and process memory checks.
 """
+
 import gc
 import logging
 from typing import Dict, Optional, Any
@@ -28,7 +29,7 @@ def evict_lru(models: Dict[str, CachedModel]) -> Optional[str]:
         return None
     lru_key = min(models.keys(), key=lambda k: models[k].last_accessed)
     del models[lru_key]
-    logger.info(f"Evicted LRU model: {lru_key}")
+    logger.debug(f"Evicted LRU model: {lru_key}")
     return lru_key
 
 
@@ -54,7 +55,7 @@ def check_memory_and_evict(
                     evict_lru(models)
             gc.collect()
             new_memory_mb = process.memory_info().rss / (1024 * 1024)
-            logger.info(f"After eviction: {new_memory_mb:.1f}MB")
+            logger.debug(f"After eviction: {new_memory_mb:.1f}MB")
     except ImportError:
         pass
     except Exception as e:
@@ -65,7 +66,7 @@ def clear_cache(models: Dict[str, CachedModel]) -> int:
     """Clear all cached model instances. Returns count cleared."""
     count = len(models)
     models.clear()
-    logger.info(f"Cleared {count} cached model instances")
+    logger.debug(f"Cleared {count} cached model instances")
     return count
 
 

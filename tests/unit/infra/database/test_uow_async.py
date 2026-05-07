@@ -1,4 +1,5 @@
 """Unit tests for AsyncUnitOfWork."""
+
 import pytest
 from unittest.mock import AsyncMock, patch
 

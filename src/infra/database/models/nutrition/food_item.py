@@ -1,6 +1,7 @@
 """
 Food item model for individual food components within a meal.
 """
+
 from sqlalchemy import Column, String, Float, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
@@ -11,7 +12,7 @@ from src.infra.database.models.base import PrimaryEntityMixin
 class FoodItemORM(Base, PrimaryEntityMixin):
     """Database model for food items in a meal."""
 
-    __tablename__ = 'food_item'  # Explicit table name to match migration
+    __tablename__ = "food_item"  # Explicit table name to match migration
 
     name = Column(String(255), nullable=False)
     quantity = Column(Float, nullable=False)
@@ -19,9 +20,13 @@ class FoodItemORM(Base, PrimaryEntityMixin):
     confidence = Column(Float, nullable=True)
 
     # Edit support fields
-    fdc_id = Column(Integer, nullable=True)  # USDA FDC ID (legacy, use food_reference_id)
+    fdc_id = Column(
+        Integer, nullable=True
+    )  # USDA FDC ID (legacy, use food_reference_id)
     food_reference_id = Column(Integer, ForeignKey("food_reference.id"), nullable=True)
-    is_custom = Column(Boolean, default=False, nullable=False)  # Whether this is a custom ingredient
+    is_custom = Column(
+        Boolean, default=False, nullable=False
+    )  # Whether this is a custom ingredient
 
     # Macro fields (previously in separate Macros table)
     protein = Column(Float, default=0, nullable=False)
@@ -31,13 +36,15 @@ class FoodItemORM(Base, PrimaryEntityMixin):
     sugar = Column(Float, default=0, nullable=False)
 
     # Foreign keys
-    nutrition_id = Column(Integer, ForeignKey("nutrition.id"), nullable=True)  # Nullable for orphaned items
+    nutrition_id = Column(
+        Integer, ForeignKey("nutrition.id"), nullable=True
+    )  # Nullable for orphaned items
 
     # Soft delete
-    is_deleted = Column(Boolean, default=False, nullable=False, server_default='false')
+    is_deleted = Column(Boolean, default=False, nullable=False, server_default="false")
 
     # Position ordering within meal
-    order_index = Column(Integer, default=0, nullable=False, server_default='0')
+    order_index = Column(Integer, default=0, nullable=False, server_default="0")
 
     # Relationships
     nutrition = relationship("NutritionORM", back_populates="food_items")

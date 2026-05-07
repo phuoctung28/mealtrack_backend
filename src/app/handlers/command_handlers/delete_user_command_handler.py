@@ -5,7 +5,7 @@ Performs soft delete in database and hard delete in Firebase Auth.
 
 import asyncio
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
 
 from src.api.dependencies.auth_cache import invalidate_cached_user_id
 from src.api.exceptions import ResourceNotFoundException
@@ -14,36 +14,36 @@ from src.app.events.base import EventHandler, handles
 from src.domain.ports.cache_port import CachePort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.services.firebase_auth_service import FirebaseAuthService
+from src.infra.database.models.enums import MealStatusEnum
 
 # Models for soft-delete operations
 from src.infra.database.models.meal.meal import MealORM
-from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.notification.user_fcm_token import (
-    UserFcmTokenORM as UserFcmToken,
-)
 from src.infra.database.models.notification.notification_preferences import (
     NotificationPreferencesORM as NotificationPreferences,
 )
+from src.infra.database.models.notification.user_fcm_token import (
+    UserFcmTokenORM as UserFcmToken,
+)
+from src.infra.database.uow_async import AsyncUnitOfWork
+from src.infra.services.firebase_auth_service import FirebaseAuthService
 
 logger = logging.getLogger(__name__)
 
 
 @handles(DeleteUserCommand)
-class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
+class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, dict[str, Any]]):
     """Handler for deleting user accounts."""
 
     def __init__(
         self,
-        uow: Optional[UnitOfWorkPort] = None,
-        cache_service: Optional[CachePort] = None,
+        uow: UnitOfWorkPort | None = None,
+        cache_service: CachePort | None = None,
     ):
         self.uow = uow
         self.cache_service = cache_service
         self.firebase_auth_service = FirebaseAuthService()
 
-    async def handle(self, command: DeleteUserCommand) -> Dict[str, Any]:
+    async def handle(self, command: DeleteUserCommand) -> dict[str, Any]:
         """
         Delete user account.
         - Soft delete in database (set is_active=False)
@@ -60,7 +60,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
 
                 if not user or not user.is_active:
                     raise ResourceNotFoundException(
-                        f"Active user with Firebase UID not found"
+                        "Active user with Firebase UID not found"
                     )
 
                 # Store user_id for logging
@@ -90,7 +90,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                 await invalidate_cached_user_id(
                     self.cache_service, command.firebase_uid
                 )
-                logger.info(f"Successfully soft deleted user in database")
+                logger.info("Successfully soft deleted user in database")
 
                 # Step 4: Revoke refresh tokens to invalidate all active sessions
                 # This prevents the user from getting new access tokens
@@ -100,7 +100,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                         self.firebase_auth_service.revoke_refresh_tokens,
                         command.firebase_uid,
                     )
-                    logger.info(f"Successfully revoked Firebase refresh tokens")
+                    logger.info("Successfully revoked Firebase refresh tokens")
                 except Exception as revoke_error:
                     logger.warning(f"Token revocation failed: {str(revoke_error)}")
                     # Continue - deletion is more important
@@ -113,9 +113,9 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
                         command.firebase_uid,
                     )
                     if firebase_deleted:
-                        logger.info(f"Successfully deleted user from Firebase")
+                        logger.info("Successfully deleted user from Firebase")
                     else:
-                        logger.warning(f"Firebase deletion returned False")
+                        logger.warning("Firebase deletion returned False")
                 except Exception as firebase_error:
                     # Log Firebase error but don't rollback DB changes
                     logger.error(f"Firebase deletion failed: {str(firebase_error)}")
@@ -133,7 +133,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
             except Exception as e:
                 await uow.rollback()
                 logger.error(f"Error deleting user account: {str(e)}")
-                raise Exception(f"Failed to delete user account: {str(e)}")
+                raise Exception(f"Failed to delete user account: {str(e)}") from e
 
     async def _soft_delete_related_data(self, uow, user_id: str) -> None:
         """
@@ -141,6 +141,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, Dict[str, Any]]):
         Uses bulk updates for performance. All operations are atomic within the transaction.
         """
         from sqlalchemy import update as sa_update
+
         try:
             # 1. Soft-delete meals (set status=INACTIVE)
             meals_result = await uow.session.execute(

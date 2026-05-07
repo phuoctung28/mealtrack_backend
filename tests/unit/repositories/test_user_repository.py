@@ -1,6 +1,7 @@
 """
 Unit tests for UserRepository.
 """
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -42,7 +43,7 @@ def sample_user(user_repository):
         password_hash="hashed_password",
         firebase_uid="firebase_123",
         provider=AuthProvider.GOOGLE,
-        is_active=True
+        is_active=True,
     )
     return user_repository.save(user_domain)
 
@@ -58,11 +59,11 @@ class TestUserRepository:
             username="newuser",
             password_hash="hashed_pwd",
             firebase_uid="firebase_newuser",
-            provider=AuthProvider.GOOGLE
+            provider=AuthProvider.GOOGLE,
         )
-        
+
         saved_user = user_repository.save(user_domain)
-        
+
         assert saved_user.id is not None
         assert saved_user.email == "newuser@example.com"
         assert saved_user.username == "newuser"
@@ -70,7 +71,7 @@ class TestUserRepository:
     def test_find_by_id(self, user_repository, sample_user):
         """Test retrieving user by ID."""
         user = user_repository.find_by_id(sample_user.id)
-        
+
         assert user is not None
         assert user.id == sample_user.id
         assert user.email == "test@example.com"
@@ -83,7 +84,7 @@ class TestUserRepository:
     def test_find_by_email(self, user_repository, sample_user):
         """Test retrieving user by email."""
         user = user_repository.find_by_email("test@example.com")
-        
+
         assert user is not None
         assert user.email == "test@example.com"
 
@@ -96,7 +97,7 @@ class TestUserRepository:
         """Test updating user profile."""
         # Create initial profile via User entity (simplified for test)
         # In reality, profile creation logic might be more complex
-        
+
         # Manually create profile domain object
         profile_domain = UserProfileDomainModel(
             user_id=sample_user.id,
@@ -109,22 +110,22 @@ class TestUserRepository:
             training_minutes_per_session=60,
             fitness_goal="maintenance",
             meals_per_day=3,
-            is_current=True
+            is_current=True,
         )
-        
+
         # Attach to user and save (to simulate profile creation)
         sample_user.profiles.append(profile_domain)
         user_repository.save(sample_user)
-        
+
         # Now update it
         # Fetch fresh to get the profile ID
         user = user_repository.find_by_id(sample_user.id)
         profile = user.current_profile
         assert profile is not None
-        
+
         profile.weight_kg = 70
         updated_profile = user_repository.update_profile(profile)
-        
+
         assert updated_profile.weight_kg == 70
         assert updated_profile.id == profile.id
 
@@ -132,7 +133,7 @@ class TestUserRepository:
         """Test soft deleting a user."""
         result = user_repository.delete(sample_user.id)
         assert result is True
-        
+
         # Verify user is not found (filtered out by is_active=True)
         user = user_repository.find_by_id(sample_user.id)
         assert user is None

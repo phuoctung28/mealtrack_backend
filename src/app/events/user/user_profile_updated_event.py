@@ -1,6 +1,7 @@
 """
 User profile updated event.
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
@@ -12,6 +13,7 @@ from src.app.events.base import DomainEvent
 @dataclass
 class UserProfileUpdatedEvent(DomainEvent):
     """Event raised when user profile is updated."""
+
     aggregate_id: str
     profile_id: str
     updated_fields: List[str]

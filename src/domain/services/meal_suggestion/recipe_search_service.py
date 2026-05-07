@@ -2,13 +2,14 @@
 Service for searching recipes in Pinecone index.
 Enables fast meal suggestion retrieval via semantic search.
 """
+
 import logging
 from typing import List, Optional
 
 from src.domain.ports.recipe_search_port import (
     RecipeSearchPort,
     RecipeSearchCriteria,
-    RecipeSearchResult
+    RecipeSearchResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -22,9 +23,7 @@ class RecipeSearchService:
         self._search_port = search_port
 
     def search_recipes(
-        self,
-        criteria: RecipeSearchCriteria,
-        limit: int = 10
+        self, criteria: RecipeSearchCriteria, limit: int = 10
     ) -> List[RecipeSearchResult]:
         """
         Search for recipes matching criteria using injected port.
@@ -40,14 +39,14 @@ class RecipeSearchService:
             return []
 
         return self._search_port.search_recipes(criteria, limit)
-    
+
     def get_recipe_by_id(self, recipe_id: str) -> Optional[RecipeSearchResult]:
         """
         Get a specific recipe by ID.
-        
+
         Args:
             recipe_id: The recipe ID
-            
+
         Returns:
             Recipe if found, None otherwise
         """

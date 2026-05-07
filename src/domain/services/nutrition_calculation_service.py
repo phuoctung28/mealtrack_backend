@@ -2,6 +2,7 @@
 Nutrition calculation service - domain service for nutrition-related operations.
 Provides a unified interface for calculating nutrition from various sources.
 """
+
 import logging
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
@@ -16,9 +17,9 @@ logger = logging.getLogger(__name__)
 # Shared unit-to-grams conversion table for common serving units.
 # Used by both parse-text and manual-meal handlers to ensure consistent nutrition.
 UNIT_TO_GRAMS = {
-    "large": 50.0,     # ~50g per large egg
-    "medium": 44.0,    # ~44g per medium egg
-    "small": 38.0,     # ~38g per small egg
+    "large": 50.0,  # ~50g per large egg
+    "medium": 44.0,  # ~44g per medium egg
+    "small": 38.0,  # ~38g per small egg
     "cup": 240.0,
     "tablespoon": 15.0,
     "tbsp": 15.0,
@@ -120,9 +121,7 @@ def _normalize_unit(unit: str) -> str:
     return base
 
 
-def convert_quantity_to_grams(
-    quantity: float, unit: str, food_name: str = ""
-) -> float:
+def convert_quantity_to_grams(quantity: float, unit: str, food_name: str = "") -> float:
     """Convert a quantity+unit pair to grams.
 
     For volume units (ml, l), applies food-specific density from
@@ -148,7 +147,6 @@ def convert_quantity_to_grams(
     return quantity * grams_per_unit
 
 
-
 def scale_per_100g_nutrition(
     per_100g: dict,
     quantity: float,
@@ -172,7 +170,9 @@ def scale_per_100g_nutrition(
     """
     # Use food-specific allowed_units if available, otherwise fallback to global mapping
     if allowed_units:
-        quantity_in_grams = _convert_with_allowed_units(quantity, unit, allowed_units, food_name)
+        quantity_in_grams = _convert_with_allowed_units(
+            quantity, unit, allowed_units, food_name
+        )
     else:
         quantity_in_grams = convert_quantity_to_grams(quantity, unit, food_name)
 
@@ -188,7 +188,9 @@ def scale_per_100g_nutrition(
 
 
 def _convert_with_allowed_units(
-    quantity: float, unit: str, allowed_units: List[Dict[str, Any]],
+    quantity: float,
+    unit: str,
+    allowed_units: List[Dict[str, Any]],
     food_name: str = "",
 ) -> float:
     """Convert quantity to grams using food-specific allowed_units.
@@ -214,7 +216,9 @@ def _convert_with_allowed_units(
     if translated != unit_lower:
         for au in allowed_units:
             if au.get("unit", "").lower() == translated:
-                logger.info(f"Unit '{unit}' translated to '{translated}', matched allowed_unit")
+                logger.info(
+                    f"Unit '{unit}' translated to '{translated}', matched allowed_unit"
+                )
                 return quantity * au.get("gram_weight", 1.0)
 
     # 3. Keyword match: check if translated unit appears in description
@@ -228,7 +232,9 @@ def _convert_with_allowed_units(
     # 4. Global UNIT_TO_GRAMS mapping
     grams = UNIT_TO_GRAMS.get(translated)
     if grams is not None:
-        logger.warning(f"Unit '{unit}' not in allowed_units, using global mapping '{translated}'={grams}g")
+        logger.warning(
+            f"Unit '{unit}' not in allowed_units, using global mapping '{translated}'={grams}g"
+        )
         return quantity * grams
 
     # 5. Smart fallback: use first non-gram serving (common portion) instead of raw grams
@@ -276,7 +282,12 @@ def clamp_nutrition_values(item: dict) -> dict:
         "fat": min(max(fat, 0), weight_g),
     }
 
-    if clamped != {"calories": calories, "protein": protein, "carbs": carbs, "fat": fat}:
+    if clamped != {
+        "calories": calories,
+        "protein": protein,
+        "carbs": carbs,
+        "fat": fat,
+    }:
         logger.warning(
             f"Clamped implausible nutrition for '{item.get('name', '?')}' "
             f"({quantity} {unit}): {calories:.1f}cal/{protein:.1f}p/{carbs:.1f}c/{fat:.1f}f "
@@ -290,6 +301,7 @@ def clamp_nutrition_values(item: dict) -> dict:
 @dataclass
 class ScaledNutritionResult:
     """Result of nutrition calculation for a specific quantity."""
+
     calories: float
     protein: float
     carbs: float
@@ -308,19 +320,16 @@ class NutritionCalculationService:
         pass
 
     def get_nutrition_for_ingredient(
-        self,
-        name: str,
-        quantity: float,
-        unit: str,
-        fdc_id: Optional[int] = None
+        self, name: str, quantity: float, unit: str, fdc_id: Optional[int] = None
     ) -> Optional[ScaledNutritionResult]:
         """
         Get nutrition data for an ingredient.
         Currently returns None — vector search removed, to be re-added later.
         """
-        logger.warning(f"Could not find nutrition data for '{name}' — no vector search configured")
+        logger.warning(
+            f"Could not find nutrition data for '{name}' — no vector search configured"
+        )
         return None
-
 
     def calculate_meal_total(self, food_items: List[FoodItem]) -> Nutrition:
         """
@@ -336,7 +345,7 @@ class NutritionCalculationService:
             return Nutrition(
                 macros=Macros(protein=0, carbs=0, fat=0),
                 food_items=[],
-                confidence_score=1.0
+                confidence_score=1.0,
             )
 
         total_protein = sum(item.macros.protein for item in food_items)
@@ -357,7 +366,7 @@ class NutritionCalculationService:
                 sugar=total_sugar,
             ),
             food_items=food_items,
-            confidence_score=avg_confidence
+            confidence_score=avg_confidence,
         )
 
     def aggregate_from_command_items(self, items) -> tuple:
@@ -380,16 +389,18 @@ class NutritionCalculationService:
             total_protein += protein
             total_carbs += carbs
             total_fat += fat
-            food_items.append(FoodItem(
-                id=uuid4(),
-                name=item.name or "Food Item",
-                quantity=item.quantity,
-                unit=item.unit,
-                macros=Macros(protein=protein, carbs=carbs, fat=fat),
-                micros=None,
-                confidence=1.0,
-                fdc_id=getattr(item, 'fdc_id', None),
-            ))
+            food_items.append(
+                FoodItem(
+                    id=uuid4(),
+                    name=item.name or "Food Item",
+                    quantity=item.quantity,
+                    unit=item.unit,
+                    macros=Macros(protein=protein, carbs=carbs, fat=fat),
+                    micros=None,
+                    confidence=1.0,
+                    fdc_id=getattr(item, "fdc_id", None),
+                )
+            )
 
         nutrition = Nutrition(
             macros=Macros(
@@ -406,7 +417,7 @@ class NutritionCalculationService:
         self,
         original_nutrition: ScaledNutritionResult,
         original_quantity: float,
-        new_quantity: float
+        new_quantity: float,
     ) -> ScaledNutritionResult:
         """
         Scale nutrition proportionally based on quantity change.
@@ -428,5 +439,5 @@ class NutritionCalculationService:
             calories=original_nutrition.calories * scale_factor,
             protein=original_nutrition.protein * scale_factor,
             carbs=original_nutrition.carbs * scale_factor,
-            fat=original_nutrition.fat * scale_factor
+            fat=original_nutrition.fat * scale_factor,
         )
