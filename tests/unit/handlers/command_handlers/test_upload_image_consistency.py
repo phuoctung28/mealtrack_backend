@@ -50,3 +50,43 @@ async def test_upload_failure_does_not_create_db_record():
     # Key assertion: meals.save should NOT have been called
     mock_uow.meals.save.assert_not_called()
     mock_uow.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_invalid_cloudinary_url_does_not_create_db_record():
+    """When Cloudinary returns invalid URL, no meal record should be created."""
+    mock_uow = MagicMock()
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users = MagicMock()
+    mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
+    mock_uow.meals = MagicMock()
+    mock_uow.meals.save = AsyncMock()
+    mock_uow.commit = AsyncMock()
+
+    mock_event_bus = MagicMock()
+    mock_event_bus.publish = AsyncMock()
+
+    handler = UploadMealImageImmediatelyHandler(
+        uow=mock_uow,
+        event_bus=mock_event_bus,
+    )
+
+    # Cloudinary returns invalid URL (just the image_id, not a URL)
+    handler.image_store = MagicMock()
+    handler.image_store.save.return_value = "just-an-id-not-a-url"
+
+    handler.vision_service = MagicMock()
+    handler.gpt_parser = MagicMock()
+
+    command = UploadMealImageImmediatelyCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        file_contents=b"fake-image-bytes",
+        content_type="image/jpeg",
+    )
+
+    with pytest.raises(RuntimeError, match="Cloudinary upload failed"):
+        await handler.handle(command)
+
+    mock_uow.meals.save.assert_not_called()
+    mock_uow.commit.assert_not_called()
