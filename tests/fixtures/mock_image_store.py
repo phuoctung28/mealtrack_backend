@@ -19,22 +19,22 @@ class MockImageStore(ImageStorePort):
         if image_id is None:
             image_id = str(uuid.uuid4())
         self.storage[image_id] = image_data
-        return f"mock://images/{image_id}"
-    
+        return f"https://mock.cloudinary.com/images/{image_id}"
+
     def load(self, image_id: str) -> Optional[bytes]:
         """Load image data from storage."""
         # Extract ID from mock URL if needed
-        if image_id.startswith("mock://images/"):
-            image_id = image_id.replace("mock://images/", "")
+        if image_id.startswith("https://mock.cloudinary.com/images/"):
+            image_id = image_id.replace("https://mock.cloudinary.com/images/", "")
         return self.storage.get(image_id)
-    
+
     def delete(self, image_id: str) -> bool:
         """Delete image from storage."""
         if image_id in self.storage:
             del self.storage[image_id]
             return True
         return False
-    
+
     def get_url(self, image_id: str) -> str:
         """Get mock URL for image."""
-        return f"mock://images/{image_id}"
+        return f"https://mock.cloudinary.com/images/{image_id}"

@@ -111,23 +111,6 @@ class UploadMealImageImmediatelyHandler(
             raise last_error
         raise RuntimeError("Vision analysis failed without a captured exception.")
 
-    def _run_vision_once(
-        self, command: UploadMealImageImmediatelyCommand, meal_id: str
-    ) -> Any:
-        """Single-attempt vision call used by the parallel path (no retries to preserve latency budget)."""
-        if command.user_description:
-            from src.domain.strategies.meal_analysis_strategy import (
-                AnalysisStrategyFactory,
-            )
-
-            strategy = AnalysisStrategyFactory.create_user_context_strategy(
-                command.user_description
-            )
-            return self.vision_service.analyze_with_strategy(
-                command.file_contents, strategy
-            )
-        return self.vision_service.analyze(command.file_contents)
-
     def _validate_cloudinary_url(self, url: str) -> bool:
         """Validate that the Cloudinary response is a valid HTTPS URL."""
         return url is not None and url.startswith("https://")
@@ -142,7 +125,7 @@ class UploadMealImageImmediatelyHandler(
 
         # Step 2: Upload to Cloudinary FIRST (before any DB operations)
         logger.info(f"[UPLOAD-START] image_id={image_id}")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         start = time.time()
 
         try:
