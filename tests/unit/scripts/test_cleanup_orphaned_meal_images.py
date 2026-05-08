@@ -1,13 +1,29 @@
 """Tests for cleanup_orphaned_meal_images script."""
 
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-from io import StringIO
+import importlib.util
+import os
+import sys
+from unittest.mock import MagicMock, patch
+
+
+def _import_cleanup_script():
+    """Import the cleanup script by path to avoid module import issues."""
+    script_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..", "scripts", "cleanup_orphaned_meal_images.py"
+    )
+    script_path = os.path.abspath(script_path)
+    spec = importlib.util.spec_from_file_location("cleanup_orphaned_meal_images", script_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["cleanup_orphaned_meal_images"] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_dry_run_does_not_modify_database():
     """Dry-run mode should report orphans but not update database."""
-    from scripts.cleanup_orphaned_meal_images import find_orphaned_meals, mark_meals_failed
+    module = _import_cleanup_script()
+    find_orphaned_meals = module.find_orphaned_meals
+    mark_meals_failed = module.mark_meals_failed
 
     # Mock session with candidate meals
     mock_session = MagicMock()
@@ -34,15 +50,18 @@ def test_dry_run_does_not_modify_database():
 
 def test_mark_meals_failed_updates_status():
     """mark_meals_failed should update meal status to FAILED."""
-    from scripts.cleanup_orphaned_meal_images import mark_meals_failed
+    module = _import_cleanup_script()
+    mark_meals_failed = module.mark_meals_failed
 
     mock_session = MagicMock()
 
     orphan_ids = ["meal-1", "meal-2"]
     mark_meals_failed(mock_session, orphan_ids)
 
-    # Verify UPDATE was called
+    # Verify UPDATE was called with correct params
     mock_session.execute.assert_called_once()
-    call_args = str(mock_session.execute.call_args)
-    assert "FAILED" in call_args or "status" in call_args.lower()
+    call_args = mock_session.execute.call_args
+    # First arg is the TextClause, second is params dict
+    params = call_args[0][1] if len(call_args[0]) > 1 else call_args[1]
+    assert params == {"id_0": "meal-1", "id_1": "meal-2"}
     mock_session.commit.assert_called_once()
