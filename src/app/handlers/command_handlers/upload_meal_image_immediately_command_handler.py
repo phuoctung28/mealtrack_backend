@@ -5,8 +5,7 @@ Handler for immediate meal image upload and analysis.
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from src.app.commands.meal import UploadMealImageImmediatelyCommand
@@ -14,27 +13,26 @@ from src.app.events.base import EventHandler, handles
 from src.app.events.meal.meal_cache_invalidation_required_event import (
     MealCacheInvalidationRequiredEvent,
 )
-from src.domain.model.meal import Meal, MealStatus
-from src.domain.model.meal import MealImage
+from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
-from src.domain.services.meal_analysis.fast_path_policy import MealAnalyzeFastPathPolicy
 from src.domain.services.meal_analysis.deepl_meal_translation_service import (
     DeepLMealTranslationService,
 )
+from src.domain.services.meal_analysis.fast_path_policy import MealAnalyzeFastPathPolicy
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
 )
 from src.domain.utils.timezone_utils import (
-    utc_now,
     get_zone_info,
     is_valid_timezone,
     noon_utc_for_date,
+    utc_now,
 )
-from src.infra.repositories.meal_repository import MealProjection
 from src.infra.config.settings import get_settings
+from src.infra.repositories.meal_repository import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +50,8 @@ class UploadMealImageImmediatelyHandler(
         image_store: ImageStorePort = None,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
-        meal_translation_service: Optional[DeepLMealTranslationService] = None,
-        fast_path_policy: Optional[MealAnalyzeFastPathPolicy] = None,
+        meal_translation_service: DeepLMealTranslationService | None = None,
+        fast_path_policy: MealAnalyzeFastPathPolicy | None = None,
     ):
         self.uow = uow
         self.event_bus = event_bus
@@ -72,7 +70,7 @@ class UploadMealImageImmediatelyHandler(
         self, command: UploadMealImageImmediatelyCommand, meal_id: str
     ) -> Any:
         max_attempts = max(1, self._fast_path_policy.max_attempts)
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         for attempt in range(1, max_attempts + 1):
             try:
@@ -143,10 +141,14 @@ class UploadMealImageImmediatelyHandler(
         # Step 3: Verify we got a valid URL back
         if not self._validate_cloudinary_url(image_url):
             logger.error(f"[UPLOAD-INVALID-URL] image_id={image_id} | url={image_url}")
-            raise RuntimeError(f"Cloudinary upload failed - invalid URL returned: {image_url}")
+            raise RuntimeError(
+                f"Cloudinary upload failed - invalid URL returned: {image_url}"
+            )
 
         upload_elapsed = time.time() - start
-        logger.info(f"[UPLOAD-COMPLETE] image_id={image_id} | url={image_url} | elapsed={upload_elapsed:.2f}s")
+        logger.info(
+            f"[UPLOAD-COMPLETE] image_id={image_id} | url={image_url} | elapsed={upload_elapsed:.2f}s"
+        )
 
         # Step 4: Run AI analysis
         logger.info(f"[ANALYSIS-START] image_id={image_id}")
@@ -162,7 +164,9 @@ class UploadMealImageImmediatelyHandler(
             raise
 
         analysis_elapsed = time.time() - analysis_start
-        logger.info(f"[ANALYSIS-COMPLETE] image_id={image_id} | elapsed={analysis_elapsed:.2f}s")
+        logger.info(
+            f"[ANALYSIS-COMPLETE] image_id={image_id} | elapsed={analysis_elapsed:.2f}s"
+        )
 
         # Step 5: Parse nutrition and validate food detected
         nutrition = self.gpt_parser.parse_to_nutrition(analysis_result)
@@ -232,7 +236,9 @@ class UploadMealImageImmediatelyHandler(
                         food_items=nutrition.food_items,
                         target_language=command.language,
                     )
-                    logger.info(f"[TRANSLATION] meal={meal.meal_id} translated to {command.language}")
+                    logger.info(
+                        f"[TRANSLATION] meal={meal.meal_id} translated to {command.language}"
+                    )
                 except Exception as e:
                     logger.warning(f"[TRANSLATION] failed for meal={meal.meal_id}: {e}")
 

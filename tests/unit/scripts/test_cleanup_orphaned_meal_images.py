@@ -9,10 +9,17 @@ from unittest.mock import MagicMock, patch
 def _import_cleanup_script():
     """Import the cleanup script by path to avoid module import issues."""
     script_path = os.path.join(
-        os.path.dirname(__file__), "..", "..", "..", "scripts", "cleanup_orphaned_meal_images.py"
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "..",
+        "scripts",
+        "cleanup_orphaned_meal_images.py",
     )
     script_path = os.path.abspath(script_path)
-    spec = importlib.util.spec_from_file_location("cleanup_orphaned_meal_images", script_path)
+    spec = importlib.util.spec_from_file_location(
+        "cleanup_orphaned_meal_images", script_path
+    )
     module = importlib.util.module_from_spec(spec)
     sys.modules["cleanup_orphaned_meal_images"] = module
     spec.loader.exec_module(module)

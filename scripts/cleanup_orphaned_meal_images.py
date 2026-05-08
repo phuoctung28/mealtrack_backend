@@ -15,7 +15,6 @@ import logging
 import os
 import sys
 import time
-from typing import Optional
 
 import requests
 from sqlalchemy import text
@@ -33,7 +32,7 @@ RATE_LIMIT_DELAY = 0.1  # 10 requests per second
 def find_orphaned_meals(
     session,
     cloudinary,
-    limit: Optional[int] = None,
+    limit: int | None = None,
 ) -> list[str]:
     """
     Find meals where the Cloudinary image no longer exists.
@@ -69,9 +68,11 @@ def find_orphaned_meals(
     orphans = []
     valid = 0
 
-    for i, (meal_id, image_id, dish_name, url) in enumerate(candidates):
+    for i, (meal_id, image_id, _dish_name, url) in enumerate(candidates):
         if i > 0 and i % 50 == 0:
-            logger.info(f"Progress: {i}/{len(candidates)} checked, {len(orphans)} orphans found")
+            logger.info(
+                f"Progress: {i}/{len(candidates)} checked, {len(orphans)} orphans found"
+            )
 
         is_orphan = False
 
@@ -80,17 +81,23 @@ def find_orphaned_meals(
             found_url = cloudinary.get_url(image_id)
             if found_url is None:
                 is_orphan = True
-                logger.info(f"  - meal {meal_id}: image NOT FOUND (no URL, Cloudinary lookup failed)")
+                logger.info(
+                    f"  - meal {meal_id}: image NOT FOUND (no URL, Cloudinary lookup failed)"
+                )
         else:
             # URL exists - verify it's accessible
             try:
                 response = requests.head(url, timeout=5)
                 if response.status_code == 404:
                     is_orphan = True
-                    logger.info(f"  - meal {meal_id}: image NOT FOUND (URL returns 404)")
+                    logger.info(
+                        f"  - meal {meal_id}: image NOT FOUND (URL returns 404)"
+                    )
                 elif response.status_code >= 400:
                     is_orphan = True
-                    logger.info(f"  - meal {meal_id}: image NOT FOUND (URL returns {response.status_code})")
+                    logger.info(
+                        f"  - meal {meal_id}: image NOT FOUND (URL returns {response.status_code})"
+                    )
             except requests.RequestException as e:
                 # Network error - log but don't mark as orphan (might be temporary)
                 logger.warning(f"  - meal {meal_id}: could not verify URL ({e})")
@@ -104,7 +111,7 @@ def find_orphaned_meals(
         # Rate limiting
         time.sleep(RATE_LIMIT_DELAY)
 
-    logger.info(f"\nSummary:")
+    logger.info("\nSummary:")
     logger.info(f"  Total checked: {len(candidates)}")
     logger.info(f"  Orphaned: {len(orphans)}")
     logger.info(f"  Valid: {valid}")
@@ -124,7 +131,7 @@ def mark_meals_failed(session, orphan_ids: list[str]) -> int:
     # Update in batches
     updated = 0
     for i in range(0, len(orphan_ids), BATCH_SIZE):
-        batch = orphan_ids[i:i + BATCH_SIZE]
+        batch = orphan_ids[i : i + BATCH_SIZE]
         placeholders = ", ".join([f":id_{j}" for j in range(len(batch))])
 
         query = text(f"""
@@ -186,9 +193,11 @@ def main():
             updated = mark_meals_failed(session, orphans)
             logger.info(f"Updated {updated} meals to FAILED status")
         else:
-            logger.info(f"\nDRY RUN - No changes made.")
-            logger.info(f"Run with --execute to mark {len(orphans)} orphaned meals as FAILED.")
-            logger.info(f"\nOrphaned meal IDs:")
+            logger.info("\nDRY RUN - No changes made.")
+            logger.info(
+                f"Run with --execute to mark {len(orphans)} orphaned meals as FAILED."
+            )
+            logger.info("\nOrphaned meal IDs:")
             for mid in orphans[:20]:
                 logger.info(f"  {mid}")
             if len(orphans) > 20:

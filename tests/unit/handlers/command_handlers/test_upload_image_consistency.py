@@ -123,7 +123,9 @@ async def test_successful_upload_creates_meal_with_verified_url():
 
     # Cloudinary returns valid URL
     handler.image_store = MagicMock()
-    handler.image_store.save.return_value = "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc123.jpg"
+    handler.image_store.save.return_value = (
+        "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc123.jpg"
+    )
 
     # Vision service returns valid analysis
     handler.vision_service = MagicMock()
@@ -151,5 +153,8 @@ async def test_successful_upload_creates_meal_with_verified_url():
     # Verify meal was saved with the Cloudinary URL
     assert len(saved_meals) > 0
     final_meal = saved_meals[-1]
-    assert final_meal.image.url == "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc123.jpg"
+    assert (
+        final_meal.image.url
+        == "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc123.jpg"
+    )
     assert final_meal.status.value == "READY"
