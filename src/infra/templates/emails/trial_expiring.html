@@ -6,16 +6,18 @@
 
 <p><strong>Here's what you've built so far:</strong></p>
 <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0;">
-  <div style="display: flex; justify-content: space-around; text-align: center;">
-    <div>
-      <div style="font-size: 24px; font-weight: bold; color: #22c55e;">{{ meals_logged }}</div>
-      <div style="color: #666; font-size: 14px;">Meals logged</div>
-    </div>
-    <div>
-      <div style="font-size: 24px; font-weight: bold; color: #22c55e;">{{ streak_days }}</div>
-      <div style="color: #666; font-size: 14px;">Day streak</div>
-    </div>
-  </div>
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td style="text-align: center; padding: 10px;">
+        <div style="font-size: 24px; font-weight: bold; color: #22c55e;">{{ meals_logged }}</div>
+        <div style="color: #666; font-size: 14px;">Meals logged</div>
+      </td>
+      <td style="text-align: center; padding: 10px;">
+        <div style="font-size: 24px; font-weight: bold; color: #22c55e;">{{ streak_days }}</div>
+        <div style="color: #666; font-size: 14px;">Day streak</div>
+      </td>
+    </tr>
+  </table>
 </div>
 
 <p>Keep your progress. Upgrade now and continue your journey.</p>

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,7 +28,7 @@
     <div class="footer">
       <p>© 2026 Nutree. All rights reserved.</p>
       <p>
-        <a href="{{ unsubscribe_url }}">Unsubscribe</a> from these emails
+        <a href="{{ unsubscribe_url | default('#') }}">Unsubscribe</a> from these emails
       </p>
     </div>
   </div>
