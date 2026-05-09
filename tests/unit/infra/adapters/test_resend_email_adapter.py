@@ -65,3 +65,18 @@ async def test_send_email_api_error(mock_settings):
 
         assert result.success is False
         assert "API error" in result.error
+
+
+@pytest.mark.asyncio
+async def test_send_email_no_api_key(mock_settings):
+    mock_settings.RESEND_API_KEY = None
+
+    adapter = ResendEmailAdapter()
+    result = await adapter.send_email(
+        to="user@example.com",
+        subject="Welcome!",
+        html_body="<p>Hello</p>",
+    )
+
+    assert result.success is False
+    assert result.error == "API key not configured"

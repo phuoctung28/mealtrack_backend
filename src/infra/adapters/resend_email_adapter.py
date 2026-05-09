@@ -51,6 +51,8 @@ class ResendEmailAdapter(EmailServicePort):
                 },
             )
             message_id = result.get("id") if isinstance(result, dict) else str(result)
+            if not message_id:
+                logger.warning(f"Email sent but no message_id returned for {to}")
             logger.info(f"Email sent to {to}: {subject} (id={message_id})")
             return EmailResult(success=True, message_id=message_id)
 
