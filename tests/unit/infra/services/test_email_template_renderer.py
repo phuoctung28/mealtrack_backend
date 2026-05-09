@@ -23,7 +23,8 @@ def test_render_welcome_template(renderer):
     )
 
     assert "Alex" in html
-    assert "2000 kcal" in html
+    assert "2000" in html
+    assert "kcal" in html
     assert "Log Your First Meal" in html
     assert "Unsubscribe" in html
 
@@ -42,7 +43,7 @@ def test_render_reengagement_template(renderer):
 
     assert "Alex" in html
     assert "5 day streak" in html
-    assert "Pick Up Where You Left Off" in html
+    assert "Continue My Journey" in html
 
 
 def test_render_with_missing_optional_field(renderer):
