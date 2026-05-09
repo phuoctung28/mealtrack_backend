@@ -101,7 +101,7 @@ class GeminiProvider(AIProviderPort):
         purpose = MODEL_PURPOSE_MAP.get(model, GeminiModelPurpose.GENERAL)
         llm = self._model_manager.get_model_for_purpose(
             purpose=purpose,
-            max_output_tokens=kwargs.get("max_tokens", 2048),
+            max_output_tokens=kwargs.get("max_tokens", 4096),
         )
 
         image_b64 = base64.b64encode(image_data).decode("utf-8")
