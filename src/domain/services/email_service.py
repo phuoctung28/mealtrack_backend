@@ -1,6 +1,7 @@
 """Email service for sending lifecycle emails."""
 
 import logging
+from typing import Protocol
 
 from src.domain.ports.email_service_port import EmailResult, EmailServicePort
 
@@ -12,14 +13,28 @@ FEEDBACK_URL = "https://app.nutree.app/feedback"
 PAUSE_URL = "https://app.nutree.app/pause"
 
 
+class EmailUser(Protocol):
+    """Protocol for user objects passed to email methods."""
+
+    id: str
+    email: str
+    first_name: str | None
+
+
+class TemplateRenderer(Protocol):
+    """Protocol for template renderer."""
+
+    def render(self, template_name: str, context: dict) -> str: ...
+
+
 class EmailService:
     """Business logic for sending lifecycle emails."""
 
-    def __init__(self, email_adapter: EmailServicePort, template_renderer):
+    def __init__(self, email_adapter: EmailServicePort, template_renderer: TemplateRenderer):
         self._adapter = email_adapter
         self._renderer = template_renderer
 
-    async def send_welcome_email(self, user, tdee: int) -> EmailResult:
+    async def send_welcome_email(self, user: EmailUser, tdee: int) -> EmailResult:
         """Send welcome email after onboarding."""
         subject = f"Your nutrition journey starts now, {user.first_name or 'there'}! 🎉"
 
@@ -42,7 +57,7 @@ class EmailService:
         )
 
     async def send_reengagement_email(
-        self, user, days_inactive: int, streak_days: int = 0
+        self, user: EmailUser, days_inactive: int, streak_days: int = 0
     ) -> EmailResult:
         """Send re-engagement email for inactive users."""
         subject = f"We saved your progress, {user.first_name or 'there'} 📊"
@@ -66,7 +81,7 @@ class EmailService:
         )
 
     async def send_trial_expiring_email(
-        self, user, days_left: int, meals_logged: int = 0, streak_days: int = 0
+        self, user: EmailUser, days_left: int, meals_logged: int = 0, streak_days: int = 0
     ) -> EmailResult:
         """Send trial expiring reminder."""
         subject = f"In {days_left} days, your macros go dark ⏰"
@@ -91,7 +106,7 @@ class EmailService:
             tags=["trial_expiring", f"days_left_{days_left}"],
         )
 
-    async def send_cancellation_email(self, user) -> EmailResult:
+    async def send_cancellation_email(self, user: EmailUser) -> EmailResult:
         """Send cancellation email with feedback request."""
         subject = "Before you go — one quick question? 🤔"
 

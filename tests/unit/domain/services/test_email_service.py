@@ -47,7 +47,21 @@ async def test_send_welcome_email(email_service, mock_user, mock_adapter, mock_r
     mock_adapter.send_email.assert_called_once()
     call_kwargs = mock_adapter.send_email.call_args[1]
     assert call_kwargs["to"] == "test@example.com"
-    assert "Welcome" in call_kwargs["subject"] or "journey" in call_kwargs["subject"]
+    assert call_kwargs["subject"] == "Your nutrition journey starts now, Alex! 🎉"
+
+
+@pytest.mark.asyncio
+async def test_send_welcome_email_fallback_name(email_service, mock_adapter, mock_renderer):
+    user = MagicMock()
+    user.id = "user_123"
+    user.email = "test@example.com"
+    user.first_name = None
+
+    result = await email_service.send_welcome_email(user, tdee=2000)
+
+    assert result.success is True
+    call_kwargs = mock_adapter.send_email.call_args[1]
+    assert "there" in call_kwargs["subject"]
 
 
 @pytest.mark.asyncio
