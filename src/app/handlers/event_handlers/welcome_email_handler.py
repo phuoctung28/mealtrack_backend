@@ -3,11 +3,14 @@
 import logging
 import uuid
 
+from sqlalchemy import update
+
 from src.app.events.base import EventHandler, handles
 from src.app.events.user.user_onboarded_event import UserOnboardedEvent
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.email_log import EmailLog
+from src.infra.database.models.user.user import User as UserORM
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -43,20 +46,26 @@ class WelcomeEmailHandler(EventHandler[UserOnboardedEvent, None]):
             )
 
             if result.success:
-                # Mark as sent
-                user.welcome_email_sent_at = utc_now()
+                now = utc_now()
+
+                # Mark as sent via direct SQL update (domain model is detached)
+                await uow.session.execute(
+                    update(UserORM)
+                    .where(UserORM.id == user.id)
+                    .values(welcome_email_sent_at=now)
+                )
 
                 # Log the email
                 email_log = EmailLog(
                     id=str(uuid.uuid4()),
                     user_id=user.id,
                     email_type="welcome",
-                    sent_at=utc_now(),
+                    sent_at=now,
                     resend_message_id=result.message_id,
                     status="sent",
                 )
                 uow.session.add(email_log)
-                await uow.commit()
+                # UoW context manager auto-commits on clean exit
 
                 logger.info(f"Welcome email sent to user {user.id}")
             else:

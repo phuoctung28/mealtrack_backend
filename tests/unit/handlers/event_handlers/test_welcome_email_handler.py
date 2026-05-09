@@ -53,6 +53,9 @@ async def test_sends_welcome_email_on_onboarding(mock_email_service, mock_user, 
         mock_email_service.send_welcome_email.assert_called_once_with(
             mock_user, tdee=2000
         )
+        # Verify user update and email log persisted
+        mock_uow_instance.session.execute.assert_called_once()
+        mock_uow_instance.session.add.assert_called_once()
 
 
 @pytest.mark.asyncio
