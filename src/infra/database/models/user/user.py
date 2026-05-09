@@ -48,6 +48,10 @@ class User(Base, BaseMixin):
     # Preferred language (ISO 639-1: 'en', 'vi', 'es', 'fr', 'de', 'ja', 'zh')
     language_code = Column(String(5), nullable=False, default="en", server_default="en")
 
+    # Email preferences
+    welcome_email_sent_at = Column(DateTime(timezone=True), nullable=True)
+    email_opt_out = Column(Boolean, default=False, nullable=False)
+
     # Indexes for performance
     __table_args__ = (
         Index("idx_firebase_uid", "firebase_uid"),
@@ -70,7 +74,9 @@ class User(Base, BaseMixin):
     referral_wallet = relationship(
         "ReferralWallet", back_populates="user", uselist=False
     )
-
+    email_logs = relationship(
+        "EmailLog", back_populates="user", cascade="all, delete-orphan", lazy="raise"
+    )
 
     @property
     def current_profile(self):
