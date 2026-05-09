@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>In {{ days_left }} days, your macros go dark ⏰</h2>
+
+<p>Hey {{ first_name }}, your Nutree trial is ending soon.</p>
+
+<p><strong>Here's what you've built so far:</strong></p>
+<div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0;">
+  <div style="display: flex; justify-content: space-around; text-align: center;">
+    <div>
+      <div style="font-size: 24px; font-weight: bold; color: #22c55e;">{{ meals_logged }}</div>
+      <div style="color: #666; font-size: 14px;">Meals logged</div>
+    </div>
+    <div>
+      <div style="font-size: 24px; font-weight: bold; color: #22c55e;">{{ streak_days }}</div>
+      <div style="color: #666; font-size: 14px;">Day streak</div>
+    </div>
+  </div>
+</div>
+
+<p>Keep your progress. Upgrade now and continue your journey.</p>
+
+<p style="text-align: center;">
+  <a href="{{ upgrade_url }}" class="btn">Upgrade to Premium</a>
+</p>
+{% endblock %}

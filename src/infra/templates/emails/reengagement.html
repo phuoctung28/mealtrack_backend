@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>We saved your progress, {{ first_name }} 📊</h2>
+
+<p>We noticed you haven't logged a meal in a few days. Your tracking streak and data are still here, waiting for you.</p>
+
+{% if streak_days > 0 %}
+<div style="background: #fef3c7; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+  <div style="font-size: 24px; font-weight: bold; color: #d97706;">{{ streak_days }} day streak</div>
+  <div style="color: #666;">Don't let it reset!</div>
+</div>
+{% endif %}
+
+<p style="text-align: center;">
+  <a href="{{ app_url }}" class="btn">Pick Up Where You Left Off</a>
+</p>
+
+<p style="color: #666; font-size: 14px;">
+  <em>What got in the way? Reply to this email — we read every response.</em>
+</p>
+{% endblock %}

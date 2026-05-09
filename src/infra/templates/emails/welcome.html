@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Your nutrition journey starts now, {{ first_name }}! 🎉</h2>
+
+<p>Welcome to Nutree! You've taken the first step toward understanding your nutrition and reaching your goals.</p>
+
+<p><strong>Your personalized daily target:</strong></p>
+<div style="background: #f0fdf4; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+  <div style="font-size: 36px; font-weight: bold; color: #22c55e;">{{ tdee }} kcal</div>
+  <div style="color: #666;">Daily calorie target</div>
+</div>
+
+<p>Join <strong>10,000+ users</strong> who track their meals daily with Nutree.</p>
+
+<p style="text-align: center;">
+  <a href="{{ app_url }}" class="btn">Log Your First Meal</a>
+</p>
+
+<p>One meal at a time. You've got this! 💪</p>
+{% endblock %}
