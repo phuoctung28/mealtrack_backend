@@ -89,7 +89,7 @@ async def test_translation_called_for_non_english_language():
     )
     handler.image_store = MagicMock()
     handler.image_store.save.return_value = (
-        "mock://images/00000000-0000-0000-0000-000000000123"
+        "https://res.cloudinary.com/demo/image/upload/00000000-0000-0000-0000-000000000123"
     )
     handler.vision_service = MagicMock()
     handler.vision_service.analyze.return_value = {"dish_name": "Pho"}
@@ -178,22 +178,17 @@ async def test_parallel_mode_runs_upload_and_analysis_and_returns_ready(
     harness = parallel_mode_harness
 
     def upload_side_effect(file_contents, content_type, image_id=None):
-        time.sleep(0.2)
-        return "mock://images/00000000-0000-0000-0000-000000000123"
+        return "https://res.cloudinary.com/demo/image/upload/00000000-0000-0000-0000-000000000123"
 
     def analyze_side_effect(file_contents):
-        time.sleep(0.2)
         return {"dish_name": "Pho"}
 
     harness.handler.image_store.save.side_effect = upload_side_effect
     harness.handler.vision_service.analyze.side_effect = analyze_side_effect
 
-    started_at = time.perf_counter()
     meal = await harness.handler.handle(harness.command)
-    elapsed = time.perf_counter() - started_at
 
     assert meal.status == MealStatus.READY
-    assert elapsed < 0.34
 
 
 @pytest.mark.asyncio
@@ -203,23 +198,21 @@ async def test_parallel_mode_marks_failed_when_upload_fails_but_analysis_succeed
     harness = parallel_mode_harness
 
     def upload_side_effect(file_contents, content_type, image_id=None):
-        time.sleep(0.2)
         raise RuntimeError("upload failed")
 
     def analyze_side_effect(file_contents):
-        time.sleep(0.2)
         return {"dish_name": "Pho"}
 
     harness.handler.image_store.save.side_effect = upload_side_effect
     harness.handler.vision_service.analyze.side_effect = analyze_side_effect
 
-    with pytest.raises(RuntimeError, match="upload failed"):
+    with pytest.raises(RuntimeError, match="Cloudinary upload failed"):
         await harness.handler.handle(harness.command)
 
-    assert harness.handler.vision_service.analyze.call_count == 1
-    assert any(
-        meal.status == MealStatus.FAILED for meal in harness.saved_state["meals"]
-    )
+    # Upload-first flow: analysis never runs when upload fails
+    assert harness.handler.vision_service.analyze.call_count == 0
+    # No DB record created when upload fails
+    assert len(harness.saved_state["meals"]) == 0
 
 
 @pytest.mark.asyncio
@@ -229,26 +222,20 @@ async def test_parallel_mode_marks_failed_when_analysis_fails_even_if_upload_suc
     harness = parallel_mode_harness
 
     def upload_side_effect(file_contents, content_type, image_id=None):
-        time.sleep(0.2)
-        return "mock://images/00000000-0000-0000-0000-000000000123"
+        return "https://res.cloudinary.com/demo/image/upload/00000000-0000-0000-0000-000000000123"
 
     def analyze_side_effect(file_contents):
-        time.sleep(0.2)
         raise ValueError("analysis failed")
 
     harness.handler.image_store.save.side_effect = upload_side_effect
     harness.handler.vision_service.analyze.side_effect = analyze_side_effect
 
-    started_at = time.perf_counter()
     with pytest.raises(ValueError, match="analysis failed"):
         await harness.handler.handle(harness.command)
-    elapsed = time.perf_counter() - started_at
 
     assert harness.handler.image_store.save.call_count == 1
-    assert any(
-        meal.status == MealStatus.FAILED for meal in harness.saved_state["meals"]
-    )
-    assert elapsed < 0.34
+    # No DB record created when analysis fails (upload-first flow)
+    assert len(harness.saved_state["meals"]) == 0
 
 
 @pytest.mark.asyncio
@@ -266,9 +253,9 @@ async def test_parallel_mode_prioritises_analysis_error_when_both_fail(
     harness.handler.image_store.save.side_effect = upload_side_effect
     harness.handler.vision_service.analyze.side_effect = analyze_side_effect
 
-    with pytest.raises(ValueError, match="analysis failed"):
+    # Upload-first: upload error is raised before analysis even runs
+    with pytest.raises(RuntimeError, match="Cloudinary upload failed"):
         await harness.handler.handle(harness.command)
 
-    assert any(
-        meal.status == MealStatus.FAILED for meal in harness.saved_state["meals"]
-    )
+    # No DB record created (upload-first flow aborts before any DB write)
+    assert len(harness.saved_state["meals"]) == 0

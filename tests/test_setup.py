@@ -41,14 +41,17 @@ def test_database_rollback(test_session):
 def test_mock_services(mock_image_store, mock_vision_service):
     """Test that mock services are available."""
     # Test image store
-    image_id = mock_image_store.save(b"test-image", "image/jpeg")
-    # Now save returns just the UUID
+    image_url = mock_image_store.save(b"test-image", "image/jpeg")
+    assert image_url.startswith("https://mock.cloudinary.com/images/")
+
+    # Extract UUID portion and verify format
+    image_id = image_url.replace("https://mock.cloudinary.com/images/", "")
     assert len(image_id) == 36  # UUID length
     assert "-" in image_id  # UUID format
 
     # Test get_url returns the full mock URL
-    image_url = mock_image_store.get_url(image_id)
-    assert image_url.startswith("mock://images/")
+    image_url2 = mock_image_store.get_url(image_id)
+    assert image_url2.startswith("https://mock.cloudinary.com/images/")
 
     # Test vision service
     result = mock_vision_service.analyze(b"test-image")

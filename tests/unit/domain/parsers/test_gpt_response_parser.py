@@ -137,3 +137,74 @@ class TestGPTResponseParserStrictSchemaMode:
         assert nutrition.macros.protein == pytest.approx(12.0)
         assert nutrition.macros.carbs == pytest.approx(30.0)
         assert nutrition.macros.fat == pytest.approx(7.0)
+
+
+class TestGPTResponseParserZeroQuantity:
+    def test_filters_out_zero_quantity_food_items(self, gpt_parser):
+        """AI sometimes returns quantity=0, which should be filtered out."""
+        gpt_response = {
+            "structured_data": {
+                "dish_name": "Mixed Plate",
+                "foods": [
+                    {
+                        "name": "Valid Food",
+                        "quantity": 100,
+                        "unit": "g",
+                        "macros": {"protein": 10, "carbs": 20, "fat": 5},
+                    },
+                    {
+                        "name": "Zero Quantity Food",
+                        "quantity": 0,
+                        "unit": "g",
+                        "macros": {"protein": 5, "carbs": 10, "fat": 2},
+                    },
+                    {
+                        "name": "Another Valid Food",
+                        "quantity": 50,
+                        "unit": "g",
+                        "macros": {"protein": 8, "carbs": 15, "fat": 3},
+                    },
+                ],
+                "confidence": 0.9,
+            }
+        }
+
+        nutrition = gpt_parser.parse_to_nutrition(gpt_response)
+
+        assert nutrition.food_items is not None
+        assert len(nutrition.food_items) == 2
+        assert nutrition.food_items[0].name == "Valid Food"
+        assert nutrition.food_items[1].name == "Another Valid Food"
+        # Macros should only include valid foods
+        assert nutrition.macros.protein == pytest.approx(18.0)
+        assert nutrition.macros.carbs == pytest.approx(35.0)
+        assert nutrition.macros.fat == pytest.approx(8.0)
+
+    def test_filters_out_negative_quantity_food_items(self, gpt_parser):
+        """Negative quantities should also be filtered out."""
+        gpt_response = {
+            "structured_data": {
+                "dish_name": "Test Meal",
+                "foods": [
+                    {
+                        "name": "Negative Quantity",
+                        "quantity": -5,
+                        "unit": "g",
+                        "macros": {"protein": 5, "carbs": 10, "fat": 2},
+                    },
+                    {
+                        "name": "Valid Food",
+                        "quantity": 100,
+                        "unit": "g",
+                        "macros": {"protein": 10, "carbs": 20, "fat": 5},
+                    },
+                ],
+                "confidence": 0.9,
+            }
+        }
+
+        nutrition = gpt_parser.parse_to_nutrition(gpt_response)
+
+        assert nutrition.food_items is not None
+        assert len(nutrition.food_items) == 1
+        assert nutrition.food_items[0].name == "Valid Food"
