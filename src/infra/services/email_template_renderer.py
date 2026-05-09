@@ -2,7 +2,7 @@
 
 import os
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
 
 class EmailTemplateRenderer:
@@ -27,5 +27,8 @@ class EmailTemplateRenderer:
         Returns:
             Rendered HTML string
         """
-        template = self._env.get_template(f"{template_name}.html")
-        return template.render(**context)
+        try:
+            template = self._env.get_template(f"{template_name}.html")
+            return template.render(**context)
+        except TemplateNotFound:
+            raise ValueError(f"Email template '{template_name}' not found")

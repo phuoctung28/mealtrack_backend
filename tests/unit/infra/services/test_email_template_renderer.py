@@ -59,3 +59,8 @@ def test_render_with_missing_optional_field(renderer):
 
     assert "Alex" in html
     assert "day streak" not in html  # Hidden when streak is 0
+
+
+def test_render_raises_for_unknown_template(renderer):
+    with pytest.raises(ValueError, match="not found"):
+        renderer.render("nonexistent", {})
