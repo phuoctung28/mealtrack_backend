@@ -44,14 +44,18 @@ def manager(mock_gemini_provider, mock_circuit_breaker):
 
 class TestModelSelection:
     def test_get_fallback_chain_for_meal_scan(self, manager):
+        """Vision tasks use Gemini first, Mistral-large as emergency fallback."""
         chain = manager.get_fallback_chain(ModelPurpose.MEAL_SCAN)
         assert chain[0] == "gemini-2.5-flash"
         assert chain[1] == "gemini-2.5-flash-lite"
+        assert chain[2] == "mistral-large-latest"
 
     def test_get_fallback_chain_for_barcode(self, manager):
+        """Barcode uses Mistral-small first (cheaper), then Gemini fallback."""
         chain = manager.get_fallback_chain(ModelPurpose.BARCODE)
-        assert chain[0] == "gemini-2.5-flash-lite"
-        assert chain[1] == "gemini-2.5-flash"
+        assert chain[0] == "mistral-small-latest"
+        assert chain[1] == "gemini-2.5-flash-lite"
+        assert chain[2] == "gemini-2.5-flash"
 
 
 class TestGenerate:
