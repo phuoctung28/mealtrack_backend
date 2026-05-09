@@ -1,5 +1,7 @@
 """Email log model for tracking sent emails."""
 
+import uuid
+
 from sqlalchemy import Column, String, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
 
@@ -12,7 +14,7 @@ class EmailLog(Base):
 
     __tablename__ = "email_logs"
 
-    id = Column(String(36), primary_key=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
