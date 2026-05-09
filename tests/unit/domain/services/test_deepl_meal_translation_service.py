@@ -9,6 +9,7 @@ from src.domain.model.meal.meal_translation_domain_models import MealTranslation
 from src.domain.model.nutrition.macros import Macros
 from src.domain.model.nutrition.nutrition import FoodItem
 from src.domain.services.meal_analysis.deepl_meal_translation_service import DeepLMealTranslationService
+from src.domain.services.translation.deepl_text_translation_service import DeepLTextTranslationService
 
 
 @pytest.fixture
@@ -51,27 +52,30 @@ def repo():
 
 
 @pytest.fixture
-def deepl_port():
-    p = AsyncMock()
-    p.translate_texts = AsyncMock()
-    return p
+def text_translation_service():
+    svc = AsyncMock(spec=DeepLTextTranslationService)
+    svc.translate_texts = AsyncMock()
+    return svc
 
 
 @pytest.fixture
-def service(repo, deepl_port):
-    return DeepLMealTranslationService(translation_repo=repo, deepl_port=deepl_port)
+def service(repo, text_translation_service):
+    return DeepLMealTranslationService(
+        translation_repo=repo,
+        text_translation_service=text_translation_service,
+    )
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_skips_english(service, meal, food_items, deepl_port, repo):
+async def test_translate_meal_skips_english(service, meal, food_items, text_translation_service, repo):
     result = await service.translate_meal(meal, "Grilled chicken", food_items, "en")
     assert result is None
-    deepl_port.translate_texts.assert_not_called()
+    text_translation_service.translate_texts.assert_not_called()
     repo.save.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_uses_cache_when_fully_cached(service, meal, food_items, deepl_port, repo):
+async def test_translate_meal_uses_cache_when_fully_cached(service, meal, food_items, text_translation_service, repo):
     cached = MealTranslation(
         meal_id=meal.meal_id,
         language="vi",
@@ -85,13 +89,13 @@ async def test_translate_meal_uses_cache_when_fully_cached(service, meal, food_i
     result = await service.translate_meal(meal, "Grilled chicken", food_items, "vi", instructions=["Step"])
 
     assert result == cached
-    deepl_port.translate_texts.assert_not_called()
+    text_translation_service.translate_texts.assert_not_called()
     repo.save.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_calls_deepl_and_saves(service, meal, food_items, deepl_port, repo):
-    deepl_port.translate_texts.return_value = [
+async def test_translate_meal_calls_deepl_and_saves(service, meal, food_items, text_translation_service, repo):
+    text_translation_service.translate_texts.return_value = [
         "Gà nướng",          # dish
         "Ức gà",             # ingredient 1
         "Cơm gạo lứt",        # ingredient 2
@@ -111,12 +115,12 @@ async def test_translate_meal_calls_deepl_and_saves(service, meal, food_items, d
     assert result.meal_ingredients == ["Ức gà", "Cơm gạo lứt"]
     assert result.meal_instruction == [{"instruction": "Bước 1", "duration_minutes": None}]
     repo.save.assert_called_once()
-    deepl_port.translate_texts.assert_awaited_once()
+    text_translation_service.translate_texts.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_normalizes_instruction_dicts(service, meal, food_items, deepl_port):
-    deepl_port.translate_texts.return_value = [
+async def test_translate_meal_normalizes_instruction_dicts(service, meal, food_items, text_translation_service):
+    text_translation_service.translate_texts.return_value = [
         "Gà nướng",
         "Ức gà",
         "Cơm gạo lứt",
@@ -142,9 +146,9 @@ async def test_translate_meal_normalizes_instruction_dicts(service, meal, food_i
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_pads_when_deepl_returns_short(service, meal, food_items, deepl_port):
+async def test_translate_meal_pads_when_deepl_returns_short(service, meal, food_items, text_translation_service):
     # Only dish name returned, rest should be padded with originals.
-    deepl_port.translate_texts.return_value = ["Gà nướng"]
+    text_translation_service.translate_texts.return_value = ["Gà nướng"]
 
     result = await service.translate_meal(
         meal,
@@ -162,8 +166,8 @@ async def test_translate_meal_pads_when_deepl_returns_short(service, meal, food_
 
 
 @pytest.mark.asyncio
-async def test_translate_meal_returns_none_on_exception(service, meal, food_items, deepl_port, repo):
-    deepl_port.translate_texts.side_effect = Exception("DeepL down")
+async def test_translate_meal_returns_none_on_exception(service, meal, food_items, text_translation_service, repo):
+    text_translation_service.translate_texts.side_effect = Exception("DeepL down")
 
     result = await service.translate_meal(
         meal,

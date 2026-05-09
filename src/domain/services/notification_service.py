@@ -126,21 +126,20 @@ class NotificationService:
         """Send meal reminder with gender-aware tone and remaining calories."""
         messages = get_messages(language, gender)["meal_reminder"]
         config = messages.get(
-            meal_type, {"title": "🍽️ Meal Time!", "body": "Time to log your meal"}
+            meal_type, {"body": "Time to log your meal 🍽️"}
         )
 
-        title = config["title"]
         # Breakfast uses static body; lunch/dinner use body_template with remaining cal
         if "body_template" in config and remaining_calories is not None:
             body = config["body_template"].format(remaining=remaining_calories)
         else:
-            body = config.get("body", "Time to log your meal")
+            body = config.get("body", "Time to log your meal 🍽️")
 
         notification_type = NotificationType(f"meal_reminder_{meal_type}")
 
         return await self.send_notification(
             user_id=user_id,
-            title=title,
+            title="",  # Empty title — iOS shows app name for Time Sensitive
             body=body,
             notification_type=notification_type,
             data={"meal_type": meal_type},
@@ -156,7 +155,7 @@ class NotificationService:
         gender: str = "male",
     ) -> Dict[str, Any]:
         """Send daily summary with gender-aware tone."""
-        title, body = self._get_summary_message(
+        body = self._get_summary_message(
             calories_consumed,
             calorie_goal,
             meals_logged,
@@ -166,7 +165,7 @@ class NotificationService:
 
         return await self.send_notification(
             user_id=user_id,
-            title=title,
+            title="",  # Empty title — iOS shows app name for Time Sensitive
             body=body,
             notification_type=NotificationType.DAILY_SUMMARY,
             data={
@@ -184,31 +183,26 @@ class NotificationService:
         meals_logged: int,
         language: str = "en",
         gender: str = "male",
-    ) -> tuple[str, str]:
-        """Get title and body for summary based on consumption level, language, and gender."""
+    ) -> str:
+        """Get body message for summary based on consumption level, language, and gender."""
         summary = get_messages(language, gender)["daily_summary"]
 
         if meals_logged == 0:
-            cfg = summary["zero_logs"]
-            return cfg["title"], cfg["body"]
+            return summary["zero_logs"]["body"]
 
         percentage = (consumed / goal) * 100 if goal > 0 else 0
 
         if 95 <= percentage <= 105:  # ±5%
-            cfg = summary["on_target"]
-            return cfg["title"], cfg["body_template"].format(percentage=int(percentage))
+            return summary["on_target"]["body_template"].format(percentage=int(percentage))
         elif percentage < 95:
             deficit = int(goal - consumed)
-            cfg = summary["under_goal"]
-            return cfg["title"], cfg["body_template"].format(deficit=deficit)
+            return summary["under_goal"]["body_template"].format(deficit=deficit)
         elif 105 < percentage <= 120:  # 10-20% over
             excess = int(consumed - goal)
-            cfg = summary["slightly_over"]
-            return cfg["title"], cfg["body_template"].format(excess=excess)
+            return summary["slightly_over"]["body_template"].format(excess=excess)
         else:  # 20%+ over
             excess = int(consumed - goal)
-            cfg = summary["way_over"]
-            return cfg["title"], cfg["body_template"].format(excess=excess)
+            return summary["way_over"]["body_template"].format(excess=excess)
 
     async def send_bulk_notifications(
         self, notifications: List[PushNotification]

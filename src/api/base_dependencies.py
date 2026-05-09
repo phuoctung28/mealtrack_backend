@@ -23,6 +23,7 @@ from src.infra.adapters.open_food_facts_service import (
 )
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.cache.cache_service import CacheService
+from src.infra.services.ai.ai_model_manager import AIModelManager
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
 from src.infra.config.settings import get_settings, settings
@@ -54,6 +55,7 @@ _cache_monitor = CacheMonitor()
 # Singleton service instances (initialized once, reused across requests)
 _image_store: Optional[ImageStorePort] = None
 _vision_service: Optional[VisionAIServicePort] = None
+_ai_model_manager: Optional[AIModelManager] = None
 
 
 async def initialize_cache_layer() -> None:
@@ -145,6 +147,20 @@ def get_vision_service() -> VisionAIServicePort:
     if _vision_service is None:
         _vision_service = VisionAIService()
     return _vision_service
+
+
+# AI Model Manager (singleton pattern)
+def get_ai_model_manager() -> AIModelManager:
+    """
+    Get the AI model manager instance (singleton).
+
+    Returns:
+        AIModelManager: The AI model manager with circuit breaker and fallback support
+    """
+    global _ai_model_manager
+    if _ai_model_manager is None:
+        _ai_model_manager = AIModelManager.get_instance()
+    return _ai_model_manager
 
 
 # GPT Parser
@@ -345,7 +361,6 @@ _deepl_suggestion_translation_service = None
 def get_deepl_suggestion_translation_service():
     """Get DeepL-backed suggestion translation service (singleton).
 
-    Replaces the Gemini-based TranslationService for meal suggestions.
     Returns None if DEEPL_API_KEY is not set (generation still works, just in English).
     """
     global _deepl_suggestion_translation_service
@@ -353,17 +368,18 @@ def get_deepl_suggestion_translation_service():
     if _deepl_suggestion_translation_service is not None:
         return _deepl_suggestion_translation_service
 
-    if not settings.DEEPL_API_KEY:
+    # Requires text translation service
+    text_service = get_deepl_text_translation_service()
+    if text_service is None:
         logger.warning("DEEPL_API_KEY not set – suggestion translation will be skipped")
         return None
 
-    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
     from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
         DeepLSuggestionTranslationService,
     )
 
     _deepl_suggestion_translation_service = DeepLSuggestionTranslationService(
-        deepl_port=DeepLTranslationAdapter(settings.DEEPL_API_KEY),
+        text_translation_service=text_service,
     )
     logger.info("DeepL suggestion translation service initialised")
     return _deepl_suggestion_translation_service
@@ -428,11 +444,12 @@ def get_deepl_meal_translation_service():
     if _deepl_meal_translation_service is not None:
         return _deepl_meal_translation_service
 
-    if not settings.DEEPL_API_KEY:
+    # Requires text translation service
+    text_service = get_deepl_text_translation_service()
+    if text_service is None:
         logger.warning("DEEPL_API_KEY not set – meal translation will be skipped")
         return None
 
-    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
     from src.infra.repositories.meal_translation_repository import (
         MealTranslationRepository,
     )
@@ -442,10 +459,40 @@ def get_deepl_meal_translation_service():
 
     _deepl_meal_translation_service = DeepLMealTranslationService(
         translation_repo=MealTranslationRepository(),
-        deepl_port=DeepLTranslationAdapter(settings.DEEPL_API_KEY),
+        text_translation_service=text_service,
     )
     logger.info("DeepL meal translation service initialised")
     return _deepl_meal_translation_service
+
+
+_deepl_text_translation_service = None
+
+
+def get_deepl_text_translation_service():
+    """Get DeepL-backed text translation service (singleton).
+
+    Used for ingredient recognition, food search, barcode lookup, and meal text parsing.
+    Returns None if DEEPL_API_KEY is not configured.
+    """
+    global _deepl_text_translation_service
+
+    if _deepl_text_translation_service is not None:
+        return _deepl_text_translation_service
+
+    if not settings.DEEPL_API_KEY:
+        logger.warning("DEEPL_API_KEY not set – text translation will be skipped")
+        return None
+
+    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
+    from src.domain.services.translation.deepl_text_translation_service import (
+        DeepLTextTranslationService,
+    )
+
+    _deepl_text_translation_service = DeepLTextTranslationService(
+        deepl_port=DeepLTranslationAdapter(settings.DEEPL_API_KEY),
+    )
+    logger.info("DeepL text translation service initialised")
+    return _deepl_text_translation_service
 
 
 # IngredientNutritionResolver (singleton — reuses FatSecret + FoodReferenceRepository singletons)

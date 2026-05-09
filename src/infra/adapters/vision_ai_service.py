@@ -1,12 +1,10 @@
-import base64
+import asyncio
 import json
 import logging
 import re
 from io import BytesIO
 from typing import Any
 
-from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage, SystemMessage
 from PIL import Image
 
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
@@ -14,31 +12,21 @@ from src.domain.strategies.meal_analysis_strategy import (
     AnalysisStrategyFactory,
     MealAnalysisStrategy,
 )
-from src.infra.services.ai.gemini_model_manager import GeminiModelManager
-
-# Load environment variables
-load_dotenv()
+from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
 logger = logging.getLogger(__name__)
 
 
 class VisionAIService(VisionAIServicePort):
-    """
-    Implementation of VisionAIServicePort using Google Gemini API.
-
-    This class implements US-2.1 - Call Vision AI to get nutrition estimate.
-    """
+    """Vision AI service with automatic fallback on failures."""
 
     def __init__(self):
-        """Initialize the Gemini client using singleton manager."""
-        self._model_manager = GeminiModelManager.get_instance()
-        # Disable thinking tokens and cap output to reduce latency
-        self.model = self._model_manager.get_model(
-            thinking_budget=0, max_output_tokens=2048
-        )
+        """Initialize with AI model manager."""
+        self._ai_manager = AIModelManager.get_instance()
         self._optimized_prompt_enabled = True
 
     def _compress_image(self, image_bytes: bytes) -> bytes:
+        """Compress image for faster upload."""
         try:
             img = Image.open(BytesIO(image_bytes))
             w, h = img.size
@@ -64,85 +52,16 @@ class VisionAIService(VisionAIServicePort):
             logger.warning("Image compression failed, using original: %s", exc)
             return image_bytes
 
-    def _analyze_image_reference(
-        self, image_reference: str, strategy: MealAnalysisStrategy
-    ) -> dict[str, Any]:
-        """
-        Analyze an image reference (data URL or public URL) using strategy.
-        """
+    def _run_async(self, coro):
+        """Run async coroutine synchronously."""
         try:
-            messages = [
-                SystemMessage(content=strategy.get_analysis_prompt()),
-                HumanMessage(
-                    content=[
-                        {"type": "text", "text": strategy.get_user_message()},
-                        {"type": "image_url", "image_url": {"url": image_reference}},
-                    ]
-                ),
-            ]
-
-            response = self.model.invoke(messages)
-            content = response.content
-
-            if not content or (isinstance(content, str) and not content.strip()):
-                response_metadata = getattr(response, "response_metadata", {})
-                finish_reason = response_metadata.get("finish_reason", "unknown")
-                safety_ratings = response_metadata.get("safety_ratings", [])
-
-                logger.warning(
-                    f"Empty response from Gemini API. finish_reason={finish_reason}, "
-                    f"safety_ratings={safety_ratings}"
-                )
-
-                if finish_reason == "SAFETY":
-                    raise ValueError(
-                        "Image was blocked by AI safety filters. "
-                        "Please try a different image of food."
-                    )
-                raise ValueError(
-                    f"AI returned empty response (finish_reason: {finish_reason}). "
-                    "The image may not be clear or recognizable as food."
-                )
-
-            result = self._extract_json_from_response(content)
-            return {
-                "raw_response": content,
-                "structured_data": result,
-                "strategy_used": strategy.get_strategy_name(),
-            }
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}"
-            ) from e
-
-    def analyze_with_strategy(
-        self, image_bytes: bytes, strategy: MealAnalysisStrategy
-    ) -> dict[str, Any]:
-        """
-        Analyze a food image using the provided analysis strategy.
-
-        Args:
-            image_bytes: The raw bytes of the image to analyze
-            strategy: The analysis strategy to use
-
-        Returns:
-            JSON-compatible dictionary with the raw AI response
-
-        Raises:
-            RuntimeError: If analysis fails
-        """
-        image_bytes = self._compress_image(image_bytes)
-        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-        image_data_url = f"data:image/jpeg;base64,{image_base64}"
-        return self._analyze_image_reference(image_data_url, strategy)
-
-    def analyze_by_url_with_strategy(
-        self, image_url: str, strategy: MealAnalysisStrategy
-    ) -> dict[str, Any]:
-        """
-        Analyze a food image by public URL using the provided analysis strategy.
-        """
-        return self._analyze_image_reference(image_url, strategy)
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                raise RuntimeError("Event loop is closed")
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        return loop.run_until_complete(coro)
 
     def _extract_json_from_response(self, content: str) -> dict[str, Any]:
         """
@@ -179,8 +98,19 @@ class VisionAIService(VisionAIServicePort):
             except json.JSONDecodeError:
                 pass
 
-        # Detect truncated response (has opening { but no closing })
-        if "{" in content and "}" not in content:
+        # Detect truncated response:
+        # 1. Has opening { but no closing }
+        # 2. Unbalanced braces (more { than })
+        # 3. Ends mid-string (common truncation pattern)
+        open_braces = content.count("{")
+        close_braces = content.count("}")
+        is_truncated = (
+            (open_braces > 0 and close_braces == 0)
+            or (open_braces > close_braces)
+            or content.rstrip().endswith(('":', '": "', '"name": "', '",'))
+        )
+
+        if is_truncated:
             logger.error(f"Truncated JSON response detected: {content[:500]}")
             raise ValueError(
                 "AI response was truncated. Please try again with a simpler image."
@@ -191,6 +121,80 @@ class VisionAIService(VisionAIServicePort):
             "Could not extract JSON from AI response. "
             "Please try again or use a clearer image."
         )
+
+    def analyze_with_strategy(
+        self, image_bytes: bytes, strategy: MealAnalysisStrategy
+    ) -> dict[str, Any]:
+        """
+        Analyze a food image using the provided analysis strategy with automatic fallback.
+
+        Args:
+            image_bytes: The raw bytes of the image to analyze
+            strategy: The analysis strategy to use
+
+        Returns:
+            JSON-compatible dictionary with the raw AI response
+
+        Raises:
+            RuntimeError: If analysis fails
+        """
+        image_bytes = self._compress_image(image_bytes)
+
+        try:
+            result = self._run_async(
+                self._ai_manager.generate_with_vision(
+                    purpose=ModelPurpose.MEAL_SCAN,
+                    prompt=strategy.get_user_message(),
+                    image_data=image_bytes,
+                    system_message=strategy.get_analysis_prompt(),
+                )
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}"
+            ) from e
+
+        return {
+            "raw_response": json.dumps(result),
+            "structured_data": result,
+            "strategy_used": strategy.get_strategy_name(),
+        }
+
+    def analyze_by_url_with_strategy(
+        self, image_url: str, strategy: MealAnalysisStrategy
+    ) -> dict[str, Any]:
+        """
+        Analyze a food image by public URL using the provided analysis strategy.
+
+        Args:
+            image_url: Public URL of the image to analyze
+            strategy: The analysis strategy to use
+
+        Returns:
+            JSON-compatible dictionary with the raw AI response
+
+        Raises:
+            RuntimeError: If analysis fails
+        """
+        try:
+            result = self._run_async(
+                self._ai_manager.generate_with_vision(
+                    purpose=ModelPurpose.MEAL_SCAN,
+                    prompt=strategy.get_user_message(),
+                    image_data=image_url.encode("utf-8"),
+                    system_message=strategy.get_analysis_prompt(),
+                )
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to analyze image URL with {strategy.get_strategy_name()}: {str(e)}"
+            ) from e
+
+        return {
+            "raw_response": json.dumps(result),
+            "structured_data": result,
+            "strategy_used": strategy.get_strategy_name(),
+        }
 
     def analyze(self, image_bytes: bytes) -> dict[str, Any]:
         """
