@@ -1,17 +1,17 @@
 """Tests for EmailServicePort interface."""
 
-from dataclasses import dataclass
+from abc import ABC
 
 import pytest
 
 from src.domain.ports.email_service_port import EmailServicePort, EmailResult
 
 
-@dataclass
 class MockEmailAdapter(EmailServicePort):
     """Mock implementation for testing."""
 
-    should_succeed: bool = True
+    def __init__(self, should_succeed: bool = True):
+        self.should_succeed = should_succeed
 
     async def send_email(
         self,
@@ -23,6 +23,15 @@ class MockEmailAdapter(EmailServicePort):
         if self.should_succeed:
             return EmailResult(success=True, message_id="mock_123")
         return EmailResult(success=False, error="mock_error")
+
+
+def test_email_service_port_is_abstract():
+    assert issubclass(EmailServicePort, ABC)
+
+
+def test_email_service_port_cannot_be_instantiated():
+    with pytest.raises(TypeError):
+        EmailServicePort()
 
 
 @pytest.mark.asyncio
