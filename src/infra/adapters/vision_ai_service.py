@@ -98,8 +98,19 @@ class VisionAIService(VisionAIServicePort):
             except json.JSONDecodeError:
                 pass
 
-        # Detect truncated response (has opening { but no closing })
-        if "{" in content and "}" not in content:
+        # Detect truncated response:
+        # 1. Has opening { but no closing }
+        # 2. Unbalanced braces (more { than })
+        # 3. Ends mid-string (common truncation pattern)
+        open_braces = content.count("{")
+        close_braces = content.count("}")
+        is_truncated = (
+            (open_braces > 0 and close_braces == 0)
+            or (open_braces > close_braces)
+            or content.rstrip().endswith(('":', '": "', '"name": "', '",'))
+        )
+
+        if is_truncated:
             logger.error(f"Truncated JSON response detected: {content[:500]}")
             raise ValueError(
                 "AI response was truncated. Please try again with a simpler image."
