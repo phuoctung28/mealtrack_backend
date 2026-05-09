@@ -61,6 +61,10 @@ from src.api.routes.v1.weight_entries import router as weight_entries_router
 from src.infra.config.settings import settings
 from src.infra.database.config import engine
 from src.infra.monitoring.sentry import initialize_sentry
+from src.infra.services.scheduled_email_service import ScheduledEmailService
+from src.infra.services.email_template_renderer import EmailTemplateRenderer
+from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
+from src.domain.services.email_service import EmailService
 
 load_dotenv()
 
@@ -184,6 +188,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to start scheduled notification service: {e}")
         # Continue running the API even if notification service fails
+
+    # Start scheduled email service
+    email_adapter = ResendEmailAdapter()
+    email_renderer = EmailTemplateRenderer()
+    email_service = EmailService(email_adapter=email_adapter, template_renderer=email_renderer)
+    scheduled_email_service = ScheduledEmailService(email_service=email_service)
+
+    # Run email check on startup (daily runs via external cron)
+    try:
+        await scheduled_email_service.check_and_send_emails()
+    except Exception as e:
+        logger.error(f"Scheduled email check failed: {e}")
 
     logger.info("MealTrack API started successfully!")
     yield

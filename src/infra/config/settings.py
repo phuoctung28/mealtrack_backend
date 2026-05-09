@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     FIREBASE_SERVICE_ACCOUNT_JSON: str | None = Field(default=None)
     FIREBASE_SERVICE_ACCOUNT_PATH: str | None = Field(default=None)
 
+    # Email (Resend)
+    RESEND_API_KEY: str | None = Field(default=None)
+    EMAIL_FROM: str = Field(default="Nutree <hello@nutree.app>")
+    EMAIL_ENABLED: bool = Field(default=False)
+
     # External APIs & integrations
     DEEPL_API_KEY: str | None = Field(
         default=None, description="DeepL API key for meal translation"
