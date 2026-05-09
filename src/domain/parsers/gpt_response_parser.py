@@ -80,11 +80,22 @@ class GPTResponseParser:
             ) from e
 
     def _normalize_structured_data(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Normalize structured data before validation."""
+        """Normalize structured data before validation.
+
+        Filters out food items with invalid quantities (0 or negative)
+        and limits to MAX_FOOD_ITEMS.
+        """
         normalized_data = dict(data)
         foods = normalized_data.get("foods")
-        if isinstance(foods, list) and len(foods) > self.MAX_FOOD_ITEMS:
-            normalized_data["foods"] = foods[: self.MAX_FOOD_ITEMS]
+        if isinstance(foods, list):
+            # Filter out foods with invalid quantity (AI sometimes returns 0)
+            valid_foods = [
+                f for f in foods
+                if isinstance(f, dict)
+                and isinstance(f.get("quantity"), (int, float))
+                and f.get("quantity", 0) > 0
+            ]
+            normalized_data["foods"] = valid_foods[: self.MAX_FOOD_ITEMS]
         return normalized_data
 
     def _parse_food_items(self, data: dict[str, Any]) -> list[FoodItem]:
