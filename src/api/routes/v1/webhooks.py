@@ -12,13 +12,23 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Header
 
+from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
+from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
+from src.infra.services.email_template_renderer import EmailTemplateRenderer
 
 router = APIRouter(prefix="/v1/webhooks", tags=["Webhooks"])
 logger = logging.getLogger(__name__)
+
+
+def _get_email_service() -> EmailService:
+    """Get email service instance."""
+    adapter = ResendEmailAdapter()
+    renderer = EmailTemplateRenderer()
+    return EmailService(email_adapter=adapter, template_renderer=renderer)
 
 
 @router.post("/revenuecat")
@@ -211,6 +221,15 @@ async def handle_cancellation(uow, user, event):
         subscription.updated_at = utc_now()
         # Note: User still has access until expires_at
         logger.info(f"User {user.id} cancelled subscription (expires {subscription.expires_at})")
+
+    # Send cancellation email
+    if not user.email_opt_out:
+        try:
+            email_service = _get_email_service()
+            await email_service.send_cancellation_email(user)
+            logger.info(f"Cancellation email sent to user {user.id}")
+        except Exception as e:
+            logger.error(f"Failed to send cancellation email to {user.id}: {e}")
 
 
 async def handle_expiration(uow, user, event):
