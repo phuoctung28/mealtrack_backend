@@ -161,6 +161,7 @@ class FirebaseService:
                     headers={
                         "apns-priority": "10",
                         "apns-push-type": "alert",
+                        "apns-interruption-level": "time-sensitive",
                     },
                     payload=messaging.APNSPayload(
                         aps=messaging.Aps(
@@ -246,6 +247,7 @@ class FirebaseService:
                     headers={
                         "apns-priority": "10",
                         "apns-push-type": "alert",
+                        "apns-interruption-level": "time-sensitive",
                     },
                     payload=messaging.APNSPayload(
                         aps=messaging.Aps(

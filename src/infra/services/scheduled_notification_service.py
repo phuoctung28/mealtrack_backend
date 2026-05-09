@@ -314,42 +314,37 @@ def _render_message(
     calories_consumed: int = 0,
     calorie_goal: int = 2000,
 ) -> tuple[str, str]:
-    """Render title + body for a notification type."""
+    """Render title + body for a notification type. Title is empty for Time Sensitive."""
     messages = get_messages(lang, gender)
     if notification_type == "meal_reminder_breakfast":
         cfg = messages["meal_reminder"]["breakfast"]
-        return cfg["title"], cfg.get("body", "")
+        return "", cfg.get("body", "Time to log your meal 🍽️")
     elif notification_type == "meal_reminder_lunch":
         cfg = messages["meal_reminder"]["lunch"]
-        return cfg["title"], cfg["body_template"].format(remaining=remaining)
+        return "", cfg["body_template"].format(remaining=remaining)
     elif notification_type == "meal_reminder_dinner":
         cfg = messages["meal_reminder"]["dinner"]
-        return cfg["title"], cfg["body_template"].format(remaining=remaining)
+        return "", cfg["body_template"].format(remaining=remaining)
     elif notification_type == "daily_summary":
         summary = messages["daily_summary"]
         if calories_consumed == 0:
-            cfg = summary["zero_logs"]
-            return cfg["title"], cfg["body"]
+            return "", summary["zero_logs"]["body"]
         pct = (calories_consumed / calorie_goal * 100) if calorie_goal > 0 else 0
         if 95 <= pct <= 105:
-            cfg = summary["on_target"]
-            return cfg["title"], cfg["body_template"].format(percentage=int(pct))
+            return "", summary["on_target"]["body_template"].format(percentage=int(pct))
         elif pct < 95:
-            cfg = summary["under_goal"]
-            return cfg["title"], cfg["body_template"].format(
+            return "", summary["under_goal"]["body_template"].format(
                 deficit=int(calorie_goal - calories_consumed)
             )
         elif pct <= 120:
-            cfg = summary["slightly_over"]
-            return cfg["title"], cfg["body_template"].format(
+            return "", summary["slightly_over"]["body_template"].format(
                 excess=int(calories_consumed - calorie_goal)
             )
         else:
-            cfg = summary["way_over"]
-            return cfg["title"], cfg["body_template"].format(
+            return "", summary["way_over"]["body_template"].format(
                 excess=int(calories_consumed - calorie_goal)
             )
-    return "Notification", ""
+    return "", "You have a notification 📬"
 
 
 def _chunked(lst: list, size: int):
