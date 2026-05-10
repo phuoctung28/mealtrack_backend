@@ -49,4 +49,4 @@ def test_aasa_has_app_id():
 
     details = data["applinks"]["details"][0]
     assert "appID" in details
-    assert ".com.nutree.app" in details["appID"]
+    assert ".com.nutreeai.mobile" in details["appID"]
