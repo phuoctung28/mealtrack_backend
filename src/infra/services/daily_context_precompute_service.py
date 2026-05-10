@@ -104,9 +104,15 @@ class DailyContextPrecomputeService:
         """Reschedule notifications for a single user after preferences update.
 
         Deletes pending notifications for today and creates new ones with updated times.
+        Uses per-user lock to prevent concurrent reschedules.
         Returns number of notifications scheduled.
         """
-        return await asyncio.to_thread(self._reschedule_user_sync, user_id)
+        lock_key = f"reschedule:{user_id}"
+        if lock_key not in self._locks:
+            self._locks[lock_key] = asyncio.Lock()
+
+        async with self._locks[lock_key]:
+            return await asyncio.to_thread(self._reschedule_user_sync, user_id)
 
     def _reschedule_user_sync(self, user_id: str) -> int:
         """Sync implementation of user notification rescheduling."""
@@ -259,11 +265,16 @@ class DailyContextPrecomputeService:
                         "expires_at": expires_at,
                     })
 
-            # Insert new notifications
+            # Insert new notifications (upsert to handle race conditions)
             if rows:
                 stmt = pg_insert(NotificationORM).values(rows)
-                stmt = stmt.on_conflict_do_nothing(
-                    index_elements=["user_id", "notification_type", "scheduled_date"]
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["user_id", "notification_type", "scheduled_date"],
+                    set_={
+                        "scheduled_for_utc": stmt.excluded.scheduled_for_utc,
+                        "context": stmt.excluded.context,
+                        "status": "pending",
+                    },
                 )
                 session.execute(stmt)
 
