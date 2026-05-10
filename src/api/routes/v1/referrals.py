@@ -3,7 +3,7 @@ import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from src.api.dependencies.auth import get_current_user_id
 from src.app.commands.referral.apply_referral_code_command import ApplyReferralCodeCommand
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # ── Request / Response Schemas ────────────────────────────────────────────────
 
 class ValidateCodeRequest(BaseModel):
-    code: str
+    code: str = Field(..., min_length=3, max_length=15)
 
     @field_validator("code")
     @classmethod
@@ -51,7 +51,7 @@ class ValidateCodeResponse(BaseModel):
 
 
 class ApplyCodeRequest(BaseModel):
-    code: str
+    code: str = Field(..., min_length=3, max_length=15)
     discount_applied: int
 
     @field_validator("code")
