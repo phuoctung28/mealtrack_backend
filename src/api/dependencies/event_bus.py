@@ -296,6 +296,7 @@ def get_configured_event_bus() -> EventBus:
         get_suggestion_orchestration_service,
         get_deepl_meal_translation_service,
         get_deepl_text_translation_service,
+        get_daily_context_precompute_service,
     )
 
     image_store = get_image_store()
