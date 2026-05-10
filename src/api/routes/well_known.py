@@ -6,8 +6,8 @@ from fastapi.responses import JSONResponse
 router = APIRouter(tags=["well-known"])
 
 # TODO: Replace with actual Apple Developer Team ID from App Store Connect
-APPLE_TEAM_ID = "XXXXXXXXXX"
-APP_BUNDLE_ID = "com.nutree.app"
+APPLE_TEAM_ID = "KB4Q9QGD7M"
+APP_BUNDLE_ID = "com.nutreeai.mobile"
 
 
 @router.get("/.well-known/apple-app-site-association")
