@@ -60,6 +60,7 @@ from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
 from src.infra.config.settings import settings
 from src.infra.database.config import engine
+from src.infra.database.config_async import async_engine
 from src.infra.monitoring.sentry import initialize_sentry
 from src.infra.services.scheduled_email_service import ScheduledEmailService
 from src.infra.services.email_template_renderer import EmailTemplateRenderer
@@ -218,6 +219,10 @@ async def lifespan(app: FastAPI):
 
     # Disconnect cache
     await shutdown_cache_layer()
+
+    # Dispose async SQLAlchemy engine so pooled asyncpg connections are returned
+    if async_engine is not None:
+        await async_engine.dispose()
 
 
 app = FastAPI(
