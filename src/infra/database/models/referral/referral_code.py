@@ -9,7 +9,7 @@ class ReferralCode(Base):
     __tablename__ = "referral_codes"
 
     user_id = Column(String(36), ForeignKey("users.id"), primary_key=True)
-    code = Column(String(6), nullable=False)
+    code = Column(String(15), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (

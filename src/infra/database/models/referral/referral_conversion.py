@@ -11,7 +11,7 @@ class ReferralConversion(Base, PrimaryEntityMixin):
 
     referrer_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     referred_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    code_used = Column(String(6), nullable=False)
+    code_used = Column(String(15), nullable=False)
     # status: pending | converted | revoked
     status = Column(String(20), nullable=False, default="pending")
     discount_applied = Column(Integer, nullable=True)
