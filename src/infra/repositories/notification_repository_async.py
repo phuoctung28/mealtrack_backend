@@ -10,6 +10,7 @@ import logging
 from typing import List, Optional
 
 from sqlalchemy import select, and_
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.model.notification import UserFcmToken, NotificationPreferences
@@ -36,21 +37,14 @@ class AsyncNotificationRepository:
     # ------------------------------------------------------------------
 
     async def save_fcm_token(self, token: UserFcmToken) -> UserFcmToken:
-        """Insert or update an FCM token."""
-        result = await self.session.execute(
-            select(UserFcmTokenORM).where(UserFcmTokenORM.fcm_token == token.fcm_token)
-        )
-        existing = result.scalars().first()
+        """Insert or update an FCM token.
 
-        if existing:
-            existing.user_id = token.user_id
-            existing.device_type = token.device_type.value
-            existing.is_active = token.is_active
-            existing.updated_at = token.updated_at
-            await self.session.flush()
-            return fcm_token_orm_to_domain(existing)
-        else:
-            db_token = UserFcmTokenORM(
+        Uses PostgreSQL upsert to avoid race-condition duplicate key failures
+        when multiple requests register the same token concurrently.
+        """
+        stmt = (
+            insert(UserFcmTokenORM)
+            .values(
                 id=token.token_id,
                 user_id=token.user_id,
                 fcm_token=token.fcm_token,
@@ -59,9 +53,20 @@ class AsyncNotificationRepository:
                 created_at=token.created_at,
                 updated_at=token.updated_at,
             )
-            self.session.add(db_token)
-            await self.session.flush()
-            return fcm_token_orm_to_domain(db_token)
+            .on_conflict_do_update(
+                index_elements=[UserFcmTokenORM.fcm_token],
+                set_={
+                    "user_id": token.user_id,
+                    "device_type": token.device_type.value,
+                    "is_active": token.is_active,
+                    "updated_at": token.updated_at,
+                },
+            )
+            .returning(UserFcmTokenORM)
+        )
+        result = await self.session.execute(stmt)
+        db_token = result.scalar_one()
+        return fcm_token_orm_to_domain(db_token)
 
     async def find_fcm_token_by_token(self, fcm_token: str) -> Optional[UserFcmToken]:
         """Find an FCM token by the token string."""
