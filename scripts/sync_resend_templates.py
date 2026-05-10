@@ -45,6 +45,7 @@ SAMPLE_DATA = {
     "streak_days": 7,
     "days_left": 2,
     "meals_logged": 42,
+    "user_id": "sample-user-123",
     "app_url": "https://app.nutree.app",
     "upgrade_url": "https://app.nutree.app/upgrade",
     "feedback_url": "https://app.nutree.app/feedback",
