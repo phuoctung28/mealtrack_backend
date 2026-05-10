@@ -100,6 +100,213 @@ class DailyContextPrecomputeService:
                 "Pre-compute complete for %s: %d users", tz_name, len(redis_items)
             )
 
+    async def reschedule_user_notifications(self, user_id: str) -> int:
+        """Reschedule notifications for a single user after preferences update.
+
+        Deletes pending notifications for today and creates new ones with updated times.
+        Returns number of notifications scheduled.
+        """
+        return await asyncio.to_thread(self._reschedule_user_sync, user_id)
+
+    def _reschedule_user_sync(self, user_id: str) -> int:
+        """Sync implementation of user notification rescheduling."""
+        with UnitOfWork() as uow:
+            session = uow.session
+
+            # Get user's timezone
+            user_row = session.execute(
+                text("SELECT timezone FROM users WHERE id = :user_id AND is_active = true"),
+                {"user_id": user_id},
+            ).fetchone()
+
+            if not user_row or not user_row.timezone:
+                logger.warning("Cannot reschedule: user %s has no timezone", user_id)
+                return 0
+
+            tz_name = user_row.timezone
+            try:
+                tz = ZoneInfo(tz_name)
+            except ZoneInfoNotFoundError:
+                tz = ZoneInfo("UTC")
+                tz_name = "UTC"
+
+            today = datetime.now(tz).date()
+
+            # Delete existing pending notifications for today
+            session.execute(
+                text("""
+                    DELETE FROM notifications
+                    WHERE user_id = :user_id
+                      AND scheduled_date = :today
+                      AND status = 'pending'
+                """),
+                {"user_id": user_id, "today": today},
+            )
+
+            # Get user's notification preferences
+            pref_row = session.execute(
+                text("""
+                    SELECT meal_reminders_enabled, daily_summary_enabled,
+                           breakfast_time_minutes, lunch_time_minutes,
+                           dinner_time_minutes, daily_summary_time_minutes, language
+                    FROM notification_preferences
+                    WHERE user_id = :user_id AND is_deleted = false
+                """),
+                {"user_id": user_id},
+            ).fetchone()
+
+            if not pref_row:
+                logger.info("No notification preferences for user %s", user_id)
+                return 0
+
+            # Get active FCM tokens
+            token_rows = session.execute(
+                text("""
+                    SELECT fcm_token FROM user_fcm_tokens
+                    WHERE user_id = :user_id AND is_active = true
+                """),
+                {"user_id": user_id},
+            ).fetchall()
+
+            tokens = [row.fcm_token for row in token_rows]
+            if not tokens:
+                logger.info("No active FCM tokens for user %s", user_id)
+                return 0
+
+            # Get profile for gender and calorie goal
+            profile_row = session.execute(
+                text("""
+                    SELECT up.gender, u.language_code
+                    FROM user_profiles up
+                    JOIN users u ON u.id = up.user_id
+                    WHERE up.user_id = :user_id AND up.is_current = true
+                """),
+                {"user_id": user_id},
+            ).fetchone()
+
+            gender = (profile_row.gender if profile_row else None) or "male"
+            language_code = pref_row.language or (profile_row.language_code if profile_row else "en") or "en"
+
+            # Calculate calorie goal (simplified - use TDEE service for accuracy)
+            calorie_goal = self._get_user_calorie_goal(session, user_id)
+
+            # Get today's consumed calories
+            day_start_utc = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=tz).astimezone(timezone.utc)
+            day_end_utc = day_start_utc + timedelta(days=1)
+
+            consumed_row = session.execute(
+                text("""
+                    SELECT COALESCE(SUM(
+                        protein * 4 + (carbs - COALESCE(fiber, 0)) * 4 +
+                        COALESCE(fiber, 0) * 2 + fat * 9
+                    ), 0) as total
+                    FROM meal_logs
+                    WHERE user_id = :user_id
+                      AND logged_at >= :start AND logged_at < :end
+                      AND is_deleted = false
+                """),
+                {"user_id": user_id, "start": day_start_utc, "end": day_end_utc},
+            ).fetchone()
+
+            calories_consumed = int(round(consumed_row.total)) if consumed_row else 0
+
+            # Build notification rows
+            context = {
+                "fcm_tokens": tokens,
+                "calorie_goal": calorie_goal,
+                "calories_consumed": calories_consumed,
+                "gender": gender,
+                "language_code": language_code,
+            }
+
+            now = utc_now()
+            expires_at = datetime(today.year, today.month, today.day, tzinfo=timezone.utc) + timedelta(days=_NOTIF_EXPIRY_DAYS)
+            rows = []
+
+            if pref_row.meal_reminders_enabled:
+                for notif_type, local_minutes in [
+                    ("meal_reminder_breakfast", pref_row.breakfast_time_minutes or _DEFAULT_BREAKFAST_MINUTES),
+                    ("meal_reminder_lunch", pref_row.lunch_time_minutes or _DEFAULT_LUNCH_MINUTES),
+                    ("meal_reminder_dinner", pref_row.dinner_time_minutes or _DEFAULT_DINNER_MINUTES),
+                ]:
+                    scheduled_utc = _local_minutes_to_utc(today, local_minutes, tz_name)
+                    if scheduled_utc and scheduled_utc > now:  # Only schedule future notifications
+                        rows.append({
+                            "id": str(uuid.uuid4()),
+                            "user_id": user_id,
+                            "notification_type": notif_type,
+                            "scheduled_date": today,
+                            "scheduled_for_utc": scheduled_utc,
+                            "status": "pending",
+                            "context": context,
+                            "created_at": now,
+                            "expires_at": expires_at,
+                        })
+
+            if pref_row.daily_summary_enabled:
+                summary_minutes = pref_row.daily_summary_time_minutes or _DEFAULT_SUMMARY_MINUTES
+                scheduled_utc = _local_minutes_to_utc(today, summary_minutes, tz_name)
+                if scheduled_utc and scheduled_utc > now:
+                    rows.append({
+                        "id": str(uuid.uuid4()),
+                        "user_id": user_id,
+                        "notification_type": "daily_summary",
+                        "scheduled_date": today,
+                        "scheduled_for_utc": scheduled_utc,
+                        "status": "pending",
+                        "context": context,
+                        "created_at": now,
+                        "expires_at": expires_at,
+                    })
+
+            # Insert new notifications
+            if rows:
+                stmt = pg_insert(NotificationORM).values(rows)
+                stmt = stmt.on_conflict_do_nothing(
+                    index_elements=["user_id", "notification_type", "scheduled_date"]
+                )
+                session.execute(stmt)
+
+            logger.info("Rescheduled %d notifications for user %s", len(rows), user_id)
+            return len(rows)
+
+    def _get_user_calorie_goal(self, session, user_id: str) -> int:
+        """Get user's daily calorie goal from weekly budget or TDEE."""
+        # Try weekly budget first
+        budget_row = session.execute(
+            text("""
+                SELECT adjusted_daily_calories FROM weekly_budgets
+                WHERE user_id = :user_id AND is_active = true
+                ORDER BY week_start_date DESC LIMIT 1
+            """),
+            {"user_id": user_id},
+        ).fetchone()
+
+        if budget_row and budget_row.adjusted_daily_calories:
+            return int(budget_row.adjusted_daily_calories)
+
+        # Fallback to TDEE calculation
+        profile_row = session.execute(
+            text("""
+                SELECT age, gender, height_cm, weight_kg, body_fat_percentage,
+                       job_type, training_days_per_week, training_minutes_per_session,
+                       fitness_goal, training_level
+                FROM user_profiles
+                WHERE user_id = :user_id AND is_current = true
+            """),
+            {"user_id": user_id},
+        ).fetchone()
+
+        if not profile_row:
+            return 2000  # Default fallback
+
+        try:
+            tdee_request = build_tdee_request(profile_row)
+            result = self._tdee_service.calculate_tdee(tdee_request)
+            return int(result.adjusted_tdee)
+        except Exception:
+            return 2000
+
     # ------------------------------------------------------------------
     # Synchronous DB work (runs in thread pool via asyncio.to_thread)
     # ------------------------------------------------------------------
