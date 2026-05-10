@@ -66,6 +66,8 @@ from src.infra.services.scheduled_email_service import ScheduledEmailService
 from src.infra.services.email_template_renderer import EmailTemplateRenderer
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
 from src.domain.services.email_service import EmailService
+from src.api.routes.well_known import router as well_known_router
+from src.api.routes.app_download import router as app_download_router
 
 load_dotenv()
 
@@ -276,6 +278,8 @@ app.include_router(cheat_days_router)
 app.include_router(referrals_router)
 app.include_router(nutrition_router)
 app.include_router(weight_entries_router)
+app.include_router(well_known_router)
+app.include_router(app_download_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get("ENVIRONMENT") == "development":
