@@ -11,6 +11,9 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.notification import NotificationPreferences
 from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
+from src.infra.services.daily_context_precompute_service import (
+    DailyContextPrecomputeService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +24,18 @@ class UpdateNotificationPreferencesCommandHandler(
 ):
     """Handler for updating notification preferences."""
 
-    def __init__(self, cache_service: Optional[CachePort] = None):
+    def __init__(
+        self,
+        cache_service: Optional[CachePort] = None,
+        precompute_service: Optional[DailyContextPrecomputeService] = None,
+    ):
         self.cache_service = cache_service
+        self.precompute_service = precompute_service
 
     def set_dependencies(self, **kwargs):
         """Set dependencies for dependency injection."""
-        pass
+        if "precompute_service" in kwargs:
+            self.precompute_service = kwargs["precompute_service"]
 
     async def handle(
         self, command: UpdateNotificationPreferencesCommand
@@ -74,8 +83,21 @@ class UpdateNotificationPreferencesCommandHandler(
             logger.error(f"Error updating notification preferences: {e}")
             raise e
 
+        # Invalidate cache
         if self.cache_service:
             cache_key, _ = CacheKeys.notification_prefs(command.user_id)
             await self.cache_service.invalidate(cache_key)
+
+        # Reschedule notifications with updated times (real-time update)
+        if self.precompute_service:
+            try:
+                scheduled_count = await self.precompute_service.reschedule_user_notifications(
+                    command.user_id
+                )
+                logger.info(
+                    f"Rescheduled {scheduled_count} notifications for user {command.user_id}"
+                )
+            except Exception as e:
+                logger.error(f"Failed to reschedule notifications: {e}")
 
         return result

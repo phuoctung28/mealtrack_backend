@@ -336,6 +336,17 @@ def initialize_scheduled_notification_service() -> ScheduledNotificationService:
     return _scheduled_notification_service
 
 
+def get_daily_context_precompute_service():
+    """Get daily context precompute service for notification rescheduling."""
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+    )
+
+    if _redis_client is None:
+        return None
+    return DailyContextPrecomputeService(_redis_client)
+
+
 # Phase 06: Meal Suggestion Dependencies
 def get_redis_client() -> Optional[RedisClient]:
     """Get Redis client for meal suggestions repository."""
