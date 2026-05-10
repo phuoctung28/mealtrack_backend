@@ -150,7 +150,7 @@ class TestIsInQuietHours:
         assert is_in_quiet_hours(720, None, None) is False
         # Verify defaults are correct
         assert DEFAULT_SLEEP_TIME_MINUTES == 1320
-        assert DEFAULT_BREAKFAST_TIME_MINUTES == 480
+        assert DEFAULT_BREAKFAST_TIME_MINUTES == 510
 
     def test_partial_none_quiet_start(self):
         """None quiet_start uses default sleep time"""

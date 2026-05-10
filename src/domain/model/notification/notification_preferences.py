@@ -75,8 +75,8 @@ class NotificationPreferences:
             user_id=user_id,
             meal_reminders_enabled=True,
             daily_summary_enabled=True,
-            breakfast_time_minutes=480,  # 8:00 AM
-            lunch_time_minutes=720,  # 12:00 PM
+            breakfast_time_minutes=510,  # 8:30 AM
+            lunch_time_minutes=690,  # 11:30 AM
             dinner_time_minutes=1080,  # 6:00 PM
             daily_summary_time_minutes=1260,  # 9:00 PM
             language="en",
