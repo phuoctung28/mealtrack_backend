@@ -3,6 +3,7 @@ PyMediator-based event bus implementation.
 """
 
 import asyncio
+import copy
 import logging
 from typing import Any, Type, TypeVar, Dict, List
 
@@ -109,6 +110,11 @@ class PyMediatorEventBus(EventBus):
         try:
             # Get the handler directly and execute it asynchronously
             handler = self._async_handlers[event_type]
+
+            # Ensure stateful handlers don't share a UnitOfWork/session across requests.
+            if hasattr(handler, "uow") and getattr(handler, "uow") is not None:
+                handler = copy.copy(handler)
+                handler.uow = handler.uow.__class__()
 
             # Check if handler is async
             import inspect
