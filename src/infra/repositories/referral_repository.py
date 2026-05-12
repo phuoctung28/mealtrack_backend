@@ -1,4 +1,5 @@
 """Async repository for referral system — codes, conversions, wallets, payouts."""
+
 import random
 import string
 from typing import List, Optional
@@ -7,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.utils.timezone_utils import utc_now
+from src.infra.config.settings import settings
 from src.infra.database.models.referral import (
     PayoutRequest,
     ReferralCode,
@@ -81,7 +83,7 @@ class ReferralRepository:
             code_used=code.upper(),
             status="pending",
             discount_applied=discount,
-            commission_amount=50000,
+            commission_amount=settings.REFERRAL_COMMISSION_VND,
         )
         self.session.add(conversion)
         return conversion

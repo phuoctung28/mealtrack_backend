@@ -193,6 +193,12 @@ class Settings(BaseSettings):
     MEAL_ANALYZE_MAX_ATTEMPTS: int = Field(default=2)
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(default=700)
 
+    # Referral system
+    REFERRAL_COMMISSION_VND: int = Field(
+        default=50000,
+        description="Commission paid to referrer per successful conversion (VND)",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
