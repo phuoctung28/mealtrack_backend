@@ -5,11 +5,13 @@ PyMediator-based event bus implementation.
 import asyncio
 import copy
 import logging
-from typing import Any, Type, TypeVar, Dict, List
+from typing import Any, TypeVar
 
-from pymediator import Mediator as PyMediator, SingletonRegistry
+from pymediator import Mediator as PyMediator
+from pymediator import SingletonRegistry
 
-from src.domain.events.base import Event, DomainEvent, EventHandler
+from src.domain.events.base import DomainEvent, Event, EventHandler
+
 from .event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -58,12 +60,12 @@ class PyMediatorEventBus(EventBus):
         # Use SingletonRegistry to ensure handlers are reused
         registry = SingletonRegistry()
         self._mediator = PyMediator(registry=registry)
-        self._event_type_mapping: Dict[Type[Event], Type[EventRequest]] = {}
-        self._domain_event_subscribers: Dict[Type[DomainEvent], List[Any]] = {}
+        self._event_type_mapping: dict[type[Event], type[EventRequest]] = {}
+        self._domain_event_subscribers: dict[type[DomainEvent], list[Any]] = {}
         # Store direct handler references for async execution
-        self._async_handlers: Dict[Type[Event], EventHandler] = {}
+        self._async_handlers: dict[type[Event], EventHandler] = {}
 
-    def register_handler(self, event_type: Type[Event], handler: EventHandler) -> None:
+    def register_handler(self, event_type: type[Event], handler: EventHandler) -> None:
         """Register a handler for a specific event type."""
         # Store the handler directly for async execution
         self._async_handlers[event_type] = handler
@@ -92,7 +94,7 @@ class PyMediatorEventBus(EventBus):
         # Register with pymediator
         self._mediator.registry.register(wrapper_class, adapter_class)
 
-    def subscribe(self, event_type: Type[DomainEvent], handler) -> None:
+    def subscribe(self, event_type: type[DomainEvent], handler) -> None:
         """Subscribe to domain events."""
         if event_type not in self._domain_event_subscribers:
             self._domain_event_subscribers[event_type] = []
@@ -112,9 +114,16 @@ class PyMediatorEventBus(EventBus):
             handler = self._async_handlers[event_type]
 
             # Ensure stateful handlers don't share a UnitOfWork/session across requests.
-            if hasattr(handler, "uow") and getattr(handler, "uow") is not None:
-                handler = copy.copy(handler)
-                handler.uow = handler.uow.__class__()
+            if hasattr(handler, "uow") and handler.uow is not None:
+                try:
+                    fresh_uow = handler.uow.__class__()
+                except TypeError:
+                    # Some injected test fakes require constructor args and are
+                    # already scoped to a single test session.
+                    fresh_uow = None
+                if fresh_uow is not None:
+                    handler = copy.copy(handler)
+                    handler.uow = fresh_uow
 
             # Check if handler is async
             import inspect

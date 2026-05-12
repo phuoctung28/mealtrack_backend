@@ -1,14 +1,17 @@
 """Mistral AI provider implementation."""
-import asyncio
 import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any
+
+import httpx
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
 
 logger = logging.getLogger(__name__)
+
+MISTRAL_CHAT_COMPLETIONS_URL = "https://api.mistral.ai/v1/chat/completions"
 
 
 class MistralProvider(AIProviderPort):
@@ -39,14 +42,14 @@ class MistralProvider(AIProviderPort):
         return "mistral"
 
     @property
-    def supported_capabilities(self) -> Set[AICapability]:
+    def supported_capabilities(self) -> set[AICapability]:
         return {
             AICapability.TEXT_GENERATION,
             AICapability.VISION,
             AICapability.STRUCTURED_OUTPUT,
         }
 
-    def get_available_models(self) -> List[str]:
+    def get_available_models(self) -> list[str]:
         return self.AVAILABLE_MODELS.copy()
 
     def is_available(self) -> bool:
@@ -59,17 +62,13 @@ class MistralProvider(AIProviderPort):
         prompt: str,
         system_message: str,
         response_type: str = "json",
-        max_tokens: Optional[int] = None,
-        schema: Optional[type] = None,
+        max_tokens: int | None = None,
+        schema: type | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate text using Mistral API."""
         if not self._api_key:
             raise RuntimeError("MISTRAL_API_KEY not configured")
-
-        from mistralai.client import Mistral
-
-        client = Mistral(api_key=self._api_key)
 
         messages = [
             {"role": "system", "content": system_message},
@@ -89,12 +88,8 @@ class MistralProvider(AIProviderPort):
             request_params["response_format"] = {"type": "json_object"}
 
         try:
-            response = await asyncio.to_thread(
-                client.chat.complete,
-                **request_params,
-            )
-
-            content = response.choices[0].message.content
+            response = await self._complete_chat(request_params)
+            content = response["choices"][0]["message"]["content"]
 
             if response_type == "json":
                 return self._extract_json(content)
@@ -109,17 +104,14 @@ class MistralProvider(AIProviderPort):
         model: str,
         prompt: str,
         image_data: bytes,
-        system_message: Optional[str] = None,
+        system_message: str | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate with vision using Pixtral model."""
         if not self._api_key:
             raise RuntimeError("MISTRAL_API_KEY not configured")
 
         import base64
-        from mistralai.client import Mistral
-
-        client = Mistral(api_key=self._api_key)
 
         # Use mistral-large for vision tasks (pixtral-12b deprecated Dec 2025)
         vision_model = "mistral-large-latest"
@@ -136,25 +128,38 @@ class MistralProvider(AIProviderPort):
             "role": "user",
             "content": [
                 {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": image_url},
+                {"type": "image_url", "image_url": {"url": image_url}},
             ],
         })
 
         try:
-            response = await asyncio.to_thread(
-                client.chat.complete,
-                model=vision_model,
-                messages=messages,
-            )
-
-            content = response.choices[0].message.content
+            response = await self._complete_chat({
+                "model": vision_model,
+                "messages": messages,
+            })
+            content = response["choices"][0]["message"]["content"]
             return self._extract_json(content)
 
         except Exception as e:
             logger.error(f"[MISTRAL-VISION-ERROR] model={vision_model} | error={str(e)[:200]}")
             raise
 
-    def extract_error_code(self, error: Exception) -> Optional[Union[int, str]]:
+    async def _complete_chat(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Call Mistral's OpenAI-compatible chat completions API."""
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                MISTRAL_CHAT_COMPLETIONS_URL,
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    def extract_error_code(self, error: Exception) -> int | str | None:
         """Extract status code or error type from exception."""
         error_str = str(error)
 
@@ -171,7 +176,7 @@ class MistralProvider(AIProviderPort):
 
         return None
 
-    def _extract_json(self, content: str) -> Dict[str, Any]:
+    def _extract_json(self, content: str) -> dict[str, Any]:
         """Extract JSON from response content."""
         # Try direct parse
         try:
