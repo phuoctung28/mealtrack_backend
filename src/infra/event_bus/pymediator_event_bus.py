@@ -3,6 +3,8 @@ PyMediator-based event bus implementation.
 """
 
 import asyncio
+import copy
+import inspect
 import logging
 from typing import Any, Type, TypeVar, Dict, List
 
@@ -91,6 +93,33 @@ class PyMediatorEventBus(EventBus):
         # Register with pymediator
         self._mediator.registry.register(wrapper_class, adapter_class)
 
+    @staticmethod
+    def _fresh_uow_copy(handler: EventHandler) -> EventHandler:
+        """Return a shallow handler copy with a fresh no-arg UnitOfWork when possible."""
+        uow = getattr(handler, "uow", None)
+        if uow is None:
+            return handler
+
+        uow_class = uow.__class__
+        try:
+            signature = inspect.signature(uow_class)
+        except (TypeError, ValueError):
+            return handler
+
+        required_params = [
+            param
+            for param in signature.parameters.values()
+            if param.default is inspect.Parameter.empty
+            and param.kind
+            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        ]
+        if required_params:
+            return handler
+
+        handler_copy = copy.copy(handler)
+        handler_copy.uow = uow_class()
+        return handler_copy
+
     def subscribe(self, event_type: Type[DomainEvent], handler) -> None:
         """Subscribe to domain events."""
         if event_type not in self._domain_event_subscribers:
@@ -110,9 +139,10 @@ class PyMediatorEventBus(EventBus):
             # Get the handler directly and execute it asynchronously
             handler = self._async_handlers[event_type]
 
-            # Check if handler is async
-            import inspect
+            # Ensure stateful handlers don't share a UnitOfWork/session across requests.
+            handler = self._fresh_uow_copy(handler)
 
+            # Check if handler is async
             if inspect.iscoroutinefunction(handler.handle):
                 result = await handler.handle(event)
             else:
