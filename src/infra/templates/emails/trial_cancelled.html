@@ -36,7 +36,7 @@
                   </p>
 
                   <!-- Feedback Option 1 -->
-                  <a href="https://app.nutree.app/feedback?reason=too_expensive&source=cancellation_email&user_id={{ user_id | default('') }}" style="display: block; text-decoration: none; margin-bottom: 10px;">
+                  <a href="https://app.nutree.app/feedback?reason=too_expensive&source=cancellation_email{% if user_id %}&user_id={{ user_id }}{% endif %}" style="display: block; text-decoration: none; margin-bottom: 10px;">
                     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: linear-gradient(145deg, rgba(255,255,255,0.7) 0%, rgba(250,249,246,0.5) 100%); border-radius: 16px; border: 1px solid rgba(107, 143, 119, 0.06); box-shadow: 0 1px 4px rgba(45, 41, 38, 0.02), inset 0 1px 0 rgba(255,255,255,0.8);">
                       <tr>
                         <td style="padding: 16px 18px;">
@@ -61,7 +61,7 @@
                   </a>
 
                   <!-- Feedback Option 2 -->
-                  <a href="https://app.nutree.app/feedback?reason=not_using&source=cancellation_email&user_id={{ user_id | default('') }}" style="display: block; text-decoration: none; margin-bottom: 10px;">
+                  <a href="https://app.nutree.app/feedback?reason=not_using&source=cancellation_email{% if user_id %}&user_id={{ user_id }}{% endif %}" style="display: block; text-decoration: none; margin-bottom: 10px;">
                     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: linear-gradient(145deg, rgba(255,255,255,0.7) 0%, rgba(250,249,246,0.5) 100%); border-radius: 16px; border: 1px solid rgba(107, 143, 119, 0.06); box-shadow: 0 1px 4px rgba(45, 41, 38, 0.02), inset 0 1px 0 rgba(255,255,255,0.8);">
                       <tr>
                         <td style="padding: 16px 18px;">
@@ -86,7 +86,7 @@
                   </a>
 
                   <!-- Feedback Option 3 -->
-                  <a href="https://app.nutree.app/feedback?reason=missing_features&source=cancellation_email&user_id={{ user_id | default('') }}" style="display: block; text-decoration: none; margin-bottom: 10px;">
+                  <a href="https://app.nutree.app/feedback?reason=missing_features&source=cancellation_email{% if user_id %}&user_id={{ user_id }}{% endif %}" style="display: block; text-decoration: none; margin-bottom: 10px;">
                     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: linear-gradient(145deg, rgba(255,255,255,0.7) 0%, rgba(250,249,246,0.5) 100%); border-radius: 16px; border: 1px solid rgba(107, 143, 119, 0.06); box-shadow: 0 1px 4px rgba(45, 41, 38, 0.02), inset 0 1px 0 rgba(255,255,255,0.8);">
                       <tr>
                         <td style="padding: 16px 18px;">
@@ -111,7 +111,7 @@
                   </a>
 
                   <!-- Feedback Option 4 -->
-                  <a href="https://app.nutree.app/feedback?reason=other&source=cancellation_email&user_id={{ user_id | default('') }}" style="display: block; text-decoration: none;">
+                  <a href="https://app.nutree.app/feedback?reason=other&source=cancellation_email{% if user_id %}&user_id={{ user_id }}{% endif %}" style="display: block; text-decoration: none;">
                     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: linear-gradient(145deg, rgba(255,255,255,0.7) 0%, rgba(250,249,246,0.5) 100%); border-radius: 16px; border: 1px solid rgba(107, 143, 119, 0.06); box-shadow: 0 1px 4px rgba(45, 41, 38, 0.02), inset 0 1px 0 rgba(255,255,255,0.8);">
                       <tr>
                         <td style="padding: 16px 18px;">
@@ -168,7 +168,7 @@
                         <p style="font-family: 'DM Sans', -apple-system, sans-serif; font-size: 14px; color: #047857; margin: 0 0 16px 0; line-height: 1.5;">
                           Pause for up to 30 days. Your data stays safe, your streak is preserved.
                         </p>
-                        <a href="https://app.nutree.app/settings/pause?source=cancellation_email&user_id={{ user_id | default('') }}" style="display: inline-block; background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(250,249,246,0.9) 100%); color: #5A7D66; font-family: 'DM Sans', -apple-system, sans-serif; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 28px; border-radius: 12px; border: 1px solid rgba(90, 125, 102, 0.2); box-shadow: 0 2px 8px rgba(45, 41, 38, 0.06), 0 4px 16px rgba(90, 125, 102, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);">
+                        <a href="https://app.nutree.app/settings/pause?source=cancellation_email{% if user_id %}&user_id={{ user_id }}{% endif %}" style="display: inline-block; background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(250,249,246,0.9) 100%); color: #5A7D66; font-family: 'DM Sans', -apple-system, sans-serif; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 28px; border-radius: 12px; border: 1px solid rgba(90, 125, 102, 0.2); box-shadow: 0 2px 8px rgba(45, 41, 38, 0.06), 0 4px 16px rgba(90, 125, 102, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);">
                           Pause Instead →
                         </a>
                       </td>
