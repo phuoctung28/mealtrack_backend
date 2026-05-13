@@ -57,3 +57,6 @@ slowapi>=0.1.9
 # Error monitoring
 sentry-sdk[fastapi]>=2.18.0
 resend>=2.0.0
+
+# Template rendering
+jinja2>=3.1.0
