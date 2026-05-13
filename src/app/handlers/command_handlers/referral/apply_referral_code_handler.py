@@ -29,6 +29,7 @@ class ApplyReferralCodeCommandHandler:
                 referred_user_id=command.user_id,
                 code=command.code,
                 discount=command.discount_applied,
+                currency=command.currency,
             )
             logger.info(
                 "Referral conversion created: referrer=%s referred=%s",

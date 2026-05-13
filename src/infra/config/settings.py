@@ -2,9 +2,11 @@
 Application configuration settings loaded from environment variables.
 """
 
+import json
 from functools import lru_cache
+from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -193,11 +195,38 @@ class Settings(BaseSettings):
     MEAL_ANALYZE_MAX_ATTEMPTS: int = Field(default=2)
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(default=700)
 
-    # Referral system
-    REFERRAL_COMMISSION_VND: int = Field(
-        default=50000,
-        description="Commission paid to referrer per successful conversion (VND)",
+    # Referral system (multi-currency)
+    REFERRAL_COMMISSIONS: dict = Field(
+        default={"USD": 2, "VND": 50000, "EUR": 1.8, "default": 2},
+        description="Commission per currency (code: amount in local units)",
     )
+    EXCHANGE_RATES_TO_VND: dict = Field(
+        default={"USD": 25000, "EUR": 27000, "default": 25000},
+        description="Fixed exchange rates to VND for wallet conversion",
+    )
+
+    @field_validator("REFERRAL_COMMISSIONS", "EXCHANGE_RATES_TO_VND", mode="before")
+    @classmethod
+    def parse_json_dict(cls, v: Any) -> dict:
+        """Parse JSON string from env var to dict."""
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+
+    def get_commission(self, currency: str) -> float:
+        """Get commission amount for a currency, fallback to default."""
+        return self.REFERRAL_COMMISSIONS.get(
+            currency, self.REFERRAL_COMMISSIONS.get("default", 2)
+        )
+
+    def convert_to_vnd(self, amount: float, currency: str) -> int:
+        """Convert amount to VND using fixed exchange rate."""
+        if currency == "VND":
+            return int(amount)
+        rate = self.EXCHANGE_RATES_TO_VND.get(
+            currency, self.EXCHANGE_RATES_TO_VND.get("default", 25000)
+        )
+        return int(amount * rate)
 
     model_config = SettingsConfigDict(
         env_file=".env",

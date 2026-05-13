@@ -76,14 +76,19 @@ class ReferralRepository:
         referred_user_id: str,
         code: str,
         discount: int,
+        currency: str = "VND",
     ) -> ReferralConversion:
+        commission = settings.get_commission(currency)
+        commission_vnd = settings.convert_to_vnd(commission, currency)
         conversion = ReferralConversion(
             referrer_user_id=referrer_user_id,
             referred_user_id=referred_user_id,
             code_used=code.upper(),
             status="pending",
             discount_applied=discount,
-            commission_amount=settings.REFERRAL_COMMISSION_VND,
+            commission_amount=commission,  # Float: e.g., 2.0 USD, 1.8 EUR, 50000.0 VND
+            commission_currency=currency,
+            commission_amount_vnd=commission_vnd,
         )
         self.session.add(conversion)
         return conversion
