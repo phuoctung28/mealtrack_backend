@@ -137,6 +137,18 @@ class UnitOfWork:
         else: ...     # Commit + invalidate caches
 ```
 
+### AsyncUnitOfWork Concurrency Guard
+
+`AsyncUnitOfWork` uses `asyncio.Lock` to prevent the same instance from being entered concurrently. If two coroutines attempt `async with uow:` simultaneously, the second will block until the first exits (commit/rollback + session close + lock release).
+
+To prevent shared-state bugs across handlers, the event bus clones each handler before dispatch — every `event_bus.send()` call receives a fresh `AsyncUnitOfWork` instance.
+
+```python
+# Correct — each call gets an isolated session
+async with AsyncUnitOfWork() as uow:
+    result = await uow.meals.find_by_id(meal_id)
+```
+
 ---
 
 ## Key Rules
