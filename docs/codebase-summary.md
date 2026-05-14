@@ -1,6 +1,6 @@
 # Backend Codebase Summary
 
-**Generated:** May 6, 2026  
+**Generated:** May 15, 2026  
 **Status:** Production-ready (430 files, ~38.5K LOC, 681+ tests, 70%+ coverage)  
 **Language:** Python 3.11+ | **Framework:** FastAPI 0.115+ + SQLAlchemy 2.0
 
@@ -53,13 +53,14 @@
 
 ---
 
-## Recent Features (Apr 2026)
+## Recent Features (May 2026)
 
-- **Sentry Monitoring:** Error tracking, performance monitoring, profiling
-- **Meal Discovery:** `/v1/meal-suggestions/discover` with image search (Unsplash/Pexels)
-- **Notification Dedup:** Cross-worker FCM deduplication (migration 047)
-- **Onboarding Redesign:** Challenge duration, training types (migration 045)
-- **Fiber-Aware Calories:** Fiber column + net-carb calorie derivation (migration 034)
+- **Configurable Referral Commission:** `REFERRAL_COMMISSIONS` env var (JSON dict, per-currency, default 2 USD)
+- **Custom Unit Normalization:** Food items with non-standard units now convert to grams before nutrition calculation
+- **BMR Floor Protection:** Daily target never drops below 85% of standard daily (raised from 80%); cutting deficit reduced to 300 kcal
+- **Email Deep Links:** Universal Links via `/.well-known/apple-app-site-association`; `/app-download` redirect with campaign tracking
+- **AsyncUnitOfWork Concurrency Guard:** `asyncio.Lock` prevents concurrent reuse; handlers receive fresh UoW per `event_bus.send()` call
+- **Variable-Length Referral Codes:** 3–15 character codes (previously fixed length)
 
 ---
 
