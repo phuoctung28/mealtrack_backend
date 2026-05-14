@@ -203,6 +203,49 @@ class TestMealMapper:
             108.0
         )  # derived: (1*4+8*4+2*9) * (100/50)
 
+    def test_to_detailed_response_custom_nutrition_uses_grams_for_large_units(self):
+        """Custom nutrition is projected per 100g, not per serving count."""
+        food_items = [
+            FoodItem(
+                id="item-eggs",
+                name="Eggs",
+                quantity=20,
+                unit="large",
+                macros=Macros(protein=126, carbs=7, fat=96),
+                confidence=0.8,
+                fdc_id=None,
+                is_custom=True,
+            )
+        ]
+        meal = Meal(
+            meal_id=str(uuid.uuid4()),
+            user_id=str(uuid.uuid4()),
+            status=MealStatus.READY,
+            image=MealImage(
+                url="https://example.com/eggs.jpg",
+                image_id=str(uuid.uuid4()),
+                format="jpeg",
+                size_bytes=1024,
+                width=800,
+                height=600,
+            ),
+            dish_name="Omelette",
+            ready_at=datetime(2025, 1, 15, 15, 0),
+            created_at=datetime(2025, 1, 15, 14, 30),
+            nutrition=Nutrition(
+                macros=Macros(protein=126, carbs=7, fat=96),
+                food_items=food_items,
+            ),
+        )
+
+        result = MealMapper.to_detailed_response(meal)
+
+        custom = result.food_items[0].custom_nutrition
+        assert custom is not None
+        assert custom.protein_per_100g == pytest.approx(12.6)
+        assert custom.carbs_per_100g == pytest.approx(0.7)
+        assert custom.fat_per_100g == pytest.approx(9.6)
+
     def test_to_detailed_response_without_nutrition(self):
         """Test detailed response when nutrition is None."""
         image = MealImage(
