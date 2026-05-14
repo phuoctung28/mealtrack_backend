@@ -19,10 +19,11 @@ from src.infra.database.config import (
 router = APIRouter(tags=["Health"])
 
 
-@router.get("/health")
+@router.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     """
     Basic health check endpoint for uptime monitoring.
+    Supports HEAD for lightweight client connectivity probes.
     """
     return JSONResponse(
         status_code=200,
