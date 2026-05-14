@@ -15,7 +15,8 @@ from src.api.routes.v1.webhooks import (
     handle_renewal,
     handle_cancellation,
     handle_expiration,
-    handle_billing_issue
+    handle_billing_issue,
+    handle_product_change,
 )
 
 
@@ -252,4 +253,205 @@ class TestWebhookHandler:
         with patch('src.api.routes.v1.webhooks.get_or_create_subscription', new_callable=AsyncMock, return_value=subscription):
             await handle_billing_issue(mock_uow, user, event)
 
-        assert subscription.status == "billing_issue"
+    async def test_transfer_event_returns_success_without_db_access(self, mock_request):
+        """TRANSFER events are unhandled; should return 200 without touching the database."""
+        mock_request.json.return_value = {
+            "event": {
+                "type": "TRANSFER",
+                "app_user_id": None,
+                "aliases": [],
+                "product_id": None,
+            }
+        }
+
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
+                result = await revenuecat_webhook(mock_request, authorization="test_secret")
+
+            mock_uow_class.assert_not_called()
+            assert result == {"status": "success"}
+
+    async def test_webhook_receipt_does_not_log_at_error_level(self, mock_request, webhook_event):
+        """Routine webhook receipt must not call logger.error (each error log → extra Sentry event)."""
+        mock_request.json.return_value = webhook_event
+
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.commit = AsyncMock()
+                mock_uow_class.return_value = mock_uow
+
+                mock_user = MagicMock(id="user_123")
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = mock_user
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+
+                with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None):
+                    with patch('src.api.routes.v1.webhooks.logger') as mock_logger:
+                        await revenuecat_webhook(mock_request, authorization="test_secret")
+
+                        mock_logger.error.assert_not_called()
+
+    async def test_anonymous_only_user_returns_success_without_retry(self, mock_request):
+        """When all identifiers are $RCAnonymousIDs (no Firebase UID ever linked), return 200.
+        These users never authenticated — retrying forever via 404 is pointless."""
+        mock_request.json.return_value = {
+            "event": {
+                "type": "EXPIRATION",
+                "app_user_id": "$RCAnonymousID:afa82c25d90e4c7c9905a43a09f536c9",
+                "aliases": ["$RCAnonymousID:afa82c25d90e4c7c9905a43a09f536c9"],
+                "product_id": "discount_monthly",
+            }
+        }
+
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
+                mock_uow_class.return_value = mock_uow
+
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = None
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+
+                result = await revenuecat_webhook(mock_request, authorization="test_secret")
+
+        assert result == {"status": "success"}
+
+    async def test_firebase_uid_not_found_still_returns_404_for_retry(self, mock_request):
+        """When app_user_id looks like a real Firebase UID (not anonymous), keep 404 so RevenueCat retries.
+        This handles the race condition where the webhook fires before user creation commits."""
+        mock_request.json.return_value = {
+            "event": {
+                "type": "INITIAL_PURCHASE",
+                "app_user_id": "abc123FirebaseUID",
+                "aliases": ["abc123FirebaseUID"],
+                "product_id": "premium_monthly",
+            }
+        }
+
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
+                mock_uow_class.return_value = mock_uow
+
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = None
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+
+                with pytest.raises(HTTPException) as exc_info:
+                    await revenuecat_webhook(mock_request, authorization="test_secret")
+
+        assert exc_info.value.status_code == 404
+
+    async def test_user_not_found_does_not_log_at_error_level(self, mock_request, webhook_event):
+        """User not found must log at WARNING, not ERROR — each logger.error fires an extra Sentry event per RevenueCat retry."""
+        mock_request.json.return_value = webhook_event
+
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
+                mock_uow_class.return_value = mock_uow
+
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = None
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+
+                with patch('src.api.routes.v1.webhooks.logger') as mock_logger:
+                    with pytest.raises(HTTPException):
+                        await revenuecat_webhook(mock_request, authorization="test_secret")
+
+                    mock_logger.error.assert_not_called()
+                    mock_logger.warning.assert_called()
+
+    async def test_handler_exception_does_not_call_logger_error(self, mock_request, webhook_event):
+        """When a handler raises, logger.error must not be called — let exception reach Sentry once."""
+        mock_request.json.return_value = webhook_event
+
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.rollback = AsyncMock()
+                mock_uow_class.return_value = mock_uow
+
+                mock_user = MagicMock(id="user_123")
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = mock_user
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+
+                with patch('src.api.routes.v1.webhooks.handle_purchase', new_callable=AsyncMock, side_effect=ValueError("db error")):
+                    with patch('src.api.routes.v1.webhooks.logger') as mock_logger:
+                        with pytest.raises(ValueError):
+                            await revenuecat_webhook(mock_request, authorization="test_secret")
+
+                        mock_logger.error.assert_not_called()
+
+    async def test_billing_issue_handler_is_awaited(self, mock_request):
+        """BILLING_ISSUE handler must be awaited — it's async, so skipping await silently drops the status update."""
+        mock_request.json.return_value = {
+            "event": {
+                "type": "BILLING_ISSUE",
+                "app_user_id": "user_123",
+                "aliases": [],
+            }
+        }
+
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.commit = AsyncMock()
+                mock_uow_class.return_value = mock_uow
+
+                mock_user = MagicMock(id="user_123")
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = mock_user
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+
+                with patch('src.api.routes.v1.webhooks.handle_billing_issue', new_callable=AsyncMock) as mock_handle:
+                    await revenuecat_webhook(mock_request, authorization="test_secret")
+                    mock_handle.assert_awaited_once()
+
+    async def test_product_change_handler_is_awaited(self, mock_request):
+        """PRODUCT_CHANGE handler must be awaited — it's async, so skipping await silently drops the product_id update."""
+        mock_request.json.return_value = {
+            "event": {
+                "type": "PRODUCT_CHANGE",
+                "app_user_id": "user_123",
+                "aliases": [],
+            }
+        }
+
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.commit = AsyncMock()
+                mock_uow_class.return_value = mock_uow
+
+                mock_user = MagicMock(id="user_123")
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = mock_user
+                mock_uow.session.execute = AsyncMock(return_value=mock_result)
+
+                with patch('src.api.routes.v1.webhooks.handle_product_change', new_callable=AsyncMock) as mock_handle:
+                    await revenuecat_webhook(mock_request, authorization="test_secret")
+                    mock_handle.assert_awaited_once()
+

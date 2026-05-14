@@ -106,8 +106,6 @@ class RequestLoggerMiddleware:
             log_level = logging.WARNING
         if status_code >= 400:
             log_level = logging.WARNING
-        if status_code >= 500:
-            log_level = logging.ERROR
         logger.log(
             log_level,
             f"[RES-{request_id}] {request.method} {request.url.path}"
@@ -121,7 +119,7 @@ class RequestLoggerMiddleware:
         elapsed: float,
         error: Exception,
     ) -> None:
-        logger.error(
+        logger.warning(
             f"[ERR-{request_id}] {request.method} {request.url.path}"
             f" elapsed={elapsed:.3f}s error={type(error).__name__}: {error}"
         )

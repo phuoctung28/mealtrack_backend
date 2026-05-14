@@ -119,16 +119,31 @@ class TestErrorLogging:
     """Test error logging functionality."""
 
     def test_logs_error_on_exception(self, client, caplog):
-        """Should log error when handler raises exception."""
-        with caplog.at_level("ERROR"):
+        """Should log [ERR-xxx] when handler raises, but at WARNING not ERROR level."""
+        with caplog.at_level("WARNING"):
             try:
                 client.get("/error")
             except Exception:
                 pass
 
-        # Check error was logged
-        errors = [r for r in caplog.records if r.levelname == "ERROR"]
-        assert len(errors) >= 1
+        err_records = [r for r in caplog.records if "[ERR-" in r.message]
+        assert len(err_records) >= 1
+        assert all(r.levelname == "WARNING" for r in err_records), (
+            "exception log must be WARNING so LoggingIntegration does not create a duplicate Sentry event"
+        )
+
+    def test_exception_does_not_log_at_error_level(self, client, caplog):
+        """_log_error must not use logger.error — that would fire a second Sentry event via LoggingIntegration."""
+        with caplog.at_level("WARNING"):
+            try:
+                client.get("/error")
+            except Exception:
+                pass
+
+        error_records = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert len(error_records) == 0, (
+            f"Expected no ERROR-level logs, got: {[r.message for r in error_records]}"
+        )
 
     def test_logs_warning_on_4xx(self, app, caplog):
         """Should log warning on 4xx responses."""

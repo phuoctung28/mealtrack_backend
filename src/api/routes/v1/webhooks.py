@@ -54,8 +54,16 @@ async def revenuecat_webhook(
     event = payload.get("event", {})
     event_type = event.get("type")
     app_user_id = event.get("app_user_id")
-    
-    logger.error(f"RevenueCat webhook received: {event_type} for app_user_id={app_user_id}")
+
+    logger.info(f"RevenueCat webhook received: {event_type} for app_user_id={app_user_id}")
+
+    _HANDLED_EVENT_TYPES = frozenset({
+        "INITIAL_PURCHASE", "RENEWAL", "CANCELLATION",
+        "EXPIRATION", "BILLING_ISSUE", "PRODUCT_CHANGE", "REFUND",
+    })
+    if event_type not in _HANDLED_EVENT_TYPES:
+        logger.info(f"RevenueCat webhook: skipping unhandled event_type={event_type}")
+        return {"status": "success"}
 
     # Get user
     from sqlalchemy import select
@@ -102,7 +110,21 @@ async def revenuecat_webhook(
                     )
 
         if not user:
-            logger.error(
+            # If every identifier is a RevenueCat anonymous ID with no Firebase UID,
+            # the user never authenticated — they will never appear in our DB.
+            # Return 200 to stop RevenueCat retrying indefinitely.
+            all_ids = [app_user_id] + event.get("aliases", [])
+            is_anonymous_only = bool(all_ids) and all(
+                str(uid).startswith("$RCAnonymousID:") for uid in all_ids if uid
+            )
+            if is_anonymous_only:
+                logger.warning(
+                    f"RevenueCat webhook: anonymous-only subscriber, skipping — "
+                    f"event_type={event_type}, app_user_id={app_user_id}"
+                )
+                return {"status": "success"}
+
+            logger.warning(
                 f"RevenueCat webhook: user not found — "
                 f"event_type={event_type}, app_user_id={app_user_id}, "
                 f"aliases={event.get('aliases', [])}, product_id={event.get('product_id')}"
@@ -124,10 +146,10 @@ async def revenuecat_webhook(
                 await handle_expiration(uow, user, event)
 
             elif event_type == "BILLING_ISSUE":
-                handle_billing_issue(uow, user, event)
-                
+                await handle_billing_issue(uow, user, event)
+
             elif event_type == "PRODUCT_CHANGE":
-                handle_product_change(uow, user, event)
+                await handle_product_change(uow, user, event)
 
             elif event_type == "REFUND":
                 await handle_refund(uow, user, event)
@@ -136,15 +158,11 @@ async def revenuecat_webhook(
                 logger.info(f"Unhandled event type: {event_type}")
 
             await uow.commit()
-            
-        except Exception as e:
-            logger.error(
-                f"RevenueCat webhook handler error — "
-                f"event_type={event_type}, user_id={user.id}, error={e}"
-            )
+
+        except Exception:
             await uow.rollback()
             raise
-    
+
     return {"status": "success"}
 
 

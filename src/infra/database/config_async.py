@@ -99,7 +99,7 @@ try:
             ASYNC_DATABASE_URL,
             echo=False,
             poolclass=NullPool,
-            connect_args=_connect_args,
+            connect_args={**_connect_args, "statement_cache_size": 0},
         )
         logger.info("Async engine: NullPool (Neon pooler detected)")
     else:
@@ -107,7 +107,7 @@ try:
             ASYNC_DATABASE_URL,
             echo=False,
             poolclass=AsyncAdaptedQueuePool,
-            pool_size=_UVICORN_WORKERS * _ASYNC_POOL_SIZE,
+            pool_size=_ASYNC_POOL_SIZE,
             max_overflow=_ASYNC_POOL_OVERFLOW,
             pool_recycle=120,
             pool_timeout=_ASYNC_POOL_TIMEOUT,
@@ -115,7 +115,7 @@ try:
         )
         logger.info(
             "Async engine: AsyncAdaptedQueuePool pool_size=%s max_overflow=%s",
-            _UVICORN_WORKERS * _ASYNC_POOL_SIZE,
+            _ASYNC_POOL_SIZE,
             _ASYNC_POOL_OVERFLOW,
         )
 
