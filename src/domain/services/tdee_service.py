@@ -6,6 +6,7 @@ from src.domain.model.user import (
     JobType,
     Goal,
     TrainingLevel,
+    Sex,
 )
 from src.domain.services.bmr_calculator import BMRCalculatorFactory
 
@@ -29,7 +30,12 @@ class TdeeCalculationService:
             request.training_minutes_per_session,
         )
         macro_targets = self._calculate_all_macro_targets(
-            tdee, request.weight_kg, request.goal, request.training_level
+            tdee,
+            request.weight_kg,
+            request.goal,
+            request.training_level,
+            bmr=bmr,
+            sex=request.sex,
         )
         return TdeeResponse(
             bmr=round(bmr, 1),
@@ -84,6 +90,8 @@ class TdeeCalculationService:
         weight_kg: float,
         goal: Goal,
         training_level: TrainingLevel = None,
+        bmr: float = None,
+        sex: Sex = None,
     ) -> MacroTargets:
         """Calculate macro targets using weight-based approach.
 
@@ -97,6 +105,8 @@ class TdeeCalculationService:
             weight_kg: Body weight in kilograms
             goal: Fitness goal (CUT, BULK, RECOMP)
             training_level: Optional training experience level for protein adjustment
+            bmr: Basal Metabolic Rate for floor protection
+            sex: Sex for clinical minimum floor (1200F/1500M)
         """
         # Determine target calories based on goal
         if goal == Goal.CUT:
@@ -111,6 +121,16 @@ class TdeeCalculationService:
         else:
             calories = tdee
             goal_key = "recomp"
+
+        # Apply calorie floor: never below BMR or clinical minimum (1200F/1500M)
+        # Industry standard used by MyFitnessPal, Noom, Lose It
+        if bmr is not None and sex is not None:
+            clinical_min = (
+                TDEEConstants.MIN_CALORIES_FEMALE
+                if sex == Sex.FEMALE
+                else TDEEConstants.MIN_CALORIES_MALE
+            )
+            calories = max(calories, bmr, clinical_min)
 
         # Calculate protein from body weight (g/kg)
         # Use training-level-aware protein if provided, otherwise use default
@@ -172,6 +192,9 @@ class TdeeCalculationService:
         training_level: TrainingLevel = None,
     ) -> MacroTargets:
         """Calculate macros based on TDEE, goal, and weight.
+
+        Note: BMR floor protection (1200F/1500M) is NOT applied by this method.
+        Use calculate_tdee() for full floor protection.
 
         Args:
             tdee: Total Daily Energy Expenditure in calories
