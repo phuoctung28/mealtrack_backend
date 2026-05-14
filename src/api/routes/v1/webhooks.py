@@ -269,11 +269,15 @@ async def _credit_referral_on_purchase(uow, user_id: str) -> None:
     if conversion and conversion.status == "pending":
         conversion.status = "converted"
         conversion.converted_at = utc_now()
-        await repo.credit_wallet(conversion.referrer_user_id, conversion.commission_amount)
+        # Use VND amount for wallet (fallback to commission_amount for old records)
+        amount_vnd = conversion.commission_amount_vnd or conversion.commission_amount
+        await repo.credit_wallet(conversion.referrer_user_id, amount_vnd)
         logger.info(
-            "Referral credited: referrer=%s amount=%d",
+            "Referral credited: referrer=%s amount=%d VND (original: %d %s)",
             conversion.referrer_user_id,
+            amount_vnd,
             conversion.commission_amount,
+            conversion.commission_currency or "VND",
         )
 
 
@@ -285,11 +289,13 @@ async def _revoke_referral_on_refund(uow, user_id: str) -> None:
     if conversion and conversion.status == "converted":
         conversion.status = "revoked"
         conversion.revoked_at = utc_now()
-        await repo.revoke_from_wallet(conversion.referrer_user_id, conversion.commission_amount)
+        # Use VND amount for wallet (fallback to commission_amount for old records)
+        amount_vnd = conversion.commission_amount_vnd or conversion.commission_amount
+        await repo.revoke_from_wallet(conversion.referrer_user_id, amount_vnd)
         logger.info(
-            "Referral revoked: referrer=%s amount=%d",
+            "Referral revoked: referrer=%s amount=%d VND",
             conversion.referrer_user_id,
-            conversion.commission_amount,
+            amount_vnd,
         )
 
 
