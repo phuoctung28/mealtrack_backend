@@ -1,16 +1,16 @@
 """Add commission_currency and commission_amount_vnd columns.
 
 Revision ID: 20260513070245
-Revises: 20260503113601
+Revises: 20260512162000
 Create Date: 2026-05-13 07:02:45
 
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "20260513070245"
-down_revision = "20260503113601"
+down_revision = "20260512162000"
 branch_labels = None
 depends_on = None
 
