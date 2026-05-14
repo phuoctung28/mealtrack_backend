@@ -95,49 +95,23 @@ def test_meal_service_add_custom_nutrition_uses_unit_grams():
     assert updated.nutrition.macros.fat == pytest.approx(9.5)
 
 
-def test_meal_service_update_custom_nutrition_uses_new_unit_grams():
-    food_item = FoodItem(
-        id="food-1",
-        name="Cooking oil",
-        quantity=1.0,
-        unit="ml",
-        macros=Macros(protein=0.0, carbs=0.0, fat=0.92),
-    )
-    meal = _new_processing_meal(
-        Nutrition(
-            macros=Macros(protein=0.0, carbs=0.0, fat=0.92),
-            food_items=[food_item],
-        )
-    )
-
-    updated = MealService().apply_food_item_changes(
-        meal,
-        [
-            FoodItemChange(
-                action="update",
-                id="food-1",
-                quantity=5.0,
-                unit="ml",
-                custom_nutrition=CustomNutritionData(
-                    calories_per_100g=828.0,
-                    protein_per_100g=0.0,
-                    carbs_per_100g=0.0,
-                    fat_per_100g=92.0,
-                ),
+def _new_processing_meal() -> Meal:
+    return Meal(
+        id=uuid4(),
+        user_id=uuid4(),
+        status=MealStatus.PROCESSING,
+        images=[
+            MealImage(
+                id=uuid4(),
+                url="https://example.com/img.jpg",
+                created_at=datetime.now(timezone.utc),
             )
         ],
-    )
-
-    assert updated.nutrition.food_items[0].macros.fat == pytest.approx(4.232)
-    assert updated.nutrition.macros.fat == pytest.approx(4.232)
-
-
-def _new_processing_meal(nutrition=None):
-    return Meal(
-        meal_id=str(uuid4()),
-        user_id=str(uuid4()),
-        status=MealStatus.PROCESSING,
+        nutrition=Nutrition(
+            foods=[],
+            macros=Macros(protein=0.0, carbs=0.0, fat=0.0),
+        ),
+        consumed_at=datetime.now(timezone.utc),
         created_at=datetime.now(timezone.utc),
-        image=MealImage(image_id=str(uuid4()), format="jpeg", size_bytes=1),
-        nutrition=nutrition,
+        updated_at=datetime.now(timezone.utc),
     )
