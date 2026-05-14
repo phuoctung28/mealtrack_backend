@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -137,7 +137,7 @@ def _new_processing_meal(nutrition=None):
         meal_id=str(uuid4()),
         user_id=str(uuid4()),
         status=MealStatus.PROCESSING,
-        created_at=datetime.now(UTC),
+        created_at=datetime.now(timezone.utc),
         image=MealImage(image_id=str(uuid4()), format="jpeg", size_bytes=1),
         nutrition=nutrition,
     )
