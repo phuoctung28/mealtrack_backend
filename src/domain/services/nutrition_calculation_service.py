@@ -5,12 +5,10 @@ Provides a unified interface for calculating nutrition from various sources.
 
 import logging
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from typing import Any
 
-from src.domain.constants.food_density import get_density, DEFAULT_DENSITY
-from src.domain.model.nutrition import FoodItem, Nutrition
-from src.domain.model.nutrition import Macros
-from src.domain.model.nutrition.serving_unit import ServingUnit
+from src.domain.constants.food_density import DEFAULT_DENSITY, get_density
+from src.domain.model.nutrition import FoodItem, Macros, Nutrition
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +93,6 @@ UNIT_TRANSLATION = {
     "小": "small",
     "块": "piece",
     "片": "slice",
-    "杯": "cup",
     "汤匙": "tablespoon",
     "茶匙": "teaspoon",
     "份": "serving",
@@ -152,7 +149,7 @@ def scale_per_100g_nutrition(
     quantity: float,
     unit: str,
     base_serving: float = 100.0,
-    allowed_units: Optional[List[Dict[str, Any]]] = None,
+    allowed_units: list[dict[str, Any]] | None = None,
     food_name: str = "",
 ) -> dict:
     """Scale per-100g nutrition values for a given quantity and unit.
@@ -190,7 +187,7 @@ def scale_per_100g_nutrition(
 def _convert_with_allowed_units(
     quantity: float,
     unit: str,
-    allowed_units: List[Dict[str, Any]],
+    allowed_units: list[dict[str, Any]],
     food_name: str = "",
 ) -> float:
     """Convert quantity to grams using food-specific allowed_units.
@@ -320,8 +317,8 @@ class NutritionCalculationService:
         pass
 
     def get_nutrition_for_ingredient(
-        self, name: str, quantity: float, unit: str, fdc_id: Optional[int] = None
-    ) -> Optional[ScaledNutritionResult]:
+        self, name: str, quantity: float, unit: str, fdc_id: int | None = None
+    ) -> ScaledNutritionResult | None:
         """
         Get nutrition data for an ingredient.
         Currently returns None — vector search removed, to be re-added later.
@@ -331,7 +328,7 @@ class NutritionCalculationService:
         )
         return None
 
-    def calculate_meal_total(self, food_items: List[FoodItem]) -> Nutrition:
+    def calculate_meal_total(self, food_items: list[FoodItem]) -> Nutrition:
         """
         Calculate total nutrition from a list of food items.
 
@@ -382,7 +379,11 @@ class NutritionCalculationService:
         for item in items:
             if not item.custom_nutrition:
                 continue
-            factor = item.quantity / 100.0
+            item_name = item.name or "Food Item"
+            quantity_grams = convert_quantity_to_grams(
+                item.quantity, item.unit, item_name
+            )
+            factor = quantity_grams / 100.0
             protein = item.custom_nutrition.protein_per_100g * factor
             carbs = item.custom_nutrition.carbs_per_100g * factor
             fat = item.custom_nutrition.fat_per_100g * factor
@@ -392,7 +393,7 @@ class NutritionCalculationService:
             food_items.append(
                 FoodItem(
                     id=uuid4(),
-                    name=item.name or "Food Item",
+                    name=item_name,
                     quantity=item.quantity,
                     unit=item.unit,
                     macros=Macros(protein=protein, carbs=carbs, fat=fat),
