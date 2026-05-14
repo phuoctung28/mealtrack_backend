@@ -137,9 +137,14 @@ def test_get_configured_event_bus_is_singleton(monkeypatch):
         "GetSavedSuggestionsQueryHandler",
         "MealAnalysisEventHandler",
     ]
+    class _StubWithHandle:
+        def handle(self, *a, **k):
+            pass
+
     for name in handler_names:
         if hasattr(mod, name):
-            monkeypatch.setattr(mod, name, lambda *a, **k: object())
+            stub = _StubWithHandle if name == "MealAnalysisEventHandler" else object
+            monkeypatch.setattr(mod, name, lambda *a, _stub=stub, **k: _stub())
 
     bus1 = mod.get_configured_event_bus()
     bus2 = mod.get_configured_event_bus()
