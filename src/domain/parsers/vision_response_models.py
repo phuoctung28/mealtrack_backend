@@ -46,7 +46,8 @@ class VisionAnalyzeResponse(BaseModel):
             values["foods"] = [
                 f for f in foods
                 if not isinstance(f, dict)
-                or _coerce_quantity(f.get("quantity")) > 0
+                or "quantity" not in f  # missing field → let Pydantic reject it
+                or _coerce_quantity(f["quantity"]) > 0  # present but <= 0 → drop silently
             ]
         return values
 
