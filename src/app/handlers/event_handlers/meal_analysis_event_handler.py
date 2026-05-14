@@ -57,72 +57,51 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             f"EVENT HANDLER CALLED: Received MealImageUploadedEvent for meal {event.meal_id}"
         )
 
-        # Use provided UoW or create default
+        # Phase 1: quick DB read — fetch meal and update status to ANALYZING.
+        # Connection is released before any slow external calls.
         uow = self.uow or AsyncUnitOfWork()
-
         async with uow:
-            try:
-                logger.info(f"Starting background analysis for meal {event.meal_id}")
-
-                # Get the meal from repository
-                meal = await uow.meals.find_by_id(event.meal_id)
-                if not meal:
-                    logger.error(
-                        f"Meal {event.meal_id} not found for background analysis"
-                    )
-                    return
-
-                # Skip if already processed
-                if meal.status != MealStatus.PROCESSING:
-                    logger.info(
-                        f"Meal {event.meal_id} already processed with status {meal.status}"
-                    )
-                    return
-
-                # Update status to ANALYZING
-                meal = meal.mark_analyzing()
-                await uow.meals.save(meal)
-                await uow.commit()
-                logger.info(f"Updated meal {event.meal_id} status to ANALYZING")
-
-                # Try to perform real analysis if we can get image contents
-                # Otherwise fall back to mock analysis
-                await self._perform_analysis(meal, uow, language=event.language)
-
-            except Exception as e:
-                await uow.rollback()
-                logger.error(
-                    f"Error processing meal image upload event for meal {event.meal_id}: {str(e)}"
+            meal = await uow.meals.find_by_id(event.meal_id)
+            if not meal:
+                logger.error(f"Meal {event.meal_id} not found for background analysis")
+                return
+            if meal.status != MealStatus.PROCESSING:
+                logger.info(
+                    f"Meal {event.meal_id} already processed with status {meal.status}"
                 )
-                await self._mark_meal_as_failed(event.meal_id, str(e))
+                return
+            meal = meal.mark_analyzing()
+            await uow.meals.save(meal)
+        # DB connection released here — vision and translation run without holding a connection
 
-    async def _perform_analysis(self, meal, uow: UnitOfWorkPort, language: str = "en"):
-        """Perform real AI analysis using the same logic as UploadMealImageImmediatelyHandler."""
+        logger.info(f"Starting background analysis for meal {event.meal_id}")
         try:
-            # Add small delay to simulate processing time
-            import asyncio
+            await self._perform_analysis(meal, language=event.language)
+        except Exception as e:
+            logger.error(
+                f"Error processing meal image upload event for meal {event.meal_id}: {str(e)}"
+            )
+            await self._mark_meal_as_failed(event.meal_id, str(e))
 
+    async def _perform_analysis(self, meal, language: str = "en"):
+        """Perform AI analysis. No DB connection is held during external calls."""
+        import asyncio
+
+        try:
             await asyncio.sleep(1)
 
-            # Get image contents from the image store
             logger.info(f"Loading image contents for meal {meal.meal_id}")
             image_contents = self.image_store.load(meal.image.image_id)
-
             if not image_contents:
                 raise Exception(
                     f"Could not load image contents for image_id: {meal.image.image_id}"
                 )
 
             logger.info(f"Performing real AI analysis for meal {meal.meal_id}")
-
-            # Perform AI analysis (same as UploadMealImageImmediatelyHandler)
             vision_result = self.vision_service.analyze(image_contents)
 
-            # Parse the response (same as UploadMealImageImmediatelyHandler)
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
             dish_name = self.gpt_parser.parse_dish_name(vision_result)
-
-            # Update meal with analysis results (same as UploadMealImageImmediatelyHandler)
             meal = meal.mark_ready(
                 nutrition=nutrition,
                 dish_name=dish_name or "Unknown dish",
@@ -130,7 +109,6 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
                 emoji=self.gpt_parser.parse_emoji(vision_result),
             )
 
-            # Translation (if non-English)
             if (
                 language
                 and language != "en"
@@ -139,23 +117,19 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
                 and nutrition.food_items
             ):
                 try:
-                    translation = await self.meal_translation_service.translate_meal(
+                    await self.meal_translation_service.translate_meal(
                         meal=meal,
                         dish_name=meal.dish_name,
                         food_items=nutrition.food_items,
                         target_language=language,
                     )
-                    if translation:
-                        logger.info(
-                            f"Translation saved for meal={meal.meal_id}, language={language}"
-                        )
                 except Exception as e:
                     logger.warning(f"Translation failed for meal {meal.meal_id}: {e}")
-                    # Don't fail the whole analysis if translation fails
 
-            # Save the fully analyzed meal
-            await uow.meals.save(meal)
-            await uow.commit()
+            # Phase 3: quick DB write — save result (connection held only for this save)
+            uow = self.uow or AsyncUnitOfWork()
+            async with uow:
+                await uow.meals.save(meal)
             logger.info(f"Real analysis completed for meal {meal.meal_id}")
 
         except Exception as e:
@@ -165,17 +139,8 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
     async def _mark_meal_as_failed(self, meal_id: str, error_message: str):
         """Mark a meal as failed with error message."""
         uow = self.uow or AsyncUnitOfWork()
-
         async with uow:
-            try:
-                meal = await uow.meals.find_by_id(meal_id)
-                if meal:
-                    meal = meal.mark_failed(error_message=error_message)
-                    await uow.meals.save(meal)
-                    await uow.commit()
-                    logger.info(f"Marked meal {meal_id} as failed")
-            except Exception as save_error:
-                await uow.rollback()
-                logger.error(
-                    f"Failed to update meal status to failed: {str(save_error)}"
-                )
+            meal = await uow.meals.find_by_id(meal_id)
+            if meal:
+                await uow.meals.save(meal.mark_failed(error_message=error_message))
+                logger.info(f"Marked meal {meal_id} as failed")
