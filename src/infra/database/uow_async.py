@@ -70,12 +70,18 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
             return
         try:
             if exc_type:
-                await self.rollback()
+                try:
+                    await self.rollback()
+                except Exception:
+                    logger.warning("Rollback failed; connection will be discarded", exc_info=True)
             else:
                 try:
                     await self.commit()
                 except Exception:
-                    await self.rollback()
+                    try:
+                        await self.rollback()
+                    except Exception:
+                        logger.warning("Rollback failed after commit error; connection will be discarded", exc_info=True)
                     raise
         finally:
             await session.close()
