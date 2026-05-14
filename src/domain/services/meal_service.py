@@ -4,13 +4,12 @@ Provides shared meal editing and management logic.
 """
 
 import logging
-from typing import List
 from uuid import uuid4
 
 from src.domain.model.meal import Meal
 from src.domain.model.meal.food_item_change import FoodItemChange
-from src.domain.model.nutrition import FoodItem
-from src.domain.model.nutrition import Nutrition
+from src.domain.model.nutrition import FoodItem, Nutrition
+from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ class MealService:
     """Service for meal operations."""
 
     def apply_food_item_changes(
-        self, meal: Meal, food_item_changes: List[FoodItemChange]
+        self, meal: Meal, food_item_changes: list[FoodItemChange]
     ) -> Meal:
         """Apply food item changes to a meal."""
         # Ensure meal.nutrition exists and food_items list is initialized
@@ -41,9 +40,10 @@ class MealService:
 
                 # Calculate calories and macros from custom_nutrition if provided
                 if change.custom_nutrition:
-                    scale_factor = (
-                        change.quantity / 100.0
-                    )  # Custom nutrition is per 100g
+                    quantity_grams = convert_quantity_to_grams(
+                        change.quantity, change.unit, change.name or ""
+                    )
+                    scale_factor = quantity_grams / 100.0
                     macros = Macros(
                         protein=change.custom_nutrition.protein_per_100g * scale_factor,
                         carbs=change.custom_nutrition.carbs_per_100g * scale_factor,
@@ -94,7 +94,13 @@ class MealService:
                             item.unit = change.unit
                         if change.custom_nutrition is not None:
                             # Recalculate macros from custom nutrition (calories derived automatically)
-                            scale_factor = (change.quantity or item.quantity) / 100.0
+                            item_name = change.name or item.name
+                            item_quantity = change.quantity or item.quantity
+                            item_unit = change.unit or item.unit
+                            quantity_grams = convert_quantity_to_grams(
+                                item_quantity, item_unit, item_name
+                            )
+                            scale_factor = quantity_grams / 100.0
                             item.macros = Macros(
                                 protein=change.custom_nutrition.protein_per_100g
                                 * scale_factor,
