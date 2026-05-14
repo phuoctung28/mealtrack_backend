@@ -130,6 +130,10 @@ class GPTResponseParser:
                 fat=float(macros_data.get("fat", 0)),
             )
 
+            quantity = float(food_data["quantity"])
+            if quantity <= 0:
+                continue
+
             # Create FoodItem with confidence score
             confidence = 1.0  # Default confidence
             if "confidence" in food_data:
@@ -138,7 +142,7 @@ class GPTResponseParser:
             food_item = FoodItem(
                 id=uuid.uuid4(),  # Generate UUID for editing support
                 name=food_data["name"],
-                quantity=float(food_data["quantity"]),
+                quantity=quantity,
                 unit=food_data["unit"],
                 macros=macros,
                 micros=None,  # GPT doesn't provide micros yet

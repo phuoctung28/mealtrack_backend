@@ -119,42 +119,28 @@ async def revenuecat_webhook(
             )
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Handle events
-        try:
-            if event_type == "INITIAL_PURCHASE":
-                await handle_purchase(uow, user, event)
+        # Handle events — commit/rollback is owned by the AsyncUnitOfWork context manager
+        if event_type == "INITIAL_PURCHASE":
+            await handle_purchase(uow, user, event)
 
-            elif event_type == "RENEWAL":
-                await handle_renewal(uow, user, event)
+        elif event_type == "RENEWAL":
+            await handle_renewal(uow, user, event)
 
-            elif event_type == "CANCELLATION":
-                await handle_cancellation(uow, user, event)
+        elif event_type == "CANCELLATION":
+            await handle_cancellation(uow, user, event)
 
-            elif event_type == "EXPIRATION":
-                await handle_expiration(uow, user, event)
+        elif event_type == "EXPIRATION":
+            await handle_expiration(uow, user, event)
 
-            elif event_type == "BILLING_ISSUE":
-                handle_billing_issue(uow, user, event)
-                
-            elif event_type == "PRODUCT_CHANGE":
-                handle_product_change(uow, user, event)
+        elif event_type == "BILLING_ISSUE":
+            await handle_billing_issue(uow, user, event)
 
-            elif event_type == "REFUND":
-                await handle_refund(uow, user, event)
+        elif event_type == "PRODUCT_CHANGE":
+            await handle_product_change(uow, user, event)
 
-            else:
-                logger.info(f"Unhandled event type: {event_type}")
+        elif event_type == "REFUND":
+            await handle_refund(uow, user, event)
 
-            await uow.commit()
-            
-        except Exception as e:
-            logger.error(
-                f"RevenueCat webhook handler error — "
-                f"event_type={event_type}, user_id={user.id}, error={e}"
-            )
-            await uow.rollback()
-            raise
-    
     return {"status": "success"}
 
 

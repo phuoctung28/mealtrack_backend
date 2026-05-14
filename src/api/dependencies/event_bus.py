@@ -558,7 +558,7 @@ def get_configured_event_bus() -> EventBus:
         image_store=image_store,
         meal_translation_service=meal_translation_service,
     )
-    event_bus.subscribe(MealImageUploadedEvent, meal_analysis_handler)
+    event_bus.subscribe(MealImageUploadedEvent, meal_analysis_handler.handle)
 
     # Subscribe cache invalidation handler to meal mutation events
     from src.app.events.meal.meal_cache_invalidation_required_event import (
