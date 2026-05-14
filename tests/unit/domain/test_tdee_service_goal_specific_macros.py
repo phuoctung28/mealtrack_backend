@@ -102,13 +102,13 @@ class TestTdeeServiceGoalSpecificMacros:
 
     # ===== CUTTING TESTS =====
 
-    def test_cutting_uses_500_calorie_deficit(self, service, base_request):
-        """Verify cutting goal applies 500 calorie deficit to TDEE."""
+    def test_cutting_uses_300_calorie_deficit(self, service, base_request):
+        """Verify cutting goal applies 300 calorie deficit to TDEE."""
         base_request.goal = Goal.CUT
         response = service.calculate_tdee(base_request)
 
-        # Expected: TDEE - 500 = 2492 - 500 = 1992
-        expected_calories = 2492.0 - 500
+        # Expected: TDEE - 300 = 2492 - 300 = 2142
+        expected_calories = 2492.0 - 300
         assert response.macros.calories == pytest.approx(expected_calories, abs=0.1)
 
     def test_cutting_uses_weight_based_protein(self, service, base_request):
@@ -306,7 +306,7 @@ class TestTdeeServiceGoalSpecificMacros:
 
         assert cutting.macros.calories < recomp.macros.calories
         assert cutting.macros.calories == pytest.approx(
-            recomp.macros.calories - 500, abs=0.1
+            recomp.macros.calories - 300, abs=0.1
         )
 
     def test_recomp_calories_equal_tdee(self, service, base_request):
@@ -337,7 +337,7 @@ class TestTdeeServiceGoalSpecificMacros:
         assert hasattr(TDEEConstants, "BULKING_SURPLUS")
         assert hasattr(TDEEConstants, "RECOMP_ADJUSTMENT")
 
-        assert TDEEConstants.CUTTING_DEFICIT == 500
+        assert TDEEConstants.CUTTING_DEFICIT == 300
         assert TDEEConstants.BULKING_SURPLUS == 300
         assert TDEEConstants.RECOMP_ADJUSTMENT == 0
 
@@ -630,3 +630,96 @@ class TestTrainingLevelProtein:
         assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["bulk"]["beginner"] == 1.8
         assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["bulk"]["intermediate"] == 2.0
         assert TDEEConstants.PROTEIN_PER_KG_BY_TRAINING["bulk"]["advanced"] == 2.2
+
+
+class TestBmrFloorProtection:
+    """Test BMR floor protection for small users on cutting goal."""
+
+    @pytest.fixture
+    def service(self):
+        return TdeeCalculationService()
+
+    def test_small_female_cutting_respects_1200_floor(self, service):
+        """48kg/156cm/23F cutting should get 1200 kcal, not below-BMR 1148.
+
+        Reported bug: user got 1147 kcal (below BMR of 1179).
+        """
+        request = TdeeRequest(
+            age=23,
+            sex=Sex.FEMALE,
+            height=156,
+            weight=48,
+            body_fat_pct=None,
+            job_type=JobType.DESK,
+            training_days_per_week=4,
+            training_minutes_per_session=60,
+            goal=Goal.CUT,
+        )
+        response = service.calculate_tdee(request)
+
+        # BMR for this user: 10*48 + 6.25*156 - 5*23 - 161 = 1179 kcal
+        assert response.bmr == pytest.approx(1179, abs=1)
+
+        # Calories should be at least 1200 (female clinical minimum)
+        assert response.macros.calories >= TDEEConstants.MIN_CALORIES_FEMALE
+
+    def test_small_male_cutting_respects_1500_floor(self, service):
+        """Small male cutting should get at least 1500 kcal (male minimum)."""
+        request = TdeeRequest(
+            age=25,
+            sex=Sex.MALE,
+            height=165,
+            weight=55,
+            body_fat_pct=None,
+            job_type=JobType.DESK,
+            training_days_per_week=2,
+            training_minutes_per_session=30,
+            goal=Goal.CUT,
+        )
+        response = service.calculate_tdee(request)
+
+        # Should respect male clinical minimum
+        assert response.macros.calories >= TDEEConstants.MIN_CALORIES_MALE
+
+    def test_large_user_cutting_unaffected_by_floor(self, service):
+        """Large user cutting should apply full 300 deficit (floor not triggered)."""
+        request = TdeeRequest(
+            age=30,
+            sex=Sex.MALE,
+            height=185,
+            weight=90,
+            body_fat_pct=None,
+            job_type=JobType.ON_FEET,
+            training_days_per_week=5,
+            training_minutes_per_session=90,
+            goal=Goal.CUT,
+        )
+        response = service.calculate_tdee(request)
+
+        # TDEE minus 300 should be well above 1500, so full deficit applies
+        expected_cut_calories = response.tdee - 300
+        assert response.macros.calories == pytest.approx(expected_cut_calories, abs=10)
+        assert response.macros.calories > TDEEConstants.MIN_CALORIES_MALE
+
+    def test_floor_uses_bmr_when_higher_than_clinical_min(self, service):
+        """When BMR > clinical min, use BMR as floor."""
+        # 55kg female with desk job + 3d×45min training
+        # BMR ~1214, TDEE ~1600, after -300 deficit = ~1300 (above both floors)
+        request = TdeeRequest(
+            age=35,
+            sex=Sex.FEMALE,
+            height=160,
+            weight=55,
+            body_fat_pct=None,
+            job_type=JobType.DESK,
+            training_days_per_week=3,
+            training_minutes_per_session=45,
+            goal=Goal.CUT,
+        )
+        response = service.calculate_tdee(request)
+
+        # BMR = 10*55 + 6.25*160 - 5*35 - 161 = 550 + 1000 - 175 - 161 = 1214
+        # Clinical min for female = 1200
+        # Floor should be max(BMR=1214, clinical=1200) = 1214
+        assert response.macros.calories >= response.bmr
+        assert response.macros.calories >= TDEEConstants.MIN_CALORIES_FEMALE

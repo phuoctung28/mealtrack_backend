@@ -7,13 +7,15 @@ and will be migrated in Phase 3b.
 """
 
 import logging
+from datetime import date
 from typing import List, Optional
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.model.notification import UserFcmToken, NotificationPreferences
+from src.infra.database.models.notification.notification import NotificationORM
 from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM
 from src.infra.database.models.notification.notification_preferences import (
     NotificationPreferencesORM,
@@ -187,3 +189,26 @@ class AsyncNotificationRepository:
             await self.session.flush()
             return True
         return False
+
+    # ------------------------------------------------------------------
+    # Notification scheduling operations
+    # ------------------------------------------------------------------
+
+    async def delete_pending_notifications_for_user(
+        self, user_id: str, scheduled_date: date
+    ) -> int:
+        """Delete pending notifications for a user on a specific date.
+
+        Returns the number of deleted rows.
+        """
+        result = await self.session.execute(
+            delete(NotificationORM).where(
+                and_(
+                    NotificationORM.user_id == user_id,
+                    NotificationORM.scheduled_date == scheduled_date,
+                    NotificationORM.status == "pending",
+                )
+            )
+        )
+        await self.session.flush()
+        return result.rowcount

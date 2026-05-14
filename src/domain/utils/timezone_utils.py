@@ -71,7 +71,7 @@ DEFAULT_TIMEZONE = "UTC"
 
 # Default quiet hours (for water reminders)
 DEFAULT_SLEEP_TIME_MINUTES = 1320  # 10:00 PM
-DEFAULT_BREAKFAST_TIME_MINUTES = 480  # 8:00 AM
+DEFAULT_BREAKFAST_TIME_MINUTES = 510  # 8:30 AM
 
 
 def get_zone_info(timezone_str: str) -> ZoneInfo:
