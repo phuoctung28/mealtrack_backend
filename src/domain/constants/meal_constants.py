@@ -109,7 +109,8 @@ class TDEEConstants:
     EXERCISE_MULTIPLIER_PER_HOUR = 0.05
 
     # Goal adjustments (calories)
-    CUTTING_DEFICIT = 500  # 500 calorie deficit
+    # 300 deficit = ~0.3 kg/week, sustainable for small users
+    CUTTING_DEFICIT = 300
     BULKING_SURPLUS = 300  # 300 calorie surplus (lean bulk)
     # MAINTENANCE_ADJUSTMENT removed - use RECOMP_ADJUSTMENT instead
     RECOMP_ADJUSTMENT = 0  # No calorie adjustment for recomposition
@@ -163,6 +164,11 @@ class TDEEConstants:
     MIN_FAT_G = 40  # Minimum daily fat for hormone function
     MAX_FAT_G = 150  # Maximum daily fat
     MIN_CARBS_G = 50  # Minimum daily carbs
+
+    # Clinical minimum calorie floors (industry standard: MyFitnessPal, Noom, Lose It)
+    # Going below these requires medical supervision
+    MIN_CALORIES_FEMALE = 1200
+    MIN_CALORIES_MALE = 1500
 
     # Validation ranges
     MIN_AGE = 13
