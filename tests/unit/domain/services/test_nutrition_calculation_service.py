@@ -12,7 +12,7 @@ from src.domain.model.meal.food_item_change import (
     CustomNutritionData,
     FoodItemChange,
 )
-from src.domain.model.nutrition import FoodItem, Macros, Nutrition
+from src.domain.model.nutrition import Macros, Nutrition
 from src.domain.services.meal_service import MealService
 from src.domain.services.nutrition_calculation_service import (
     NutritionCalculationService,
@@ -97,21 +97,18 @@ def test_meal_service_add_custom_nutrition_uses_unit_grams():
 
 def _new_processing_meal() -> Meal:
     return Meal(
-        id=uuid4(),
-        user_id=uuid4(),
+        meal_id=str(uuid4()),
+        user_id=str(uuid4()),
         status=MealStatus.PROCESSING,
-        images=[
-            MealImage(
-                id=uuid4(),
-                url="https://example.com/img.jpg",
-                created_at=datetime.now(timezone.utc),
-            )
-        ],
-        nutrition=Nutrition(
-            foods=[],
-            macros=Macros(protein=0.0, carbs=0.0, fat=0.0),
+        image=MealImage(
+            image_id=str(uuid4()),
+            format="jpeg",
+            size_bytes=1024,
+            url="https://example.com/img.jpg",
         ),
-        consumed_at=datetime.now(timezone.utc),
+        nutrition=Nutrition(
+            macros=Macros(protein=0.0, carbs=0.0, fat=0.0),
+            food_items=[],
+        ),
         created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
     )
