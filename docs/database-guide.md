@@ -1,9 +1,9 @@
 # Backend Database Guide
 
-**Last Updated:** May 6, 2026
-**Engine:** MySQL 8.0 + SQLAlchemy 2.0
+**Last Updated:** May 15, 2026
+**Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 (psycopg2 sync / asyncpg async)
 **Migrations:** Alembic with auto-migration on startup
-**Tables:** 15 (13 core + notification_sent_log + food_reference)
+**Tables:** 15+ (core tables + notification_sent_log + food_reference + referral tables)
 
 ---
 
@@ -11,7 +11,7 @@
 
 ```python
 # src/infra/database/config.py
-DATABASE_URL = "mysql+pymysql://user:pass@host/db"
+DATABASE_URL = "postgresql+psycopg2://user:pass@host/db"
 
 pool_size = 20       # Base connections
 max_overflow = 10    # Additional under load
