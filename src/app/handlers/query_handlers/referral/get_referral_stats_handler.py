@@ -35,11 +35,13 @@ class GetReferralStatsQueryHandler:
             conversion_dtos: List[ReferralConversionDTO] = []
             for conv in conversions:
                 referred_name = await self._get_first_name(uow, conv.referred_user_id)
+                # Use VND amount for consistency with wallet (fallback for old records)
+                amount_vnd = conv.commission_amount_vnd or int(conv.commission_amount)
                 conversion_dtos.append(
                     ReferralConversionDTO(
                         referred_name=referred_name,
                         status=conv.status,
-                        amount=conv.commission_amount,
+                        amount=amount_vnd,
                         date=conv.created_at.isoformat(),
                     )
                 )
