@@ -111,7 +111,6 @@ try:
             max_overflow=_ASYNC_POOL_OVERFLOW,
             pool_recycle=120,
             pool_timeout=_ASYNC_POOL_TIMEOUT,
-            pool_pre_ping=True,
             connect_args=_connect_args,
         )
         logger.info(

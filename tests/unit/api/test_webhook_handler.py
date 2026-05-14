@@ -116,7 +116,8 @@ class TestWebhookHandler:
                     result = await revenuecat_webhook(mock_request, authorization="test_secret")
                 
                 assert result == {"status": "success"}
-                mock_uow.commit.assert_awaited_once()
+                # commit/rollback are owned by the AsyncUnitOfWork context manager, not called explicitly
+                mock_uow.commit.assert_not_awaited()
     
     async def test_webhook_user_not_found(self, mock_request, webhook_event):
         """Test webhook returns 404 when user not found (so RevenueCat retries)."""
