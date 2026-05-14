@@ -14,6 +14,7 @@ from src.api.schemas.response import (
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.domain.model.meal import Meal
 from src.domain.model.nutrition import FoodItem, Nutrition, Macros, Micros
+from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
 
 # Status mapping from domain to API
 STATUS_MAPPING = {
@@ -122,7 +123,12 @@ class MealMapper:
                         and item.is_custom
                         and item.quantity > 0
                     ):
-                        scale_factor = 100.0 / item.quantity
+                        quantity_grams = convert_quantity_to_grams(
+                            item.quantity,
+                            item.unit,
+                            item.name,
+                        )
+                        scale_factor = 100.0 / quantity_grams
                         custom_nutrition_dto = CustomNutritionResponse(
                             calories_per_100g=item.calories * scale_factor,
                             protein_per_100g=(
