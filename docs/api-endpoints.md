@@ -14,9 +14,16 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 |--------|----------|---------|
 | GET | `/health` | Basic health check |
 | GET | `/health/db-pool` | DB pool metrics |
-| GET | `/health/db-connections` | MySQL connection stats |
+| GET | `/health/db-connections` | DB connection stats |
 | GET | `/health/notifications` | FCM health |
 | GET | `/v1/monitoring/cache/metrics` | Redis cache metrics |
+
+## App & Universal Links
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/app-download` | Redirect to App Store with `?source=` campaign tracking |
+| GET | `/.well-known/apple-app-site-association` | iOS Universal Links config (paths: /log, /dashboard, /upgrade, /feedback, /settings) |
 
 ---
 
@@ -136,9 +143,11 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 
 ## Referrals
 
+Referral codes are 3–15 characters. Commission rates are configurable via `REFERRAL_COMMISSIONS` env var (per-currency JSON; default: `{"USD": 2, "VND": 50000, "EUR": 1.8, "default": 2}`).
+
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| POST | `/v1/referrals/validate` | Validate referral code |
+| POST | `/v1/referrals/validate` | Validate referral code (3–15 chars) |
 | POST | `/v1/referrals/apply` | Apply referral code |
 | GET | `/v1/referrals/my-code` | Get user's referral code |
 | GET | `/v1/referrals/stats` | Get referral stats |
