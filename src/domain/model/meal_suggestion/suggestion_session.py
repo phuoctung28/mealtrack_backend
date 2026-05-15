@@ -24,6 +24,9 @@ class SuggestionSession:
     shown_meal_names: List[str] = field(
         default_factory=list
     )  # Track meal names for exclusion
+    discovery_meals: List[dict] = field(
+        default_factory=list
+    )  # Lightweight discovery candidates selected by /recipes
     dietary_preferences: List[str] = field(default_factory=list)
     allergies: List[str] = field(default_factory=list)
     cooking_equipment: List[str] = field(
