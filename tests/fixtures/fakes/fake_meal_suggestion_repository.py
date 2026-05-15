@@ -1,6 +1,5 @@
 """Fake meal suggestion repository for testing."""
 
-from datetime import datetime
 from typing import List, Optional
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
@@ -26,8 +25,7 @@ class FakeMealSuggestionRepository(MealSuggestionRepositoryPort):
 
     async def update_session(self, session: SuggestionSession) -> None:
         """Update existing session (maintains remaining TTL)."""
-        if session.id in self._sessions:
-            self._sessions[session.id] = session
+        self._sessions[session.id] = session
 
     async def delete_session(self, session_id: str) -> None:
         """Delete session and all associated suggestions."""

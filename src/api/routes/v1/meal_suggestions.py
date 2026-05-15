@@ -3,8 +3,8 @@ Meal suggestion API endpoints (Phase 06).
 Simplified to only include generation endpoint.
 """
 
-import asyncio
 import logging
+import asyncio
 from typing import Any, Awaitable, Callable
 
 from fastapi import APIRouter, Depends, Request
@@ -32,6 +32,8 @@ from src.api.schemas.response.meal_suggestion_responses import (
     SuggestionsListResponse,
 )
 from src.app.commands.meal_suggestion import (
+    DiscoverMealsCommand,
+    GenerateMealRecipesCommand,
     GenerateMealSuggestionsCommand,
     IngredientItem,
     SaveMealSuggestionCommand,
@@ -142,27 +144,24 @@ async def discover_meals(
         language = get_request_language(request)
         portion_type = body.get_effective_portion_type()
 
-        from src.api.base_dependencies import get_suggestion_orchestration_service
-
-        service = get_suggestion_orchestration_service()
-
-        session, meals = await service.generate_discovery(
+        command = DiscoverMealsCommand(
             user_id=user_id,
             meal_type=body.meal_type,
             meal_portion_type=portion_type.value,
             ingredients=body.ingredients,
-            cooking_time_minutes=(
+            time_available_minutes=(
                 body.cooking_time_minutes.value if body.cooking_time_minutes else None
             ),
             session_id=body.session_id,
             language=language,
             cuisine_region=body.cuisine_region,
-            calorie_target_override=body.calorie_target,
+            calorie_target=body.calorie_target,
             protein_target=body.protein_target,
             carbs_target=body.carbs_target,
             fat_target=body.fat_target,
             count=body.batch_size,
         )
+        session, meals = await event_bus.send(command)
 
         # --- meal-image-cache integration (always enabled) ---
         from src.api.dependencies.food_image import get_food_image_service
@@ -236,7 +235,10 @@ async def discover_meals(
         # Translate meal names if non-English
         translated_names = [m["name"] for m in meals]
         if language and language != "en":
-            from src.api.base_dependencies import get_deepl_suggestion_translation_service
+            from src.api.base_dependencies import (
+                get_deepl_suggestion_translation_service,
+            )
+
             try:
                 translation_svc = get_deepl_suggestion_translation_service()
                 if translation_svc:
@@ -283,7 +285,7 @@ async def discover_meals(
         response_meals = []
         for i, m in enumerate(meals):
             img = images[i] if i < len(images) else None
-            meal_id = f"disc_{uuid.uuid4().hex[:12]}"
+            meal_id = m.get("id") or f"disc_{uuid.uuid4().hex[:12]}"
             response_meals.append(
                 DiscoveryMealResponse(
                     id=meal_id,
@@ -317,53 +319,33 @@ async def generate_recipes(
     request: Request,
     body: GenerateRecipesRequest,
     user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """
     Generate full recipes for 1-3 selected discovery meals.
     Called after user picks meals from the discovery grid.
     """
     try:
-        import uuid
-
         language = get_request_language(request)
 
-        from src.api.base_dependencies import get_suggestion_orchestration_service
-
-        service = get_suggestion_orchestration_service()
-
-        # Build a minimal session for recipe generation
-        from src.domain.model.meal_suggestion import SuggestionSession
-
-        session = SuggestionSession(
-            id=f"recipe_{uuid.uuid4().hex[:16]}",
-            user_id=user_id,
-            meal_type=body.meal_type,
-            meal_portion_type="main",
-            target_calories=body.calorie_target or 500,
-            ingredients=body.ingredients,
-            cooking_time_minutes=body.cooking_time_minutes,
-            language=language,
-            cuisine_region=body.cuisine_region,
-            protein_target=body.protein_target,
-            carbs_target=body.carbs_target,
-            fat_target=body.fat_target,
+        recipes = await event_bus.send(
+            GenerateMealRecipesCommand(
+                user_id=user_id,
+                meal_type=body.meal_type,
+                language=language,
+                meal_names=body.meal_names,
+                session_id=body.session_id,
+                selected_meal_ids=body.selected_meal_ids,
+                selected_meals=body.selected_meals,
+                ingredients=body.ingredients,
+                cooking_time_minutes=body.cooking_time_minutes,
+                cuisine_region=body.cuisine_region,
+                calorie_target=body.calorie_target,
+                protein_target=body.protein_target,
+                carbs_target=body.carbs_target,
+                fat_target=body.fat_target,
+            )
         )
-
-        # Reuse existing Phase 2 recipe generation for selected names
-        recipes = await service._recipe_generator._phase2_generate_recipes(
-            session,
-            body.meal_names,
-            "English",
-            suggestion_count=len(body.meal_names),
-            min_acceptable_override=1,
-        )
-
-        # Translate if non-English (pass ISO code like "vi", not full name)
-        if language != "en" and recipes:
-            if service._recipe_generator._translation_service:
-                recipes = await service._recipe_generator._translation_service.translate_meal_suggestions_batch(
-                    recipes, language
-                )
 
         # Map to response
         from src.api.mappers.meal_suggestion_mapper import to_meal_suggestion_response

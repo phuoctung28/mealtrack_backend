@@ -394,12 +394,15 @@ class NutritionLookupService:
     # ------------------------------------------------------------------
 
     def scale_to_target(
-        self, meal_macros: MealMacros, target_calories: int
+        self,
+        meal_macros: MealMacros,
+        target_calories: int,
+        reject_out_of_range: bool = True,
     ) -> Optional[MealMacros]:
         """Scale ingredient quantities so total calories ≈ target_calories.
 
         Returns scaled MealMacros, or None if scale factor is outside 0.7–1.4
-        (caller should regenerate the recipe).
+        (caller should regenerate the recipe), unless reject_out_of_range=False.
 
         Edge cases:
           - meal_macros.calories <= 0: return None — zero-cal recipes cannot be scaled
@@ -422,7 +425,7 @@ class NutritionLookupService:
 
         scale = target_calories / meal_macros.calories
 
-        if scale < 0.7 or scale > 1.4:
+        if reject_out_of_range and (scale < 0.7 or scale > 1.4):
             logger.warning(
                 "scale_to_target: scale factor %.2f out of range [0.7, 1.4] "
                 "(actual=%.1f kcal, target=%d kcal) — recipe rejected",
@@ -483,9 +486,7 @@ class NutritionLookupService:
     def get_cache_metrics() -> dict:
         """Return current cache metrics for monitoring."""
         total = _cache_metrics["redis_hits"] + _cache_metrics["redis_misses"]
-        hit_rate = (
-            _cache_metrics["redis_hits"] / total * 100 if total > 0 else 0.0
-        )
+        hit_rate = _cache_metrics["redis_hits"] / total * 100 if total > 0 else 0.0
         return {
             **_cache_metrics,
             "total_lookups": total,

@@ -6,7 +6,7 @@ import warnings
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class MealSizeEnum(str, Enum):
@@ -212,10 +212,22 @@ class GenerateRecipesRequest(BaseModel):
     """Request to generate full recipes for 1-3 selected discovery meals."""
 
     meal_names: list[str] = Field(
-        ...,
-        min_length=1,
+        default_factory=list,
         max_length=3,
         description="English meal names from discovery grid (1-3)",
+    )
+    session_id: str | None = Field(
+        None, description="Discovery session id returned by /discover"
+    )
+    selected_meal_ids: list[str] = Field(
+        default_factory=list,
+        max_length=3,
+        description="Stable discovery meal ids selected by the client",
+    )
+    selected_meals: list[dict] = Field(
+        default_factory=list,
+        max_length=3,
+        description="Full selected discovery meal objects from /discover",
     )
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = Field(
         ..., description="Type of meal"
@@ -227,6 +239,16 @@ class GenerateRecipesRequest(BaseModel):
     protein_target: float | None = Field(None, ge=0)
     carbs_target: float | None = Field(None, ge=0)
     fat_target: float | None = Field(None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_selection(self):
+        if (
+            not self.selected_meal_ids
+            and not self.selected_meals
+            and not self.meal_names
+        ):
+            raise ValueError("Provide selected_meal_ids, selected_meals, or meal_names")
+        return self
 
 
 class SaveInstructionItem(BaseModel):

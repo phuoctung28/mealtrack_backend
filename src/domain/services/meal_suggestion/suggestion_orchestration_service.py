@@ -393,9 +393,28 @@ class SuggestionOrchestrationService:
 
         # Track shown names for "load more" exclusion
         session.add_shown_meals([m["name"] for m in meals])
+        session.discovery_meals = _merge_discovery_meals(
+            getattr(session, "discovery_meals", []), meals
+        )
         if is_existing:
             await self._repo.update_session(session)
         else:
             await self._repo.save_session(session)
 
         return session, meals
+
+
+def _merge_discovery_meals(existing: List[dict], incoming: List[dict]) -> List[dict]:
+    """Append discovery candidates while preserving ids across load-more batches."""
+    merged = list(existing)
+    seen = {
+        meal.get("id") or meal.get("english_name") or meal.get("name")
+        for meal in merged
+    }
+    for meal in incoming:
+        key = meal.get("id") or meal.get("english_name") or meal.get("name")
+        if key in seen:
+            continue
+        merged.append(meal)
+        seen.add(key)
+    return merged
