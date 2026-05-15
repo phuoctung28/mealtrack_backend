@@ -67,6 +67,9 @@ from .weight_entry import WeightEntryORM
 # Email log
 from .email_log import EmailLog
 
+# Promo codes (email marketing)
+from .promo_code import PromoCode, PromoCodeRedemption
+
 
 __all__ = [
     # Base
@@ -120,4 +123,7 @@ __all__ = [
     "WeightEntryORM",
     # Email log
     "EmailLog",
+    # Promo codes
+    "PromoCode",
+    "PromoCodeRedemption",
 ]
