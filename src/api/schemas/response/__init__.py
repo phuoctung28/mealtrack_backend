@@ -34,7 +34,6 @@ from .meal_responses import (
 # Meal suggestion responses
 from .meal_suggestion_responses import (
     MealSuggestionItem,
-    MealSuggestionsResponse,
     MacrosSchema as MealSuggestionMacrosSchema,
 )
 
@@ -88,7 +87,6 @@ __all__ = [
     "MacroTargetsResponse",
     # Meal suggestion
     "MealSuggestionItem",
-    "MealSuggestionsResponse",
     "MealSuggestionMacrosSchema",
     # Onboarding
     "OnboardingFieldResponse",

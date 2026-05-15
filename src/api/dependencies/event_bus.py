@@ -19,7 +19,6 @@ from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal_suggestion import (
     DiscoverMealsCommand,
     GenerateMealRecipesCommand,
-    GenerateMealSuggestionsCommand,
     SaveMealSuggestionCommand,
 )
 from src.app.commands.notification import (
@@ -57,7 +56,6 @@ from src.app.handlers.command_handlers import (
     AnalyzeMealImageByUrlHandler,
     UpdateCustomMacrosCommandHandler,
     UploadMealImageImmediatelyHandler,
-    GenerateMealSuggestionsCommandHandler,
     DiscoverMealsCommandHandler,
     GenerateMealRecipesCommandHandler,
     SaveMealSuggestionCommandHandler,
@@ -442,10 +440,6 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(GetMealsByDateQuery, GetMealsByDateQueryHandler())
 
     # Register meal suggestion handlers
-    event_bus.register_handler(
-        GenerateMealSuggestionsCommand,
-        GenerateMealSuggestionsCommandHandler(suggestion_service),
-    )
     event_bus.register_handler(
         DiscoverMealsCommand,
         DiscoverMealsCommandHandler(suggestion_service),

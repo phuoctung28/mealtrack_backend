@@ -14,27 +14,21 @@ from src.api.base_dependencies import get_db
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
-from src.api.mappers.meal_suggestion_mapper import (
-    to_suggestions_list_response,
-)
 from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
 from src.api.schemas.request.meal_suggestion_requests import (
     DiscoverMealsRequest,
     GenerateRecipesRequest,
-    MealSuggestionRequest,
     SaveMealSuggestionRequest,
 )
 from src.api.schemas.response.meal_suggestion_responses import (
     DiscoveryBatchResponse,
     RecipeBatchResponse,
     SaveMealSuggestionResponse,
-    SuggestionsListResponse,
 )
 from src.app.commands.meal_suggestion import (
     DiscoverMealsCommand,
     GenerateMealRecipesCommand,
-    GenerateMealSuggestionsCommand,
     IngredientItem,
     SaveMealSuggestionCommand,
 )
@@ -61,67 +55,6 @@ async def _fetch_images_parallel(
 
 
 router = APIRouter(prefix="/v1/meal-suggestions", tags=["Meal Suggestions"])
-
-
-@router.post("/generate", response_model=SuggestionsListResponse)
-@limiter.limit("5/minute")
-async def generate_suggestions(
-    request: Request,
-    body: MealSuggestionRequest,
-    user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus),
-):
-    """
-    [Phase 06] Generate 3 meal suggestions with session tracking.
-
-    **Initial Generation (no session_id):**
-    - Creates new session and generates 3 meal suggestions
-    - Returns session_id for future regeneration
-
-    **Regeneration (with session_id):**
-    - Automatically excludes previously shown meals from the session
-    - Generates 3 NEW different meal suggestions
-    - No need for separate /regenerate endpoint!
-
-    Uses meal_portion_type (snack/main/omad) to calculate target calories from user's TDEE.
-    Session expires after 4 hours.
-
-    Backward compatible: accepts deprecated meal_size (S/M/L/XL/OMAD) and maps to new types.
-
-    Language preference is read from Accept-Language header.
-    """
-    try:
-        # Get language from Accept-Language header via middleware
-        language = get_request_language(request)
-
-        portion_type = body.get_effective_portion_type()
-
-        command = GenerateMealSuggestionsCommand(
-            user_id=user_id,
-            meal_type=body.meal_type,
-            meal_portion_type=portion_type.value,
-            ingredients=body.ingredients,
-            time_available_minutes=(
-                body.cooking_time_minutes.value if body.cooking_time_minutes else None
-            ),
-            session_id=body.session_id,
-            language=language,
-            # Strictly enforce 1 serving per suggestion regardless of client input.
-            # Older clients may still send 2-4 but are coerced to 1 for consistency.
-            servings=1,
-            cooking_equipment=body.cooking_equipment,
-            cuisine_region=body.cuisine_region,
-            calorie_target=body.calorie_target,
-            protein_target=body.protein_target,
-            carbs_target=body.carbs_target,
-            fat_target=body.fat_target,
-        )
-
-        session, suggestions = await event_bus.send(command)
-        return to_suggestions_list_response(session, suggestions)
-
-    except Exception as e:
-        raise handle_exception(e) from e
 
 
 @router.post("/discover", response_model=DiscoveryBatchResponse)

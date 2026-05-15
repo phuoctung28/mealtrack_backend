@@ -7,7 +7,6 @@ from src.api.schemas.response.meal_suggestion_responses import (
     MacroEstimateResponse,
     IngredientResponse,
     RecipeStepResponse,
-    SuggestionsListResponse,
     DiscoveryMealResponse,
     DiscoveryBatchResponse,
 )
@@ -94,20 +93,4 @@ def to_discovery_batch_response(
         meals=[to_discovery_meal_response(s, images.get(s.id)) for s in suggestions],
         has_more=has_more,
         meal_count=len(suggestions),
-    )
-
-
-def to_suggestions_list_response(
-    session: SuggestionSession,
-    suggestions: List[MealSuggestion],
-) -> SuggestionsListResponse:
-    """Convert session + suggestions to API response."""
-    return SuggestionsListResponse(
-        session_id=session.id,
-        meal_type=session.meal_type,
-        meal_portion_type=session.meal_portion_type,
-        target_calories=session.target_calories,
-        suggestions=[to_meal_suggestion_response(s) for s in suggestions],
-        suggestion_count=len(suggestions),
-        expires_at=session.expires_at,
     )

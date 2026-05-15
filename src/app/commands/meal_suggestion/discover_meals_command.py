@@ -41,5 +41,5 @@ class DiscoverMealsCommand(Command):
         if self.time_available_minutes is not None and self.time_available_minutes <= 0:
             raise ValueError("time_available_minutes must be greater than 0")
 
-        if self.count < 1 or self.count > 8:
-            raise ValueError("count must be between 1 and 8")
+        if self.count < 1 or self.count > 12:
+            raise ValueError("count must be between 1 and 12")

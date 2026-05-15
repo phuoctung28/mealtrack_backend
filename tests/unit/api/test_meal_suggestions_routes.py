@@ -66,7 +66,7 @@ def ms_client():
     app.dependency_overrides = {}
 
 
-def test_generate_meal_suggestions_ok(ms_client):
+def test_generate_meal_suggestions_endpoint_removed(ms_client):
     client, _bus = ms_client
     payload = {
         "meal_type": "lunch",
@@ -75,10 +75,10 @@ def test_generate_meal_suggestions_ok(ms_client):
         "cooking_time_minutes": 30,
     }
     r = client.post("/v1/meal-suggestions/generate", json=payload)
-    assert r.status_code == 200
-    body = r.json()
-    assert body["session_id"] == "sess-1"
-    assert len(body["suggestions"]) == 1
+    assert r.status_code == 404
+
+    schema = client.get("/openapi.json").json()
+    assert "/v1/meal-suggestions/generate" not in schema["paths"]
 
 
 def test_save_meal_suggestion_ok(ms_client):
@@ -105,25 +105,6 @@ def test_save_meal_suggestion_ok(ms_client):
     r = client.post("/v1/meal-suggestions/save", json=payload)
     assert r.status_code == 200
     assert r.json()["meal_id"] == "meal-uuid-1"
-
-
-def test_generate_suggestions_handle_exception(ms_client):
-    client, _bus = ms_client
-
-    class _BusErr:
-        async def send(self, msg):
-            raise RuntimeError("pipeline")
-
-    client.app.dependency_overrides[get_configured_event_bus] = lambda: _BusErr()
-
-    payload = {
-        "meal_type": "dinner",
-        "meal_portion_type": "main",
-        "ingredients": ["rice"],
-        "cooking_time_minutes": 45,
-    }
-    r = client.post("/v1/meal-suggestions/generate", json=payload)
-    assert r.status_code == 500
 
 
 def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
@@ -192,7 +173,7 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
         "meal_portion_type": "main",
         "ingredients": ["tofu"],
         "cooking_time_minutes": 20,
-        "batch_size": 6,
+        "batch_size": 10,
         "cuisine_region": "japanese",
         "calorie_target": 450,
     }
@@ -202,7 +183,7 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
     assert r.status_code == 200
     assert isinstance(captured["msg"], DiscoverMealsCommand)
     assert captured["msg"].meal_type == "lunch"
-    assert captured["msg"].count == 6
+    assert captured["msg"].count == 10
     assert r.json()["meals"][0]["id"] == "disc_a"
 
 

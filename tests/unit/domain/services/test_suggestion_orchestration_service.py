@@ -433,35 +433,6 @@ class TestSessionCreationInvariants:
         assert session.servings == 1
 
 
-# -----------------------------------------------------------------------------
-# Route-layer guard: the `/generate` endpoint must ALWAYS dispatch the command
-# with servings=1, regardless of what the (deprecated) body field contains.
-# -----------------------------------------------------------------------------
-class TestRouteServingsCoercion:
-    """Lock the route-layer hardcoding of servings=1.
-
-    Older mobile clients may still POST `servings=3` via the deprecated
-    request field; the route must coerce to 1 before dispatching to the
-    event bus. This test asserts the line `servings=1` in meal_suggestions.py
-    never silently reverts to `body.servings`.
-    """
-
-    def test_route_hardcodes_servings_one(self):
-        """Static check: the route literal is `servings=1`, never body-derived."""
-        import inspect
-        from src.api.routes.v1 import meal_suggestions
-
-        source = inspect.getsource(meal_suggestions.generate_suggestions)
-        # The explicit literal must still be present.
-        assert (
-            "servings=1" in source
-        ), "Route must hardcode servings=1 — see PR: strict single-serving fix"
-        # And body.servings must NOT be the value being dispatched.
-        assert (
-            "servings=body.servings" not in source
-        ), "Route must not pass body.servings to the command"
-
-
 @pytest.mark.asyncio
 async def test_generate_discovery_appends_existing_discovery_meals_on_load_more(
     mock_generation_service,
