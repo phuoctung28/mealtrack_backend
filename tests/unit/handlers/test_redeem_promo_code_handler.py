@@ -29,7 +29,7 @@ def _mock_uow(promo=None, redemption=None):
     mock_uow.session = AsyncMock()
 
     mock_repo = AsyncMock()
-    mock_repo.get_by_code = AsyncMock(return_value=promo)
+    mock_repo.get_by_code_for_update = AsyncMock(return_value=promo)
     mock_repo.get_redemption = AsyncMock(return_value=redemption)
     mock_repo.create_redemption = AsyncMock()
 

@@ -15,7 +15,7 @@ class RedeemPromoCodeCommandHandler:
         async with AsyncUnitOfWork() as uow:
             repo = PromoCodeRepository(uow.session)
 
-            promo = await repo.get_by_code(command.code)
+            promo = await repo.get_by_code_for_update(command.code)
             if not promo:
                 raise PromoCodeValidationError(status_code=404, detail="Promo code not found")
 

@@ -101,6 +101,33 @@ async def test_get_by_code_normalises_input():
 
 
 @pytest.mark.asyncio
+async def test_get_by_code_for_update_returns_promo_when_exists():
+    session = _make_session()
+    promo = _make_promo()
+    result_mock = MagicMock()
+    result_mock.scalars.return_value.first.return_value = promo
+    session.execute = AsyncMock(return_value=result_mock)
+
+    repo = PromoCodeRepository(session)
+    found = await repo.get_by_code_for_update("SUMMER50")
+
+    assert found is promo
+
+
+@pytest.mark.asyncio
+async def test_get_by_code_for_update_returns_none_when_missing():
+    session = _make_session()
+    result_mock = MagicMock()
+    result_mock.scalars.return_value.first.return_value = None
+    session.execute = AsyncMock(return_value=result_mock)
+
+    repo = PromoCodeRepository(session)
+    found = await repo.get_by_code_for_update("NOTEXIST")
+
+    assert found is None
+
+
+@pytest.mark.asyncio
 async def test_get_redemption_returns_existing_redemption():
     session = _make_session()
     existing = PromoCodeRedemption()

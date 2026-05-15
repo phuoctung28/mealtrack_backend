@@ -20,6 +20,15 @@ class PromoCodeRepository:
         )
         return result.scalars().first()
 
+    async def get_by_code_for_update(self, code: str) -> Optional[PromoCode]:
+        """Fetch PromoCode with a row-level lock to prevent concurrent over-redemption."""
+        result = await self.session.execute(
+            select(PromoCode)
+            .where(PromoCode.code == code.strip().upper())
+            .with_for_update()
+        )
+        return result.scalars().first()
+
     async def get_redemption(
         self, promo_code_id: str, user_id: str
     ) -> Optional[PromoCodeRedemption]:
