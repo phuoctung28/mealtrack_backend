@@ -1,6 +1,5 @@
 """Query handler — validate a promo code: existence, active status, usage cap, already-redeemed."""
 import logging
-from datetime import timezone
 
 from src.app.queries.promo_code.validate_promo_code_query import (
     PromoCodeValidationError,

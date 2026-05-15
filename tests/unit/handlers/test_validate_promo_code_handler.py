@@ -145,3 +145,25 @@ async def test_validate_raises_422_when_already_redeemed():
 
     assert exc_info.value.status_code == 422
     assert "already used" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_validate_raises_422_when_expired():
+    from datetime import datetime, timezone, timedelta
+    past = datetime.now(timezone.utc) - timedelta(days=1)
+    promo = _make_promo(expires_at=past)
+    mock_uow, mock_repo = _mock_uow(promo=promo)
+
+    with patch(
+        "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.AsyncUnitOfWork",
+        return_value=mock_uow,
+    ), patch(
+        "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.PromoCodeRepository",
+        return_value=mock_repo,
+    ):
+        handler = ValidatePromoCodeQueryHandler()
+        with pytest.raises(PromoCodeValidationError) as exc_info:
+            await handler.handle(ValidatePromoCodeQuery(code="SUMMER50", user_id="user-123"))
+
+    assert exc_info.value.status_code == 422
+    assert "expired" in exc_info.value.detail
