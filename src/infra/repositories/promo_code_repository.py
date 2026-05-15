@@ -35,6 +35,7 @@ class PromoCodeRepository:
         self, promo_code: PromoCode, user_id: str
     ) -> PromoCodeRedemption:
         promo_code.current_uses += 1
+        promo_code.updated_at = utc_now()
         redemption = PromoCodeRedemption(
             promo_code_id=promo_code.id,
             user_id=user_id,

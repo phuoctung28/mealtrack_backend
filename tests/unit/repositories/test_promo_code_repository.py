@@ -84,3 +84,33 @@ async def test_create_redemption_increments_uses_and_adds_row():
     assert redemption.promo_code_id == "promo-id-123"
     assert redemption.user_id == "user-abc"
     session.add.assert_called_once_with(redemption)
+
+
+@pytest.mark.asyncio
+async def test_get_by_code_normalises_input():
+    session = _make_session()
+    promo = _make_promo()
+    result_mock = MagicMock()
+    result_mock.scalars.return_value.first.return_value = promo
+    session.execute = AsyncMock(return_value=result_mock)
+
+    repo = PromoCodeRepository(session)
+    found = await repo.get_by_code("  summer50  ")
+
+    assert found is promo
+
+
+@pytest.mark.asyncio
+async def test_get_redemption_returns_existing_redemption():
+    session = _make_session()
+    existing = PromoCodeRedemption()
+    existing.promo_code_id = "promo-id-123"
+    existing.user_id = "user-abc"
+    result_mock = MagicMock()
+    result_mock.scalars.return_value.first.return_value = existing
+    session.execute = AsyncMock(return_value=result_mock)
+
+    repo = PromoCodeRepository(session)
+    found = await repo.get_redemption(promo_code_id="promo-id-123", user_id="user-abc")
+
+    assert found is existing
