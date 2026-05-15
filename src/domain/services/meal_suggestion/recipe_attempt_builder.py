@@ -42,6 +42,8 @@ async def attempt_recipe_generation(
     recipe_system: str,
     session: SuggestionSession,
     is_retry: bool = False,
+    reject_on_scale_out_of_range: bool = True,
+    fill_missing_steps: bool = False,
 ) -> Optional[MealSuggestion]:
     """
     Single AI call to generate one recipe. Returns MealSuggestion on success, None on failure.
@@ -82,19 +84,23 @@ async def attempt_recipe_generation(
             raw.get("prep_time_minutes") or session.cooking_time_minutes or 30
         )
 
-        if not ingredients or not recipe_steps:
+        if not ingredients or (not recipe_steps and not fill_missing_steps):
             logger.warning(
                 f"[PHASE-2-UNEXPECTED-EMPTY]{marker} index={index} | "
                 f"ingredients={len(ingredients)} | steps={len(recipe_steps)}"
             )
             return None
+        if not recipe_steps:
+            recipe_steps = _fallback_recipe_steps(meal_name, ingredients, prep_time)
 
         # Calculate macros deterministically from ingredient list — ignore AI-reported values
         meal_macros = await nutrition_lookup.calculate_meal_macros(ingredients)
 
         # Scale ingredient quantities to match the session's calorie target
         scaled_macros = nutrition_lookup.scale_to_target(
-            meal_macros, session.target_calories
+            meal_macros,
+            session.target_calories,
+            reject_out_of_range=reject_on_scale_out_of_range,
         )
         if scaled_macros is None:
             logger.info(
@@ -201,3 +207,27 @@ def _log_ingredient_coverage(
             f"[PHASE-2-INGREDIENT-MISMATCH]{marker} index={index} | "
             f"missing={missing} | meal_name={meal_name}"
         )
+
+
+def _fallback_recipe_steps(
+    meal_name: str, ingredients: List[Dict], prep_time: int
+) -> List[Dict]:
+    """Build simple steps when selected-recipe AI output omits instructions."""
+    ingredient_names = [
+        ing.get("name", "ingredient") for ing in ingredients if ing.get("name")
+    ]
+    ingredients_text = ", ".join(ingredient_names[:4]) or "the ingredients"
+    first_duration = max(1, min(10, prep_time // 3 if prep_time else 5))
+    second_duration = max(1, prep_time - first_duration if prep_time else 10)
+    return [
+        {
+            "step": 1,
+            "instruction": f"Prepare and portion {ingredients_text} for {meal_name}.",
+            "duration_minutes": first_duration,
+        },
+        {
+            "step": 2,
+            "instruction": f"Cook until done, combine, and serve {meal_name}.",
+            "duration_minutes": second_duration,
+        },
+    ]

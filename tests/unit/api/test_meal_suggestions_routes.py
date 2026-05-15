@@ -1,18 +1,26 @@
 """Cover meal_suggestions routes with TestClient + rate limiter state."""
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from src.api.base_dependencies import get_db
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.middleware.rate_limit import limiter
 from src.api.routes.v1 import meal_suggestions as ms_mod
+from src.app.commands.meal_suggestion import (
+    DiscoverMealsCommand,
+    GenerateMealRecipesCommand,
+)
 from src.domain.model.meal_suggestion.meal_suggestion import (
+    Ingredient,
     MacroEstimate,
     MealSuggestion,
     MealType,
+    RecipeStep,
 )
 from src.domain.model.meal_suggestion.suggestion_session import SuggestionSession
 
@@ -53,11 +61,12 @@ def ms_client():
     app.dependency_overrides[get_current_user_id] = lambda: "user-1"
     bus = _BusOk()
     app.dependency_overrides[get_configured_event_bus] = lambda: bus
+    app.dependency_overrides[get_db] = lambda: None
     yield TestClient(app), bus
     app.dependency_overrides = {}
 
 
-def test_generate_meal_suggestions_ok(ms_client):
+def test_generate_meal_suggestions_endpoint_removed(ms_client):
     client, _bus = ms_client
     payload = {
         "meal_type": "lunch",
@@ -66,10 +75,10 @@ def test_generate_meal_suggestions_ok(ms_client):
         "cooking_time_minutes": 30,
     }
     r = client.post("/v1/meal-suggestions/generate", json=payload)
-    assert r.status_code == 200
-    body = r.json()
-    assert body["session_id"] == "sess-1"
-    assert len(body["suggestions"]) == 1
+    assert r.status_code == 404
+
+    schema = client.get("/openapi.json").json()
+    assert "/v1/meal-suggestions/generate" not in schema["paths"]
 
 
 def test_save_meal_suggestion_ok(ms_client):
@@ -98,20 +107,187 @@ def test_save_meal_suggestion_ok(ms_client):
     assert r.json()["meal_id"] == "meal-uuid-1"
 
 
-def test_generate_suggestions_handle_exception(ms_client):
+def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
     client, _bus = ms_client
+    captured = {}
 
-    class _BusErr:
+    class _BusDiscover:
         async def send(self, msg):
-            raise RuntimeError("pipeline")
+            captured["msg"] = msg
+            session = SuggestionSession(
+                id="sess-discovery",
+                user_id="user-1",
+                meal_type="lunch",
+                meal_portion_type="main",
+                target_calories=500,
+                ingredients=["tofu"],
+                cooking_time_minutes=20,
+                shown_meal_names=["Tofu Bowl"],
+            )
+            return session, [
+                {
+                    "id": "disc_a",
+                    "name": "Tofu Bowl",
+                    "english_name": "Tofu Bowl",
+                    "calories": 450,
+                    "protein": 35,
+                    "carbs": 45,
+                    "fat": 14,
+                }
+            ]
 
-    client.app.dependency_overrides[get_configured_event_bus] = lambda: _BusErr()
+    class _Cache:
+        async def lookup_batch(self, names):
+            return [None for _ in names]
+
+    class _Pending:
+        async def enqueue_many(self, misses):
+            captured["misses"] = misses
+
+    class _Images:
+        async def search_food_image(self, name):
+            return None
+
+    async def _cache_service(session):
+        return _Cache()
+
+    async def _pending_queue(session):
+        return _Pending()
+
+    monkeypatch.setattr(
+        "src.api.dependencies.food_image.get_food_image_service",
+        lambda: _Images(),
+    )
+    monkeypatch.setattr(
+        "src.api.dependencies.meal_image_cache.get_meal_image_cache_service",
+        _cache_service,
+    )
+    monkeypatch.setattr(
+        "src.api.dependencies.meal_image_cache.get_pending_queue",
+        _pending_queue,
+    )
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _BusDiscover()
 
     payload = {
-        "meal_type": "dinner",
+        "meal_type": "lunch",
         "meal_portion_type": "main",
-        "ingredients": ["rice"],
-        "cooking_time_minutes": 45,
+        "ingredients": ["tofu"],
+        "cooking_time_minutes": 20,
+        "batch_size": 10,
+        "cuisine_region": "japanese",
+        "calorie_target": 450,
     }
-    r = client.post("/v1/meal-suggestions/generate", json=payload)
-    assert r.status_code == 500
+
+    r = client.post("/v1/meal-suggestions/discover", json=payload)
+
+    assert r.status_code == 200
+    assert isinstance(captured["msg"], DiscoverMealsCommand)
+    assert captured["msg"].meal_type == "lunch"
+    assert captured["msg"].count == 10
+    assert r.json()["meals"][0]["id"] == "disc_a"
+
+
+def test_generate_recipes_accepts_selected_discovery_ids(ms_client):
+    client, _bus = ms_client
+    captured = {}
+
+    class _BusRecipe:
+        async def send(self, msg):
+            captured["msg"] = msg
+            return [
+                MealSuggestion(
+                    id="s1",
+                    session_id="recipe-session",
+                    user_id="user-1",
+                    meal_name="Lemongrass Carp Grilled",
+                    description="",
+                    meal_type=MealType.LUNCH,
+                    macros=MacroEstimate(calories=350, protein=35, carbs=20, fat=12),
+                    ingredients=[Ingredient(name="carp", amount=120, unit="g")],
+                    recipe_steps=[
+                        RecipeStep(
+                            step=1,
+                            instruction="Steam the carp.",
+                            duration_minutes=15,
+                        )
+                    ],
+                    prep_time_minutes=20,
+                    confidence_score=0.9,
+                )
+            ]
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _BusRecipe()
+
+    payload = {
+        "session_id": "sess-discovery",
+        "selected_meal_ids": ["disc_b", "disc_a"],
+        "meal_type": "lunch",
+    }
+
+    r = client.post("/v1/meal-suggestions/recipes", json=payload)
+
+    assert r.status_code == 200
+    assert isinstance(captured["msg"], GenerateMealRecipesCommand)
+    assert captured["msg"].session_id == "sess-discovery"
+    assert captured["msg"].selected_meal_ids == ["disc_b", "disc_a"]
+    assert r.json()["recipes"][0]["meal_name"] == "Lemongrass Carp Grilled"
+
+
+def test_generate_recipes_accepts_full_selected_meals_when_session_missing(ms_client):
+    client, _bus = ms_client
+    captured = {}
+
+    class _BusRecipe:
+        async def send(self, msg):
+            captured["msg"] = msg
+            return [
+                MealSuggestion(
+                    id="s1",
+                    session_id="recipe-session",
+                    user_id="user-1",
+                    meal_name="Ginger Carp Steamed",
+                    description="",
+                    meal_type=MealType.LUNCH,
+                    macros=MacroEstimate(calories=300, protein=32, carbs=18, fat=10),
+                    ingredients=[Ingredient(name="carp", amount=120, unit="g")],
+                    recipe_steps=[
+                        RecipeStep(
+                            step=1,
+                            instruction="Steam the carp.",
+                            duration_minutes=15,
+                        )
+                    ],
+                    prep_time_minutes=20,
+                    confidence_score=0.9,
+                )
+            ]
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _BusRecipe()
+
+    payload = {
+        "session_id": "expired-session",
+        "selected_meal_ids": ["disc_a"],
+        "selected_meals": [
+            {
+                "id": "disc_a",
+                "meal_name": "Ginger Carp Steamed",
+                "english_name": "Ginger Carp Steamed",
+                "macros": {
+                    "calories": 300,
+                    "protein": 32,
+                    "carbs": 18,
+                    "fat": 10,
+                },
+            }
+        ],
+        "meal_names": ["Ginger Carp Steamed"],
+        "meal_type": "lunch",
+    }
+
+    r = client.post("/v1/meal-suggestions/recipes", json=payload)
+
+    assert r.status_code == 200
+    assert isinstance(captured["msg"], GenerateMealRecipesCommand)
+    assert captured["msg"].session_id == "expired-session"
+    assert captured["msg"].selected_meal_ids == ["disc_a"]
+    assert captured["msg"].selected_meals == payload["selected_meals"]

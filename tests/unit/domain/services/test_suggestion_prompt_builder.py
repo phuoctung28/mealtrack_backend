@@ -11,7 +11,6 @@ from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
     build_meal_names_prompt,
     build_recipe_details_prompt,
 )
-from src.domain.services.prompts.prompt_template_manager import PromptTemplateManager
 
 
 @pytest.fixture
@@ -249,6 +248,16 @@ class TestBuildRecipeDetailsPrompt:
             or "minute" in prompt.lower()
             or "time" in prompt.lower()
         )
+
+    def test_low_calorie_prompt_includes_portion_guidance(self, mock_session):
+        """Low-calorie selected recipes should guide the AI toward smaller portions."""
+        mock_session.target_calories = 300
+
+        prompt = build_recipe_details_prompt("Test Meal", mock_session)
+
+        assert "Low-calorie portion guidance" in prompt
+        assert "80-140g lean protein" in prompt
+        assert "0-5g oil" in prompt
 
     def test_does_not_include_macro_fields_in_prompt(self, mock_session):
         """Prompt must not include macro field requests (protein/carbs/fat/macros).

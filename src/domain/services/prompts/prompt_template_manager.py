@@ -314,6 +314,13 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         ):
             macro_target_str = f"\nMacro targets: ~{int(protein_target)}g protein, ~{int(carbs_target)}g carbs, ~{int(fat_target)}g fat"
 
+        low_calorie_str = ""
+        if target_calories <= 400:
+            low_calorie_str = (
+                "\nLow-calorie portion guidance: use 80-140g lean protein, "
+                "plenty of vegetables, small starch portions, and 0-5g oil or added fat."
+            )
+
         time_str = f" | ≤{cooking_time_minutes} min" if cooking_time_minutes else ""
         time_req_str = (
             f"\n- 2-6 clear recipe steps with duration\n- Total prep_time ≤{cooking_time_minutes} min"
@@ -324,7 +331,7 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         return f"""Generate complete recipe for: "{meal_name}"
 
 MUST USE these ingredients as main components: {ing_str}{' | ' + constraints_str if constraints_str else ''}
-Target:{servings_str} — ~{target_calories} cal{time_str}{equipment_str}{cuisine_str}{macro_target_str}
+Target:{servings_str} — ~{target_calories} cal{time_str}{equipment_str}{cuisine_str}{macro_target_str}{low_calorie_str}
 
 CRITICAL: Size all quantities for {servings} serving only — no batch scaling.
 

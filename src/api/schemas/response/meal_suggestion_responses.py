@@ -1,8 +1,5 @@
-"""
-Response schemas for meal suggestion generation (Phase 06).
-"""
+"""Response schemas for meal suggestion discovery, recipes, and saving."""
 
-from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -80,40 +77,6 @@ class MealSuggestionResponse(BaseModel):
 
 # Alias for backward compatibility
 MealSuggestionItem = MealSuggestionResponse
-
-
-class SuggestionsListResponse(BaseModel):
-    """
-    Response containing 1-3 meal suggestions (Phase 06).
-    Note: May return fewer than 3 if some generations fail.
-    """
-
-    session_id: str = Field(..., description="Suggestion session ID for tracking")
-    meal_type: str = Field(
-        ..., description="Type of meal (breakfast, lunch, dinner, snack)"
-    )
-    meal_portion_type: str = Field(
-        ..., description="Portion type: snack, main, or omad"
-    )
-    target_calories: float = Field(
-        ..., description="Calculated target calories for this portion type"
-    )
-    suggestions: List[MealSuggestionResponse] = Field(
-        ...,
-        min_length=1,
-        max_length=3,
-        description="1-3 meal suggestions (may be partial if generation fails)",
-    )
-    suggestion_count: int = Field(
-        ..., ge=1, le=3, description="Number of suggestions returned (1-3)"
-    )
-    expires_at: datetime = Field(
-        ..., description="Session expiration timestamp (4 hours)"
-    )
-
-
-# Alias for backward compatibility
-MealSuggestionsResponse = SuggestionsListResponse
 
 
 class RecipeBatchResponse(BaseModel):

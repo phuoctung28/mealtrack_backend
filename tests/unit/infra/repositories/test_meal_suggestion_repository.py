@@ -27,6 +27,17 @@ def session():
         ingredients=["chicken"],
         cooking_time_minutes=20,
         shown_suggestion_ids=[],
+        discovery_meals=[
+            {
+                "id": "disc_1",
+                "name": "Ginger Carp Steamed",
+                "english_name": "Ginger Carp Steamed",
+                "calories": 300,
+                "protein": 32,
+                "carbs": 18,
+                "fat": 10,
+            }
+        ],
         created_at=datetime.utcnow(),
         expires_at=datetime.utcnow() + timedelta(hours=4),
     )
@@ -64,6 +75,15 @@ async def test_save_and_get_session_roundtrip(session):
 
     await repo.save_session(session)
     redis.set.assert_awaited_once()
+
+
+def test_session_serialization_preserves_discovery_meals(session):
+    repo = MealSuggestionRepository(SimpleNamespace())
+
+    serialized = repo._serialize_session(session)
+    out = repo._deserialize_session(serialized)
+
+    assert out.discovery_meals == session.discovery_meals
 
 
 @pytest.mark.asyncio
@@ -146,8 +166,12 @@ async def test_save_session_with_suggestions_uses_pipeline(session, suggestion):
 
 @pytest.mark.asyncio
 async def test_get_suggestion_searches_keys_and_deserializes(session, suggestion):
-    client = SimpleNamespace(keys=AsyncMock(return_value=[f"suggestion:{session.id}:{suggestion.id}"]))
-    serialized = MealSuggestionRepository(SimpleNamespace())._serialize_suggestion(suggestion)
+    client = SimpleNamespace(
+        keys=AsyncMock(return_value=[f"suggestion:{session.id}:{suggestion.id}"])
+    )
+    serialized = MealSuggestionRepository(SimpleNamespace())._serialize_suggestion(
+        suggestion
+    )
     redis = SimpleNamespace(
         set=AsyncMock(),
         get=AsyncMock(return_value=serialized),
@@ -174,4 +198,3 @@ async def test_delete_session_deletes_session_key_and_pattern(session):
     await repo.delete_session(session.id)
     redis.delete.assert_awaited_once()
     redis.delete_pattern.assert_awaited_once()
-
