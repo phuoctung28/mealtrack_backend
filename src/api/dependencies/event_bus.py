@@ -17,7 +17,8 @@ from src.app.commands.meal import (
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal_suggestion import (
-    GenerateMealSuggestionsCommand,
+    DiscoverMealsCommand,
+    GenerateMealRecipesCommand,
     SaveMealSuggestionCommand,
 )
 from src.app.commands.notification import (
@@ -55,7 +56,8 @@ from src.app.handlers.command_handlers import (
     AnalyzeMealImageByUrlHandler,
     UpdateCustomMacrosCommandHandler,
     UploadMealImageImmediatelyHandler,
-    GenerateMealSuggestionsCommandHandler,
+    DiscoverMealsCommandHandler,
+    GenerateMealRecipesCommandHandler,
     SaveMealSuggestionCommandHandler,
     ParseMealTextHandler,
 )
@@ -226,6 +228,7 @@ def get_food_search_event_bus() -> EventBus:
     nutritionix_service = get_nutritionix_service()
     macro_validation_service = MacroValidationService()
     from src.infra.adapters.meal_generation_service import MealGenerationService
+
     meal_generation_service = MealGenerationService()
     brave_search_service = get_brave_search_nutrition_service(
         meal_generation_service=meal_generation_service,
@@ -438,8 +441,12 @@ def get_configured_event_bus() -> EventBus:
 
     # Register meal suggestion handlers
     event_bus.register_handler(
-        GenerateMealSuggestionsCommand,
-        GenerateMealSuggestionsCommandHandler(suggestion_service),
+        DiscoverMealsCommand,
+        DiscoverMealsCommandHandler(suggestion_service),
+    )
+    event_bus.register_handler(
+        GenerateMealRecipesCommand,
+        GenerateMealRecipesCommandHandler(suggestion_service),
     )
     event_bus.register_handler(
         SaveMealSuggestionCommand,

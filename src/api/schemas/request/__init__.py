@@ -15,9 +15,6 @@ from .meal_requests import (
     MacrosRequest,
 )
 
-# Meal suggestion requests
-from .meal_suggestion_requests import MealSuggestionRequest
-
 # Onboarding requests
 from .onboarding_requests import OnboardingCompleteRequest
 
@@ -56,8 +53,6 @@ __all__ = [
     "JobTypeEnum",
     "GoalEnum",
     "UnitSystemEnum",
-    # Meal suggestion
-    "MealSuggestionRequest",
     # Onboarding
     "OnboardingCompleteRequest",
     # User

@@ -7,6 +7,8 @@ Per-recipe attempt logic lives in recipe_attempt_builder.py.
 import asyncio
 import logging
 import time
+import uuid
+from dataclasses import replace
 from typing import List, Optional
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
@@ -210,6 +212,7 @@ class ParallelRecipeGenerator:
 
             results.append(
                 {
+                    "id": f"disc_{uuid.uuid4().hex[:12]}",
                     "name": name,
                     "english_name": name,
                     "calories": macros["calories"],
@@ -232,6 +235,71 @@ class ParallelRecipeGenerator:
             raise RuntimeError("Discovery returned no valid meals")
 
         return results
+
+    async def generate_selected_recipes(
+        self,
+        session: SuggestionSession,
+        selected_meals: List[dict],
+    ) -> List[MealSuggestion]:
+        """Generate full recipes for discovery selections without scale rejection."""
+        from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
+            build_recipe_details_prompt,
+        )
+
+        recipe_system = (
+            "You are a professional chef. Return ONLY this exact JSON structure:\n"
+            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
+            '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
+            '"prep_time_minutes":0}}\n'
+            "All ingredient amounts MUST be in GRAMS.\n"
+            "CRITICAL: ALL text (ingredient names, instructions) MUST be in ENGLISH ONLY. "
+            "Do NOT include Vietnamese, Japanese, or any non-English text. JSON keys in English only."
+        )
+
+        async def generate_one(index: int, selected: dict) -> Optional[MealSuggestion]:
+            target_calories = int(selected.get("calories") or session.target_calories)
+            recipe_session = replace(
+                session,
+                target_calories=target_calories,
+                protein_target=selected.get("protein") or session.protein_target,
+                carbs_target=selected.get("carbs") or session.carbs_target,
+                fat_target=selected.get("fat") or session.fat_target,
+            )
+            meal_name = selected.get("english_name") or selected.get("name")
+            prompt = build_recipe_details_prompt(meal_name, recipe_session)
+            return await self._generate_with_retry(
+                prompt,
+                meal_name,
+                index,
+                recipe_system,
+                recipe_session,
+                reject_on_scale_out_of_range=False,
+                fill_missing_steps=True,
+            )
+
+        tasks = [
+            asyncio.create_task(generate_one(index, selected))
+            for index, selected in enumerate(selected_meals)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        recipes: List[MealSuggestion] = []
+        failures: List[str] = []
+        for index, result in enumerate(results):
+            if isinstance(result, Exception):
+                failures.append(
+                    f"{selected_meals[index].get('id')}: {type(result).__name__}"
+                )
+            elif result is None:
+                failures.append(f"{selected_meals[index].get('id')}: empty result")
+            else:
+                recipes.append(result)
+
+        if failures:
+            raise RuntimeError(
+                "Failed to generate selected recipes: " + "; ".join(failures)
+            )
+        return recipes
 
     async def _phase1_generate_names(
         self,
@@ -298,7 +366,9 @@ class ParallelRecipeGenerator:
                     f"Could not generate enough unique meal names "
                     f"(got {len(meal_names)}, need {suggestion_count})."
                 )
-            logger.debug(f"[PHASE-1-COMPLETE] session={session.id} | names={meal_names}")
+            logger.debug(
+                f"[PHASE-1-COMPLETE] session={session.id} | names={meal_names}"
+            )
             return meal_names
         except Exception as e:
             logger.error(
@@ -403,6 +473,8 @@ class ParallelRecipeGenerator:
         index: int,
         recipe_system: str,
         session: SuggestionSession,
+        reject_on_scale_out_of_range: bool = True,
+        fill_missing_steps: bool = False,
     ) -> Optional[MealSuggestion]:
         """Try primary model pool; retry on alternate pool if first attempt fails."""
         primary = "recipe_primary" if index % 2 == 0 else "recipe_secondary"
@@ -416,6 +488,8 @@ class ParallelRecipeGenerator:
             primary,
             recipe_system,
             session,
+            reject_on_scale_out_of_range=reject_on_scale_out_of_range,
+            fill_missing_steps=fill_missing_steps,
         )
         if result is not None:
             return result
@@ -436,6 +510,8 @@ class ParallelRecipeGenerator:
             recipe_system,
             session,
             is_retry=True,
+            reject_on_scale_out_of_range=reject_on_scale_out_of_range,
+            fill_missing_steps=fill_missing_steps,
         )
 
     async def _translate_single(
@@ -443,7 +519,7 @@ class ParallelRecipeGenerator:
     ) -> MealSuggestion:
         """Translate a single suggestion; return original on failure."""
         if self._translation_service is None:
-            logger.debug(f"[TRANSLATE-SKIP] No translation service configured")
+            logger.debug("[TRANSLATE-SKIP] No translation service configured")
             return suggestion
         try:
             results = await self._translation_service.translate_meal_suggestions_batch(

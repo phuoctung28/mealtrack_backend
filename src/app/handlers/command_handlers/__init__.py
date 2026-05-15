@@ -17,11 +17,9 @@ from .delete_user_command_handler import DeleteUserCommandHandler
 # Meal handlers (already extracted)
 from .edit_meal_command_handler import EditMealCommandHandler
 
-# Meal Suggestion handlers (supports both initial generation and regeneration via session_id)
-from .generate_meal_suggestions_command_handler import (
-    GenerateMealSuggestionsCommandHandler,
-)
-from .meal_suggestion.save_meal_suggestion_command_handler import (
+from .meal_suggestion import (
+    DiscoverMealsCommandHandler,
+    GenerateMealRecipesCommandHandler,
     SaveMealSuggestionCommandHandler,
 )
 
@@ -67,8 +65,9 @@ __all__ = [
     "UpdateCustomMacrosCommandHandler",
     "UpdateLanguageCommandHandler",
     "UpdateTimezoneCommandHandler",
-    # Meal Suggestion handlers (supports both initial generation and regeneration via session_id)
-    "GenerateMealSuggestionsCommandHandler",
+    # Meal Suggestion handlers
+    "DiscoverMealsCommandHandler",
+    "GenerateMealRecipesCommandHandler",
     "SaveMealSuggestionCommandHandler",
     # Standalone handlers
     "CreateManualMealCommandHandler",
