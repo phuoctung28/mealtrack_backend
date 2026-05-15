@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 
 from src.api.mappers.meal_suggestion_mapper import (
     to_meal_suggestion_response,
-    to_suggestions_list_response,
+    to_discovery_batch_response,
+    to_discovery_meal_response,
 )
 from src.domain.model.meal_suggestion import (
     MealSuggestion,
@@ -60,8 +61,44 @@ class TestMealSuggestionMapper:
         assert result.prep_time_minutes == 15
         assert result.confidence_score == 0.95
 
-    def test_to_suggestions_list_response(self):
-        """Test converting session and suggestions to list response."""
+    def test_to_discovery_meal_response(self):
+        """Test converting MealSuggestion to lightweight discovery response."""
+        from src.domain.model.meal_suggestion import MealType
+
+        suggestion = MealSuggestion(
+            id="suggestion-123",
+            session_id="session-456",
+            user_id="user-789",
+            meal_name="Grilled Chicken",
+            english_name="Grilled Chicken",
+            emoji="🍗",
+            description="Healthy grilled chicken",
+            meal_type=MealType.DINNER,
+            macros=MacroEstimate(calories=500, protein=50, carbs=20, fat=15),
+            ingredients=[
+                Ingredient(name="Chicken Breast", amount=200, unit="g"),
+                Ingredient(name="Olive Oil", amount=10, unit="ml"),
+            ],
+            recipe_steps=[],
+            prep_time_minutes=15,
+            confidence_score=0.95,
+            cuisine_type="Mediterranean",
+            origin_country="Greece",
+        )
+
+        result = to_discovery_meal_response(suggestion)
+
+        assert result.id == "suggestion-123"
+        assert result.meal_name == "Grilled Chicken"
+        assert result.emoji == "🍗"
+        assert result.macros.calories == 500
+        assert result.ingredient_names == ["Chicken Breast", "Olive Oil"]
+        assert result.prep_time_minutes == 15
+        assert result.cuisine_type == "Mediterranean"
+        assert result.origin_country == "Greece"
+
+    def test_to_discovery_batch_response(self):
+        """Test converting session and suggestions to discovery batch response."""
         session = SuggestionSession(
             id="session-123",
             user_id="user-123",
@@ -117,21 +154,18 @@ class TestMealSuggestionMapper:
             ),
         ]
 
-        result = to_suggestions_list_response(session, suggestions)
+        result = to_discovery_batch_response(session, suggestions)
 
         assert result.session_id == "session-123"
-        assert result.meal_type == "main"
-        assert result.meal_portion_type == "regular"
-        assert result.target_calories == 600
-        assert len(result.suggestions) == 3
-        assert result.suggestions[0].id == "suggestion-1"
-        assert result.suggestions[1].id == "suggestion-2"
-        assert result.suggestions[2].id == "suggestion-3"
-        assert result.suggestion_count == 3
-        assert result.expires_at == session.expires_at
+        assert len(result.meals) == 3
+        assert result.meals[0].id == "suggestion-1"
+        assert result.meals[1].id == "suggestion-2"
+        assert result.meals[2].id == "suggestion-3"
+        assert result.meal_count == 3
+        assert result.has_more is False
 
-    def test_to_suggestions_list_response_partial(self):
-        """Test converting partial suggestions (1-2) to list response."""
+    def test_to_discovery_batch_response_partial(self):
+        """Test converting partial suggestions to discovery batch response."""
         session = SuggestionSession(
             id="session-456",
             user_id="user-456",
@@ -175,10 +209,11 @@ class TestMealSuggestionMapper:
             ),
         ]
 
-        result = to_suggestions_list_response(session, suggestions)
+        result = to_discovery_batch_response(session, suggestions)
 
         assert result.session_id == "session-456"
-        assert len(result.suggestions) == 2
-        assert result.suggestion_count == 2
-        assert result.suggestions[0].id == "suggestion-1"
-        assert result.suggestions[1].id == "suggestion-2"
+        assert len(result.meals) == 2
+        assert result.meal_count == 2
+        assert result.meals[0].id == "suggestion-1"
+        assert result.meals[1].id == "suggestion-2"
+        assert result.has_more is False
