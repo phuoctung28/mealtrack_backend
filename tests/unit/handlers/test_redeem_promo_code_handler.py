@@ -92,3 +92,65 @@ async def test_redeem_raises_422_when_already_redeemed():
             await handler.handle(RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123"))
 
     assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_redeem_raises_422_when_inactive():
+    promo = _make_promo(is_active=False)
+    mock_uow, mock_repo = _mock_uow(promo=promo)
+
+    with patch(
+        "src.app.handlers.command_handlers.promo_code.redeem_promo_code_handler.AsyncUnitOfWork",
+        return_value=mock_uow,
+    ), patch(
+        "src.app.handlers.command_handlers.promo_code.redeem_promo_code_handler.PromoCodeRepository",
+        return_value=mock_repo,
+    ):
+        handler = RedeemPromoCodeCommandHandler()
+        with pytest.raises(PromoCodeValidationError) as exc_info:
+            await handler.handle(RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123"))
+
+    assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_redeem_raises_422_when_max_uses_reached():
+    promo = _make_promo(max_uses=10, current_uses=10)
+    mock_uow, mock_repo = _mock_uow(promo=promo)
+
+    with patch(
+        "src.app.handlers.command_handlers.promo_code.redeem_promo_code_handler.AsyncUnitOfWork",
+        return_value=mock_uow,
+    ), patch(
+        "src.app.handlers.command_handlers.promo_code.redeem_promo_code_handler.PromoCodeRepository",
+        return_value=mock_repo,
+    ):
+        handler = RedeemPromoCodeCommandHandler()
+        with pytest.raises(PromoCodeValidationError) as exc_info:
+            await handler.handle(RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123"))
+
+    assert exc_info.value.status_code == 422
+    assert "no longer available" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_redeem_raises_422_when_expired():
+    from datetime import datetime, timezone, timedelta
+    past = datetime.now(timezone.utc) - timedelta(days=1)
+    promo = _make_promo()
+    promo.expires_at = past
+    mock_uow, mock_repo = _mock_uow(promo=promo)
+
+    with patch(
+        "src.app.handlers.command_handlers.promo_code.redeem_promo_code_handler.AsyncUnitOfWork",
+        return_value=mock_uow,
+    ), patch(
+        "src.app.handlers.command_handlers.promo_code.redeem_promo_code_handler.PromoCodeRepository",
+        return_value=mock_repo,
+    ):
+        handler = RedeemPromoCodeCommandHandler()
+        with pytest.raises(PromoCodeValidationError) as exc_info:
+            await handler.handle(RedeemPromoCodeCommand(code="SUMMER50", user_id="user-123"))
+
+    assert exc_info.value.status_code == 422
+    assert "expired" in exc_info.value.detail
