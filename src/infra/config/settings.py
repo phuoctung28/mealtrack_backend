@@ -125,6 +125,10 @@ class Settings(BaseSettings):
     )
     REVENUECAT_SECRET_API_KEY: str | None = Field(default=None)
     REVENUECAT_WEBHOOK_SECRET: str | None = Field(default=None)
+    SUBSCRIPTION_GRACE_PERIOD_HOURS: int = Field(
+        default=24,
+        description="Hours past expires_at before denying access (buffer for webhook delays and billing retries)",
+    )
     CLOUDINARY_CLOUD_NAME: str | None = Field(default=None)
     CLOUDINARY_API_KEY: str | None = Field(default=None)
     CLOUDINARY_API_SECRET: str | None = Field(default=None)
