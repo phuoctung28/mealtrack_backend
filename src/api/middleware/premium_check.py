@@ -8,10 +8,15 @@ RevenueCat webhooks keep the DB in sync; no live RC API calls are made here.
 import logging
 from datetime import timedelta
 
-from fastapi import Request, HTTPException, status
+from fastapi import Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.dependencies.auth import get_current_user_id
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.config.settings import settings
+from src.infra.database.config_async import get_async_db
+from src.infra.database.models.subscription import Subscription
 
 logger = logging.getLogger(__name__)
 
@@ -49,31 +54,28 @@ def _has_subscription_access(subscriptions: list, grace_period_hours: int) -> bo
     return False
 
 
-async def require_subscription(request: Request) -> None:
+async def require_subscription(
+    user_id: str = Depends(get_current_user_id),
+    async_db: AsyncSession = Depends(get_async_db),
+) -> None:
     """
     FastAPI dependency that requires an active subscription.
 
-    Checks the local database only. No RevenueCat API calls.
+    Resolves user identity via Firebase JWT, then checks subscription state
+    in the local database. No RevenueCat API calls.
 
     Usage:
         router = APIRouter(dependencies=[Depends(require_subscription)])
     """
-    user = getattr(request.state, "user", None)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-        )
-
-    # Fast path: covers active subscriptions and the dev mock (has_active_subscription=lambda: True)
-    if user.has_active_subscription():
+    if settings.ENVIRONMENT == "development":
         return
 
-    # Grace period path: covers cancelled-within-period and billing_issue cases
-    subscriptions = getattr(user, "subscriptions", [])
+    result = await async_db.execute(
+        select(Subscription).where(Subscription.user_id == user_id)
+    )
+    subscriptions = result.scalars().all()
+
     if _has_subscription_access(subscriptions, settings.SUBSCRIPTION_GRACE_PERIOD_HOURS):
-        logger.debug(f"User {user.id} allowed via grace period / paid-through-period check")
         return
 
     raise HTTPException(
@@ -85,7 +87,7 @@ async def require_subscription(request: Request) -> None:
     )
 
 
-async def get_subscription_status(request: Request) -> dict:
+async def get_subscription_status(user_id: str = Depends(get_current_user_id), async_db: AsyncSession = Depends(get_async_db)) -> dict:
     """
     Non-blocking subscription check that returns status info.
 
@@ -95,27 +97,26 @@ async def get_subscription_status(request: Request) -> dict:
             if status_info["has_subscription"]:
                 return {"data": "premium content"}
     """
-    user = getattr(request.state, "user", None)
+    result = await async_db.execute(
+        select(Subscription)
+        .where(Subscription.user_id == user_id)
+        .order_by(Subscription.purchased_at.desc())
+    )
+    subscriptions = result.scalars().all()
 
-    if not user:
-        return {"has_subscription": False, "subscription": None, "source": "no_user"}
+    # Find first active subscription
+    now = utc_now()
+    for sub in subscriptions:
+        if sub.status == "active" and (sub.expires_at is None or sub.expires_at > now):
+            return {
+                "has_subscription": True,
+                "subscription": {
+                    "product_id": sub.product_id,
+                    "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
+                    "is_monthly": sub.is_monthly(),
+                    "is_yearly": sub.is_yearly(),
+                },
+                "source": "db",
+            }
 
-    subscription = user.get_active_subscription()
-
-    if subscription:
-        return {
-            "has_subscription": True,
-            "subscription": {
-                "product_id": subscription.product_id,
-                "expires_at": (
-                    subscription.expires_at.isoformat()
-                    if subscription.expires_at
-                    else None
-                ),
-                "is_monthly": subscription.is_monthly(),
-                "is_yearly": subscription.is_yearly(),
-            },
-            "source": "cache",
-        }
-
-    return {"has_subscription": False, "subscription": None, "source": "none"}
+    return {"has_subscription": False, "subscription": None, "source": "db"}

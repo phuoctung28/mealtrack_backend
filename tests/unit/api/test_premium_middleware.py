@@ -3,10 +3,11 @@ Unit tests for subscription access middleware (DB-only, no RevenueCat API calls)
 """
 
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.middleware.premium_check import (
     _has_subscription_access,
@@ -24,6 +25,15 @@ def _make_sub(status, expires_at=None):
     sub.is_monthly = MagicMock(return_value=True)
     sub.is_yearly = MagicMock(return_value=False)
     return sub
+
+
+def _mock_db_with_subscriptions(subscriptions):
+    """Build an AsyncSession mock that returns the given subscriptions."""
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = subscriptions
+    db = AsyncMock(spec=AsyncSession)
+    db.execute = AsyncMock(return_value=mock_result)
+    return db
 
 
 class TestHasSubscriptionAccess:
@@ -53,7 +63,6 @@ class TestHasSubscriptionAccess:
         assert _has_subscription_access([sub], grace_period_hours=24) is True
 
     def test_cancelled_past_expiry_denies_immediately(self):
-        # No grace period for intentional cancellation
         sub = _make_sub("cancelled", expires_at=utc_now() - timedelta(hours=1))
         assert _has_subscription_access([sub], grace_period_hours=24) is False
 
@@ -91,113 +100,87 @@ class TestHasSubscriptionAccess:
 class TestRequireSubscription:
     """Test the require_subscription FastAPI dependency."""
 
-    @pytest.fixture
-    def mock_request(self):
-        request = MagicMock(spec=Request)
-        request.state = MagicMock()
-        return request
+    async def test_dev_environment_always_passes(self):
+        """In dev mode, subscription check is bypassed entirely."""
+        db = _mock_db_with_subscriptions([])
+        with patch("src.api.middleware.premium_check.settings") as mock_settings:
+            mock_settings.ENVIRONMENT = "development"
+            mock_settings.SUBSCRIPTION_GRACE_PERIOD_HOURS = 24
+            result = await require_subscription(user_id="user_123", async_db=db)
+        assert result is None
+        db.execute.assert_not_called()
 
-    @pytest.fixture
-    def user_with_active_sub(self):
-        user = MagicMock()
-        user.id = "user_123"
+    async def test_active_subscription_passes(self):
         sub = _make_sub("active", expires_at=utc_now() + timedelta(days=30))
-        user.has_active_subscription = MagicMock(return_value=True)
-        user.get_active_subscription = MagicMock(return_value=sub)
-        user.subscriptions = [sub]
-        return user
-
-    @pytest.fixture
-    def user_no_subscriptions(self):
-        user = MagicMock()
-        user.id = "user_456"
-        user.has_active_subscription = MagicMock(return_value=False)
-        user.get_active_subscription = MagicMock(return_value=None)
-        user.subscriptions = []
-        return user
-
-    async def test_unauthenticated_raises_401(self, mock_request):
-        mock_request.state.user = None
-        with pytest.raises(HTTPException) as exc_info:
-            await require_subscription(mock_request)
-        assert exc_info.value.status_code == 401
-
-    async def test_active_subscription_passes(self, mock_request, user_with_active_sub):
-        mock_request.state.user = user_with_active_sub
-        result = await require_subscription(mock_request)
+        db = _mock_db_with_subscriptions([sub])
+        with patch("src.api.middleware.premium_check.settings") as mock_settings:
+            mock_settings.ENVIRONMENT = "production"
+            mock_settings.SUBSCRIPTION_GRACE_PERIOD_HOURS = 24
+            result = await require_subscription(user_id="user_123", async_db=db)
         assert result is None
 
-    async def test_no_subscription_raises_402(self, mock_request, user_no_subscriptions):
-        mock_request.state.user = user_no_subscriptions
-        with pytest.raises(HTTPException) as exc_info:
-            await require_subscription(mock_request)
+    async def test_no_subscription_raises_402(self):
+        db = _mock_db_with_subscriptions([])
+        with patch("src.api.middleware.premium_check.settings") as mock_settings:
+            mock_settings.ENVIRONMENT = "production"
+            mock_settings.SUBSCRIPTION_GRACE_PERIOD_HOURS = 24
+            with pytest.raises(HTTPException) as exc_info:
+                await require_subscription(user_id="user_456", async_db=db)
         assert exc_info.value.status_code == 402
         assert exc_info.value.detail["error_code"] == "SUBSCRIPTION_REQUIRED"
 
-    async def test_cancelled_within_paid_period_passes(self, mock_request):
-        user = MagicMock()
-        user.id = "user_789"
+    async def test_cancelled_within_paid_period_passes(self):
         sub = _make_sub("cancelled", expires_at=utc_now() + timedelta(days=5))
-        user.has_active_subscription = MagicMock(return_value=False)
-        user.get_active_subscription = MagicMock(return_value=None)
-        user.subscriptions = [sub]
-        mock_request.state.user = user
-        result = await require_subscription(mock_request)
-        assert result is None
-
-    async def test_billing_issue_within_grace_passes(self, mock_request):
-        user = MagicMock()
-        user.id = "user_999"
-        sub = _make_sub("billing_issue", expires_at=utc_now() - timedelta(hours=6))
-        user.has_active_subscription = MagicMock(return_value=False)
-        user.get_active_subscription = MagicMock(return_value=None)
-        user.subscriptions = [sub]
-        mock_request.state.user = user
+        db = _mock_db_with_subscriptions([sub])
         with patch("src.api.middleware.premium_check.settings") as mock_settings:
+            mock_settings.ENVIRONMENT = "production"
             mock_settings.SUBSCRIPTION_GRACE_PERIOD_HOURS = 24
-            result = await require_subscription(mock_request)
+            result = await require_subscription(user_id="user_789", async_db=db)
         assert result is None
 
-    async def test_no_rc_api_calls_made(self, mock_request, user_no_subscriptions):
+    async def test_billing_issue_within_grace_passes(self):
+        sub = _make_sub("billing_issue", expires_at=utc_now() - timedelta(hours=6))
+        db = _mock_db_with_subscriptions([sub])
+        with patch("src.api.middleware.premium_check.settings") as mock_settings:
+            mock_settings.ENVIRONMENT = "production"
+            mock_settings.SUBSCRIPTION_GRACE_PERIOD_HOURS = 24
+            result = await require_subscription(user_id="user_999", async_db=db)
+        assert result is None
+
+    async def test_no_rc_api_calls_made(self):
         """RC API must never be called during authorization."""
-        mock_request.state.user = user_no_subscriptions
-        # If RC adapter were called, it would fail with no mock configured.
+        db = _mock_db_with_subscriptions([])
+        with patch("src.api.middleware.premium_check.settings") as mock_settings:
+            mock_settings.ENVIRONMENT = "production"
+            mock_settings.SUBSCRIPTION_GRACE_PERIOD_HOURS = 24
+            with pytest.raises(HTTPException):
+                await require_subscription(user_id="user_456", async_db=db)
+        # If RC adapter were called, it would raise because it has no mock.
         # The test passing without patching RC confirms no RC calls are made.
-        with pytest.raises(HTTPException):
-            await require_subscription(mock_request)
 
 
 @pytest.mark.asyncio
 class TestGetSubscriptionStatus:
     """Test the non-blocking get_subscription_status dependency."""
 
-    @pytest.fixture
-    def mock_request(self):
-        request = MagicMock(spec=Request)
-        request.state = MagicMock()
-        return request
-
-    async def test_no_user_returns_false(self, mock_request):
-        mock_request.state.user = None
-        result = await get_subscription_status(mock_request)
+    async def test_no_subscriptions_returns_false(self):
+        db = _mock_db_with_subscriptions([])
+        result = await get_subscription_status(user_id="user_123", async_db=db)
         assert result["has_subscription"] is False
-        assert result["source"] == "no_user"
+        assert result["source"] == "db"
 
-    async def test_active_subscription_returns_info(self, mock_request):
-        user = MagicMock()
+    async def test_active_subscription_returns_info(self):
         sub = _make_sub("active", expires_at=utc_now() + timedelta(days=30))
         sub.product_id = "premium_monthly"
-        user.get_active_subscription = MagicMock(return_value=sub)
-        mock_request.state.user = user
-        result = await get_subscription_status(mock_request)
+        db = _mock_db_with_subscriptions([sub])
+        result = await get_subscription_status(user_id="user_123", async_db=db)
         assert result["has_subscription"] is True
         assert result["subscription"]["product_id"] == "premium_monthly"
-        assert result["source"] == "cache"
+        assert result["source"] == "db"
 
-    async def test_no_subscription_returns_false(self, mock_request):
-        user = MagicMock()
-        user.get_active_subscription = MagicMock(return_value=None)
-        mock_request.state.user = user
-        result = await get_subscription_status(mock_request)
+    async def test_expired_subscription_returns_false(self):
+        sub = _make_sub("expired", expires_at=utc_now() - timedelta(days=10))
+        db = _mock_db_with_subscriptions([sub])
+        result = await get_subscription_status(user_id="user_123", async_db=db)
         assert result["has_subscription"] is False
-        assert result["source"] == "none"
+        assert result["source"] == "db"
