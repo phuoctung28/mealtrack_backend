@@ -184,3 +184,21 @@ class TestGetSubscriptionStatus:
         result = await get_subscription_status(user_id="user_123", async_db=db)
         assert result["has_subscription"] is False
         assert result["source"] == "db"
+
+    async def test_cancelled_within_paid_period_returns_true(self):
+        sub = _make_sub("cancelled", expires_at=utc_now() + timedelta(days=5))
+        db = _mock_db_with_subscriptions([sub])
+        with patch("src.api.middleware.premium_check.settings") as mock_settings:
+            mock_settings.SUBSCRIPTION_GRACE_PERIOD_HOURS = 24
+            result = await get_subscription_status(user_id="user_123", async_db=db)
+        assert result["has_subscription"] is True
+        assert result["source"] == "db"
+
+    async def test_billing_issue_within_grace_returns_true(self):
+        sub = _make_sub("billing_issue", expires_at=utc_now() - timedelta(hours=6))
+        db = _mock_db_with_subscriptions([sub])
+        with patch("src.api.middleware.premium_check.settings") as mock_settings:
+            mock_settings.SUBSCRIPTION_GRACE_PERIOD_HOURS = 24
+            result = await get_subscription_status(user_id="user_123", async_db=db)
+        assert result["has_subscription"] is True
+        assert result["source"] == "db"
