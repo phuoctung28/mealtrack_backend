@@ -87,7 +87,10 @@ async def require_subscription(
     )
 
 
-async def get_subscription_status(user_id: str = Depends(get_current_user_id), async_db: AsyncSession = Depends(get_async_db)) -> dict:
+async def get_subscription_status(
+    user_id: str = Depends(get_current_user_id),
+    async_db: AsyncSession = Depends(get_async_db),
+) -> dict:
     """
     Non-blocking subscription check that returns status info.
 
@@ -104,10 +107,9 @@ async def get_subscription_status(user_id: str = Depends(get_current_user_id), a
     )
     subscriptions = result.scalars().all()
 
-    # Find first active subscription
-    now = utc_now()
+    # Find the most informative subscription for display (active first, then grace-period states)
     for sub in subscriptions:
-        if sub.status == "active" and (sub.expires_at is None or sub.expires_at > now):
+        if sub.status == "active" and (sub.expires_at is None or sub.expires_at > utc_now()):
             return {
                 "has_subscription": True,
                 "subscription": {
@@ -118,5 +120,20 @@ async def get_subscription_status(user_id: str = Depends(get_current_user_id), a
                 },
                 "source": "db",
             }
+
+    # Check grace period / cancelled-within-paid-period access
+    if _has_subscription_access(subscriptions, settings.SUBSCRIPTION_GRACE_PERIOD_HOURS):
+        # Find the subscription granting access for display
+        sub = subscriptions[0] if subscriptions else None
+        return {
+            "has_subscription": True,
+            "subscription": {
+                "product_id": sub.product_id if sub else None,
+                "expires_at": sub.expires_at.isoformat() if sub and sub.expires_at else None,
+                "is_monthly": sub.is_monthly() if sub else False,
+                "is_yearly": sub.is_yearly() if sub else False,
+            },
+            "source": "db",
+        }
 
     return {"has_subscription": False, "subscription": None, "source": "db"}
