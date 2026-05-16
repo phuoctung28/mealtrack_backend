@@ -26,7 +26,7 @@ from contextlib import asynccontextmanager
 
 import firebase_admin
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from firebase_admin import credentials
@@ -58,6 +58,7 @@ from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
+from src.api.middleware.premium_check import require_subscription
 from src.infra.config.settings import settings
 from src.infra.database.config import engine
 from src.infra.monitoring.sentry import initialize_sentry
@@ -236,25 +237,29 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Dev auth bypass: inject a fixed user during development
 add_dev_auth_bypass(app)
 
-# Include all routers
+_sub = [Depends(require_subscription)]
+
+# Public routes — no subscription required
 app.include_router(health_router)
-app.include_router(meals_router)
-app.include_router(activities_router)
-app.include_router(feature_flags_router)
-app.include_router(meal_suggestions_router)
-app.include_router(user_profiles_router)
 app.include_router(users_router)
-app.include_router(foods_router)
-app.include_router(monitoring_router)
 app.include_router(webhooks_router)
-app.include_router(notifications_router)
-app.include_router(ingredients_router)
-app.include_router(tdee_router)
-app.include_router(saved_suggestions_router)
-app.include_router(cheat_days_router)
+app.include_router(monitoring_router)
+app.include_router(feature_flags_router)
 app.include_router(referrals_router)
-app.include_router(nutrition_router)
-app.include_router(weight_entries_router)
+app.include_router(notifications_router)
+
+# Premium routes — active subscription required
+app.include_router(meals_router, dependencies=_sub)
+app.include_router(activities_router, dependencies=_sub)
+app.include_router(meal_suggestions_router, dependencies=_sub)
+app.include_router(user_profiles_router, dependencies=_sub)
+app.include_router(foods_router, dependencies=_sub)
+app.include_router(ingredients_router, dependencies=_sub)
+app.include_router(tdee_router, dependencies=_sub)
+app.include_router(saved_suggestions_router, dependencies=_sub)
+app.include_router(cheat_days_router, dependencies=_sub)
+app.include_router(nutrition_router, dependencies=_sub)
+app.include_router(weight_entries_router, dependencies=_sub)
 
 # Serve static files from uploads directory (development)
 if os.environ.get("ENVIRONMENT") == "development":
