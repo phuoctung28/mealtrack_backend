@@ -3,7 +3,7 @@ Unit tests for subscription access middleware (DB-only, no RevenueCat API calls)
 """
 
 from datetime import timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException, Request
@@ -153,7 +153,9 @@ class TestRequireSubscription:
         user.get_active_subscription = MagicMock(return_value=None)
         user.subscriptions = [sub]
         mock_request.state.user = user
-        result = await require_subscription(mock_request)
+        with patch("src.api.middleware.premium_check.settings") as mock_settings:
+            mock_settings.SUBSCRIPTION_GRACE_PERIOD_HOURS = 24
+            result = await require_subscription(mock_request)
         assert result is None
 
     async def test_no_rc_api_calls_made(self, mock_request, user_no_subscriptions):

@@ -16,7 +16,7 @@ from src.infra.config.settings import settings
 logger = logging.getLogger(__name__)
 
 
-def _has_subscription_access(subscriptions, grace_period_hours: int) -> bool:
+def _has_subscription_access(subscriptions: list, grace_period_hours: int) -> bool:
     """
     Return True if any subscription in the list grants access.
 
@@ -49,7 +49,7 @@ def _has_subscription_access(subscriptions, grace_period_hours: int) -> bool:
     return False
 
 
-async def require_subscription(request: Request):
+async def require_subscription(request: Request) -> None:
     """
     FastAPI dependency that requires an active subscription.
 
