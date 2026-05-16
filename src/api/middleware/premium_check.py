@@ -1,80 +1,81 @@
 """
 Subscription access validation middleware.
 
-Uses RevenueCat as source of truth, with local cache for performance.
+Uses the local database as the sole source of truth.
+RevenueCat webhooks keep the DB in sync; no live RC API calls are made here.
 """
 
 import logging
-import os
-from typing import Optional
+from datetime import timedelta
 
 from fastapi import Request, HTTPException, status
 
-from src.domain.ports.subscription_service_port import SubscriptionServicePort
-from src.api.base_dependencies import get_subscription_service
+from src.domain.utils.timezone_utils import utc_now
+from src.infra.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 
-def _get_subscription_service() -> SubscriptionServicePort:
-    """Helper to get subscription service - can be overridden in tests."""
-    return get_subscription_service()
+def _has_subscription_access(subscriptions, grace_period_hours: int) -> bool:
+    """
+    Return True if any subscription in the list grants access.
+
+    Grace period tolerates webhook delivery delays and billing retry windows.
+    Intentionally cancelled subscriptions get no grace period — access ends at expires_at.
+    """
+    now = utc_now()
+    grace = timedelta(hours=grace_period_hours)
+
+    for sub in subscriptions:
+        if sub.status in ("refunded", "expired"):
+            continue
+
+        if sub.status == "active":
+            if sub.expires_at is None:
+                return True  # Lifetime subscription
+            if now <= sub.expires_at + grace:
+                return True
+
+        elif sub.status == "cancelled":
+            # No grace period — user intentionally cancelled
+            if sub.expires_at and now <= sub.expires_at:
+                return True
+
+        elif sub.status == "billing_issue":
+            # Grace period covers the billing retry window
+            if sub.expires_at and now <= sub.expires_at + grace:
+                return True
+
+    return False
 
 
 async def require_subscription(request: Request):
     """
-    Dependency that requires active standard subscription.
+    FastAPI dependency that requires an active subscription.
 
-    Strategy:
-    1. Check local database cache first (fast)
-    2. If no cache, verify with RevenueCat API (accurate)
+    Checks the local database only. No RevenueCat API calls.
 
     Usage:
-        @router.get("/subscription-feature", dependencies=[Depends(require_subscription)])
-        async def subscription_feature():
-            return {"data": "subscription content"}
+        router = APIRouter(dependencies=[Depends(require_subscription)])
     """
     user = getattr(request.state, "user", None)
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
         )
 
-    # Quick check: Local database cache
+    # Fast path: covers active subscriptions and the dev mock (has_active_subscription=lambda: True)
     if user.has_active_subscription():
-        logger.debug(f"User {user.id} has cached subscription")
         return
 
-    # No local subscription - verify with RevenueCat (source of truth)
-    logger.info(f"User {user.id} has no cached subscription, checking RevenueCat")
-
-    revenuecat_secret_key = os.getenv("REVENUECAT_SECRET_API_KEY", "")
-    if not revenuecat_secret_key:
-        logger.warning("REVENUECAT_SECRET_API_KEY not configured")
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                "message": "Standard subscription required",
-                "error_code": "SUBSCRIPTION_REQUIRED",
-            },
-        )
-
-    subscription_service = _get_subscription_service()
-    has_subscription = await subscription_service.has_active_subscription(
-        app_user_id=user.firebase_uid
-    )
-
-    if has_subscription:
-        # User has subscription in RevenueCat but not in local cache
-        # This can happen if webhook failed or is delayed
-        logger.warning(
-            f"User {user.id} has subscription in RevenueCat but not in cache"
-        )
-        # Allow access - webhook will sync eventually
+    # Grace period path: covers cancelled-within-period and billing_issue cases
+    subscriptions = getattr(user, "subscriptions", [])
+    if _has_subscription_access(subscriptions, settings.SUBSCRIPTION_GRACE_PERIOD_HOURS):
+        logger.debug(f"User {user.id} allowed via grace period / paid-through-period check")
         return
 
-    # User does not have subscription access
     raise HTTPException(
         status_code=status.HTTP_402_PAYMENT_REQUIRED,
         detail={
@@ -92,16 +93,13 @@ async def get_subscription_status(request: Request) -> dict:
         @router.get("/feature")
         async def feature(status_info: dict = Depends(get_subscription_status)):
             if status_info["has_subscription"]:
-                return {"data": "subscription"}
-            else:
-                return {"data": "basic"}
+                return {"data": "premium content"}
     """
     user = getattr(request.state, "user", None)
 
     if not user:
         return {"has_subscription": False, "subscription": None, "source": "no_user"}
 
-    # Check local cache
     subscription = user.get_active_subscription()
 
     if subscription:
@@ -119,18 +117,5 @@ async def get_subscription_status(request: Request) -> dict:
             },
             "source": "cache",
         }
-
-    # Check RevenueCat if configured
-    revenuecat_secret_key = os.getenv("REVENUECAT_SECRET_API_KEY", "")
-    if revenuecat_secret_key:
-        subscription_service = _get_subscription_service()
-        sub_info = await subscription_service.get_subscription_info(user.id)
-
-        if sub_info:
-            return {
-                "has_subscription": True,
-                "subscription": sub_info,
-                "source": "revenuecat_api",
-            }
 
     return {"has_subscription": False, "subscription": None, "source": "none"}
