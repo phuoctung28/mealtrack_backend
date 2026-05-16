@@ -108,6 +108,71 @@ Added to `Settings` in `src/infra/config/settings.py` and `.env.example`.
 
 ---
 
+## Mobile Architecture Change (Required Companion Work)
+
+The backend is now the sole authorization gate. Mobile must be updated to match — otherwise the mobile app will still enforce subscription rules client-side via RC, creating two sources of truth.
+
+### Problem 1: RC is the authorization gate on mobile (4 layers)
+
+Mobile currently uses `customerInfo.entitlements.active` from RC to gate features at 4 layers:
+1. **GoRouter redirect** — 8 named routes check `hasAccess`, redirect to paywall if false
+2. **Shell nav bar** — Progress tab + FAB actions (scan/add meal/suggest) check on tap
+3. **In-widget tap guards** — meal edit, meal suggestion tap, meal creation entry
+4. **Onboarding gate** — final check before routing to home after sign-in
+
+All 4 layers read from `subscriptionStatusProvider` which is populated from RC `CustomerInfo`. This is the client-side gate to replace.
+
+**Target model:**
+- Mobile makes API calls without any prior entitlement check
+- Backend returns `HTTP 402` with `{"error_code": "SUBSCRIPTION_REQUIRED"}` if not subscribed
+- A **single global 402 interceptor** in the API client layer replaces all 4 gating layers
+
+```
+API call → 402 received → navigate to paywall
+API call → 200 received → show content
+```
+
+`subscriptionStatusProvider` is no longer driven by RC `CustomerInfo` — it reflects the last known backend response (200 vs 402).
+
+### Problem 2: RC identity is self-reported by mobile
+
+Currently mobile calls `Purchases.logIn(firebaseUID)` directly, which means:
+- The client self-reports its RC subscriber identity with no backend validation
+- `Purchases.logOut()` is called client-side on logout, potentially leaving RC in an inconsistent state
+- If a client passes the wrong UID, RC webhooks arrive with mismatched identity
+
+**Target model:**
+- Mobile still calls `Purchases.logIn(firebaseUID)` (RC requires this for purchase attribution), but the backend becomes the authority on whether that RC subscriber ID maps to a valid user
+- The backend already performs this validation via the webhook handler's 4-step user lookup (firebase_uid → internal UUID → aliases → `revenuecat_subscriber_id`)
+- No additional backend change needed — the existing webhook logic already handles mismatched IDs safely
+- Mobile should ensure `Purchases.logIn` is called with the verified Firebase UID only (already the case via `auth_repository.dart` post sign-in)
+
+### What stays on mobile (billing flow — no change)
+- `Purchases.purchase()` — processes App Store / Play Store purchases
+- `Purchases.getOfferings()` — fetches offerings for paywall UI (3 offerings: `current`, `discount`, `email`)
+- `Purchases.restorePurchases()` — restore on reinstall
+- `Purchases.presentCodeRedemptionSheet()` — iOS offer code redemption
+- `Purchases.logIn(firebaseUID)` / `logOut()` — RC identity for purchase attribution
+- All paywall screens, plan cards, promo/referral purchase flows
+
+### What to change on mobile
+- Remove `subscriptionStatusProvider` dependency on RC `CustomerInfo` entitlement checks
+- Remove all 4 gating layers that check `hasAccess` from RC
+- Add a global 402 interceptor in the API client (Dio interceptor or equivalent)
+- The interceptor catches `{"error_code": "SUBSCRIPTION_REQUIRED"}` → navigates to paywall
+- `subscriptionStatusProvider` can be simplified or removed; UI state comes from API responses
+
+### Mobile ticket scope
+1. Add global 402 interceptor in Dio/HTTP client → navigate to paywall on `SUBSCRIPTION_REQUIRED`
+2. Remove GoRouter `subscriptionRoutes` redirect logic (router no longer gates by RC state)
+3. Remove shell nav bar `_premiumTabIndices` and FAB tap guards
+4. Remove in-widget `hasSubscriptionAccess(ref)` checks (meal edit, suggestion tap, meal creation)
+5. Remove onboarding gate RC entitlement check
+6. Simplify or remove `subscriptionStatusProvider` RC entitlement polling
+7. Test: no subscription → 402 from backend → paywall shown; active subscription → 200 → content shown
+
+---
+
 ## What Does NOT Change
 
 - **RC webhooks:** `webhooks.py` is not modified. It already correctly writes `status` and `expires_at` on every lifecycle event (`INITIAL_PURCHASE`, `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `BILLING_ISSUE`, `PRODUCT_CHANGE`, `REFUND`).
