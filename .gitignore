@@ -80,9 +80,11 @@ firebase-service-account.json
 profile*.txt
 profile*.svg
 
-# docs/superpowers/ specs are now tracked
+# docs/superpowers/ specs and plans are tracked
 # Git worktrees
 .worktrees/
-docs/superpowers/
+docs/superpowers/*
+!docs/superpowers/specs/
+!docs/superpowers/plans/
 
 plans/
