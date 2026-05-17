@@ -63,7 +63,7 @@ class ValidateCodeQueryHandler:
 
                 return {
                     "type": "referral_code",
-                    "code": query.code,
+                    "code": ref_code.code,
                     "is_valid": True,
                     "referrer_name": referrer_name,
                     "discount_monthly": 199000,
