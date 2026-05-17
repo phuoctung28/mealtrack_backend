@@ -194,7 +194,7 @@ class DailyContextPrecomputeService:
             language_code = pref_row.language or (profile_row.language_code if profile_row else "en") or "en"
 
             # Calculate calorie goal (simplified - use TDEE service for accuracy)
-            calorie_goal = self._get_user_calorie_goal(session, user_id)
+            calorie_goal = self._get_user_calorie_goal(session, user_id, today)
 
             # Get today's consumed calories
             day_start_utc = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=tz).astimezone(timezone.utc)
@@ -281,20 +281,23 @@ class DailyContextPrecomputeService:
             logger.info("Rescheduled %d notifications for user %s", len(rows), user_id)
             return len(rows)
 
-    def _get_user_calorie_goal(self, session, user_id: str) -> int:
+    def _get_user_calorie_goal(self, session, user_id: str, target_date: date) -> int:
         """Get user's daily calorie goal from weekly budget or TDEE."""
         # Try weekly budget first
         budget_row = session.execute(
             text("""
-                SELECT adjusted_daily_calories FROM weekly_budgets
-                WHERE user_id = :user_id AND is_active = true
-                ORDER BY week_start_date DESC LIMIT 1
+                SELECT target_calories
+                FROM weekly_macro_budgets
+                WHERE user_id = :user_id
+                  AND week_start_date <= :target_date
+                ORDER BY week_start_date DESC
+                LIMIT 1
             """),
-            {"user_id": user_id},
+            {"user_id": user_id, "target_date": target_date},
         ).fetchone()
 
-        if budget_row and budget_row.adjusted_daily_calories:
-            return int(budget_row.adjusted_daily_calories)
+        if budget_row and budget_row.target_calories:
+            return int(round(float(budget_row.target_calories) / 7))
 
         # Fallback to TDEE calculation
         profile_row = session.execute(

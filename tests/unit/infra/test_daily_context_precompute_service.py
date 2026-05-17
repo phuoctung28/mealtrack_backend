@@ -55,3 +55,22 @@ def test_context_key_format():
 
     svc = DailyContextPrecomputeService(redis_client=MagicMock())
     assert svc.context_key("user-123") == "user_daily_context:user-123"
+
+
+def test_user_calorie_goal_reads_weekly_macro_budget_table():
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+    )
+
+    session = MagicMock()
+    weekly_budget_row = MagicMock()
+    weekly_budget_row.target_calories = 14000
+    session.execute.return_value.fetchone.return_value = weekly_budget_row
+
+    svc = DailyContextPrecomputeService(redis_client=MagicMock())
+    result = svc._get_user_calorie_goal(session, "user-123", date(2026, 5, 17))
+
+    executed_sql = str(session.execute.call_args.args[0])
+    assert result == 2000
+    assert "weekly_macro_budgets" in executed_sql
+    assert "weekly_budgets" not in executed_sql
