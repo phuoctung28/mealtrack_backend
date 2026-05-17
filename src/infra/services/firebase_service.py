@@ -148,14 +148,16 @@ class FirebaseService:
             # Ensure all data values are strings
             string_data = {k: str(v) for k, v in data.items()} if data else {}
 
-            # Create multicast message
+            # Use platform-specific notification blocks only. This keeps iOS on the
+            # explicit APNs payload that carries aps.interruption-level.
             message = messaging.MulticastMessage(
-                notification=messaging.Notification(title=title, body=body),
                 data=string_data,
                 tokens=tokens,
                 android=messaging.AndroidConfig(
                     priority="high",
                     notification=messaging.AndroidNotification(
+                        title=title,
+                        body=body,
                         channel_id=NotificationChannelConfig.HIGH_PRIORITY_CHANNEL_ID,
                         sound="default",
                     ),
@@ -221,14 +223,16 @@ class FirebaseService:
             message_data = data or {}
             message_data["topic"] = topic
 
-            # Create message
+            # Use platform-specific notification blocks only. This keeps iOS on the
+            # explicit APNs payload that carries aps.interruption-level.
             message = messaging.Message(
-                notification=messaging.Notification(title=title, body=body),
                 data=message_data,
                 topic=topic,
                 android=messaging.AndroidConfig(
                     priority="high",
                     notification=messaging.AndroidNotification(
+                        title=title,
+                        body=body,
                         channel_id=NotificationChannelConfig.HIGH_PRIORITY_CHANNEL_ID,
                         sound="default",
                     ),

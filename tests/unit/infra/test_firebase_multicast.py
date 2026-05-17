@@ -9,7 +9,6 @@ def test_apns_config_encodes_time_sensitive_payload():
 
     message = messaging.Message(
         token="tok",
-        notification=messaging.Notification(title="Lunch", body="Log your meal"),
         apns=FirebaseService._build_apns_config("Lunch", "Log your meal"),
     )
 
@@ -23,6 +22,7 @@ def test_apns_config_encodes_time_sensitive_payload():
     }
     assert "apns-interruption-level" not in apns["headers"]
     assert aps["interruption-level"] == "time-sensitive"
+    assert "notification" not in encoded
 
 
 def test_send_multicast_delegates_to_send_to_tokens():
@@ -96,5 +96,6 @@ def test_send_notification_sets_ios_time_sensitive_payload(monkeypatch):
 
     apns = captured["message"]["apns"]
     assert result["success"] is True
+    assert "notification" not in captured["message"]
     assert apns.headers == {"apns-priority": "10", "apns-push-type": "alert"}
     assert apns.payload.aps.custom_data == {"interruption-level": "time-sensitive"}
