@@ -26,7 +26,7 @@ class PromoValidatedResponse(BaseModel):
     type: Literal["promo_code"]
     code: str
     is_valid: bool
-    rc_offering_id: str
+    rc_offering_id: Optional[str] = None
     description: Optional[str] = None
 
 
