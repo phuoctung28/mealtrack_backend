@@ -1,12 +1,14 @@
 # tests/unit/handlers/test_validate_code_handler.py
 """Unit tests for ValidateCodeQueryHandler — unified promo + referral validation."""
 import pytest
+from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.app.queries.codes.validate_code_query import ValidateCodeQuery, CodeValidationError
-from src.infra.database.models.promo_code import PromoCode
+from src.infra.database.models.promo_code import PromoCode, PromoCodeRedemption
 from src.infra.database.models.referral.referral_code import ReferralCode
+from src.infra.database.models.referral.referral_conversion import ReferralConversion
 
 
 # ── Factories ────────────────────────────────────────────────────────────────
@@ -68,8 +70,6 @@ def _mock_uow(promo=None, promo_redemption=None, referral=None, conversion=None,
 
 HANDLER_PATH = "src.app.handlers.query_handlers.codes.validate_code_handler"
 
-
-from contextlib import contextmanager
 
 @contextmanager
 def _patch(mock_uow, mock_promo_repo, mock_referral_repo):
@@ -188,7 +188,6 @@ async def test_exhausted_promo_raises_422():
 @pytest.mark.asyncio
 async def test_already_redeemed_promo_raises_422():
     promo = _make_promo()
-    from src.infra.database.models.promo_code import PromoCodeRedemption
     redemption = PromoCodeRedemption()
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=promo, promo_redemption=redemption)
 
@@ -205,7 +204,6 @@ async def test_already_redeemed_promo_raises_422():
 
 @pytest.mark.asyncio
 async def test_already_referred_user_raises_422():
-    from src.infra.database.models.referral.referral_conversion import ReferralConversion
     referral = _make_referral_code(user_id="referrer-id")
     conversion = ReferralConversion()
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(
@@ -221,3 +219,50 @@ async def test_already_referred_user_raises_422():
 
     assert exc_info.value.status_code == 422
     assert exc_info.value.detail == "You have already used this code"
+
+
+@pytest.mark.asyncio
+async def test_inactive_promo_raises_422():
+    promo = _make_promo(is_active=False)
+    mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=promo)
+
+    with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
+        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        with pytest.raises(CodeValidationError) as exc_info:
+            await ValidateCodeQueryHandler().handle(
+                ValidateCodeQuery(code="SUMMER30", user_id="user-abc")
+            )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Code is no longer available"
+
+
+@pytest.mark.asyncio
+async def test_referral_falls_back_to_display_name():
+    referral = _make_referral_code(user_id="referrer-id")
+    row = MagicMock()
+    row.first_name = None
+    row.display_name = "Alex Smith"
+    mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(referral=referral, referrer_row=row)
+
+    with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
+        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        result = await ValidateCodeQueryHandler().handle(
+            ValidateCodeQuery(code="ALEX123", user_id="user-456")
+        )
+
+    assert result["referrer_name"] == "Alex"
+
+
+@pytest.mark.asyncio
+async def test_referral_falls_back_to_friend_when_no_name():
+    referral = _make_referral_code(user_id="referrer-id")
+    mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(referral=referral, referrer_row=None)
+
+    with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
+        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        result = await ValidateCodeQueryHandler().handle(
+            ValidateCodeQuery(code="ALEX123", user_id="user-456")
+        )
+
+    assert result["referrer_name"] == "Friend"
