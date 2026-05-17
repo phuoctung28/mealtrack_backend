@@ -187,6 +187,10 @@ async def lifespan(app: FastAPI):
     try:
         logger.info("Initializing scheduled notification service...")
         scheduled_service = initialize_scheduled_notification_service()
+        # Expose trial_push for the RevenueCat RENEWAL webhook handler.
+        app.state.trial_push_service = getattr(
+            scheduled_service, "trial_push_service", None
+        )
         await scheduled_service.start()
         logger.info("Scheduled notification service started successfully!")
     except Exception as e:
