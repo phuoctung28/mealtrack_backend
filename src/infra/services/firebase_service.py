@@ -21,6 +21,9 @@ class NotificationChannelConfig:
     LOW_PRIORITY_CHANNEL_ID = "low_priority_channel"
 
 
+APNS_INTERRUPTION_LEVEL = "time-sensitive"
+
+
 class FirebaseService:
     """Service for Firebase Admin SDK operations."""
 
@@ -157,20 +160,7 @@ class FirebaseService:
                         sound="default",
                     ),
                 ),
-                apns=messaging.APNSConfig(
-                    headers={
-                        "apns-priority": "10",
-                        "apns-push-type": "alert",
-                    },
-                    payload=messaging.APNSPayload(
-                        aps=messaging.Aps(
-                            sound="default",
-                            badge=1,
-                            alert=messaging.ApsAlert(title=title, body=body),
-                            custom_data={"interruption-level": "time-sensitive"},
-                        )
-                    ),
-                ),
+                apns=self._build_apns_config(title, body),
             )
 
             # Send the message
@@ -243,20 +233,7 @@ class FirebaseService:
                         sound="default",
                     ),
                 ),
-                apns=messaging.APNSConfig(
-                    headers={
-                        "apns-priority": "10",
-                        "apns-push-type": "alert",
-                    },
-                    payload=messaging.APNSPayload(
-                        aps=messaging.Aps(
-                            sound="default",
-                            badge=1,
-                            alert=messaging.ApsAlert(title=title, body=body),
-                            custom_data={"interruption-level": "time-sensitive"},
-                        )
-                    ),
-                ),
+                apns=self._build_apns_config(title, body),
             )
 
             # Send the message
@@ -273,3 +250,30 @@ class FirebaseService:
     def is_initialized(self) -> bool:
         """Check if Firebase Admin SDK is initialized."""
         return len(firebase_admin._apps) > 0
+
+    @staticmethod
+    def apns_diagnostics() -> Dict[str, Any]:
+        """Return non-sensitive APNs settings used for all iOS push sends."""
+        return {
+            "push_type": "alert",
+            "priority": "10",
+            "interruption_level": APNS_INTERRUPTION_LEVEL,
+            "interruption_level_location": "payload.aps.interruption-level",
+        }
+
+    @staticmethod
+    def _build_apns_config(title: str, body: str):
+        return messaging.APNSConfig(
+            headers={
+                "apns-priority": "10",
+                "apns-push-type": "alert",
+            },
+            payload=messaging.APNSPayload(
+                aps=messaging.Aps(
+                    sound="default",
+                    badge=1,
+                    alert=messaging.ApsAlert(title=title, body=body),
+                    custom_data={"interruption-level": APNS_INTERRUPTION_LEVEL},
+                )
+            ),
+        )

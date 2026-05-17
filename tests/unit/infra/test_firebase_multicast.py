@@ -1,6 +1,30 @@
 from unittest.mock import patch, MagicMock
 
 
+def test_apns_config_encodes_time_sensitive_payload():
+    from firebase_admin import messaging
+    from firebase_admin._messaging_encoder import MessageEncoder
+
+    from src.infra.services.firebase_service import FirebaseService
+
+    message = messaging.Message(
+        token="tok",
+        notification=messaging.Notification(title="Lunch", body="Log your meal"),
+        apns=FirebaseService._build_apns_config("Lunch", "Log your meal"),
+    )
+
+    encoded = MessageEncoder().default(message)
+    apns = encoded["apns"]
+    aps = apns["payload"]["aps"]
+
+    assert apns["headers"] == {
+        "apns-priority": "10",
+        "apns-push-type": "alert",
+    }
+    assert "apns-interruption-level" not in apns["headers"]
+    assert aps["interruption-level"] == "time-sensitive"
+
+
 def test_send_multicast_delegates_to_send_to_tokens():
     from src.infra.services.firebase_service import FirebaseService
 
@@ -61,10 +85,6 @@ def test_send_notification_sets_ios_time_sensitive_payload(monkeypatch):
     monkeypatch.setattr(firebase_module.messaging, "Notification", FakeValue)
     monkeypatch.setattr(firebase_module.messaging, "AndroidConfig", FakeValue)
     monkeypatch.setattr(firebase_module.messaging, "AndroidNotification", FakeValue)
-    monkeypatch.setattr(firebase_module.messaging, "APNSConfig", FakeValue)
-    monkeypatch.setattr(firebase_module.messaging, "APNSPayload", FakeValue)
-    monkeypatch.setattr(firebase_module.messaging, "Aps", FakeValue)
-    monkeypatch.setattr(firebase_module.messaging, "ApsAlert", FakeValue)
     monkeypatch.setattr(
         firebase_module.messaging,
         "send_each_for_multicast",
@@ -74,7 +94,7 @@ def test_send_notification_sets_ios_time_sensitive_payload(monkeypatch):
     svc = FirebaseService.__new__(FirebaseService)
     result = svc._send_to_tokens(["tok"], "Lunch", "Log your meal", {"type": "meal"})
 
-    aps = captured["message"]["apns"].kwargs["payload"].kwargs["aps"]
+    apns = captured["message"]["apns"]
     assert result["success"] is True
-    assert "apns-interruption-level" not in captured["message"]["apns"].kwargs["headers"]
-    assert aps.kwargs["custom_data"] == {"interruption-level": "time-sensitive"}
+    assert apns.headers == {"apns-priority": "10", "apns-push-type": "alert"}
+    assert apns.payload.aps.custom_data == {"interruption-level": "time-sensitive"}

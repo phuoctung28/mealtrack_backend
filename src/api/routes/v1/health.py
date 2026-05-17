@@ -165,6 +165,10 @@ async def notification_health_check():
             "firebase_initialized": firebase_service.is_initialized(),
             "components": {},
         }
+        health_status["components"]["apns"] = {
+            "status": "healthy",
+            **FirebaseService.apns_diagnostics(),
+        }
 
         # Check Firebase Admin SDK
         if not firebase_service.is_initialized():
