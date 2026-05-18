@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 
-def test_find_due_notifications_queries_pending_in_window():
+def test_find_due_notifications_queries_pending_due_rows():
     from src.infra.repositories.notification.reminder_query_builder import (
         ReminderQueryBuilder,
     )
@@ -60,3 +60,32 @@ def test_find_due_notifications_includes_past_due_rows(test_session, sample_user
     assert any(
         r.id == past_due.id for r in results
     ), "Past-due pending row must be returned"
+
+
+def test_find_due_notifications_excludes_future_rows(test_session, sample_user):
+    """Future rows must not be returned, even if they are within the next minute."""
+    from datetime import timedelta
+    from src.infra.database.models.notification.notification import NotificationORM
+    from src.infra.repositories.notification.reminder_query_builder import (
+        ReminderQueryBuilder,
+    )
+    import uuid
+
+    now = datetime(2026, 4, 22, 8, 0, 0, tzinfo=timezone.utc)
+    future = NotificationORM(
+        id=str(uuid.uuid4()),
+        user_id=sample_user.id,
+        notification_type="meal_reminder_lunch",
+        scheduled_date=now.date(),
+        scheduled_for_utc=now + timedelta(seconds=30),
+        status="pending",
+        context={"fcm_tokens": []},
+        created_at=now,
+        expires_at=now + timedelta(days=7),
+    )
+    test_session.add(future)
+    test_session.flush()
+
+    results = ReminderQueryBuilder.find_due_notifications(test_session, now)
+
+    assert all(r.id != future.id for r in results)
