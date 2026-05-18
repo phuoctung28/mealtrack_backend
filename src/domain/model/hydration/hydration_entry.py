@@ -12,8 +12,8 @@ from typing import Optional
 
 from src.domain.utils.timezone_utils import utc_now
 
-# Per-entry volume bounds (application-enforced at API layer in Phase 2).
-# Goal bounds (500–4000 ml) are enforced on users.hydration_goal_ml.
+# Per-entry volume bounds. Daily-goal bounds (500–4000 ml) are
+# enforced separately on users.hydration_goal_ml at the API layer.
 _VOLUME_MIN_ML = 1
 _VOLUME_MAX_ML = 2000
 
