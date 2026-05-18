@@ -10,7 +10,7 @@ import logging
 from datetime import date
 from typing import List, Optional
 
-from sqlalchemy import select, and_, delete
+from sqlalchemy import select, and_, delete, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -175,6 +175,21 @@ class AsyncNotificationRepository:
     ) -> NotificationPreferences:
         """Update notification preferences for a user (delegates to save)."""
         return await self.save_notification_preferences(preferences)
+
+    async def update_notification_language(self, user_id: str, language: str) -> int:
+        """Update the notification language for an existing preferences row."""
+        result = await self.session.execute(
+            update(NotificationPreferencesORM)
+            .where(
+                and_(
+                    NotificationPreferencesORM.user_id == user_id,
+                    NotificationPreferencesORM.is_deleted.is_(False),
+                )
+            )
+            .values(language=language)
+        )
+        await self.session.flush()
+        return result.rowcount or 0
 
     async def delete_notification_preferences(self, user_id: str) -> bool:
         """Delete notification preferences for a user."""

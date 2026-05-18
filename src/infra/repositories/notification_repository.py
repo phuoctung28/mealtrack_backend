@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from src.domain.model.notification import UserFcmToken, NotificationPreferences
 from src.domain.ports.notification_repository_port import NotificationRepositoryPort
 from src.infra.database.config import ScopedSession
+from src.infra.database.models.notification import NotificationPreferencesORM
 from src.infra.repositories.notification.fcm_token_operations import FcmTokenOperations
 from src.infra.repositories.notification.notification_preferences_operations import (
     NotificationPreferencesOperations,
@@ -106,6 +107,23 @@ class NotificationRepository(NotificationRepositoryPort):
     ) -> NotificationPreferences:
         """Update notification preferences for a user."""
         return self.save_notification_preferences(preferences)
+
+    def update_notification_language(self, user_id: str, language: str) -> int:
+        """Update notification language for a user."""
+        db = self._get_db()
+        try:
+            rows = (
+                db.query(NotificationPreferencesORM)
+                .filter(
+                    NotificationPreferencesORM.user_id == user_id,
+                    NotificationPreferencesORM.is_deleted.is_(False),
+                )
+                .update({"language": language})
+            )
+            db.commit()
+            return rows
+        finally:
+            self._close_db_if_created(db)
 
     def delete_notification_preferences(self, user_id: str) -> bool:
         """Delete notification preferences for a user."""

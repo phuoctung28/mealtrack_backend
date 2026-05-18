@@ -53,6 +53,13 @@ class FakeNotificationRepository(NotificationRepositoryPort):
         self.preferences[user_id] = preferences
         return preferences
 
+    async def update_notification_language(self, user_id: str, language: str) -> int:
+        prefs = self.preferences.get(user_id)
+        if prefs is None:
+            return 0
+        self.preferences[user_id] = prefs.update_preferences(language=language)
+        return 1
+
     async def delete_notification_preferences(self, user_id: str) -> bool:
         if user_id in self.preferences:
             del self.preferences[user_id]
