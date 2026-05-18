@@ -26,7 +26,9 @@ def test_get_food_search_event_bus_is_singleton(monkeypatch):
     monkeypatch.setattr(deps, "get_fat_secret_service_instance", lambda: object())
     monkeypatch.setattr(deps, "get_food_reference_repository", lambda: object())
 
-    # Patch MealGenerationService + translation service referenced in function
+    # Patch MealGenerationService + translation service referenced in function.
+    # These are locally imported inside get_food_search_event_bus(), so we must
+    # patch the source module, not the event_bus module attribute.
     class _MealGen:
         pass
 
@@ -34,7 +36,8 @@ def test_get_food_search_event_bus_is_singleton(monkeypatch):
         def __init__(self, *args, **kwargs):
             pass
 
-    monkeypatch.setattr(mod, "MealGenerationService", _MealGen, raising=False)
+    import src.infra.adapters.meal_generation_service as _meal_gen_mod
+    monkeypatch.setattr(_meal_gen_mod, "MealGenerationService", _MealGen)
     monkeypatch.setattr(mod, "FoodSearchTranslationService", _Translator, raising=False)
 
     # Patch handlers to avoid constructing real ones
