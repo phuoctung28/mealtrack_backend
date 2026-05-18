@@ -14,6 +14,7 @@ from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
     build_tdee_request,
 )
 from src.domain.services.tdee_service import TdeeCalculationService
+from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.redis_client import RedisClient
 from src.infra.database.models.notification.notification import NotificationORM
@@ -121,7 +122,9 @@ class DailyContextPrecomputeService:
 
             # Get user's timezone
             user_row = session.execute(
-                text("SELECT timezone FROM users WHERE id = :user_id AND is_active = true"),
+                text(
+                    "SELECT timezone FROM users WHERE id = :user_id AND is_active = true"
+                ),
                 {"user_id": user_id},
             ).fetchone()
 
@@ -191,13 +194,21 @@ class DailyContextPrecomputeService:
             ).fetchone()
 
             gender = (profile_row.gender if profile_row else None) or "male"
-            language_code = pref_row.language or (profile_row.language_code if profile_row else "en") or "en"
+            language_code = (
+                pref_row.language
+                or (profile_row.language_code if profile_row else "en")
+                or "en"
+            )
 
             # Calculate calorie goal (simplified - use TDEE service for accuracy)
-            calorie_goal = self._get_user_calorie_goal(session, user_id)
+            calorie_goal = self._get_user_calorie_goal(
+                uow, user_id, today, profile_row, tz_name
+            )
 
             # Get today's consumed calories
-            day_start_utc = datetime(today.year, today.month, today.day, 0, 0, 0, tzinfo=tz).astimezone(timezone.utc)
+            day_start_utc = datetime(
+                today.year, today.month, today.day, 0, 0, 0, tzinfo=tz
+            ).astimezone(timezone.utc)
             day_end_utc = day_start_utc + timedelta(days=1)
 
             consumed_row = session.execute(
@@ -226,44 +237,63 @@ class DailyContextPrecomputeService:
             }
 
             now = utc_now()
-            expires_at = datetime(today.year, today.month, today.day, tzinfo=timezone.utc) + timedelta(days=_NOTIF_EXPIRY_DAYS)
+            expires_at = datetime(
+                today.year, today.month, today.day, tzinfo=timezone.utc
+            ) + timedelta(days=_NOTIF_EXPIRY_DAYS)
             rows = []
 
             if pref_row.meal_reminders_enabled:
                 for notif_type, local_minutes in [
-                    ("meal_reminder_breakfast", pref_row.breakfast_time_minutes or _DEFAULT_BREAKFAST_MINUTES),
-                    ("meal_reminder_lunch", pref_row.lunch_time_minutes or _DEFAULT_LUNCH_MINUTES),
-                    ("meal_reminder_dinner", pref_row.dinner_time_minutes or _DEFAULT_DINNER_MINUTES),
+                    (
+                        "meal_reminder_breakfast",
+                        pref_row.breakfast_time_minutes or _DEFAULT_BREAKFAST_MINUTES,
+                    ),
+                    (
+                        "meal_reminder_lunch",
+                        pref_row.lunch_time_minutes or _DEFAULT_LUNCH_MINUTES,
+                    ),
+                    (
+                        "meal_reminder_dinner",
+                        pref_row.dinner_time_minutes or _DEFAULT_DINNER_MINUTES,
+                    ),
                 ]:
                     scheduled_utc = _local_minutes_to_utc(today, local_minutes, tz_name)
-                    if scheduled_utc and scheduled_utc > now:  # Only schedule future notifications
-                        rows.append({
+                    if (
+                        scheduled_utc and scheduled_utc > now
+                    ):  # Only schedule future notifications
+                        rows.append(
+                            {
+                                "id": str(uuid.uuid4()),
+                                "user_id": user_id,
+                                "notification_type": notif_type,
+                                "scheduled_date": today,
+                                "scheduled_for_utc": scheduled_utc,
+                                "status": "pending",
+                                "context": context,
+                                "created_at": now,
+                                "expires_at": expires_at,
+                            }
+                        )
+
+            if pref_row.daily_summary_enabled:
+                summary_minutes = (
+                    pref_row.daily_summary_time_minutes or _DEFAULT_SUMMARY_MINUTES
+                )
+                scheduled_utc = _local_minutes_to_utc(today, summary_minutes, tz_name)
+                if scheduled_utc and scheduled_utc > now:
+                    rows.append(
+                        {
                             "id": str(uuid.uuid4()),
                             "user_id": user_id,
-                            "notification_type": notif_type,
+                            "notification_type": "daily_summary",
                             "scheduled_date": today,
                             "scheduled_for_utc": scheduled_utc,
                             "status": "pending",
                             "context": context,
                             "created_at": now,
                             "expires_at": expires_at,
-                        })
-
-            if pref_row.daily_summary_enabled:
-                summary_minutes = pref_row.daily_summary_time_minutes or _DEFAULT_SUMMARY_MINUTES
-                scheduled_utc = _local_minutes_to_utc(today, summary_minutes, tz_name)
-                if scheduled_utc and scheduled_utc > now:
-                    rows.append({
-                        "id": str(uuid.uuid4()),
-                        "user_id": user_id,
-                        "notification_type": "daily_summary",
-                        "scheduled_date": today,
-                        "scheduled_for_utc": scheduled_utc,
-                        "status": "pending",
-                        "context": context,
-                        "created_at": now,
-                        "expires_at": expires_at,
-                    })
+                        }
+                    )
 
             # Insert new notifications (upsert to handle race conditions)
             if rows:
@@ -281,32 +311,26 @@ class DailyContextPrecomputeService:
             logger.info("Rescheduled %d notifications for user %s", len(rows), user_id)
             return len(rows)
 
-    def _get_user_calorie_goal(self, session, user_id: str) -> int:
-        """Get user's daily calorie goal from weekly budget or TDEE."""
-        # Try weekly budget first
-        budget_row = session.execute(
-            text("""
-                SELECT adjusted_daily_calories FROM weekly_budgets
-                WHERE user_id = :user_id AND is_active = true
-                ORDER BY week_start_date DESC LIMIT 1
-            """),
-            {"user_id": user_id},
-        ).fetchone()
-
-        if budget_row and budget_row.adjusted_daily_calories:
-            return int(budget_row.adjusted_daily_calories)
-
-        # Fallback to TDEE calculation
-        profile_row = session.execute(
-            text("""
-                SELECT age, gender, height_cm, weight_kg, body_fat_percentage,
-                       job_type, training_days_per_week, training_minutes_per_session,
-                       fitness_goal, training_level
-                FROM user_profiles
-                WHERE user_id = :user_id AND is_current = true
-            """),
-            {"user_id": user_id},
-        ).fetchone()
+    def _get_user_calorie_goal(
+        self,
+        uow,
+        user_id: str,
+        target_date: date,
+        profile_row=None,
+        user_timezone: str = "UTC",
+    ) -> int:
+        """Get today's adjusted calorie goal from weekly budget, then TDEE fallback."""
+        if profile_row is None:
+            profile_row = uow.session.execute(
+                text("""
+                    SELECT age, gender, height_cm, weight_kg, body_fat_percentage,
+                           job_type, training_days_per_week, training_minutes_per_session,
+                           fitness_goal, training_level
+                    FROM user_profiles
+                    WHERE user_id = :user_id AND is_current = true
+                """),
+                {"user_id": user_id},
+            ).fetchone()
 
         if not profile_row:
             return 2000  # Default fallback
@@ -314,7 +338,27 @@ class DailyContextPrecomputeService:
         try:
             tdee_request = build_tdee_request(profile_row)
             result = self._tdee_service.calculate_tdee(tdee_request)
-            return int(result.adjusted_tdee)
+            week_start = target_date - timedelta(days=target_date.weekday())
+            weekly_budget = uow.weekly_budgets.find_by_user_and_week(
+                user_id, week_start
+            )
+            if not weekly_budget:
+                return int(round(result.macros.calories))
+
+            effective = WeeklyBudgetService.get_effective_adjusted_daily(
+                uow=uow,
+                user_id=user_id,
+                week_start=week_start,
+                target_date=target_date,
+                weekly_budget=weekly_budget,
+                base_daily_cal=weekly_budget.target_calories / 7,
+                base_daily_protein=weekly_budget.target_protein / 7,
+                base_daily_carbs=weekly_budget.target_carbs / 7,
+                base_daily_fat=weekly_budget.target_fat / 7,
+                bmr=result.bmr,
+                user_timezone=user_timezone,
+            )
+            return int(round(effective.adjusted.calories))
         except Exception:
             return 2000
 
@@ -452,9 +496,9 @@ class DailyContextPrecomputeService:
                     calorie_goals[user_id] = 2000
                     continue
                 try:
-                    tdee_req = build_tdee_request(profile)
-                    tdee_resp = self._tdee_service.calculate_tdee(tdee_req)
-                    calorie_goals[user_id] = int(round(tdee_resp.macros.calories))
+                    calorie_goals[user_id] = self._get_user_calorie_goal(
+                        uow, user_id, today, profile, tz_name
+                    )
                 except Exception as exc:
                     logger.warning(
                         "TDEE calculation failed for user %s: %s — using 2000 kcal fallback",

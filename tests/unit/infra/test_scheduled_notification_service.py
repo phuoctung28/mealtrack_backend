@@ -67,7 +67,7 @@ def test_render_message_daily_summary_zero_logs():
     title, body = _render_message(
         "daily_summary", 2000, "male", "en", calories_consumed=0, calorie_goal=2000
     )
-    assert title == ""  # daily_summary has no title
+    assert title == "Nutree"
     assert "Busy" in body
     assert "log" in body.lower()
 
@@ -136,7 +136,7 @@ def test_render_trial_expiry_2d_en_male_returns_2_day_body():
     title, body = _render_message(
         "trial_expiry_2d", 0, "male", "en"
     )
-    assert title == ""
+    assert title == "Nutree"
     assert "2 days" in body
 
 
@@ -146,7 +146,7 @@ def test_render_trial_expiry_1d_en_female_returns_1_day_body():
     title, body = _render_message(
         "trial_expiry_1d", 0, "female", "en"
     )
-    assert title == ""
+    assert title == "Nutree"
     assert "tomorrow" in body.lower()
 
 
