@@ -122,6 +122,20 @@ class NotificationRepositoryPort(ABC):
         pass
 
     @abstractmethod
+    def update_notification_language(self, user_id: str, language: str) -> int:
+        """
+        Updates the notification language for an existing preferences row.
+
+        Args:
+            user_id: The user ID to update preferences for
+            language: ISO 639-1 notification language
+
+        Returns:
+            Number of updated rows
+        """
+        pass
+
+    @abstractmethod
     def delete_notification_preferences(self, user_id: str) -> bool:
         """
         Deletes notification preferences for a user.

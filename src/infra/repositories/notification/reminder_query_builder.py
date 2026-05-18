@@ -1,6 +1,6 @@
 """Reminder query builder for finding users due for notifications."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -126,16 +126,17 @@ class ReminderQueryBuilder:
 
     @staticmethod
     def find_due_notifications(db: Session, now: datetime) -> list:
-        """Return all pending notifications due on or before the end of the current 60-second window.
+        """Return all pending notifications due at or before the current moment.
 
         No lower bound: if the scheduler is delayed, past-due pending rows are
-        still picked up rather than silently dropped.
+        still picked up rather than silently dropped. Future rows are excluded
+        so reminders are never intentionally sent before the user's configured
+        minute.
         """
-        window_end = now + timedelta(seconds=60)
         return (
             db.query(NotificationORM)
             .filter(
-                NotificationORM.scheduled_for_utc <= window_end,
+                NotificationORM.scheduled_for_utc <= now,
                 NotificationORM.status == "pending",
             )
             .all()

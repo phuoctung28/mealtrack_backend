@@ -134,7 +134,7 @@ class ScheduledNotificationService:
                 if self._cleanup_counter >= _CLEANUP_TICKS:
                     self._cleanup_counter = 0
                     await asyncio.to_thread(self._cleanup_expired_notifications)
-                await asyncio.sleep(self.LOOP_INTERVAL_SECONDS)
+                await asyncio.sleep(_seconds_until_next_minute(now))
             except asyncio.CancelledError:
                 break
             except Exception as exc:
@@ -403,3 +403,12 @@ def _render_message(
 def _chunked(lst: list, size: int):
     for i in range(0, len(lst), size):
         yield lst[i : i + size]
+
+
+def _seconds_until_next_minute(now: datetime) -> float:
+    """Sleep until the next minute boundary without looking ahead."""
+    seconds = now.second + (now.microsecond / 1_000_000)
+    remaining = 60 - seconds
+    if remaining <= 0 or remaining > 60:
+        return float(ScheduledNotificationService.LOOP_INTERVAL_SECONDS)
+    return remaining
