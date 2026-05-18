@@ -214,15 +214,22 @@ class DailyContextPrecomputeService:
             consumed_row = session.execute(
                 text("""
                     SELECT COALESCE(SUM(
-                        protein * 4 + (carbs - COALESCE(fiber, 0)) * 4 +
-                        COALESCE(fiber, 0) * 2 + fat * 9
+                        (n.protein * 4.0)
+                        + (GREATEST(n.carbs - n.fiber, 0) * 4.0)
+                        + (n.fiber * 2.0)
+                        + (n.fat * 9.0)
                     ), 0) as total
-                    FROM meal_logs
-                    WHERE user_id = :user_id
-                      AND logged_at >= :start AND logged_at < :end
-                      AND is_deleted = false
+                    FROM meal m
+                    JOIN nutrition n ON n.meal_id = m.meal_id
+                    WHERE m.user_id = :user_id
+                      AND m.created_at >= :start AND m.created_at < :end
+                      AND m.status = 'READY'
                 """),
-                {"user_id": user_id, "start": day_start_utc, "end": day_end_utc},
+                {
+                    "user_id": user_id,
+                    "start": day_start_utc.replace(tzinfo=None),
+                    "end": day_end_utc.replace(tzinfo=None),
+                },
             ).fetchone()
 
             calories_consumed = int(round(consumed_row.total)) if consumed_row else 0
