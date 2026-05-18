@@ -1,6 +1,6 @@
 """Unified code validation — accepts promo codes and referral codes via a single endpoint."""
 import logging
-from typing import Literal, Optional, Union
+from typing import Dict, Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -37,6 +37,7 @@ class ReferralValidatedResponse(BaseModel):
     referrer_name: str
     discount_monthly: int
     discount_annual: int
+    commission_rewards: Dict[str, float] = Field(default_factory=dict)
 
 
 @router.post(

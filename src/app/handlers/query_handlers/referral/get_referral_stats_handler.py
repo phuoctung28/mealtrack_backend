@@ -9,6 +9,7 @@ from src.app.queries.referral.get_referral_stats_query import (
     ReferralConversionDTO,
     ReferralStatsResult,
 )
+from src.infra.config.settings import settings
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.repositories.referral_repository import ReferralRepository
@@ -55,6 +56,7 @@ class GetReferralStatsQueryHandler:
                 total_converted=total_converted,
                 conversions=conversion_dtos,
                 has_pending_payout=pending_payout is not None,
+                commission_rewards=settings.REFERRAL_COMMISSIONS,
             )
 
     async def _get_first_name(self, uow, user_id: str) -> str:
