@@ -1,7 +1,8 @@
 """Unit tests: timezone update handler skips DB write when tz is unchanged."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.app.commands.user.update_timezone_command import UpdateTimezoneCommand
 from src.app.handlers.command_handlers.update_timezone_command_handler import (
@@ -12,7 +13,8 @@ from src.app.handlers.command_handlers.update_timezone_command_handler import (
 @pytest.mark.asyncio
 async def test_skips_db_write_when_timezone_unchanged():
     """If the stored timezone equals the incoming one, no DB write occurs."""
-    handler = UpdateTimezoneCommandHandler()
+    precompute = AsyncMock()
+    handler = UpdateTimezoneCommandHandler(precompute_service=precompute)
     command = UpdateTimezoneCommand(user_id="user-1", timezone="Asia/Ho_Chi_Minh")
 
     mock_uow = MagicMock()
@@ -31,13 +33,15 @@ async def test_skips_db_write_when_timezone_unchanged():
 
     assert result == {"success": True, "timezone": "Asia/Ho_Chi_Minh"}
     mock_uow.users.update_user_timezone.assert_not_called()
-    # commit() may be called by the read-path UoW's __exit__ — we only assert the write didn't happen
+    precompute.reschedule_user_notifications.assert_not_called()
+    # commit() may be called by the read UoW exit; only assert no write happened.
 
 
 @pytest.mark.asyncio
 async def test_writes_db_when_timezone_changed():
     """If the stored timezone differs, the update proceeds."""
-    handler = UpdateTimezoneCommandHandler()
+    precompute = AsyncMock()
+    handler = UpdateTimezoneCommandHandler(precompute_service=precompute)
     command = UpdateTimezoneCommand(user_id="user-1", timezone="America/New_York")
 
     mock_uow = MagicMock()
@@ -57,12 +61,14 @@ async def test_writes_db_when_timezone_changed():
     mock_uow.users.update_user_timezone.assert_called_once_with(
         "user-1", "America/New_York"
     )
+    precompute.reschedule_user_notifications.assert_awaited_once_with("user-1")
 
 
 @pytest.mark.asyncio
 async def test_writes_db_when_no_stored_timezone():
     """If no timezone is stored yet (None), the update proceeds."""
-    handler = UpdateTimezoneCommandHandler()
+    precompute = AsyncMock()
+    handler = UpdateTimezoneCommandHandler(precompute_service=precompute)
     command = UpdateTimezoneCommand(user_id="user-1", timezone="Asia/Ho_Chi_Minh")
 
     mock_uow = MagicMock()
@@ -82,3 +88,18 @@ async def test_writes_db_when_no_stored_timezone():
     mock_uow.users.update_user_timezone.assert_called_once_with(
         "user-1", "Asia/Ho_Chi_Minh"
     )
+    precompute.reschedule_user_notifications.assert_awaited_once_with("user-1")
+
+
+@pytest.mark.asyncio
+async def test_rejects_invalid_timezone_without_reschedule():
+    """Invalid timezone input should not write or reschedule."""
+    precompute = AsyncMock()
+    handler = UpdateTimezoneCommandHandler(precompute_service=precompute)
+
+    result = await handler.handle(
+        UpdateTimezoneCommand(user_id="user-1", timezone="Not/AZone")
+    )
+
+    assert result == {"success": False, "error": "Invalid timezone"}
+    precompute.reschedule_user_notifications.assert_not_called()
