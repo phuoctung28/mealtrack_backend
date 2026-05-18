@@ -1,5 +1,9 @@
 """
 Firebase Admin SDK service for push notifications.
+
+Data-only FCM contract: messages carry title/body in `data`, plus `aps.alert`
+for iOS native display. Mobile foreground/background handlers read from
+`message.data` and render via `flutter_local_notifications`.
 """
 
 import json
@@ -10,15 +14,10 @@ from typing import Dict, List, Optional, Any
 import firebase_admin
 from firebase_admin import credentials, messaging
 
+from src.infra.services.push.apns_payload_builder import build_apns_config
+from src.infra.services.push.android_payload_builder import build_android_config
+
 logger = logging.getLogger(__name__)
-
-
-class NotificationChannelConfig:
-    """Android notification channel configuration."""
-
-    HIGH_PRIORITY_CHANNEL_ID = "high_priority_channel"
-    MEDIUM_PRIORITY_CHANNEL_ID = "medium_priority_channel"
-    LOW_PRIORITY_CHANNEL_ID = "low_priority_channel"
 
 
 class FirebaseService:
@@ -140,37 +139,25 @@ class FirebaseService:
     def _send_to_tokens(
         self, tokens: List[str], title: str, body: str, data: Dict[str, str]
     ) -> Dict[str, Any]:
-        """Send notification to specific FCM tokens."""
-        try:
-            # Ensure all data values are strings
-            string_data = {k: str(v) for k, v in data.items()} if data else {}
+        """Send notification to specific FCM tokens.
 
-            # Create multicast message
+        Data-only message: title/body injected into `data` so the mobile
+        message handler renders the notification through FLN (foreground +
+        Android background). iOS background/terminated relies on
+        `aps.alert` + `aps.interruption-level` for native display.
+        """
+        try:
+            # Ensure all data values are strings; inject title/body for mobile.
+            string_data = {k: str(v) for k, v in data.items()} if data else {}
+            string_data["title"] = title
+            string_data["body"] = body
+
+            # Create multicast message (data-only — no top-level notification field)
             message = messaging.MulticastMessage(
-                notification=messaging.Notification(title=title, body=body),
                 data=string_data,
                 tokens=tokens,
-                android=messaging.AndroidConfig(
-                    priority="high",
-                    notification=messaging.AndroidNotification(
-                        channel_id=NotificationChannelConfig.HIGH_PRIORITY_CHANNEL_ID,
-                        sound="default",
-                    ),
-                ),
-                apns=messaging.APNSConfig(
-                    headers={
-                        "apns-priority": "10",
-                        "apns-push-type": "alert",
-                        "apns-interruption-level": "time-sensitive",
-                    },
-                    payload=messaging.APNSPayload(
-                        aps=messaging.Aps(
-                            sound="default",
-                            badge=1,
-                            alert=messaging.ApsAlert(title=title, body=body),
-                        )
-                    ),
-                ),
+                android=build_android_config(),
+                apns=build_apns_config(title=title, body=body),
             )
 
             # Send the message
@@ -227,36 +214,18 @@ class FirebaseService:
             if not firebase_admin._apps:
                 return {"success": False, "reason": "firebase_not_initialized"}
 
-            # Prepare message data
-            message_data = data or {}
+            # Prepare data payload (data-only contract — title/body injected for mobile).
+            message_data = {k: str(v) for k, v in (data or {}).items()}
             message_data["topic"] = topic
+            message_data["title"] = title
+            message_data["body"] = body
 
-            # Create message
+            # Create message (no top-level notification field)
             message = messaging.Message(
-                notification=messaging.Notification(title=title, body=body),
                 data=message_data,
                 topic=topic,
-                android=messaging.AndroidConfig(
-                    priority="high",
-                    notification=messaging.AndroidNotification(
-                        channel_id=NotificationChannelConfig.HIGH_PRIORITY_CHANNEL_ID,
-                        sound="default",
-                    ),
-                ),
-                apns=messaging.APNSConfig(
-                    headers={
-                        "apns-priority": "10",
-                        "apns-push-type": "alert",
-                        "apns-interruption-level": "time-sensitive",
-                    },
-                    payload=messaging.APNSPayload(
-                        aps=messaging.Aps(
-                            sound="default",
-                            badge=1,
-                            alert=messaging.ApsAlert(title=title, body=body),
-                        )
-                    ),
-                ),
+                android=build_android_config(),
+                apns=build_apns_config(title=title, body=body),
             )
 
             # Send the message

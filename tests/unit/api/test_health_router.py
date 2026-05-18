@@ -11,3 +11,17 @@ def test_health_accepts_head_requests():
     response = TestClient(app).head("/health")
 
     assert response.status_code == 200
+
+
+def test_health_exposes_deployment_identity(monkeypatch):
+    monkeypatch.setenv("RAILWAY_GIT_COMMIT_SHA", "1e1170b7")
+    monkeypatch.setenv("RAILWAY_GIT_BRANCH", "fix/ios-time-sensitive-notifications")
+    app = FastAPI()
+    app.include_router(router)
+
+    response = TestClient(app).get("/health")
+
+    assert response.status_code == 200
+    deployment = response.json()["deployment"]
+    assert deployment["git_commit"] == "1e1170b7"
+    assert deployment["git_branch"] == "fix/ios-time-sensitive-notifications"
