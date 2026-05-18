@@ -475,11 +475,11 @@ def get_configured_event_bus() -> EventBus:
             uow=AsyncUnitOfWork(), cache_service=cache_service
         ),
     )
+    precompute_service = get_daily_context_precompute_service()
     event_bus.register_handler(
         UpdateTimezoneCommand,
-        UpdateTimezoneCommandHandler(),
+        UpdateTimezoneCommandHandler(precompute_service=precompute_service),
     )
-    precompute_service = get_daily_context_precompute_service()
     event_bus.register_handler(
         UpdateLanguageCommand,
         UpdateLanguageCommandHandler(precompute_service=precompute_service),
@@ -508,7 +508,8 @@ def get_configured_event_bus() -> EventBus:
 
     # Register notification handlers
     event_bus.register_handler(
-        RegisterFcmTokenCommand, RegisterFcmTokenCommandHandler()
+        RegisterFcmTokenCommand,
+        RegisterFcmTokenCommandHandler(precompute_service=precompute_service),
     )
     event_bus.register_handler(DeleteFcmTokenCommand, DeleteFcmTokenCommandHandler())
     event_bus.register_handler(
