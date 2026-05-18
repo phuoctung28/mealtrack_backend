@@ -1,5 +1,5 @@
 """Referral conversion model — tracks each referred user and their commission status."""
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Index
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
@@ -11,11 +11,13 @@ class ReferralConversion(Base, PrimaryEntityMixin):
 
     referrer_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     referred_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    code_used = Column(String(6), nullable=False)
+    code_used = Column(String(15), nullable=False)
     # status: pending | converted | revoked
     status = Column(String(20), nullable=False, default="pending")
     discount_applied = Column(Integer, nullable=True)
-    commission_amount = Column(Integer, nullable=False, default=50000)
+    commission_amount = Column(Float, nullable=False, default=50000)
+    commission_currency = Column(String(3), nullable=False, default="VND")
+    commission_amount_vnd = Column(Integer, nullable=True)
     trial_started_at = Column(DateTime(timezone=True), nullable=True)
     converted_at = Column(DateTime(timezone=True), nullable=True)
     revoked_at = Column(DateTime(timezone=True), nullable=True)

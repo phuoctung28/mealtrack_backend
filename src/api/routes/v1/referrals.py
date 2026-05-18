@@ -3,7 +3,7 @@ import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from src.api.dependencies.auth import get_current_user_id
 from src.app.commands.referral.apply_referral_code_command import ApplyReferralCodeCommand
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # ── Request / Response Schemas ────────────────────────────────────────────────
 
 class ValidateCodeRequest(BaseModel):
-    code: str
+    code: str = Field(..., min_length=3, max_length=15)
 
     @field_validator("code")
     @classmethod
@@ -50,14 +50,26 @@ class ValidateCodeResponse(BaseModel):
     discount_annual: int = 499000
 
 
+SUPPORTED_CURRENCIES = {"VND", "USD", "EUR"}
+
+
 class ApplyCodeRequest(BaseModel):
-    code: str
+    code: str = Field(..., min_length=3, max_length=15)
     discount_applied: int
+    currency: str = "VND"
 
     @field_validator("code")
     @classmethod
     def normalise_code(cls, v: str) -> str:
         return v.strip().upper()
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, v: str) -> str:
+        v = v.upper()
+        if v not in SUPPORTED_CURRENCIES:
+            raise ValueError(f"Unsupported currency: {v}. Supported: {SUPPORTED_CURRENCIES}")
+        return v
 
 
 class MyCodeResponse(BaseModel):
@@ -117,6 +129,7 @@ async def apply_code(
                 user_id=user_id,
                 code=request.code,
                 discount_applied=request.discount_applied,
+                currency=request.currency,
             ),
         )
     except ValueError as exc:

@@ -1,5 +1,6 @@
 """Async Unit of Work backed by asyncpg + AsyncSession."""
 
+import asyncio
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,9 +36,12 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
 
     def __init__(self):
         self.session: AsyncSession | None = None
+        self._session_lock = asyncio.Lock()
 
     async def __aenter__(self) -> "AsyncUnitOfWork":
+        await self._session_lock.acquire()
         if AsyncSessionLocal is None:
+            self._session_lock.release()
             raise RuntimeError(
                 "AsyncSessionLocal is not initialized. Async engine setup failed; "
                 "check async DB configuration."
@@ -66,16 +70,23 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
             return
         try:
             if exc_type:
-                await self.rollback()
+                try:
+                    await self.rollback()
+                except Exception:
+                    logger.warning("Rollback failed; connection will be discarded", exc_info=True)
             else:
                 try:
                     await self.commit()
                 except Exception:
-                    await self.rollback()
+                    try:
+                        await self.rollback()
+                    except Exception:
+                        logger.warning("Rollback failed after commit error; connection will be discarded", exc_info=True)
                     raise
         finally:
             await session.close()
             self.session = None
+            self._session_lock.release()
 
     async def commit(self) -> None:
         await self._require_session().commit()

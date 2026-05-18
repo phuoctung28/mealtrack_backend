@@ -41,6 +41,7 @@ def _deployment_info() -> Dict[str, Optional[str]]:
 async def health_check():
     """
     Basic health check endpoint for uptime monitoring.
+    Supports HEAD for lightweight client connectivity probes.
     """
     return JSONResponse(
         status_code=200,

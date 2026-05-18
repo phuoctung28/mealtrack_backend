@@ -1,6 +1,6 @@
 # Backend System Architecture Overview
 
-**Last Updated:** May 6, 2026
+**Last Updated:** May 15, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
 **Codebase:** 430 files, ~38.5K LOC across 4 layers
@@ -102,6 +102,7 @@ Smart sync (diff-based updates), eager loading via pre-defined `joinedload` opti
 - No API versioning strategy beyond v1
 - `CloudinaryImageStore` instantiated directly in routes (not via DI)
 - Hardcoded constants (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) not in config
+- `AsyncUnitOfWork` uses `asyncio.Lock`; concurrent reuse within one instance will block (by design — use separate instances per handler, enforced by event bus handler cloning)
 
 ---
 

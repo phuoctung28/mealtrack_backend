@@ -51,6 +51,8 @@ from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.monitoring import router as monitoring_router
 from src.api.routes.v1.notifications import router as notifications_router
 from src.api.routes.v1.referrals import router as referrals_router
+from src.api.routes.v1.promo_codes import router as promo_codes_router
+from src.api.routes.v1.codes import router as codes_router
 from src.api.routes.v1.saved_suggestions import router as saved_suggestions_router
 from src.api.routes.v1.tdee import router as tdee_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
@@ -60,7 +62,14 @@ from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
 from src.infra.config.settings import settings
 from src.infra.database.config import engine
+from src.infra.database.config_async import async_engine
 from src.infra.monitoring.sentry import initialize_sentry
+from src.infra.services.scheduled_email_service import ScheduledEmailService
+from src.infra.services.email_template_renderer import EmailTemplateRenderer
+from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
+from src.domain.services.email_service import EmailService
+from src.api.routes.well_known import router as well_known_router
+from src.api.routes.app_download import router as app_download_router
 
 load_dotenv()
 
@@ -180,11 +189,27 @@ async def lifespan(app: FastAPI):
     try:
         logger.info("Initializing scheduled notification service...")
         scheduled_service = initialize_scheduled_notification_service()
+        # Expose trial_push for the RevenueCat RENEWAL webhook handler.
+        app.state.trial_push_service = getattr(
+            scheduled_service, "trial_push_service", None
+        )
         await scheduled_service.start()
         logger.info("Scheduled notification service started successfully!")
     except Exception as e:
         logger.error(f"Failed to start scheduled notification service: {e}")
         # Continue running the API even if notification service fails
+
+    # Start scheduled email service
+    email_adapter = ResendEmailAdapter()
+    email_renderer = EmailTemplateRenderer()
+    email_service = EmailService(email_adapter=email_adapter, template_renderer=email_renderer)
+    scheduled_email_service = ScheduledEmailService(email_service=email_service)
+
+    # Run email check on startup (daily runs via external cron)
+    try:
+        await scheduled_email_service.check_and_send_emails()
+    except Exception as e:
+        logger.error(f"Scheduled email check failed: {e}")
 
     logger.info("MealTrack API started successfully!")
     yield
@@ -203,6 +228,10 @@ async def lifespan(app: FastAPI):
 
     # Disconnect cache
     await shutdown_cache_layer()
+
+    # Dispose async SQLAlchemy engine so pooled asyncpg connections are returned
+    if async_engine is not None:
+        await async_engine.dispose()
 
 
 app = FastAPI(
@@ -254,8 +283,12 @@ app.include_router(tdee_router)
 app.include_router(saved_suggestions_router)
 app.include_router(cheat_days_router)
 app.include_router(referrals_router)
+app.include_router(promo_codes_router)
+app.include_router(codes_router)
 app.include_router(nutrition_router)
 app.include_router(weight_entries_router)
+app.include_router(well_known_router)
+app.include_router(app_download_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get("ENVIRONMENT") == "development":

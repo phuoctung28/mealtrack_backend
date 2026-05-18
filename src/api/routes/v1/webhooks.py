@@ -12,13 +12,25 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Header
 
+from sqlalchemy import text
+
+from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
+from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
+from src.infra.services.email_template_renderer import EmailTemplateRenderer
 
 router = APIRouter(prefix="/v1/webhooks", tags=["Webhooks"])
 logger = logging.getLogger(__name__)
+
+
+def _get_email_service() -> EmailService:
+    """Get email service instance."""
+    adapter = ResendEmailAdapter()
+    renderer = EmailTemplateRenderer()
+    return EmailService(email_adapter=adapter, template_renderer=renderer)
 
 
 @router.post("/revenuecat")
@@ -109,42 +121,28 @@ async def revenuecat_webhook(
             )
             raise HTTPException(status_code=404, detail="User not found")
         
-        # Handle events
-        try:
-            if event_type == "INITIAL_PURCHASE":
-                await handle_purchase(uow, user, event)
+        # Handle events — commit/rollback is owned by the AsyncUnitOfWork context manager
+        if event_type == "INITIAL_PURCHASE":
+            await handle_purchase(uow, user, event)
 
-            elif event_type == "RENEWAL":
-                await handle_renewal(uow, user, event)
+        elif event_type == "RENEWAL":
+            await handle_renewal(uow, user, event)
 
-            elif event_type == "CANCELLATION":
-                await handle_cancellation(uow, user, event)
+        elif event_type == "CANCELLATION":
+            await handle_cancellation(uow, user, event)
 
-            elif event_type == "EXPIRATION":
-                await handle_expiration(uow, user, event)
+        elif event_type == "EXPIRATION":
+            await handle_expiration(uow, user, event)
 
-            elif event_type == "BILLING_ISSUE":
-                handle_billing_issue(uow, user, event)
-                
-            elif event_type == "PRODUCT_CHANGE":
-                handle_product_change(uow, user, event)
+        elif event_type == "BILLING_ISSUE":
+            await handle_billing_issue(uow, user, event)
 
-            elif event_type == "REFUND":
-                await handle_refund(uow, user, event)
+        elif event_type == "PRODUCT_CHANGE":
+            await handle_product_change(uow, user, event)
 
-            else:
-                logger.info(f"Unhandled event type: {event_type}")
+        elif event_type == "REFUND":
+            await handle_refund(uow, user, event)
 
-            await uow.commit()
-            
-        except Exception as e:
-            logger.error(
-                f"RevenueCat webhook handler error — "
-                f"event_type={event_type}, user_id={user.id}, error={e}"
-            )
-            await uow.rollback()
-            raise
-    
     return {"status": "success"}
 
 
@@ -200,6 +198,26 @@ async def handle_renewal(uow, user, event):
         logger.warning(f"Subscription not found for renewal, creating new one")
         await handle_purchase(uow, user, event)
 
+    # Purge any pending trial-expiry pushes so renewed users don't get a
+    # "your trial ends tomorrow" push for a sub that just auto-renewed.
+    try:
+        await uow.session.execute(
+            text(
+                """
+                DELETE FROM notifications
+                WHERE user_id = :uid
+                  AND notification_type LIKE 'trial_expiry%'
+                  AND status = 'pending'
+                """
+            ),
+            {"uid": user.id},
+        )
+    except Exception:
+        # Do not raise — webhook MUST still ACK so RevenueCat doesn't retry.
+        logger.exception(
+            "Failed to purge stale trial pushes for user %s after renewal", user.id
+        )
+
 
 async def handle_cancellation(uow, user, event):
     """Handle subscription cancellation."""
@@ -211,6 +229,15 @@ async def handle_cancellation(uow, user, event):
         subscription.updated_at = utc_now()
         # Note: User still has access until expires_at
         logger.info(f"User {user.id} cancelled subscription (expires {subscription.expires_at})")
+
+    # Send cancellation email
+    if not user.email_opt_out:
+        try:
+            email_service = _get_email_service()
+            await email_service.send_cancellation_email(user)
+            logger.info(f"Cancellation email sent to user {user.id}")
+        except Exception as e:
+            logger.error(f"Failed to send cancellation email to {user.id}: {e}")
 
 
 async def handle_expiration(uow, user, event):
@@ -264,11 +291,15 @@ async def _credit_referral_on_purchase(uow, user_id: str) -> None:
     if conversion and conversion.status == "pending":
         conversion.status = "converted"
         conversion.converted_at = utc_now()
-        await repo.credit_wallet(conversion.referrer_user_id, conversion.commission_amount)
+        # Use VND amount for wallet (fallback to commission_amount for old records)
+        amount_vnd = conversion.commission_amount_vnd or conversion.commission_amount
+        await repo.credit_wallet(conversion.referrer_user_id, amount_vnd)
         logger.info(
-            "Referral credited: referrer=%s amount=%d",
+            "Referral credited: referrer=%s amount=%d VND (original: %d %s)",
             conversion.referrer_user_id,
+            amount_vnd,
             conversion.commission_amount,
+            conversion.commission_currency or "VND",
         )
 
 
@@ -280,11 +311,13 @@ async def _revoke_referral_on_refund(uow, user_id: str) -> None:
     if conversion and conversion.status == "converted":
         conversion.status = "revoked"
         conversion.revoked_at = utc_now()
-        await repo.revoke_from_wallet(conversion.referrer_user_id, conversion.commission_amount)
+        # Use VND amount for wallet (fallback to commission_amount for old records)
+        amount_vnd = conversion.commission_amount_vnd or conversion.commission_amount
+        await repo.revoke_from_wallet(conversion.referrer_user_id, amount_vnd)
         logger.info(
-            "Referral revoked: referrer=%s amount=%d",
+            "Referral revoked: referrer=%s amount=%d VND",
             conversion.referrer_user_id,
-            conversion.commission_amount,
+            amount_vnd,
         )
 
 

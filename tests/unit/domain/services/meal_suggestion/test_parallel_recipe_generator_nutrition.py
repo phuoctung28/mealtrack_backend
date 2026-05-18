@@ -8,13 +8,11 @@ Verifies:
 """
 
 import asyncio
-import uuid
-from typing import List
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.domain.model.meal_suggestion import MealType, SuggestionSession
+from src.domain.model.meal_suggestion import SuggestionSession
 from src.domain.services.meal_suggestion.macro_validation_service import (
     MacroValidationService,
 )
@@ -452,3 +450,107 @@ async def test_attempt_recipe_generation_scale_out_of_range_returns_none():
     assert (
         result is None
     ), "Scale factor out of range should return None for upstream retry"
+
+
+@pytest.mark.asyncio
+async def test_attempt_recipe_generation_selected_mode_scales_without_rejecting():
+    """Selected discovery recipes must be scaled and returned even outside default range."""
+    session = _make_session()
+    session.target_calories = 300
+
+    generation_service = MagicMock()
+    generation_service.generate_meal_plan.return_value = _make_ai_raw_response()
+
+    raw_macros = MealMacros(
+        calories=600.0,
+        protein=120.0,
+        carbs=30.0,
+        fat=0.0,
+        fiber=0.0,
+        sugar=0.0,
+        ingredients=[
+            IngredientMacros(
+                name="chicken breast",
+                quantity_g=200.0,
+                calories=480.0,
+                protein=120.0,
+                carbs=0.0,
+                fat=0.0,
+                fiber=0.0,
+                sugar=0.0,
+                source_tier="T1_food_reference",
+            ),
+            IngredientMacros(
+                name="rice",
+                quantity_g=150.0,
+                calories=120.0,
+                protein=0.0,
+                carbs=30.0,
+                fat=0.0,
+                fiber=0.0,
+                sugar=0.0,
+                source_tier="T1_food_reference",
+            ),
+        ],
+        t1_count=2,
+        t2_count=0,
+        t3_count=0,
+    )
+
+    real_nutrition_lookup = NutritionLookupService(
+        food_ref_repo=MagicMock(),
+        ingredient_nutrition_resolver=MagicMock(),
+        generation_service=MagicMock(),
+    )
+    real_nutrition_lookup.calculate_meal_macros = AsyncMock(return_value=raw_macros)
+
+    result = await attempt_recipe_generation(
+        generation_service=generation_service,
+        macro_validator=MacroValidationService(),
+        nutrition_lookup=real_nutrition_lookup,
+        prompt="Generate chicken rice",
+        meal_name="Chicken Rice",
+        index=0,
+        model_purpose="recipe_primary",
+        recipe_system="You are a chef.",
+        session=session,
+        reject_on_scale_out_of_range=False,
+    )
+
+    assert result is not None
+    assert result.macros.calories == pytest.approx(300.0)
+    assert result.ingredients[0].amount == 100
+    assert result.ingredients[1].amount == 75
+
+
+@pytest.mark.asyncio
+async def test_attempt_recipe_generation_selected_mode_fills_missing_steps():
+    """Selected discovery recipes should not be dropped when AI omits recipe_steps."""
+    session = _make_session()
+
+    generation_service = MagicMock()
+    raw = _make_ai_raw_response()
+    raw["recipe_steps"] = []
+    generation_service.generate_meal_plan.return_value = raw
+
+    meal_macros = _make_meal_macros()
+    nutrition_lookup = AsyncMock(spec=NutritionLookupService)
+    nutrition_lookup.calculate_meal_macros.return_value = meal_macros
+    nutrition_lookup.scale_to_target.return_value = meal_macros
+
+    result = await attempt_recipe_generation(
+        generation_service=generation_service,
+        macro_validator=MacroValidationService(),
+        nutrition_lookup=nutrition_lookup,
+        prompt="Generate chicken rice",
+        meal_name="Chicken Rice",
+        index=0,
+        model_purpose="recipe_primary",
+        recipe_system="You are a chef.",
+        session=session,
+        fill_missing_steps=True,
+    )
+
+    assert result is not None
+    assert len(result.recipe_steps) >= 2
+    assert result.recipe_steps[0].step == 1

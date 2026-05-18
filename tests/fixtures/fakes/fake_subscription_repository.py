@@ -48,6 +48,24 @@ class FakeSubscriptionRepository(SubscriptionRepositoryPort):
             if sub.expires_at and datetime.now() < sub.expires_at <= cutoff
         ]
 
+    def find_expiring_in_window(
+        self,
+        from_days: int,
+        to_days: int,
+        now: Optional[datetime] = None,
+    ) -> List[Subscription]:
+        """Active subs whose expires_at falls within the [from_days, to_days) window."""
+        reference = now or datetime.now()
+        lower = reference + timedelta(days=from_days)
+        upper = reference + timedelta(days=to_days)
+        return [
+            sub
+            for sub in self._subscriptions.values()
+            if sub.status == "active"
+            and sub.expires_at is not None
+            and lower <= sub.expires_at < upper
+        ]
+
     async def cancel(self, subscription_id: str, reason: str = None) -> bool:
         """Cancel a subscription."""
         if subscription_id in self._subscriptions:

@@ -120,7 +120,143 @@ async def test_startup_catchup_calls_precompute_for_each_timezone():
     svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
     svc._precompute = mock_precompute
     svc._distinct_timezones = ["UTC", "Asia/Ho_Chi_Minh"]
+    svc._trial_push = None  # disable trial-push branch for this test
 
     await svc._startup_catchup()
 
     assert mock_precompute.precompute_for_timezone.call_count == 2
+
+
+# ── Trial-expiry coverage ──────────────────────────────────────────────────────
+
+
+def test_render_trial_expiry_2d_en_male_returns_2_day_body():
+    from src.infra.services.scheduled_notification_service import _render_message
+
+    title, body = _render_message(
+        "trial_expiry_2d", 0, "male", "en"
+    )
+    assert title == "Nutree"
+    assert "2 days" in body
+
+
+def test_render_trial_expiry_1d_en_female_returns_1_day_body():
+    from src.infra.services.scheduled_notification_service import _render_message
+
+    title, body = _render_message(
+        "trial_expiry_1d", 0, "female", "en"
+    )
+    assert title == "Nutree"
+    assert "tomorrow" in body.lower()
+
+
+def test_render_trial_expiry_2d_vi_male_returns_vietnamese():
+    from src.infra.services.scheduled_notification_service import _render_message
+
+    title, body = _render_message(
+        "trial_expiry_2d", 0, "male", "vi"
+    )
+    assert "2 ngày" in body
+    assert "bro" in body
+
+
+def test_render_trial_expiry_1d_vi_female_returns_vietnamese():
+    from src.infra.services.scheduled_notification_service import _render_message
+
+    _, body = _render_message(
+        "trial_expiry_1d", 0, "female", "vi"
+    )
+    assert "bạn ơi" in body
+    assert "mai" in body
+
+
+def test_render_unknown_type_falls_through_to_generic_stub():
+    from src.infra.services.scheduled_notification_service import _render_message
+
+    _, body = _render_message("totally_unknown", 0, "male", "en")
+    assert body == "You have a notification 📬"
+
+
+def _make_trial_notif(notif_type: str = "trial_expiry_2d"):
+    n = MagicMock()
+    n.id = "n1"
+    n.user_id = "u1"
+    n.notification_type = notif_type
+    n.context = {
+        "fcm_tokens": ["tok1"],
+        "calorie_goal": 2000,
+        "calories_consumed": 0,
+        "gender": "male",
+        "language_code": "en",
+    }
+    return n
+
+
+@pytest.mark.asyncio
+async def test_send_due_normalizes_trial_fcm_type():
+    """trial_expiry_2d in DB → 'trial_expiry' in FCM data.type."""
+    import asyncio as _asyncio
+
+    from src.infra.services.scheduled_notification_service import (
+        ScheduledNotificationService,
+    )
+
+    svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
+    svc._firebase = MagicMock()
+    svc._firebase.send_multicast = MagicMock(
+        return_value={"success": True, "failed_tokens": []}
+    )
+    svc._redis = AsyncMock()
+    svc._redis.hgetall_batch = AsyncMock(return_value=[{}])
+    svc._running = True
+
+    async def _passthrough(fn, *a, **kw):
+        return fn(*a, **kw)
+
+    with patch(
+        "src.infra.services.scheduled_notification_service.ReminderQueryBuilder"
+    ) as Q, patch(
+        "src.infra.services.scheduled_notification_service.UnitOfWork"
+    ), patch.object(_asyncio, "to_thread", new=_passthrough):
+        Q.find_due_notifications.return_value = [_make_trial_notif("trial_expiry_2d")]
+        await svc._send_due_notifications(
+            datetime(2026, 5, 17, tzinfo=timezone.utc)
+        )
+
+    call_kwargs = svc._firebase.send_multicast.call_args.kwargs
+    assert call_kwargs["notification_type"] == "trial_expiry"
+
+
+@pytest.mark.asyncio
+async def test_send_due_trial_skips_redis_lookup(caplog):
+    """Trial rows must NOT log Redis cache-miss WARNING."""
+    import asyncio as _asyncio
+
+    from src.infra.services.scheduled_notification_service import (
+        ScheduledNotificationService,
+    )
+
+    svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
+    svc._firebase = MagicMock()
+    svc._firebase.send_multicast = MagicMock(
+        return_value={"success": True, "failed_tokens": []}
+    )
+    svc._redis = AsyncMock()
+    svc._redis.hgetall_batch = AsyncMock(return_value=[{}])  # empty cache
+    svc._running = True
+
+    async def _passthrough(fn, *a, **kw):
+        return fn(*a, **kw)
+
+    with patch(
+        "src.infra.services.scheduled_notification_service.ReminderQueryBuilder"
+    ) as Q, patch(
+        "src.infra.services.scheduled_notification_service.UnitOfWork"
+    ), patch.object(_asyncio, "to_thread", new=_passthrough):
+        Q.find_due_notifications.return_value = [_make_trial_notif("trial_expiry_1d")]
+        with caplog.at_level("WARNING"):
+            await svc._send_due_notifications(
+                datetime(2026, 5, 17, tzinfo=timezone.utc)
+            )
+
+    assert "Redis cache miss" not in caplog.text

@@ -206,7 +206,7 @@ class FatSecretService:
                 # Log error details if present
                 error = result.get("error")
                 if error:
-                    logger.error(f"FatSecret API error for '{query}': {error}")
+                    logger.warning(f"FatSecret API error for '{query}': {error}")
                 else:
                     logger.warning(
                         f"FatSecret returned no foods for '{query}'. "

@@ -1,13 +1,21 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.6.1
-**Last Updated:** April 17, 2026
+**Version:** 0.6.2
+**Last Updated:** May 15, 2026
 **Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 681+ tests, 70%+ coverage.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
 
 ## Completed Phases
+
+### May 2026: Nutrition Fixes, Referral Improvements, Email Deep Links
+- [x] Configurable referral commission rates via `REFERRAL_COMMISSIONS` env var (per-currency JSON)
+- [x] Custom unit-to-grams normalization fix in nutrition calculation (`convert_quantity_to_grams`)
+- [x] BMR floor raised to 85% of standard daily; cutting deficit reduced 500→300 kcal (clinical floor: 1200F/1500M)
+- [x] Email Universal Links: `/.well-known/apple-app-site-association` + `/app-download` redirect
+- [x] AsyncUnitOfWork concurrency guard (`asyncio.Lock`); handlers cloned with fresh UoW per dispatch
+- [x] Variable-length referral codes: 3–15 characters (PR #252)
 
 ### April 2026: Sentry Monitoring, Meal Discovery, Onboarding Redesign
 - [x] Sentry SDK integration for error tracking and performance monitoring

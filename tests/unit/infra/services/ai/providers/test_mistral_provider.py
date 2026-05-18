@@ -1,6 +1,8 @@
 """Tests for MistralProvider."""
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+
 from src.domain.ports.ai_provider_port import AICapability
 from src.infra.services.ai.providers.mistral_provider import MistralProvider
 
@@ -50,14 +52,13 @@ class TestProviderInterface:
 class TestGenerate:
     @pytest.mark.asyncio
     async def test_generate_returns_dict(self, provider_with_key):
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = '{"meal": "test"}'
-
-        with patch("mistralai.client.Mistral") as mock_mistral:
-            mock_client = MagicMock()
-            mock_client.chat.complete.return_value = mock_response
-            mock_mistral.return_value = mock_client
+        with patch.object(
+            provider_with_key,
+            "_complete_chat",
+            new=AsyncMock(return_value={
+                "choices": [{"message": {"content": '{"meal": "test"}'}}],
+            }),
+        ):
 
             result = await provider_with_key.generate(
                 model="mistral-small-latest",
@@ -79,14 +80,13 @@ class TestGenerate:
 
     @pytest.mark.asyncio
     async def test_generate_with_json_response_format(self, provider_with_key):
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = '{"result": "success"}'
-
-        with patch("mistralai.client.Mistral") as mock_mistral:
-            mock_client = MagicMock()
-            mock_client.chat.complete.return_value = mock_response
-            mock_mistral.return_value = mock_client
+        with patch.object(
+            provider_with_key,
+            "_complete_chat",
+            new=AsyncMock(return_value={
+                "choices": [{"message": {"content": '{"result": "success"}'}}],
+            }),
+        ) as mock_complete:
 
             await provider_with_key.generate(
                 model="mistral-small-latest",
@@ -95,21 +95,20 @@ class TestGenerate:
                 response_type="json",
             )
 
-            call_kwargs = mock_client.chat.complete.call_args[1]
-            assert call_kwargs["response_format"] == {"type": "json_object"}
+            payload = mock_complete.call_args[0][0]
+            assert payload["response_format"] == {"type": "json_object"}
 
 
 class TestVision:
     @pytest.mark.asyncio
     async def test_generate_with_vision_uses_mistral_large(self, provider_with_key):
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = '{"food": "pizza"}'
-
-        with patch("mistralai.client.Mistral") as mock_mistral:
-            mock_client = MagicMock()
-            mock_client.chat.complete.return_value = mock_response
-            mock_mistral.return_value = mock_client
+        with patch.object(
+            provider_with_key,
+            "_complete_chat",
+            new=AsyncMock(return_value={
+                "choices": [{"message": {"content": '{"food": "pizza"}'}}],
+            }),
+        ) as mock_complete:
 
             result = await provider_with_key.generate_with_vision(
                 model="any-model",
@@ -117,8 +116,8 @@ class TestVision:
                 image_data=b"fake_image_bytes",
             )
 
-            call_kwargs = mock_client.chat.complete.call_args[1]
-            assert call_kwargs["model"] == "mistral-large-latest"
+            payload = mock_complete.call_args[0][0]
+            assert payload["model"] == "mistral-large-latest"
             assert result["food"] == "pizza"
 
 
