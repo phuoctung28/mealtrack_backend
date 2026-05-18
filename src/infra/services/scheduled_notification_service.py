@@ -83,9 +83,7 @@ class ScheduledNotificationService:
                 "trial_push_service — trial reminders disabled"
             )
         else:
-            logger.info(
-                "ScheduledNotificationService: trial_push scheduler active"
-            )
+            logger.info("ScheduledNotificationService: trial_push scheduler active")
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -158,9 +156,7 @@ class ScheduledNotificationService:
 
         if self._trial_push is not None:
             try:
-                await asyncio.to_thread(
-                    self._trial_push.check_and_schedule_pushes, now
-                )
+                await asyncio.to_thread(self._trial_push.check_and_schedule_pushes, now)
             except Exception:
                 logger.exception("Startup trial-push catchup failed")
 
@@ -183,31 +179,36 @@ class ScheduledNotificationService:
                         self._trial_push.check_and_schedule_pushes, now
                     )
                 except Exception:
-                    logger.exception(
-                        "Trial-push scheduling failed for tz=%s", tz_name
-                    )
+                    logger.exception("Trial-push scheduling failed for tz=%s", tz_name)
 
     # ── Phase 2: Send due notifications ───────────────────────────────────────
 
     async def _send_due_notifications(self, now: datetime) -> None:
         """Fetch due rows, pull consumed from Redis, render, batch FCM, mark sent."""
 
-        def _fetch_due():
+        def _claim_due():
             with UnitOfWork() as uow:
-                return ReminderQueryBuilder.find_due_notifications(uow.session, now)
+                due_rows = ReminderQueryBuilder.find_due_notifications(
+                    uow.session, now, lock_rows=True
+                )
+                for row in due_rows:
+                    row.status = "processing"
+                return due_rows
 
-        due = await asyncio.to_thread(_fetch_due)
+        due = await asyncio.to_thread(_claim_due)
         if not due:
             return
 
-        logger.info("Sending %d due notifications", len(due))
+        logger.info("Sending %d claimed due notifications", len(due))
 
         # Batch-fetch calories_consumed from Redis
         context_keys = [f"user_daily_context:{n.user_id}" for n in due]
         redis_contexts = await self._redis.hgetall_batch(context_keys)
 
         # Render messages per notification and group by (type, title, body)
-        groups: dict[tuple[str, str, str], list[str]] = defaultdict(list)
+        groups: dict[tuple[str, str, str], dict[str, list[str]]] = defaultdict(
+            lambda: {"tokens": [], "ids": []}
+        )
         sent_ids = []
         failed_ids = []
 
@@ -249,21 +250,31 @@ class ScheduledNotificationService:
                 calories_consumed=calories_consumed,
                 calorie_goal=calorie_goal,
             )
-            for tok in tokens:
-                groups[(notif.notification_type, title, body)].append(tok)
+            group = groups[(notif.notification_type, title, body)]
+            group["tokens"].extend(tokens)
+            group["ids"].append(str(notif.id))
             sent_ids.append(notif.id)
 
         # Batch FCM — 500 tokens per call.
         # DB stores trial_expiry_2d / trial_expiry_1d so the UNIQUE
         # (user_id, type, scheduled_date) constraint dedups per-day; mobile expects
         # a single "trial_expiry" type in data.type for dispatch.
-        for (notif_type, title, body), tokens in groups.items():
+        for (notif_type, title, body), group in groups.items():
             fcm_type = (
                 "trial_expiry" if notif_type.startswith("trial_expiry") else notif_type
             )
+            data = {
+                "notification_ids": ",".join(group["ids"]),
+                "notification_count": str(len(group["ids"])),
+            }
+            tokens = group["tokens"]
             for chunk in _chunked(tokens, 500):
                 result = self._firebase.send_multicast(
-                    tokens=chunk, title=title, body=body, notification_type=fcm_type
+                    tokens=chunk,
+                    title=title,
+                    body=body,
+                    notification_type=fcm_type,
+                    data=data,
                 )
                 if result.get("failed_tokens"):
                     await self._handle_failed_tokens(result["failed_tokens"])
@@ -285,16 +296,20 @@ class ScheduledNotificationService:
         with UnitOfWork() as uow:
             if sent_ids:
                 uow.session.execute(
-                    text(
-                        "UPDATE notifications SET status = 'sent' WHERE id IN :ids"
-                    ).bindparams(bindparam("ids", expanding=True)),
+                    text("""
+                        UPDATE notifications
+                        SET status = 'sent'
+                        WHERE status = 'processing' AND id IN :ids
+                        """).bindparams(bindparam("ids", expanding=True)),
                     {"ids": sent_ids},
                 )
             if failed_ids:
                 uow.session.execute(
-                    text(
-                        "UPDATE notifications SET status = 'failed' WHERE id IN :ids"
-                    ).bindparams(bindparam("ids", expanding=True)),
+                    text("""
+                        UPDATE notifications
+                        SET status = 'failed'
+                        WHERE status = 'processing' AND id IN :ids
+                        """).bindparams(bindparam("ids", expanding=True)),
                     {"ids": failed_ids},
                 )
 
@@ -378,7 +393,9 @@ def _render_message(
             return "Nutree", summary["zero_logs"]["body"]
         pct = (calories_consumed / calorie_goal * 100) if calorie_goal > 0 else 0
         if 95 <= pct <= 105:
-            return "Nutree", summary["on_target"]["body_template"].format(percentage=int(pct))
+            return "Nutree", summary["on_target"]["body_template"].format(
+                percentage=int(pct)
+            )
         elif pct < 95:
             return "Nutree", summary["under_goal"]["body_template"].format(
                 deficit=int(calorie_goal - calories_consumed)

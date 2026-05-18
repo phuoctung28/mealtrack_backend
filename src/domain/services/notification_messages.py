@@ -1,8 +1,9 @@
 """
 Notification message templates keyed by language and gender.
 
-Time Sensitive notifications: title is empty (iOS shows app name).
-All content in body field with emoji at end.
+Time Sensitive notifications use a title plus body field.
+Bodies intentionally include one line break so iOS renders richer copy across
+two lines without leaving the emoji alone on a third line.
 
 Gender-aware buddy terms:
 - EN: male="bro", female="mate"
@@ -18,80 +19,80 @@ NOTIFICATION_MESSAGES = {
         "male": {
             "meal_reminder": {
                 "breakfast": {
-                    "body": "Morning, bro! Grab a bite or coffee — log it! ☕",
+                    "body": "Morning, bro! Grab a bite or coffee\nWhen you can — log it 🌅",
                 },
                 "lunch": {
-                    "body_template": "Lunch o'clock, bro! {remaining} cal left — what's on the plate? 🥗",
+                    "body_template": "Lunch o'clock, bro! {remaining} cal left\nWhat's going on the plate? 🥗",
                 },
                 "dinner": {
-                    "body_template": "Dinner time, bro! {remaining} cal left — make it count! 🍽️",
+                    "body_template": "Dinner time, bro! {remaining} cal left\nMake it count tonight 🌙",
                 },
             },
             "daily_summary": {
                 "zero_logs": {
-                    "body": "Busy day, bro? Drop a quick meal log when you can! 📝",
+                    "body": "Busy day, bro? No stress\nLog one quick meal when you can 📝",
                 },
                 "on_target": {
-                    "body_template": "Crushed it, bro! {percentage}% of your goal! 🎉",
+                    "body_template": "Crushed it, bro! {percentage}% of your goal\nKeep that momentum going 🎉",
                 },
                 "under_goal": {
-                    "body_template": "Almost there, bro! {deficit} cal left — grab a snack! 💪",
+                    "body_template": "Almost there, bro! {deficit} cal left\nA smart snack can close it 💪",
                 },
                 "slightly_over": {
-                    "body_template": "No stress, bro! {excess} cal over — keep going! 😎",
+                    "body_template": "No stress, bro! {excess} cal over\nKeep going and stay consistent 😎",
                 },
                 "way_over": {
-                    "body_template": "All good, bro! {excess} cal over — tomorrow's a fresh start! 🤙",
+                    "body_template": "All good, bro! {excess} cal over\nTomorrow's a fresh start 🤙",
                 },
             },
             "trial_expiry": {
                 "2d": {
                     "title": "Nutree",
-                    "body": "Heads up, bro — your trial ends in 2 days. Lock in your streak! ⏳",
+                    "body": "Heads up, bro — trial ends in 2 days\nLock in your streak ⏳",
                 },
                 "1d": {
                     "title": "Nutree",
-                    "body": "Last day, bro — trial ends tomorrow. Keep your progress going! 🔥",
+                    "body": "Last day, bro — trial ends tomorrow\nKeep your progress going 🔥",
                 },
             },
         },
         "female": {
             "meal_reminder": {
                 "breakfast": {
-                    "body": "Morning, mate! Grab a bite or coffee — log it! ☕",
+                    "body": "Morning, mate! Grab a bite or coffee\nWhen you can — log it 🌅",
                 },
                 "lunch": {
-                    "body_template": "Lunch o'clock, mate! {remaining} cal left — what's on the plate? 🥗",
+                    "body_template": "Lunch o'clock, mate! {remaining} cal left\nWhat's going on the plate? 🥗",
                 },
                 "dinner": {
-                    "body_template": "Dinner time, mate! {remaining} cal left — make it count! 🍽️",
+                    "body_template": "Dinner time, mate! {remaining} cal left\nMake it count tonight 🌙",
                 },
             },
             "daily_summary": {
                 "zero_logs": {
-                    "body": "Busy day, mate? Drop a quick meal log when you can! 📝",
+                    "body": "Busy day, mate? No stress\nLog one quick meal when you can 📝",
                 },
                 "on_target": {
-                    "body_template": "Crushed it, mate! {percentage}% of your goal! 🎉",
+                    "body_template": "Crushed it, mate! {percentage}% of your goal\nKeep that momentum going 🎉",
                 },
                 "under_goal": {
-                    "body_template": "Almost there, mate! {deficit} cal left — grab a snack! 💪",
+                    "body_template": "Almost there, mate! {deficit} cal left\nA smart snack can close it 💪",
                 },
                 "slightly_over": {
-                    "body_template": "No stress, mate! {excess} cal over — keep going! 😎",
+                    "body_template": "No stress, mate! {excess} cal over\nKeep going and stay consistent 😎",
                 },
                 "way_over": {
-                    "body_template": "All good, mate! {excess} cal over — tomorrow's a fresh start! 🤙",
+                    "body_template": "All good, mate! {excess} cal over\nTomorrow's a fresh start 🤙",
                 },
             },
             "trial_expiry": {
                 "2d": {
                     "title": "Nutree",
-                    "body": "Heads up, mate — your trial ends in 2 days. Lock in your streak! ⏳",
+                    "body": "Heads up, mate — trial ends in 2 days\nLock in your streak ⏳",
                 },
                 "1d": {
                     "title": "Nutree",
-                    "body": "Last day, mate — trial ends tomorrow. Keep your progress going! 🔥",
+                    "body": "Last day, mate — trial ends tomorrow\nKeep your progress going 🔥",
                 },
             },
         },
@@ -100,80 +101,80 @@ NOTIFICATION_MESSAGES = {
         "male": {
             "meal_reminder": {
                 "breakfast": {
-                    "body": "Sáng rồi bro! Ăn nhẹ hay cà phê đi — ghi lại nha! ☕",
+                    "body": "Sáng rồi bro! Ăn nhẹ hay cà phê đi\nNhớ ghi lại nha 🌅",
                 },
                 "lunch": {
-                    "body_template": "Trưa rồi bro! Còn {remaining} cal — ăn gì chưa? 🥗",
+                    "body_template": "Trưa rồi bro! Còn {remaining} cal\nĂn gì cho ngon đây? 🥗",
                 },
                 "dinner": {
-                    "body_template": "Tối rồi bro! Còn {remaining} cal — ăn gì đi hả? 🍽️",
+                    "body_template": "Tối rồi bro! Còn {remaining} cal\nĂn gì cho đúng mục tiêu? 🌙",
                 },
             },
             "daily_summary": {
                 "zero_logs": {
-                    "body": "Bận cả ngày hả bro? Tranh thủ ghi lại bữa nào đó nha! 📝",
+                    "body": "Bận cả ngày hả bro? Không sao\nTranh thủ ghi lại một bữa nha 📝",
                 },
                 "on_target": {
-                    "body_template": "Đỉnh nóc bro! {percentage}% mục tiêu! 🎉",
+                    "body_template": "Đỉnh nóc bro! {percentage}% mục tiêu\nCứ giữ nhịp này nha 🎉",
                 },
                 "under_goal": {
-                    "body_template": "Gần tới rồi bro! Còn {deficit} cal — ăn nhẹ gì đi! 💪",
+                    "body_template": "Gần tới rồi bro! Còn {deficit} cal\nĂn nhẹ gì đó đi 💪",
                 },
                 "slightly_over": {
-                    "body_template": "Thoải mái bro! Vượt một ít {excess} cal — tiếp tục nha! 😎",
+                    "body_template": "Thoải mái bro! Vượt {excess} cal\nVẫn ổn, tiếp tục nha 😎",
                 },
                 "way_over": {
-                    "body_template": "Không sao bro! Vượt {excess} cal — mai là ngày mới! 🤙",
+                    "body_template": "Không sao bro! Vượt {excess} cal\nMai là ngày mới nha 🤙",
                 },
             },
             "trial_expiry": {
                 "2d": {
                     "title": "Nutree",
-                    "body": "Còn 2 ngày là trial hết hạn nha bro — giữ streak nào! ⏳",
+                    "body": "Trial còn 2 ngày là hết hạn nha bro\nGiữ streak tiếp nào ⏳",
                 },
                 "1d": {
                     "title": "Nutree",
-                    "body": "Ngày cuối rồi bro — trial mai hết hạn. Tiếp tục nha! 🔥",
+                    "body": "Mai hết trial rồi bro\nĐừng để mất tiến độ nha 🔥",
                 },
             },
         },
         "female": {
             "meal_reminder": {
                 "breakfast": {
-                    "body": "Sáng rồi bạn ơi! Ăn nhẹ hay cà phê đi — ghi lại nha! ☕",
+                    "body": "Sáng rồi bạn ơi! Ăn nhẹ hay cà phê đi\nNhớ ghi lại nha 🌅",
                 },
                 "lunch": {
-                    "body_template": "Trưa rồi bạn ơi! Còn {remaining} cal — ăn gì chưa? 🥗",
+                    "body_template": "Trưa rồi bạn ơi! Còn {remaining} cal\nĂn gì cho ngon đây? 🥗",
                 },
                 "dinner": {
-                    "body_template": "Tối rồi bạn ơi! Còn {remaining} cal — ăn gì đi hả? 🍽️",
+                    "body_template": "Tối rồi bạn ơi! Còn {remaining} cal\nĂn gì cho đúng mục tiêu? 🌙",
                 },
             },
             "daily_summary": {
                 "zero_logs": {
-                    "body": "Bận cả ngày hả bạn ơi? Tranh thủ ghi lại bữa nào đó nha! 📝",
+                    "body": "Bận cả ngày hả bạn ơi? Không sao\nTranh thủ ghi lại một bữa nha 📝",
                 },
                 "on_target": {
-                    "body_template": "Đỉnh nóc bạn ơi! {percentage}% mục tiêu! 🎉",
+                    "body_template": "Đỉnh nóc bạn ơi! {percentage}% mục tiêu\nCứ giữ nhịp này nha 🎉",
                 },
                 "under_goal": {
-                    "body_template": "Gần tới rồi bạn ơi! Còn {deficit} cal — ăn nhẹ gì đi! 💪",
+                    "body_template": "Gần tới rồi bạn ơi! Còn {deficit} cal\nĂn nhẹ gì đó đi 💪",
                 },
                 "slightly_over": {
-                    "body_template": "Thoải mái bạn ơi! Vượt một ít {excess} cal — tiếp tục nha! 😎",
+                    "body_template": "Thoải mái bạn ơi! Vượt {excess} cal\nVẫn ổn, tiếp tục nha 😎",
                 },
                 "way_over": {
-                    "body_template": "Không sao bạn ơi! Vượt {excess} cal — mai là ngày mới! 🤙",
+                    "body_template": "Không sao bạn ơi! Vượt {excess} cal\nMai là ngày mới nha 🤙",
                 },
             },
             "trial_expiry": {
                 "2d": {
                     "title": "Nutree",
-                    "body": "Còn 2 ngày là trial hết hạn nha bạn ơi — giữ streak nào! ⏳",
+                    "body": "Trial còn 2 ngày là hết hạn nha bạn ơi\nGiữ streak tiếp nào ⏳",
                 },
                 "1d": {
                     "title": "Nutree",
-                    "body": "Ngày cuối rồi bạn ơi — trial mai hết hạn. Tiếp tục nha! 🔥",
+                    "body": "Mai hết trial rồi bạn ơi\nĐừng để mất tiến độ nha 🔥",
                 },
             },
         },
