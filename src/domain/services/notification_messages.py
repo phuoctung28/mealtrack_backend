@@ -44,6 +44,16 @@ NOTIFICATION_MESSAGES = {
                     "body_template": "All good, bro! {excess} cal over — tomorrow's a fresh start! 🤙",
                 },
             },
+            "trial_expiry": {
+                "2d": {
+                    "title": "",
+                    "body": "Heads up, bro — your trial ends in 2 days. Lock in your streak! ⏳",
+                },
+                "1d": {
+                    "title": "",
+                    "body": "Last day, bro — trial ends tomorrow. Keep your progress going! 🔥",
+                },
+            },
         },
         "female": {
             "meal_reminder": {
@@ -72,6 +82,16 @@ NOTIFICATION_MESSAGES = {
                 },
                 "way_over": {
                     "body_template": "All good, mate! {excess} cal over — tomorrow's a fresh start! 🤙",
+                },
+            },
+            "trial_expiry": {
+                "2d": {
+                    "title": "",
+                    "body": "Heads up, mate — your trial ends in 2 days. Lock in your streak! ⏳",
+                },
+                "1d": {
+                    "title": "",
+                    "body": "Last day, mate — trial ends tomorrow. Keep your progress going! 🔥",
                 },
             },
         },
@@ -106,6 +126,16 @@ NOTIFICATION_MESSAGES = {
                     "body_template": "Không sao bro! Vượt {excess} cal — mai là ngày mới! 🤙",
                 },
             },
+            "trial_expiry": {
+                "2d": {
+                    "title": "",
+                    "body": "Còn 2 ngày là trial hết hạn nha bro — giữ streak nào! ⏳",
+                },
+                "1d": {
+                    "title": "",
+                    "body": "Ngày cuối rồi bro — trial mai hết hạn. Tiếp tục nha! 🔥",
+                },
+            },
         },
         "female": {
             "meal_reminder": {
@@ -134,6 +164,16 @@ NOTIFICATION_MESSAGES = {
                 },
                 "way_over": {
                     "body_template": "Không sao bạn ơi! Vượt {excess} cal — mai là ngày mới! 🤙",
+                },
+            },
+            "trial_expiry": {
+                "2d": {
+                    "title": "",
+                    "body": "Còn 2 ngày là trial hết hạn nha bạn ơi — giữ streak nào! ⏳",
+                },
+                "1d": {
+                    "title": "",
+                    "body": "Ngày cuối rồi bạn ơi — trial mai hết hạn. Tiếp tục nha! 🔥",
                 },
             },
         },

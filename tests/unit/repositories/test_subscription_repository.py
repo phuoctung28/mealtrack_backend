@@ -2,7 +2,7 @@
 Unit tests for SubscriptionRepository.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 
 from src.infra.database.models.subscription import Subscription
@@ -128,6 +128,56 @@ class TestSubscriptionRepository:
         result = self.repository.get_expired_subscriptions()
 
         assert len(result) == 1
+
+    def test_find_expiring_in_window_queries_subscription(self):
+        """Window query returns subscriptions filtered through SQLAlchemy."""
+        sub = Mock(spec=Subscription, status="active")
+        self.mock_session.query.return_value.filter.return_value.all.return_value = [
+            sub
+        ]
+
+        result = self.repository.find_expiring_in_window(from_days=1, to_days=2)
+
+        assert result == [sub]
+        self.mock_session.query.assert_called_with(Subscription)
+
+    def test_find_expiring_in_window_is_deterministic_with_now(self):
+        """Passing `now` pins both bounds against the same reference moment."""
+        self.mock_session.query.return_value.filter.return_value.all.return_value = []
+        fixed = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        # Two consecutive calls with the same `now` must produce the same
+        # bound literals. SQLAlchemy expressions don't support ==; compile
+        # them and compare the rendered SQL + parameter values.
+        from sqlalchemy.dialects import postgresql
+
+        def _compiled(call):
+            expr = call.args[0]
+            return str(
+                expr.compile(
+                    dialect=postgresql.dialect(),
+                    compile_kwargs={"literal_binds": True},
+                )
+            )
+
+        self.repository.find_expiring_in_window(
+            from_days=1, to_days=2, now=fixed
+        )
+        first = _compiled(
+            self.mock_session.query.return_value.filter.call_args
+        )
+
+        self.repository.find_expiring_in_window(
+            from_days=1, to_days=2, now=fixed
+        )
+        second = _compiled(
+            self.mock_session.query.return_value.filter.call_args
+        )
+
+        assert first == second
+        # Bound timestamps must appear in the compiled SQL (proves `now` was used).
+        assert "2026-06-02" in first  # from_days=1
+        assert "2026-06-03" in first  # to_days=2
 
     def test_update_subscription_status(self):
         """Test updating subscription status."""

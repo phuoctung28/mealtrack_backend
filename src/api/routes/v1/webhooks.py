@@ -12,6 +12,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Header
 
+from sqlalchemy import text
+
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
@@ -195,6 +197,26 @@ async def handle_renewal(uow, user, event):
     else:
         logger.warning(f"Subscription not found for renewal, creating new one")
         await handle_purchase(uow, user, event)
+
+    # Purge any pending trial-expiry pushes so renewed users don't get a
+    # "your trial ends tomorrow" push for a sub that just auto-renewed.
+    try:
+        await uow.session.execute(
+            text(
+                """
+                DELETE FROM notifications
+                WHERE user_id = :uid
+                  AND notification_type LIKE 'trial_expiry%'
+                  AND status = 'pending'
+                """
+            ),
+            {"uid": user.id},
+        )
+    except Exception:
+        # Do not raise — webhook MUST still ACK so RevenueCat doesn't retry.
+        logger.exception(
+            "Failed to purge stale trial pushes for user %s after renewal", user.id
+        )
 
 
 async def handle_cancellation(uow, user, event):

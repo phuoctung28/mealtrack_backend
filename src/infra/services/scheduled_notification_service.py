@@ -31,6 +31,9 @@ from src.infra.services.daily_context_precompute_service import (
     DailyContextPrecomputeService,
 )
 from src.infra.services.firebase_service import FirebaseService
+from src.infra.services.scheduled_subscription_push_service import (
+    ScheduledSubscriptionPushService,
+)
 from src.infra.services.scheduler_leader_lock import SchedulerLeaderLock
 
 logger = logging.getLogger(__name__)
@@ -57,16 +60,32 @@ class ScheduledNotificationService:
     LOOP_INTERVAL_SECONDS = 60
     LOOP_ERROR_RETRY_SECONDS = 30
 
-    def __init__(self, firebase_service: FirebaseService, redis_client: RedisClient):
+    def __init__(
+        self,
+        firebase_service: FirebaseService,
+        redis_client: RedisClient,
+        trial_push_service: "ScheduledSubscriptionPushService | None" = None,
+    ):
         self._firebase = firebase_service
         self._redis = redis_client
         self._precompute = DailyContextPrecomputeService(redis_client)
+        self._trial_push = trial_push_service
         self._running = False
         self._tasks: List[asyncio.Task] = []
         self._leader_lock = SchedulerLeaderLock()
         self._leader_acquired = False
         self._cleanup_counter = 0
         self._distinct_timezones: list[str] = []
+
+        if self._trial_push is None:
+            logger.warning(
+                "ScheduledNotificationService constructed without "
+                "trial_push_service — trial reminders disabled"
+            )
+        else:
+            logger.info(
+                "ScheduledNotificationService: trial_push scheduler active"
+            )
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -137,6 +156,14 @@ class ScheduledNotificationService:
             "Startup catch-up complete for %d timezones", len(self._distinct_timezones)
         )
 
+        if self._trial_push is not None:
+            try:
+                await asyncio.to_thread(
+                    self._trial_push.check_and_schedule_pushes, now
+                )
+            except Exception:
+                logger.exception("Startup trial-push catchup failed")
+
     # ── Phase 1: Midnight pre-compute ─────────────────────────────────────────
 
     async def _check_midnight_precompute(self, now: datetime) -> None:
@@ -149,6 +176,16 @@ class ScheduledNotificationService:
                 await self._precompute.precompute_for_timezone(tz_name, today)
             except Exception as exc:
                 logger.error("Pre-compute failed for %s: %s", tz_name, exc)
+
+            if self._trial_push is not None:
+                try:
+                    await asyncio.to_thread(
+                        self._trial_push.check_and_schedule_pushes, now
+                    )
+                except Exception:
+                    logger.exception(
+                        "Trial-push scheduling failed for tz=%s", tz_name
+                    )
 
     # ── Phase 2: Send due notifications ───────────────────────────────────────
 
@@ -188,6 +225,10 @@ class ScheduledNotificationService:
             if notif.notification_type == "daily_summary":
                 # Use JSONB snapshot from midnight pre-compute (stable for full-day summary)
                 calories_consumed = int(ctx.get("calories_consumed", 0))
+            elif notif.notification_type.startswith("trial_expiry"):
+                # Trial reminders don't depend on calorie data; skip Redis to avoid
+                # a "cache miss" WARNING per row.
+                calories_consumed = 0
             else:
                 # Use Redis for meal reminders (fresher, ~30 min stale)
                 if not redis_ctx:
@@ -212,11 +253,17 @@ class ScheduledNotificationService:
                 groups[(notif.notification_type, title, body)].append(tok)
             sent_ids.append(notif.id)
 
-        # Batch FCM — 500 tokens per call
+        # Batch FCM — 500 tokens per call.
+        # DB stores trial_expiry_2d / trial_expiry_1d so the UNIQUE
+        # (user_id, type, scheduled_date) constraint dedups per-day; mobile expects
+        # a single "trial_expiry" type in data.type for dispatch.
         for (notif_type, title, body), tokens in groups.items():
+            fcm_type = (
+                "trial_expiry" if notif_type.startswith("trial_expiry") else notif_type
+            )
             for chunk in _chunked(tokens, 500):
                 result = self._firebase.send_multicast(
-                    tokens=chunk, title=title, body=body, notification_type=notif_type
+                    tokens=chunk, title=title, body=body, notification_type=fcm_type
                 )
                 if result.get("failed_tokens"):
                     await self._handle_failed_tokens(result["failed_tokens"])
@@ -344,6 +391,12 @@ def _render_message(
             return "", summary["way_over"]["body_template"].format(
                 excess=int(calories_consumed - calorie_goal)
             )
+    elif notification_type.startswith("trial_expiry"):
+        days = "2d" if notification_type.endswith("_2d") else "1d"
+        trial = messages.get("trial_expiry", {}).get(days, {})
+        return trial.get("title", ""), trial.get(
+            "body", "Your trial is ending soon."
+        )
     return "", "You have a notification 📬"
 
 
