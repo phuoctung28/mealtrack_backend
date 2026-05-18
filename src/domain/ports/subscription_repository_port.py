@@ -38,6 +38,20 @@ class SubscriptionRepositoryPort(ABC):
         pass
 
     @abstractmethod
+    def find_expiring_in_window(
+        self,
+        from_days: int,
+        to_days: int,
+        now: Optional[datetime] = None,
+    ) -> List[Subscription]:
+        """Active subs whose expires_at falls within [reference+from_days, reference+to_days).
+
+        `now` lets callers pin the reference moment for deterministic tests and
+        consistent window boundaries within a single scheduler run.
+        """
+        pass
+
+    @abstractmethod
     def cancel(self, subscription_id: str, reason: str = None) -> bool:
         """Cancel a subscription."""
         pass
