@@ -3,6 +3,7 @@ Health check endpoints for monitoring and status.
 """
 
 import asyncio
+import os
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter
@@ -19,6 +20,23 @@ from src.infra.database.config import (
 router = APIRouter(tags=["Health"])
 
 
+def _deployment_info() -> Dict[str, Optional[str]]:
+    """Expose non-sensitive deploy identity for staging/runtime verification."""
+    return {
+        "environment": os.getenv("ENVIRONMENT"),
+        "railway_environment": os.getenv("RAILWAY_ENVIRONMENT_NAME"),
+        "git_branch": os.getenv("GIT_BRANCH") or os.getenv("RAILWAY_GIT_BRANCH"),
+        "git_commit": (
+            os.getenv("GIT_SHA")
+            or os.getenv("COMMIT_SHA")
+            or os.getenv("RAILWAY_GIT_COMMIT_SHA")
+            or os.getenv("RENDER_GIT_COMMIT")
+            or os.getenv("SOURCE_VERSION")
+        ),
+        "app_version": os.getenv("APP_VERSION"),
+    }
+
+
 @router.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     """
@@ -30,6 +48,7 @@ async def health_check():
         content={
             "status": "healthy",
             "message": "API is running",
+            "deployment": _deployment_info(),
         },
     )
 
@@ -160,10 +179,15 @@ async def notification_health_check():
 
         firebase_service = FirebaseService()
 
+        from src.infra.services.push.apns_payload_builder import apns_diagnostics
+
         health_status = {
             "status": "healthy",
             "firebase_initialized": firebase_service.is_initialized(),
-            "components": {},
+            "deployment": _deployment_info(),
+            "components": {
+                "apns": {"status": "healthy", **apns_diagnostics()},
+            },
         }
 
         # Check Firebase Admin SDK

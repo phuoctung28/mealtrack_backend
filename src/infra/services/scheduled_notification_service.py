@@ -365,39 +365,39 @@ def _render_message(
     messages = get_messages(lang, gender)
     if notification_type == "meal_reminder_breakfast":
         cfg = messages["meal_reminder"]["breakfast"]
-        return "", cfg.get("body", "Time to log your meal 🍽️")
+        return "Nutree", cfg.get("body", "Time to log your meal 🍽️")
     elif notification_type == "meal_reminder_lunch":
         cfg = messages["meal_reminder"]["lunch"]
-        return "", cfg["body_template"].format(remaining=remaining)
+        return "Nutree", cfg["body_template"].format(remaining=remaining)
     elif notification_type == "meal_reminder_dinner":
         cfg = messages["meal_reminder"]["dinner"]
-        return "", cfg["body_template"].format(remaining=remaining)
+        return "Nutree", cfg["body_template"].format(remaining=remaining)
     elif notification_type == "daily_summary":
         summary = messages["daily_summary"]
         if calories_consumed == 0:
-            return "", summary["zero_logs"]["body"]
+            return "Nutree", summary["zero_logs"]["body"]
         pct = (calories_consumed / calorie_goal * 100) if calorie_goal > 0 else 0
         if 95 <= pct <= 105:
-            return "", summary["on_target"]["body_template"].format(percentage=int(pct))
+            return "Nutree", summary["on_target"]["body_template"].format(percentage=int(pct))
         elif pct < 95:
-            return "", summary["under_goal"]["body_template"].format(
+            return "Nutree", summary["under_goal"]["body_template"].format(
                 deficit=int(calorie_goal - calories_consumed)
             )
         elif pct <= 120:
-            return "", summary["slightly_over"]["body_template"].format(
+            return "Nutree", summary["slightly_over"]["body_template"].format(
                 excess=int(calories_consumed - calorie_goal)
             )
         else:
-            return "", summary["way_over"]["body_template"].format(
+            return "Nutree", summary["way_over"]["body_template"].format(
                 excess=int(calories_consumed - calorie_goal)
             )
     elif notification_type.startswith("trial_expiry"):
         days = "2d" if notification_type.endswith("_2d") else "1d"
         trial = messages.get("trial_expiry", {}).get(days, {})
-        return trial.get("title", ""), trial.get(
+        return trial.get("title", "Nutree") or "Nutree", trial.get(
             "body", "Your trial is ending soon."
         )
-    return "", "You have a notification 📬"
+    return "Nutree", "You have a notification 📬"
 
 
 def _chunked(lst: list, size: int):

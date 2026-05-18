@@ -21,9 +21,9 @@ def test_trial_expiry_keys_exist(lang, gender):
     assert "1d" in msgs["trial_expiry"]
     assert msgs["trial_expiry"]["2d"]["body"]
     assert msgs["trial_expiry"]["1d"]["body"]
-    # Time-sensitive: title is empty so iOS shows app name.
-    assert msgs["trial_expiry"]["2d"]["title"] == ""
-    assert msgs["trial_expiry"]["1d"]["title"] == ""
+    # iOS Time Sensitive requires a non-empty alert title — banner is suppressed otherwise.
+    assert msgs["trial_expiry"]["2d"]["title"] == "Nutree"
+    assert msgs["trial_expiry"]["1d"]["title"] == "Nutree"
 
 
 def test_trial_expiry_fallback_locale_returns_english():

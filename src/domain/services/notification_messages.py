@@ -46,11 +46,11 @@ NOTIFICATION_MESSAGES = {
             },
             "trial_expiry": {
                 "2d": {
-                    "title": "",
+                    "title": "Nutree",
                     "body": "Heads up, bro — your trial ends in 2 days. Lock in your streak! ⏳",
                 },
                 "1d": {
-                    "title": "",
+                    "title": "Nutree",
                     "body": "Last day, bro — trial ends tomorrow. Keep your progress going! 🔥",
                 },
             },
@@ -86,11 +86,11 @@ NOTIFICATION_MESSAGES = {
             },
             "trial_expiry": {
                 "2d": {
-                    "title": "",
+                    "title": "Nutree",
                     "body": "Heads up, mate — your trial ends in 2 days. Lock in your streak! ⏳",
                 },
                 "1d": {
-                    "title": "",
+                    "title": "Nutree",
                     "body": "Last day, mate — trial ends tomorrow. Keep your progress going! 🔥",
                 },
             },
@@ -128,11 +128,11 @@ NOTIFICATION_MESSAGES = {
             },
             "trial_expiry": {
                 "2d": {
-                    "title": "",
+                    "title": "Nutree",
                     "body": "Còn 2 ngày là trial hết hạn nha bro — giữ streak nào! ⏳",
                 },
                 "1d": {
-                    "title": "",
+                    "title": "Nutree",
                     "body": "Ngày cuối rồi bro — trial mai hết hạn. Tiếp tục nha! 🔥",
                 },
             },
@@ -168,11 +168,11 @@ NOTIFICATION_MESSAGES = {
             },
             "trial_expiry": {
                 "2d": {
-                    "title": "",
+                    "title": "Nutree",
                     "body": "Còn 2 ngày là trial hết hạn nha bạn ơi — giữ streak nào! ⏳",
                 },
                 "1d": {
-                    "title": "",
+                    "title": "Nutree",
                     "body": "Ngày cuối rồi bạn ơi — trial mai hết hạn. Tiếp tục nha! 🔥",
                 },
             },
