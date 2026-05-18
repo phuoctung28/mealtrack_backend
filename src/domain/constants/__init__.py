@@ -14,6 +14,7 @@ from .meal_constants import (
     TDEEConstants,
     WeeklyBudgetConstants,
 )
+from .met_table import MET_TABLE, estimate_burn
 
 __all__ = [
     "MealDistribution",
@@ -23,4 +24,6 @@ __all__ = [
     "MealPlanningConstants",
     "TDEEConstants",
     "WeeklyBudgetConstants",
+    "MET_TABLE",
+    "estimate_burn",
 ]

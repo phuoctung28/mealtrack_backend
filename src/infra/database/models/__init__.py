@@ -70,6 +70,12 @@ from .email_log import EmailLog
 # Promo codes (email marketing)
 from .promo_code import PromoCode, PromoCodeRedemption
 
+# Workout logging
+from .workout.workout_log_orm import WorkoutLogORM
+
+# Hydration logging
+from .hydration.hydration_entry_orm import HydrationEntryORM
+
 
 __all__ = [
     # Base
@@ -126,4 +132,8 @@ __all__ = [
     # Promo codes
     "PromoCode",
     "PromoCodeRedemption",
+    # Workout logging
+    "WorkoutLogORM",
+    # Hydration logging
+    "HydrationEntryORM",
 ]

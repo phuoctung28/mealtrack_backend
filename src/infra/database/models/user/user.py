@@ -2,7 +2,7 @@
 Core user model for authentication and account management.
 """
 
-from sqlalchemy import Column, String, Boolean, DateTime, Text, Index, Enum
+from sqlalchemy import Column, String, Boolean, DateTime, Text, Index, Enum, Integer
 from sqlalchemy.orm import relationship
 
 from src.api.schemas.common.auth_enums import AuthProviderEnum
@@ -51,6 +51,10 @@ class User(Base, BaseMixin):
     # Email preferences
     welcome_email_sent_at = Column(DateTime(timezone=True), nullable=True)
     email_opt_out = Column(Boolean, default=False, nullable=False)
+
+    # Hydration goal in millilitres. Application-enforced bounds: 500–4000.
+    # DB default 2000 ml covers the standard WHO recommendation for most adults.
+    hydration_goal_ml = Column(Integer, nullable=False, server_default="2000", default=2000)
 
     # Indexes for performance
     __table_args__ = (

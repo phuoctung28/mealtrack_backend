@@ -92,6 +92,14 @@ from src.app.commands.weight import (
     DeleteWeightEntryCommand,
     SyncWeightEntriesCommand,
 )
+from src.app.commands.workout import LogWorkoutCommand, DeleteWorkoutCommand
+from src.app.commands.hydration import (
+    LogHydrationCommand,
+    DeleteHydrationCommand,
+    UpdateHydrationGoalCommand,
+)
+from src.app.queries.workout import GetWorkoutsForDateQuery
+from src.app.queries.hydration import GetHydrationForDateQuery
 from src.app.queries.weight import GetWeightEntriesQuery
 from src.app.handlers.command_handlers.add_weight_entry_command_handler import (
     AddWeightEntryCommandHandler,
@@ -104,6 +112,27 @@ from src.app.handlers.command_handlers.sync_weight_entries_command_handler impor
 )
 from src.app.handlers.query_handlers.get_weight_entries_query_handler import (
     GetWeightEntriesQueryHandler,
+)
+from src.app.handlers.command_handlers.log_workout_command_handler import (
+    LogWorkoutCommandHandler,
+)
+from src.app.handlers.command_handlers.delete_workout_command_handler import (
+    DeleteWorkoutCommandHandler,
+)
+from src.app.handlers.command_handlers.log_hydration_command_handler import (
+    LogHydrationCommandHandler,
+)
+from src.app.handlers.command_handlers.delete_hydration_command_handler import (
+    DeleteHydrationCommandHandler,
+)
+from src.app.handlers.command_handlers.update_hydration_goal_command_handler import (
+    UpdateHydrationGoalCommandHandler,
+)
+from src.app.handlers.query_handlers.get_workouts_for_date_query_handler import (
+    GetWorkoutsForDateQueryHandler,
+)
+from src.app.handlers.query_handlers.get_hydration_for_date_query_handler import (
+    GetHydrationForDateQueryHandler,
 )
 from src.app.handlers.command_handlers.mark_cheat_day_command_handler import (
     MarkCheatDayCommandHandler,
@@ -561,6 +590,21 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         GetSavedSuggestionsQuery,
         GetSavedSuggestionsQueryHandler(cache_service=cache_service),
+    )
+
+    # Register workout handlers
+    event_bus.register_handler(LogWorkoutCommand, LogWorkoutCommandHandler())
+    event_bus.register_handler(DeleteWorkoutCommand, DeleteWorkoutCommandHandler())
+    event_bus.register_handler(GetWorkoutsForDateQuery, GetWorkoutsForDateQueryHandler())
+
+    # Register hydration handlers
+    event_bus.register_handler(LogHydrationCommand, LogHydrationCommandHandler())
+    event_bus.register_handler(DeleteHydrationCommand, DeleteHydrationCommandHandler())
+    event_bus.register_handler(
+        UpdateHydrationGoalCommand, UpdateHydrationGoalCommandHandler()
+    )
+    event_bus.register_handler(
+        GetHydrationForDateQuery, GetHydrationForDateQueryHandler()
     )
 
     # Register domain event subscribers

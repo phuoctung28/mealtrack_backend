@@ -69,6 +69,9 @@ class UserDomainModel(BaseDomainModel):
     photo_url: Optional[str] = None
     deleted_at: Optional[datetime] = None
     profiles: List[UserProfileDomainModel] = field(default_factory=list)
+    # Daily hydration target in millilitres. Application-enforced bounds: 500–4000.
+    # DB default 2000 ml covers the standard WHO recommendation for most adults.
+    hydration_goal_ml: int = 2000
 
     @property
     def current_profile(self) -> Optional[UserProfileDomainModel]:

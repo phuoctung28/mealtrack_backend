@@ -31,6 +31,7 @@ class UserMapper:
             created_at=user_entity.created_at,
             updated_at=user_entity.updated_at,
             profiles=[UserProfileMapper.to_domain(p) for p in user_entity.profiles],
+            hydration_goal_ml=getattr(user_entity, "hydration_goal_ml", 2000) or 2000,
         )
 
     @staticmethod

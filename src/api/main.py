@@ -60,6 +60,8 @@ from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
+from src.api.routes.v1.workout_routes import router as workout_router
+from src.api.routes.v1.hydration_routes import router as hydration_router
 from src.infra.config.settings import settings
 from src.infra.database.config import engine
 from src.infra.database.config_async import async_engine
@@ -289,6 +291,8 @@ app.include_router(nutrition_router)
 app.include_router(weight_entries_router)
 app.include_router(well_known_router)
 app.include_router(app_download_router)
+app.include_router(workout_router)
+app.include_router(hydration_router)
 
 # Serve static files from uploads directory (development)
 if os.environ.get("ENVIRONMENT") == "development":
