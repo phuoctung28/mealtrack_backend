@@ -185,7 +185,12 @@ class DailyContextPrecomputeService:
             # Get profile for gender and calorie goal
             profile_row = session.execute(
                 text("""
-                    SELECT up.gender, u.language_code
+                    SELECT up.age, up.gender, up.height_cm, up.weight_kg,
+                           up.body_fat_percentage, up.job_type,
+                           up.training_days_per_week,
+                           up.training_minutes_per_session,
+                           up.fitness_goal, up.training_level,
+                           u.language_code
                     FROM user_profiles up
                     JOIN users u ON u.id = up.user_id
                     WHERE up.user_id = :user_id AND up.is_current = true

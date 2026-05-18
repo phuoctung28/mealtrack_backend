@@ -156,7 +156,12 @@ def test_reschedule_uses_meal_and_nutrition_for_consumed_calories():
         assert svc._reschedule_user_sync("user-123") == 0
 
     consumed_query = session.queries[5]
+    profile_query = session.queries[4]
     consumed_params = session.params[5]
+    assert "up.age" in profile_query
+    assert "up.height_cm" in profile_query
+    assert "up.weight_kg" in profile_query
+    assert "up.fitness_goal" in profile_query
     assert "FROM meal m" in consumed_query
     assert "JOIN nutrition n ON n.meal_id = m.meal_id" in consumed_query
     assert "m.created_at >= :start" in consumed_query
