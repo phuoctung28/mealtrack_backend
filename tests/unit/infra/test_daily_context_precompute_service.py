@@ -58,6 +58,22 @@ def test_context_key_format():
     assert svc.context_key("user-123") == "user_daily_context:user-123"
 
 
+def test_notification_language_prefers_in_app_user_language():
+    from src.infra.services.daily_context_precompute_service import (
+        _resolve_notification_language,
+    )
+
+    assert _resolve_notification_language("en", "vi") == "vi"
+
+
+def test_notification_language_uses_pref_when_user_language_missing():
+    from src.infra.services.daily_context_precompute_service import (
+        _resolve_notification_language,
+    )
+
+    assert _resolve_notification_language("vi", None) == "vi"
+
+
 def test_user_calorie_goal_uses_adjusted_weekly_budget_target():
     from src.infra.services.daily_context_precompute_service import (
         DailyContextPrecomputeService,

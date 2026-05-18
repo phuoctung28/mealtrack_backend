@@ -199,10 +199,9 @@ class DailyContextPrecomputeService:
             ).fetchone()
 
             gender = (profile_row.gender if profile_row else None) or "male"
-            language_code = (
-                pref_row.language
-                or (profile_row.language_code if profile_row else "en")
-                or "en"
+            language_code = _resolve_notification_language(
+                pref_row.language,
+                profile_row.language_code if profile_row else None,
             )
 
             # Calculate calorie goal (simplified - use TDEE service for accuracy)
@@ -543,7 +542,10 @@ class DailyContextPrecomputeService:
                 user_id = pref_row.user_id
                 profile = profiles_by_user.get(user_id)
                 gender = (profile.gender if profile else None) or "male"
-                language_code = pref_row.language or "en"
+                language_code = _resolve_notification_language(
+                    pref_row.language,
+                    profile.language_code if profile else None,
+                )
 
                 mapping = {
                     "calorie_goal": str(calorie_goals.get(user_id, 2000)),
@@ -587,7 +589,10 @@ class DailyContextPrecomputeService:
             calorie_goal = calorie_goals.get(user_id, 2000)
             profile = profiles_by_user.get(user_id)
             gender = (profile.gender if profile else None) or "male"
-            language_code = pref.language or "en"
+            language_code = _resolve_notification_language(
+                pref.language,
+                profile.language_code if profile else None,
+            )
 
             context = {
                 "fcm_tokens": tokens,
@@ -671,3 +676,15 @@ def _local_minutes_to_utc(local_date: date, local_minutes: int, tz_name: str):
             "Cannot compute UTC for tz=%s minutes=%d: %s", tz_name, local_minutes, exc
         )
         return None
+
+
+def _resolve_notification_language(
+    pref_language: str | None,
+    user_language: str | None,
+) -> str:
+    """Resolve notification language from supported in-app locales."""
+    if user_language in ("en", "vi"):
+        return user_language
+    if pref_language in ("en", "vi"):
+        return pref_language
+    return "en"

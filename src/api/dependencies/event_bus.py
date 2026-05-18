@@ -479,9 +479,10 @@ def get_configured_event_bus() -> EventBus:
         UpdateTimezoneCommand,
         UpdateTimezoneCommandHandler(),
     )
+    precompute_service = get_daily_context_precompute_service()
     event_bus.register_handler(
         UpdateLanguageCommand,
-        UpdateLanguageCommandHandler(),
+        UpdateLanguageCommandHandler(precompute_service=precompute_service),
     )
     event_bus.register_handler(
         UpdateCustomMacrosCommand,
@@ -510,7 +511,6 @@ def get_configured_event_bus() -> EventBus:
         RegisterFcmTokenCommand, RegisterFcmTokenCommandHandler()
     )
     event_bus.register_handler(DeleteFcmTokenCommand, DeleteFcmTokenCommandHandler())
-    precompute_service = get_daily_context_precompute_service()
     event_bus.register_handler(
         UpdateNotificationPreferencesCommand,
         UpdateNotificationPreferencesCommandHandler(

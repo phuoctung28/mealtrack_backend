@@ -177,6 +177,16 @@ def test_render_unknown_type_falls_through_to_generic_stub():
     assert body == "You have a notification 📬"
 
 
+def test_seconds_until_next_minute_aligns_scheduler_tick():
+    from src.infra.services.scheduled_notification_service import (
+        _seconds_until_next_minute,
+    )
+
+    now = datetime(2026, 4, 22, 5, 0, 58, 500_000, tzinfo=timezone.utc)
+
+    assert _seconds_until_next_minute(now) == 1.5
+
+
 def _make_trial_notif(notif_type: str = "trial_expiry_2d"):
     n = MagicMock()
     n.id = "n1"
