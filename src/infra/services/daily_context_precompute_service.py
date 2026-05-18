@@ -141,15 +141,19 @@ class DailyContextPrecomputeService:
 
             today = datetime.now(tz).date()
 
-            # Delete existing pending notifications for today
+            now = utc_now()
+
+            # Delete only future pending notifications. Due rows may already be
+            # claimed by the scheduler and must not be recreated for the same day.
             session.execute(
                 text("""
                     DELETE FROM notifications
                     WHERE user_id = :user_id
                       AND scheduled_date = :today
                       AND status = 'pending'
+                      AND scheduled_for_utc > :now
                 """),
-                {"user_id": user_id, "today": today},
+                {"user_id": user_id, "today": today, "now": now},
             )
 
             # Get user's notification preferences
@@ -247,7 +251,6 @@ class DailyContextPrecomputeService:
                 "language_code": language_code,
             }
 
-            now = utc_now()
             expires_at = datetime(
                 today.year, today.month, today.day, tzinfo=timezone.utc
             ) + timedelta(days=_NOTIF_EXPIRY_DAYS)
