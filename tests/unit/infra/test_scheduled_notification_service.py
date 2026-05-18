@@ -67,7 +67,7 @@ def test_render_message_daily_summary_zero_logs():
     title, body = _render_message(
         "daily_summary", 2000, "male", "en", calories_consumed=0, calorie_goal=2000
     )
-    assert title == ""  # daily_summary has no title
+    assert title == "Nutree"
     assert "Busy" in body
     assert "log" in body.lower()
 

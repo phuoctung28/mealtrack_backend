@@ -5,7 +5,25 @@ Pure-function builder: produces messaging.APNSConfig with the
 not in HTTP headers (where APNs silently drops it).
 """
 
+from typing import Any, Dict
+
 from firebase_admin import messaging
+
+APNS_INTERRUPTION_LEVEL = "time-sensitive"
+
+
+def apns_diagnostics() -> Dict[str, Any]:
+    """Return non-sensitive APNs settings used for all iOS push sends.
+
+    Surfaced via /health/notifications so staging can prove the deployed
+    config carries `interruption-level` in the payload body, not headers.
+    """
+    return {
+        "push_type": "alert",
+        "priority": "10",
+        "interruption_level": APNS_INTERRUPTION_LEVEL,
+        "interruption_level_location": "payload.aps.interruption-level",
+    }
 
 
 def build_apns_config(title: str, body: str) -> messaging.APNSConfig:
@@ -27,7 +45,7 @@ def build_apns_config(title: str, body: str) -> messaging.APNSConfig:
                 sound="default",
                 badge=1,
                 mutable_content=True,
-                custom_data={"interruption-level": "time-sensitive"},
+                custom_data={"interruption-level": APNS_INTERRUPTION_LEVEL},
             )
         ),
     )

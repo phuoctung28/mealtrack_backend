@@ -178,11 +178,15 @@ async def notification_health_check():
 
         firebase_service = FirebaseService()
 
+        from src.infra.services.push.apns_payload_builder import apns_diagnostics
+
         health_status = {
             "status": "healthy",
             "firebase_initialized": firebase_service.is_initialized(),
             "deployment": _deployment_info(),
-            "components": {},
+            "components": {
+                "apns": {"status": "healthy", **apns_diagnostics()},
+            },
         }
 
         # Check Firebase Admin SDK
