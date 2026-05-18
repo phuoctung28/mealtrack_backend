@@ -4,6 +4,7 @@ from firebase_admin._messaging_encoder import MessageEncoder
 
 from src.infra.services.push.android_payload_builder import (
     HIGH_PRIORITY_CHANNEL_ID,
+    MEDIUM_PRIORITY_CHANNEL_ID,
     build_android_config,
 )
 
@@ -22,6 +23,12 @@ class TestAndroidPayloadBuilder:
         cfg = build_android_config()
         encoded = _serialize(cfg)
         assert encoded["notification"]["channel_id"] == HIGH_PRIORITY_CHANNEL_ID
+        assert encoded["notification"]["channel_id"] == "meal_reminders"
+
+    def test_medium_priority_channel_matches_mobile_daily_summary(self):
+        cfg = build_android_config(channel_id=MEDIUM_PRIORITY_CHANNEL_ID)
+        encoded = _serialize(cfg)
+        assert encoded["notification"]["channel_id"] == "daily_summary"
 
     def test_custom_channel_id(self):
         cfg = build_android_config(channel_id="custom_channel")

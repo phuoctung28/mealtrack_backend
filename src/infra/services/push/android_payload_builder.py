@@ -6,9 +6,8 @@ mapping; mobile creates the channels with matching IDs at app start.
 
 from firebase_admin import messaging
 
-HIGH_PRIORITY_CHANNEL_ID = "high_priority_channel"
-MEDIUM_PRIORITY_CHANNEL_ID = "medium_priority_channel"
-LOW_PRIORITY_CHANNEL_ID = "low_priority_channel"
+HIGH_PRIORITY_CHANNEL_ID = "meal_reminders"
+MEDIUM_PRIORITY_CHANNEL_ID = "daily_summary"
 
 
 def build_android_config(

@@ -57,20 +57,39 @@ def test_context_key_format():
     assert svc.context_key("user-123") == "user_daily_context:user-123"
 
 
-def test_user_calorie_goal_reads_weekly_macro_budget_table():
+def test_user_calorie_goal_uses_adjusted_weekly_budget_target():
     from src.infra.services.daily_context_precompute_service import (
         DailyContextPrecomputeService,
     )
 
-    session = MagicMock()
-    weekly_budget_row = MagicMock()
-    weekly_budget_row.target_calories = 14000
-    session.execute.return_value.fetchone.return_value = weekly_budget_row
+    uow = MagicMock()
+    weekly_budget = MagicMock(
+        target_calories=14000,
+        target_protein=700,
+        target_carbs=1750,
+        target_fat=420,
+    )
+    uow.weekly_budgets.find_by_user_and_week.return_value = weekly_budget
+    adjusted = MagicMock()
+    adjusted.adjusted.calories = 1800
 
     svc = DailyContextPrecomputeService(redis_client=MagicMock())
-    result = svc._get_user_calorie_goal(session, "user-123", date(2026, 5, 17))
+    profile = MagicMock()
+    tdee_result = MagicMock()
+    tdee_result.bmr = 1600
+    tdee_result.macros.calories = 2000
+    svc._tdee_service.calculate_tdee = MagicMock(return_value=tdee_result)
 
-    executed_sql = str(session.execute.call_args.args[0])
-    assert result == 2000
-    assert "weekly_macro_budgets" in executed_sql
-    assert "weekly_budgets" not in executed_sql
+    with patch(
+        "src.infra.services.daily_context_precompute_service.build_tdee_request",
+        return_value=MagicMock(),
+    ), patch(
+        "src.infra.services.daily_context_precompute_service.WeeklyBudgetService.get_effective_adjusted_daily",
+        return_value=adjusted,
+    ) as mock_adjusted:
+        result = svc._get_user_calorie_goal(
+            uow, "user-123", date(2026, 5, 17), profile, "Asia/Ho_Chi_Minh"
+        )
+
+    assert result == 1800
+    mock_adjusted.assert_called_once()
