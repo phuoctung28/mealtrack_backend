@@ -602,7 +602,7 @@ Create `src/infra/templates/emails/trial_cancelled.html`:
 </div>
 
 <p style="color: #666;">
-  <strong>Need a break instead?</strong> You can pause your subscription for 30 days instead of cancelling. 
+  <strong>Need a break instead?</strong> You can pause your subscription for 30 days instead of cancelling.
   <a href="{{ pause_url }}" style="color: #22c55e;">Pause instead</a>
 </p>
 
@@ -1608,7 +1608,7 @@ In the lifespan function, after `scheduled_notification_service.start()`, add:
     email_renderer = EmailTemplateRenderer()
     email_service = EmailService(email_adapter=email_adapter, template_renderer=email_renderer)
     scheduled_email_service = ScheduledEmailService(email_service=email_service)
-    
+
     # Run email check daily (integrate with existing scheduler or run on startup)
     # For now, run on startup and rely on cron/external scheduler for daily runs
     try:

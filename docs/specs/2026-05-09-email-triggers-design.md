@@ -1,7 +1,7 @@
 # Email Triggers System Design
 
-**Date:** 2026-05-09  
-**Status:** Approved  
+**Date:** 2026-05-09
+**Status:** Approved
 **App:** Nutree
 
 ## Problem Statement
@@ -64,7 +64,7 @@ email_opt_out = Column(Boolean, default=False, nullable=False)
 ```python
 class EmailLog(Base):
     __tablename__ = "email_logs"
-    
+
     id = Column(String(36), primary_key=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     email_type = Column(String(50), nullable=False)  # welcome, reengagement_day3, trial_expiring, cancelled
@@ -76,8 +76,8 @@ class EmailLog(Base):
 ### Index for Scheduled Job
 
 ```sql
-CREATE INDEX idx_users_last_accessed_active 
-ON users(last_accessed) 
+CREATE INDEX idx_users_last_accessed_active
+ON users(last_accessed)
 WHERE is_active = true AND email_opt_out = false;
 ```
 
@@ -91,9 +91,9 @@ WHERE is_active = true AND email_opt_out = false;
 class EmailServicePort(ABC):
     @abstractmethod
     async def send_email(
-        self, 
-        to: str, 
-        subject: str, 
+        self,
+        to: str,
+        subject: str,
         html_body: str,
         tags: list[str] | None = None
     ) -> EmailResult:
