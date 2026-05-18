@@ -59,6 +59,11 @@ async def test_send_loop_marks_notifications_sent():
         await svc._send_due_notifications(now)
 
     mock_firebase.send_multicast.assert_called_once()
+    assert mock_notif.status == "processing"
+    assert mock_firebase.send_multicast.call_args.kwargs["data"] == {
+        "notification_ids": "notif-id-1",
+        "notification_count": "1",
+    }
 
 
 def test_render_message_daily_summary_zero_logs():
@@ -133,9 +138,7 @@ async def test_startup_catchup_calls_precompute_for_each_timezone():
 def test_render_trial_expiry_2d_en_male_returns_2_day_body():
     from src.infra.services.scheduled_notification_service import _render_message
 
-    title, body = _render_message(
-        "trial_expiry_2d", 0, "male", "en"
-    )
+    title, body = _render_message("trial_expiry_2d", 0, "male", "en")
     assert title == "Nutree"
     assert "2 days" in body
 
@@ -143,9 +146,7 @@ def test_render_trial_expiry_2d_en_male_returns_2_day_body():
 def test_render_trial_expiry_1d_en_female_returns_1_day_body():
     from src.infra.services.scheduled_notification_service import _render_message
 
-    title, body = _render_message(
-        "trial_expiry_1d", 0, "female", "en"
-    )
+    title, body = _render_message("trial_expiry_1d", 0, "female", "en")
     assert title == "Nutree"
     assert "tomorrow" in body.lower()
 
@@ -153,9 +154,7 @@ def test_render_trial_expiry_1d_en_female_returns_1_day_body():
 def test_render_trial_expiry_2d_vi_male_returns_vietnamese():
     from src.infra.services.scheduled_notification_service import _render_message
 
-    title, body = _render_message(
-        "trial_expiry_2d", 0, "male", "vi"
-    )
+    title, body = _render_message("trial_expiry_2d", 0, "male", "vi")
     assert "2 ngày" in body
     assert "bro" in body
 
@@ -163,11 +162,9 @@ def test_render_trial_expiry_2d_vi_male_returns_vietnamese():
 def test_render_trial_expiry_1d_vi_female_returns_vietnamese():
     from src.infra.services.scheduled_notification_service import _render_message
 
-    _, body = _render_message(
-        "trial_expiry_1d", 0, "female", "vi"
-    )
+    _, body = _render_message("trial_expiry_1d", 0, "female", "vi")
     assert "bạn ơi" in body
-    assert "mai" in body
+    assert "mai" in body.lower()
 
 
 def test_render_unknown_type_falls_through_to_generic_stub():
@@ -227,11 +224,11 @@ async def test_send_due_normalizes_trial_fcm_type():
         "src.infra.services.scheduled_notification_service.ReminderQueryBuilder"
     ) as Q, patch(
         "src.infra.services.scheduled_notification_service.UnitOfWork"
-    ), patch.object(_asyncio, "to_thread", new=_passthrough):
+    ), patch.object(
+        _asyncio, "to_thread", new=_passthrough
+    ):
         Q.find_due_notifications.return_value = [_make_trial_notif("trial_expiry_2d")]
-        await svc._send_due_notifications(
-            datetime(2026, 5, 17, tzinfo=timezone.utc)
-        )
+        await svc._send_due_notifications(datetime(2026, 5, 17, tzinfo=timezone.utc))
 
     call_kwargs = svc._firebase.send_multicast.call_args.kwargs
     assert call_kwargs["notification_type"] == "trial_expiry"
@@ -262,7 +259,9 @@ async def test_send_due_trial_skips_redis_lookup(caplog):
         "src.infra.services.scheduled_notification_service.ReminderQueryBuilder"
     ) as Q, patch(
         "src.infra.services.scheduled_notification_service.UnitOfWork"
-    ), patch.object(_asyncio, "to_thread", new=_passthrough):
+    ), patch.object(
+        _asyncio, "to_thread", new=_passthrough
+    ):
         Q.find_due_notifications.return_value = [_make_trial_notif("trial_expiry_1d")]
         with caplog.at_level("WARNING"):
             await svc._send_due_notifications(

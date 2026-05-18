@@ -34,7 +34,7 @@ def test_trial_expiry_fallback_locale_returns_english():
 
 def test_trial_expiry_vi_contains_vietnamese_phrasing():
     msgs = get_messages("vi", "male")
-    assert "trial" in msgs["trial_expiry"]["2d"]["body"]
+    assert "trial" in msgs["trial_expiry"]["2d"]["body"].lower()
     # Distinct buddy term for male VN.
     assert "bro" in msgs["trial_expiry"]["2d"]["body"]
 

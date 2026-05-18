@@ -1,8 +1,8 @@
 """Reminder query builder for finding users due for notifications."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from src.domain.utils.timezone_utils import DEFAULT_TIMEZONE, utc_to_local_minutes
@@ -18,6 +18,8 @@ from src.infra.database.models.user.user import User
 
 class ReminderQueryBuilder:
     """Builds queries for finding users due for reminders."""
+
+    PROCESSING_RECLAIM_AFTER = timedelta(minutes=10)
 
     @staticmethod
     def _active_token_users_subquery(db: Session):
@@ -125,7 +127,9 @@ class ReminderQueryBuilder:
         return matching_users
 
     @staticmethod
-    def find_due_notifications(db: Session, now: datetime) -> list:
+    def find_due_notifications(
+        db: Session, now: datetime, lock_rows: bool = False
+    ) -> list:
         """Return all pending notifications due at or before the current moment.
 
         No lower bound: if the scheduler is delayed, past-due pending rows are
@@ -133,11 +137,27 @@ class ReminderQueryBuilder:
         so reminders are never intentionally sent before the user's configured
         minute.
         """
-        return (
+        status_filter = NotificationORM.status == "pending"
+        if lock_rows:
+            stale_processing_before = (
+                now - ReminderQueryBuilder.PROCESSING_RECLAIM_AFTER
+            )
+            status_filter = or_(
+                status_filter,
+                and_(
+                    NotificationORM.status == "processing",
+                    NotificationORM.scheduled_for_utc <= stale_processing_before,
+                ),
+            )
+
+        query = (
             db.query(NotificationORM)
             .filter(
                 NotificationORM.scheduled_for_utc <= now,
-                NotificationORM.status == "pending",
+                status_filter,
             )
-            .all()
+            .order_by(NotificationORM.scheduled_for_utc, NotificationORM.created_at)
         )
+        if lock_rows:
+            query = query.with_for_update(skip_locked=True)
+        return query.all()
