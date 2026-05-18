@@ -328,11 +328,19 @@ def initialize_scheduled_notification_service() -> ScheduledNotificationService:
     """
     global _scheduled_notification_service
     if _scheduled_notification_service is None:
+        from src.infra.services.scheduled_subscription_push_service import (
+            ScheduledSubscriptionPushService,
+        )
+
         firebase_service = get_firebase_service()
+        trial_push_service = ScheduledSubscriptionPushService()
         _scheduled_notification_service = ScheduledNotificationService(
             firebase_service,
             _redis_client,
+            trial_push_service=trial_push_service,
         )
+        # Expose for webhook handler to purge stale trial rows on RENEWAL.
+        _scheduled_notification_service.trial_push_service = trial_push_service
     return _scheduled_notification_service
 
 

@@ -93,6 +93,30 @@ class SubscriptionRepository(BaseRepository[Subscription], SubscriptionRepositor
             .all()
         )
 
+    def find_expiring_in_window(
+        self,
+        from_days: int,
+        to_days: int,
+        now: Optional[datetime] = None,
+    ) -> List[Subscription]:
+        """Active subs whose expires_at falls within [reference+from_days, reference+to_days)."""
+        from datetime import timedelta
+
+        reference = now or utc_now()
+        lower = reference + timedelta(days=from_days)
+        upper = reference + timedelta(days=to_days)
+        return (
+            self.session.query(Subscription)
+            .filter(
+                and_(
+                    Subscription.status == "active",
+                    Subscription.expires_at >= lower,
+                    Subscription.expires_at < upper,
+                )
+            )
+            .all()
+        )
+
     def cancel(self, subscription_id: str, reason: str = None) -> bool:
         """Cancel a subscription."""
         subscription = self.get(subscription_id)
