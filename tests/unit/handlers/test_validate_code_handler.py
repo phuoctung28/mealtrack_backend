@@ -119,6 +119,9 @@ async def test_valid_referral_code_returns_referral_type():
     assert result["referrer_name"] == "Alex"
     assert result["discount_monthly"] == 199000
     assert result["discount_annual"] == 499000
+    # Mobile reads commission_rewards to render localized reward strings;
+    # an empty dict here silently falls back to mobile's hardcoded defaults.
+    assert result["commission_rewards"], "commission_rewards must be exposed for mobile"
 
 
 @pytest.mark.asyncio
@@ -266,3 +269,27 @@ async def test_referral_falls_back_to_friend_when_no_name():
         )
 
     assert result["referrer_name"] == "Friend"
+
+
+@pytest.mark.asyncio
+async def test_commission_rewards_match_runtime_settings():
+    """Commission rewards in the response must match the live settings instance.
+
+    Render redeploy -> settings re-load -> response reflects the new value.
+    """
+    referral = _make_referral_code(user_id="referrer-id")
+    row = MagicMock()
+    row.first_name = "Alex"
+    row.display_name = None
+    mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(referral=referral, referrer_row=row)
+
+    overridden = {"USD": 5, "VND": 100000, "EUR": 4.5, "default": 5}
+    with _patch(mock_uow, mock_promo_repo, mock_referral_repo), \
+         patch(f"{HANDLER_PATH}.settings") as mock_settings:
+        mock_settings.REFERRAL_COMMISSIONS = overridden
+        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        result = await ValidateCodeQueryHandler().handle(
+            ValidateCodeQuery(code="ALEX123", user_id="user-456")
+        )
+
+    assert result["commission_rewards"] == overridden

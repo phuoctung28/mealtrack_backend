@@ -48,6 +48,7 @@ class ValidateCodeResponse(BaseModel):
     referrer_name: Optional[str] = None
     discount_monthly: int = 199000
     discount_annual: int = 499000
+    commission_rewards: Dict[str, float] = Field(default_factory=dict)
 
 
 SUPPORTED_CURRENCIES = {"VND", "USD", "EUR"}
@@ -93,6 +94,7 @@ class StatsResponse(BaseModel):
     total_converted: int
     conversions: List[ConversionDTO]
     has_pending_payout: bool
+    commission_rewards: Dict[str, float] = Field(default_factory=dict)
 
 
 class PayoutRequest(BaseModel):
@@ -159,6 +161,7 @@ async def get_stats(user_id: str = Depends(get_current_user_id)):
         total_converted=result.total_converted,
         conversions=[ConversionDTO(**c.__dict__) for c in result.conversions],
         has_pending_payout=result.has_pending_payout,
+        commission_rewards=result.commission_rewards,
     )
 
 
