@@ -94,10 +94,11 @@ class ScheduledSubscriptionPushService:
                     np.lunch_time_minutes,
                     np.language,
                     u.timezone,
-                    u.gender,
+                    up.gender,
                     u.language_code
                 FROM notification_preferences np
                 JOIN users u ON u.id = np.user_id
+                LEFT JOIN user_profiles up ON up.user_id = np.user_id AND up.is_current = true
                 WHERE np.user_id = ANY(:ids) AND np.is_deleted = false
                 """
             ),
