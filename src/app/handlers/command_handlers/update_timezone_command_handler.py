@@ -1,21 +1,32 @@
 """Handler for updating user timezone."""
 
 import logging
-from typing import Dict, Any
+from typing import Any
 
 from src.app.commands.user.update_timezone_command import UpdateTimezoneCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.utils.timezone_utils import is_valid_timezone, normalize_timezone
 from src.infra.database.uow_async import AsyncUnitOfWork
+from src.infra.services.daily_context_precompute_service import (
+    DailyContextPrecomputeService,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @handles(UpdateTimezoneCommand)
-class UpdateTimezoneCommandHandler(EventHandler[UpdateTimezoneCommand, Dict[str, Any]]):
+class UpdateTimezoneCommandHandler(EventHandler[UpdateTimezoneCommand, dict[str, Any]]):
     """Handler for updating user timezone."""
 
-    async def handle(self, command: UpdateTimezoneCommand) -> Dict[str, Any]:
+    def __init__(self, precompute_service: DailyContextPrecomputeService | None = None):
+        self.precompute_service = precompute_service
+
+    def set_dependencies(self, **kwargs):
+        """Set dependencies for dependency injection."""
+        if "precompute_service" in kwargs:
+            self.precompute_service = kwargs["precompute_service"]
+
+    async def handle(self, command: UpdateTimezoneCommand) -> dict[str, Any]:
         """Handle timezone update command. Skips DB write if timezone is unchanged."""
         logger.info(
             f"Timezone update request: user={command.user_id}, "
@@ -36,7 +47,9 @@ class UpdateTimezoneCommandHandler(EventHandler[UpdateTimezoneCommand, Dict[str,
 
         if current_tz == canonical_tz:
             logger.debug(
-                f"Timezone unchanged for user {command.user_id}: {canonical_tz!r} — skipping write"
+                "Timezone unchanged for user %s: %r - skipping write",
+                command.user_id,
+                canonical_tz,
             )
             return {"success": True, "timezone": canonical_tz}
 
@@ -46,4 +59,23 @@ class UpdateTimezoneCommandHandler(EventHandler[UpdateTimezoneCommand, Dict[str,
             await uow.commit()
 
         logger.info(f"Updated timezone for user {command.user_id}: {canonical_tz}")
+
+        if self.precompute_service:
+            try:
+                scheduled_count = (
+                    await self.precompute_service.reschedule_user_notifications(
+                        str(command.user_id)
+                    )
+                )
+                logger.info(
+                    "Rescheduled %s notifications after timezone update for user %s",
+                    scheduled_count,
+                    command.user_id,
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed to reschedule notifications after timezone update: %s",
+                    exc,
+                )
+
         return {"success": True, "timezone": canonical_tz}

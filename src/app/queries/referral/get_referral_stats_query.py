@@ -1,6 +1,6 @@
 """Query and result dataclasses for retrieving a user's full referral stats and wallet."""
 from dataclasses import dataclass, field
-from typing import List
+from typing import Dict, List
 
 
 @dataclass
@@ -26,3 +26,4 @@ class ReferralStatsResult:
     total_converted: int
     conversions: List[ReferralConversionDTO] = field(default_factory=list)
     has_pending_payout: bool = False
+    commission_rewards: Dict[str, float] = field(default_factory=dict)

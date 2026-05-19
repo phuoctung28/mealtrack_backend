@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from src.app.queries.codes.validate_code_query import CodeValidationError, ValidateCodeQuery
 from src.domain.utils.timezone_utils import utc_now
+from src.infra.config.settings import settings
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.repositories.promo_code_repository import PromoCodeRepository
@@ -68,6 +69,7 @@ class ValidateCodeQueryHandler:
                     "referrer_name": referrer_name,
                     "discount_monthly": 199000,
                     "discount_annual": 499000,
+                    "commission_rewards": settings.REFERRAL_COMMISSIONS,
                 }
 
             raise CodeValidationError(404, "Code not found")
