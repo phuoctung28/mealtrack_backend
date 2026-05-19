@@ -7,6 +7,7 @@ from src.app.queries.referral.validate_referral_code_query import (
     ValidateCodeResult,
     ValidateReferralCodeQuery,
 )
+from src.infra.config.settings import settings
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.repositories.referral_repository import ReferralRepository
@@ -21,14 +22,26 @@ class ValidateReferralCodeQueryHandler:
 
             code = await repo.get_code_by_code(query.code)
             if not code:
-                return ValidateCodeResult(valid=False, error="invalid_code")
+                return ValidateCodeResult(
+                    valid=False,
+                    error="invalid_code",
+                    commission_rewards=settings.REFERRAL_COMMISSIONS,
+                )
 
             if code.user_id == query.user_id:
-                return ValidateCodeResult(valid=False, error="self_referral")
+                return ValidateCodeResult(
+                    valid=False,
+                    error="self_referral",
+                    commission_rewards=settings.REFERRAL_COMMISSIONS,
+                )
 
             existing = await repo.get_conversion_by_referred_user(query.user_id)
             if existing:
-                return ValidateCodeResult(valid=False, error="already_referred")
+                return ValidateCodeResult(
+                    valid=False,
+                    error="already_referred",
+                    commission_rewards=settings.REFERRAL_COMMISSIONS,
+                )
 
             # Fetch referrer's first name for personalised UI copy
             result = await uow.session.execute(
@@ -45,4 +58,5 @@ class ValidateReferralCodeQueryHandler:
                 referrer_name=referrer_name,
                 discount_monthly=199000,
                 discount_annual=499000,
+                commission_rewards=settings.REFERRAL_COMMISSIONS,
             )

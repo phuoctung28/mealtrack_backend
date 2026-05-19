@@ -1,6 +1,6 @@
 """Query and result dataclass for validating a referral code before it is applied."""
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Dict, Optional
 
 
 @dataclass
@@ -16,3 +16,4 @@ class ValidateCodeResult:
     referrer_name: Optional[str] = None
     discount_monthly: int = 199000
     discount_annual: int = 499000
+    commission_rewards: Dict[str, float] = field(default_factory=dict)
