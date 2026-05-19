@@ -8,20 +8,21 @@ import pytest
 from fastapi import HTTPException
 
 from src.api.routes.v1.webhooks import (
-    revenuecat_webhook,
-    parse_platform,
-    parse_timestamp,
-    handle_purchase,
-    handle_renewal,
+    handle_billing_issue,
     handle_cancellation,
     handle_expiration,
-    handle_billing_issue
+    handle_purchase,
+    handle_renewal,
+    handle_transfer,
+    parse_platform,
+    parse_timestamp,
+    revenuecat_webhook,
 )
 
 
 class TestWebhookHelpers:
     """Test webhook helper functions."""
-    
+
     def test_parse_platform(self):
         """Test platform parsing from store name."""
         assert parse_platform("APP_STORE") == "ios"
@@ -31,7 +32,7 @@ class TestWebhookHelpers:
         assert parse_platform(None) == "ios"
         assert parse_platform("") == "ios"
         assert parse_platform("UNKNOWN") == "ios"
-    
+
     def test_parse_timestamp(self):
         """Test timestamp parsing from milliseconds."""
         # Valid timestamp
@@ -39,15 +40,15 @@ class TestWebhookHelpers:
         result = parse_timestamp(ms)
         assert isinstance(result, datetime)
         assert result.year == 2023
-        
+
         # None timestamp
         assert parse_timestamp(None) is None
-        
+
         # Zero timestamp
         assert parse_timestamp(0) is not None
-        
+
         # Invalid timestamp
-        with patch('src.api.routes.v1.webhooks.logger') as mock_logger:
+        with patch("src.api.routes.v1.webhooks.logger"):
             result = parse_timestamp("invalid")
             assert result is None
 
@@ -55,14 +56,14 @@ class TestWebhookHelpers:
 @pytest.mark.asyncio
 class TestWebhookHandler:
     """Test webhook handler functions."""
-    
+
     @pytest.fixture
     def mock_request(self):
         """Create mock request object."""
         request = MagicMock()
         request.json = AsyncMock()
         return request
-    
+
     @pytest.fixture
     def mock_uow(self):
         """Create mock Unit of Work."""
@@ -72,7 +73,7 @@ class TestWebhookHandler:
         uow.commit = AsyncMock()
         uow.rollback = AsyncMock()
         return uow
-    
+
     @pytest.fixture
     def webhook_event(self):
         """Create sample webhook event."""
@@ -88,7 +89,7 @@ class TestWebhookHandler:
                 "transaction_id": "1000000123456789"
             }
         }
-    
+
     async def test_webhook_success(self, mock_request, webhook_event):
         """Test successful webhook processing."""
         mock_request.json.return_value = webhook_event
@@ -102,22 +103,22 @@ class TestWebhookHandler:
                 mock_uow.commit = AsyncMock()
                 mock_uow.rollback = AsyncMock()
                 mock_uow_class.return_value = mock_uow
-                
+
                 # Mock user exists
                 mock_user = MagicMock(id="user_123")
                 mock_uow.session.execute = AsyncMock()
                 mock_result = MagicMock()
                 mock_result.scalars.return_value.first.return_value = mock_user
                 mock_uow.session.execute.return_value = mock_result
-                
+
                 # Mock no existing subscription (async)
                 with patch('src.api.routes.v1.webhooks.get_subscription_by_revenuecat_id', new_callable=AsyncMock, return_value=None):
                     result = await revenuecat_webhook(mock_request, authorization="test_secret")
-                
+
                 assert result == {"status": "success"}
                 # commit/rollback are owned by the AsyncUnitOfWork context manager, not called explicitly
                 mock_uow.commit.assert_not_awaited()
-    
+
     async def test_webhook_user_not_found(self, mock_request, webhook_event):
         """Test webhook returns 404 when user not found (so RevenueCat retries)."""
         mock_request.json.return_value = webhook_event
@@ -150,7 +151,57 @@ class TestWebhookHandler:
                     await revenuecat_webhook(mock_request, authorization="test_secret")
 
                 assert exc_info.value.status_code == 404
-    
+
+    async def test_webhook_lifecycle_user_not_found_is_ignored(self, mock_request):
+        """Test userless lifecycle events ACK to stop RevenueCat retry storms."""
+        mock_request.json.return_value = {
+            "event": {
+                "type": "BILLING_ISSUE",
+                "app_user_id": "$RCAnonymousID:missing",
+                "product_id": "nutree_2999_1y_0",
+            }
+        }
+
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
+                mock_uow.session.execute = AsyncMock()
+                mock_result = MagicMock()
+                mock_result.scalars.return_value.first.return_value = None
+                mock_uow.session.execute.return_value = mock_result
+                mock_uow_class.return_value = mock_uow
+
+                result = await revenuecat_webhook(mock_request, authorization="test_secret")
+
+                assert result == {"status": "ignored", "reason": "user_not_found"}
+
+    async def test_webhook_transfer_without_user_acknowledged(self, mock_request):
+        """Test RevenueCat TRANSFER webhooks do not require app_user_id lookup."""
+        mock_request.json.return_value = {
+            "event": {
+                "type": "TRANSFER",
+                "transferred_from": ["$RCAnonymousID:old"],
+                "transferred_to": ["$RCAnonymousID:new"],
+            }
+        }
+
+        with patch('src.api.routes.v1.webhooks.os.getenv', return_value="test_secret"):
+            with patch('src.api.routes.v1.webhooks.AsyncUnitOfWork') as mock_uow_class:
+                mock_uow = MagicMock()
+                mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+                mock_uow.__aexit__ = AsyncMock(return_value=False)
+                mock_uow.subscriptions = MagicMock()
+                mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
+                mock_uow_class.return_value = mock_uow
+
+                result = await revenuecat_webhook(mock_request, authorization="test_secret")
+
+                assert result == {"status": "success"}
+
     async def test_webhook_invalid_json(self, mock_request):
         """Test webhook with invalid JSON."""
         mock_request.json.side_effect = Exception("Invalid JSON")
@@ -162,21 +213,21 @@ class TestWebhookHandler:
 
             assert exc_info.value.status_code == 400
             assert exc_info.value.detail == "Invalid JSON"
-    
+
     async def test_webhook_authorization_check(self, mock_request, webhook_event):
         """Test webhook authorization check."""
         mock_request.json.return_value = webhook_event
-        
+
         with patch('src.api.routes.v1.webhooks.os.getenv') as mock_getenv:
             mock_getenv.return_value = "secret_token"
-            
+
             # Test with wrong authorization
             with pytest.raises(HTTPException) as exc_info:
                 await revenuecat_webhook(mock_request, authorization="wrong_token")
-            
+
             assert exc_info.value.status_code == 401
             assert exc_info.value.detail == "Unauthorized"
-    
+
     async def test_handle_purchase(self, mock_uow):
         """Test handling initial purchase event."""
         user = MagicMock(id="user_123")
@@ -201,7 +252,7 @@ class TestWebhookHandler:
         assert added_subscription.user_id == "user_123"
         assert added_subscription.product_id == "premium_monthly"
         assert added_subscription.status == "active"
-    
+
     async def test_handle_renewal(self, mock_uow):
         """Test handling renewal event."""
         user = MagicMock(id="user_123")
@@ -217,7 +268,7 @@ class TestWebhookHandler:
 
         assert subscription.status == "active"
         assert subscription.expires_at is not None
-    
+
     async def test_handle_cancellation(self, mock_uow):
         """Test handling cancellation event."""
         user = MagicMock(id="user_123")
@@ -230,7 +281,7 @@ class TestWebhookHandler:
 
         assert subscription.status == "cancelled"
         assert subscription.cancelled_at is not None
-    
+
     async def test_handle_expiration(self, mock_uow):
         """Test handling expiration event."""
         user = MagicMock(id="user_123")
@@ -242,7 +293,7 @@ class TestWebhookHandler:
             await handle_expiration(mock_uow, user, event)
 
         assert subscription.status == "expired"
-    
+
     async def test_handle_billing_issue(self, mock_uow):
         """Test handling billing issue event."""
         user = MagicMock(id="user_123")
@@ -254,3 +305,18 @@ class TestWebhookHandler:
             await handle_billing_issue(mock_uow, user, event)
 
         assert subscription.status == "billing_issue"
+
+    async def test_handle_transfer_updates_known_subscription(self, mock_uow):
+        """Test transfer remaps existing subscription to the canonical subscriber ID."""
+        subscription = MagicMock()
+        event = {
+            "transferred_from": ["$RCAnonymousID:old"],
+            "transferred_to": ["firebase_uid_123", "$RCAnonymousID:new"],
+        }
+        mock_uow.subscriptions = MagicMock()
+        mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=subscription)
+
+        await handle_transfer(mock_uow, event)
+
+        assert subscription.revenuecat_subscriber_id == "firebase_uid_123"
+        assert subscription.updated_at is not None
