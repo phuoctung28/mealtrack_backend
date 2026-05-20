@@ -149,7 +149,6 @@ class Settings(BaseSettings):
     )
 
     # Feature flags / development toggles
-    USE_MOCK_STORAGE: int = Field(default=0)
     DEV_USER_FIREBASE_UID: str = Field(default="dev_firebase_uid")
     DEV_USER_EMAIL: str = Field(default="dev@example.com")
     DEV_USER_USERNAME: str = Field(default="dev_user")
