@@ -11,7 +11,6 @@ from src.infra.services.ai.provider_circuit_breaker import (
     ProviderCircuitBreaker,
 )
 from src.infra.services.ai.providers.gemini_provider import GeminiProvider
-from src.infra.services.ai.providers.mistral_provider import MistralProvider
 
 logger = logging.getLogger(__name__)
 
@@ -81,17 +80,7 @@ class AIModelManager:
     def __init__(self) -> None:
         self._circuit_breaker = ProviderCircuitBreaker()
         self._gemini = GeminiProvider()
-        self._mistral = MistralProvider()
-        self._providers = {
-            "gemini": self._gemini,
-            "mistral": self._mistral,
-        }
-
-        # Log provider availability
-        if self._mistral.is_available():
-            logger.info("[AI-MANAGER] Mistral provider available as fallback")
-        else:
-            logger.warning("[AI-MANAGER] Mistral provider not configured (MISTRAL_API_KEY missing)")
+        self._providers = {"gemini": self._gemini}
 
     def get_fallback_chain(self, purpose: ModelPurpose) -> List[str]:
         """Get fallback chain for a purpose."""
@@ -101,11 +90,6 @@ class AIModelManager:
         """Get provider that owns a model."""
         if model.startswith("gemini"):
             return self._gemini
-        if model.startswith("mistral"):
-            if self._mistral.is_available():
-                return self._mistral
-            logger.debug(f"[SKIP-MISTRAL] model={model} | reason=not configured")
-            return None
         return None
 
     async def generate(

@@ -71,6 +71,25 @@ class TestModelSelection:
         assert chain[1] == "gemini-2.5-flash"
         assert "mistral" not in " ".join(chain)
 
+    def test_no_mistral_in_any_fallback_chain(self, manager):
+        """No fallback chain should reference Mistral after removal."""
+        from src.infra.services.ai.ai_model_manager import FALLBACK_CHAINS
+        all_models = [m for chain in FALLBACK_CHAINS.values() for m in chain]
+        assert not any("mistral" in m for m in all_models)
+
+    def test_no_kimi_in_any_fallback_chain(self, manager):
+        from src.infra.services.ai.ai_model_manager import FALLBACK_CHAINS
+        all_models = [m for chain in FALLBACK_CHAINS.values() for m in chain]
+        assert not any("kimi" in m for m in all_models)
+
+    def test_mistral_provider_not_imported(self, manager):
+        """AIModelManager must not import or reference MistralProvider."""
+        import inspect
+        import src.infra.services.ai.ai_model_manager as module
+        source = inspect.getsource(module)
+        assert "MistralProvider" not in source
+        assert "mistral_provider" not in source
+
 
 class TestGenerate:
     @pytest.mark.asyncio
