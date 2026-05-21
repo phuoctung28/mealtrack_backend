@@ -37,7 +37,8 @@ async def test_runs_and_adds_to_sentinel_set():
     svc = DailyContextPrecomputeService()
     today = date(2026, 4, 22)
 
-    with patch.object(svc, "_precompute_db_sync", return_value=5):
+    with patch.object(svc, "_precompute_db_sync", return_value=5), \
+         patch.object(svc, "_check_db_sentinel", return_value=False):
         await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
 
     assert (today.isoformat(), "Asia/Ho_Chi_Minh") in module._precomputed_today
@@ -52,10 +53,25 @@ async def test_zero_users_does_not_set_sentinel():
     svc = DailyContextPrecomputeService()
     today = date(2026, 4, 22)
 
-    with patch.object(svc, "_precompute_db_sync", return_value=0):
+    with patch.object(svc, "_precompute_db_sync", return_value=0), \
+         patch.object(svc, "_check_db_sentinel", return_value=False):
         await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
 
     assert (today.isoformat(), "Asia/Ho_Chi_Minh") not in module._precomputed_today
+
+
+@pytest.mark.asyncio
+async def test_db_sentinel_fallback_skips_precompute():
+    """When in-memory set is empty but DB has notifications, precompute is skipped."""
+    from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
+
+    svc = DailyContextPrecomputeService()
+    today = date(2026, 4, 22)
+
+    with patch.object(svc, "_check_db_sentinel", return_value=True), \
+         patch.object(svc, "_precompute_db_sync") as mock_sync:
+        await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
+        mock_sync.assert_not_called()
 
 
 def test_sentinel_key_format():

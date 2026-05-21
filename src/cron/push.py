@@ -17,8 +17,6 @@ from sqlalchemy import text
 from zoneinfo import ZoneInfo
 
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.cache.redis_client import RedisClient
-from src.infra.config.settings import settings
 from src.infra.database.config import engine
 from src.infra.database.uow import UnitOfWork
 from src.infra.monitoring.sentry import initialize_sentry
@@ -44,21 +42,19 @@ async def run() -> None:
         sentry_sdk.flush(timeout=5)
         return
 
-    redis = RedisClient(redis_url=settings.redis_url, max_connections=2)
-    await redis.connect()
     firebase = FirebaseService()  # initialises firebase_admin internally
     now = utc_now()
 
     # Phase 1 — precompute notification rows for each timezone today
     # DailyContextPrecomputeService.precompute_for_timezone() is idempotent:
-    # it checks a Redis sentinel before doing DB work, so re-running is free.
+    # it checks an in-memory sentinel (fast) then a DB fallback, so re-running is free.
     try:
         with UnitOfWork() as uow:
             tz_rows = uow.session.execute(
                 text("SELECT DISTINCT timezone FROM users WHERE timezone IS NOT NULL")
             ).fetchall()
         timezones = [r.timezone for r in tz_rows]
-        precompute = DailyContextPrecomputeService(redis)
+        precompute = DailyContextPrecomputeService()
         for tz_name in timezones:
             local_today = now.astimezone(ZoneInfo(tz_name)).date()
             await precompute.precompute_for_timezone(tz_name, local_today)
@@ -76,12 +72,11 @@ async def run() -> None:
     # Phase 3 — claim due rows, render messages, batch FCM send, mark sent
     # status='processing' claim prevents double-sends on concurrent runs.
     try:
-        svc = ScheduledNotificationService(firebase, redis, trial_push_service=None)
+        svc = ScheduledNotificationService(firebase, trial_push_service=None)
         await svc._send_due_notifications(now)
     except Exception:
         logger.exception("Phase 3 (FCM dispatch) failed")
 
-    await redis.disconnect()
     engine.dispose()
     sentry_sdk.flush(timeout=5)
 

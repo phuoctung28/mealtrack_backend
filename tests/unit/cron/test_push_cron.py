@@ -13,7 +13,6 @@ async def test_push_cron_happy_path_runs_all_three_phases():
         patch("src.cron.push.initialize_sentry"),
         patch("src.cron.push.engine") as mock_engine,
         patch("src.cron.push.FirebaseService") as mock_firebase_cls,
-        patch("src.cron.push.RedisClient") as mock_redis_cls,
         patch("src.cron.push.DailyContextPrecomputeService") as mock_precompute_cls,
         patch("src.cron.push.ScheduledSubscriptionPushService") as mock_trial_cls,
         patch("src.cron.push.ScheduledNotificationService") as mock_svc_cls,
@@ -49,10 +48,6 @@ async def test_push_cron_happy_path_runs_all_three_phases():
         mock_svc._send_due_notifications = AsyncMock()
         mock_svc_cls.return_value = mock_svc
 
-        # Redis
-        mock_redis = AsyncMock()
-        mock_redis_cls.return_value = mock_redis
-
         from src.cron.push import run
         await run()
 
@@ -60,8 +55,6 @@ async def test_push_cron_happy_path_runs_all_three_phases():
         assert mock_precompute.precompute_for_timezone.call_count == 2  # one per timezone
         mock_trial.check_and_schedule_pushes.assert_called_once()
         mock_svc._send_due_notifications.assert_called_once()
-        mock_redis.connect.assert_called_once()
-        mock_redis.disconnect.assert_called_once()
         mock_engine.dispose.assert_called_once()
 
 
@@ -71,7 +64,6 @@ async def test_push_cron_aborts_on_db_warmup_failure():
     with (
         patch("src.cron.push.initialize_sentry"),
         patch("src.cron.push.engine") as mock_engine,
-        patch("src.cron.push.RedisClient") as mock_redis_cls,
         patch("src.cron.push.FirebaseService"),
         patch("src.cron.push.DailyContextPrecomputeService") as mock_precompute_cls,
         patch("src.cron.push.ScheduledSubscriptionPushService") as mock_trial_cls,
@@ -84,7 +76,6 @@ async def test_push_cron_aborts_on_db_warmup_failure():
         from src.cron.push import run
         await run()  # should not raise
 
-        mock_redis_cls.assert_not_called()
         mock_precompute_cls.assert_not_called()
         mock_trial_cls.assert_not_called()
         mock_svc_cls.assert_not_called()
@@ -97,7 +88,6 @@ async def test_push_cron_phase_failure_does_not_abort_subsequent_phases():
         patch("src.cron.push.initialize_sentry"),
         patch("src.cron.push.engine") as mock_engine,
         patch("src.cron.push.FirebaseService"),
-        patch("src.cron.push.RedisClient") as mock_redis_cls,
         patch("src.cron.push.DailyContextPrecomputeService") as mock_precompute_cls,
         patch("src.cron.push.ScheduledSubscriptionPushService") as mock_trial_cls,
         patch("src.cron.push.ScheduledNotificationService") as mock_svc_cls,
@@ -121,9 +111,6 @@ async def test_push_cron_phase_failure_does_not_abort_subsequent_phases():
         mock_svc = MagicMock()
         mock_svc._send_due_notifications = AsyncMock()
         mock_svc_cls.return_value = mock_svc
-
-        mock_redis = AsyncMock()
-        mock_redis_cls.return_value = mock_redis
 
         from src.cron.push import run
         await run()  # must not raise

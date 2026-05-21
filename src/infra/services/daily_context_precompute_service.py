@@ -52,8 +52,33 @@ class DailyContextPrecomputeService:
     # Public async entry point
     # ------------------------------------------------------------------
 
+    def _check_db_sentinel(self, tz_name: str, today: date) -> bool:
+        """Check DB for existing notifications for this timezone+date.
+
+        Used as a fallback when the in-memory sentinel is empty (e.g. fresh
+        cron process). One fast query prevents re-running precompute every run.
+        """
+        with UnitOfWork() as uow:
+            row = uow.session.execute(
+                text("""
+                    SELECT 1 FROM notifications n
+                    JOIN users u ON u.id = n.user_id
+                    WHERE u.timezone = :tz_name
+                      AND n.scheduled_date = :today
+                    LIMIT 1
+                """),
+                {"tz_name": tz_name, "today": today},
+            ).fetchone()
+        return row is not None
+
     async def is_precomputed(self, today: date, tz_name: str) -> bool:
-        return (today.isoformat(), tz_name) in _precomputed_today
+        if (today.isoformat(), tz_name) in _precomputed_today:
+            return True
+        # DB fallback: repopulate in-memory sentinel for fresh cron processes.
+        already = await asyncio.to_thread(self._check_db_sentinel, tz_name, today)
+        if already:
+            _precomputed_today.add((today.isoformat(), tz_name))
+        return already
 
     async def precompute_for_timezone(self, tz_name: str, today: date) -> None:
         """No-op if sentinel exists; otherwise runs DB sync work in thread pool."""
