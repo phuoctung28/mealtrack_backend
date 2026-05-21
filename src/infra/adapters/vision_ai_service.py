@@ -147,6 +147,7 @@ class VisionAIService(VisionAIServicePort):
                     prompt=strategy.get_user_message(),
                     image_data=image_bytes,
                     system_message=strategy.get_analysis_prompt(),
+                    max_tokens=1024,
                 )
             )
         except Exception as e:
@@ -183,6 +184,7 @@ class VisionAIService(VisionAIServicePort):
                     prompt=strategy.get_user_message(),
                     image_data=image_url.encode("utf-8"),
                     system_message=strategy.get_analysis_prompt(),
+                    max_tokens=1024,
                 )
             )
         except Exception as e:

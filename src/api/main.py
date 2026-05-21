@@ -149,6 +149,33 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting MealTrack API...")
 
+    # PostHog LLM Analytics via OpenTelemetry — must run before any LangChain calls
+    _posthog_key = os.getenv("POSTHOG_API_KEY")
+    if _posthog_key:
+        try:
+            from opentelemetry import trace
+            from opentelemetry.sdk.trace import TracerProvider
+            from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+            from posthog.ai.otel import PostHogSpanProcessor
+            from opentelemetry.instrumentation.langchain import LangchainInstrumentor
+
+            _otel_provider = TracerProvider(
+                resource=Resource(attributes={SERVICE_NAME: "mealtrack-backend"})
+            )
+            _otel_provider.add_span_processor(
+                PostHogSpanProcessor(
+                    api_key=_posthog_key,
+                    host=os.getenv("POSTHOG_HOST", "https://us.i.posthog.com"),
+                )
+            )
+            trace.set_tracer_provider(_otel_provider)
+            LangchainInstrumentor().instrument()
+            logger.info("PostHog LLM Analytics instrumented via OpenTelemetry")
+        except Exception as e:
+            logger.warning(f"PostHog LLM Analytics init failed (non-fatal): {e}")
+    else:
+        logger.info("POSTHOG_API_KEY not set — LLM analytics disabled")
+
     # Initialize Firebase Admin SDK
     try:
         initialize_firebase()
@@ -179,11 +206,41 @@ async def lifespan(app: FastAPI):
         if os.getenv("FAIL_ON_CACHE_ERROR", "false").lower() == "true":
             raise
 
+
+    # Initialize Gemini explicit context caches
+    gemini_cache_manager = None
+    try:
+        from src.infra.services.ai.gemini_cache_manager import GeminiCacheManager
+        from src.api.base_dependencies import get_raw_redis_client
+
+        _raw_redis = get_raw_redis_client()
+        if _raw_redis is not None:
+            gemini_cache_manager = GeminiCacheManager(redis_client=_raw_redis)
+            await gemini_cache_manager.warm_all()
+            gemini_cache_manager.start_refresh_loop()
+            logger.info("Gemini context caches warmed")
+            from src.infra.services.ai.ai_model_manager import AIModelManager
+            AIModelManager.get_instance().set_cache_manager(gemini_cache_manager)
+            logger.info("GeminiCacheManager wired into AIModelManager")
+        else:
+            logger.warning("Redis not available — Gemini cache skipped")
+    except Exception as e:
+        logger.warning(f"Gemini cache warmup failed (non-fatal): {e}")
+
+
     logger.info("MealTrack API started successfully!")
     yield
 
     # Shutdown
     logger.info("Shutting down MealTrack API...")
+
+    # Stop Gemini cache refresh loop before disconnecting Redis
+    if gemini_cache_manager is not None:
+        try:
+            await gemini_cache_manager.stop()
+        except Exception as e:
+            logger.warning(f"Gemini cache manager stop failed: {e}")
+
 
     # Disconnect cache
     await shutdown_cache_layer()

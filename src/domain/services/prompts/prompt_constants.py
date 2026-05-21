@@ -80,6 +80,43 @@ DECOMPOSITION_RULES = (
     "  ❌ 'pho bo' → 1 entry with 450 kcal\n"
 )
 
+# Vision-specific decomposition rules (used by all 5 analysis strategies)
+VISION_DECOMPOSITION_RULES = """
+CRITICAL — INGREDIENT DECOMPOSITION:
+- ALWAYS decompose compound dishes into individual ingredients
+- If you see a bowl of soup: list broth, noodles, meat, vegetables separately
+- If you see a sandwich: list bread, meat, cheese, sauce separately
+- Never return compound dish names as single items (e.g. "pho" → list noodle, beef, broth, etc.)
+- Simple single-ingredient items (banana, egg, plain rice) stay as 1 item
+- Each ingredient: name, quantity (grams), unit, calories, macros
+
+MACRO ACCURACY:
+- All quantities in GRAMS (convert volumes using density: honey=1.42g/ml, oil=0.92g/ml)
+- Verify: calories ≈ protein*4 + carbs*4 + fat*9
+
+EMOJI SELECTION (for the "emoji" field):
+- Return exactly ONE emoji that represents the OVERALL DISH, not individual ingredients
+- Pick emoji based on the SERVING STYLE, not just the main ingredient:
+  🍜 = noodle soup served in broth (phở, bún bò Huế, bún riêu, ramen, udon soup)
+  🍝 = dry pasta/noodles without broth (spaghetti, mì xào, pad thai)
+  🍚 = rice-based dishes (cơm, fried rice, bibimbap)
+  🍛 = curry or saucy dish over rice
+  🍲 = stew, hotpot, or thick soup (lẩu, canh, chowder)
+  🥗 = salad or fresh/cold dishes (gỏi)
+  🍖 = grilled/roasted meat dishes (bún chả, thịt nướng, BBQ)
+  🥘 = braised/simmered dishes (kho, bò kho)
+  🥟 = dumplings, spring rolls, wrapped items (nem, bánh cuốn, gyoza)
+  🥪 = sandwiches, bánh mì
+  🍳 = egg-based dishes (omelette, trứng chiên)
+  🥣 = porridge, oatmeal, cháo
+  🍱 = bento/meal box/combo platter
+  🍗 = fried chicken, fried items
+  🥩 = steak or large meat cuts
+  🍕🍔🌮🌯 = pizza, burger, taco, burrito (Western fast food)
+- If unsure, use 🍽️ as fallback
+- NEVER return text or multiple emoji — exactly one emoji character
+"""
+
 
 # =============================================================================
 # EMOJI RULES — guide AI emoji selection for meal suggestions

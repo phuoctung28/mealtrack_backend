@@ -92,25 +92,28 @@ class TestFallbackMealNames:
 class TestBasicAnalysisPromptConstraints:
     """Test prompt constraints for basic analysis strategy."""
 
-    def test_basic_analysis_prompt_requires_json_only_and_compact_fields(self):
-        """Ensure JSON-only output and compact field constraints are explicit."""
+    def test_basic_analysis_prompt_requires_json_only_and_no_prose(self):
+        """Ensure JSON-only output constraints are explicit in VISION_ANALYSIS."""
+        from src.infra.services.ai.prompts.system_prompts import SystemPrompts
         prompt = BasicAnalysisStrategy().get_analysis_prompt().lower()
 
-        assert "only valid json" in prompt
-        assert "no commentary text" in prompt
-        assert "max 8 food items" in prompt
-        assert "keep dish_name concise" in prompt
+        assert "json only" in prompt
+        assert "no prose" in prompt
+        assert "maximum 8 food items" in prompt
 
-    def test_basic_analysis_prompt_is_compact(self):
-        """Ensure the basic analysis prompt is materially compressed."""
+    def test_basic_analysis_prompt_returns_vision_analysis(self):
+        """BasicAnalysisStrategy must return SystemPrompts.VISION_ANALYSIS."""
+        from src.infra.services.ai.prompts.system_prompts import SystemPrompts
         prompt = BasicAnalysisStrategy().get_analysis_prompt()
+        assert prompt == SystemPrompts.VISION_ANALYSIS
 
-        assert len(prompt) <= 2600
-
-    def test_basic_analysis_strategy_can_disable_optimized_prompt(self):
-        prompt = BasicAnalysisStrategy(
+    def test_basic_analysis_strategy_optimized_flag_always_returns_vision_analysis(self):
+        """optimized_prompt_enabled flag is a no-op; always returns VISION_ANALYSIS."""
+        from src.infra.services.ai.prompts.system_prompts import SystemPrompts
+        prompt_default = BasicAnalysisStrategy().get_analysis_prompt()
+        prompt_disabled = BasicAnalysisStrategy(
             optimized_prompt_enabled=False
         ).get_analysis_prompt()
 
-        assert "ONLY valid JSON with no commentary text" not in prompt
-        assert "always return well-formed json" in prompt.lower()
+        assert prompt_default == SystemPrompts.VISION_ANALYSIS
+        assert prompt_disabled == SystemPrompts.VISION_ANALYSIS

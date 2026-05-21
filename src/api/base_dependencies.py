@@ -314,6 +314,11 @@ def get_redis_client() -> Optional[RedisClient]:
     return _redis_client
 
 
+def get_raw_redis_client():
+    """Return the underlying async Redis client (None if not initialized)."""
+    return _redis_client.client if _redis_client and _redis_client.client else None
+
+
 def get_meal_suggestion_repository():
     """Get meal suggestion repository (Phase 06)."""
     from src.infra.repositories.meal_suggestion_repository import (

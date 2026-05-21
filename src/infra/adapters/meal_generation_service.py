@@ -13,10 +13,9 @@ logger = logging.getLogger(__name__)
 
 PURPOSE_MAP = {
     "meal_names": ModelPurpose.MEAL_NAMES,
-    "recipe_primary": ModelPurpose.RECIPE_PRIMARY,
-    "recipe_secondary": ModelPurpose.RECIPE_SECONDARY,
-    "barcode": ModelPurpose.BARCODE,
-    "general": ModelPurpose.GENERAL,
+    "recipe":     ModelPurpose.RECIPE,
+    "barcode":    ModelPurpose.BARCODE,
+    "general":    ModelPurpose.GENERAL,
 }
 
 

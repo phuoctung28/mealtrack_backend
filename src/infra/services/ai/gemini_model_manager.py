@@ -17,6 +17,7 @@ from src.infra.services.ai.gemini_model_config import (
     MEMORY_WARNING_THRESHOLD_MB,
     PURPOSE_MODEL_DEFAULTS,
     PURPOSE_ENV_VARS,
+    PURPOSE_TEMPERATURES,
 )
 import src.infra.services.ai.gemini_cache_handler as cache_handler
 
@@ -184,22 +185,21 @@ class GeminiModelManager:
     def get_model_for_purpose(
         self,
         purpose: GeminiModelPurpose = GeminiModelPurpose.GENERAL,
-        temperature: float = 0.7,
+        temperature: Optional[float] = None,   # None = use PURPOSE_TEMPERATURES lookup
         max_output_tokens: Optional[int] = None,
         response_mime_type: Optional[str] = None,
         **kwargs,
     ):
         """Get model instance configured for specific purpose."""
+        if temperature is None:
+            temperature = PURPOSE_TEMPERATURES.get(purpose, 0.4)
+
         env_var = PURPOSE_ENV_VARS.get(purpose, "GEMINI_MODEL")
         model_name = os.getenv(
             env_var, PURPOSE_MODEL_DEFAULTS.get(purpose, self.model_name)
         )
 
-        if purpose in (
-            GeminiModelPurpose.RECIPE_PRIMARY,
-            GeminiModelPurpose.RECIPE_SECONDARY,
-            GeminiModelPurpose.BARCODE,
-        ):
+        if purpose in (GeminiModelPurpose.RECIPE, GeminiModelPurpose.BARCODE):
             kwargs.setdefault("thinking_budget", 0)
 
         config_key = self._get_config_key(

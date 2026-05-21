@@ -30,11 +30,12 @@ def test_generate_meal_plan_uses_ai_manager(service, mock_ai_manager):
 
 
 def test_model_purpose_maps_to_enum(service, mock_ai_manager):
+    """recipe purpose maps to RECIPE enum (collapsed from PRIMARY/SECONDARY)."""
     service.generate_meal_plan(
         prompt="test",
         system_message="system",
-        model_purpose="recipe_primary",
+        model_purpose="recipe",
     )
 
     call_kwargs = mock_ai_manager.generate.call_args[1]
-    assert call_kwargs["purpose"].value == "recipe_primary"
+    assert call_kwargs["purpose"].value == "recipe"
