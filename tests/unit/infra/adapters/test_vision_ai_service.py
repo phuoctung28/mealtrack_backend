@@ -85,3 +85,36 @@ def test_analyze_with_strategy_compresses_before_sending():
     # The image should be compressed (smaller than 2000x1500)
     img = Image.open(BytesIO(image_data))
     assert max(img.size) <= 768
+
+
+def test_analyze_with_strategy_passes_max_tokens_1024():
+    """Vision calls must pass max_tokens=1024, not use the 4096 default."""
+    service = _make_service()
+    from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+    strategy = AnalysisStrategyFactory.create_basic_strategy()
+
+    image = _make_jpeg(400, 300)
+    service.analyze_with_strategy(image, strategy)
+
+    call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
+    assert call_kwargs.get("max_tokens") == 1024
+
+
+def test_analyze_by_url_passes_max_tokens_1024():
+    """analyze_by_url_with_strategy must also pass max_tokens=1024."""
+    service = _make_service()
+    from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+    strategy = AnalysisStrategyFactory.create_basic_strategy()
+
+    service.analyze_by_url_with_strategy("http://example.com/food.jpg", strategy)
+
+    call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
+    assert call_kwargs.get("max_tokens") == 1024
+
+
+def test_recipe_token_limit_is_1200():
+    """PARALLEL_SINGLE_MEAL_TOKENS must be 1200, not 4000."""
+    from src.domain.services.meal_suggestion.recipe_attempt_builder import (
+        PARALLEL_SINGLE_MEAL_TOKENS,
+    )
+    assert PARALLEL_SINGLE_MEAL_TOKENS == 1200
