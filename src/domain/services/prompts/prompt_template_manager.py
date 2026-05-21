@@ -281,7 +281,7 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
         Always generates in English (translation happens in Phase 3).
         """
         ingredients = ingredients or []
-        ing_str = ", ".join(ingredients[:6]) if ingredients else "any ingredients"
+        ing_str = ", ".join(ingredients[:6]) if ingredients else ""
 
         constraints_parts = []
         if allergies:
@@ -290,6 +290,13 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
             constraints_parts.append(f"Diet: {', '.join(dietary_preferences)}")
 
         constraints_str = " | ".join(constraints_parts) if constraints_parts else ""
+
+        if ing_str:
+            ing_line = f"Use these ingredients as main components where compatible: {ing_str}"
+        else:
+            ing_line = "Use common ingredients appropriate for the dish."
+        if constraints_str:
+            ing_line += f" | {constraints_str}"
 
         # Always state serving count explicitly so the AI sizes the
         # recipe correctly.
@@ -330,14 +337,13 @@ Names: Natural, concise (max 5 words), no "Quick/Healthy/Power" tags.{exclude_st
 
         return f"""Generate complete recipe for: "{meal_name}"
 
-MUST USE these ingredients as main components: {ing_str}{' | ' + constraints_str if constraints_str else ''}
+{ing_line}
 Target:{servings_str} — ~{target_calories} cal{time_str}{equipment_str}{cuisine_str}{macro_target_str}{low_calorie_str}
 
 CRITICAL: Size all quantities for {servings} serving only — no batch scaling.
 
 REQUIREMENTS:
 - Match name "{meal_name}" exactly
-- MUST include user's ingredients ({ing_str}) — no substitutions
 - 3-8 ingredients in GRAMS, scaled for {servings} serving{'s' if servings > 1 else ''}{time_req_str}
 - Include origin_country and cuisine_type in JSON
 

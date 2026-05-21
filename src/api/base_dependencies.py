@@ -38,9 +38,6 @@ from src.infra.services.scheduled_notification_service import (
 if TYPE_CHECKING:
     from src.domain.ports.subscription_service_port import SubscriptionServicePort
 
-if TYPE_CHECKING:
-    from src.domain.ports.subscription_service_port import SubscriptionServicePort
-
 # Note: Old handler imports removed - using event-driven architecture now
 # from src.app.handlers.activity_handler import ActivityHandler
 # ... etc
@@ -417,7 +414,11 @@ def get_suggestion_orchestration_service():
     from src.infra.adapters.meal_generation_service import MealGenerationService
     from src.infra.database.config import SessionLocal
     from src.infra.repositories.user_repository import UserRepository
-    from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
+    from src.infra.services.ai.schemas import (
+        DiscoveryMealsResponse,
+        MealNamesResponse,
+        RecipeDetailsResponse,
+    )
 
     meal_gen_service = MealGenerationService()
     suggestion_repo = get_meal_suggestion_repository()
@@ -441,6 +442,7 @@ def get_suggestion_orchestration_service():
         uow_factory=AsyncUnitOfWork,
         meal_names_schema_class=MealNamesResponse,
         discovery_meals_schema_class=DiscoveryMealsResponse,
+        recipe_details_schema_class=RecipeDetailsResponse,
         translation_service=get_deepl_suggestion_translation_service(),
     )
 

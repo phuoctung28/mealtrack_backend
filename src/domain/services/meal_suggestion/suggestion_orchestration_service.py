@@ -48,6 +48,7 @@ class SuggestionOrchestrationService:
         nutrition_lookup: NutritionLookupService,
         meal_names_schema_class: type,
         discovery_meals_schema_class: type,
+        recipe_details_schema_class: type | None = None,
         tdee_service: TdeeCalculationService = None,
         portion_service: PortionCalculationService = None,
         profile_provider: Optional[Callable[[str], Any]] = None,
@@ -68,6 +69,7 @@ class SuggestionOrchestrationService:
             nutrition_lookup=nutrition_lookup,
             meal_names_schema_class=meal_names_schema_class,
             discovery_meals_schema_class=discovery_meals_schema_class,
+            recipe_details_schema_class=recipe_details_schema_class,
         )
 
     async def generate_suggestions(

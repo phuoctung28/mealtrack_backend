@@ -17,7 +17,7 @@ def _make_suggestion(name: str) -> MealSuggestion:
 
 
 def _make_generator() -> tuple:
-    from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
+    from src.infra.services.ai.schemas import DiscoveryMealsResponse, MealNamesResponse, RecipeDetailsResponse
 
     translate_svc = MagicMock()
     translate_svc.translate_meal_suggestions_batch = AsyncMock(
@@ -30,6 +30,7 @@ def _make_generator() -> tuple:
         nutrition_lookup=MagicMock(),
         meal_names_schema_class=MealNamesResponse,
         discovery_meals_schema_class=DiscoveryMealsResponse,
+        recipe_details_schema_class=RecipeDetailsResponse,
     )
     return gen, translate_svc
 

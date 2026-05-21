@@ -291,3 +291,72 @@ def test_generate_recipes_accepts_full_selected_meals_when_session_missing(ms_cl
     assert captured["msg"].session_id == "expired-session"
     assert captured["msg"].selected_meal_ids == ["disc_a"]
     assert captured["msg"].selected_meals == payload["selected_meals"]
+
+
+def test_generate_recipes_generation_failure_returns_503(ms_client):
+    client, _bus = ms_client
+
+    class _BusRecipeFailure:
+        async def send(self, msg):
+            from src.api.exceptions import ExternalServiceException
+
+            raise ExternalServiceException(
+                "Could not generate recipes. Please retry.",
+                error_code="RECIPE_GENERATION_FAILED",
+                details={"requested": 3, "generated": 0},
+            )
+
+    client.app.dependency_overrides[get_configured_event_bus] = (
+        lambda: _BusRecipeFailure()
+    )
+
+    payload = {
+        "session_id": "sess-discovery",
+        "selected_meal_ids": ["disc_a", "disc_b", "disc_c"],
+        "selected_meals": [
+            {
+                "id": "disc_a",
+                "meal_name": "Ginger Chicken Rice",
+                "english_name": "Ginger Chicken Rice",
+                "macros": {
+                    "calories": 450,
+                    "protein": 35,
+                    "carbs": 45,
+                    "fat": 12,
+                },
+            },
+            {
+                "id": "disc_b",
+                "meal_name": "Lemon Salmon Bowl",
+                "english_name": "Lemon Salmon Bowl",
+                "macros": {
+                    "calories": 520,
+                    "protein": 38,
+                    "carbs": 50,
+                    "fat": 18,
+                },
+            },
+            {
+                "id": "disc_c",
+                "meal_name": "Tofu Vegetable Noodles",
+                "english_name": "Tofu Vegetable Noodles",
+                "macros": {
+                    "calories": 430,
+                    "protein": 28,
+                    "carbs": 55,
+                    "fat": 11,
+                },
+            },
+        ],
+        "meal_names": [
+            "Ginger Chicken Rice",
+            "Lemon Salmon Bowl",
+            "Tofu Vegetable Noodles",
+        ],
+        "meal_type": "lunch",
+    }
+
+    response = client.post("/v1/meal-suggestions/recipes", json=payload)
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["error_code"] == "RECIPE_GENERATION_FAILED"

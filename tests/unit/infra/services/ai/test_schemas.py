@@ -265,6 +265,27 @@ class TestRecipeDetailsResponse:
         assert response.calories == 2800
         assert response.protein == 180.0
 
+    def test_accepts_optional_recipe_metadata(self):
+        response = RecipeDetailsResponse(
+            ingredients=[
+                IngredientItem(name="Chicken breast", amount=180, unit="g"),
+                IngredientItem(name="Rice", amount=160, unit="g"),
+                IngredientItem(name="Ginger", amount=8, unit="g"),
+            ],
+            recipe_steps=[
+                RecipeStepItem(step=1, instruction="Cook rice", duration_minutes=12),
+                RecipeStepItem(step=2, instruction="Cook chicken", duration_minutes=10),
+            ],
+            prep_time_minutes=25,
+            origin_country="Vietnam",
+            cuisine_type="Vietnamese",
+            emoji="🍚",
+        )
+
+        assert response.origin_country == "Vietnam"
+        assert response.cuisine_type == "Vietnamese"
+        assert response.emoji == "🍚"
+
 
 class TestIngredientItem:
     """Test IngredientItem validation."""
