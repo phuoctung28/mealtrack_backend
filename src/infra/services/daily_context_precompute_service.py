@@ -79,7 +79,8 @@ class DailyContextPrecomputeService:
             count = await asyncio.to_thread(
                 self._precompute_db_sync, tz_name, today
             )
-            _precomputed_today.add((today.isoformat(), tz_name))
+            if count > 0:
+                _precomputed_today.add((today.isoformat(), tz_name))
             logger.debug(
                 "Pre-compute complete for %s: %d users", tz_name, count
             )

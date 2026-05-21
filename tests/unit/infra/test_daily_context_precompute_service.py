@@ -37,10 +37,25 @@ async def test_runs_and_adds_to_sentinel_set():
     svc = DailyContextPrecomputeService()
     today = date(2026, 4, 22)
 
-    with patch.object(svc, "_precompute_db_sync", return_value=0):
+    with patch.object(svc, "_precompute_db_sync", return_value=5):
         await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
 
     assert (today.isoformat(), "Asia/Ho_Chi_Minh") in module._precomputed_today
+
+
+@pytest.mark.asyncio
+async def test_zero_users_does_not_set_sentinel():
+    """When no users are eligible, sentinel must NOT be set (allows retry)."""
+    from src.infra.services import daily_context_precompute_service as module
+    from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
+
+    svc = DailyContextPrecomputeService()
+    today = date(2026, 4, 22)
+
+    with patch.object(svc, "_precompute_db_sync", return_value=0):
+        await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
+
+    assert (today.isoformat(), "Asia/Ho_Chi_Minh") not in module._precomputed_today
 
 
 def test_sentinel_key_format():
