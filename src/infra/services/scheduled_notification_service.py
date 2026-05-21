@@ -5,14 +5,14 @@ Architecture:
   Phase 1 (every tick): detect which timezones just hit local midnight →
           trigger DailyContextPrecomputeService for that group.
   Phase 2 (every tick): fetch due notifications from PostgreSQL →
-          read calories_consumed from Redis → render messages →
+          fetch calories_consumed from DB → render messages →
           batch FCM send → mark sent.
 """
 
 import asyncio
 import logging
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -22,7 +22,6 @@ from src.domain.model.notification import NotificationType
 from src.domain.services.notification_messages import get_messages
 from src.domain.services.notification_service import DEACTIVATABLE_FCM_ERRORS
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.cache.redis_client import RedisClient
 from src.infra.database.uow import UnitOfWork
 from src.infra.repositories.notification.reminder_query_builder import (
     ReminderQueryBuilder,
@@ -63,12 +62,10 @@ class ScheduledNotificationService:
     def __init__(
         self,
         firebase_service: FirebaseService,
-        redis_client: RedisClient,
         trial_push_service: "ScheduledSubscriptionPushService | None" = None,
     ):
         self._firebase = firebase_service
-        self._redis = redis_client
-        self._precompute = DailyContextPrecomputeService(redis_client)
+        self._precompute = DailyContextPrecomputeService()
         self._trial_push = trial_push_service
         self._running = False
         self._tasks: List[asyncio.Task] = []
@@ -184,7 +181,7 @@ class ScheduledNotificationService:
     # ── Phase 2: Send due notifications ───────────────────────────────────────
 
     async def _send_due_notifications(self, now: datetime) -> None:
-        """Fetch due rows, pull consumed from Redis, render, batch FCM, mark sent."""
+        """Fetch due rows, fetch calories_consumed from DB, render, batch FCM, mark sent."""
 
         def _claim_due():
             with UnitOfWork() as uow:
@@ -201,9 +198,17 @@ class ScheduledNotificationService:
 
         logger.info("Sending %d claimed due notifications", len(due))
 
-        # Batch-fetch calories_consumed from Redis
-        context_keys = [f"user_daily_context:{n.user_id}" for n in due]
-        redis_contexts = await self._redis.hgetall_batch(context_keys)
+        # Batch-fetch real-time calories_consumed from DB for meal reminders.
+        # daily_summary uses the JSONB snapshot; trial_expiry ignores calories.
+        meal_reminder_ids = [
+            n.user_id for n in due
+            if n.notification_type.startswith("meal_reminder")
+        ]
+        consumed_map: dict[str, int] = {}
+        if meal_reminder_ids:
+            consumed_map = await asyncio.to_thread(
+                _fetch_calories_consumed_batch, meal_reminder_ids, now
+            )
 
         # Render messages per notification and group by (type, title, body)
         groups: dict[tuple[str, str, str], dict[str, list[str]]] = defaultdict(
@@ -212,7 +217,7 @@ class ScheduledNotificationService:
         sent_ids = []
         failed_ids = []
 
-        for notif, redis_ctx in zip(due, redis_contexts):
+        for notif in due:
             ctx = notif.context  # JSONB dict from PostgreSQL
             tokens = ctx.get("fcm_tokens", [])
             if not tokens:
@@ -224,22 +229,13 @@ class ScheduledNotificationService:
             lang = ctx.get("language_code", "en")
 
             if notif.notification_type == "daily_summary":
-                # Use JSONB snapshot from midnight pre-compute (stable for full-day summary)
+                # JSONB snapshot from midnight pre-compute (stable for full-day summary)
                 calories_consumed = int(ctx.get("calories_consumed", 0))
             elif notif.notification_type.startswith("trial_expiry"):
-                # Trial reminders don't depend on calorie data; skip Redis to avoid
-                # a "cache miss" WARNING per row.
                 calories_consumed = 0
             else:
-                # Use Redis for meal reminders (fresher, ~30 min stale)
-                if not redis_ctx:
-                    logger.warning(
-                        "Redis cache miss for user %s — using calorie_goal only",
-                        notif.user_id,
-                    )
-                    calories_consumed = 0
-                else:
-                    calories_consumed = int(redis_ctx.get("calories_consumed", 0))
+                # meal_reminder_* — real-time DB data
+                calories_consumed = consumed_map.get(notif.user_id, 0)
 
             remaining = max(0, calorie_goal - calories_consumed)
             title, body = _render_message(
@@ -420,6 +416,41 @@ def _render_message(
 def _chunked(lst: list, size: int):
     for i in range(0, len(lst), size):
         yield lst[i : i + size]
+
+
+def _fetch_calories_consumed_batch(
+    user_ids: list[str], now: datetime
+) -> dict[str, int]:
+    """Batch-fetch calories consumed in the last 24 hours per user.
+
+    Uses a 24-hour lookback from now. Meal reminders fire mid-day locally,
+    so a 24-hour window captures all of the user's current-day meals.
+    This replaces the Redis HGETALL that fetched a stale midnight snapshot.
+    """
+    window_start = now - timedelta(hours=24)
+    with UnitOfWork() as uow:
+        rows = uow.session.execute(
+            text("""
+                SELECT m.user_id,
+                       COALESCE(SUM(
+                           (n.protein * 4.0)
+                           + (GREATEST(n.carbs - n.fiber, 0) * 4.0)
+                           + (n.fiber * 2.0)
+                           + (n.fat * 9.0)
+                       ), 0) AS consumed_calories
+                FROM meal m
+                JOIN nutrition n ON n.meal_id = m.meal_id
+                WHERE m.user_id = ANY(:ids)
+                  AND m.created_at >= :start
+                  AND m.status = 'READY'
+                GROUP BY m.user_id
+            """),
+            {
+                "ids": user_ids,
+                "start": window_start,
+            },
+        ).fetchall()
+    return {row.user_id: int(round(row.consumed_calories)) for row in rows}
 
 
 def _seconds_until_next_minute(now: datetime) -> float:

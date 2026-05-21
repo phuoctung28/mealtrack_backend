@@ -307,44 +307,53 @@ class TestGetCurrentUserId:
     @pytest.mark.asyncio
     async def test_get_user_id_returns_cached_active_user(self):
         """Test cached Firebase UID mapping avoids a database lookup."""
-        mock_cache = Mock()
-        mock_cache.get = AsyncMock(
-            return_value={"user_id": "cached_user_id", "is_active": True}
-        )
-        mock_cache.set = AsyncMock()
+        from src.api.dependencies import auth_cache as cache_module
 
-        mock_async_db = _make_async_db(None)
-        mock_token = {"uid": "firebase_uid_123"}
+        # Pre-populate the in-memory TTLCache directly
+        cache_module._uid_cache["firebase_uid_123"] = {
+            "user_id": "cached_user_id",
+            "is_active": True,
+        }
+        try:
+            mock_async_db = _make_async_db(None)
+            mock_token = {"uid": "firebase_uid_123"}
 
-        result = await get_current_user_id(
-            mock_token, async_db=mock_async_db, cache_service=mock_cache
-        )
+            result = await get_current_user_id(
+                mock_token, async_db=mock_async_db, cache_service=None
+            )
 
-        assert result == "cached_user_id"
-        mock_async_db.execute.assert_not_awaited()
-        mock_cache.set.assert_not_awaited()
+            assert result == "cached_user_id"
+            mock_async_db.execute.assert_not_awaited()
+        finally:
+            cache_module._uid_cache.pop("firebase_uid_123", None)
 
     @pytest.mark.asyncio
     async def test_get_user_id_caches_database_result_on_miss(self):
-        """Test DB lookup result is cached for the next authenticated request."""
+        """Test DB lookup result is cached in-memory after a DB hit."""
+        from src.api.dependencies import auth_cache as cache_module
+
         mock_user = Mock()
         mock_user.id = "user_db_id_123"
-        mock_user.firebase_uid = "firebase_uid_123"
+        mock_user.firebase_uid = "firebase_uid_456"
 
         mock_async_db = _make_async_db(mock_user)
 
-        mock_cache = Mock()
-        mock_cache.get = AsyncMock(return_value=None)
-        mock_cache.set = AsyncMock()
+        # Ensure no stale entry
+        cache_module._uid_cache.pop("firebase_uid_456", None)
+        try:
+            result = await get_current_user_id(
+                {"uid": "firebase_uid_456"},
+                async_db=mock_async_db,
+                cache_service=None,
+            )
 
-        result = await get_current_user_id(
-            {"uid": "firebase_uid_123"},
-            async_db=mock_async_db,
-            cache_service=mock_cache,
-        )
-
-        assert result == "user_db_id_123"
-        mock_cache.set.assert_awaited_once()
+            assert result == "user_db_id_123"
+            # The in-memory cache should now hold the entry
+            cached = cache_module._uid_cache.get("firebase_uid_456")
+            assert cached is not None
+            assert cached["user_id"] == "user_db_id_123"
+        finally:
+            cache_module._uid_cache.pop("firebase_uid_456", None)
 
 
 class TestGetCurrentUserEmail:
