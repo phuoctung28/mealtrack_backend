@@ -68,7 +68,7 @@ class ScheduledNotificationService:
     ):
         self._firebase = firebase_service
         self._redis = redis_client
-        self._precompute = DailyContextPrecomputeService(redis_client)
+        self._precompute = DailyContextPrecomputeService()
         self._trial_push = trial_push_service
         self._running = False
         self._tasks: List[asyncio.Task] = []

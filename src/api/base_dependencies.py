@@ -350,9 +350,7 @@ def get_daily_context_precompute_service():
         DailyContextPrecomputeService,
     )
 
-    if _redis_client is None:
-        return None
-    return DailyContextPrecomputeService(_redis_client)
+    return DailyContextPrecomputeService()
 
 
 # Phase 06: Meal Suggestion Dependencies
