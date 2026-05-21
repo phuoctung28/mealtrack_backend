@@ -42,6 +42,14 @@ PURPOSE_ENV_VARS = {
     GeminiModelPurpose.BARCODE:    "GEMINI_MODEL",
 }
 
+# Default temperature per purpose
+PURPOSE_TEMPERATURES: dict[GeminiModelPurpose, float] = {
+    GeminiModelPurpose.GENERAL:    0.2,
+    GeminiModelPurpose.MEAL_NAMES: 0.7,  # diversity is the point
+    GeminiModelPurpose.RECIPE:     0.4,
+    GeminiModelPurpose.BARCODE:    0.1,  # extraction — accuracy over creativity
+}
+
 
 @dataclass
 class CachedModel:

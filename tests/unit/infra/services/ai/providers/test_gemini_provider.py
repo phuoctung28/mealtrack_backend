@@ -85,3 +85,14 @@ class TestErrorExtraction:
     def test_extract_unknown(self, provider):
         code = provider.extract_error_code(Exception("random error"))
         assert code is None
+
+
+def test_purpose_temperatures_defined():
+    from src.infra.services.ai.gemini_model_config import (
+        GeminiModelPurpose,
+        PURPOSE_TEMPERATURES,
+    )
+    assert PURPOSE_TEMPERATURES[GeminiModelPurpose.BARCODE] == 0.1
+    assert PURPOSE_TEMPERATURES[GeminiModelPurpose.MEAL_NAMES] == 0.7
+    assert PURPOSE_TEMPERATURES[GeminiModelPurpose.RECIPE] == 0.4
+    assert PURPOSE_TEMPERATURES[GeminiModelPurpose.GENERAL] == 0.2
