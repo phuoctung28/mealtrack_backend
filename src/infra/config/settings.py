@@ -107,13 +107,9 @@ class Settings(BaseSettings):
         default="gemini-2.5-flash-lite",
         description="Gemini model for meal name generation (higher RPM: 10/min)",
     )
-    GEMINI_MODEL_RECIPE_PRIMARY: str = Field(
-        default="gemini-2.5-flash",
-        description="Primary model for recipe generation (5 RPM)",
-    )
-    GEMINI_MODEL_RECIPE_SECONDARY: str = Field(
-        default="gemini-3-flash",
-        description="Secondary model for recipe generation (5 RPM, load distribution)",
+    GEMINI_MODEL_RECIPE: str = Field(
+        default="gemini-2.5-flash-lite",
+        description="Model for recipe generation",
     )
 
     # Image search (meal discovery photos)
