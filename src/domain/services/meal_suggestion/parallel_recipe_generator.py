@@ -84,6 +84,7 @@ class ParallelRecipeGenerator:
         nutrition_lookup: NutritionLookupService,
         meal_names_schema_class: type,
         discovery_meals_schema_class: type,
+        recipe_details_schema_class: type | None = None,
     ) -> None:
         self._generation = generation_service
         self._translation_service = translation_service
@@ -91,6 +92,7 @@ class ParallelRecipeGenerator:
         self._nutrition_lookup = nutrition_lookup
         self._meal_names_schema = meal_names_schema_class
         self._discovery_meals_schema = discovery_meals_schema_class
+        self._recipe_details_schema = recipe_details_schema_class
 
     async def generate(
         self,
@@ -241,7 +243,11 @@ class ParallelRecipeGenerator:
         session: SuggestionSession,
         selected_meals: List[dict],
     ) -> List[MealSuggestion]:
-        """Generate full recipes for discovery selections without scale rejection."""
+        """Generate full recipes for discovery selections without scale rejection.
+
+        2-pass retry: pass 1 generates all slots in parallel; pass 2 retries any
+        None slots. Raises RuntimeError if any slot still fails after retry.
+        """
         from src.domain.services.meal_suggestion.suggestion_prompt_builder import (
             build_recipe_details_prompt,
         )
@@ -266,6 +272,8 @@ class ParallelRecipeGenerator:
                 fat_target=selected.get("fat") or session.fat_target,
             )
             meal_name = selected.get("english_name") or selected.get("name")
+            if not meal_name:
+                raise ValueError("selected meal is missing english_name/name")
             prompt = build_recipe_details_prompt(meal_name, recipe_session)
             return await self._generate_with_retry(
                 prompt,
@@ -277,29 +285,41 @@ class ParallelRecipeGenerator:
                 fill_missing_steps=True,
             )
 
-        tasks = [
+        results: List[Optional[MealSuggestion]] = [None] * len(selected_meals)
+
+        # Pass 1: generate all slots in parallel
+        pass1_tasks = [
             asyncio.create_task(generate_one(index, selected))
             for index, selected in enumerate(selected_meals)
         ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        pass1_raw = await asyncio.gather(*pass1_tasks, return_exceptions=True)
+        for i, result in enumerate(pass1_raw):
+            if not isinstance(result, Exception) and result is not None:
+                results[i] = result
 
-        recipes: List[MealSuggestion] = []
-        failures: List[str] = []
-        for index, result in enumerate(results):
-            if isinstance(result, Exception):
-                failures.append(
-                    f"{selected_meals[index].get('id')}: {type(result).__name__}"
-                )
-            elif result is None:
-                failures.append(f"{selected_meals[index].get('id')}: empty result")
-            else:
-                recipes.append(result)
+        # Pass 2: retry any failed slots
+        failed_indices = [i for i, r in enumerate(results) if r is None]
+        if failed_indices:
+            pass2_tasks = [
+                asyncio.create_task(generate_one(i, selected_meals[i]))
+                for i in failed_indices
+            ]
+            pass2_raw = await asyncio.gather(*pass2_tasks, return_exceptions=True)
+            for i, result in zip(failed_indices, pass2_raw):
+                if not isinstance(result, Exception) and result is not None:
+                    results[i] = result
 
+        failures = [
+            selected_meals[i].get("id", str(i))
+            for i, r in enumerate(results)
+            if r is None
+        ]
         if failures:
             raise RuntimeError(
-                "Failed to generate selected recipes: " + "; ".join(failures)
+                "Failed to generate all selected recipes: " + ", ".join(failures)
             )
-        return recipes
+
+        return [r for r in results if r is not None]
 
     async def _phase1_generate_names(
         self,
@@ -490,6 +510,7 @@ class ParallelRecipeGenerator:
             session,
             reject_on_scale_out_of_range=reject_on_scale_out_of_range,
             fill_missing_steps=fill_missing_steps,
+            recipe_schema=self._recipe_details_schema,
         )
         if result is not None:
             return result
@@ -512,6 +533,7 @@ class ParallelRecipeGenerator:
             is_retry=True,
             reject_on_scale_out_of_range=reject_on_scale_out_of_range,
             fill_missing_steps=fill_missing_steps,
+            recipe_schema=self._recipe_details_schema,
         )
 
     async def _translate_single(

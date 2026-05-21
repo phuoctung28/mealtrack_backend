@@ -44,6 +44,7 @@ async def attempt_recipe_generation(
     is_retry: bool = False,
     reject_on_scale_out_of_range: bool = True,
     fill_missing_steps: bool = False,
+    recipe_schema: type | None = None,
 ) -> Optional[MealSuggestion]:
     """
     Single AI call to generate one recipe. Returns MealSuggestion on success, None on failure.
@@ -72,7 +73,7 @@ async def attempt_recipe_generation(
                 recipe_system,
                 "json",
                 PARALLEL_SINGLE_MEAL_TOKENS,
-                None,
+                recipe_schema,
                 model_purpose,
             ),
             timeout=PARALLEL_SINGLE_MEAL_TIMEOUT,

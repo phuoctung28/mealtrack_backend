@@ -61,7 +61,7 @@ def make_meal_suggestion(meal_name: str, index: int) -> MealSuggestion:
 
 def make_generator() -> ParallelRecipeGenerator:
     """Build a ParallelRecipeGenerator with mock dependencies."""
-    from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
+    from src.infra.services.ai.schemas import DiscoveryMealsResponse, MealNamesResponse, RecipeDetailsResponse
 
     generation_service = MagicMock()
     translation_service = MagicMock()
@@ -74,6 +74,7 @@ def make_generator() -> ParallelRecipeGenerator:
         nutrition_lookup=nutrition_lookup,
         meal_names_schema_class=MealNamesResponse,
         discovery_meals_schema_class=DiscoveryMealsResponse,
+        recipe_details_schema_class=RecipeDetailsResponse,
     )
 
 
@@ -296,3 +297,163 @@ class TestPhase2PreservesSubmissionOrder:
         for r in results:
             assert isinstance(r, MealSuggestion)
             assert r.meal_name in meal_names
+
+
+@pytest.mark.asyncio
+async def test_selected_recipes_retry_failed_slot_and_return_full_batch_in_order():
+    selected_meals = [
+        {
+            "id": "disc_a",
+            "name": "Ginger Chicken Rice",
+            "english_name": "Ginger Chicken Rice",
+            "calories": 450,
+            "protein": 35,
+            "carbs": 45,
+            "fat": 12,
+        },
+        {
+            "id": "disc_b",
+            "name": "Lemon Salmon Bowl",
+            "english_name": "Lemon Salmon Bowl",
+            "calories": 520,
+            "protein": 38,
+            "carbs": 50,
+            "fat": 18,
+        },
+    ]
+    session = make_session()
+    generator = make_generator()
+    calls: dict[str, int] = {}
+
+    async def fake_generate_with_retry(
+        prompt: str,
+        meal_name: str,
+        index: int,
+        recipe_system: str,
+        session: SuggestionSession,
+        reject_on_scale_out_of_range: bool = True,
+        fill_missing_steps: bool = False,
+    ) -> Optional[MealSuggestion]:
+        calls[meal_name] = calls.get(meal_name, 0) + 1
+        if meal_name == "Lemon Salmon Bowl" and calls[meal_name] == 1:
+            return None
+        return make_meal_suggestion(meal_name, index)
+
+    with patch.object(
+        generator, "_generate_with_retry", side_effect=fake_generate_with_retry
+    ):
+        with patch(
+            "src.domain.services.meal_suggestion.suggestion_prompt_builder"
+            ".build_recipe_details_prompt",
+            return_value="mock-prompt",
+        ):
+            results = await generator.generate_selected_recipes(session, selected_meals)
+
+    assert [r.meal_name for r in results] == [
+        "Ginger Chicken Rice",
+        "Lemon Salmon Bowl",
+    ]
+    assert calls["Lemon Salmon Bowl"] == 2
+
+
+@pytest.mark.asyncio
+async def test_selected_recipes_raise_when_any_slot_still_fails():
+    selected_meals = [
+        {
+            "id": "disc_a",
+            "name": "Ginger Chicken Rice",
+            "english_name": "Ginger Chicken Rice",
+            "calories": 450,
+            "protein": 35,
+            "carbs": 45,
+            "fat": 12,
+        },
+        {
+            "id": "disc_b",
+            "name": "Lemon Salmon Bowl",
+            "english_name": "Lemon Salmon Bowl",
+            "calories": 520,
+            "protein": 38,
+            "carbs": 50,
+            "fat": 18,
+        },
+    ]
+    session = make_session()
+    generator = make_generator()
+
+    async def fake_generate_with_retry(
+        prompt: str,
+        meal_name: str,
+        index: int,
+        recipe_system: str,
+        session: SuggestionSession,
+        reject_on_scale_out_of_range: bool = True,
+        fill_missing_steps: bool = False,
+    ) -> Optional[MealSuggestion]:
+        if meal_name == "Lemon Salmon Bowl":
+            return None
+        return make_meal_suggestion(meal_name, index)
+
+    with patch.object(
+        generator, "_generate_with_retry", side_effect=fake_generate_with_retry
+    ):
+        with patch(
+            "src.domain.services.meal_suggestion.suggestion_prompt_builder"
+            ".build_recipe_details_prompt",
+            return_value="mock-prompt",
+        ):
+            with pytest.raises(RuntimeError) as exc:
+                await generator.generate_selected_recipes(session, selected_meals)
+
+    assert "Failed to generate all selected recipes" in str(exc.value)
+    assert "disc_b" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_generate_with_retry_passes_recipe_details_schema_to_generation_service():
+    from src.infra.services.ai.schemas import RecipeDetailsResponse
+
+    session = make_session()
+    generator = make_generator()
+    generator._recipe_details_schema = RecipeDetailsResponse
+
+    raw_recipe = {
+        "ingredients": [
+            {"name": "chicken breast", "amount": 180, "unit": "g"},
+            {"name": "rice", "amount": 160, "unit": "g"},
+            {"name": "ginger", "amount": 8, "unit": "g"},
+        ],
+        "recipe_steps": [
+            {"step": 1, "instruction": "Cook rice.", "duration_minutes": 12},
+            {"step": 2, "instruction": "Cook chicken.", "duration_minutes": 10},
+        ],
+        "prep_time_minutes": 25,
+    }
+    generator._generation.generate_meal_plan.return_value = raw_recipe
+
+    meal_macros = MagicMock()
+    meal_macros.calories = 450
+    meal_macros.protein = 35
+    meal_macros.carbs = 45
+    meal_macros.fat = 12
+    meal_macros.ingredients = []
+    meal_macros.t1_count = 3
+    meal_macros.t2_count = 0
+    meal_macros.t3_count = 0
+    generator._nutrition_lookup.calculate_meal_macros = AsyncMock(
+        return_value=meal_macros
+    )
+    generator._nutrition_lookup.scale_to_target.return_value = meal_macros
+    generator._macro_validator.validate_deterministic.return_value = meal_macros
+
+    result = await generator._generate_with_retry(
+        "prompt",
+        "Ginger Chicken Rice",
+        0,
+        "system",
+        session,
+    )
+
+    assert result is not None
+    first_call = generator._generation.generate_meal_plan.call_args_list[0]
+    assert first_call.args[4] is RecipeDetailsResponse
