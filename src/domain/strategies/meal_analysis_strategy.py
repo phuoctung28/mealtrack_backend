@@ -2,54 +2,9 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 
+from src.domain.services.prompts.prompt_constants import VISION_DECOMPOSITION_RULES
+
 logger = logging.getLogger(__name__)
-
-# Shared decomposition instruction appended to all scanning strategies
-SCAN_DECOMPOSITION_RULES = """
-CRITICAL — INGREDIENT DECOMPOSITION:
-- ALWAYS decompose compound dishes into individual ingredients
-- If you see a bowl of soup: list broth, noodles, meat, vegetables separately
-- If you see a sandwich: list bread, meat, cheese, sauce separately
-- Never return compound dish names as single items (e.g. "pho" → list noodle, beef, broth, etc.)
-- Simple single-ingredient items (banana, egg, plain rice) stay as 1 item
-- Each ingredient: name, quantity (grams), unit, calories, macros
-
-MACRO ACCURACY:
-- All quantities in GRAMS (convert volumes using density: honey=1.42g/ml, oil=0.92g/ml)
-- Verify: calories ≈ protein*4 + carbs*4 + fat*9
-
-EMOJI SELECTION (for the "emoji" field):
-- Return exactly ONE emoji that represents the OVERALL DISH, not individual ingredients
-- Pick emoji based on the SERVING STYLE, not just the main ingredient:
-  🍜 = noodle soup served in broth (phở, bún bò Huế, bún riêu, ramen, udon soup)
-  🍝 = dry pasta/noodles without broth (spaghetti, mì xào, pad thai)
-  🍚 = rice-based dishes (cơm, fried rice, bibimbap)
-  🍛 = curry or saucy dish over rice
-  🍲 = stew, hotpot, or thick soup (lẩu, canh, chowder)
-  🥗 = salad or fresh/cold dishes (gỏi)
-  🍖 = grilled/roasted meat dishes (bún chả, thịt nướng, BBQ)
-  🥘 = braised/simmered dishes (kho, bò kho)
-  🥟 = dumplings, spring rolls, wrapped items (nem, bánh cuốn, gyoza)
-  🥪 = sandwiches, bánh mì
-  🍳 = egg-based dishes (omelette, trứng chiên)
-  🥣 = porridge, oatmeal, cháo
-  🍱 = bento/meal box/combo platter
-  🍗 = fried chicken, fried items
-  🥩 = steak or large meat cuts
-  🍕🍔🌮🌯 = pizza, burger, taco, burrito (Western fast food)
-- If unsure, use 🍽️ as fallback
-- NEVER return text or multiple emoji — exactly one emoji character
-"""
-
-# Compact rules for basic strategy prompts to meet length constraints
-BASIC_SCAN_DECOMPOSITION_RULES = (
-    "DECOMPOSE: split compound dishes into ingredients (soup→broth/noodles/meat/veg; "
-    "sandwich→bread/meat/cheese/sauce). Single-ingredient foods may stay 1 item. "
-    "Quantities in grams; calories ≈ protein*4 + carbs*4 + fat*9. "
-    "EMOJI: return exactly one emoji for the overall dish by serving style "
-    "(🍜 soup noodles, 🍝 dry noodles, 🍚 rice, 🍛 curry, 🍲 stew, 🥗 salad, 🍖 grilled, "
-    "🥘 braised, 🥟 rolls, 🥪 sandwich, 🍳 egg, 🥣 porridge, 🍗 fried, 🥩 steak; fallback 🍽️)."
-)
 
 
 class MealAnalysisStrategy(ABC):
@@ -109,7 +64,7 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
             "Each food item includes name, quantity, unit, calories, and macros. "
             "Confidence should be between 0 and 1. "
             "Always return well-formed JSON."
-        ) + SCAN_DECOMPOSITION_RULES
+        ) + VISION_DECOMPOSITION_RULES
 
     def get_analysis_prompt(self) -> str:
         if not self.optimized_prompt_enabled:
@@ -131,7 +86,7 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
             "- Each food item includes name, quantity, unit, calories, macros (grams).\n"
             "- Confidence between 0 and 1.\n"
             "- Max 8 food items.\n"
-        ) + BASIC_SCAN_DECOMPOSITION_RULES
+        ) + VISION_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         return "Analyze this food image and provide nutritional information:"
@@ -187,7 +142,7 @@ class PortionAwareAnalysisStrategy(MealAnalysisStrategy):
         - Confidence should be between 0 (low) and 1 (high)
         - Include portion_adjustment field to indicate scaling was applied
         - Always return well-formed JSON
-        """ + SCAN_DECOMPOSITION_RULES
+        """ + VISION_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         return f"""Analyze this food image and provide nutritional information.
@@ -250,7 +205,7 @@ class IngredientAwareAnalysisStrategy(MealAnalysisStrategy):
         - Higher confidence scores are appropriate when ingredients are known
         - Include ingredient_based field to indicate enhanced analysis
         - Always return well-formed JSON
-        """ + SCAN_DECOMPOSITION_RULES
+        """ + VISION_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         # Format ingredients list
@@ -327,7 +282,7 @@ class WeightAwareAnalysisStrategy(MealAnalysisStrategy):
         - Higher confidence scores are appropriate with weight context
         - Include weight_adjustment and total_weight_grams fields
         - Always return well-formed JSON
-        """ + SCAN_DECOMPOSITION_RULES
+        """ + VISION_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         return f"""Analyze this food image and provide nutritional information.
@@ -432,7 +387,7 @@ Return your analysis in the following JSON format:
 - Confidence should be between 0 (low) and 1 (high) based on how certain you are
 - Set user_context_applied: true to indicate user context was used
 - Always return well-formed JSON
-""" + SCAN_DECOMPOSITION_RULES
+""" + VISION_DECOMPOSITION_RULES
 
     def get_user_message(self) -> str:
         return f"""Analyze this food image and provide nutritional information.
