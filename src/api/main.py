@@ -200,16 +200,18 @@ async def lifespan(app: FastAPI):
         # Continue running the API even if notification service fails
 
     # Start scheduled email service
-    email_adapter = ResendEmailAdapter()
-    email_renderer = EmailTemplateRenderer()
-    email_service = EmailService(email_adapter=email_adapter, template_renderer=email_renderer)
-    scheduled_email_service = ScheduledEmailService(email_service=email_service)
+    if os.getenv("SCHEDULED_EMAIL_ENABLED", "false").lower() == "true":
+        email_adapter = ResendEmailAdapter()
+        email_renderer = EmailTemplateRenderer()
+        email_service = EmailService(email_adapter=email_adapter, template_renderer=email_renderer)
+        scheduled_email_service = ScheduledEmailService(email_service=email_service)
 
-    # Run email check on startup (daily runs via external cron)
-    try:
-        await scheduled_email_service.check_and_send_emails()
-    except Exception as e:
-        logger.error(f"Scheduled email check failed: {e}")
+        try:
+            await scheduled_email_service.check_and_send_emails()
+        except Exception as e:
+            logger.error(f"Scheduled email check failed: {e}")
+    else:
+        logger.info("Scheduled email service disabled (SCHEDULED_EMAIL_ENABLED=false)")
 
     logger.info("MealTrack API started successfully!")
     yield
