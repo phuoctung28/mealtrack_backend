@@ -105,16 +105,19 @@ class RedisClient:
             return False
 
     async def delete_pattern(self, pattern: str) -> int:
-        """Delete keys that match a pattern."""
+        """Delete keys matching a pattern using non-blocking SCAN."""
         if not self.client:
             return 0
         try:
-            keys = await self.client.keys(pattern)
-            if not keys:
-                return 0
-            return await self.client.delete(*keys)
+            deleted = 0
+            async for key in self.client.scan_iter(match=pattern):
+                await self.client.delete(key)
+                deleted += 1
+            if deleted:
+                logger.debug("Deleted %d keys matching %s", deleted, pattern)
+            return deleted
         except RedisError as exc:
-            logger.warning("Redis DELETE pattern error for %s: %s", pattern, exc)
+            logger.warning("Redis delete_pattern error for %s: %s", pattern, exc)
             return 0
 
     async def exists(self, key: str) -> bool:
