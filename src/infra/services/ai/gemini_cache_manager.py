@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 _CACHE_REDIS_KEYS = {
     "recipe":     "gemini_cache:recipe",
     "vision":     "gemini_cache:vision",
-    "discovery":  "gemini_cache:discovery",
     "text_parse": "gemini_cache:text_parse",
 }
 
@@ -24,6 +23,7 @@ class GeminiCacheManager:
     def __init__(self, redis_client, api_key: Optional[str] = None):
         self._redis = redis_client
         self._api_key = api_key or os.getenv("GOOGLE_API_KEY", "")
+        self._refresh_task: Optional[asyncio.Task] = None
 
     async def get_cache_name(self, cache_type: str) -> Optional[str]:
         """Return the Gemini cache name for the given type, or None if not cached."""
@@ -62,8 +62,21 @@ class GeminiCacheManager:
             logger.warning("[GEMINI-CACHE] Failed to create cache_type=%s: %s", cache_type, e)
             return None
 
+    def start_refresh_loop(self) -> None:
+        """Schedule the background refresh loop as a managed asyncio task."""
+        self._refresh_task = asyncio.create_task(self.refresh_loop())
+
+    async def stop(self) -> None:
+        """Cancel the background refresh task and wait for it to finish."""
+        if self._refresh_task and not self._refresh_task.done():
+            self._refresh_task.cancel()
+            try:
+                await self._refresh_task
+            except asyncio.CancelledError:
+                pass
+
     async def warm_all(self) -> None:
-        """Warm all 4 context caches concurrently.
+        """Warm all 3 context caches concurrently.
 
         Uses SystemPrompts constants; falls back gracefully if any creation fails.
         """
@@ -78,7 +91,6 @@ class GeminiCacheManager:
         cache_configs = {
             "recipe":     (_get_recipe_prompt(), "gemini-2.5-flash"),
             "vision":     (_get_vision_prompt(), "gemini-2.5-flash"),
-            "discovery":  (text_parse_prompt,    "gemini-2.5-flash-lite"),
             "text_parse": (text_parse_prompt,    "gemini-2.5-flash-lite"),
         }
         tasks = [

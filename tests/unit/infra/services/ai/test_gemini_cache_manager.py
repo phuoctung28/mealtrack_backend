@@ -106,10 +106,49 @@ async def test_create_cache_handles_exception_gracefully(cache_manager):
 
 @pytest.mark.asyncio
 async def test_warm_all_calls_warm_one_for_all_types(cache_manager, mock_redis):
-    """warm_all calls _warm_one for each of the 4 cache types."""
+    """warm_all calls _warm_one for each of the 3 cache types (discovery removed as duplicate)."""
     mock_redis.get.return_value = "cachedContents/existing"
 
     with patch.object(cache_manager, "_warm_one", new_callable=AsyncMock) as mock_warm:
         await cache_manager.warm_all()
         called_types = {call.args[0] for call in mock_warm.call_args_list}
-        assert called_types == {"recipe", "vision", "discovery", "text_parse"}
+        assert called_types == {"recipe", "vision", "text_parse"}
+
+
+@pytest.mark.asyncio
+async def test_start_refresh_loop_stores_task(cache_manager):
+    """start_refresh_loop stores the task handle in _refresh_task."""
+    import asyncio
+
+    with patch.object(cache_manager, "refresh_loop", new_callable=AsyncMock) as mock_loop:
+        mock_loop.return_value = None
+        cache_manager.start_refresh_loop()
+        assert cache_manager._refresh_task is not None
+        # Clean up the task
+        cache_manager._refresh_task.cancel()
+        try:
+            await cache_manager._refresh_task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_stop_cancels_refresh_task(cache_manager):
+    """stop() cancels the background refresh task."""
+    import asyncio
+
+    async def _long_running():
+        await asyncio.sleep(9999)
+
+    cache_manager._refresh_task = asyncio.create_task(_long_running())
+    assert not cache_manager._refresh_task.done()
+
+    await cache_manager.stop()
+    assert cache_manager._refresh_task.done()
+
+
+@pytest.mark.asyncio
+async def test_stop_is_safe_when_no_task(cache_manager):
+    """stop() does nothing (no error) when _refresh_task is None."""
+    assert cache_manager._refresh_task is None
+    await cache_manager.stop()  # should not raise

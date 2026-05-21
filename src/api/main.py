@@ -215,11 +215,9 @@ async def lifespan(app: FastAPI):
 
         _raw_redis = get_raw_redis_client()
         if _raw_redis is not None:
-            import asyncio as _asyncio
-
             gemini_cache_manager = GeminiCacheManager(redis_client=_raw_redis)
             await gemini_cache_manager.warm_all()
-            _asyncio.create_task(gemini_cache_manager.refresh_loop())
+            gemini_cache_manager.start_refresh_loop()
             logger.info("Gemini context caches warmed")
         else:
             logger.warning("Redis not available — Gemini cache skipped")
@@ -232,6 +230,14 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down MealTrack API...")
+
+    # Stop Gemini cache refresh loop before disconnecting Redis
+    if gemini_cache_manager is not None:
+        try:
+            await gemini_cache_manager.stop()
+        except Exception as e:
+            logger.warning(f"Gemini cache manager stop failed: {e}")
+
 
     # Disconnect cache
     await shutdown_cache_layer()
