@@ -206,6 +206,27 @@ async def lifespan(app: FastAPI):
         if os.getenv("FAIL_ON_CACHE_ERROR", "false").lower() == "true":
             raise
 
+
+    # Initialize Gemini explicit context caches
+    gemini_cache_manager = None
+    try:
+        from src.infra.services.ai.gemini_cache_manager import GeminiCacheManager
+        from src.api.base_dependencies import get_raw_redis_client
+
+        _raw_redis = get_raw_redis_client()
+        if _raw_redis is not None:
+            import asyncio as _asyncio
+
+            gemini_cache_manager = GeminiCacheManager(redis_client=_raw_redis)
+            await gemini_cache_manager.warm_all()
+            _asyncio.create_task(gemini_cache_manager.refresh_loop())
+            logger.info("Gemini context caches warmed")
+        else:
+            logger.warning("Redis not available — Gemini cache skipped")
+    except Exception as e:
+        logger.warning(f"Gemini cache warmup failed (non-fatal): {e}")
+
+
     logger.info("MealTrack API started successfully!")
     yield
 
