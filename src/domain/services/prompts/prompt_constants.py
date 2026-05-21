@@ -163,14 +163,13 @@ JSON_SCHEMAS: Dict[str, str] = {
   "cuisine_type": "International"
 }""",
     "suggestion_recipe": """{
-  "name": "Dish Name",
-  "emoji": "🍜",
-  "description": "Brief description",
-  "cuisine_type": "Asian",
+  "emoji": "🍚",
+  "cuisine_type": "Vietnamese",
   "origin_country": "Vietnam",
   "ingredients": [
     {"name": "ingredient1", "amount": 200, "unit": "g"},
-    {"name": "ingredient2", "amount": 100, "unit": "g"}
+    {"name": "ingredient2", "amount": 100, "unit": "g"},
+    {"name": "ingredient3", "amount": 50, "unit": "g"}
   ],
   "recipe_steps": [
     {"step": 1, "instruction": "Action", "duration_minutes": 5},

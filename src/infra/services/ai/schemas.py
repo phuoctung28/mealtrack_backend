@@ -81,10 +81,7 @@ class RecipeDetailsResponse(BaseModel):
 
     Macros are optional — AI no longer required to calculate them.
     Deterministic macros are calculated from ingredients via NutritionLookupService.
-
-    # Used by: tests/unit/infra/services/ai/test_schemas.py (validation tests only).
-    # NOT injected into the production pipeline — recipe_attempt_builder.py parses
-    # raw JSON dicts directly.  Wire through injection if structured output is needed.
+    Injected as structured-output schema via generate_selected_recipes.
     """
 
     ingredients: List[IngredientItem] = Field(
@@ -111,3 +108,13 @@ class RecipeDetailsResponse(BaseModel):
         default=None, description="AI-reported carbs (ignored)"
     )
     fat: Optional[float] = Field(default=None, description="AI-reported fat (ignored)")
+    # Metadata fields surfaced by the AI for UX enrichment
+    origin_country: Optional[str] = Field(
+        default=None, description="Country of origin for the dish"
+    )
+    cuisine_type: Optional[str] = Field(
+        default=None, description="Cuisine type (e.g., 'Vietnamese', 'Japanese')"
+    )
+    emoji: Optional[str] = Field(
+        default=None, description="Single emoji representing the dish"
+    )

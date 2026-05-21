@@ -4,7 +4,7 @@ Handler for selected-discovery recipe generation.
 
 import uuid
 
-from src.api.exceptions import ResourceNotFoundException, ValidationException
+from src.api.exceptions import ExternalServiceException, ResourceNotFoundException, ValidationException
 from src.app.commands.meal_suggestion import GenerateMealRecipesCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
@@ -66,9 +66,22 @@ class GenerateMealRecipesCommandHandler(
         )
 
         if selected_meals:
-            recipes = await self.service._recipe_generator.generate_selected_recipes(
-                session, selected_meals
-            )
+            try:
+                recipes = await self.service._recipe_generator.generate_selected_recipes(
+                    session, selected_meals
+                )
+            except RuntimeError as exc:
+                raise ExternalServiceException(
+                    str(exc),
+                    error_code="RECIPE_GENERATION_FAILED",
+                    details={"requested": len(selected_meals), "generated": 0},
+                ) from exc
+            if len(recipes) != len(selected_meals):
+                raise ExternalServiceException(
+                    "Could not generate all selected recipes. Please retry.",
+                    error_code="RECIPE_GENERATION_FAILED",
+                    details={"requested": len(selected_meals), "generated": len(recipes)},
+                )
         else:
             recipes = await self.service._recipe_generator._phase2_generate_recipes(
                 session,
