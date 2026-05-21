@@ -406,3 +406,53 @@ async def test_selected_recipes_raise_when_any_slot_still_fails():
 
     assert "Failed to generate all selected recipes" in str(exc.value)
     assert "disc_b" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_generate_with_retry_passes_recipe_details_schema_to_generation_service():
+    from src.infra.services.ai.schemas import RecipeDetailsResponse
+
+    session = make_session()
+    generator = make_generator()
+    generator._recipe_details_schema = RecipeDetailsResponse
+
+    raw_recipe = {
+        "ingredients": [
+            {"name": "chicken breast", "amount": 180, "unit": "g"},
+            {"name": "rice", "amount": 160, "unit": "g"},
+            {"name": "ginger", "amount": 8, "unit": "g"},
+        ],
+        "recipe_steps": [
+            {"step": 1, "instruction": "Cook rice.", "duration_minutes": 12},
+            {"step": 2, "instruction": "Cook chicken.", "duration_minutes": 10},
+        ],
+        "prep_time_minutes": 25,
+    }
+    generator._generation.generate_meal_plan.return_value = raw_recipe
+
+    meal_macros = MagicMock()
+    meal_macros.calories = 450
+    meal_macros.protein = 35
+    meal_macros.carbs = 45
+    meal_macros.fat = 12
+    meal_macros.ingredients = []
+    meal_macros.t1_count = 3
+    meal_macros.t2_count = 0
+    meal_macros.t3_count = 0
+    generator._nutrition_lookup.calculate_meal_macros = AsyncMock(
+        return_value=meal_macros
+    )
+    generator._nutrition_lookup.scale_to_target.return_value = meal_macros
+    generator._macro_validator.validate_deterministic.return_value = meal_macros
+
+    result = await generator._generate_with_retry(
+        "prompt",
+        "Ginger Chicken Rice",
+        0,
+        "system",
+        session,
+    )
+
+    assert result is not None
+    first_call = generator._generation.generate_meal_plan.call_args_list[0]
+    assert first_call.args[4] is RecipeDetailsResponse

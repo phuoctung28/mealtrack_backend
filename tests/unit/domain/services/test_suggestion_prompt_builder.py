@@ -405,3 +405,19 @@ class TestPromptContent:
         # Names prompt under 2000 chars, recipe prompt under 3000 (includes macro/decomposition rules)
         assert len(names_prompt) < 2000
         assert len(recipe_prompt) < 3000
+
+    def test_empty_ingredients_prompt_uses_common_ingredients(self, mock_session):
+        mock_session.ingredients = []
+
+        prompt = build_recipe_details_prompt("Tomato Egg Rice", mock_session)
+
+        assert "Use common ingredients appropriate for the dish." in prompt
+        assert "MUST include user's ingredients" not in prompt
+        assert "any ingredients" not in prompt
+
+    def test_non_empty_ingredients_prompt_uses_compatible_wording(self, mock_session):
+        prompt = build_recipe_details_prompt("Chicken Rice Bowl", mock_session)
+
+        assert "Use these ingredients as main components where compatible" in prompt
+        assert "MUST include user's ingredients" not in prompt
+        assert "no substitutions" not in prompt.lower()
