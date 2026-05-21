@@ -12,6 +12,7 @@ class CacheKeys:
 
     TTL_10_MIN = 600
     TTL_5_MIN = 300
+    TTL_30_MIN = 1800
     TTL_1_HOUR = 3600
     TTL_1_DAY = 86400
     TTL_7_DAYS = 604_800
