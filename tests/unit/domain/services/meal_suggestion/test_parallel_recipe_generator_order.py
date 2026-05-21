@@ -296,3 +296,113 @@ class TestPhase2PreservesSubmissionOrder:
         for r in results:
             assert isinstance(r, MealSuggestion)
             assert r.meal_name in meal_names
+
+
+@pytest.mark.asyncio
+async def test_selected_recipes_retry_failed_slot_and_return_full_batch_in_order():
+    selected_meals = [
+        {
+            "id": "disc_a",
+            "name": "Ginger Chicken Rice",
+            "english_name": "Ginger Chicken Rice",
+            "calories": 450,
+            "protein": 35,
+            "carbs": 45,
+            "fat": 12,
+        },
+        {
+            "id": "disc_b",
+            "name": "Lemon Salmon Bowl",
+            "english_name": "Lemon Salmon Bowl",
+            "calories": 520,
+            "protein": 38,
+            "carbs": 50,
+            "fat": 18,
+        },
+    ]
+    session = make_session()
+    generator = make_generator()
+    calls: dict[str, int] = {}
+
+    async def fake_generate_with_retry(
+        prompt: str,
+        meal_name: str,
+        index: int,
+        recipe_system: str,
+        session: SuggestionSession,
+        reject_on_scale_out_of_range: bool = True,
+        fill_missing_steps: bool = False,
+    ) -> Optional[MealSuggestion]:
+        calls[meal_name] = calls.get(meal_name, 0) + 1
+        if meal_name == "Lemon Salmon Bowl" and calls[meal_name] == 1:
+            return None
+        return make_meal_suggestion(meal_name, index)
+
+    with patch.object(
+        generator, "_generate_with_retry", side_effect=fake_generate_with_retry
+    ):
+        with patch(
+            "src.domain.services.meal_suggestion.suggestion_prompt_builder"
+            ".build_recipe_details_prompt",
+            return_value="mock-prompt",
+        ):
+            results = await generator.generate_selected_recipes(session, selected_meals)
+
+    assert [r.meal_name for r in results] == [
+        "Ginger Chicken Rice",
+        "Lemon Salmon Bowl",
+    ]
+    assert calls["Lemon Salmon Bowl"] == 2
+
+
+@pytest.mark.asyncio
+async def test_selected_recipes_raise_when_any_slot_still_fails():
+    selected_meals = [
+        {
+            "id": "disc_a",
+            "name": "Ginger Chicken Rice",
+            "english_name": "Ginger Chicken Rice",
+            "calories": 450,
+            "protein": 35,
+            "carbs": 45,
+            "fat": 12,
+        },
+        {
+            "id": "disc_b",
+            "name": "Lemon Salmon Bowl",
+            "english_name": "Lemon Salmon Bowl",
+            "calories": 520,
+            "protein": 38,
+            "carbs": 50,
+            "fat": 18,
+        },
+    ]
+    session = make_session()
+    generator = make_generator()
+
+    async def fake_generate_with_retry(
+        prompt: str,
+        meal_name: str,
+        index: int,
+        recipe_system: str,
+        session: SuggestionSession,
+        reject_on_scale_out_of_range: bool = True,
+        fill_missing_steps: bool = False,
+    ) -> Optional[MealSuggestion]:
+        if meal_name == "Lemon Salmon Bowl":
+            return None
+        return make_meal_suggestion(meal_name, index)
+
+    with patch.object(
+        generator, "_generate_with_retry", side_effect=fake_generate_with_retry
+    ):
+        with patch(
+            "src.domain.services.meal_suggestion.suggestion_prompt_builder"
+            ".build_recipe_details_prompt",
+            return_value="mock-prompt",
+        ):
+            with pytest.raises(RuntimeError) as exc:
+                await generator.generate_selected_recipes(session, selected_meals)
+
+    assert "Failed to generate all selected recipes" in str(exc.value)
+    assert "disc_b" in str(exc.value)

@@ -238,6 +238,59 @@ async def test_generate_meal_recipes_handler_rejects_missing_session_without_cli
 
 
 @pytest.mark.asyncio
+async def test_generate_meal_recipes_handler_rejects_selected_count_mismatch():
+    discovery_session = SuggestionSession(
+        id="sess-discovery",
+        user_id="user-1",
+        meal_type="lunch",
+        meal_portion_type="main",
+        target_calories=500,
+        ingredients=["carp"],
+        cooking_time_minutes=30,
+        discovery_meals=[
+            {
+                "id": "disc_a",
+                "name": "Ginger Carp",
+                "english_name": "Ginger Carp",
+                "calories": 300,
+                "protein": 32,
+                "carbs": 18,
+                "fat": 10,
+            },
+            {
+                "id": "disc_b",
+                "name": "Grilled Carp",
+                "english_name": "Grilled Carp",
+                "calories": 350,
+                "protein": 35,
+                "carbs": 20,
+                "fat": 12,
+            },
+        ],
+    )
+    service = AsyncMock()
+    service._repo.get_session.return_value = discovery_session
+    service._recipe_generator.generate_selected_recipes.return_value = [
+        _recipe("r1", "Ginger Carp", 300)
+    ]
+
+    from src.api.exceptions import ExternalServiceException
+
+    with pytest.raises(ExternalServiceException) as exc:
+        await GenerateMealRecipesCommandHandler(service).handle(
+            GenerateMealRecipesCommand(
+                user_id="user-1",
+                meal_type="lunch",
+                language="en",
+                session_id="sess-discovery",
+                selected_meal_ids=["disc_a", "disc_b"],
+            )
+        )
+
+    assert exc.value.error_code == "RECIPE_GENERATION_FAILED"
+
+
+@pytest.mark.asyncio
 async def test_generate_meal_recipes_handler_returns_three_recipes_for_three_selected_ids():
     """3 selected_meal_ids from session → exactly 3 recipes in matching order."""
     discovery_session = SuggestionSession(
