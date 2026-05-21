@@ -336,7 +336,6 @@ def initialize_scheduled_notification_service() -> ScheduledNotificationService:
         trial_push_service = ScheduledSubscriptionPushService()
         _scheduled_notification_service = ScheduledNotificationService(
             firebase_service,
-            _redis_client,
             trial_push_service=trial_push_service,
         )
         # Expose for webhook handler to purge stale trial rows on RENEWAL.
