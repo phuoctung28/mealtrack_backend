@@ -102,7 +102,7 @@ def recipe_generator(mock_generation_service):
     from src.domain.services.meal_suggestion.macro_validation_service import (
         MacroValidationService,
     )
-    from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
+    from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse, RecipeDetailsResponse
 
     meal_macros = _make_meal_macros()
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
@@ -115,6 +115,7 @@ def recipe_generator(mock_generation_service):
         nutrition_lookup=nutrition_lookup,
         meal_names_schema_class=MealNamesResponse,
         discovery_meals_schema_class=DiscoveryMealsResponse,
+        recipe_details_schema_class=RecipeDetailsResponse,
     )
 
 
@@ -329,6 +330,7 @@ class TestSessionCreationInvariants:
         from src.infra.services.ai.schemas import (
             MealNamesResponse,
             DiscoveryMealsResponse,
+            RecipeDetailsResponse,
         )
 
         service = SuggestionOrchestrationService(
@@ -337,6 +339,7 @@ class TestSessionCreationInvariants:
             nutrition_lookup=nutrition_lookup,
             meal_names_schema_class=MealNamesResponse,
             discovery_meals_schema_class=DiscoveryMealsResponse,
+            recipe_details_schema_class=RecipeDetailsResponse,
             tdee_service=tdee_stub,
             portion_service=portion_stub,
             profile_provider=lambda uid: mock_user_repo.get_profile(uid),
@@ -441,7 +444,7 @@ async def test_generate_discovery_appends_existing_discovery_meals_on_load_more(
     from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
         SuggestionOrchestrationService,
     )
-    from src.infra.services.ai.schemas import DiscoveryMealsResponse, MealNamesResponse
+    from src.infra.services.ai.schemas import DiscoveryMealsResponse, MealNamesResponse, RecipeDetailsResponse
 
     existing_session = SuggestionSession(
         id="sess-discovery",
@@ -473,6 +476,7 @@ async def test_generate_discovery_appends_existing_discovery_meals_on_load_more(
         nutrition_lookup=nutrition_lookup,
         meal_names_schema_class=MealNamesResponse,
         discovery_meals_schema_class=DiscoveryMealsResponse,
+        recipe_details_schema_class=RecipeDetailsResponse,
         profile_provider=lambda user_id: Mock(),
     )
     service._recipe_generator.generate_discovery = AsyncMock(
