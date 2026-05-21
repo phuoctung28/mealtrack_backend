@@ -44,18 +44,51 @@ def manager(mock_gemini_provider, mock_circuit_breaker):
 
 class TestModelSelection:
     def test_get_fallback_chain_for_meal_scan(self, manager):
-        """Vision tasks use Gemini first, Mistral-large as emergency fallback."""
+        """Vision tasks use Gemini Flash first, Flash-Lite as fallback."""
         chain = manager.get_fallback_chain(ModelPurpose.MEAL_SCAN)
         assert chain[0] == "gemini-2.5-flash"
         assert chain[1] == "gemini-2.5-flash-lite"
-        assert chain[2] == "mistral-large-latest"
+        assert len(chain) == 2
 
     def test_get_fallback_chain_for_barcode(self, manager):
-        """Barcode uses Mistral-small first (cheaper), then Gemini fallback."""
+        """Barcode uses Flash-Lite (cheaper) first, Flash as fallback."""
         chain = manager.get_fallback_chain(ModelPurpose.BARCODE)
-        assert chain[0] == "mistral-small-latest"
-        assert chain[1] == "gemini-2.5-flash-lite"
-        assert chain[2] == "gemini-2.5-flash"
+        assert chain[0] == "gemini-2.5-flash-lite"
+        assert chain[1] == "gemini-2.5-flash"
+        assert len(chain) == 2
+
+    def test_recipe_purpose_exists(self, manager):
+        """RECIPE is a valid purpose; RECIPE_PRIMARY and RECIPE_SECONDARY do not exist."""
+        from src.infra.services.ai.ai_model_manager import ModelPurpose
+        assert hasattr(ModelPurpose, "RECIPE")
+        assert not hasattr(ModelPurpose, "RECIPE_PRIMARY")
+        assert not hasattr(ModelPurpose, "RECIPE_SECONDARY")
+
+    def test_recipe_chain_uses_flash_lite_first(self, manager):
+        """Flash-Lite is primary for recipes (cheaper, less 503 pressure)."""
+        chain = manager.get_fallback_chain(ModelPurpose.RECIPE)
+        assert chain[0] == "gemini-2.5-flash-lite"
+        assert chain[1] == "gemini-2.5-flash"
+        assert "mistral" not in " ".join(chain)
+
+    def test_no_mistral_in_any_fallback_chain(self, manager):
+        """No fallback chain should reference Mistral after removal."""
+        from src.infra.services.ai.ai_model_manager import FALLBACK_CHAINS
+        all_models = [m for chain in FALLBACK_CHAINS.values() for m in chain]
+        assert not any("mistral" in m for m in all_models)
+
+    def test_no_kimi_in_any_fallback_chain(self, manager):
+        from src.infra.services.ai.ai_model_manager import FALLBACK_CHAINS
+        all_models = [m for chain in FALLBACK_CHAINS.values() for m in chain]
+        assert not any("kimi" in m for m in all_models)
+
+    def test_mistral_provider_not_imported(self, manager):
+        """AIModelManager must not import or reference MistralProvider."""
+        import inspect
+        import src.infra.services.ai.ai_model_manager as module
+        source = inspect.getsource(module)
+        assert "MistralProvider" not in source
+        assert "mistral_provider" not in source
 
 
 class TestGenerate:

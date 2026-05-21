@@ -82,3 +82,12 @@ async def test_translate_single_returns_original_on_failure():
     result = await gen._translate_single(suggestion, "vi")
 
     assert result is suggestion  # returned original, not crashed
+
+
+def test_recipe_system_uses_central_constant():
+    """Inline recipe_system strings must be gone; SystemPrompts.RECIPE_GENERATION must be used."""
+    import inspect
+    from src.domain.services.meal_suggestion import parallel_recipe_generator
+    source = inspect.getsource(parallel_recipe_generator)
+    # The inline string started with "You are a professional chef. Return ONLY this exact JSON structure"
+    assert "You are a professional chef. Return ONLY this exact JSON structure" not in source

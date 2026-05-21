@@ -18,6 +18,17 @@ MODEL_PURPOSE_MAP = {
     "gemini-2.5-flash-lite": GeminiModelPurpose.MEAL_NAMES,
 }
 
+_PURPOSE_HINT_MAP: dict[str, GeminiModelPurpose] = {
+    "recipe":          GeminiModelPurpose.RECIPE,
+    "barcode":         GeminiModelPurpose.BARCODE,
+    "meal_names":      GeminiModelPurpose.MEAL_NAMES,
+    "discovery":       GeminiModelPurpose.MEAL_NAMES,
+    "parse_text":      GeminiModelPurpose.GENERAL,
+    "ingredient_scan": GeminiModelPurpose.GENERAL,
+    "meal_scan":       GeminiModelPurpose.GENERAL,
+    "general":         GeminiModelPurpose.GENERAL,
+}
+
 
 class GeminiProvider(AIProviderPort):
     """Gemini implementation using existing GeminiModelManager."""
@@ -50,25 +61,39 @@ class GeminiProvider(AIProviderPort):
         response_type: str = "json",
         max_tokens: Optional[int] = None,
         schema: Optional[type] = None,
+        purpose_hint: Optional[str] = None,  # ModelPurpose.value string
+        cache_name: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Generate text using Gemini."""
-        purpose = MODEL_PURPOSE_MAP.get(model, GeminiModelPurpose.GENERAL)
+        if purpose_hint is not None:
+            purpose = _PURPOSE_HINT_MAP.get(purpose_hint, GeminiModelPurpose.GENERAL)
+        else:
+            purpose = MODEL_PURPOSE_MAP.get(model, GeminiModelPurpose.GENERAL)
 
         response_mime_type = None
         if not schema and response_type == "json":
             response_mime_type = "application/json"
 
+        extra_kwargs = {}
+        if cache_name:
+            extra_kwargs["cached_content"] = cache_name
+
         llm = self._model_manager.get_model_for_purpose(
             purpose=purpose,
             max_output_tokens=max_tokens,
             response_mime_type=response_mime_type,
+            **extra_kwargs,
         )
 
-        messages = [
-            SystemMessage(content=system_message),
-            HumanMessage(content=prompt),
-        ]
+        # When using explicit cache, system message is already in cache — omit it to avoid duplication errors
+        messages = []
+        if cache_name:
+            # system content is already in the Gemini cache — omit to avoid 400 error
+            pass
+        elif system_message:
+            messages.append(SystemMessage(content=system_message))
+        messages.append(HumanMessage(content=prompt))
 
         if schema:
             llm_structured = llm.with_structured_output(schema, include_raw=True)
@@ -93,12 +118,17 @@ class GeminiProvider(AIProviderPort):
         prompt: str,
         image_data: bytes,
         system_message: Optional[str] = None,
+        purpose_hint: Optional[str] = None,   # NEW
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Generate with image input."""
         import base64
 
-        purpose = MODEL_PURPOSE_MAP.get(model, GeminiModelPurpose.GENERAL)
+        if purpose_hint is not None:
+            purpose = _PURPOSE_HINT_MAP.get(purpose_hint, GeminiModelPurpose.GENERAL)
+        else:
+            purpose = MODEL_PURPOSE_MAP.get(model, GeminiModelPurpose.GENERAL)
+
         llm = self._model_manager.get_model_for_purpose(
             purpose=purpose,
             max_output_tokens=kwargs.get("max_tokens", 4096),
