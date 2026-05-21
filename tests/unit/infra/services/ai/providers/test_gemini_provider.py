@@ -149,3 +149,58 @@ async def test_no_purpose_hint_falls_back_to_model_map(mock_model_manager):
 
     call_kwargs = mock_model_manager.get_model_for_purpose.call_args[1]
     assert call_kwargs["purpose"] == GeminiModelPurpose.GENERAL
+
+
+@pytest.mark.asyncio
+async def test_generate_passes_cached_content_when_available():
+    """When cache_name is provided, get_model_for_purpose receives cached_content kwarg."""
+    from unittest.mock import MagicMock
+
+    provider = GeminiProvider.__new__(GeminiProvider)
+    mock_manager = MagicMock()
+    mock_model = MagicMock()
+    mock_model.invoke = MagicMock(return_value=MagicMock(content='{"emoji":"🍚"}'))
+    mock_manager.get_model_for_purpose = MagicMock(return_value=mock_model)
+    provider._model_manager = mock_manager
+
+    with patch.object(provider, "_extract_json", return_value={"emoji": "🍚"}):
+        await provider.generate(
+            model="gemini-2.5-flash-lite",
+            prompt="Recipe for chicken salad",
+            system_message="",
+            purpose_hint="recipe",
+            cache_name="cachedContents/abc123",
+        )
+
+    call_kwargs = mock_manager.get_model_for_purpose.call_args[1]
+    assert call_kwargs.get("cached_content") == "cachedContents/abc123"
+
+
+@pytest.mark.asyncio
+async def test_generate_omits_system_message_when_cache_active():
+    """When cache_name is set, SystemMessage is NOT added to messages."""
+    from unittest.mock import MagicMock
+
+    provider = GeminiProvider.__new__(GeminiProvider)
+    mock_manager = MagicMock()
+    mock_model = MagicMock()
+    captured_messages = []
+
+    def capture_invoke(msgs):
+        captured_messages.extend(msgs)
+        return MagicMock(content='{"result": "ok"}')
+
+    mock_model.invoke = capture_invoke
+    mock_manager.get_model_for_purpose = MagicMock(return_value=mock_model)
+    provider._model_manager = mock_manager
+
+    with patch.object(provider, "_extract_json", return_value={"result": "ok"}):
+        await provider.generate(
+            model="gemini-2.5-flash",
+            prompt="test prompt",
+            system_message="This is the system message",
+            cache_name="cachedContents/xyz789",
+        )
+
+    from langchain_core.messages import SystemMessage
+    assert not any(isinstance(m, SystemMessage) for m in captured_messages)

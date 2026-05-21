@@ -62,6 +62,7 @@ class GeminiProvider(AIProviderPort):
         max_tokens: Optional[int] = None,
         schema: Optional[type] = None,
         purpose_hint: Optional[str] = None,  # ModelPurpose.value string
+        cache_name: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Generate text using Gemini."""
@@ -74,16 +75,22 @@ class GeminiProvider(AIProviderPort):
         if not schema and response_type == "json":
             response_mime_type = "application/json"
 
+        extra_kwargs = {}
+        if cache_name:
+            extra_kwargs["cached_content"] = cache_name
+
         llm = self._model_manager.get_model_for_purpose(
             purpose=purpose,
             max_output_tokens=max_tokens,
             response_mime_type=response_mime_type,
+            **extra_kwargs,
         )
 
-        messages = [
-            SystemMessage(content=system_message),
-            HumanMessage(content=prompt),
-        ]
+        # When using explicit cache, system message is already in cache — omit it to avoid duplication errors
+        messages = []
+        if not cache_name and system_message:
+            messages.append(SystemMessage(content=system_message))
+        messages.append(HumanMessage(content=prompt))
 
         if schema:
             llm_structured = llm.with_structured_output(schema, include_raw=True)

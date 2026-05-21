@@ -82,6 +82,10 @@ class AIModelManager:
         self._gemini = GeminiProvider()
         self._providers = {"gemini": self._gemini}
 
+    def set_cache_manager(self, cache_manager) -> None:
+        """Wire in GeminiCacheManager after startup warmup."""
+        self._cache_manager = cache_manager
+
     def get_fallback_chain(self, purpose: ModelPurpose) -> List[str]:
         """Get fallback chain for a purpose."""
         return FALLBACK_CHAINS.get(purpose, FALLBACK_CHAINS[ModelPurpose.GENERAL]).copy()
@@ -115,6 +119,20 @@ class AIModelManager:
             logger.warning(f"[ALL-CIRCUITS-OPEN] purpose={purpose.value} | forcing first model")
             available = [chain[0]]
 
+        # Look up warm Gemini context cache for this purpose
+        cache_name: Optional[str] = None
+        cache_mgr = getattr(self, "_cache_manager", None)
+        if cache_mgr is not None:
+            purpose_to_cache_type = {
+                ModelPurpose.RECIPE:     "recipe",
+                ModelPurpose.MEAL_SCAN:  "vision",
+                ModelPurpose.PARSE_TEXT: "text_parse",
+                ModelPurpose.BARCODE:    "text_parse",
+            }
+            cache_type = purpose_to_cache_type.get(purpose)
+            if cache_type:
+                cache_name = await cache_mgr.get_cache_name(cache_type)
+
         attempted = []
         last_error = None
 
@@ -136,6 +154,7 @@ class AIModelManager:
                     max_tokens=max_tokens,
                     schema=schema,
                     purpose_hint=purpose.value,   # NEW: pass real purpose to provider
+                    cache_name=cache_name,
                     **kwargs,
                 )
 
