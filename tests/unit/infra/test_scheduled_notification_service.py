@@ -21,7 +21,7 @@ async def test_send_loop_marks_notifications_sent():
     )
 
     mock_notif = MagicMock()
-    mock_notif.notification_type = "meal_reminder_breakfast"
+    mock_notif.notification_type = "meal_reminder_lunch"
     mock_notif.context = {
         "fcm_tokens": ["tok1"],
         "calorie_goal": 1800,
@@ -60,6 +60,10 @@ async def test_send_loop_marks_notifications_sent():
         "notification_ids": "notif-id-1",
         "notification_count": "1",
     }
+    call_kwargs = mock_firebase.send_multicast.call_args.kwargs
+    assert "1400" in call_kwargs.get("body", ""), (
+        f"Expected remaining=1400 in body, got: {call_kwargs.get('body')}"
+    )
 
 
 def test_render_message_daily_summary_zero_logs():

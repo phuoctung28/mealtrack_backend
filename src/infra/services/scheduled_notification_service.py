@@ -447,7 +447,7 @@ def _fetch_calories_consumed_batch(
             """),
             {
                 "ids": user_ids,
-                "start": window_start.replace(tzinfo=None),
+                "start": window_start,
             },
         ).fetchall()
     return {row.user_id: int(round(row.consumed_calories)) for row in rows}
