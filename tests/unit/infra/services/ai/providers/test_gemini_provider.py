@@ -153,13 +153,19 @@ async def test_no_purpose_hint_falls_back_to_model_map(mock_model_manager):
 
 @pytest.mark.asyncio
 async def test_generate_passes_cached_content_when_available():
-    """When cache_name is provided, get_model_for_purpose receives cached_content kwarg."""
+    """When cache_name is provided, get_model_for_purpose receives cached_content kwarg and system message is omitted."""
     from unittest.mock import MagicMock
 
     provider = GeminiProvider.__new__(GeminiProvider)
     mock_manager = MagicMock()
     mock_model = MagicMock()
-    mock_model.invoke = MagicMock(return_value=MagicMock(content='{"emoji":"🍚"}'))
+    captured_messages = []
+
+    def capture_invoke(msgs):
+        captured_messages.extend(msgs)
+        return MagicMock(content='{"emoji":"🍚"}')
+
+    mock_model.invoke = capture_invoke
     mock_manager.get_model_for_purpose = MagicMock(return_value=mock_model)
     provider._model_manager = mock_manager
 
@@ -167,13 +173,16 @@ async def test_generate_passes_cached_content_when_available():
         await provider.generate(
             model="gemini-2.5-flash-lite",
             prompt="Recipe for chicken salad",
-            system_message="",
+            system_message="You are a professional chef",
             purpose_hint="recipe",
             cache_name="cachedContents/abc123",
         )
 
     call_kwargs = mock_manager.get_model_for_purpose.call_args[1]
     assert call_kwargs.get("cached_content") == "cachedContents/abc123"
+
+    from langchain_core.messages import SystemMessage
+    assert not any(isinstance(m, SystemMessage) for m in captured_messages)
 
 
 @pytest.mark.asyncio

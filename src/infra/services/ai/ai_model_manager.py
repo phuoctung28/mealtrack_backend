@@ -78,6 +78,7 @@ class AIModelManager:
             cls._instance = None
 
     def __init__(self) -> None:
+        self._cache_manager: Optional[Any] = None
         self._circuit_breaker = ProviderCircuitBreaker()
         self._gemini = GeminiProvider()
         self._providers = {"gemini": self._gemini}
@@ -121,8 +122,7 @@ class AIModelManager:
 
         # Look up warm Gemini context cache for this purpose
         cache_name: Optional[str] = None
-        cache_mgr = getattr(self, "_cache_manager", None)
-        if cache_mgr is not None:
+        if self._cache_manager is not None:
             purpose_to_cache_type = {
                 ModelPurpose.RECIPE:     "recipe",
                 ModelPurpose.MEAL_SCAN:  "vision",
@@ -131,7 +131,10 @@ class AIModelManager:
             }
             cache_type = purpose_to_cache_type.get(purpose)
             if cache_type:
-                cache_name = await cache_mgr.get_cache_name(cache_type)
+                try:
+                    cache_name = await self._cache_manager.get_cache_name(cache_type)
+                except Exception as e:
+                    logger.warning("[AI-CACHE-LOOKUP-FAILED] purpose=%s error=%s", purpose.value, e)
 
         attempted = []
         last_error = None

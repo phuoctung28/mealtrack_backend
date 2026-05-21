@@ -88,7 +88,10 @@ class GeminiProvider(AIProviderPort):
 
         # When using explicit cache, system message is already in cache — omit it to avoid duplication errors
         messages = []
-        if not cache_name and system_message:
+        if cache_name:
+            # system content is already in the Gemini cache — omit to avoid 400 error
+            pass
+        elif system_message:
             messages.append(SystemMessage(content=system_message))
         messages.append(HumanMessage(content=prompt))
 
