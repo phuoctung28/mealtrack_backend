@@ -272,6 +272,8 @@ class ParallelRecipeGenerator:
                 fat_target=selected.get("fat") or session.fat_target,
             )
             meal_name = selected.get("english_name") or selected.get("name")
+            if not meal_name:
+                raise ValueError("selected meal is missing english_name/name")
             prompt = build_recipe_details_prompt(meal_name, recipe_session)
             return await self._generate_with_retry(
                 prompt,

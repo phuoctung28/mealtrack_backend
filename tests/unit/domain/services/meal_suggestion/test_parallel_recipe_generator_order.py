@@ -61,7 +61,7 @@ def make_meal_suggestion(meal_name: str, index: int) -> MealSuggestion:
 
 def make_generator() -> ParallelRecipeGenerator:
     """Build a ParallelRecipeGenerator with mock dependencies."""
-    from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse
+    from src.infra.services.ai.schemas import DiscoveryMealsResponse, MealNamesResponse, RecipeDetailsResponse
 
     generation_service = MagicMock()
     translation_service = MagicMock()
@@ -74,6 +74,7 @@ def make_generator() -> ParallelRecipeGenerator:
         nutrition_lookup=nutrition_lookup,
         meal_names_schema_class=MealNamesResponse,
         discovery_meals_schema_class=DiscoveryMealsResponse,
+        recipe_details_schema_class=RecipeDetailsResponse,
     )
 
 

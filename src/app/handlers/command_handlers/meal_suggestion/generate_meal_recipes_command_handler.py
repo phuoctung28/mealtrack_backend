@@ -72,9 +72,9 @@ class GenerateMealRecipesCommandHandler(
                 )
             except RuntimeError as exc:
                 raise ExternalServiceException(
-                    str(exc),
+                    "Could not generate recipes. Please retry.",
                     error_code="RECIPE_GENERATION_FAILED",
-                    details={"requested": len(selected_meals), "generated": 0},
+                    details={"requested": len(selected_meals), "generated": 0, "reason": str(exc)},
                 ) from exc
             if len(recipes) != len(selected_meals):
                 raise ExternalServiceException(
