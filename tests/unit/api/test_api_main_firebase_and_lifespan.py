@@ -19,9 +19,18 @@ def _patch_lifespan_side_effects(main_mod):
     async def _noop():
         return None
 
+    class _Scheduled:
+        async def start(self):
+            return None
+
+        async def stop(self):
+            return None
+
     main_mod.initialize_cache_layer = _noop  # type: ignore[assignment]
     main_mod.shutdown_cache_layer = _noop  # type: ignore[assignment]
-    # Note: no scheduler stub — scheduler removed from lifespan
+    main_mod.initialize_scheduled_notification_service = (  # type: ignore[assignment]
+        lambda: _Scheduled()
+    )
 
 
 @pytest.fixture
@@ -43,6 +52,20 @@ def test_lifespan_firebase_failure_propagates(monkeypatch, fresh_main):
     with pytest.raises(RuntimeError, match="firebase down"):
         with TestClient(fresh_main.app):
             pass
+
+
+def test_lifespan_scheduled_start_failure_still_starts_api(monkeypatch, fresh_main):
+    class _Bad:
+        async def start(self):
+            raise RuntimeError("scheduler")
+
+        async def stop(self):
+            return None
+
+    fresh_main.initialize_scheduled_notification_service = lambda: _Bad()  # type: ignore
+
+    with TestClient(fresh_main.app):
+        pass
 
 
 def test_lifespan_cache_failure_raises_when_env_true(monkeypatch, fresh_main):

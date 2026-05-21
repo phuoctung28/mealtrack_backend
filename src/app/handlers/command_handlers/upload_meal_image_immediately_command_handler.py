@@ -221,6 +221,27 @@ class UploadMealImageImmediatelyHandler(
                 nutrition=nutrition,
             )
 
+            # Translation for non-English languages
+            if (
+                command.language
+                and command.language != "en"
+                and self.meal_translation_service
+                and nutrition
+                and nutrition.food_items
+            ):
+                try:
+                    await self.meal_translation_service.translate_meal(
+                        meal=meal,
+                        dish_name=meal.dish_name,
+                        food_items=nutrition.food_items,
+                        target_language=command.language,
+                    )
+                    logger.info(
+                        f"[TRANSLATION] meal={meal.meal_id} translated to {command.language}"
+                    )
+                except Exception as e:
+                    logger.warning(f"[TRANSLATION] failed for meal={meal.meal_id}: {e}")
+
             saved_meal = await uow.meals.save(meal)
             await uow.commit()
 
@@ -231,33 +252,8 @@ class UploadMealImageImmediatelyHandler(
                 f"total_elapsed={total_elapsed:.2f}s"
             )
 
-        # Translation repository uses its own DB session, so the parent meal must
-        # be committed before inserting meal_translation rows.
-        if (
-            command.language
-            and command.language != "en"
-            and self.meal_translation_service
-            and nutrition
-            and nutrition.food_items
-        ):
-            try:
-                await self.meal_translation_service.translate_meal(
-                    meal=saved_meal,
-                    dish_name=saved_meal.dish_name,
-                    food_items=nutrition.food_items,
-                    target_language=command.language,
-                )
-                logger.info(
-                    f"[TRANSLATION] meal={saved_meal.meal_id} translated to {command.language}"
-                )
-            except Exception as e:
-                logger.warning(
-                    f"[TRANSLATION] failed for meal={saved_meal.meal_id}: {e}"
-                )
-
-        async with self.uow as uow:
             final_meal = await uow.meals.find_by_id(
-                saved_meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
+                meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
             )
 
         await self.event_bus.publish(
