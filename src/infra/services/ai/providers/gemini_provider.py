@@ -118,12 +118,17 @@ class GeminiProvider(AIProviderPort):
         prompt: str,
         image_data: bytes,
         system_message: Optional[str] = None,
+        purpose_hint: Optional[str] = None,   # NEW
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Generate with image input."""
         import base64
 
-        purpose = MODEL_PURPOSE_MAP.get(model, GeminiModelPurpose.GENERAL)
+        if purpose_hint is not None:
+            purpose = _PURPOSE_HINT_MAP.get(purpose_hint, GeminiModelPurpose.GENERAL)
+        else:
+            purpose = MODEL_PURPOSE_MAP.get(model, GeminiModelPurpose.GENERAL)
+
         llm = self._model_manager.get_model_for_purpose(
             purpose=purpose,
             max_output_tokens=kwargs.get("max_tokens", 4096),

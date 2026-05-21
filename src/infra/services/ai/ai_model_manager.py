@@ -223,6 +223,7 @@ class AIModelManager:
                     prompt=prompt,
                     image_data=image_data,
                     system_message=system_message,
+                    purpose_hint=purpose.value,   # NEW
                     **kwargs,
                 )
 

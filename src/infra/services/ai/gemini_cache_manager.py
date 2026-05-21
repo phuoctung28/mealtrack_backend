@@ -89,7 +89,7 @@ class GeminiCacheManager:
             text_parse_prompt = ""
 
         cache_configs = {
-            "recipe":     (_get_recipe_prompt(), "gemini-2.5-flash"),
+            "recipe":     (_get_recipe_prompt(), "gemini-2.5-flash-lite"),
             "vision":     (_get_vision_prompt(), "gemini-2.5-flash"),
             "text_parse": (text_parse_prompt,    "gemini-2.5-flash-lite"),
         }
@@ -110,10 +110,16 @@ class GeminiCacheManager:
             await self._set_cache_name(cache_type, name)
 
     async def refresh_loop(self) -> None:
-        """Background task: re-warm all caches every REFRESH_BEFORE_EXPIRY seconds."""
+        """Background task: refresh caches before TTL expiry. Run indefinitely."""
         while True:
             await asyncio.sleep(REFRESH_BEFORE_EXPIRY)
             logger.info("[GEMINI-CACHE] Refreshing caches before TTL expiry")
+            # Clear stale Redis entries so _warm_one creates fresh caches
+            for redis_key in _CACHE_REDIS_KEYS.values():
+                try:
+                    await self._redis.delete(redis_key)
+                except Exception as e:
+                    logger.warning("[GEMINI-CACHE] Failed to clear Redis key %s: %s", redis_key, e)
             await self.warm_all()
 
 
