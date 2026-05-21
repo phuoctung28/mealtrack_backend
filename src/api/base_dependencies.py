@@ -31,9 +31,6 @@ from src.infra.database.config import get_db as get_db_from_config
 from src.infra.repositories.meal_repository import MealRepository
 from src.infra.repositories.notification_repository import NotificationRepository
 from src.infra.services.firebase_service import FirebaseService
-from src.infra.services.scheduled_notification_service import (
-    ScheduledNotificationService,
-)
 
 if TYPE_CHECKING:
     from src.domain.ports.subscription_service_port import SubscriptionServicePort
@@ -303,44 +300,6 @@ def get_notification_service(
     """
     return NotificationService(notification_repository, firebase_service)
 
-
-# Scheduled Notification Service (singleton pattern - create once and reuse)
-_scheduled_notification_service = None
-
-
-def get_scheduled_notification_service() -> ScheduledNotificationService:
-    """
-    Get the scheduled notification service instance (singleton).
-    This is created during application startup in the lifespan function.
-
-    Returns:
-        ScheduledNotificationService: The scheduled notification service
-    """
-    return _scheduled_notification_service
-
-
-def initialize_scheduled_notification_service() -> ScheduledNotificationService:
-    """
-    Initialize the scheduled notification service during application startup.
-
-    Returns:
-        ScheduledNotificationService: The initialized scheduled notification service
-    """
-    global _scheduled_notification_service
-    if _scheduled_notification_service is None:
-        from src.infra.services.scheduled_subscription_push_service import (
-            ScheduledSubscriptionPushService,
-        )
-
-        firebase_service = get_firebase_service()
-        trial_push_service = ScheduledSubscriptionPushService()
-        _scheduled_notification_service = ScheduledNotificationService(
-            firebase_service,
-            trial_push_service=trial_push_service,
-        )
-        # Expose for webhook handler to purge stale trial rows on RENEWAL.
-        _scheduled_notification_service.trial_push_service = trial_push_service
-    return _scheduled_notification_service
 
 
 def get_daily_context_precompute_service():
