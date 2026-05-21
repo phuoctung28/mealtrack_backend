@@ -83,6 +83,5 @@ profile*.svg
 # docs/superpowers/ specs are now tracked
 # Git worktrees
 .worktrees/
-docs/superpowers/
 
 plans/
