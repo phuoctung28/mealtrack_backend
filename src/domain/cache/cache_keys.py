@@ -43,15 +43,15 @@ class CacheKeys:
     def daily_breakdown(user_id: str, week_start_date: date) -> tuple[str, int]:
         return (
             f"user:{user_id}:daily_breakdown:{week_start_date.isoformat()}",
-            CacheKeys.TTL_5_MIN,
+            CacheKeys.TTL_30_MIN,
         )
 
     @staticmethod
     def weekly_budget(user_id: str, week_start_date: date) -> tuple[str, int]:
-        """Cache key for weekly macro budget. 10 min TTL."""
+        """Cache key for weekly macro budget. 30 min TTL."""
         return (
             f"user:{user_id}:weekly_budget:{week_start_date.isoformat()}",
-            CacheKeys.TTL_10_MIN,  # 10 minutes
+            CacheKeys.TTL_30_MIN,
         )
 
     @staticmethod
