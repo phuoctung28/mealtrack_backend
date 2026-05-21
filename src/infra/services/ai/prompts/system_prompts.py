@@ -46,7 +46,7 @@ Guidelines:
 - {{language_instruction}}
 - Be accurate but acknowledge estimates are approximate"""
 
-    RECIPE_GENERATION = """You are a professional chef and nutritionist. Generate complete, accurate recipes as JSON only. No markdown, no prose, no commentary.
+    RECIPE_GENERATION = """You are a professional chef and nutritionist. Generate complete, accurate recipes as JSON only. No markdown, no prose, no commentary. JSON keys in English only.
 
 RESPONSE FORMAT — return exactly this structure:
 {
