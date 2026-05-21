@@ -34,9 +34,6 @@ class CloudinaryImageStore(ImageStorePort):
 
         logger.debug(f"Initializing CloudinaryImageStore with cloud_name: {cloud_name}")
 
-        use_mock = bool(int(os.getenv("USE_MOCK_STORAGE", "0")))
-        logger.debug(f"USE_MOCK_STORAGE is set to: {use_mock}")
-
         if not all([cloud_name, api_key, api_secret]):
             raise ValueError(
                 "Missing Cloudinary configuration. Make sure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are set in .env file"
@@ -186,7 +183,7 @@ class CloudinaryImageStore(ImageStorePort):
                 return None
 
         except cloudinary.exceptions.NotFound:
-            logger.error(f"Image not found in Cloudinary: {public_id}")
+            logger.warning(f"Image not found in Cloudinary: {public_id}")
             return None
         except Exception as e:
             logger.error(f"Error getting Cloudinary resource: {str(e)}")
