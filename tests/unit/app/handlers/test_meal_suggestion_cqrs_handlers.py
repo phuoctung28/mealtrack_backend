@@ -237,6 +237,98 @@ async def test_generate_meal_recipes_handler_rejects_missing_session_without_cli
     assert exc.value.error_code == "DISCOVERY_SESSION_NOT_FOUND"
 
 
+@pytest.mark.asyncio
+async def test_generate_meal_recipes_handler_returns_three_recipes_for_three_selected_ids():
+    """3 selected_meal_ids from session → exactly 3 recipes in matching order."""
+    discovery_session = SuggestionSession(
+        id="sess-discovery",
+        user_id="user-1",
+        meal_type="dinner",
+        meal_portion_type="main",
+        target_calories=600,
+        ingredients=[],
+        cooking_time_minutes=None,
+        discovery_meals=[
+            {
+                "id": "disc_1",
+                "name": "Chicken Rice",
+                "english_name": "Chicken Rice",
+                "calories": 500,
+                "protein": 35,
+                "carbs": 55,
+                "fat": 14,
+            },
+            {
+                "id": "disc_2",
+                "name": "Grilled Salmon",
+                "english_name": "Grilled Salmon",
+                "calories": 600,
+                "protein": 42,
+                "carbs": 30,
+                "fat": 28,
+            },
+            {
+                "id": "disc_3",
+                "name": "Beef Stew",
+                "english_name": "Beef Stew",
+                "calories": 550,
+                "protein": 38,
+                "carbs": 45,
+                "fat": 18,
+            },
+        ],
+    )
+    service = AsyncMock()
+    service._repo.get_session.return_value = discovery_session
+    service._recipe_generator.generate_selected_recipes.return_value = [
+        _recipe("r1", "Chicken Rice", 500),
+        _recipe("r2", "Grilled Salmon", 600),
+        _recipe("r3", "Beef Stew", 550),
+    ]
+
+    recipes = await GenerateMealRecipesCommandHandler(service).handle(
+        GenerateMealRecipesCommand(
+            user_id="user-1",
+            meal_type="dinner",
+            language="en",
+            session_id="sess-discovery",
+            selected_meal_ids=["disc_1", "disc_2", "disc_3"],
+        )
+    )
+
+    assert len(recipes) == 3
+    assert [r.meal_name for r in recipes] == ["Chicken Rice", "Grilled Salmon", "Beef Stew"]
+    _, selected = service._recipe_generator.generate_selected_recipes.await_args.args
+    assert [m["id"] for m in selected] == ["disc_1", "disc_2", "disc_3"]
+    assert [m["calories"] for m in selected] == [500, 600, 550]
+
+
+@pytest.mark.asyncio
+async def test_generate_meal_recipes_handler_legacy_meal_names_uses_phase2():
+    """When only meal_names provided (no session_id/selected_ids), handler falls back to _phase2_generate_recipes."""
+    service = AsyncMock()
+    service._repo.get_session.return_value = None
+    service._recipe_generator._phase2_generate_recipes.return_value = [
+        _recipe("r1", "Grilled Chicken", 400),
+        _recipe("r2", "Pasta Primavera", 450),
+    ]
+
+    recipes = await GenerateMealRecipesCommandHandler(service).handle(
+        GenerateMealRecipesCommand(
+            user_id="user-1",
+            meal_type="lunch",
+            language="en",
+            meal_names=["Grilled Chicken", "Pasta Primavera"],
+            calorie_target=450,
+        )
+    )
+
+    assert len(recipes) == 2
+    assert [r.meal_name for r in recipes] == ["Grilled Chicken", "Pasta Primavera"]
+    service._recipe_generator._phase2_generate_recipes.assert_awaited_once()
+    service._recipe_generator.generate_selected_recipes.assert_not_awaited()
+
+
 def _recipe(recipe_id: str, name: str, calories: float) -> MealSuggestion:
     return MealSuggestion(
         id=recipe_id,
