@@ -8,6 +8,8 @@ python-multipart>=0.0.19
 # AI/LLM dependencies
 langchain-core>=0.1.0
 langchain-google-genai
+posthog[otel]>=3.0.0
+opentelemetry-instrumentation-langchain>=0.1.0
 
 # Vector search and embeddings
 pgvector>=0.3.6

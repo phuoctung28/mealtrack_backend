@@ -149,6 +149,33 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting MealTrack API...")
 
+    # PostHog LLM Analytics via OpenTelemetry — must run before any LangChain calls
+    _posthog_key = os.getenv("POSTHOG_API_KEY")
+    if _posthog_key:
+        try:
+            from opentelemetry import trace
+            from opentelemetry.sdk.trace import TracerProvider
+            from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+            from posthog.ai.otel import PostHogSpanProcessor
+            from opentelemetry.instrumentation.langchain import LangchainInstrumentor
+
+            _otel_provider = TracerProvider(
+                resource=Resource(attributes={SERVICE_NAME: "mealtrack-backend"})
+            )
+            _otel_provider.add_span_processor(
+                PostHogSpanProcessor(
+                    api_key=_posthog_key,
+                    host=os.getenv("POSTHOG_HOST", "https://us.i.posthog.com"),
+                )
+            )
+            trace.set_tracer_provider(_otel_provider)
+            LangchainInstrumentor().instrument()
+            logger.info("PostHog LLM Analytics instrumented via OpenTelemetry")
+        except Exception as e:
+            logger.warning(f"PostHog LLM Analytics init failed (non-fatal): {e}")
+    else:
+        logger.info("POSTHOG_API_KEY not set — LLM analytics disabled")
+
     # Initialize Firebase Admin SDK
     try:
         initialize_firebase()
