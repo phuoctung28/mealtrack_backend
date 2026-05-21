@@ -393,7 +393,7 @@ async def delete_meal(
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
-    """Mark a meal as INACTIVE (soft delete)."""
+    """Hard-delete a meal (idempotent — returns success if already deleted)."""
     try:
         command = DeleteMealCommand(meal_id=meal_id, user_id=user_id)
         result = await event_bus.send(command)
