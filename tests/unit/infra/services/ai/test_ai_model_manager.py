@@ -44,18 +44,32 @@ def manager(mock_gemini_provider, mock_circuit_breaker):
 
 class TestModelSelection:
     def test_get_fallback_chain_for_meal_scan(self, manager):
-        """Vision tasks use Gemini first, Mistral-large as emergency fallback."""
+        """Vision tasks use Gemini Flash first, Flash-Lite as fallback."""
         chain = manager.get_fallback_chain(ModelPurpose.MEAL_SCAN)
         assert chain[0] == "gemini-2.5-flash"
         assert chain[1] == "gemini-2.5-flash-lite"
-        assert chain[2] == "mistral-large-latest"
+        assert len(chain) == 2
 
     def test_get_fallback_chain_for_barcode(self, manager):
-        """Barcode uses Mistral-small first (cheaper), then Gemini fallback."""
+        """Barcode uses Flash-Lite (cheaper) first, Flash as fallback."""
         chain = manager.get_fallback_chain(ModelPurpose.BARCODE)
-        assert chain[0] == "mistral-small-latest"
-        assert chain[1] == "gemini-2.5-flash-lite"
-        assert chain[2] == "gemini-2.5-flash"
+        assert chain[0] == "gemini-2.5-flash-lite"
+        assert chain[1] == "gemini-2.5-flash"
+        assert len(chain) == 2
+
+    def test_recipe_purpose_exists(self, manager):
+        """RECIPE is a valid purpose; RECIPE_PRIMARY and RECIPE_SECONDARY do not exist."""
+        from src.infra.services.ai.ai_model_manager import ModelPurpose
+        assert hasattr(ModelPurpose, "RECIPE")
+        assert not hasattr(ModelPurpose, "RECIPE_PRIMARY")
+        assert not hasattr(ModelPurpose, "RECIPE_SECONDARY")
+
+    def test_recipe_chain_uses_flash_lite_first(self, manager):
+        """Flash-Lite is primary for recipes (cheaper, less 503 pressure)."""
+        chain = manager.get_fallback_chain(ModelPurpose.RECIPE)
+        assert chain[0] == "gemini-2.5-flash-lite"
+        assert chain[1] == "gemini-2.5-flash"
+        assert "mistral" not in " ".join(chain)
 
 
 class TestGenerate:

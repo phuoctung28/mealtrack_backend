@@ -19,41 +19,36 @@ logger = logging.getLogger(__name__)
 class ModelPurpose(Enum):
     """Purpose-based model selection."""
 
-    MEAL_SCAN = "meal_scan"
-    INGREDIENT_SCAN = "ingredient_scan"
-    PARSE_TEXT = "parse_text"
-    BARCODE = "barcode"
-    MEAL_NAMES = "meal_names"
-    RECIPE_PRIMARY = "recipe_primary"
-    RECIPE_SECONDARY = "recipe_secondary"
-    DISCOVERY = "discovery"
-    GENERAL = "general"
+    MEAL_SCAN        = "meal_scan"
+    INGREDIENT_SCAN  = "ingredient_scan"
+    PARSE_TEXT       = "parse_text"
+    BARCODE          = "barcode"
+    MEAL_NAMES       = "meal_names"
+    RECIPE           = "recipe"
+    DISCOVERY        = "discovery"
+    GENERAL          = "general"
 
 
 FALLBACK_CHAINS: Dict[ModelPurpose, List[str]] = {
     # ==========================================================================
-    # VISION TASKS (critical): Gemini first → Mistral-large as emergency fallback
-    # Gemini is reliable; Mistral-large ($2/$6 per 1M) only if Gemini fails
+    # VISION TASKS (critical): Gemini Flash first → Flash-Lite as fallback
     # ==========================================================================
-    ModelPurpose.MEAL_SCAN: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "mistral-large-latest"],
-    ModelPurpose.INGREDIENT_SCAN: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-large-latest"],
+    ModelPurpose.MEAL_SCAN:       ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    ModelPurpose.INGREDIENT_SCAN: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
 
     # ==========================================================================
-    # TEXT TASKS: Mistral-small first (cheaper: $0.15/$0.60) → Gemini as fallback
-    # Mistral-small is 2x cheaper on input, 4x cheaper on output than Gemini Flash
+    # TEXT TASKS: Flash-Lite first (cheaper) → Flash as fallback
     # ==========================================================================
-    ModelPurpose.PARSE_TEXT: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.BARCODE: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.MEAL_NAMES: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.DISCOVERY: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.GENERAL: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.PARSE_TEXT:  ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.BARCODE:     ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.MEAL_NAMES:  ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.DISCOVERY:   ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.GENERAL:     ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
 
     # ==========================================================================
-    # RECIPE TASKS: Gemini first (quality) → Gemini-lite fallback (no Mistral-large)
-    # Recipe generation needs quality; Mistral-large too expensive for fallback
+    # RECIPE TASKS: Flash-Lite primary (cheaper, less 503 pressure) → Flash fallback
     # ==========================================================================
-    ModelPurpose.RECIPE_PRIMARY: ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
-    ModelPurpose.RECIPE_SECONDARY: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.RECIPE:      ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
 }
 
 

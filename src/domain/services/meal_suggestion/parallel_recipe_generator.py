@@ -496,8 +496,7 @@ class ParallelRecipeGenerator:
         reject_on_scale_out_of_range: bool = True,
         fill_missing_steps: bool = False,
     ) -> Optional[MealSuggestion]:
-        """Try primary model pool; retry on alternate pool if first attempt fails."""
-        primary = "recipe_primary" if index % 2 == 0 else "recipe_secondary"
+        """Try recipe model; retry on failure."""
         result = await attempt_recipe_generation(
             self._generation,
             self._macro_validator,
@@ -505,7 +504,7 @@ class ParallelRecipeGenerator:
             prompt,
             meal_name,
             index,
-            primary,
+            "recipe",
             recipe_system,
             session,
             reject_on_scale_out_of_range=reject_on_scale_out_of_range,
@@ -514,12 +513,7 @@ class ParallelRecipeGenerator:
         )
         if result is not None:
             return result
-        alternate = (
-            "recipe_secondary" if primary == "recipe_primary" else "recipe_primary"
-        )
-        logger.debug(
-            f"[PHASE-2-RETRY] index={index} | {primary} → {alternate} | meal={meal_name}"
-        )
+        logger.debug(f"[PHASE-2-RETRY] index={index} | meal={meal_name}")
         return await attempt_recipe_generation(
             self._generation,
             self._macro_validator,
@@ -527,7 +521,7 @@ class ParallelRecipeGenerator:
             prompt,
             meal_name,
             index,
-            alternate,
+            "recipe",
             recipe_system,
             session,
             is_retry=True,
