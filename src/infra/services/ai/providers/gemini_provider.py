@@ -18,6 +18,17 @@ MODEL_PURPOSE_MAP = {
     "gemini-2.5-flash-lite": GeminiModelPurpose.MEAL_NAMES,
 }
 
+_PURPOSE_HINT_MAP: dict[str, GeminiModelPurpose] = {
+    "recipe":          GeminiModelPurpose.RECIPE,
+    "barcode":         GeminiModelPurpose.BARCODE,
+    "meal_names":      GeminiModelPurpose.MEAL_NAMES,
+    "discovery":       GeminiModelPurpose.MEAL_NAMES,
+    "parse_text":      GeminiModelPurpose.GENERAL,
+    "ingredient_scan": GeminiModelPurpose.GENERAL,
+    "meal_scan":       GeminiModelPurpose.GENERAL,
+    "general":         GeminiModelPurpose.GENERAL,
+}
+
 
 class GeminiProvider(AIProviderPort):
     """Gemini implementation using existing GeminiModelManager."""
@@ -50,10 +61,14 @@ class GeminiProvider(AIProviderPort):
         response_type: str = "json",
         max_tokens: Optional[int] = None,
         schema: Optional[type] = None,
+        purpose_hint: Optional[str] = None,  # ModelPurpose.value string
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Generate text using Gemini."""
-        purpose = MODEL_PURPOSE_MAP.get(model, GeminiModelPurpose.GENERAL)
+        if purpose_hint is not None:
+            purpose = _PURPOSE_HINT_MAP.get(purpose_hint, GeminiModelPurpose.GENERAL)
+        else:
+            purpose = MODEL_PURPOSE_MAP.get(model, GeminiModelPurpose.GENERAL)
 
         response_mime_type = None
         if not schema and response_type == "json":

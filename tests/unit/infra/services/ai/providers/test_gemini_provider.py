@@ -96,3 +96,56 @@ def test_purpose_temperatures_defined():
     assert PURPOSE_TEMPERATURES[GeminiModelPurpose.MEAL_NAMES] == 0.7
     assert PURPOSE_TEMPERATURES[GeminiModelPurpose.RECIPE] == 0.4
     assert PURPOSE_TEMPERATURES[GeminiModelPurpose.GENERAL] == 0.2
+
+
+@pytest.mark.asyncio
+async def test_recipe_purpose_hint_resolves_to_recipe_purpose(mock_model_manager):
+    """purpose_hint='recipe' must resolve to GeminiModelPurpose.RECIPE,
+    which triggers thinking_budget=0 in get_model_for_purpose."""
+    from src.infra.services.ai.gemini_model_config import GeminiModelPurpose
+
+    with patch(
+        "src.infra.services.ai.providers.gemini_provider.GeminiModelManager"
+    ) as mock_cls:
+        mock_cls.get_instance.return_value = mock_model_manager
+        p = GeminiProvider()
+
+    mock_llm = Mock()
+    mock_llm.invoke = Mock(return_value=Mock(content='{"emoji": "🍚"}'))
+    mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+    await p.generate(
+        model="gemini-2.5-flash",
+        prompt="test",
+        system_message="system",
+        purpose_hint="recipe",
+    )
+
+    call_kwargs = mock_model_manager.get_model_for_purpose.call_args[1]
+    assert call_kwargs["purpose"] == GeminiModelPurpose.RECIPE
+
+
+@pytest.mark.asyncio
+async def test_no_purpose_hint_falls_back_to_model_map(mock_model_manager):
+    """Without purpose_hint, MODEL_PURPOSE_MAP is used (backward compat)."""
+    from src.infra.services.ai.gemini_model_config import GeminiModelPurpose
+
+    with patch(
+        "src.infra.services.ai.providers.gemini_provider.GeminiModelManager"
+    ) as mock_cls:
+        mock_cls.get_instance.return_value = mock_model_manager
+        p = GeminiProvider()
+
+    mock_llm = Mock()
+    mock_llm.invoke = Mock(return_value=Mock(content='{"result": "ok"}'))
+    mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+    await p.generate(
+        model="gemini-2.5-flash",
+        prompt="test",
+        system_message="system",
+        # no purpose_hint
+    )
+
+    call_kwargs = mock_model_manager.get_model_for_purpose.call_args[1]
+    assert call_kwargs["purpose"] == GeminiModelPurpose.GENERAL

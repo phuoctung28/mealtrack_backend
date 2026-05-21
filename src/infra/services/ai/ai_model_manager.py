@@ -151,6 +151,7 @@ class AIModelManager:
                     response_type=response_type,
                     max_tokens=max_tokens,
                     schema=schema,
+                    purpose_hint=purpose.value,   # NEW: pass real purpose to provider
                     **kwargs,
                 )
 
