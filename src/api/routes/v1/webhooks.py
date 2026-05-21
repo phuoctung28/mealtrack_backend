@@ -84,7 +84,7 @@ async def revenuecat_webhook(
     event_type = event.get("type")
     app_user_id = event.get("app_user_id")
 
-    logger.info(f"RevenueCat webhook received: {event_type} for app_user_id={app_user_id}")
+    logger.error(f"RevenueCat webhook received: {event_type} for app_user_id={app_user_id}")
 
     # Get user
     async with AsyncUnitOfWork() as uow:

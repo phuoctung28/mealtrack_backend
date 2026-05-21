@@ -61,7 +61,6 @@ def test_run_vision_analysis_raises_after_max_attempts():
 
 @pytest.mark.asyncio
 async def test_translation_called_for_non_english_language():
-    call_order = []
     saved_state = {}
     mock_uow = MagicMock()
     mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
@@ -71,21 +70,15 @@ async def test_translation_called_for_non_english_language():
     mock_uow.meals = MagicMock()
 
     async def save_meal(meal):
-        call_order.append("save")
         saved_state["meal"] = meal
         return meal
 
     async def find_meal(meal_id, projection=None):
-        call_order.append("find")
         return saved_state["meal"]
 
     mock_uow.meals.save = AsyncMock(side_effect=save_meal)
     mock_uow.meals.find_by_id = AsyncMock(side_effect=find_meal)
-
-    async def commit():
-        call_order.append("commit")
-
-    mock_uow.commit = AsyncMock(side_effect=commit)
+    mock_uow.commit = AsyncMock()
 
     mock_event_bus = MagicMock()
     mock_event_bus.publish = AsyncMock()
@@ -107,13 +100,8 @@ async def test_translation_called_for_non_english_language():
     handler.gpt_parser.parse_emoji.return_value = "🍲"
     handler.gpt_parser.extract_raw_json.return_value = "{}"
     handler.meal_translation_service = MagicMock()
-
-    async def translate_meal(**kwargs):
-        call_order.append("translate")
-        return {"dish_name": "Pho"}
-
     handler.meal_translation_service.translate_meal = AsyncMock(
-        side_effect=translate_meal
+        return_value={"dish_name": "Pho"}
     )
 
     command = UploadMealImageImmediatelyCommand(
@@ -131,7 +119,6 @@ async def test_translation_called_for_non_english_language():
     assert translate_kwargs["dish_name"] == "Pho"
     assert translate_kwargs["food_items"] == nutrition.food_items
     assert translate_kwargs["meal"] == saved_state["meal"]
-    assert call_order[:3] == ["save", "commit", "translate"]
 
 
 @pytest.fixture

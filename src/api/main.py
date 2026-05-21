@@ -33,6 +33,7 @@ from firebase_admin import credentials
 
 from src.api.base_dependencies import (
     initialize_cache_layer,
+    initialize_scheduled_notification_service,
     shutdown_cache_layer,
 )
 from src.api.middleware.accept_language import AcceptLanguageMiddleware
@@ -63,6 +64,10 @@ from src.infra.config.settings import settings
 from src.infra.database.config import engine
 from src.infra.database.config_async import async_engine
 from src.infra.monitoring.sentry import initialize_sentry
+from src.infra.services.scheduled_email_service import ScheduledEmailService
+from src.infra.services.email_template_renderer import EmailTemplateRenderer
+from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
+from src.domain.services.email_service import EmailService
 from src.api.routes.well_known import router as well_known_router
 from src.api.routes.app_download import router as app_download_router
 
@@ -179,11 +184,47 @@ async def lifespan(app: FastAPI):
         if os.getenv("FAIL_ON_CACHE_ERROR", "false").lower() == "true":
             raise
 
+    # Initialize and start scheduled notification service
+    scheduled_service = None
+    try:
+        logger.info("Initializing scheduled notification service...")
+        scheduled_service = initialize_scheduled_notification_service()
+        # Expose trial_push for the RevenueCat RENEWAL webhook handler.
+        app.state.trial_push_service = getattr(
+            scheduled_service, "trial_push_service", None
+        )
+        await scheduled_service.start()
+        logger.info("Scheduled notification service started successfully!")
+    except Exception as e:
+        logger.error(f"Failed to start scheduled notification service: {e}")
+        # Continue running the API even if notification service fails
+
+    # Start scheduled email service
+    email_adapter = ResendEmailAdapter()
+    email_renderer = EmailTemplateRenderer()
+    email_service = EmailService(email_adapter=email_adapter, template_renderer=email_renderer)
+    scheduled_email_service = ScheduledEmailService(email_service=email_service)
+
+    # Run email check on startup (daily runs via external cron)
+    try:
+        await scheduled_email_service.check_and_send_emails()
+    except Exception as e:
+        logger.error(f"Scheduled email check failed: {e}")
+
     logger.info("MealTrack API started successfully!")
     yield
 
     # Shutdown
     logger.info("Shutting down MealTrack API...")
+
+    # Stop scheduled notification service
+    if scheduled_service:
+        try:
+            logger.info("Stopping scheduled notification service...")
+            await scheduled_service.stop()
+            logger.info("Scheduled notification service stopped successfully!")
+        except Exception as e:
+            logger.error(f"Error stopping scheduled notification service: {e}")
 
     # Disconnect cache
     await shutdown_cache_layer()
