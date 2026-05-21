@@ -25,6 +25,7 @@ from src.domain.services.meal_suggestion.nutrition_lookup_service import (
 from src.domain.services.meal_suggestion.recipe_attempt_builder import (
     attempt_recipe_generation,
 )
+from src.infra.services.ai.prompts.system_prompts import SystemPrompts
 
 logger = logging.getLogger(__name__)
 
@@ -252,15 +253,7 @@ class ParallelRecipeGenerator:
             build_recipe_details_prompt,
         )
 
-        recipe_system = (
-            "You are a professional chef. Return ONLY this exact JSON structure:\n"
-            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
-            '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
-            '"prep_time_minutes":0}}\n'
-            "All ingredient amounts MUST be in GRAMS.\n"
-            "CRITICAL: ALL text (ingredient names, instructions) MUST be in ENGLISH ONLY. "
-            "Do NOT include Vietnamese, Japanese, or any non-English text. JSON keys in English only."
-        )
+        recipe_system = SystemPrompts.RECIPE_GENERATION
 
         async def generate_one(index: int, selected: dict) -> Optional[MealSuggestion]:
             target_calories = int(selected.get("calories") or session.target_calories)
@@ -416,16 +409,7 @@ class ParallelRecipeGenerator:
         logger.debug(
             f"[PHASE-2-START] session={session.id} | recipes for {meal_names} | preserve_order={preserve_order}"
         )
-        recipe_system = (
-            "You are a professional chef. Return ONLY this exact JSON structure:\n"
-            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
-            '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
-            '"prep_time_minutes":0}}\n'
-            "All ingredient amounts MUST be in GRAMS.\n"
-            "CRITICAL: ALL text (ingredient names, instructions) MUST be in ENGLISH ONLY. "
-            "Do NOT include Vietnamese, Japanese, or any non-English text (no 'gà', 'cơm', 'trứng' — "
-            "use 'chicken', 'rice', 'egg'). No parenthetical translations. JSON keys in English only."
-        )
+        recipe_system = SystemPrompts.RECIPE_GENERATION
         prompts = [build_recipe_details_prompt(n, session) for n in meal_names]
         tasks = [
             asyncio.create_task(
@@ -561,16 +545,7 @@ class ParallelRecipeGenerator:
             build_recipe_details_prompt,
         )
 
-        recipe_system = (
-            "You are a professional chef. Return ONLY this exact JSON structure:\n"
-            '{{"ingredients":[{{"name":"...","amount":0.0,"unit":"g"}}],'
-            '"recipe_steps":[{{"step":1,"instruction":"...","duration_minutes":0}}],'
-            '"prep_time_minutes":0}}\n'
-            "All ingredient amounts MUST be in GRAMS.\n"
-            "CRITICAL: ALL text (ingredient names, instructions) MUST be in ENGLISH ONLY. "
-            "Do NOT include Vietnamese, Japanese, or any non-English text (no 'gà', 'cơm', 'trứng' — "
-            "use 'chicken', 'rice', 'egg'). No parenthetical translations. JSON keys in English only."
-        )
+        recipe_system = SystemPrompts.RECIPE_GENERATION
         prompts = [build_recipe_details_prompt(n, session) for n in meal_names]
         gen_tasks = [
             asyncio.create_task(
