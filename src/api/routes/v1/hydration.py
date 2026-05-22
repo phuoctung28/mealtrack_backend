@@ -23,9 +23,9 @@ from src.infra.event_bus import EventBus
 router = APIRouter(prefix="/v1/hydration", tags=["Hydration"])
 
 
-@router.get("/catalog")
+@router.get("/catalog", response_model=None)
 async def get_drink_catalog(
-    user_id: str = Depends(get_current_user_id),
+    _: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """Get the drink catalog with hydration and caloric categories."""
@@ -94,7 +94,7 @@ async def log_caloric_drink(
         raise handle_exception(e) from e
 
 
-@router.get("/daily")
+@router.get("/daily", response_model=None)
 async def get_daily_hydration(
     request: Request,
     user_id: str = Depends(get_current_user_id),
