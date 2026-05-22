@@ -7,7 +7,6 @@ import logging
 from typing import Any
 
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.infra.adapters.async_utils import run_coroutine_blocking
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
 logger = logging.getLogger(__name__)
@@ -30,7 +29,7 @@ class MealGenerationService(MealGenerationServicePort):
         """Initialize with AI model manager."""
         self._ai_manager = AIModelManager.get_instance()
 
-    def generate_meal_plan(
+    async def generate_meal_plan(
         self,
         prompt: str,
         system_message: str,
@@ -55,13 +54,11 @@ class MealGenerationService(MealGenerationServicePort):
         """
         purpose = PURPOSE_MAP.get(model_purpose, ModelPurpose.GENERAL)
 
-        return run_coroutine_blocking(
-            self._ai_manager.generate(
-                purpose=purpose,
-                prompt=prompt,
-                system_message=system_message,
-                response_type=response_type,
-                max_tokens=max_tokens,
-                schema=schema,
-            )
+        return await self._ai_manager.generate(
+            purpose=purpose,
+            prompt=prompt,
+            system_message=system_message,
+            response_type=response_type,
+            max_tokens=max_tokens,
+            schema=schema,
         )

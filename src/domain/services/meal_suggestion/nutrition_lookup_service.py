@@ -333,8 +333,7 @@ class NutritionLookupService:
 
         try:
             raw = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._gen.generate_meal_plan,
+                self._gen.generate_meal_plan(
                     prompt,
                     system_message,
                     "json",

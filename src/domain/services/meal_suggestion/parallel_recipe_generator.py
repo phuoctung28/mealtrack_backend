@@ -177,8 +177,7 @@ class ParallelRecipeGenerator:
 
         try:
             raw = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._generation.generate_meal_plan,
+                self._generation.generate_meal_plan(
                     prompt,
                     system,
                     "json",
@@ -351,8 +350,7 @@ class ParallelRecipeGenerator:
         try:
             for attempt in range(1, max_attempts + 1):
                 names_raw = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        self._generation.generate_meal_plan,
+                    self._generation.generate_meal_plan(
                         build_meal_names_prompt(
                             session, exclude_meal_names, names_to_generate
                         ),

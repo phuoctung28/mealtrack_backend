@@ -66,9 +66,9 @@ def _make_service(
 
     gen = MagicMock()
     if gen_result is not None:
-        gen.generate_meal_plan.return_value = gen_result
+        gen.generate_meal_plan = AsyncMock(return_value=gen_result)
     else:
-        gen.generate_meal_plan.side_effect = RuntimeError("AI unavailable")
+        gen.generate_meal_plan = AsyncMock(side_effect=RuntimeError("AI unavailable"))
 
     return NutritionLookupService(
         food_ref_repo=repo,
@@ -333,18 +333,16 @@ def test_to_grams_unknown_unit_assumes_grams(caplog):
 
 @pytest.mark.asyncio
 async def test_t3_ai_estimate_does_not_block_event_loop():
-    """C2: _ai_estimate wraps generate_meal_plan in asyncio.to_thread.
+    """C2: _ai_estimate awaits the async generate_meal_plan.
 
-    If the call were made directly (not via to_thread), it would block the
-    event loop and prevent other coroutines from running. We verify that a
-    slow synchronous generate_meal_plan does NOT block a concurrent task.
+    Because the call is awaited (not run synchronously), it yields control to
+    the event loop while the AI request is in flight. We verify that a slow
+    generate_meal_plan does NOT block a concurrent task.
     """
-    import time
-
     slow_completed = []
 
-    def slow_generate(*args, **kwargs):
-        time.sleep(0.05)  # 50ms blocking sleep — must not block event loop
+    async def slow_generate(*args, **kwargs):
+        await asyncio.sleep(0.05)  # must not block the event loop
         return {"protein": 10.0, "carbs": 5.0, "fat": 2.0, "fiber": 0.0, "sugar": 0.0}
 
     repo = MagicMock()
@@ -352,7 +350,7 @@ async def test_t3_ai_estimate_does_not_block_event_loop():
     resolver = MagicMock()
     resolver.resolve = AsyncMock(return_value=None)
     gen = MagicMock()
-    gen.generate_meal_plan.side_effect = slow_generate
+    gen.generate_meal_plan = AsyncMock(side_effect=slow_generate)
 
     svc = NutritionLookupService(
         food_ref_repo=repo,
@@ -371,9 +369,7 @@ async def test_t3_ai_estimate_does_not_block_event_loop():
     )
 
     # concurrent_task must have run (proves event loop was NOT blocked)
-    assert (
-        slow_completed
-    ), "Concurrent task was blocked — _ai_estimate is not using to_thread"
+    assert slow_completed, "Concurrent task was blocked — _ai_estimate is not awaiting"
 
 
 @pytest.mark.asyncio
@@ -389,13 +385,15 @@ async def test_t3_ai_estimate_respects_10s_timeout():
     resolver = MagicMock()
     resolver.resolve = AsyncMock(return_value=None)
     gen = MagicMock()
-    gen.generate_meal_plan.return_value = {
-        "protein": 5.0,
-        "carbs": 5.0,
-        "fat": 1.0,
-        "fiber": 0.0,
-        "sugar": 0.0,
-    }
+    gen.generate_meal_plan = AsyncMock(
+        return_value={
+            "protein": 5.0,
+            "carbs": 5.0,
+            "fat": 1.0,
+            "fiber": 0.0,
+            "sugar": 0.0,
+        }
+    )
 
     svc = NutritionLookupService(
         food_ref_repo=repo,
@@ -432,13 +430,15 @@ async def test_t3_ai_estimate_passes_correct_positional_args():
     resolver = MagicMock()
     resolver.resolve = AsyncMock(return_value=None)
     gen = MagicMock()
-    gen.generate_meal_plan.return_value = {
-        "protein": 8.0,
-        "carbs": 3.0,
-        "fat": 1.0,
-        "fiber": 0.0,
-        "sugar": 0.0,
-    }
+    gen.generate_meal_plan = AsyncMock(
+        return_value={
+            "protein": 8.0,
+            "carbs": 3.0,
+            "fat": 1.0,
+            "fiber": 0.0,
+            "sugar": 0.0,
+        }
+    )
 
     svc = NutritionLookupService(
         food_ref_repo=repo,
@@ -449,7 +449,7 @@ async def test_t3_ai_estimate_passes_correct_positional_args():
     await svc._lookup_ingredient("truffle oil", 20.0)
 
     gen.generate_meal_plan.assert_called_once()
-    args = gen.generate_meal_plan.call_args[0]  # positional args passed to to_thread
+    args = gen.generate_meal_plan.call_args[0]  # positional args
     assert len(args) == 6, f"Expected 6 positional args, got {len(args)}: {args}"
     assert args[2] == "json"  # response_type
     assert args[3] == 256  # max_tokens

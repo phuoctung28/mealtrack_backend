@@ -36,7 +36,7 @@ async def test_upload_failure_does_not_create_db_record():
     handler.image_store = MagicMock()
     handler.image_store.save.side_effect = Exception("Cloudinary upload failed")
 
-    handler.vision_service = MagicMock()
+    handler.vision_service = AsyncMock()
     handler.gpt_parser = MagicMock()
 
     command = UploadMealImageImmediatelyCommand(
@@ -77,7 +77,7 @@ async def test_invalid_cloudinary_url_does_not_create_db_record():
     handler.image_store = MagicMock()
     handler.image_store.save.return_value = "just-an-id-not-a-url"
 
-    handler.vision_service = MagicMock()
+    handler.vision_service = AsyncMock()
     handler.gpt_parser = MagicMock()
 
     command = UploadMealImageImmediatelyCommand(
@@ -128,7 +128,7 @@ async def test_successful_upload_creates_meal_with_verified_url():
     )
 
     # Vision service returns valid analysis
-    handler.vision_service = MagicMock()
+    handler.vision_service = AsyncMock()
     handler.vision_service.analyze.return_value = {"dish_name": "Test Dish"}
 
     # Parser returns valid nutrition

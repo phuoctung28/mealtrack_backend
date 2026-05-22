@@ -11,7 +11,6 @@ from src.domain.strategies.meal_analysis_strategy import (
     AnalysisStrategyFactory,
     MealAnalysisStrategy,
 )
-from src.infra.adapters.async_utils import run_coroutine_blocking
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
 logger = logging.getLogger(__name__)
@@ -51,10 +50,6 @@ class VisionAIService(VisionAIServicePort):
         except Exception as exc:
             logger.warning("Image compression failed, using original: %s", exc)
             return image_bytes
-
-    def _run_async(self, coro):
-        """Run async coroutine synchronously."""
-        return run_coroutine_blocking(coro)
 
     def _extract_json_from_response(self, content: str) -> dict[str, Any]:
         """
@@ -115,7 +110,7 @@ class VisionAIService(VisionAIServicePort):
             "Please try again or use a clearer image."
         )
 
-    def analyze_with_strategy(
+    async def analyze_with_strategy(
         self, image_bytes: bytes, strategy: MealAnalysisStrategy
     ) -> dict[str, Any]:
         """
@@ -134,14 +129,12 @@ class VisionAIService(VisionAIServicePort):
         image_bytes = self._compress_image(image_bytes)
 
         try:
-            result = self._run_async(
-                self._ai_manager.generate_with_vision(
-                    purpose=ModelPurpose.MEAL_SCAN,
-                    prompt=strategy.get_user_message(),
-                    image_data=image_bytes,
-                    system_message=strategy.get_analysis_prompt(),
-                    max_tokens=1024,
-                )
+            result = await self._ai_manager.generate_with_vision(
+                purpose=ModelPurpose.MEAL_SCAN,
+                prompt=strategy.get_user_message(),
+                image_data=image_bytes,
+                system_message=strategy.get_analysis_prompt(),
+                max_tokens=1024,
             )
         except Exception as e:
             raise RuntimeError(
@@ -154,7 +147,7 @@ class VisionAIService(VisionAIServicePort):
             "strategy_used": strategy.get_strategy_name(),
         }
 
-    def analyze_by_url_with_strategy(
+    async def analyze_by_url_with_strategy(
         self, image_url: str, strategy: MealAnalysisStrategy
     ) -> dict[str, Any]:
         """
@@ -171,14 +164,12 @@ class VisionAIService(VisionAIServicePort):
             RuntimeError: If analysis fails
         """
         try:
-            result = self._run_async(
-                self._ai_manager.generate_with_vision(
-                    purpose=ModelPurpose.MEAL_SCAN,
-                    prompt=strategy.get_user_message(),
-                    image_data=image_url.encode("utf-8"),
-                    system_message=strategy.get_analysis_prompt(),
-                    max_tokens=1024,
-                )
+            result = await self._ai_manager.generate_with_vision(
+                purpose=ModelPurpose.MEAL_SCAN,
+                prompt=strategy.get_user_message(),
+                image_data=image_url.encode("utf-8"),
+                system_message=strategy.get_analysis_prompt(),
+                max_tokens=1024,
             )
         except Exception as e:
             raise RuntimeError(
@@ -191,7 +182,7 @@ class VisionAIService(VisionAIServicePort):
             "strategy_used": strategy.get_strategy_name(),
         }
 
-    def analyze(self, image_bytes: bytes) -> dict[str, Any]:
+    async def analyze(self, image_bytes: bytes) -> dict[str, Any]:
         """
         Analyze a food image to extract nutritional information.
 
@@ -207,18 +198,18 @@ class VisionAIService(VisionAIServicePort):
         strategy = AnalysisStrategyFactory.create_basic_strategy(
             optimized_prompt_enabled=self._optimized_prompt_enabled
         )
-        return self.analyze_with_strategy(image_bytes, strategy)
+        return await self.analyze_with_strategy(image_bytes, strategy)
 
-    def analyze_by_url(self, image_url: str) -> dict[str, Any]:
+    async def analyze_by_url(self, image_url: str) -> dict[str, Any]:
         """
         Analyze a food image from a public URL.
         """
         strategy = AnalysisStrategyFactory.create_basic_strategy(
             optimized_prompt_enabled=self._optimized_prompt_enabled
         )
-        return self.analyze_by_url_with_strategy(image_url, strategy)
+        return await self.analyze_by_url_with_strategy(image_url, strategy)
 
-    def analyze_with_portion_context(
+    async def analyze_with_portion_context(
         self, image_bytes: bytes, portion_size: float, unit: str
     ) -> dict[str, Any]:
         """
@@ -233,9 +224,9 @@ class VisionAIService(VisionAIServicePort):
             JSON-compatible dictionary with the raw AI response
         """
         strategy = AnalysisStrategyFactory.create_portion_strategy(portion_size, unit)
-        return self.analyze_with_strategy(image_bytes, strategy)
+        return await self.analyze_with_strategy(image_bytes, strategy)
 
-    def analyze_with_ingredients_context(
+    async def analyze_with_ingredients_context(
         self, image_bytes: bytes, ingredients: list[dict[str, Any]]
     ) -> dict[str, Any]:
         """
@@ -249,9 +240,9 @@ class VisionAIService(VisionAIServicePort):
             JSON-compatible dictionary with the raw AI response
         """
         strategy = AnalysisStrategyFactory.create_ingredient_strategy(ingredients)
-        return self.analyze_with_strategy(image_bytes, strategy)
+        return await self.analyze_with_strategy(image_bytes, strategy)
 
-    def analyze_with_weight_context(
+    async def analyze_with_weight_context(
         self, image_bytes: bytes, weight_grams: float
     ) -> dict[str, Any]:
         """
@@ -265,4 +256,4 @@ class VisionAIService(VisionAIServicePort):
             JSON-compatible dictionary with the raw AI response
         """
         strategy = AnalysisStrategyFactory.create_weight_strategy(weight_grams)
-        return self.analyze_with_strategy(image_bytes, strategy)
+        return await self.analyze_with_strategy(image_bytes, strategy)

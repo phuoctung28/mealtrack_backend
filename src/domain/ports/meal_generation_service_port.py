@@ -11,7 +11,7 @@ class MealGenerationServicePort(ABC):
     """Unified port for all meal generation using single LLM with different prompts."""
 
     @abstractmethod
-    def generate_meal_plan(
+    async def generate_meal_plan(
         self,
         prompt: str,
         system_message: str,

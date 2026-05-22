@@ -109,11 +109,13 @@ class AnalyzeMealImageByUrlHandler(EventHandler[AnalyzeMealImageByUrlCommand, Me
                 strategy = AnalysisStrategyFactory.create_user_context_strategy(
                     command.user_description
                 )
-                vision_result = self.vision_service.analyze_by_url_with_strategy(
+                vision_result = await self.vision_service.analyze_by_url_with_strategy(
                     command.image_url, strategy
                 )
             else:
-                vision_result = self.vision_service.analyze_by_url(command.image_url)
+                vision_result = await self.vision_service.analyze_by_url(
+                    command.image_url
+                )
             phase1_elapsed = time.time() - phase1_start
 
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)

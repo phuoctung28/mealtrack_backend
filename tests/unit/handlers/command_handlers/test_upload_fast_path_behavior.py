@@ -14,13 +14,14 @@ from src.domain.model.meal import MealStatus
 from src.domain.services.meal_analysis.fast_path_policy import MealAnalyzeFastPathPolicy
 
 
-def test_run_vision_analysis_retries_once_then_succeeds():
+@pytest.mark.asyncio
+async def test_run_vision_analysis_retries_once_then_succeeds():
     handler = UploadMealImageImmediatelyHandler(
         uow=MagicMock(),
         event_bus=MagicMock(),
         fast_path_policy=MealAnalyzeFastPathPolicy(max_attempts=2),
     )
-    handler.vision_service = MagicMock()
+    handler.vision_service = AsyncMock()
     handler.vision_service.analyze.side_effect = [
         Exception("vision failed"),
         {"dish_name": "Pho"},
@@ -32,19 +33,20 @@ def test_run_vision_analysis_retries_once_then_succeeds():
         content_type="image/jpeg",
     )
 
-    result = handler._run_vision_analysis(command, "meal-123")
+    result = await handler._run_vision_analysis(command, "meal-123")
 
     assert result == {"dish_name": "Pho"}
     assert handler.vision_service.analyze.call_count == 2
 
 
-def test_run_vision_analysis_raises_after_max_attempts():
+@pytest.mark.asyncio
+async def test_run_vision_analysis_raises_after_max_attempts():
     handler = UploadMealImageImmediatelyHandler(
         uow=MagicMock(),
         event_bus=MagicMock(),
         fast_path_policy=MealAnalyzeFastPathPolicy(max_attempts=2),
     )
-    handler.vision_service = MagicMock()
+    handler.vision_service = AsyncMock()
     handler.vision_service.analyze.side_effect = Exception("vision failed")
 
     command = UploadMealImageImmediatelyCommand(
@@ -54,7 +56,7 @@ def test_run_vision_analysis_raises_after_max_attempts():
     )
 
     with pytest.raises(Exception, match="vision failed"):
-        handler._run_vision_analysis(command, "meal-123")
+        await handler._run_vision_analysis(command, "meal-123")
 
     assert handler.vision_service.analyze.call_count == 2
 
@@ -98,7 +100,7 @@ async def test_translation_called_for_non_english_language():
     handler.image_store.save.return_value = (
         "https://res.cloudinary.com/demo/image/upload/00000000-0000-0000-0000-000000000123"
     )
-    handler.vision_service = MagicMock()
+    handler.vision_service = AsyncMock()
     handler.vision_service.analyze.return_value = {"dish_name": "Pho"}
     handler.gpt_parser = MagicMock()
     nutrition = SimpleNamespace(food_items=[MagicMock()], calories=400)
@@ -164,7 +166,7 @@ def parallel_mode_harness():
         event_bus=mock_event_bus,
     )
     handler.image_store = MagicMock()
-    handler.vision_service = MagicMock()
+    handler.vision_service = AsyncMock()
     handler.gpt_parser = MagicMock()
     handler.gpt_parser.parse_to_nutrition.return_value = SimpleNamespace(
         food_items=[MagicMock()], calories=400

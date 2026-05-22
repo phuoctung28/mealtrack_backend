@@ -286,7 +286,7 @@ class LookupBarcodeQueryHandler(
                 f"AI estimation for {barcode}: country={country}, "
                 f"partial_name={partial_name}, prompt_len={len(user_prompt)}"
             )
-            result = self.meal_gen.generate_meal_plan(
+            result = await self.meal_gen.generate_meal_plan(
                 user_prompt,
                 system_prompt,
                 response_type="json",

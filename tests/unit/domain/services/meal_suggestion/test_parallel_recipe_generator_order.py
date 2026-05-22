@@ -64,6 +64,7 @@ def make_generator() -> ParallelRecipeGenerator:
     from src.infra.services.ai.schemas import DiscoveryMealsResponse, MealNamesResponse, RecipeDetailsResponse
 
     generation_service = MagicMock()
+    generation_service.generate_meal_plan = AsyncMock()
     translation_service = MagicMock()
     macro_validator = MagicMock()
     nutrition_lookup = MagicMock()

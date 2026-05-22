@@ -63,7 +63,9 @@ def _make_meal_macros() -> MealMacros:
 @pytest.fixture
 def mock_generation_service():
     """Mock MealGenerationServicePort."""
-    return Mock()
+    service = Mock()
+    service.generate_meal_plan = AsyncMock()
+    return service
 
 
 @pytest.fixture

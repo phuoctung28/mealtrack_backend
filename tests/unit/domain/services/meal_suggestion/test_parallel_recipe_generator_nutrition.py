@@ -128,6 +128,7 @@ async def test_attempt_recipe_generation_uses_deterministic_macros():
     meal_macros = _make_meal_macros()
 
     generation_service = MagicMock()
+    generation_service.generate_meal_plan = AsyncMock()
     generation_service.generate_meal_plan.return_value = _make_ai_raw_response()
 
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
@@ -189,7 +190,7 @@ async def test_attempt_recipe_generation_ignores_ai_macro_fields():
     generation_service = MagicMock()
     ai_raw = _make_ai_raw_response()
     ai_raw["calories"] = 1500  # intentionally wrong AI value
-    generation_service.generate_meal_plan.return_value = ai_raw
+    generation_service.generate_meal_plan = AsyncMock(return_value=ai_raw)
 
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
     nutrition_lookup.calculate_meal_macros.return_value = det_macros
@@ -219,6 +220,7 @@ async def test_attempt_recipe_generation_returns_none_on_empty_ingredients():
     session = _make_session()
 
     generation_service = MagicMock()
+    generation_service.generate_meal_plan = AsyncMock()
     generation_service.generate_meal_plan.return_value = {
         "ingredients": [],
         "recipe_steps": [{"step": 1, "instruction": "...", "duration_minutes": 5}],
@@ -250,7 +252,9 @@ async def test_attempt_recipe_generation_returns_none_on_timeout():
     session = _make_session()
 
     generation_service = MagicMock()
-    generation_service.generate_meal_plan.side_effect = asyncio.TimeoutError()
+    generation_service.generate_meal_plan = AsyncMock(
+        side_effect=asyncio.TimeoutError()
+    )
 
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
 
@@ -275,6 +279,7 @@ async def test_attempt_recipe_generation_returns_none_on_nutrition_lookup_error(
     session = _make_session()
 
     generation_service = MagicMock()
+    generation_service.generate_meal_plan = AsyncMock()
     generation_service.generate_meal_plan.return_value = _make_ai_raw_response()
 
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
@@ -308,6 +313,7 @@ async def test_attempt_recipe_generation_scale_within_range_returns_scaled_sugge
     session = _make_session()  # target_calories=600
 
     generation_service = MagicMock()
+    generation_service.generate_meal_plan = AsyncMock()
     generation_service.generate_meal_plan.return_value = _make_ai_raw_response()
 
     # Deterministic macros: 520 kcal (scale = 600/520 ≈ 1.154 → within range)
@@ -387,6 +393,7 @@ async def test_attempt_recipe_generation_scale_out_of_range_returns_none():
     session = _make_session()  # target_calories=600
 
     generation_service = MagicMock()
+    generation_service.generate_meal_plan = AsyncMock()
     generation_service.generate_meal_plan.return_value = _make_ai_raw_response()
 
     # Deterministic macros: 1400 kcal → scale = 600/1400 ≈ 0.43 → rejected
@@ -459,6 +466,7 @@ async def test_attempt_recipe_generation_selected_mode_scales_without_rejecting(
     session.target_calories = 300
 
     generation_service = MagicMock()
+    generation_service.generate_meal_plan = AsyncMock()
     generation_service.generate_meal_plan.return_value = _make_ai_raw_response()
 
     raw_macros = MealMacros(
@@ -531,7 +539,7 @@ async def test_attempt_recipe_generation_selected_mode_fills_missing_steps():
     generation_service = MagicMock()
     raw = _make_ai_raw_response()
     raw["recipe_steps"] = []
-    generation_service.generate_meal_plan.return_value = raw
+    generation_service.generate_meal_plan = AsyncMock(return_value=raw)
 
     meal_macros = _make_meal_macros()
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)

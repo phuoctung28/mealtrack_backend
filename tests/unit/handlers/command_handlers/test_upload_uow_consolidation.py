@@ -38,7 +38,7 @@ def _make_handler(mock_uow, mock_event_bus=None):
     )
     handler.image_store = MagicMock()
     handler.image_store.save.return_value = f"https://res.cloudinary.com/demo/image/upload/{_FAKE_IMAGE_UUID}"
-    handler.vision_service = MagicMock()
+    handler.vision_service = AsyncMock()
     handler.vision_service.analyze.return_value = '{"dish_name": "Salad"}'
     handler.gpt_parser = MagicMock()
     handler.gpt_parser.parse_to_nutrition.return_value = MagicMock(
