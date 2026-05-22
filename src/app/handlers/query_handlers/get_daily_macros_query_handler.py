@@ -105,10 +105,11 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 user_profile = await uow.users.get_profile(UUID(query.user_id))
                 water_goal_ml = (
                     user_profile.daily_water_goal_ml
-                    if user_profile and hasattr(user_profile, "daily_water_goal_ml") and user_profile.daily_water_goal_ml
+                    if user_profile and hasattr(user_profile, "daily_water_goal_ml") and user_profile.daily_water_goal_ml is not None and user_profile.daily_water_goal_ml > 0
                     else 2000
                 )
-            except Exception:
+            except Exception as exc:
+                logger.warning("Failed to fetch hydration data for user %s: %s", query.user_id, exc)
                 consumed_water_ml = 0
                 water_goal_ml = 2000
 

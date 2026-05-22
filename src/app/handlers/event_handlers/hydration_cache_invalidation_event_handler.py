@@ -31,6 +31,12 @@ class HydrationCacheInvalidationEventHandler(
         except Exception as exc:
             logger.warning("Cache invalidation failed for key=%s: %s", hydration_key, exc)
 
+        macros_key, _ = CacheKeys.daily_macros(user_id, hydration_date)
+        try:
+            await self.cache.invalidate(macros_key)
+        except Exception as exc:
+            logger.warning("Cache invalidation failed for key=%s: %s", macros_key, exc)
+
         activities_pattern = f"user:{user_id}:activities:{hydration_date.isoformat()}:*"
         try:
             await self.cache.invalidate_pattern(activities_pattern)

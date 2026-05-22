@@ -70,7 +70,7 @@ class GetDailyHydrationQueryHandler(EventHandler[GetDailyHydrationQuery, dict]):
             goal_ml = 2000
             try:
                 user_profile = await uow.users.get_profile(UUID(query.user_id))
-                if user_profile and hasattr(user_profile, "daily_water_goal_ml") and user_profile.daily_water_goal_ml:
+                if user_profile and hasattr(user_profile, "daily_water_goal_ml") and user_profile.daily_water_goal_ml is not None and user_profile.daily_water_goal_ml > 0:
                     goal_ml = user_profile.daily_water_goal_ml
             except Exception:
                 logger.debug(

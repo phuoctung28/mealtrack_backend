@@ -243,10 +243,7 @@ class GetDailyActivitiesQueryHandler(
                         if hasattr(entry.source, "value")
                         else entry.source
                     )
-                    if entry_source not in (
-                        HydrationSource.HYDRATION.value,
-                        "hydration",
-                    ):
+                    if entry_source not in (HydrationSource.HYDRATION, "hydration"):
                         continue
 
                     drink = find_drink_by_id(entry.drink_id) if entry.drink_id else None
