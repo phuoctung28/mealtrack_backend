@@ -1,9 +1,9 @@
 """HydrationSummary — value object for daily hydration totals."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
-@dataclass
+@dataclass(frozen=True)
 class HydrationSummary:
     """
     Value object representing daily hydration progress.
@@ -14,13 +14,12 @@ class HydrationSummary:
 
     consumed_ml: int
     goal_ml: int
-    percentage: float = 0.0
+    percentage: float = field(init=False, default=0.0)
 
     def __post_init__(self) -> None:
         """Compute and cap percentage."""
         if self.goal_ml > 0:
-            self.percentage = min(
-                100.0, round(self.consumed_ml / self.goal_ml * 100, 1)
-            )
+            value = min(100.0, round(self.consumed_ml / self.goal_ml * 100, 1))
         else:
-            self.percentage = 0.0
+            value = 0.0
+        object.__setattr__(self, "percentage", value)

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
 
+from src.domain.model.hydration.hydration_enums import HydrationSource
 from src.domain.utils.timezone_utils import utc_now
 
 
@@ -18,7 +19,7 @@ class HydrationEntry:
     drink_id: str
     volume_ml: int
     credited_ml: int
-    source: str  # "hydration" or "caloric_drink"
+    source: HydrationSource  # "hydration" or "caloric_drink"
     meal_id: str | None
     logged_at: datetime
     created_at: datetime
@@ -32,11 +33,16 @@ class HydrationEntry:
             raise ValueError(
                 f"credited_ml must be non-negative, got {self.credited_ml}"
             )
-        if self.source not in ("hydration", "caloric_drink"):
+        if self.source not in (
+            HydrationSource.HYDRATION,
+            HydrationSource.CALORIC_DRINK,
+            "hydration",
+            "caloric_drink",
+        ):
             raise ValueError(
                 f"source must be 'hydration' or 'caloric_drink', got '{self.source}'"
             )
-        if self.source == "caloric_drink" and self.meal_id is None:
+        if self.source in (HydrationSource.CALORIC_DRINK, "caloric_drink") and self.meal_id is None:
             raise ValueError("meal_id is required when source is 'caloric_drink'")
 
     @classmethod
@@ -46,7 +52,7 @@ class HydrationEntry:
         drink_id: str,
         volume_ml: int,
         credited_ml: int,
-        source: str,
+        source: HydrationSource | str,
         meal_id: str | None = None,
     ) -> "HydrationEntry":
         """Factory method to create a new hydration log entry."""

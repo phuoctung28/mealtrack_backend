@@ -4,15 +4,13 @@ All drink metadata lives here so the application and API layers
 can resolve drink details without hitting the database.
 """
 
-from typing import Dict, List, Optional
-
-from src.domain.model.hydration import Drink
+from src.domain.model.hydration import Drink, DrinkCategory
 
 # ---------------------------------------------------------------------------
 # Static catalog data
 # ---------------------------------------------------------------------------
 
-_DRINKS: List[Drink] = [
+_DRINKS: list[Drink] = [
     # -----------------------------------------------------------------------
     # Zero-calorie / hydration drinks
     # -----------------------------------------------------------------------
@@ -26,7 +24,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=0.0,
         hydration_weight=1.0,
         brand_color="#3B82F6",
-        category="hydration",
+        category=DrinkCategory.HYDRATION,
     ),
     Drink(
         id="sparkling",
@@ -38,7 +36,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=0.0,
         hydration_weight=1.0,
         brand_color="#60A5FA",
-        category="hydration",
+        category=DrinkCategory.HYDRATION,
     ),
     Drink(
         id="tea",
@@ -50,7 +48,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=0.0,
         hydration_weight=0.90,
         brand_color="#78716C",
-        category="hydration",
+        category=DrinkCategory.HYDRATION,
     ),
     Drink(
         id="coffee",
@@ -62,7 +60,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=0.0,
         hydration_weight=0.80,
         brand_color="#92400E",
-        category="hydration",
+        category=DrinkCategory.HYDRATION,
     ),
     Drink(
         id="electrolyte",
@@ -74,7 +72,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=0.8,
         hydration_weight=0.95,
         brand_color="#22C55E",
-        category="hydration",
+        category=DrinkCategory.HYDRATION,
     ),
     # -----------------------------------------------------------------------
     # Caloric drinks
@@ -89,7 +87,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=9.0,
         hydration_weight=0.70,
         brand_color="#A87C5F",
-        category="caloric",
+        category=DrinkCategory.CALORIC,
     ),
     Drink(
         id="coke",
@@ -101,7 +99,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=10.6,
         hydration_weight=0.80,
         brand_color="#B91C1C",
-        category="caloric",
+        category=DrinkCategory.CALORIC,
     ),
     Drink(
         id="coke-zero",
@@ -113,7 +111,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=0.0,
         hydration_weight=1.0,
         brand_color="#1F2937",
-        category="caloric",
+        category=DrinkCategory.CALORIC,
     ),
     Drink(
         id="oj",
@@ -125,7 +123,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=8.8,
         hydration_weight=0.95,
         brand_color="#F97316",
-        category="caloric",
+        category=DrinkCategory.CALORIC,
     ),
     Drink(
         id="iced-latte",
@@ -137,7 +135,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=3.4,
         hydration_weight=0.85,
         brand_color="#92400E",
-        category="caloric",
+        category=DrinkCategory.CALORIC,
     ),
     Drink(
         id="smoothie",
@@ -149,7 +147,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=7.5,
         hydration_weight=0.90,
         brand_color="#7C3AED",
-        category="caloric",
+        category=DrinkCategory.CALORIC,
     ),
     Drink(
         id="energy",
@@ -161,7 +159,7 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=10.8,
         hydration_weight=0.85,
         brand_color="#0EA5E9",
-        category="caloric",
+        category=DrinkCategory.CALORIC,
     ),
     Drink(
         id="beer",
@@ -173,12 +171,12 @@ _DRINKS: List[Drink] = [
         sugar_per_100ml=0.0,
         hydration_weight=0.60,
         brand_color="#CA8A04",
-        category="caloric",
+        category=DrinkCategory.CALORIC,
     ),
 ]
 
 # Module-level constant — dict keyed by drink id for O(1) lookup.
-DRINK_CATALOG: Dict[str, Drink] = {drink.id: drink for drink in _DRINKS}
+DRINK_CATALOG: dict[str, Drink] = {drink.id: drink for drink in _DRINKS}
 
 
 # ---------------------------------------------------------------------------
@@ -186,11 +184,11 @@ DRINK_CATALOG: Dict[str, Drink] = {drink.id: drink for drink in _DRINKS}
 # ---------------------------------------------------------------------------
 
 
-def get_all() -> List[Drink]:
+def get_all() -> list[Drink]:
     """Return all drinks in catalog order."""
     return list(_DRINKS)
 
 
-def find_by_id(drink_id: str) -> Optional[Drink]:
+def find_by_id(drink_id: str) -> Drink | None:
     """Return a Drink by its id, or None if not found."""
     return DRINK_CATALOG.get(drink_id)

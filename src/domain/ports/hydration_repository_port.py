@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import List, Optional
 
 from src.domain.model.hydration import HydrationEntry
 
@@ -26,7 +25,7 @@ class HydrationRepositoryPort(ABC):
     @abstractmethod
     async def find_by_id(
         self, user_id: str, entry_id: str
-    ) -> Optional[HydrationEntry]:
+    ) -> HydrationEntry | None:
         """
         Find a hydration entry by user and entry ID.
 
@@ -42,7 +41,7 @@ class HydrationRepositoryPort(ABC):
     @abstractmethod
     async def find_by_date(
         self, user_id: str, target_date: date, user_timezone: str
-    ) -> List[HydrationEntry]:
+    ) -> list[HydrationEntry]:
         """
         Return all non-deleted entries for a user on a given local date.
 

@@ -2,8 +2,10 @@
 
 from dataclasses import dataclass
 
+from src.domain.model.hydration.hydration_enums import DrinkCategory
 
-@dataclass
+
+@dataclass(frozen=True)
 class Drink:
     """
     Catalog entry for a drink type.
@@ -20,7 +22,7 @@ class Drink:
     sugar_per_100ml: float
     hydration_weight: float
     brand_color: str
-    category: str  # "hydration" or "caloric"
+    category: DrinkCategory
 
     def kcal_for_volume(self, ml: int) -> float:
         """Return calories for the given volume in ml."""
@@ -32,4 +34,4 @@ class Drink:
 
     def credited_ml_for_volume(self, ml: int) -> int:
         """Return water-equivalent ml credited for the given volume."""
-        return round(ml * self.hydration_weight)
+        return int(round(ml * self.hydration_weight))
