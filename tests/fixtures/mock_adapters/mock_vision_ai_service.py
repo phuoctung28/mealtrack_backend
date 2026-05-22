@@ -19,6 +19,14 @@ class MockVisionAIService(VisionAIServicePort):
         """Return mock analysis result."""
         return self.mock_response
 
+    async def analyze_with_strategy(
+        self, image_bytes: bytes, strategy: MealAnalysisStrategy
+    ) -> Dict[str, Any]:
+        """Return mock analysis result for strategy-based analysis."""
+        response = self.mock_response.copy()
+        response["strategy_used"] = strategy.get_strategy_name()
+        return response
+
     async def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
         """Return mock analysis result for URL-based analysis."""
         response = self.mock_response.copy()

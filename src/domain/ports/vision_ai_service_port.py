@@ -32,6 +32,25 @@ class VisionAIServicePort(ABC):
         pass
 
     @abstractmethod
+    async def analyze_with_strategy(
+        self, image_bytes: bytes, strategy: MealAnalysisStrategy
+    ) -> Dict[str, Any]:
+        """
+        Analyze a food image using a custom analysis strategy.
+
+        Args:
+            image_bytes: The raw bytes of the image to analyze
+            strategy: The analysis strategy to use
+
+        Returns:
+            JSON-compatible dictionary with the raw AI response
+
+        Raises:
+            RuntimeError: If analysis fails
+        """
+        pass
+
+    @abstractmethod
     async def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
         """
         Analyze a food image from a public URL.
