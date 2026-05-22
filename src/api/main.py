@@ -57,6 +57,7 @@ from src.api.routes.v1.tdee import router as tdee_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
+from src.api.routes.v1.hydration import router as hydration_router
 from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
 from src.infra.config.settings import settings
@@ -303,6 +304,7 @@ app.include_router(promo_codes_router)
 app.include_router(codes_router)
 app.include_router(nutrition_router)
 app.include_router(weight_entries_router)
+app.include_router(hydration_router)
 app.include_router(well_known_router)
 app.include_router(app_download_router)
 
