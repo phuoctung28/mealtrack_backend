@@ -2,6 +2,7 @@
 USDA FoodData Central HTTP client. Real implementation would call external API; this is a thin wrapper.
 """
 
+import asyncio
 import os
 from typing import Dict, Any, List, Optional
 
@@ -27,11 +28,13 @@ class FoodDataService(FoodDataServicePort):
 
     async def search_foods(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         # For simplicity in tests, this won't be called. Kept for completeness.
-        data = self._get("/foods/search", {"query": query, "pageSize": limit})
+        data = await asyncio.to_thread(
+            self._get, "/foods/search", {"query": query, "pageSize": limit}
+        )
         return data.get("foods", [])
 
     async def get_food_details(self, fdc_id: int) -> Dict[str, Any]:
-        return self._get(f"/food/{fdc_id}", {})
+        return await asyncio.to_thread(self._get, f"/food/{fdc_id}", {})
 
     async def get_multiple_foods(self, fdc_ids: List[int]) -> List[Dict[str, Any]]:
         # Batch endpoint; many accounts need POST. To keep simple, call individually.

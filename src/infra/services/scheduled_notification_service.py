@@ -265,7 +265,8 @@ class ScheduledNotificationService:
             }
             tokens = group["tokens"]
             for chunk in _chunked(tokens, 500):
-                result = self._firebase.send_multicast(
+                result = await asyncio.to_thread(
+                    self._firebase.send_multicast,
                     tokens=chunk,
                     title=title,
                     body=body,

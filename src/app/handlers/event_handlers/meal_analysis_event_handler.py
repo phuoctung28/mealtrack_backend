@@ -91,7 +91,9 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             await asyncio.sleep(1)
 
             logger.info(f"Loading image contents for meal {meal.meal_id}")
-            image_contents = self.image_store.load(meal.image.image_id)
+            image_contents = await asyncio.to_thread(
+                self.image_store.load, meal.image.image_id
+            )
             if not image_contents:
                 raise Exception(
                     f"Could not load image contents for image_id: {meal.image.image_id}"

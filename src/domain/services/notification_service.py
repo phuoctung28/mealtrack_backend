@@ -1,5 +1,6 @@
 """Notification service for sending push notifications."""
 
+import asyncio
 import logging
 from typing import Dict, List, Optional, Any
 
@@ -91,7 +92,8 @@ class NotificationService:
                     f"updated={t.updated_at}"
                 )
 
-            result = self.firebase_service.send_notification(
+            result = await asyncio.to_thread(
+                self.firebase_service.send_notification,
                 user_id=user_id,
                 title=title,
                 body=body,

@@ -3,6 +3,7 @@ Meals API endpoints using event-driven architecture.
 Clean separation with event bus pattern.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional
@@ -159,7 +160,9 @@ async def analyze_meal_image_immediate(
 
         image_url = None
         if meal.image:
-            image_url = meal.image.url or image_store.get_url(meal.image.image_id)
+            image_url = meal.image.url or await asyncio.to_thread(
+                image_store.get_url, meal.image.image_id
+            )
 
         return MealMapper.to_detailed_response(
             meal, image_url, target_language=language
@@ -373,7 +376,9 @@ async def get_meal(
         if meal.image:
             # Prefer persisted Cloudinary URL from upload response.
             # Avoid extra Cloudinary API calls unless URL is missing.
-            image_url = meal.image.url or image_store.get_url(meal.image.image_id)
+            image_url = meal.image.url or await asyncio.to_thread(
+                image_store.get_url, meal.image.image_id
+            )
 
         # Get language from Accept-Language header via middleware
         language = get_request_language(request)
