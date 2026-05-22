@@ -6,7 +6,7 @@ from typing import Any
 from src.app.commands.hydration.delete_hydration_entry_command import (
     DeleteHydrationEntryCommand,
 )
-from src.app.events.base import EventHandler
+from src.app.events.base import EventHandler, handles
 from src.app.events.hydration.hydration_cache_invalidation_required_event import (
     HydrationCacheInvalidationRequiredEvent,
 )
@@ -14,6 +14,7 @@ from src.app.events.meal.meal_cache_invalidation_required_event import (
     MealCacheInvalidationRequiredEvent,
 )
 from src.domain.model.meal import MealStatus
+from src.infra.database.uow_async import AsyncUnitOfWork
 from src.domain.utils.timezone_utils import (
     resolve_user_timezone_async,
     get_zone_info,
@@ -22,10 +23,11 @@ from src.domain.utils.timezone_utils import (
 logger = logging.getLogger(__name__)
 
 
+@handles(DeleteHydrationEntryCommand)
 class DeleteHydrationEntryCommandHandler(
     EventHandler[DeleteHydrationEntryCommand, bool]
 ):
-    def __init__(self, uow: Any, event_bus: Any):
+    def __init__(self, uow: AsyncUnitOfWork, event_bus: Any):
         self.uow = uow
         self.event_bus = event_bus
 

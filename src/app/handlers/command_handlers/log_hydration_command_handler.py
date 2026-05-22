@@ -4,12 +4,13 @@ import logging
 from typing import Any
 
 from src.app.commands.hydration.log_hydration_command import LogHydrationCommand
-from src.app.events.base import EventHandler
+from src.app.events.base import EventHandler, handles
 from src.app.events.hydration.hydration_cache_invalidation_required_event import (
     HydrationCacheInvalidationRequiredEvent,
 )
 from src.domain.model.hydration import HydrationEntry, DrinkCategory, HydrationSource
 from src.domain.services.hydration_catalog_service import find_by_id
+from src.infra.database.uow_async import AsyncUnitOfWork
 from src.domain.utils.timezone_utils import (
     utc_now,
     noon_utc_for_date,
@@ -20,8 +21,9 @@ from src.domain.utils.timezone_utils import (
 logger = logging.getLogger(__name__)
 
 
+@handles(LogHydrationCommand)
 class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, HydrationEntry]):
-    def __init__(self, uow: Any, event_bus: Any):
+    def __init__(self, uow: AsyncUnitOfWork, event_bus: Any):
         self.uow = uow
         self.event_bus = event_bus
 
@@ -63,7 +65,7 @@ class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, HydrationEntr
                 source=HydrationSource.HYDRATION,
             )
             # Override logged_at with the resolved datetime.
-            # HydrationEntry is NOT frozen, so we assign directly.
+            # Reconstruct with timezone-resolved logged_at
             entry = HydrationEntry(
                 entry_id=prototype.entry_id,
                 user_id=prototype.user_id,

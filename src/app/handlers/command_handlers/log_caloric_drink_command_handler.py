@@ -5,7 +5,7 @@ from typing import Any
 from uuid import uuid4
 
 from src.app.commands.hydration.log_caloric_drink_command import LogCaloricDrinkCommand
-from src.app.events.base import EventHandler
+from src.app.events.base import EventHandler, handles
 from src.app.events.hydration.hydration_cache_invalidation_required_event import (
     HydrationCacheInvalidationRequiredEvent,
 )
@@ -17,6 +17,7 @@ from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.model.nutrition.nutrition import Nutrition
 from src.domain.model.nutrition.macros import Macros
 from src.domain.services.hydration_catalog_service import find_by_id
+from src.infra.database.uow_async import AsyncUnitOfWork
 from src.domain.utils.timezone_utils import (
     utc_now,
     noon_utc_for_date,
@@ -27,8 +28,9 @@ from src.domain.utils.timezone_utils import (
 logger = logging.getLogger(__name__)
 
 
+@handles(LogCaloricDrinkCommand)
 class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
-    def __init__(self, uow: Any, event_bus: Any):
+    def __init__(self, uow: AsyncUnitOfWork, event_bus: Any):
         self.uow = uow
         self.event_bus = event_bus
 
@@ -74,7 +76,7 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
                     fiber=0.0,
                     sugar=round(drink.sugar_per_100ml * volume_factor, 1),
                 ),
-                food_items=[],
+                food_items=None,
             )
 
             # 4. Create Meal (same pattern as CreateManualMealCommandHandler)
