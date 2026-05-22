@@ -60,7 +60,7 @@ class AsyncHydrationRepository(HydrationRepositoryPort):
             select(HydrationLogORM).where(
                 HydrationLogORM.id == entry_id,
                 HydrationLogORM.user_id == user_id,
-                HydrationLogORM.is_deleted == False,  # noqa: E712
+                HydrationLogORM.is_deleted.is_(False),
             )
         )
         db = result.scalars().first()
@@ -82,7 +82,7 @@ class AsyncHydrationRepository(HydrationRepositoryPort):
                 HydrationLogORM.user_id == user_id,
                 HydrationLogORM.logged_at >= start_of_day,
                 HydrationLogORM.logged_at < end_of_day,
-                HydrationLogORM.is_deleted == False,  # noqa: E712
+                HydrationLogORM.is_deleted.is_(False),
             )
             .order_by(HydrationLogORM.logged_at.asc())
         )
@@ -115,7 +115,7 @@ class AsyncHydrationRepository(HydrationRepositoryPort):
                 HydrationLogORM.user_id == user_id,
                 HydrationLogORM.logged_at >= start_of_day,
                 HydrationLogORM.logged_at < end_of_day,
-                HydrationLogORM.is_deleted == False,  # noqa: E712
+                HydrationLogORM.is_deleted.is_(False),
             )
         )
         total = result.scalar()

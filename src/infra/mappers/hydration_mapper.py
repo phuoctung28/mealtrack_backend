@@ -30,4 +30,5 @@ def hydration_entry_domain_to_orm(entry: HydrationEntry) -> HydrationLogORM:
         source=entry.source.value if isinstance(entry.source, HydrationSource) else entry.source,
         meal_id=entry.meal_id,
         logged_at=entry.logged_at,
+        is_deleted=entry.is_deleted,
     )

@@ -1,6 +1,5 @@
 """Hydration log ORM model."""
 
-import sqlalchemy as sa
 from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Index
 
 from src.infra.database.config import Base
@@ -26,7 +25,7 @@ class HydrationLogORM(Base, BaseMixin):
     )
     logged_at = Column(DateTime(timezone=True), nullable=False)
     is_deleted = Column(
-        Boolean, default=False, nullable=False, server_default=sa.text("false")
+        Boolean, default=False, nullable=False, server_default="false"
     )
 
     __table_args__ = (
