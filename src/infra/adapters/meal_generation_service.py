@@ -2,20 +2,21 @@
 Meal generation service implementation using AI Model Manager.
 Provides resilient AI calls with automatic fallback.
 """
-import asyncio
+
 import logging
 from typing import Any
 
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.infra.adapters.async_utils import run_coroutine_blocking
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
 logger = logging.getLogger(__name__)
 
 PURPOSE_MAP = {
     "meal_names": ModelPurpose.MEAL_NAMES,
-    "recipe":     ModelPurpose.RECIPE,
-    "barcode":    ModelPurpose.BARCODE,
-    "general":    ModelPurpose.GENERAL,
+    "recipe": ModelPurpose.RECIPE,
+    "barcode": ModelPurpose.BARCODE,
+    "general": ModelPurpose.GENERAL,
 }
 
 
@@ -54,13 +55,7 @@ class MealGenerationService(MealGenerationServicePort):
         """
         purpose = PURPOSE_MAP.get(model_purpose, ModelPurpose.GENERAL)
 
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        return loop.run_until_complete(
+        return run_coroutine_blocking(
             self._ai_manager.generate(
                 purpose=purpose,
                 prompt=prompt,

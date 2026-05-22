@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import re
@@ -12,6 +11,7 @@ from src.domain.strategies.meal_analysis_strategy import (
     AnalysisStrategyFactory,
     MealAnalysisStrategy,
 )
+from src.infra.adapters.async_utils import run_coroutine_blocking
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
 logger = logging.getLogger(__name__)
@@ -54,14 +54,7 @@ class VisionAIService(VisionAIServicePort):
 
     def _run_async(self, coro):
         """Run async coroutine synchronously."""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_closed():
-                raise RuntimeError("Event loop is closed")
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        return loop.run_until_complete(coro)
+        return run_coroutine_blocking(coro)
 
     def _extract_json_from_response(self, content: str) -> dict[str, Any]:
         """
