@@ -29,3 +29,21 @@ def test_profile_daily_water_goal_round_trips_through_mapper():
     assert orm_obj.daily_water_goal_ml == 2500
     domain_obj = UserProfileMapper.to_domain(orm_obj)
     assert domain_obj.daily_water_goal_ml == 2500
+
+
+def test_resolve_goal_uses_weight_formula_when_no_override():
+    from src.domain.services.hydration_goal_service import resolve_hydration_goal_ml
+    profile = _make_profile(weight_kg=70.0, daily_water_goal_ml=None)
+    assert resolve_hydration_goal_ml(profile) == round(35 * 70.0)  # 2450
+
+
+def test_resolve_goal_uses_override_when_set():
+    from src.domain.services.hydration_goal_service import resolve_hydration_goal_ml
+    profile = _make_profile(weight_kg=70.0, daily_water_goal_ml=3000)
+    assert resolve_hydration_goal_ml(profile) == 3000
+
+
+def test_resolve_goal_weight_formula_rounds():
+    from src.domain.services.hydration_goal_service import resolve_hydration_goal_ml
+    profile = _make_profile(weight_kg=71.3, daily_water_goal_ml=None)
+    assert resolve_hydration_goal_ml(profile) == round(35 * 71.3)

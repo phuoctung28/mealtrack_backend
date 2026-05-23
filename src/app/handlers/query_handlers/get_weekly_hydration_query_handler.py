@@ -10,6 +10,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.hydration.get_weekly_hydration_query import GetWeeklyHydrationQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.ports.cache_port import CachePort
+from src.domain.services.hydration_goal_service import resolve_hydration_goal_ml
 from src.domain.utils.timezone_utils import get_zone_info, resolve_user_timezone_async
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -45,18 +46,12 @@ class GetWeeklyHydrationQueryHandler(EventHandler[GetWeeklyHydrationQuery, dict]
                 if cached is not None:
                     return cached
 
-            # Fetch user goal (default 2000 ml)
             goal_ml = 2000
             try:
                 from uuid import UUID
                 user_profile = await uow.users.get_profile(UUID(query.user_id))
-                if (
-                    user_profile
-                    and hasattr(user_profile, "daily_water_goal_ml")
-                    and user_profile.daily_water_goal_ml is not None
-                    and user_profile.daily_water_goal_ml > 0
-                ):
-                    goal_ml = user_profile.daily_water_goal_ml
+                if user_profile:
+                    goal_ml = resolve_hydration_goal_ml(user_profile)
             except Exception:
                 logger.debug("Could not fetch user profile for water goal; defaulting to 2000 ml", exc_info=True)
 
