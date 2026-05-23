@@ -120,6 +120,7 @@ async def update_notification_preferences(
             user_id=user_id,
             meal_reminders_enabled=request.meal_reminders_enabled,
             daily_summary_enabled=request.daily_summary_enabled,
+            hydration_reminders_enabled=request.hydration_reminders_enabled,
             breakfast_time_minutes=request.breakfast_time_minutes,
             lunch_time_minutes=request.lunch_time_minutes,
             dinner_time_minutes=request.dinner_time_minutes,
