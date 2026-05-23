@@ -55,6 +55,14 @@ NOTIFICATION_MESSAGES = {
                     "body": "Last day, bro — trial ends tomorrow\nKeep your progress going 🔥",
                 },
             },
+            "hydration_reminder": {
+                "afternoon": {
+                    "body_template": "Halfway there, bro! {consumed_ml}ml down, {remaining_ml}ml to go\nStay hydrated 💧",
+                },
+                "evening": {
+                    "body_template": "Almost there, bro! {consumed_ml}ml logged today\nJust {remaining_ml}ml left to hit your goal 💧",
+                },
+            },
         },
         "female": {
             "meal_reminder": {
@@ -93,6 +101,14 @@ NOTIFICATION_MESSAGES = {
                 "1d": {
                     "title": "Nutree",
                     "body": "Last day, mate — trial ends tomorrow\nKeep your progress going 🔥",
+                },
+            },
+            "hydration_reminder": {
+                "afternoon": {
+                    "body_template": "Halfway there, mate! {consumed_ml}ml down, {remaining_ml}ml to go\nStay hydrated 💧",
+                },
+                "evening": {
+                    "body_template": "Almost there, mate! {consumed_ml}ml logged today\nJust {remaining_ml}ml left to hit your goal 💧",
                 },
             },
         },
@@ -137,6 +153,14 @@ NOTIFICATION_MESSAGES = {
                     "body": "Mai hết trial rồi bro\nĐừng để mất tiến độ nha 🔥",
                 },
             },
+            "hydration_reminder": {
+                "afternoon": {
+                    "body_template": "Giữa ngày rồi bro! Uống thêm {remaining_ml}ml nữa nhé\nHôm nay uống được {consumed_ml}ml rồi đó 💧",
+                },
+                "evening": {
+                    "body_template": "Chiều tà rồi bro! Còn {remaining_ml}ml nữa là đủ nước\nCố lên nha 💧",
+                },
+            },
         },
         "female": {
             "meal_reminder": {
@@ -175,6 +199,14 @@ NOTIFICATION_MESSAGES = {
                 "1d": {
                     "title": "Nutree",
                     "body": "Mai hết trial rồi bạn ơi\nĐừng để mất tiến độ nha 🔥",
+                },
+            },
+            "hydration_reminder": {
+                "afternoon": {
+                    "body_template": "Giữa ngày rồi bạn ơi! Uống thêm {remaining_ml}ml nữa nhé\nHôm nay uống được {consumed_ml}ml rồi đó 💧",
+                },
+                "evening": {
+                    "body_template": "Chiều tà rồi bạn ơi! Còn {remaining_ml}ml nữa là đủ nước\nCố lên nha 💧",
                 },
             },
         },

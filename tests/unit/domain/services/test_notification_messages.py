@@ -42,3 +42,27 @@ def test_trial_expiry_vi_contains_vietnamese_phrasing():
 def test_trial_expiry_en_female_uses_mate():
     msgs = get_messages("en", "female")
     assert "mate" in msgs["trial_expiry"]["2d"]["body"]
+
+
+@pytest.mark.parametrize(
+    "lang,gender",
+    [
+        ("en", "male"),
+        ("en", "female"),
+        ("vi", "male"),
+        ("vi", "female"),
+    ],
+)
+def test_hydration_reminder_keys_exist(lang, gender):
+    msgs = get_messages(lang, gender)
+    assert "hydration_reminder" in msgs
+    assert "afternoon" in msgs["hydration_reminder"]
+    assert "evening" in msgs["hydration_reminder"]
+    assert msgs["hydration_reminder"]["afternoon"]["body_template"]
+    assert msgs["hydration_reminder"]["evening"]["body_template"]
+
+
+def test_hydration_type_enum_values_exist():
+    from src.domain.model.notification.enums import NotificationType
+    assert NotificationType.HYDRATION_REMINDER_AFTERNOON.value == "hydration_reminder_afternoon"
+    assert NotificationType.HYDRATION_REMINDER_EVENING.value == "hydration_reminder_evening"

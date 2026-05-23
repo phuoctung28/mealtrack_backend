@@ -16,6 +16,8 @@ NOTIFICATION_TYPE_TO_FIELD = {
     NotificationType.MEAL_REMINDER_LUNCH: "meal_reminders_enabled",
     NotificationType.MEAL_REMINDER_DINNER: "meal_reminders_enabled",
     NotificationType.DAILY_SUMMARY: "daily_summary_enabled",
+    NotificationType.HYDRATION_REMINDER_AFTERNOON: "hydration_reminders_enabled",
+    NotificationType.HYDRATION_REMINDER_EVENING: "hydration_reminders_enabled",
 }
 
 

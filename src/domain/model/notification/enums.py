@@ -22,6 +22,8 @@ class NotificationType(Enum):
     MEAL_REMINDER_LUNCH = "meal_reminder_lunch"
     MEAL_REMINDER_DINNER = "meal_reminder_dinner"
     DAILY_SUMMARY = "daily_summary"
+    HYDRATION_REMINDER_AFTERNOON = "hydration_reminder_afternoon"
+    HYDRATION_REMINDER_EVENING = "hydration_reminder_evening"
 
     def __str__(self):
         return self.value
