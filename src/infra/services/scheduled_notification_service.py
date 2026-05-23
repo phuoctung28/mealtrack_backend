@@ -216,9 +216,12 @@ class ScheduledNotificationService:
         ]
         hydration_map: dict[str, tuple[int, int]] = {}
         if hydration_user_ids:
-            hydration_map = await asyncio.to_thread(
-                _fetch_hydration_data_batch, hydration_user_ids, now
-            )
+            try:
+                hydration_map = await asyncio.to_thread(
+                    _fetch_hydration_data_batch, hydration_user_ids, now
+                )
+            except Exception as exc:
+                logger.warning("Failed to fetch hydration data batch: %s", exc)
 
         # Render messages per notification and group by (type, title, body)
         groups: dict[tuple[str, str, str], dict[str, list[str]]] = defaultdict(
@@ -524,7 +527,7 @@ def _fetch_hydration_data_batch(
                   AND is_deleted = false
                 GROUP BY user_id
             """),
-            {"ids": user_ids, "start": window_start.replace(tzinfo=None)},
+            {"ids": user_ids, "start": window_start},
         ).fetchall()
 
         consumed_by_user = {r.user_id: int(r.consumed_ml) for r in hydration_rows}
@@ -535,7 +538,8 @@ def _fetch_hydration_data_batch(
         if profile is None:
             result[user_id] = (0, 2000)
             continue
-        goal_ml = profile.daily_water_goal_ml or round(35 * float(profile.weight_kg))
+        weight = float(profile.weight_kg) if profile.weight_kg else 70.0
+        goal_ml = profile.daily_water_goal_ml or round(35 * weight)
         consumed_ml = consumed_by_user.get(user_id, 0)
         result[user_id] = (consumed_ml, goal_ml)
 
