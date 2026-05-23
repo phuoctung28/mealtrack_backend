@@ -1,5 +1,6 @@
-from src.domain.model.user.core_user import UserProfileDomainModel
 import uuid
+
+from src.domain.model.user.core_user import UserProfileDomainModel
 
 
 def _make_profile(**kwargs) -> UserProfileDomainModel:
@@ -18,3 +19,13 @@ def _make_profile(**kwargs) -> UserProfileDomainModel:
 def test_profile_daily_water_goal_defaults_to_none():
     profile = _make_profile()
     assert profile.daily_water_goal_ml is None
+
+
+def test_profile_daily_water_goal_round_trips_through_mapper():
+    """Verify daily_water_goal_ml persists correctly through to_persistence and to_domain."""
+    from src.infra.mappers.user_mapper import UserProfileMapper
+    profile = _make_profile(daily_water_goal_ml=2500)
+    orm_obj = UserProfileMapper.to_persistence(profile)
+    assert orm_obj.daily_water_goal_ml == 2500
+    domain_obj = UserProfileMapper.to_domain(orm_obj)
+    assert domain_obj.daily_water_goal_ml == 2500

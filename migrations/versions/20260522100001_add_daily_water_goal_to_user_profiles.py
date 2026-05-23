@@ -17,7 +17,13 @@ def upgrade() -> None:
         "user_profiles",
         sa.Column("daily_water_goal_ml", sa.Integer, nullable=True),
     )
+    op.create_check_constraint(
+        "check_water_goal_positive",
+        "user_profiles",
+        "daily_water_goal_ml IS NULL OR daily_water_goal_ml > 0",
+    )
 
 
 def downgrade() -> None:
+    op.drop_constraint("check_water_goal_positive", "user_profiles", type_="check")
     op.drop_column("user_profiles", "daily_water_goal_ml")
