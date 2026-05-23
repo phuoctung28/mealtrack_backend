@@ -1,6 +1,7 @@
 """Cache invalidation handler for hydration mutations."""
 
 import logging
+from datetime import timedelta
 
 from src.app.events.base import EventHandler, handles
 from src.app.events.hydration.hydration_cache_invalidation_required_event import (
@@ -42,3 +43,10 @@ class HydrationCacheInvalidationEventHandler(
             await self.cache.invalidate_pattern(activities_pattern)
         except Exception as exc:
             logger.warning("Cache pattern invalidation failed for %s: %s", activities_pattern, exc)
+
+        week_start = hydration_date - timedelta(days=hydration_date.weekday())
+        weekly_key, _ = CacheKeys.weekly_hydration(user_id, week_start)
+        try:
+            await self.cache.invalidate(weekly_key)
+        except Exception as exc:
+            logger.warning("Cache invalidation failed for key=%s: %s", weekly_key, exc)

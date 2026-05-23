@@ -17,7 +17,7 @@ from src.app.commands.hydration import (
     LogCaloricDrinkCommand,
     LogHydrationCommand,
 )
-from src.app.queries.hydration import GetDailyHydrationQuery, GetDrinkCatalogQuery
+from src.app.queries.hydration import GetDailyHydrationQuery, GetDrinkCatalogQuery, GetWeeklyHydrationQuery
 from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/hydration", tags=["Hydration"])
@@ -114,6 +114,33 @@ async def get_daily_hydration(
         query = GetDailyHydrationQuery(
             user_id=user_id,
             target_date=target_date,
+            header_timezone=header_timezone,
+        )
+        return await event_bus.send(query)
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.get("/weekly", response_model=None)
+async def get_weekly_hydration(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+    start_date: Optional[str] = Query(None, description="Monday of the week in YYYY-MM-DD format, defaults to current week"),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """Get 7-day hydration chart data."""
+    try:
+        parsed_start = None
+        if start_date:
+            try:
+                parsed_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+            except ValueError as e:
+                raise ValidationException("Invalid date format. Use YYYY-MM-DD") from e
+
+        header_timezone = request.headers.get("X-Timezone")
+        query = GetWeeklyHydrationQuery(
+            user_id=user_id,
+            start_date=parsed_start,
             header_timezone=header_timezone,
         )
         return await event_bus.send(query)

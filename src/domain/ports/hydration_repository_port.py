@@ -70,6 +70,24 @@ class HydrationRepositoryPort(ABC):
         ...
 
     @abstractmethod
+    async def sum_credited_ml_by_date_range(
+        self, user_id: str, start_date: date, end_date: date, user_timezone: str
+    ) -> dict[date, int]:
+        """
+        Return total credited_ml per local calendar date for a date range.
+
+        Args:
+            user_id: The owning user's UUID string.
+            start_date: First local date (inclusive).
+            end_date: Last local date (inclusive).
+            user_timezone: IANA timezone identifier.
+
+        Returns:
+            Mapping of local date → total credited_ml (dates with no entries are absent).
+        """
+        ...
+
+    @abstractmethod
     async def sum_credited_ml_for_date(
         self, user_id: str, target_date: date, user_timezone: str
     ) -> int:

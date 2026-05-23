@@ -41,6 +41,7 @@ from .get_weekly_budget_query_handler import GetWeeklyBudgetQueryHandler
 # Hydration handlers
 from .get_daily_hydration_query_handler import GetDailyHydrationQueryHandler
 from .get_drink_catalog_query_handler import GetDrinkCatalogQueryHandler
+from .get_weekly_hydration_query_handler import GetWeeklyHydrationQueryHandler
 
 __all__ = [
     # TDEE
@@ -73,4 +74,5 @@ __all__ = [
     # Hydration
     "GetDailyHydrationQueryHandler",
     "GetDrinkCatalogQueryHandler",
+    "GetWeeklyHydrationQueryHandler",
 ]

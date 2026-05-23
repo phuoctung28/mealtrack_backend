@@ -16,18 +16,19 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     resolve_user_timezone_async,
     get_zone_info,
+    format_iso_utc,
 )
 
 logger = logging.getLogger(__name__)
 
 
 @handles(LogHydrationCommand)
-class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, HydrationEntry]):
+class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, dict]):
     def __init__(self, uow: AsyncUnitOfWork, event_bus: Any):
         self.uow = uow
         self.event_bus = event_bus
 
-    async def handle(self, cmd: LogHydrationCommand) -> HydrationEntry:
+    async def handle(self, cmd: LogHydrationCommand) -> dict:
         # 1. Validate drink_id exists in catalog and is category "hydration"
         drink = find_by_id(cmd.drink_id)
         if drink is None:
@@ -88,4 +89,15 @@ class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, HydrationEntr
                 hydration_date=log_date,
             )
         )
-        return saved
+        return {
+            "id": saved.entry_id,
+            "drink_id": saved.drink_id,
+            "drink_name": drink.name,
+            "emoji": drink.emoji,
+            "volume_ml": saved.volume_ml,
+            "credited_ml": saved.credited_ml,
+            "kcal": round(drink.kcal_for_volume(saved.volume_ml), 1),
+            "source": saved.source.value if hasattr(saved.source, "value") else saved.source,
+            "meal_id": None,
+            "logged_at": format_iso_utc(saved.logged_at),
+        }

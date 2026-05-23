@@ -100,6 +100,28 @@ class AsyncHydrationRepository(HydrationRepositoryPort):
         )
         return result.rowcount > 0
 
+    async def sum_credited_ml_by_date_range(
+        self, user_id: str, start_date: date, end_date: date, user_timezone: str
+    ) -> dict[date, int]:
+        """Return credited_ml per local date for a date range — single query, grouped in Python."""
+        tz = get_zone_info(user_timezone)
+        start_utc = datetime(start_date.year, start_date.month, start_date.day, tzinfo=tz)
+        end_utc = datetime(end_date.year, end_date.month, end_date.day, tzinfo=tz) + timedelta(days=1)
+
+        result = await self.session.execute(
+            select(HydrationLogORM.logged_at, HydrationLogORM.credited_ml).where(
+                HydrationLogORM.user_id == user_id,
+                HydrationLogORM.logged_at >= start_utc,
+                HydrationLogORM.logged_at < end_utc,
+                HydrationLogORM.is_deleted.is_(False),
+            )
+        )
+        totals: dict[date, int] = {}
+        for logged_at, credited_ml in result.all():
+            local_date = logged_at.astimezone(tz).date()
+            totals[local_date] = totals.get(local_date, 0) + (credited_ml or 0)
+        return totals
+
     async def sum_credited_ml_for_date(
         self, user_id: str, target_date: date, user_timezone: str
     ) -> int:

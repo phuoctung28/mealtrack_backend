@@ -550,9 +550,9 @@ def get_configured_event_bus() -> EventBus:
 
     # Register hydration handlers
     from src.app.commands.hydration import LogHydrationCommand, LogCaloricDrinkCommand, DeleteHydrationEntryCommand
-    from src.app.queries.hydration import GetDailyHydrationQuery, GetDrinkCatalogQuery
+    from src.app.queries.hydration import GetDailyHydrationQuery, GetDrinkCatalogQuery, GetWeeklyHydrationQuery
     from src.app.handlers.command_handlers import LogHydrationCommandHandler, LogCaloricDrinkCommandHandler, DeleteHydrationEntryCommandHandler
-    from src.app.handlers.query_handlers import GetDailyHydrationQueryHandler, GetDrinkCatalogQueryHandler
+    from src.app.handlers.query_handlers import GetDailyHydrationQueryHandler, GetDrinkCatalogQueryHandler, GetWeeklyHydrationQueryHandler
     from src.app.events.hydration import HydrationCacheInvalidationRequiredEvent
     from src.app.handlers.event_handlers.hydration_cache_invalidation_event_handler import HydrationCacheInvalidationEventHandler
 
@@ -561,6 +561,7 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(DeleteHydrationEntryCommand, DeleteHydrationEntryCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus))
     event_bus.register_handler(GetDailyHydrationQuery, GetDailyHydrationQueryHandler(cache_service=cache_service))
     event_bus.register_handler(GetDrinkCatalogQuery, GetDrinkCatalogQueryHandler())
+    event_bus.register_handler(GetWeeklyHydrationQuery, GetWeeklyHydrationQueryHandler(cache_service=cache_service))
 
     # Register saved suggestion handlers
     event_bus.register_handler(

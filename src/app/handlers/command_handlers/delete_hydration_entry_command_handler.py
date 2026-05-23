@@ -67,4 +67,4 @@ class DeleteHydrationEntryCommandHandler(
                     meal_date=log_date,
                 )
             )
-        return True
+        return {"success": True}

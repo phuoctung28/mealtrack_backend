@@ -3,7 +3,7 @@ GetDailyHydrationQueryHandler — cache-aside handler for daily hydration summar
 """
 
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional
 from uuid import UUID
 
@@ -17,6 +17,30 @@ from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
+
+
+def _compute_streak(totals: dict[date, int], today: date, goal_ml: int) -> int:
+    """Count consecutive days ending on/before today where consumed_ml >= goal_ml."""
+    yesterday = today - timedelta(days=1)
+    # Find most recent qualifying day within last 30 days
+    most_recent: date | None = None
+    for days_back in range(31):
+        d = today - timedelta(days=days_back)
+        if totals.get(d, 0) >= goal_ml:
+            most_recent = d
+            break
+    if most_recent is None or most_recent < yesterday:
+        return 0
+    # Count consecutive qualifying days backwards from most_recent
+    streak = 0
+    current = most_recent
+    while current >= today - timedelta(days=30):
+        if totals.get(current, 0) >= goal_ml:
+            streak += 1
+            current -= timedelta(days=1)
+        else:
+            break
+    return streak
 
 
 def _build_entry_dict(entry: HydrationEntry) -> dict:
@@ -82,12 +106,22 @@ class GetDailyHydrationQueryHandler(EventHandler[GetDailyHydrationQuery, dict]):
             consumed_ml = sum(e.credited_ml for e in entries)
             summary = HydrationSummary(consumed_ml=consumed_ml, goal_ml=goal_ml)
 
-            # 6. Build result dict with enriched entries
+            # 6. Compute streak (31-day window, single query)
+            streak_start = target_date - timedelta(days=30)
+            daily_totals = await uow.hydration_logs.sum_credited_ml_by_date_range(
+                query.user_id, streak_start, target_date, user_tz_str
+            )
+            # Merge today's live total in case it differs from cached rows
+            daily_totals[target_date] = consumed_ml
+            streak = _compute_streak(daily_totals, target_date, goal_ml)
+
+            # 7. Build result dict with enriched entries
             result = {
                 "date": target_date.isoformat(),
                 "consumed_ml": summary.consumed_ml,
                 "goal_ml": summary.goal_ml,
                 "percentage": summary.percentage,
+                "streak": streak,
                 "entries": [
                     _build_entry_dict(e) for e in entries
                 ],

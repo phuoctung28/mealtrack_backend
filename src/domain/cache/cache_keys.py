@@ -93,6 +93,14 @@ class CacheKeys:
         )
 
     @staticmethod
+    def weekly_hydration(user_id: str, week_start: date) -> tuple[str, int]:
+        """Cache key for weekly hydration chart. 5min TTL."""
+        return (
+            f"user:{user_id}:hydration_weekly:{week_start.isoformat()}",
+            CacheKeys.TTL_5_MIN,
+        )
+
+    @staticmethod
     def saved_suggestions(user_id: str) -> tuple[str, int]:
         """Cache key for user's saved suggestions. 1h TTL."""
         return (f"user:{user_id}:saved_suggestions", CacheKeys.TTL_1_HOUR)

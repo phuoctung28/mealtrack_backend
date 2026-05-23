@@ -23,6 +23,7 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     resolve_user_timezone_async,
     get_zone_info,
+    format_iso_utc,
 )
 
 logger = logging.getLogger(__name__)
@@ -131,4 +132,15 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
                 hydration_date=log_date,
             )
         )
-        return {"entry_id": saved_entry.entry_id, "meal_id": saved_meal.meal_id}
+        return {
+            "id": saved_entry.entry_id,
+            "meal_id": saved_entry.meal_id,
+            "drink_id": saved_entry.drink_id,
+            "drink_name": drink.name,
+            "emoji": drink.emoji,
+            "volume_ml": saved_entry.volume_ml,
+            "credited_ml": saved_entry.credited_ml,
+            "kcal": round(drink.kcal_for_volume(saved_entry.volume_ml), 1),
+            "source": saved_entry.source.value if hasattr(saved_entry.source, "value") else saved_entry.source,
+            "logged_at": format_iso_utc(saved_entry.logged_at),
+        }
