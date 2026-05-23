@@ -8,4 +8,6 @@ def resolve_hydration_goal_ml(profile: UserProfileDomainModel) -> int:
 
     Uses custom override if set; otherwise 35 ml per kg body weight.
     """
-    return profile.daily_water_goal_ml or round(35 * profile.weight_kg)
+    if profile.daily_water_goal_ml is not None:
+        return profile.daily_water_goal_ml
+    return round(35 * profile.weight_kg)

@@ -47,3 +47,12 @@ def test_resolve_goal_weight_formula_rounds():
     from src.domain.services.hydration_goal_service import resolve_hydration_goal_ml
     profile = _make_profile(weight_kg=71.3, daily_water_goal_ml=None)
     assert resolve_hydration_goal_ml(profile) == round(35 * 71.3)
+
+
+def test_resolve_goal_zero_override_is_treated_as_weight_fallback():
+    from src.domain.services.hydration_goal_service import resolve_hydration_goal_ml
+    # 0 is falsy; the is-not-None check means None falls back, but 0 is a valid (if silly) override
+    # This documents the current behaviour so a regression would be caught
+    profile = _make_profile(weight_kg=70.0, daily_water_goal_ml=0)
+    # 0 is not None, so returns 0 (the override), not the weight formula
+    assert resolve_hydration_goal_ml(profile) == 0

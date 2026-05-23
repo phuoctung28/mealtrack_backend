@@ -5,6 +5,7 @@ GetWeeklyHydrationQueryHandler — 7-day hydration chart data.
 import logging
 from datetime import datetime, date, timedelta
 from typing import Optional
+from uuid import UUID
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.hydration.get_weekly_hydration_query import GetWeeklyHydrationQuery
@@ -48,7 +49,6 @@ class GetWeeklyHydrationQueryHandler(EventHandler[GetWeeklyHydrationQuery, dict]
 
             goal_ml = 2000
             try:
-                from uuid import UUID
                 user_profile = await uow.users.get_profile(UUID(query.user_id))
                 if user_profile:
                     goal_ml = resolve_hydration_goal_ml(user_profile)
