@@ -158,7 +158,7 @@ NOTIFICATION_MESSAGES = {
                     "body_template": "Giữa ngày rồi bro! Uống thêm {remaining_ml}ml nữa nhé\nHôm nay uống được {consumed_ml}ml rồi đó 💧",
                 },
                 "evening": {
-                    "body_template": "Chiều tà rồi bro! Còn {remaining_ml}ml nữa là đủ nước\nCố lên nha 💧",
+                    "body_template": "Chiều tà rồi bro! Uống được {consumed_ml}ml rồi, còn {remaining_ml}ml nữa là đủ nước\nCố lên nha 💧",
                 },
             },
         },
@@ -206,7 +206,7 @@ NOTIFICATION_MESSAGES = {
                     "body_template": "Giữa ngày rồi bạn ơi! Uống thêm {remaining_ml}ml nữa nhé\nHôm nay uống được {consumed_ml}ml rồi đó 💧",
                 },
                 "evening": {
-                    "body_template": "Chiều tà rồi bạn ơi! Còn {remaining_ml}ml nữa là đủ nước\nCố lên nha 💧",
+                    "body_template": "Chiều tà rồi bạn ơi! Uống được {consumed_ml}ml rồi, còn {remaining_ml}ml nữa là đủ nước\nCố lên nha 💧",
                 },
             },
         },

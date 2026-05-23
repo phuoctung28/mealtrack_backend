@@ -1,4 +1,4 @@
-"""Unit tests for notification message templates (trial_expiry)."""
+"""Unit tests for notification message templates (trial_expiry, hydration_reminder)."""
 
 import pytest
 
@@ -58,8 +58,11 @@ def test_hydration_reminder_keys_exist(lang, gender):
     assert "hydration_reminder" in msgs
     assert "afternoon" in msgs["hydration_reminder"]
     assert "evening" in msgs["hydration_reminder"]
-    assert msgs["hydration_reminder"]["afternoon"]["body_template"]
-    assert msgs["hydration_reminder"]["evening"]["body_template"]
+    for slot in ("afternoon", "evening"):
+        tmpl = msgs["hydration_reminder"][slot]["body_template"]
+        assert tmpl, f"{lang}/{gender}/{slot} body_template is empty"
+        assert "{consumed_ml}" in tmpl, f"{lang}/{gender}/{slot} missing {{consumed_ml}}"
+        assert "{remaining_ml}" in tmpl, f"{lang}/{gender}/{slot} missing {{remaining_ml}}"
 
 
 def test_hydration_type_enum_values_exist():
