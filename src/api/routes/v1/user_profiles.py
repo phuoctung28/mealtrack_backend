@@ -207,6 +207,8 @@ async def update_user_metrics(
             target_weight_kg=request.target_weight_kg,
             goal_start_weight_kg=request.goal_start_weight_kg,
             goal_started_at=request.goal_started_at,
+            daily_water_goal_ml=request.daily_water_goal_ml,
+            reset_water_goal=request.reset_water_goal,
         )
 
         await event_bus.send(command)

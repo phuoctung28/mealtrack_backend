@@ -56,3 +56,15 @@ def test_resolve_goal_zero_override_is_treated_as_weight_fallback():
     profile = _make_profile(weight_kg=70.0, daily_water_goal_ml=0)
     # 0 is not None, so returns 0 (the override), not the weight formula
     assert resolve_hydration_goal_ml(profile) == 0
+
+
+def test_update_metrics_command_accepts_water_goal():
+    from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
+    cmd = UpdateUserMetricsCommand(user_id="abc", daily_water_goal_ml=2500)
+    assert cmd.daily_water_goal_ml == 2500
+
+
+def test_update_metrics_command_accepts_reset_flag():
+    from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
+    cmd = UpdateUserMetricsCommand(user_id="abc", reset_water_goal=True)
+    assert cmd.reset_water_goal is True
