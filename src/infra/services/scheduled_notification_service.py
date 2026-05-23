@@ -504,7 +504,12 @@ def _fetch_calories_consumed_batch(
 def _fetch_hydration_data_batch(
     user_ids: list[str], now: datetime
 ) -> dict[str, tuple[int, int]]:
-    """Fetch (consumed_ml, goal_ml) per user for a 24-hour lookback window."""
+    """Fetch (consumed_ml, goal_ml) per user using a 24-hour rolling window.
+
+    Uses a rolling 24h window consistent with _fetch_calories_consumed_batch.
+    This is an approximation — a calendar-day boundary would be more accurate
+    but requires per-user timezone joins. Acceptable for v1 threshold checks.
+    """
     window_start = now - timedelta(hours=24)
     with UnitOfWork() as uow:
         profile_rows = uow.session.execute(

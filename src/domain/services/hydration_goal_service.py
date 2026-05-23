@@ -10,4 +10,5 @@ def resolve_hydration_goal_ml(profile: UserProfileDomainModel) -> int:
     """
     if profile.daily_water_goal_ml is not None:
         return profile.daily_water_goal_ml
-    return round(35 * profile.weight_kg)
+    weight = profile.weight_kg or 70.0
+    return round(35 * weight)
