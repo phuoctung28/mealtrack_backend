@@ -79,8 +79,8 @@ _DRINKS: list[Drink] = [
     ),
     Drink(
         id="coke",
-        name="Coca-Cola",
-        sub="Regular",
+        name="Soda",
+        sub="Soft drink",
         emoji="🥤",
         default_ml=330,
         kcal_per_100ml=42.1,
@@ -91,9 +91,9 @@ _DRINKS: list[Drink] = [
     ),
     Drink(
         id="oj",
-        name="Orange juice",
-        sub="Fresh",
-        emoji="🍊",
+        name="Fruit juice",
+        sub="Fresh pressed",
+        emoji="🧃",
         default_ml=250,
         kcal_per_100ml=44.0,
         sugar_per_100ml=8.8,

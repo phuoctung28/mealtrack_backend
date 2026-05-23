@@ -309,5 +309,5 @@ Soft-delete a hydration entry. If the entry has a linked meal (`source = "calori
 | `coffee` | Coffee | hydration | 250 ml | 0 | 0.80 | null |
 | `electrolyte` | Electrolyte | hydration | 500 ml | 2 | 0.95 | "Sports drink" |
 | `milk-tea` | Milk tea | caloric | 500 ml | 76 | 0.70 | "Boba" |
-| `coke` | Coca-Cola | caloric | 330 ml | 42.1 | 0.80 | "Regular" |
-| `oj` | Orange juice | caloric | 250 ml | 44 | 0.95 | "Fresh" |
+| `coke` | Soda | caloric | 330 ml | 42.1 | 0.80 | "Soft drink" |
+| `oj` | Fruit juice | caloric | 250 ml | 44 | 0.95 | "Fresh pressed" |
