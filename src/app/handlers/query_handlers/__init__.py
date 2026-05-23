@@ -38,6 +38,11 @@ from .search_foods_query_handler import SearchFoodsQueryHandler
 from .get_saved_suggestions_query_handler import GetSavedSuggestionsQueryHandler
 from .get_weekly_budget_query_handler import GetWeeklyBudgetQueryHandler
 
+# Hydration handlers
+from .get_daily_hydration_query_handler import GetDailyHydrationQueryHandler
+from .get_drink_catalog_query_handler import GetDrinkCatalogQueryHandler
+from .get_weekly_hydration_query_handler import GetWeeklyHydrationQueryHandler
+
 __all__ = [
     # TDEE
     "GetUserTdeeQueryHandler",
@@ -66,4 +71,8 @@ __all__ = [
     "GetWeeklyBudgetQueryHandler",
     # Saved suggestion
     "GetSavedSuggestionsQueryHandler",
+    # Hydration
+    "GetDailyHydrationQueryHandler",
+    "GetDrinkCatalogQueryHandler",
+    "GetWeeklyHydrationQueryHandler",
 ]

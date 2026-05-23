@@ -17,6 +17,14 @@ class MacrosResponse(BaseModel):
     sugar: float = Field(0, ge=0, description="Sugar in grams")
 
 
+class HydrationSummaryResponse(BaseModel):
+    """Hydration summary for daily nutrition response."""
+
+    consumed_ml: int = Field(..., description="Water consumed today in ml")
+    goal_ml: int = Field(..., description="Daily water goal in ml")
+    percentage: float = Field(..., description="Percentage of daily goal achieved")
+
+
 class WeeklyContextResponse(BaseModel):
     """Weekly budget context for daily response."""
 
@@ -53,4 +61,7 @@ class DailyNutritionResponse(BaseModel):
     )
     weekly_context: Optional[WeeklyContextResponse] = Field(
         None, description="Weekly budget context"
+    )
+    hydration: Optional[HydrationSummaryResponse] = Field(
+        None, description="Daily hydration summary"
     )

@@ -50,6 +50,11 @@ from .saved_suggestion import (
     DeleteSavedSuggestionCommandHandler,
 )
 
+# Hydration handlers
+from .log_hydration_command_handler import LogHydrationCommandHandler
+from .log_caloric_drink_command_handler import LogCaloricDrinkCommandHandler
+from .delete_hydration_entry_command_handler import DeleteHydrationEntryCommandHandler
+
 __all__ = [
     # Meal handlers
     "EditMealCommandHandler",
@@ -83,4 +88,8 @@ __all__ = [
     # Saved suggestion handlers
     "SaveSuggestionCommandHandler",
     "DeleteSavedSuggestionCommandHandler",
+    # Hydration handlers
+    "LogHydrationCommandHandler",
+    "LogCaloricDrinkCommandHandler",
+    "DeleteHydrationEntryCommandHandler",
 ]

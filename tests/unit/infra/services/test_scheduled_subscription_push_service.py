@@ -1,7 +1,7 @@
 """Unit tests for ScheduledSubscriptionPushService."""
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
@@ -9,7 +9,7 @@ from src.infra.services.scheduled_subscription_push_service import (
     ScheduledSubscriptionPushService,
 )
 
-NOW_UTC = datetime(2026, 5, 17, 5, 0, 0, tzinfo=UTC)
+NOW_UTC = datetime(2026, 5, 17, 5, 0, 0, tzinfo=timezone.utc)
 
 
 def _make_sub(user_id: str, expires_at: datetime, status: str = "active"):
