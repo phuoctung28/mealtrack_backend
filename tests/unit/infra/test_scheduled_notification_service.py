@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
@@ -273,10 +273,8 @@ def test_build_notification_rows_includes_hydration_reminders_when_enabled():
         _DEFAULT_AFTERNOON_MINUTES,
         _DEFAULT_EVENING_MINUTES,
     )
-    from datetime import date
 
     svc = DailyContextPrecomputeService.__new__(DailyContextPrecomputeService)
-    from unittest.mock import MagicMock
     svc._tdee_service = MagicMock()
 
     pref = MagicMock()
@@ -307,8 +305,6 @@ def test_build_notification_rows_includes_hydration_reminders_when_enabled():
 
 def test_build_notification_rows_skips_hydration_when_disabled():
     from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
-    from datetime import date
-    from unittest.mock import MagicMock
 
     svc = DailyContextPrecomputeService.__new__(DailyContextPrecomputeService)
     svc._tdee_service = MagicMock()
