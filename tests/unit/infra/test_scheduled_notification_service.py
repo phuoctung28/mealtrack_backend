@@ -265,3 +265,71 @@ async def test_send_due_trial_skips_redis_lookup(caplog):
             )
 
     assert "Redis cache miss" not in caplog.text
+
+
+def test_build_notification_rows_includes_hydration_reminders_when_enabled():
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+        _DEFAULT_AFTERNOON_MINUTES,
+        _DEFAULT_EVENING_MINUTES,
+    )
+    from datetime import date
+
+    svc = DailyContextPrecomputeService.__new__(DailyContextPrecomputeService)
+    from unittest.mock import MagicMock
+    svc._tdee_service = MagicMock()
+
+    pref = MagicMock()
+    pref.user_id = "user-1"
+    pref.meal_reminders_enabled = False
+    pref.daily_summary_enabled = False
+    pref.hydration_reminders_enabled = True
+    pref.language = "en"
+
+    tokens_by_user = {"user-1": ["tok1"]}
+    profiles_by_user = {"user-1": MagicMock(gender="male", language_code="en")}
+    today = date(2026, 5, 23)
+
+    rows = svc._build_notification_rows(
+        pref_rows=[pref],
+        tokens_by_user=tokens_by_user,
+        calorie_goals={"user-1": 2000},
+        consumed_by_user={"user-1": 0},
+        profiles_by_user=profiles_by_user,
+        today=today,
+        tz_name="UTC",
+    )
+
+    types = [r["notification_type"] for r in rows]
+    assert "hydration_reminder_afternoon" in types
+    assert "hydration_reminder_evening" in types
+
+
+def test_build_notification_rows_skips_hydration_when_disabled():
+    from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
+    from datetime import date
+    from unittest.mock import MagicMock
+
+    svc = DailyContextPrecomputeService.__new__(DailyContextPrecomputeService)
+    svc._tdee_service = MagicMock()
+
+    pref = MagicMock()
+    pref.user_id = "user-2"
+    pref.meal_reminders_enabled = False
+    pref.daily_summary_enabled = False
+    pref.hydration_reminders_enabled = False
+    pref.language = "en"
+
+    rows = svc._build_notification_rows(
+        pref_rows=[pref],
+        tokens_by_user={"user-2": ["tok1"]},
+        calorie_goals={"user-2": 2000},
+        consumed_by_user={"user-2": 0},
+        profiles_by_user={"user-2": MagicMock(gender="male", language_code="en")},
+        today=date(2026, 5, 23),
+        tz_name="UTC",
+    )
+
+    types = [r["notification_type"] for r in rows]
+    assert "hydration_reminder_afternoon" not in types
+    assert "hydration_reminder_evening" not in types

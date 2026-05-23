@@ -31,6 +31,8 @@ _DEFAULT_BREAKFAST_MINUTES = 510  # 08:30
 _DEFAULT_LUNCH_MINUTES = 690  # 11:30
 _DEFAULT_DINNER_MINUTES = 1_080  # 18:00
 _DEFAULT_SUMMARY_MINUTES = 1_260  # 21:00
+_DEFAULT_AFTERNOON_MINUTES = 780   # 13:00
+_DEFAULT_EVENING_MINUTES = 1_080   # 18:00
 
 
 class DailyContextPrecomputeService:
@@ -169,6 +171,7 @@ class DailyContextPrecomputeService:
             pref_row = session.execute(
                 text("""
                     SELECT meal_reminders_enabled, daily_summary_enabled,
+                           hydration_reminders_enabled,
                            breakfast_time_minutes, lunch_time_minutes,
                            dinner_time_minutes, daily_summary_time_minutes, language
                     FROM notification_preferences
@@ -318,6 +321,32 @@ class DailyContextPrecomputeService:
                         }
                     )
 
+            if pref_row.hydration_reminders_enabled:
+                hydration_context = {
+                    "fcm_tokens": tokens,
+                    "gender": gender,
+                    "language_code": language_code,
+                }
+                for notif_type, local_minutes in [
+                    ("hydration_reminder_afternoon", _DEFAULT_AFTERNOON_MINUTES),
+                    ("hydration_reminder_evening", _DEFAULT_EVENING_MINUTES),
+                ]:
+                    scheduled_utc = _local_minutes_to_utc(today, local_minutes, tz_name)
+                    if scheduled_utc and scheduled_utc > now:
+                        rows.append(
+                            {
+                                "id": str(uuid.uuid4()),
+                                "user_id": user_id,
+                                "notification_type": notif_type,
+                                "scheduled_date": today,
+                                "scheduled_for_utc": scheduled_utc,
+                                "status": "pending",
+                                "context": hydration_context,
+                                "created_at": now,
+                                "expires_at": expires_at,
+                            }
+                        )
+
             # Insert new notifications (upsert to handle race conditions)
             if rows:
                 stmt = pg_insert(NotificationORM).values(rows)
@@ -405,6 +434,7 @@ class DailyContextPrecomputeService:
                         np.user_id,
                         np.meal_reminders_enabled,
                         np.daily_summary_enabled,
+                        np.hydration_reminders_enabled,
                         np.breakfast_time_minutes,
                         np.lunch_time_minutes,
                         np.dinner_time_minutes,
@@ -643,6 +673,33 @@ class DailyContextPrecomputeService:
                             "scheduled_for_utc": scheduled_utc,
                             "status": "pending",
                             "context": context,
+                            "created_at": now,
+                            "expires_at": expires_at,
+                        }
+                    )
+
+            if pref.hydration_reminders_enabled:
+                hydration_context = {
+                    "fcm_tokens": tokens,
+                    "gender": gender,
+                    "language_code": language_code,
+                }
+                for notif_type, local_minutes in [
+                    ("hydration_reminder_afternoon", _DEFAULT_AFTERNOON_MINUTES),
+                    ("hydration_reminder_evening", _DEFAULT_EVENING_MINUTES),
+                ]:
+                    scheduled_utc = _local_minutes_to_utc(today, local_minutes, tz_name)
+                    if scheduled_utc is None:
+                        continue
+                    rows.append(
+                        {
+                            "id": str(uuid.uuid4()),
+                            "user_id": user_id,
+                            "notification_type": notif_type,
+                            "scheduled_date": today,
+                            "scheduled_for_utc": scheduled_utc,
+                            "status": "pending",
+                            "context": hydration_context,
                             "created_at": now,
                             "expires_at": expires_at,
                         }
