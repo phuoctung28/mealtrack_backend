@@ -22,7 +22,6 @@
 | `brand_color` | `string` | Hex color for UI |
 | `category` | `"hydration" \| "caloric"` | Determines which log endpoint to use — **not** kcal |
 
-> **Note on `coke-zero`:** It has `category: "caloric"` even though `kcal_per_100ml = 0`. Use `category`, not `kcal`, to decide which endpoint to call. This is intentional — category determines log behavior.
 
 ```json
 {
@@ -96,7 +95,7 @@ Returns all drinks in the catalog. No body, no query params.
       "brand_color": "#3B82F6",
       "category": "hydration"
     }
-    // ... 12 more
+    // ... 6 more
   ]
 }
 ```
@@ -301,18 +300,14 @@ Soft-delete a hydration entry. If the entry has a linked meal (`source = "calori
 
 ## Drink Catalog
 
-| `id` | Name | Category | Default | kcal/100ml | `sub` |
-|------|------|----------|---------|------------|-------|
-| `water` | Water | hydration | 250 ml | 0 | null |
-| `sparkling` | Sparkling water | hydration | 250 ml | 0 | null |
-| `tea` | Tea | hydration | 250 ml | 0 | null |
-| `coffee` | Coffee | hydration | 250 ml | 0 | null |
-| `electrolyte` | Electrolyte | hydration | 500 ml | 2 | "Sports drink" |
-| `milk-tea` | Milk tea | caloric | 500 ml | 76 | "Boba" |
-| `coke` | Coca-Cola | caloric | 330 ml | 42.1 | "Regular" |
-| `coke-zero` | Coke Zero | caloric | 330 ml | 0 | "Diet" |
-| `oj` | Orange juice | caloric | 250 ml | 44 | "Fresh" |
-| `iced-latte` | Iced latte | caloric | 350 ml | 37.1 | "Café · milk" |
-| `smoothie` | Smoothie | caloric | 400 ml | 62.5 | "Açaí blend" |
-| `energy` | Energy drink | caloric | 250 ml | 44 | "Red Bull" |
-| `beer` | Beer | caloric | 330 ml | 45.5 | "Lager · 5%" |
+7 drinks total (4 hydration, 3 caloric).
+
+| `id` | Name | Category | Default | kcal/100ml | hydration_weight | `sub` |
+|------|------|----------|---------|------------|-----------------|-------|
+| `water` | Water | hydration | 250 ml | 0 | 1.00 | null |
+| `tea` | Tea | hydration | 250 ml | 0 | 0.90 | null |
+| `coffee` | Coffee | hydration | 250 ml | 0 | 0.80 | null |
+| `electrolyte` | Electrolyte | hydration | 500 ml | 2 | 0.95 | "Sports drink" |
+| `milk-tea` | Milk tea | caloric | 500 ml | 76 | 0.70 | "Boba" |
+| `coke` | Coca-Cola | caloric | 330 ml | 42.1 | 0.80 | "Regular" |
+| `oj` | Orange juice | caloric | 250 ml | 44 | 0.95 | "Fresh" |
