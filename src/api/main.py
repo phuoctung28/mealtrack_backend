@@ -44,6 +44,7 @@ from src.api.routes.v1.cheat_days import router as cheat_days_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
 from src.api.routes.v1.health import router as health_router
+from src.api.routes.v1.hydration import router as hydration_router
 from src.api.routes.v1.ingredients import router as ingredients_router
 from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
 from src.api.routes.v1.meals import router as meals_router
@@ -294,6 +295,7 @@ app.include_router(foods_router)
 app.include_router(monitoring_router)
 app.include_router(webhooks_router)
 app.include_router(notifications_router)
+app.include_router(hydration_router)
 app.include_router(ingredients_router)
 app.include_router(tdee_router)
 app.include_router(saved_suggestions_router)

@@ -358,6 +358,7 @@ class MealMapper:
         from src.api.schemas.response.daily_nutrition_response import (
             MacrosResponse,
             WeeklyContextResponse,
+            HydrationSummaryResponse,
         )
         from src.api.exceptions import ResourceNotFoundException
 
@@ -437,6 +438,16 @@ class MealMapper:
                 remaining_days=wc.get("remaining_days", 7),
             )
 
+        # Parse hydration summary if present
+        hydration_data = daily_macros_data.get("hydration")
+        hydration = None
+        if hydration_data:
+            hydration = HydrationSummaryResponse(
+                consumed_ml=hydration_data.get("consumed_ml", 0),
+                goal_ml=hydration_data.get("goal_ml", 2000),
+                percentage=hydration_data.get("percentage", 0.0),
+            )
+
         return DailyNutritionResponse(
             date=daily_macros_data.get("date", ""),
             target_calories=target_calories,
@@ -447,4 +458,5 @@ class MealMapper:
             remaining_macros=remaining_macros,
             completion_percentage=completion_percentage,
             weekly_context=weekly_context,
+            hydration=hydration,
         )

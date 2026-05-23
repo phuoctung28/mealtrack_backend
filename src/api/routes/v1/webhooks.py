@@ -7,7 +7,7 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select, text
@@ -485,7 +485,7 @@ def parse_timestamp(ms: int | None) -> datetime | None:
     if ms is None:
         return None
     try:
-        return datetime.fromtimestamp(ms / 1000, tz=UTC)
+        return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
     except Exception as e:
         logger.error(f"Error parsing timestamp {ms}: {e}")
         return None

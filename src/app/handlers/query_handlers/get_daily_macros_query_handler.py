@@ -6,6 +6,7 @@ Auto-extracted for better maintainability.
 import logging
 from datetime import date, datetime, timedelta
 from typing import Dict, Any, Optional
+from uuid import UUID
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetDailyMacrosQuery
@@ -95,6 +96,23 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 query.user_id, week_start
             )
 
+            # Fetch hydration summary
+            try:
+                consumed_water_ml = await uow.hydration_logs.sum_credited_ml_for_date(
+                    query.user_id, target_date, user_tz_str
+                )
+                # Get water goal from profile (default 2000 if not set)
+                user_profile = await uow.users.get_profile(UUID(query.user_id))
+                water_goal_ml = (
+                    user_profile.daily_water_goal_ml
+                    if user_profile and hasattr(user_profile, "daily_water_goal_ml") and user_profile.daily_water_goal_ml is not None and user_profile.daily_water_goal_ml > 0
+                    else 2000
+                )
+            except Exception as exc:
+                logger.warning("Failed to fetch hydration data for user %s: %s", query.user_id, exc)
+                consumed_water_ml = 0
+                water_goal_ml = 2000
+
         # TDEE lookup — behind Redis cache, rarely opens DB
         target_calories = None
         target_macros = None
@@ -156,6 +174,16 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             )
             if weekly_context:
                 result["weekly_context"] = weekly_context
+
+        result["hydration"] = {
+            "consumed_ml": consumed_water_ml,
+            "goal_ml": water_goal_ml,
+            "percentage": (
+                min(100.0, round(consumed_water_ml / water_goal_ml * 100, 1))
+                if water_goal_ml > 0
+                else 0.0
+            ),
+        }
 
         await self._write_cache(query.user_id, target_date, result)
         return result

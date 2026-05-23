@@ -11,6 +11,8 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
+from src.domain.model.hydration import HydrationSource
+from src.domain.services.hydration_catalog_service import find_by_id as find_drink_by_id
 from src.domain.utils.timezone_utils import (
     format_iso_utc,
     get_zone_info,
@@ -59,6 +61,15 @@ class GetDailyActivitiesQueryHandler(
             f"Found {len(meal_activities)} meal activities for user {query.user_id} on date {query.target_date.strftime('%Y-%m-%d')}"
         )
         activities.extend(meal_activities)
+
+        # Get hydration activities
+        hydration_activities = await self._get_hydration_activities(
+            query.target_date, query.user_id, header_timezone=query.header_timezone
+        )
+        logger.info(
+            f"Found {len(hydration_activities)} hydration activities for user {query.user_id} on date {query.target_date.strftime('%Y-%m-%d')}"
+        )
+        activities.extend(hydration_activities)
 
         # Get workout activities (placeholder for now)
         workout_activities = self._get_workout_activities(
@@ -198,6 +209,63 @@ class GetDailyActivitiesQueryHandler(
                 estimated_weight = first_food.quantity
 
         return estimated_weight
+
+    async def _get_hydration_activities(
+        self,
+        target_date: datetime,
+        user_id: str,
+        header_timezone: str = None,
+    ) -> List[Dict[str, Any]]:
+        """Get pure-water hydration activities for a specific date and user."""
+        try:
+            async with AsyncUnitOfWork() as uow:
+                # Resolve user timezone (DB → X-Timezone header → UTC)
+                user_tz_str = await resolve_user_timezone_async(
+                    user_id, uow, header_timezone
+                )
+
+                # Convert target_date to user-local date
+                tz = get_zone_info(user_tz_str)
+                if target_date.tzinfo is None:
+                    date_obj = target_date.date()
+                else:
+                    date_obj = target_date.astimezone(tz).date()
+
+                entries = await uow.hydration_logs.find_by_date(
+                    user_id, date_obj, user_tz_str
+                )
+
+                hydration_activities = []
+                for entry in entries:
+                    # Only include pure water logs; caloric drinks appear in meal activities
+                    entry_source = (
+                        entry.source.value
+                        if hasattr(entry.source, "value")
+                        else entry.source
+                    )
+                    if entry_source not in (HydrationSource.HYDRATION, "hydration"):
+                        continue
+
+                    drink = find_drink_by_id(entry.drink_id) if entry.drink_id else None
+                    hydration_activities.append(
+                        {
+                            "id": entry.entry_id,
+                            "type": "hydration",
+                            "timestamp": format_iso_utc(entry.logged_at),
+                            "title": drink.name if drink else "Water",
+                            "emoji": drink.emoji if drink else "💧",
+                            "volume_ml": entry.volume_ml,
+                            "credited_ml": entry.credited_ml,
+                            "calories": 0,
+                            "source": entry_source,
+                        }
+                    )
+
+                return hydration_activities
+
+        except Exception as e:
+            logger.error(f"Error getting hydration activities: {str(e)}", exc_info=True)
+            return []
 
     def _get_workout_activities(
         self, target_date: datetime, user_id: str

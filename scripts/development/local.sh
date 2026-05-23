@@ -61,7 +61,11 @@ fi
 echo "Running database setup..."
 python3 scripts/init_postgres_db.py
 
-# ── 5. Start app ──────────────────────────────────────────────────────────────
+# ── 5. Migrations ─────────────────────────────────────────────────────────────
+echo "Running Alembic migrations..."
+alembic upgrade head
+
+# ── 6. Start app ──────────────────────────────────────────────────────────────
 echo ""
 echo "Ready! Starting at http://localhost:8000"
 echo "Docs at http://localhost:8000/docs"
