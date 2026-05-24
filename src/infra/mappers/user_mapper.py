@@ -92,6 +92,7 @@ class UserProfileMapper:
             custom_fat_g=profile_entity.custom_fat_g,
             goal_start_weight_kg=profile_entity.goal_start_weight_kg,
             goal_started_at=profile_entity.goal_started_at,
+            daily_water_goal_ml=profile_entity.daily_water_goal_ml,
             created_at=profile_entity.created_at,
             updated_at=profile_entity.updated_at,
         )
@@ -129,4 +130,5 @@ class UserProfileMapper:
             custom_fat_g=profile_domain.custom_fat_g,
             goal_start_weight_kg=profile_domain.goal_start_weight_kg,
             goal_started_at=profile_domain.goal_started_at,
+            daily_water_goal_ml=profile_domain.daily_water_goal_ml,
         )

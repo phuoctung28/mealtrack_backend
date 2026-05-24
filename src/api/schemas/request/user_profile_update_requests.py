@@ -59,3 +59,9 @@ class UpdateMetricsRequest(BaseModel):
     goal_started_at: datetime | None = Field(
         None, description="Timestamp when goal journey started"
     )
+    daily_water_goal_ml: int | None = Field(
+        None, gt=0, description="Custom daily water goal in ml (null = use weight-based formula)"
+    )
+    reset_water_goal: bool = Field(
+        False, description="Reset daily water goal to weight-based calculation (35 ml/kg)"
+    )
