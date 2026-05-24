@@ -65,6 +65,7 @@ class UserProfile(Base, BaseMixin):
     # Goal progress tracking — tracks when user started current goal journey
     goal_start_weight_kg = Column(Float, nullable=True, default=None)
     goal_started_at = Column(DateTime(timezone=True), nullable=True, default=None)
+    daily_water_goal_ml = Column(Integer, nullable=True, default=None)
 
     @property
     def has_custom_macros(self) -> bool:
@@ -100,6 +101,10 @@ class UserProfile(Base, BaseMixin):
             name="check_body_fat_range",
         ),
         Index("idx_user_current", "user_id", "is_current"),
+        CheckConstraint(
+            "daily_water_goal_ml IS NULL OR daily_water_goal_ml > 0",
+            name="check_water_goal_positive",
+        ),
     )
 
     # Relationships

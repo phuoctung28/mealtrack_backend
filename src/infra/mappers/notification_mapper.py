@@ -42,6 +42,7 @@ def notification_prefs_orm_to_domain(
         user_id=orm.user_id,
         meal_reminders_enabled=orm.meal_reminders_enabled,
         daily_summary_enabled=orm.daily_summary_enabled,
+        hydration_reminders_enabled=orm.hydration_reminders_enabled,
         breakfast_time_minutes=orm.breakfast_time_minutes,
         lunch_time_minutes=orm.lunch_time_minutes,
         dinner_time_minutes=orm.dinner_time_minutes,

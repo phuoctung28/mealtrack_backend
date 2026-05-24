@@ -210,6 +210,19 @@ class ScheduledNotificationService:
                 _fetch_calories_consumed_batch, meal_reminder_ids, now
             )
 
+        hydration_user_ids = [
+            n.user_id for n in due
+            if n.notification_type.startswith("hydration_reminder")
+        ]
+        hydration_map: dict[str, tuple[int, int]] = {}
+        if hydration_user_ids:
+            try:
+                hydration_map = await asyncio.to_thread(
+                    _fetch_hydration_data_batch, hydration_user_ids, now
+                )
+            except Exception as exc:
+                logger.warning("Failed to fetch hydration data batch: %s", exc)
+
         # Render messages per notification and group by (type, title, body)
         groups: dict[tuple[str, str, str], dict[str, list[str]]] = defaultdict(
             lambda: {"tokens": [], "ids": []}
@@ -233,6 +246,28 @@ class ScheduledNotificationService:
                 calories_consumed = int(ctx.get("calories_consumed", 0))
             elif notif.notification_type.startswith("trial_expiry"):
                 calories_consumed = 0
+            elif notif.notification_type.startswith("hydration_reminder"):
+                consumed_ml, goal_ml = hydration_map.get(notif.user_id, (0, 2000))
+                threshold = 0.5 if "afternoon" in notif.notification_type else 0.8
+                if consumed_ml >= threshold * goal_ml:
+                    # User is on track — mark as sent without FCM
+                    sent_ids.append(notif.id)
+                    continue
+                remaining_ml = max(0, goal_ml - consumed_ml)
+                title, body = _render_message(
+                    notif.notification_type,
+                    0,
+                    gender,
+                    lang,
+                    consumed_ml=consumed_ml,
+                    goal_ml=goal_ml,
+                    remaining_ml=remaining_ml,
+                )
+                group = groups[(notif.notification_type, title, body)]
+                group["tokens"].extend(tokens)
+                group["ids"].append(str(notif.id))
+                sent_ids.append(notif.id)
+                continue
             else:
                 # meal_reminder_* — real-time DB data
                 calories_consumed = consumed_map.get(notif.user_id, 0)
@@ -371,6 +406,9 @@ def _render_message(
     lang: str,
     calories_consumed: int = 0,
     calorie_goal: int = 2000,
+    consumed_ml: int = 0,
+    goal_ml: int = 2000,
+    remaining_ml: int = 0,
 ) -> tuple[str, str]:
     """Render title + body for a notification type. Title is empty for Time Sensitive."""
     messages = get_messages(lang, gender)
@@ -409,6 +447,16 @@ def _render_message(
         trial = messages.get("trial_expiry", {}).get(days, {})
         return trial.get("title", "Nutree") or "Nutree", trial.get(
             "body", "Your trial is ending soon."
+        )
+    elif notification_type == "hydration_reminder_afternoon":
+        cfg = messages["hydration_reminder"]["afternoon"]
+        return "Nutree", cfg["body_template"].format(
+            consumed_ml=consumed_ml, remaining_ml=remaining_ml
+        )
+    elif notification_type == "hydration_reminder_evening":
+        cfg = messages["hydration_reminder"]["evening"]
+        return "Nutree", cfg["body_template"].format(
+            consumed_ml=consumed_ml, remaining_ml=remaining_ml
         )
     return "Nutree", "You have a notification 📬"
 
@@ -451,6 +499,56 @@ def _fetch_calories_consumed_batch(
             },
         ).fetchall()
     return {row.user_id: int(round(row.consumed_calories)) for row in rows}
+
+
+def _fetch_hydration_data_batch(
+    user_ids: list[str], now: datetime
+) -> dict[str, tuple[int, int]]:
+    """Fetch (consumed_ml, goal_ml) per user using a 24-hour rolling window.
+
+    Uses a rolling 24h window consistent with _fetch_calories_consumed_batch.
+    This is an approximation — a calendar-day boundary would be more accurate
+    but requires per-user timezone joins. Acceptable for v1 threshold checks.
+    """
+    window_start = now - timedelta(hours=24)
+    with UnitOfWork() as uow:
+        profile_rows = uow.session.execute(
+            text("""
+                SELECT up.user_id, up.daily_water_goal_ml, up.weight_kg
+                FROM user_profiles up
+                WHERE up.user_id = ANY(:ids) AND up.is_current = true
+            """),
+            {"ids": user_ids},
+        ).fetchall()
+
+        profile_by_user = {r.user_id: r for r in profile_rows}
+
+        hydration_rows = uow.session.execute(
+            text("""
+                SELECT user_id, COALESCE(SUM(credited_ml), 0) AS consumed_ml
+                FROM hydration_logs
+                WHERE user_id = ANY(:ids)
+                  AND logged_at >= :start
+                  AND is_deleted = false
+                GROUP BY user_id
+            """),
+            {"ids": user_ids, "start": window_start},
+        ).fetchall()
+
+        consumed_by_user = {r.user_id: int(r.consumed_ml) for r in hydration_rows}
+
+    result = {}
+    for user_id in user_ids:
+        profile = profile_by_user.get(user_id)
+        if profile is None:
+            result[user_id] = (0, 2000)
+            continue
+        weight = float(profile.weight_kg) if profile.weight_kg else 70.0
+        goal_ml = profile.daily_water_goal_ml or round(35 * weight)
+        consumed_ml = consumed_by_user.get(user_id, 0)
+        result[user_id] = (consumed_ml, goal_ml)
+
+    return result
 
 
 def _seconds_until_next_minute(now: datetime) -> float:

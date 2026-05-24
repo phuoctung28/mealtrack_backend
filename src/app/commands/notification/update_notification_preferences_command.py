@@ -15,6 +15,7 @@ class UpdateNotificationPreferencesCommand(Command):
     user_id: str
     meal_reminders_enabled: Optional[bool] = None
     daily_summary_enabled: Optional[bool] = None
+    hydration_reminders_enabled: Optional[bool] = None
     breakfast_time_minutes: Optional[int] = None
     lunch_time_minutes: Optional[int] = None
     dinner_time_minutes: Optional[int] = None

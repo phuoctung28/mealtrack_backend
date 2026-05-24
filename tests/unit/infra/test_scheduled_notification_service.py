@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
@@ -265,3 +265,142 @@ async def test_send_due_trial_skips_redis_lookup(caplog):
             )
 
     assert "Redis cache miss" not in caplog.text
+
+
+def test_build_notification_rows_includes_hydration_reminders_when_enabled():
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+        _DEFAULT_AFTERNOON_MINUTES,
+        _DEFAULT_EVENING_MINUTES,
+    )
+
+    svc = DailyContextPrecomputeService.__new__(DailyContextPrecomputeService)
+    svc._tdee_service = MagicMock()
+
+    pref = MagicMock()
+    pref.user_id = "user-1"
+    pref.meal_reminders_enabled = False
+    pref.daily_summary_enabled = False
+    pref.hydration_reminders_enabled = True
+    pref.language = "en"
+
+    tokens_by_user = {"user-1": ["tok1"]}
+    profiles_by_user = {"user-1": MagicMock(gender="male", language_code="en")}
+    today = date(2026, 5, 23)
+
+    rows = svc._build_notification_rows(
+        pref_rows=[pref],
+        tokens_by_user=tokens_by_user,
+        calorie_goals={"user-1": 2000},
+        consumed_by_user={"user-1": 0},
+        profiles_by_user=profiles_by_user,
+        today=today,
+        tz_name="UTC",
+    )
+
+    types = [r["notification_type"] for r in rows]
+    assert "hydration_reminder_afternoon" in types
+    assert "hydration_reminder_evening" in types
+
+
+@pytest.mark.asyncio
+async def test_hydration_reminder_skipped_when_above_threshold():
+    """Afternoon reminder skipped when user has consumed >= 50% of goal."""
+    from src.infra.services.scheduled_notification_service import ScheduledNotificationService
+    from unittest.mock import MagicMock, patch
+    from datetime import datetime, timezone
+
+    mock_notif = MagicMock()
+    mock_notif.notification_type = "hydration_reminder_afternoon"
+    mock_notif.context = {"fcm_tokens": ["tok1"], "gender": "male", "language_code": "en"}
+    mock_notif.id = "hydration-notif-1"
+    mock_notif.user_id = "user-h1"
+
+    mock_firebase = MagicMock()
+    mock_firebase.send_multicast = MagicMock(return_value={"success": True, "failed_tokens": []})
+
+    svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
+    svc._firebase = mock_firebase
+    svc._running = True
+
+    # consumed_ml=1500, goal_ml=2000 → 75% → above 50% afternoon threshold → skip FCM
+    with patch(
+        "src.infra.services.scheduled_notification_service.ReminderQueryBuilder"
+    ) as mock_qb, patch(
+        "src.infra.services.scheduled_notification_service.UnitOfWork"
+    ) as mock_uow, patch(
+        "src.infra.services.scheduled_notification_service._fetch_hydration_data_batch",
+        return_value={"user-h1": (1500, 2000)},
+    ):
+        mock_qb.find_due_notifications.return_value = [mock_notif]
+        mock_uow.return_value.__enter__.return_value.session = MagicMock()
+        now = datetime(2026, 5, 23, 6, 0, 0, tzinfo=timezone.utc)
+        await svc._send_due_notifications(now)
+
+    # FCM not called because threshold met
+    mock_firebase.send_multicast.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_hydration_reminder_sent_when_below_threshold():
+    """Evening reminder fires when user has consumed < 80% of goal."""
+    from src.infra.services.scheduled_notification_service import ScheduledNotificationService
+    from unittest.mock import MagicMock, patch
+    from datetime import datetime, timezone
+
+    mock_notif = MagicMock()
+    mock_notif.notification_type = "hydration_reminder_evening"
+    mock_notif.context = {"fcm_tokens": ["tok1"], "gender": "male", "language_code": "en"}
+    mock_notif.id = "hydration-notif-2"
+    mock_notif.user_id = "user-h2"
+
+    mock_firebase = MagicMock()
+    mock_firebase.send_multicast = MagicMock(return_value={"success": True, "failed_tokens": []})
+
+    svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
+    svc._firebase = mock_firebase
+    svc._running = True
+
+    # consumed_ml=1200, goal_ml=2000 → 60% → below 80% evening threshold → send
+    with patch(
+        "src.infra.services.scheduled_notification_service.ReminderQueryBuilder"
+    ) as mock_qb, patch(
+        "src.infra.services.scheduled_notification_service.UnitOfWork"
+    ) as mock_uow, patch(
+        "src.infra.services.scheduled_notification_service._fetch_hydration_data_batch",
+        return_value={"user-h2": (1200, 2000)},
+    ):
+        mock_qb.find_due_notifications.return_value = [mock_notif]
+        mock_uow.return_value.__enter__.return_value.session = MagicMock()
+        now = datetime(2026, 5, 23, 11, 0, 0, tzinfo=timezone.utc)
+        await svc._send_due_notifications(now)
+
+    mock_firebase.send_multicast.assert_called_once()
+
+
+def test_build_notification_rows_skips_hydration_when_disabled():
+    from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
+
+    svc = DailyContextPrecomputeService.__new__(DailyContextPrecomputeService)
+    svc._tdee_service = MagicMock()
+
+    pref = MagicMock()
+    pref.user_id = "user-2"
+    pref.meal_reminders_enabled = False
+    pref.daily_summary_enabled = False
+    pref.hydration_reminders_enabled = False
+    pref.language = "en"
+
+    rows = svc._build_notification_rows(
+        pref_rows=[pref],
+        tokens_by_user={"user-2": ["tok1"]},
+        calorie_goals={"user-2": 2000},
+        consumed_by_user={"user-2": 0},
+        profiles_by_user={"user-2": MagicMock(gender="male", language_code="en")},
+        today=date(2026, 5, 23),
+        tz_name="UTC",
+    )
+
+    types = [r["notification_type"] for r in rows]
+    assert "hydration_reminder_afternoon" not in types
+    assert "hydration_reminder_evening" not in types

@@ -19,6 +19,7 @@ class NotificationPreferencesORM(Base, BaseMixin):
     # Notification Type Toggles
     meal_reminders_enabled = Column(Boolean, default=True, nullable=False)
     daily_summary_enabled = Column(Boolean, default=True, nullable=False)
+    hydration_reminders_enabled = Column(Boolean, default=True, nullable=False, server_default="true")
 
     # Meal Reminder Timing (minutes from midnight: 0-1439)
     breakfast_time_minutes = Column(Integer, nullable=True)
