@@ -21,6 +21,7 @@ DEACTIVATABLE_FCM_ERRORS = {
     "UNREGISTERED",  # Token unregistered from FCM
     "INVALID_ARGUMENT",  # Malformed token
     "UNAUTHENTICATED",  # Token from different Firebase project (e.g. debug build)
+    "PERMISSION_DENIED",  # Token registered to a different sender ID / Firebase project
 }
 
 
