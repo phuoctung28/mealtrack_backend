@@ -23,6 +23,9 @@ class NotificationPreferencesResponse(BaseModel):
     daily_summary_enabled: bool = Field(
         ..., description="Whether daily summary notifications are enabled"
     )
+    hydration_reminders_enabled: bool = Field(
+        True, description="Whether hydration reminder notifications are enabled"
+    )
 
     # Meal timing (minutes from midnight: 0-1439)
     breakfast_time_minutes: Optional[int] = Field(
