@@ -5,7 +5,11 @@ No DB hit and no cache needed since the catalog lives in memory.
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.hydration.get_drink_catalog_query import GetDrinkCatalogQuery
-from src.domain.services.hydration_catalog_service import get_all
+from src.domain.services.hydration_catalog_service import (
+    get_all,
+    localized_name,
+    localized_sub,
+)
 
 
 @handles(GetDrinkCatalogQuery)
@@ -18,8 +22,8 @@ class GetDrinkCatalogQueryHandler(EventHandler[GetDrinkCatalogQuery, dict]):
             "drinks": [
                 {
                     "id": d.id,
-                    "name": d.name,
-                    "sub": d.sub,
+                    "name": localized_name(d, query.language),
+                    "sub": localized_sub(d, query.language),
                     "emoji": d.emoji,
                     "default_ml": d.default_ml,
                     "kcal_per_100ml": d.kcal_per_100ml,

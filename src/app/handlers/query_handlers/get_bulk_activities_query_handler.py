@@ -6,7 +6,14 @@ from typing import Dict, List, Any, Optional
 from src.app.events.base import EventHandler, handles
 from src.app.queries.activity.get_bulk_activities_query import GetBulkActivitiesQuery
 from src.domain.model.meal import Meal, MealStatus
-from src.domain.utils.timezone_utils import format_iso_utc, get_zone_info, resolve_user_timezone_async
+from src.domain.services.hydration_catalog_service import (
+    localized_name_for_catalog_name,
+)
+from src.domain.utils.timezone_utils import (
+    format_iso_utc,
+    get_zone_info,
+    resolve_user_timezone_async,
+)
 from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.repositories.meal_repository import MealProjection
@@ -44,7 +51,7 @@ def _build_meal_activity(meal: Meal, language: str = "en") -> Dict[str, Any]:
     }
 
 
-def _build_hydration_activity(meal: Meal) -> Dict[str, Any]:
+def _build_hydration_activity(meal: Meal, language: str = "en") -> Dict[str, Any]:
     kcal = round(meal.nutrition.calories, 1) if meal.nutrition else 0
     macros = {
         "protein": round(meal.nutrition.macros.protein, 1) if meal.nutrition else 0,
@@ -55,7 +62,7 @@ def _build_hydration_activity(meal: Meal) -> Dict[str, Any]:
         "id": meal.meal_id,
         "type": "hydration",
         "timestamp": format_iso_utc(meal.created_at),
-        "title": meal.dish_name or "Water",
+        "title": localized_name_for_catalog_name(meal.dish_name, language) or "Water",
         "emoji": meal.emoji or "💧",
         "meal_type": "hydration",
         "calories": kcal,
@@ -102,7 +109,7 @@ class GetBulkActivitiesQueryHandler(
             if local_date not in result:
                 result[local_date] = []
             if meal.meal_type == "hydration":
-                result[local_date].append(_build_hydration_activity(meal))
+                result[local_date].append(_build_hydration_activity(meal, language))
             else:
                 result[local_date].append(_build_meal_activity(meal, language))
 

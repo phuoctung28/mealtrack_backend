@@ -18,7 +18,7 @@ from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.model.nutrition.nutrition import Nutrition
 from src.domain.model.nutrition.macros import Macros
 from src.domain.ports.cache_port import CachePort
-from src.domain.services.hydration_catalog_service import find_by_id
+from src.domain.services.hydration_catalog_service import find_by_id, localized_name
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.domain.utils.timezone_utils import (
     utc_now,
@@ -37,7 +37,6 @@ async def _flush_hydration_caches(
     """Synchronously flush all caches affected by a hydration mutation."""
     week_start = log_date - timedelta(days=log_date.weekday())
     keys_to_delete = [
-        CacheKeys.daily_hydration(user_id, log_date)[0],
         CacheKeys.weekly_hydration(user_id, week_start)[0],
         CacheKeys.daily_macros(user_id, log_date)[0],
     ]
@@ -51,12 +50,27 @@ async def _flush_hydration_caches(
     try:
         await cache.invalidate_pattern(activities_pattern)
     except Exception as exc:
-        logger.warning("Cache pattern invalidation failed for %s: %s", activities_pattern, exc)
+        logger.warning(
+            "Cache pattern invalidation failed for %s: %s", activities_pattern, exc
+        )
+
+    hydration_pattern = f"user:{user_id}:hydration:{log_date.isoformat()}:*"
+    try:
+        await cache.invalidate_pattern(hydration_pattern)
+    except Exception as exc:
+        logger.warning(
+            "Cache pattern invalidation failed for %s: %s", hydration_pattern, exc
+        )
 
 
 @handles(LogHydrationCommand)
 class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, dict]):
-    def __init__(self, uow: AsyncUnitOfWork, event_bus: Any, cache_service: Optional[CachePort] = None):
+    def __init__(
+        self,
+        uow: AsyncUnitOfWork,
+        event_bus: Any,
+        cache_service: Optional[CachePort] = None,
+    ):
         self.uow = uow
         self.event_bus = event_bus
         self.cache_service = cache_service
@@ -82,20 +96,25 @@ class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, dict]):
                 tz = get_zone_info(user_tz)
                 log_date = log_dt.astimezone(tz).date()
 
+            credited_ml = drink.credited_ml_for_volume(cmd.volume_ml)
             meal = Meal(
                 meal_id=str(uuid4()),
                 user_id=cmd.user_id,
                 status=MealStatus.READY,
                 created_at=log_dt,
                 ready_at=log_dt,
-                image=MealImage(image_id=str(uuid4()), format="jpeg", size_bytes=1, url=None),
+                image=MealImage(
+                    image_id=str(uuid4()), format="jpeg", size_bytes=1, url=None
+                ),
                 dish_name=drink.name,
                 emoji=drink.emoji,
                 meal_type="hydration",
                 source="hydration",
-                quantity=cmd.volume_ml,
+                quantity=credited_ml,
                 nutrition=Nutrition(
-                    macros=Macros(protein=0.0, carbs=0.0, fat=0.0, fiber=0.0, sugar=0.0),
+                    macros=Macros(
+                        protein=0.0, carbs=0.0, fat=0.0, fiber=0.0, sugar=0.0
+                    ),
                     food_items=None,
                 ),
             )
@@ -107,18 +126,22 @@ class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, dict]):
 
         await self.event_bus.publish(
             MealCacheInvalidationRequiredEvent(
-                aggregate_id=cmd.user_id, user_id=cmd.user_id, meal_date=log_date,
+                aggregate_id=cmd.user_id,
+                user_id=cmd.user_id,
+                meal_date=log_date,
             )
         )
         await self.event_bus.publish(
             HydrationCacheInvalidationRequiredEvent(
-                aggregate_id=cmd.user_id, user_id=cmd.user_id, hydration_date=log_date,
+                aggregate_id=cmd.user_id,
+                user_id=cmd.user_id,
+                hydration_date=log_date,
             )
         )
         return {
             "id": saved.meal_id,
             "drink_id": cmd.drink_id,
-            "drink_name": drink.name,
+            "drink_name": localized_name(drink, cmd.language),
             "emoji": drink.emoji,
             "volume_ml": saved.quantity,
             "kcal": 0,

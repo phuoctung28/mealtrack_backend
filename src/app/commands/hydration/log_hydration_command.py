@@ -14,3 +14,4 @@ class LogHydrationCommand(Command):
     volume_ml: int
     target_date: Optional[date] = None
     header_timezone: Optional[str] = None
+    language: str = "en"

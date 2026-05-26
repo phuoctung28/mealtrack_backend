@@ -12,7 +12,14 @@ from src.app.queries.hydration.get_daily_hydration_query import GetDailyHydratio
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import Meal
 from src.domain.services.hydration_goal_service import resolve_hydration_goal_ml
-from src.domain.utils.timezone_utils import format_iso_utc, get_zone_info, resolve_user_timezone_async
+from src.domain.services.hydration_catalog_service import (
+    localized_name_for_catalog_name,
+)
+from src.domain.utils.timezone_utils import (
+    format_iso_utc,
+    get_zone_info,
+    resolve_user_timezone_async,
+)
 from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -41,19 +48,22 @@ def _compute_streak(totals: dict[date, int], today: date, goal_ml: int) -> int:
     return streak
 
 
-def _build_entry_dict(meal: Meal) -> dict:
+def _build_entry_dict(meal: Meal, language: str = "en") -> dict:
     kcal = round(
-        (meal.nutrition.macros.carbs * 4 + meal.nutrition.macros.fat * 9)
-        if meal.nutrition
-        else 0.0,
+        (
+            (meal.nutrition.macros.carbs * 4 + meal.nutrition.macros.fat * 9)
+            if meal.nutrition
+            else 0.0
+        ),
         1,
     )
     return {
         "id": meal.meal_id,
-        "drink_name": meal.dish_name,
+        "drink_name": localized_name_for_catalog_name(meal.dish_name, language),
         "emoji": meal.emoji or "💧",
         "volume_ml": meal.quantity or 0,
         "kcal": kcal,
+        "calories": kcal,
         "source": meal.source or "hydration",
         "meal_id": meal.meal_id,
         "logged_at": format_iso_utc(meal.created_at),
@@ -75,7 +85,9 @@ class GetDailyHydrationQueryHandler(EventHandler[GetDailyHydrationQuery, dict]):
             user_tz = get_zone_info(user_tz_str)
             target_date: date = query.target_date or datetime.now(user_tz).date()
 
-            cache_key, ttl = CacheKeys.daily_hydration(query.user_id, target_date)
+            cache_key, ttl = CacheKeys.daily_hydration(
+                query.user_id, target_date, query.language
+            )
             if self.cache_service:
                 cached = await self.cache_service.get_json(cache_key)
                 if cached is not None:
@@ -115,7 +127,7 @@ class GetDailyHydrationQueryHandler(EventHandler[GetDailyHydrationQuery, dict]):
                 "goal_ml": goal_ml,
                 "percentage": percentage,
                 "streak": streak,
-                "entries": [_build_entry_dict(e) for e in entries],
+                "entries": [_build_entry_dict(e, query.language) for e in entries],
             }
 
         if self.cache_service:

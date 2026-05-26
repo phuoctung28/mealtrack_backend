@@ -7,6 +7,6 @@ from src.app.events.base import Query
 
 @dataclass
 class GetDrinkCatalogQuery(Query):
-    """Query to retrieve the static drink catalog. No parameters — returns catalog for all users."""
+    """Query to retrieve the static drink catalog."""
 
-    pass  # No parameters — returns static catalog for all users
+    language: str = "en"

@@ -106,6 +106,22 @@ _DRINKS: list[Drink] = [
 # Module-level constant — dict keyed by drink id for O(1) lookup.
 DRINK_CATALOG: dict[str, Drink] = {drink.id: drink for drink in _DRINKS}
 
+_DRINK_TRANSLATIONS: dict[str, dict[str, dict[str, str | None]]] = {
+    "vi": {
+        "water": {"name": "Nước lọc", "sub": None},
+        "tea": {"name": "Trà", "sub": None},
+        "coffee": {"name": "Cà phê", "sub": None},
+        "electrolyte": {"name": "Điện giải", "sub": "Nước thể thao"},
+        "milk-tea": {"name": "Trà sữa", "sub": "Trân châu"},
+        "coke": {"name": "Nước ngọt", "sub": "Có ga"},
+        "oj": {"name": "Nước ép", "sub": "Ép tươi"},
+    }
+}
+
+_DRINK_IDS_BY_ENGLISH_NAME: dict[str, str] = {
+    drink.name.lower(): drink.id for drink in _DRINKS
+}
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -120,3 +136,29 @@ def get_all() -> list[Drink]:
 def find_by_id(drink_id: str) -> Drink | None:
     """Return a Drink by its id, or None if not found."""
     return DRINK_CATALOG.get(drink_id)
+
+
+def localized_name(drink: Drink, language: str = "en") -> str:
+    """Return a localized drink name, falling back to the catalog name."""
+    return (
+        _DRINK_TRANSLATIONS.get(language, {}).get(drink.id, {}).get("name")
+        or drink.name
+    )
+
+
+def localized_sub(drink: Drink, language: str = "en") -> str | None:
+    """Return a localized drink subtitle, falling back to the catalog subtitle."""
+    if language not in _DRINK_TRANSLATIONS:
+        return drink.sub
+    return _DRINK_TRANSLATIONS[language].get(drink.id, {}).get("sub", drink.sub)
+
+
+def localized_name_for_catalog_name(
+    name: str | None, language: str = "en"
+) -> str | None:
+    """Localize a stored canonical catalog name."""
+    if not name:
+        return name
+    drink_id = _DRINK_IDS_BY_ENGLISH_NAME.get(name.lower())
+    drink = DRINK_CATALOG.get(drink_id) if drink_id else None
+    return localized_name(drink, language) if drink else name

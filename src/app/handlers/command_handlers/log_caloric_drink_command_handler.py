@@ -16,7 +16,7 @@ from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.model.nutrition.nutrition import Nutrition
 from src.domain.model.nutrition.macros import Macros
 from src.domain.ports.cache_port import CachePort
-from src.domain.services.hydration_catalog_service import find_by_id
+from src.domain.services.hydration_catalog_service import find_by_id, localized_name
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.domain.utils.timezone_utils import (
     utc_now,
@@ -34,7 +34,12 @@ logger = logging.getLogger(__name__)
 
 @handles(LogCaloricDrinkCommand)
 class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
-    def __init__(self, uow: AsyncUnitOfWork, event_bus: Any, cache_service: Optional[CachePort] = None):
+    def __init__(
+        self,
+        uow: AsyncUnitOfWork,
+        event_bus: Any,
+        cache_service: Optional[CachePort] = None,
+    ):
         self.uow = uow
         self.event_bus = event_bus
         self.cache_service = cache_service
@@ -64,6 +69,7 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
             carbs_100ml = drink.sugar_per_100ml
             fat_100ml = max(0.0, (drink.kcal_per_100ml - carbs_100ml * 4) / 9)
             volume_factor = cmd.volume_ml / 100.0
+            credited_ml = drink.credited_ml_for_volume(cmd.volume_ml)
 
             nutrition = Nutrition(
                 macros=Macros(
@@ -82,12 +88,14 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
                 status=MealStatus.READY,
                 created_at=log_dt,
                 ready_at=log_dt,
-                image=MealImage(image_id=str(uuid4()), format="jpeg", size_bytes=1, url=None),
+                image=MealImage(
+                    image_id=str(uuid4()), format="jpeg", size_bytes=1, url=None
+                ),
                 dish_name=drink.name,
                 emoji=drink.emoji,
                 meal_type="hydration",
                 source="hydration",
-                quantity=cmd.volume_ml,
+                quantity=credited_ml,
                 nutrition=nutrition,
             )
             saved = await uow.meals.save(meal)
@@ -97,27 +105,27 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
 
         await self.event_bus.publish(
             MealCacheInvalidationRequiredEvent(
-                aggregate_id=cmd.user_id, user_id=cmd.user_id, meal_date=log_date,
+                aggregate_id=cmd.user_id,
+                user_id=cmd.user_id,
+                meal_date=log_date,
             )
         )
         await self.event_bus.publish(
             HydrationCacheInvalidationRequiredEvent(
-                aggregate_id=cmd.user_id, user_id=cmd.user_id, hydration_date=log_date,
+                aggregate_id=cmd.user_id,
+                user_id=cmd.user_id,
+                hydration_date=log_date,
             )
         )
-        kcal = round(
-            (saved.nutrition.macros.carbs * 4 + saved.nutrition.macros.fat * 9)
-            if saved.nutrition
-            else 0.0,
-            1,
-        )
+        kcal = round(saved.nutrition.calories if saved.nutrition else 0.0, 1)
         return {
             "id": saved.meal_id,
             "drink_id": cmd.drink_id,
-            "drink_name": drink.name,
+            "drink_name": localized_name(drink, cmd.language),
             "emoji": drink.emoji,
             "volume_ml": saved.quantity,
             "kcal": kcal,
+            "calories": kcal,
             "source": "hydration",
             "meal_id": saved.meal_id,
             "logged_at": format_iso_utc(saved.created_at),

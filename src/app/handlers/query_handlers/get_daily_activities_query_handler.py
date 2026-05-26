@@ -11,6 +11,9 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.activity import GetDailyActivitiesQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import Meal
+from src.domain.services.hydration_catalog_service import (
+    localized_name_for_catalog_name,
+)
 from src.domain.utils.timezone_utils import (
     format_iso_utc,
     get_zone_info,
@@ -82,9 +85,13 @@ class GetDailyActivitiesQueryHandler(
                 )
 
                 return [
-                    self._build_hydration_activity(item)
-                    if item.meal_type == "hydration"
-                    else self._build_meal_activity(item, target_date, query.language)
+                    (
+                        self._build_hydration_activity(item, query.language or "en")
+                        if item.meal_type == "hydration"
+                        else self._build_meal_activity(
+                            item, target_date, query.language
+                        )
+                    )
                     for item in items
                 ]
 
@@ -129,7 +136,9 @@ class GetDailyActivitiesQueryHandler(
             "meal_type": meal_type,
             "calories": round(meal.nutrition.calories, 1) if meal.nutrition else 0,
             "macros": {
-                "protein": round(meal.nutrition.macros.protein, 1) if meal.nutrition else 0,
+                "protein": (
+                    round(meal.nutrition.macros.protein, 1) if meal.nutrition else 0
+                ),
                 "carbs": round(meal.nutrition.macros.carbs, 1) if meal.nutrition else 0,
                 "fat": round(meal.nutrition.macros.fat, 1) if meal.nutrition else 0,
             },
@@ -139,7 +148,9 @@ class GetDailyActivitiesQueryHandler(
             "source": getattr(meal, "source", None),
         }
 
-    def _build_hydration_activity(self, meal: Meal) -> Dict[str, Any]:
+    def _build_hydration_activity(
+        self, meal: Meal, language: str = "en"
+    ) -> Dict[str, Any]:
         kcal = round(meal.nutrition.calories, 1) if meal.nutrition else 0
         macros = {
             "protein": round(meal.nutrition.macros.protein, 1) if meal.nutrition else 0,
@@ -150,7 +161,8 @@ class GetDailyActivitiesQueryHandler(
             "id": meal.meal_id,
             "type": "hydration",
             "timestamp": format_iso_utc(meal.created_at),
-            "title": meal.dish_name or "Water",
+            "title": localized_name_for_catalog_name(meal.dish_name, language)
+            or "Water",
             "emoji": meal.emoji or "💧",
             "meal_type": "hydration",
             "calories": kcal,
