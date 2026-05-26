@@ -119,7 +119,8 @@ class GetDailyHydrationQueryHandler(EventHandler[GetDailyHydrationQuery, dict]):
                 query.user_id, streak_start, target_date, user_tz_str
             )
             daily_totals[target_date] = consumed_ml
-            streak = _compute_streak(daily_totals, target_date, goal_ml)
+            real_today = datetime.now(user_tz).date()
+            streak = _compute_streak(daily_totals, real_today, goal_ml)
 
             result = {
                 "date": target_date.isoformat(),
