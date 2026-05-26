@@ -46,12 +46,9 @@ class GetDailyActivitiesQueryHandler(
             if cached is not None:
                 return cached
 
-        activities = await self._get_daily_activities(
-            query.target_date,
-            query.user_id,
-            query.language,
-            header_timezone=query.header_timezone,
-        )
+        meal_activities = await self._get_meal_activities(query)
+        workout_activities = await self._get_workout_activities(query)
+        activities = meal_activities + workout_activities
         logger.info(
             f"Retrieved {len(activities)} activities for user {query.user_id} on {query.target_date.strftime('%Y-%m-%d')}"
         )
@@ -59,41 +56,48 @@ class GetDailyActivitiesQueryHandler(
             await self.cache_service.set_json(cache_key, activities, ttl)
         return activities
 
-    async def _get_daily_activities(
+    async def _get_meal_activities(
         self,
-        target_date: datetime,
-        user_id: str,
-        language: str = "en",
-        header_timezone: str = None,
+        query: GetDailyActivitiesQuery,
     ) -> List[Dict[str, Any]]:
-        """Fetch meals and hydration logs in a single DB session, returned as one list."""
+        """Fetch meals and hydration logs for the query date/user."""
         try:
             async with AsyncUnitOfWork() as uow:
                 user_tz_str = await resolve_user_timezone_async(
-                    user_id, uow, header_timezone
+                    query.user_id, uow, query.header_timezone
                 )
 
                 tz = get_zone_info(user_tz_str)
+                target_date = query.target_date
                 date_obj = (
                     target_date.date()
                     if target_date.tzinfo is None
                     else target_date.astimezone(tz).date()
                 )
 
-                items = await uow.meals.find_activities_by_date(
-                    date_obj, user_id, user_tz_str
+                items = await uow.meals.find_by_date(
+                    date_obj,
+                    user_id=query.user_id,
+                    user_timezone=user_tz_str,
                 )
 
                 return [
                     self._build_hydration_activity(item)
                     if item.meal_type == "hydration"
-                    else self._build_meal_activity(item, target_date, language)
+                    else self._build_meal_activity(item, target_date, query.language)
                     for item in items
                 ]
 
         except Exception as e:
-            logger.error(f"Error getting activities: {str(e)}", exc_info=True)
+            logger.error(f"Error getting meal activities: {str(e)}", exc_info=True)
             return []
+
+    async def _get_workout_activities(
+        self,
+        query: GetDailyActivitiesQuery,
+    ) -> List[Dict[str, Any]]:
+        """Fetch workout activities for the query date/user. Reserved for future use."""
+        return []
 
     def _build_meal_activity(
         self, meal, target_date: datetime, language: str = "en"
