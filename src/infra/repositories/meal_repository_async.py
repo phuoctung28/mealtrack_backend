@@ -209,6 +209,7 @@ class AsyncMealRepository(MealRepositoryPort):
         limit: int = 50,
         user_timezone: Optional[str] = None,
         projection: MealProjection = MealProjection.FULL,
+        meal_type: Optional[str] = None,
     ) -> List[Meal]:
         tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
         start_dt = datetime.combine(
@@ -227,10 +228,99 @@ class AsyncMealRepository(MealRepositoryPort):
         )
         if user_id:
             stmt = stmt.where(MealORM.user_id == user_id)
+        if meal_type is not None:
+            stmt = stmt.where(MealORM.meal_type == meal_type)
         stmt = stmt.order_by(MealORM.created_at.desc()).limit(limit)
 
         result = await self.session.execute(stmt)
         return [meal_orm_to_domain(m) for m in result.scalars().all()]
+
+    async def find_activities_by_date(
+        self,
+        date_obj: date,
+        user_id: str,
+        user_timezone: Optional[str] = None,
+    ) -> List[Meal]:
+        """Return all meals (food + hydration) for a date, sorted by timestamp DESC."""
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
+        start_dt = datetime.combine(date_obj, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        end_dt = start_dt + timedelta(days=1)
+
+        result = await self.session.execute(
+            select(MealORM)
+            .options(*_PROJECTION_OPTS[MealProjection.FULL_WITH_TRANSLATIONS])
+            .where(
+                MealORM.user_id == user_id,
+                MealORM.created_at >= start_dt,
+                MealORM.created_at < end_dt,
+                MealORM.status.in_([MealStatusEnum.READY, MealStatusEnum.ENRICHING]),
+            )
+            .order_by(MealORM.created_at.desc())
+        )
+        return [
+            meal_orm_to_domain(m)
+            for m in result.unique().scalars().all()
+        ]
+
+    async def sum_hydration_ml_for_date(
+        self,
+        date_obj: date,
+        user_id: str,
+        user_timezone: Optional[str] = None,
+    ) -> int:
+        """Return total hydration ml logged for a single date."""
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
+        start_dt = datetime.combine(date_obj, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        end_dt = start_dt + timedelta(days=1)
+
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(MealORM.quantity), 0))
+            .where(
+                MealORM.user_id == user_id,
+                MealORM.meal_type == "hydration",
+                MealORM.created_at >= start_dt,
+                MealORM.created_at < end_dt,
+                MealORM.status != MealStatusEnum.INACTIVE,
+            )
+        )
+        return result.scalar_one()
+
+    async def sum_hydration_ml_by_date_range(
+        self,
+        user_id: str,
+        start_date: date,
+        end_date: date,
+        user_timezone: Optional[str] = None,
+    ) -> Dict[date, int]:
+        """Return per-date hydration totals (ml) for a date range."""
+        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
+        start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        end_dt = (
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz) + timedelta(days=1)
+        ).astimezone(timezone.utc)
+
+        if user_timezone and user_timezone != "UTC":
+            date_expr = func.date(func.timezone(user_timezone, MealORM.created_at))
+        else:
+            date_expr = func.date(MealORM.created_at)
+
+        result = await self.session.execute(
+            select(date_expr, func.coalesce(func.sum(MealORM.quantity), 0))
+            .where(
+                MealORM.user_id == user_id,
+                MealORM.meal_type == "hydration",
+                MealORM.created_at >= start_dt,
+                MealORM.created_at < end_dt,
+                MealORM.status != MealStatusEnum.INACTIVE,
+            )
+            .group_by(date_expr)
+        )
+        out: Dict[date, int] = {}
+        for day_val, total in result.all():
+            if isinstance(day_val, str):
+                day_val = date.fromisoformat(day_val)
+            out[day_val] = int(total)
+        return out
 
     async def find_by_date_range(
         self,
@@ -262,7 +352,7 @@ class AsyncMealRepository(MealRepositoryPort):
             .order_by(MealORM.created_at.asc())
             .limit(limit)
         )
-        return [meal_orm_to_domain(m) for m in result.scalars().all()]
+        return [meal_orm_to_domain(m) for m in result.unique().scalars().all()]
 
     async def get_daily_meal_counts(
         self,

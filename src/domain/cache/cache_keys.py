@@ -77,7 +77,9 @@ class CacheKeys:
         return (f"user:streak:{user_id}", CacheKeys.TTL_1_HOUR)
 
     @staticmethod
-    def daily_activities(user_id: str, target_date: date, language: str = "en") -> tuple[str, int]:
+    def daily_activities(
+        user_id: str, target_date: date, language: str = "en"
+    ) -> tuple[str, int]:
         """Cache key for daily activities list. 5min TTL. Includes language to prevent cross-language cache pollution."""
         return (
             f"user:{user_id}:activities:{target_date.isoformat()}:{language}",
@@ -85,10 +87,12 @@ class CacheKeys:
         )
 
     @staticmethod
-    def daily_hydration(user_id: str, target_date: date) -> tuple[str, int]:
+    def daily_hydration(
+        user_id: str, target_date: date, language: str = "en"
+    ) -> tuple[str, int]:
         """Cache key for daily hydration summary. 5min TTL."""
         return (
-            f"user:{user_id}:hydration:{target_date.isoformat()}",
+            f"user:{user_id}:hydration:{target_date.isoformat()}:{language}",
             CacheKeys.TTL_5_MIN,
         )
 

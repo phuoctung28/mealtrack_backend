@@ -14,8 +14,8 @@ def test_health_accepts_head_requests():
 
 
 def test_health_exposes_deployment_identity(monkeypatch):
-    monkeypatch.setenv("RAILWAY_GIT_COMMIT_SHA", "1e1170b7")
-    monkeypatch.setenv("RAILWAY_GIT_BRANCH", "fix/ios-time-sensitive-notifications")
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "1e1170b7")
+    monkeypatch.setenv("RENDER_GIT_BRANCH", "fix/ios-time-sensitive-notifications")
     app = FastAPI()
     app.include_router(router)
 
