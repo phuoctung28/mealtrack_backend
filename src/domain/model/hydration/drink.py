@@ -34,4 +34,4 @@ class Drink:
 
     def credited_ml_for_volume(self, ml: int) -> int:
         """Return water-equivalent ml credited for the given volume."""
-        return int(round(ml * self.hydration_weight))
+        return int(ml * self.hydration_weight + 0.5)

@@ -14,3 +14,4 @@ class GetDailyHydrationQuery(Query):
     user_id: str
     target_date: Optional[date] = None
     header_timezone: Optional[str] = None
+    language: str = "en"

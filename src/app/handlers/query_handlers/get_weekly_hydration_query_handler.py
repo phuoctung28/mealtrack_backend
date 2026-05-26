@@ -55,7 +55,7 @@ class GetWeeklyHydrationQueryHandler(EventHandler[GetWeeklyHydrationQuery, dict]
             except Exception:
                 logger.debug("Could not fetch user profile for water goal; defaulting to 2000 ml", exc_info=True)
 
-            daily_totals = await uow.hydration_logs.sum_credited_ml_by_date_range(
+            daily_totals = await uow.meals.sum_hydration_ml_by_date_range(
                 query.user_id, week_start, week_end, user_tz_str
             )
 

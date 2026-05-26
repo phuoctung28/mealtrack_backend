@@ -70,9 +70,6 @@ from .email_log import EmailLog
 # Promo codes (email marketing)
 from .promo_code import PromoCode, PromoCodeRedemption
 
-# Hydration
-from .hydration.hydration_log import HydrationLogORM
-
 
 __all__ = [
     # Base
@@ -129,6 +126,4 @@ __all__ = [
     # Promo codes
     "PromoCode",
     "PromoCodeRedemption",
-    # Hydration
-    "HydrationLogORM",
 ]

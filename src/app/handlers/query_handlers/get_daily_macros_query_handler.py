@@ -98,8 +98,10 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
 
             # Fetch hydration summary
             try:
-                consumed_water_ml = await uow.hydration_logs.sum_credited_ml_for_date(
-                    query.user_id, target_date, user_tz_str
+                consumed_water_ml = await uow.meals.sum_hydration_ml_for_date(
+                    date_obj=target_date,
+                    user_id=query.user_id,
+                    user_timezone=user_tz_str,
                 )
                 # Get water goal from profile (default 2000 if not set)
                 user_profile = await uow.users.get_profile(UUID(query.user_id))

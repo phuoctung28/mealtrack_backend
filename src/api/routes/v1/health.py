@@ -24,12 +24,11 @@ def _deployment_info() -> Dict[str, Optional[str]]:
     """Expose non-sensitive deploy identity for staging/runtime verification."""
     return {
         "environment": os.getenv("ENVIRONMENT"),
-        "railway_environment": os.getenv("RAILWAY_ENVIRONMENT_NAME"),
-        "git_branch": os.getenv("GIT_BRANCH") or os.getenv("RAILWAY_GIT_BRANCH"),
+        "render_service": os.getenv("RENDER_SERVICE_NAME"),
+        "git_branch": os.getenv("GIT_BRANCH") or os.getenv("RENDER_GIT_BRANCH"),
         "git_commit": (
             os.getenv("GIT_SHA")
             or os.getenv("COMMIT_SHA")
-            or os.getenv("RAILWAY_GIT_COMMIT_SHA")
             or os.getenv("RENDER_GIT_COMMIT")
             or os.getenv("SOURCE_VERSION")
         ),

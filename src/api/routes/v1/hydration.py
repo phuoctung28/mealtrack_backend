@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import ValidationException, handle_exception
+from src.api.middleware.accept_language import get_request_language
 from src.api.schemas.request.hydration_requests import (
     LogCaloricDrinkRequest,
     LogHydrationRequest,
@@ -17,7 +18,11 @@ from src.app.commands.hydration import (
     LogCaloricDrinkCommand,
     LogHydrationCommand,
 )
-from src.app.queries.hydration import GetDailyHydrationQuery, GetDrinkCatalogQuery, GetWeeklyHydrationQuery
+from src.app.queries.hydration import (
+    GetDailyHydrationQuery,
+    GetDrinkCatalogQuery,
+    GetWeeklyHydrationQuery,
+)
 from src.infra.event_bus import EventBus
 
 router = APIRouter(prefix="/v1/hydration", tags=["Hydration"])
@@ -25,12 +30,13 @@ router = APIRouter(prefix="/v1/hydration", tags=["Hydration"])
 
 @router.get("/catalog", response_model=None)
 async def get_drink_catalog(
+    request: Request,
     _: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """Get the drink catalog with hydration and caloric categories."""
     try:
-        query = GetDrinkCatalogQuery()
+        query = GetDrinkCatalogQuery(language=get_request_language(request))
         return await event_bus.send(query)
     except Exception as e:
         raise handle_exception(e) from e
@@ -53,12 +59,14 @@ async def log_hydration(
                 raise ValidationException("Invalid date format. Use YYYY-MM-DD") from e
 
         header_timezone = request.headers.get("X-Timezone")
+        language = get_request_language(request)
         command = LogHydrationCommand(
             user_id=user_id,
             drink_id=body.drink_id,
             volume_ml=body.volume_ml,
             target_date=target_date,
             header_timezone=header_timezone,
+            language=language,
         )
         return await event_bus.send(command)
     except Exception as e:
@@ -82,12 +90,14 @@ async def log_caloric_drink(
                 raise ValidationException("Invalid date format. Use YYYY-MM-DD") from e
 
         header_timezone = request.headers.get("X-Timezone")
+        language = get_request_language(request)
         command = LogCaloricDrinkCommand(
             user_id=user_id,
             drink_id=body.drink_id,
             volume_ml=body.volume_ml,
             target_date=target_date,
             header_timezone=header_timezone,
+            language=language,
         )
         return await event_bus.send(command)
     except Exception as e:
@@ -98,7 +108,9 @@ async def log_caloric_drink(
 async def get_daily_hydration(
     request: Request,
     user_id: str = Depends(get_current_user_id),
-    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format, defaults to today"),
+    date: Optional[str] = Query(
+        None, description="Date in YYYY-MM-DD format, defaults to today"
+    ),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """Get hydration summary for a specific date."""
@@ -111,10 +123,12 @@ async def get_daily_hydration(
                 raise ValidationException("Invalid date format. Use YYYY-MM-DD") from e
 
         header_timezone = request.headers.get("X-Timezone")
+        language = get_request_language(request)
         query = GetDailyHydrationQuery(
             user_id=user_id,
             target_date=target_date,
             header_timezone=header_timezone,
+            language=language,
         )
         return await event_bus.send(query)
     except Exception as e:
@@ -125,7 +139,10 @@ async def get_daily_hydration(
 async def get_weekly_hydration(
     request: Request,
     user_id: str = Depends(get_current_user_id),
-    start_date: Optional[str] = Query(None, description="Monday of the week in YYYY-MM-DD format, defaults to current week"),
+    start_date: Optional[str] = Query(
+        None,
+        description="Monday of the week in YYYY-MM-DD format, defaults to current week",
+    ),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """Get 7-day hydration chart data."""

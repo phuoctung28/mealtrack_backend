@@ -1,15 +1,24 @@
 """Command handler for logging a hydration (non-caloric) drink entry."""
 
 import logging
-from typing import Any
+from datetime import date, timedelta
+from typing import Any, Optional
+from uuid import uuid4
 
 from src.app.commands.hydration.log_hydration_command import LogHydrationCommand
 from src.app.events.base import EventHandler, handles
 from src.app.events.hydration.hydration_cache_invalidation_required_event import (
     HydrationCacheInvalidationRequiredEvent,
 )
-from src.domain.model.hydration import HydrationEntry, DrinkCategory, HydrationSource
-from src.domain.services.hydration_catalog_service import find_by_id
+from src.app.events.meal.meal_cache_invalidation_required_event import (
+    MealCacheInvalidationRequiredEvent,
+)
+from src.domain.cache.cache_keys import CacheKeys
+from src.domain.model.meal import Meal, MealStatus, MealImage
+from src.domain.model.nutrition.nutrition import Nutrition
+from src.domain.model.nutrition.macros import Macros
+from src.domain.ports.cache_port import CachePort
+from src.domain.services.hydration_catalog_service import find_by_id, localized_name
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.domain.utils.timezone_utils import (
     utc_now,
@@ -22,23 +31,55 @@ from src.domain.utils.timezone_utils import (
 logger = logging.getLogger(__name__)
 
 
+async def _flush_hydration_caches(
+    cache: CachePort, user_id: str, log_date: date
+) -> None:
+    """Synchronously flush all caches affected by a hydration mutation."""
+    week_start = log_date - timedelta(days=log_date.weekday())
+    keys_to_delete = [
+        CacheKeys.weekly_hydration(user_id, week_start)[0],
+        CacheKeys.daily_macros(user_id, log_date)[0],
+    ]
+    for key in keys_to_delete:
+        try:
+            await cache.invalidate(key)
+        except Exception as exc:
+            logger.warning("Cache invalidation failed for key=%s: %s", key, exc)
+
+    activities_pattern = f"user:{user_id}:activities:{log_date.isoformat()}:*"
+    try:
+        await cache.invalidate_pattern(activities_pattern)
+    except Exception as exc:
+        logger.warning(
+            "Cache pattern invalidation failed for %s: %s", activities_pattern, exc
+        )
+
+    hydration_pattern = f"user:{user_id}:hydration:{log_date.isoformat()}:*"
+    try:
+        await cache.invalidate_pattern(hydration_pattern)
+    except Exception as exc:
+        logger.warning(
+            "Cache pattern invalidation failed for %s: %s", hydration_pattern, exc
+        )
+
+
 @handles(LogHydrationCommand)
 class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, dict]):
-    def __init__(self, uow: AsyncUnitOfWork, event_bus: Any):
+    def __init__(
+        self,
+        uow: AsyncUnitOfWork,
+        event_bus: Any,
+        cache_service: Optional[CachePort] = None,
+    ):
         self.uow = uow
         self.event_bus = event_bus
+        self.cache_service = cache_service
 
     async def handle(self, cmd: LogHydrationCommand) -> dict:
-        # 1. Validate drink_id exists in catalog and is category "hydration"
         drink = find_by_id(cmd.drink_id)
         if drink is None:
             raise ValueError(f"Unknown drink: {cmd.drink_id}")
-        if drink.category != DrinkCategory.HYDRATION:
-            raise ValueError(
-                f"Drink {cmd.drink_id} is caloric — use LogCaloricDrinkCommand"
-            )
 
-        # 2. Resolve the log date (timezone-aware)
         async with self.uow as uow:
             now = utc_now()
             if cmd.target_date:
@@ -55,33 +96,41 @@ class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, dict]):
                 tz = get_zone_info(user_tz)
                 log_date = log_dt.astimezone(tz).date()
 
-            # 3. Create and save HydrationEntry
             credited_ml = drink.credited_ml_for_volume(cmd.volume_ml)
-            # First create via factory to get a valid entry_id / created_at
-            prototype = HydrationEntry.create(
+            meal = Meal(
+                meal_id=str(uuid4()),
                 user_id=cmd.user_id,
-                drink_id=cmd.drink_id,
-                volume_ml=cmd.volume_ml,
-                credited_ml=credited_ml,
-                source=HydrationSource.HYDRATION,
+                status=MealStatus.READY,
+                created_at=log_dt,
+                ready_at=log_dt,
+                image=MealImage(
+                    image_id=str(uuid4()), format="jpeg", size_bytes=1, url=None
+                ),
+                dish_name=drink.name,
+                emoji=drink.emoji,
+                meal_type="hydration",
+                source="hydration",
+                quantity=credited_ml,
+                nutrition=Nutrition(
+                    macros=Macros(
+                        protein=0.0, carbs=0.0, fat=0.0, fiber=0.0, sugar=0.0
+                    ),
+                    food_items=None,
+                ),
             )
-            # Override logged_at with the resolved datetime.
-            # Reconstruct with timezone-resolved logged_at
-            entry = HydrationEntry(
-                entry_id=prototype.entry_id,
-                user_id=prototype.user_id,
-                drink_id=prototype.drink_id,
-                volume_ml=prototype.volume_ml,
-                credited_ml=prototype.credited_ml,
-                source=prototype.source,
-                meal_id=None,
-                logged_at=log_dt,
-                created_at=prototype.created_at,
-                is_deleted=False,
-            )
-            saved = await uow.hydration_logs.save(entry)
+            saved = await uow.meals.save(meal)
 
-        # 4. Publish cache invalidation event
+        # Synchronous cache flush (before fire-and-forget event bus publish)
+        if self.cache_service:
+            await _flush_hydration_caches(self.cache_service, cmd.user_id, log_date)
+
+        await self.event_bus.publish(
+            MealCacheInvalidationRequiredEvent(
+                aggregate_id=cmd.user_id,
+                user_id=cmd.user_id,
+                meal_date=log_date,
+            )
+        )
         await self.event_bus.publish(
             HydrationCacheInvalidationRequiredEvent(
                 aggregate_id=cmd.user_id,
@@ -90,14 +139,13 @@ class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, dict]):
             )
         )
         return {
-            "id": saved.entry_id,
-            "drink_id": saved.drink_id,
-            "drink_name": drink.name,
+            "id": saved.meal_id,
+            "drink_id": cmd.drink_id,
+            "drink_name": localized_name(drink, cmd.language),
             "emoji": drink.emoji,
-            "volume_ml": saved.volume_ml,
-            "credited_ml": saved.credited_ml,
-            "kcal": round(drink.kcal_for_volume(saved.volume_ml), 1),
-            "source": saved.source.value if hasattr(saved.source, "value") else saved.source,
-            "meal_id": None,
-            "logged_at": format_iso_utc(saved.logged_at),
+            "volume_ml": saved.quantity,
+            "kcal": 0,
+            "source": "hydration",
+            "meal_id": saved.meal_id,
+            "logged_at": format_iso_utc(saved.created_at),
         }
