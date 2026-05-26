@@ -137,6 +137,7 @@ from src.app.handlers.query_handlers import (
     GetUserByFirebaseUidQueryHandler,
     GetUserOnboardingStatusQueryHandler,
     GetDailyActivitiesQueryHandler,
+    GetBulkActivitiesQueryHandler,
     GetMealsByDateQueryHandler,
     GetUserMetricsQueryHandler,
     GetStreakQueryHandler,
@@ -148,7 +149,7 @@ from src.app.handlers.query_handlers.get_nutrition_bulk_query_handler import (
 from src.app.handlers.query_handlers.get_activities_presence_query_handler import (
     GetActivitiesPresenceQueryHandler,
 )
-from src.app.queries.activity import GetDailyActivitiesQuery
+from src.app.queries.activity import GetDailyActivitiesQuery, GetBulkActivitiesQuery
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
@@ -436,6 +437,10 @@ def get_configured_event_bus() -> EventBus:
         GetDailyActivitiesQuery,
         GetDailyActivitiesQueryHandler(cache_service=cache_service),
     )
+    event_bus.register_handler(
+        GetBulkActivitiesQuery,
+        GetBulkActivitiesQueryHandler(cache_service=cache_service),
+    )
 
     event_bus.register_handler(GetMealsByDateQuery, GetMealsByDateQueryHandler())
 
@@ -556,9 +561,9 @@ def get_configured_event_bus() -> EventBus:
     from src.app.events.hydration import HydrationCacheInvalidationRequiredEvent
     from src.app.handlers.event_handlers.hydration_cache_invalidation_event_handler import HydrationCacheInvalidationEventHandler
 
-    event_bus.register_handler(LogHydrationCommand, LogHydrationCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus))
-    event_bus.register_handler(LogCaloricDrinkCommand, LogCaloricDrinkCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus))
-    event_bus.register_handler(DeleteHydrationEntryCommand, DeleteHydrationEntryCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus))
+    event_bus.register_handler(LogHydrationCommand, LogHydrationCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus, cache_service=cache_service))
+    event_bus.register_handler(LogCaloricDrinkCommand, LogCaloricDrinkCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus, cache_service=cache_service))
+    event_bus.register_handler(DeleteHydrationEntryCommand, DeleteHydrationEntryCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus, cache_service=cache_service))
     event_bus.register_handler(GetDailyHydrationQuery, GetDailyHydrationQueryHandler(cache_service=cache_service))
     event_bus.register_handler(GetDrinkCatalogQuery, GetDrinkCatalogQueryHandler())
     event_bus.register_handler(GetWeeklyHydrationQuery, GetWeeklyHydrationQueryHandler(cache_service=cache_service))

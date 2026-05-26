@@ -145,6 +145,7 @@ def meal_orm_to_domain(orm: MealORM) -> DomainMeal:
         cuisine_type=orm.cuisine_type,
         origin_country=orm.origin_country,
         emoji=orm.emoji,
+        quantity=orm.quantity,
     )
 
 
@@ -257,6 +258,7 @@ def meal_domain_to_orm(domain: DomainMeal) -> MealORM:
         cuisine_type=getattr(domain, "cuisine_type", None),
         origin_country=getattr(domain, "origin_country", None),
         emoji=getattr(domain, "emoji", None),
+        quantity=getattr(domain, "quantity", None),
     )
     if domain.image:
         orm.image_id = str(domain.image.image_id)

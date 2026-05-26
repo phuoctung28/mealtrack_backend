@@ -60,6 +60,8 @@ class Meal:
     cuisine_type: str | None = None
     origin_country: str | None = None
     emoji: str | None = None  # AI-assigned food emoji, stored once on creation
+    # Generic serving quantity: grams for food, ml for hydration
+    quantity: int | None = None
 
     def __post_init__(self):
         """Validate invariants."""
@@ -257,6 +259,7 @@ class Meal:
             meal_type=self.meal_type,
             translations=self.translations,
             source=self.source,
+            quantity=self.quantity,
             **self._recipe_fields(),
         )
 

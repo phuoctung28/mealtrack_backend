@@ -10,8 +10,7 @@ from uuid import UUID
 from src.app.events.base import EventHandler, handles
 from src.app.queries.hydration.get_daily_hydration_query import GetDailyHydrationQuery
 from src.domain.cache.cache_keys import CacheKeys
-from src.domain.model.hydration import HydrationEntry, HydrationSummary
-from src.domain.services.hydration_catalog_service import find_by_id
+from src.domain.model.meal import Meal
 from src.domain.services.hydration_goal_service import resolve_hydration_goal_ml
 from src.domain.utils.timezone_utils import format_iso_utc, get_zone_info, resolve_user_timezone_async
 from src.domain.ports.cache_port import CachePort
@@ -23,7 +22,6 @@ logger = logging.getLogger(__name__)
 def _compute_streak(totals: dict[date, int], today: date, goal_ml: int) -> int:
     """Count consecutive days ending on/before today where consumed_ml >= goal_ml."""
     yesterday = today - timedelta(days=1)
-    # Find most recent qualifying day within last 30 days
     most_recent: date | None = None
     for days_back in range(31):
         d = today - timedelta(days=days_back)
@@ -32,7 +30,6 @@ def _compute_streak(totals: dict[date, int], today: date, goal_ml: int) -> int:
             break
     if most_recent is None or most_recent < yesterday:
         return 0
-    # Count consecutive qualifying days backwards from most_recent
     streak = 0
     current = most_recent
     while current >= today - timedelta(days=30):
@@ -44,20 +41,22 @@ def _compute_streak(totals: dict[date, int], today: date, goal_ml: int) -> int:
     return streak
 
 
-def _build_entry_dict(entry: HydrationEntry) -> dict:
-    """Enrich a hydration entry with catalog metadata."""
-    drink = find_by_id(entry.drink_id)
+def _build_entry_dict(meal: Meal) -> dict:
+    kcal = round(
+        (meal.nutrition.macros.carbs * 4 + meal.nutrition.macros.fat * 9)
+        if meal.nutrition
+        else 0.0,
+        1,
+    )
     return {
-        "id": entry.entry_id,
-        "drink_id": entry.drink_id,
-        "drink_name": drink.name if drink else entry.drink_id,
-        "emoji": drink.emoji if drink else "💧",
-        "volume_ml": entry.volume_ml,
-        "credited_ml": entry.credited_ml,
-        "kcal": round(drink.kcal_for_volume(entry.volume_ml), 1) if drink else 0,
-        "source": entry.source.value if hasattr(entry.source, "value") else entry.source,
-        "meal_id": entry.meal_id,
-        "logged_at": format_iso_utc(entry.logged_at),
+        "id": meal.meal_id,
+        "drink_name": meal.dish_name,
+        "emoji": meal.emoji or "💧",
+        "volume_ml": meal.quantity or 0,
+        "kcal": kcal,
+        "source": meal.source or "hydration",
+        "meal_id": meal.meal_id,
+        "logged_at": format_iso_utc(meal.created_at),
     }
 
 
@@ -70,26 +69,25 @@ class GetDailyHydrationQueryHandler(EventHandler[GetDailyHydrationQuery, dict]):
 
     async def handle(self, query: GetDailyHydrationQuery) -> dict:
         async with AsyncUnitOfWork() as uow:
-            # 1. Resolve timezone
             user_tz_str = await resolve_user_timezone_async(
                 query.user_id, uow, query.header_timezone
             )
             user_tz = get_zone_info(user_tz_str)
             target_date: date = query.target_date or datetime.now(user_tz).date()
 
-            # 2. Check cache
             cache_key, ttl = CacheKeys.daily_hydration(query.user_id, target_date)
             if self.cache_service:
                 cached = await self.cache_service.get_json(cache_key)
                 if cached is not None:
                     return cached
 
-            # 3. Fetch entries from DB
-            entries = await uow.hydration_logs.find_by_date(
-                query.user_id, target_date, user_tz_str
+            entries = await uow.meals.find_by_date(
+                date_obj=target_date,
+                user_id=query.user_id,
+                user_timezone=user_tz_str,
+                meal_type="hydration",
             )
 
-            # 4. Resolve water goal from user profile
             goal_ml = 2000
             try:
                 user_profile = await uow.users.get_profile(UUID(query.user_id))
@@ -101,32 +99,25 @@ class GetDailyHydrationQueryHandler(EventHandler[GetDailyHydrationQuery, dict]):
                     exc_info=True,
                 )
 
-            # 5. Compute summary
-            consumed_ml = sum(e.credited_ml for e in entries)
-            summary = HydrationSummary(consumed_ml=consumed_ml, goal_ml=goal_ml)
+            consumed_ml = sum(m.quantity or 0 for m in entries)
+            percentage = round((consumed_ml / goal_ml * 100), 1) if goal_ml > 0 else 0.0
 
-            # 6. Compute streak (31-day window, single query)
             streak_start = target_date - timedelta(days=30)
-            daily_totals = await uow.hydration_logs.sum_credited_ml_by_date_range(
+            daily_totals = await uow.meals.sum_hydration_ml_by_date_range(
                 query.user_id, streak_start, target_date, user_tz_str
             )
-            # Merge today's live total in case it differs from cached rows
             daily_totals[target_date] = consumed_ml
             streak = _compute_streak(daily_totals, target_date, goal_ml)
 
-            # 7. Build result dict with enriched entries
             result = {
                 "date": target_date.isoformat(),
-                "consumed_ml": summary.consumed_ml,
-                "goal_ml": summary.goal_ml,
-                "percentage": summary.percentage,
+                "consumed_ml": consumed_ml,
+                "goal_ml": goal_ml,
+                "percentage": percentage,
                 "streak": streak,
-                "entries": [
-                    _build_entry_dict(e) for e in entries
-                ],
+                "entries": [_build_entry_dict(e) for e in entries],
             }
 
-        # 7. Cache and return (after UoW context exits so session is closed)
         if self.cache_service:
             await self.cache_service.set_json(cache_key, result, ttl)
         return result

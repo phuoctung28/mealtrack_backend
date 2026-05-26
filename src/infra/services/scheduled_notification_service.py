@@ -525,11 +525,12 @@ def _fetch_hydration_data_batch(
 
         hydration_rows = uow.session.execute(
             text("""
-                SELECT user_id, COALESCE(SUM(credited_ml), 0) AS consumed_ml
-                FROM hydration_logs
+                SELECT user_id, COALESCE(SUM(quantity), 0) AS consumed_ml
+                FROM meal
                 WHERE user_id = ANY(:ids)
-                  AND logged_at >= :start
-                  AND is_deleted = false
+                  AND meal_type = 'hydration'
+                  AND created_at >= :start
+                  AND status != 'INACTIVE'
                 GROUP BY user_id
             """),
             {"ids": user_ids, "start": window_start},
