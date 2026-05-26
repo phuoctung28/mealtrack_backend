@@ -5,6 +5,7 @@ Revises: 20260525000001
 """
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import inspect
 
 revision = "20260525000002"
 down_revision = "20260525000001"
@@ -18,6 +19,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    if "hydration_logs" in inspector.get_table_names():
+        return
     op.create_table(
         "hydration_logs",
         sa.Column("id", sa.String(36), primary_key=True),

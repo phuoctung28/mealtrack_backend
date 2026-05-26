@@ -8,6 +8,7 @@ Revision ID: 20260525000003
 Revises: 20260525000002
 """
 from alembic import op
+from sqlalchemy import text
 
 revision = "20260525000003"
 down_revision = "20260525000002"
@@ -20,29 +21,33 @@ _CALORIC_DRINK_PREFIXES = ("Milk tea", "Soda", "Fruit juice")
 
 
 def upgrade() -> None:
-    like_clauses = " OR ".join(
-        f"dish_name LIKE '{name}%'" for name in _CALORIC_DRINK_PREFIXES
+    prefixes = list(_CALORIC_DRINK_PREFIXES)
+    conditions = " OR ".join(f"dish_name LIKE :prefix{i}" for i in range(len(prefixes)))
+    params = {f"prefix{i}": f"{name}%" for i, name in enumerate(prefixes)}
+    op.execute(
+        text(f"""
+            UPDATE meal
+            SET meal_type = 'hydration',
+                source    = 'hydration'
+            WHERE source    = 'manual'
+              AND meal_type = 'snack'
+              AND ({conditions})
+        """).bindparams(**params)
     )
-    op.execute(f"""
-        UPDATE meal
-        SET meal_type = 'hydration',
-            source    = 'hydration'
-        WHERE source    = 'manual'
-          AND meal_type = 'snack'
-          AND ({like_clauses})
-    """)
 
 
 def downgrade() -> None:
-    like_clauses = " OR ".join(
-        f"dish_name LIKE '{name}%'" for name in _CALORIC_DRINK_PREFIXES
+    prefixes = list(_CALORIC_DRINK_PREFIXES)
+    conditions = " OR ".join(f"dish_name LIKE :prefix{i}" for i in range(len(prefixes)))
+    params = {f"prefix{i}": f"{name}%" for i, name in enumerate(prefixes)}
+    op.execute(
+        text(f"""
+            UPDATE meal
+            SET meal_type = 'snack',
+                source    = 'manual'
+            WHERE source    = 'hydration'
+              AND meal_type = 'hydration'
+              AND quantity  IS NULL
+              AND ({conditions})
+        """).bindparams(**params)
     )
-    op.execute(f"""
-        UPDATE meal
-        SET meal_type = 'snack',
-            source    = 'manual'
-        WHERE source    = 'hydration'
-          AND meal_type = 'hydration'
-          AND quantity  IS NULL
-          AND ({like_clauses})
-    """)
