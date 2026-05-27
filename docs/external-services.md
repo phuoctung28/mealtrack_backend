@@ -1,7 +1,7 @@
 # Backend External Services Integration
 
-**Last Updated:** May 6, 2026
-**Services:** Firebase, Cloudinary, Google Gemini, RevenueCat, Redis, Sentry
+**Last Updated:** May 27, 2026
+**Services:** Firebase, Cloudinary, Google Gemini, RevenueCat, PostHog, Redis, Sentry
 **All services gracefully degrade on failure** (except Firebase Auth and DB which fail fast)
 
 ---
@@ -18,9 +18,16 @@
 **Config:** `FIREBASE_CREDENTIALS=path/to/credentials.json`
 
 ### Firebase Cloud Messaging (FCM)
-- Platform-specific configs (Android high priority, APNS alert/badge/sound)
+- Platform-specific payload builders in `src/infra/services/push/`
+  - `android_payload_builder.py`: high-priority Android config with channel ID (`meal_reminders` or `daily_summary`)
+  - `apns_payload_builder.py`: APNs Time Sensitive payload with `interruption-level` in payload body (not headers), priority 10
 - Multi-device support via `user_fcm_tokens` table
 - Deduplication across workers via `notification_sent_log` table (migration 047)
+- Trial-expiry pushes at T-2d and T-1d via `ScheduledSubscriptionPushService` (`src/infra/services/scheduled_subscription_push_service.py`)
+- Notifications rescheduled automatically on timezone changes — triggered from `UpdateTimezoneCommandHandler` and `RegisterFcmTokenCommandHandler`
+- Scheduler leader election: `SchedulerLeaderLock` (`src/infra/services/scheduler_leader_lock.py`) uses `fcntl.flock` (per-process) + PostgreSQL advisory lock (cross-container) to ensure a single scheduler leader
+- Batch loop in `ScheduledNotificationService` (`src/infra/services/scheduled_notification_service.py`): 60-second tick, detects timezone midnights for `DailyContextPrecomputeService`, fetches due notifications, batch-sends, marks sent
+- APNs diagnostics surfaced at `/health/notifications` via `apns_diagnostics()` to verify `interruption-level` placement
 
 ---
 
@@ -75,12 +82,37 @@
 
 - Webhook sync to local `subscriptions` table
 - Premium status check with Redis cache fallback
-- Signature verification for webhooks
-- Webhook events: purchase, renewal, cancellation, expiration
+- Signature verification via constant-time HMAC comparison
+- Webhook events handled in `src/api/routes/v1/webhooks.py`:
+
+| Event | Action |
+|-------|--------|
+| `INITIAL_PURCHASE` | Create subscription record, credit referral wallet |
+| `RENEWAL` | Update expiry, reset billing-issue flag |
+| `CANCELLATION` | Set status to `cancelled` |
+| `EXPIRATION` | Set status to `expired` |
+| `BILLING_ISSUE` | Set status to `billing_issue` |
+| `PRODUCT_CHANGE` | Update product ID and expiry |
+| `REFUND` | Set status to `refunded`, revoke referral credit |
+| `TRANSFER` | Re-point subscription to new subscriber ID |
+
+- PostHog lifecycle mirroring for CANCELLATION, EXPIRATION, BILLING_ISSUE, REFUND, RENEWAL, PRODUCT_CHANGE events (configurable via `POSTHOG_API_KEY`)
 
 **Config:** `REVENUECAT_SECRET_API_KEY`, `REVENUECAT_WEBHOOK_SECRET`
 
 **Status:** Premium feature gates planned, not currently enforced on routes
+
+---
+
+## PostHog
+
+**Purpose:** Product analytics — subscription lifecycle event capture
+
+- `src/infra/adapters/posthog_adapter.py`: fire-and-forget async capture via `httpx` (3s timeout)
+- Only sends events when `POSTHOG_API_KEY` is set; silently skips otherwise
+- Currently captures subscription lifecycle events mirrored from RevenueCat webhooks
+
+**Config:** `POSTHOG_API_KEY`, `POSTHOG_HOST` (default: `https://app.posthog.com`)
 
 ---
 
@@ -144,6 +176,7 @@ GET /health/notifications      # FCM health
 | Gemini | Fail fast (503) | Return error to client |
 | Cloudinary | Degrade (fallback URL) | Continue with best-effort image |
 | RevenueCat | Degrade (assume premium from cache) | Continue with last-known status |
+| PostHog | Degrade (log warning) | Continue without analytics |
 | Redis | Degrade (bypass cache) | Continue without caching |
 | Sentry | Degrade (log locally) | Continue with local logging |
 
