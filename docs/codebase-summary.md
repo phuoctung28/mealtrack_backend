@@ -1,6 +1,6 @@
 # Backend Codebase Summary
 
-**Generated:** May 15, 2026
+**Generated:** May 27, 2026
 **Status:** Production-ready (430 files, ~38.5K LOC, 681+ tests, 70%+ coverage)
 **Language:** Python 3.11+ | **Framework:** FastAPI 0.115+ + SQLAlchemy 2.0
 
@@ -31,7 +31,7 @@
 | Database Tables | 13+ (core + notification_sent_log for dedup) |
 | Repositories | 10+ with smart sync and eager loading |
 | Port Interfaces | 17 port interfaces for dependency inversion |
-| External Integrations | 8 (Gemini, Pinecone, Firebase, Cloudinary, RevenueCat, Redis, MySQL, Sentry) |
+| External Integrations | 9 (Gemini, Pinecone, Firebase, Cloudinary, RevenueCat, PostHog, Redis, MySQL, Sentry) |
 
 ---
 
@@ -55,12 +55,13 @@
 
 ## Recent Features (May 2026)
 
+- **Notification / Push Overhaul:** Platform-specific payload builders (`src/infra/services/push/`); Android high-priority FCM, APNs Time Sensitive with `interruption-level` in payload body; trial-expiry pushes at T-2d and T-1d; notifications rescheduled on timezone changes; `SchedulerLeaderLock` (flock + PostgreSQL advisory lock) for multi-replica deployments; `DailyContextPrecomputeService` pre-computes calorie context at timezone midnight
+- **RevenueCat Webhook Expansion:** Full lifecycle coverage (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE, PRODUCT_CHANGE, REFUND, TRANSFER); referral credit/revoke on purchase/refund; PostHog lifecycle mirroring
+- **PostHog Analytics Adapter:** `src/infra/adapters/posthog_adapter.py` — fire-and-forget async capture; enabled by `POSTHOG_API_KEY`
+- **Parallel Recipe Generator:** `src/domain/services/meal_suggestion/parallel_recipe_generator.py` with per-recipe attempt logic in `recipe_attempt_builder.py`; 3-phase pipeline: name generation → parallel recipe generation → translation
+- **Scheduled Email Service:** `ScheduledEmailService` runs re-engagement and trial-expiry emails at startup via `src/infra/services/scheduled_email_service.py`
 - **Configurable Referral Commission:** `REFERRAL_COMMISSIONS` env var (JSON dict, per-currency, default 2 USD)
-- **Custom Unit Normalization:** Food items with non-standard units now convert to grams before nutrition calculation
-- **BMR Floor Protection:** Daily target never drops below 85% of standard daily (raised from 80%); cutting deficit reduced to 300 kcal
-- **Email Deep Links:** Universal Links via `/.well-known/apple-app-site-association`; `/app-download` redirect with campaign tracking
-- **AsyncUnitOfWork Concurrency Guard:** `asyncio.Lock` prevents concurrent reuse; handlers receive fresh UoW per `event_bus.send()` call
-- **Variable-Length Referral Codes:** 3–15 character codes (previously fixed length)
+- **Variable-Length Referral Codes:** 3–15 character codes
 
 ---
 
@@ -83,7 +84,7 @@
 | SuggestionOrchestrationService | Session-based meal suggestions (4h Redis TTL) |
 | MealGenerationService | Multi-model Gemini for meal generation |
 | TranslationService | 7-language support (en, vi, es, fr, de, ja, zh) |
-| NotificationService | FCM push notifications with dedup |
+| NotificationService | FCM push notifications with dedup; platform-specific builders; scheduler leader election |
 | MealDiscoveryService | Image-based meal discovery |
 
 ---

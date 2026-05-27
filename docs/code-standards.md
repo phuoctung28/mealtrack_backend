@@ -1,6 +1,6 @@
 # Backend Code Standards — Python Style & Conventions
 
-**Last Updated:** May 6, 2026
+**Last Updated:** May 27, 2026
 **Scope:** All code in `src/` (430 files, ~38.5K LOC)  
 **Applies To:** Typing, naming, imports, code organization, error handling
 
@@ -25,11 +25,20 @@
 
 ---
 
-## File Size Limits
+## File Size Limits (200-Line Principle)
 
+Keep files small enough to read, review, and — for AI-context files — load with full model attention. Origin: context-engineering research on LLM instruction-following (degradation past ~200–300 instructions). Source: [Quy tắc 200 dòng](https://thieunv.substack.com/p/ce-02-quy-tac-200-dong).
+
+### Code files
 - **Target**: <200 LOC per file for readability
 - **Maximum**: 400 LOC absolute limit
 - **Action**: Split into smaller, focused modules if exceeding target
+
+### Documentation & AI-context files
+Entry points stay lean; detail moves to on-demand references (progressive disclosure):
+- **`CLAUDE.md`**: <100 lines (loads every session)
+- **Tier-3 reference docs** (`docs/*.md`): target <200 lines, hard cap ~300; split by topic and link from the entry point
+- Treat each doc as a table of contents that points to detail, not a dumping ground
 
 ---
 
