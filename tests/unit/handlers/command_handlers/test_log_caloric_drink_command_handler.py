@@ -49,8 +49,11 @@ async def test_log_caloric_drink_response_exposes_calories_alias():
         )
     )
 
-    assert result["kcal"] == pytest.approx(140.0)
-    assert result["calories"] == pytest.approx(140.0)
+    # coke: kcal_per_100ml=42.1, sugar_per_100ml=10.6 at 330 ml
+    # fat_100ml = max(0, (42.1 - 10.6*4)/9) = 0; carbs_100ml = 42.1/4 = 10.525
+    # stored: carbs=round(10.525*3.3,1)=34.7, fat=0 → kcal=34.7*4=138.8
+    assert result["kcal"] == pytest.approx(138.8)
+    assert result["calories"] == pytest.approx(138.8)
 
 
 @pytest.mark.asyncio
@@ -70,5 +73,6 @@ async def test_log_caloric_drink_credits_hydration_weight_and_localizes_name():
     )
 
     assert uow.meals.saved.quantity == 333
-    assert result["volume_ml"] == 333
+    assert result["volume_ml"] == 350  # raw input
+    assert result["credited_ml"] == 333  # hydration-weighted amount stored
     assert result["drink_name"] == "Nước ép"

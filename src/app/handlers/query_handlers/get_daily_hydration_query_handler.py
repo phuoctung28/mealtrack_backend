@@ -62,6 +62,7 @@ def _build_entry_dict(meal: Meal, language: str = "en") -> dict:
         "drink_name": localized_name_for_catalog_name(meal.dish_name, language),
         "emoji": meal.emoji or "💧",
         "volume_ml": meal.quantity or 0,
+        "credited_ml": meal.quantity or 0,
         "kcal": kcal,
         "calories": kcal,
         "source": meal.source or "hydration",
@@ -111,7 +112,9 @@ class GetDailyHydrationQueryHandler(EventHandler[GetDailyHydrationQuery, dict]):
                     exc_info=True,
                 )
 
-            consumed_ml = sum(m.quantity or 0 for m in entries)
+            consumed_ml = await uow.meals.sum_hydration_ml_for_date(
+                target_date, query.user_id, user_tz_str
+            )
             percentage = round((consumed_ml / goal_ml * 100), 1) if goal_ml > 0 else 0.0
 
             streak_start = target_date - timedelta(days=30)
