@@ -4,6 +4,7 @@ Provides product lookup by barcode and food search using OAuth 2.0.
 """
 
 from typing import Dict, Any, Optional, List
+import asyncio
 import logging
 import time
 import base64
@@ -216,9 +217,9 @@ class FatSecretService:
             if isinstance(foods, dict):
                 foods = [foods]
 
-            # Process each food with nutrition data
-            processed = []
-            for food in foods:
+            # Process each food, fetching detailed nutrition concurrently to
+            # avoid N+1 sequential round trips (one food.get per search result).
+            async def _process(food: Dict) -> Dict:
                 food_id = food.get("food_id")
                 mapped = self._map_search_result(food)
 
@@ -241,9 +242,11 @@ class FatSecretService:
                     except Exception:
                         pass  # Use basic mapped data if details fail
 
-                processed.append(mapped)
+                return mapped
 
-            return processed
+            # gather preserves input order
+            processed = await asyncio.gather(*[_process(food) for food in foods])
+            return list(processed)
         except Exception as e:
             logger.warning(f"FatSecret search error for query '{query}': {e}")
             return []

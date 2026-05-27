@@ -6,6 +6,7 @@ ingredients. Every cache hit is persisted to food_reference so T1
 warms automatically over time.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -134,7 +135,9 @@ class IngredientNutritionResolver:
         external_id: Optional[str] = food.get("food_id")
 
         try:
-            self._repo.upsert_by_normalized_name(
+            # Repo uses a sync Session; offload so the event loop isn't blocked.
+            await asyncio.to_thread(
+                self._repo.upsert_by_normalized_name,
                 name=name,
                 name_normalized=name_normalized,
                 protein_100g=macros.protein,
