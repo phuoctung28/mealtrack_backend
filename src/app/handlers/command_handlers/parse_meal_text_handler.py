@@ -7,13 +7,11 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.events.base import EventHandler, handles
 from src.app.schemas.meal_schemas import ParseMealTextResponseDto, ParsedFoodItemDto
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
-from src.infra.services.ai.gemini_model_manager import GeminiModelManager
+from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 from src.infra.services.ai.prompts.system_prompts import SystemPrompts
 from src.infra.adapters.fat_secret_service import get_fat_secret_service
 from src.domain.services.nutrition_calculation_service import (
@@ -21,7 +19,6 @@ from src.domain.services.nutrition_calculation_service import (
     clamp_nutrition_values,
 )
 from src.app.handlers.command_handlers.meal_text_parsing_utils import (
-    extract_json_from_response,
     extract_usda_nutrition,
     parse_fatsecret_nutrition,
 )
@@ -43,7 +40,7 @@ class ParseMealTextHandler(
         self,
         translation_service: Optional[DeepLTextTranslationService] = None,
     ):
-        self._model_manager = GeminiModelManager.get_instance()
+        self._ai_manager = AIModelManager.get_instance()
         self._fat_secret_service = get_fat_secret_service()
         self._translation_service = translation_service
 
@@ -51,46 +48,39 @@ class ParseMealTextHandler(
         # Sanitize user input
         sanitized_text = sanitize_user_description(command.text)
 
-        # Add refinement context if current_items provided
+        # Truncate current_items to last 5 to bound prompt size
         if command.current_items:
-            context = json.dumps(command.current_items, ensure_ascii=False)
+            recent = command.current_items[-5:]
+            context = json.dumps(recent, ensure_ascii=False)
             sanitized_text += (
                 f"\n\nCurrent meal items:\n{context}\n\n"
                 "Update the meal based on my request above. Return the COMPLETE updated list."
             )
 
-        # Get model with JSON response format
-        model = self._model_manager.get_model(
-            response_mime_type="application/json",
-            temperature=0.3,  # Lower temperature for more consistent parsing
-        )
-
-        # Build messages with locale-aware food names
         system_prompt = SystemPrompts.get_meal_text_parsing_prompt(
             language=command.language
         )
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=sanitized_text),
-        ]
 
-        # Call Gemini
-        response = await model.ainvoke(messages)
-        content = response.content
+        # Route through AIModelManager: gets circuit breaking, fallback, and context caching
+        raw = await self._ai_manager.generate(
+            purpose=ModelPurpose.PARSE_TEXT,
+            prompt=sanitized_text,
+            system_message=system_prompt,
+            response_type="json",
+            max_tokens=800,
+        )
 
-        # Extract JSON from response — may be {emoji, items: [...]} or plain [...]
+        # raw is parsed JSON — dict {emoji, items} or list [...]
         emoji = None
-        try:
-            raw = json.loads(content)
-            if isinstance(raw, dict):
-                emoji = validate_emoji(raw.get("emoji"))
-                parsed_items = raw.get("items", [])
-                if not isinstance(parsed_items, list):
-                    parsed_items = [parsed_items]
-            else:
-                parsed_items = extract_json_from_response(content)
-        except (json.JSONDecodeError, TypeError):
-            parsed_items = extract_json_from_response(content)
+        if isinstance(raw, dict):
+            emoji = validate_emoji(raw.get("emoji"))
+            parsed_items = raw.get("items", [])
+            if not isinstance(parsed_items, list):
+                parsed_items = [parsed_items]
+        elif isinstance(raw, list):
+            parsed_items = raw
+        else:
+            parsed_items = []
 
         # Enhance items with USDA/FatSecret cascade lookup
         enhanced_items = []

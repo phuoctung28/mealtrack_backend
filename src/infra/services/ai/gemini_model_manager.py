@@ -199,7 +199,12 @@ class GeminiModelManager:
             env_var, PURPOSE_MODEL_DEFAULTS.get(purpose, self.model_name)
         )
 
-        if purpose in (GeminiModelPurpose.RECIPE, GeminiModelPurpose.BARCODE):
+        if purpose in (
+            GeminiModelPurpose.RECIPE,
+            GeminiModelPurpose.BARCODE,
+            GeminiModelPurpose.GENERAL,
+            GeminiModelPurpose.MEAL_NAMES,
+        ):
             kwargs.setdefault("thinking_budget", 0)
 
         config_key = self._get_config_key(

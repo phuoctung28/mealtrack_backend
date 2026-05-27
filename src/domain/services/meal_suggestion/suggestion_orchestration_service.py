@@ -7,7 +7,7 @@ TDEE helpers: suggestion_tdee_helpers.py
 
 import logging
 import uuid
-from typing import List, Optional, Tuple, Callable, Any, AsyncGenerator, Dict
+from typing import List, Optional, Tuple, Callable, Any, Dict
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
@@ -120,66 +120,6 @@ class SuggestionOrchestrationService:
             existing_session=bool(session_id),
         )
         return session, suggestions
-
-    async def stream_suggestions(
-        self,
-        user_id: str,
-        meal_type: str,
-        meal_portion_type: str,
-        ingredients: List[str],
-        cooking_time_minutes: int,
-        session_id: Optional[str] = None,
-        language: str = "en",
-        servings: int = 1,
-        cooking_equipment: Optional[List[str]] = None,
-        cuisine_region: Optional[str] = None,
-        calorie_target_override: Optional[int] = None,
-        protein_target: Optional[float] = None,
-        carbs_target: Optional[float] = None,
-        fat_target: Optional[float] = None,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Stream meal generation events and persist generated suggestions."""
-        session, exclude_names = await self._get_or_create_session(
-            user_id=user_id,
-            meal_type=meal_type,
-            meal_portion_type=meal_portion_type,
-            ingredients=ingredients,
-            cooking_time_minutes=cooking_time_minutes,
-            session_id=session_id,
-            language=language,
-            servings=servings,
-            cooking_equipment=cooking_equipment,
-            cuisine_region=cuisine_region,
-            calorie_target_override=calorie_target_override,
-            protein_target=protein_target,
-            carbs_target=carbs_target,
-            fat_target=fat_target,
-        )
-
-        suggestions: List[MealSuggestion] = []
-        async for event in self._recipe_generator.generate_stream(
-            session=session, exclude_meal_names=exclude_names
-        ):
-            if event.get("event") == "meal_detail":
-                suggestion = event.get("data", {}).get("suggestion")
-                if suggestion is not None:
-                    suggestions.append(suggestion)
-            yield event
-
-        await self._persist_generation_result(
-            session=session,
-            suggestions=suggestions,
-            existing_session=bool(session_id),
-        )
-        yield {
-            "event": "complete",
-            "data": {
-                "session_id": session.id,
-                "meal_type": session.meal_type,
-                "meal_portion_type": session.meal_portion_type,
-                "target_calories": session.target_calories,
-            },
-        }
 
     # ------------------------------------------------------------------
     # Session helpers

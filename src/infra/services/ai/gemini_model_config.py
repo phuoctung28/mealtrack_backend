@@ -22,7 +22,7 @@ class GeminiModelPurpose(str, Enum):
 
 
 # Default cache settings
-DEFAULT_MAX_CACHE_SIZE = 5  # Max number of model instances
+DEFAULT_MAX_CACHE_SIZE = 20  # Max number of model instances
 DEFAULT_TTL_SECONDS = 3600  # 1 hour TTL for cached models
 MEMORY_WARNING_THRESHOLD_MB = 400  # Warn when process exceeds this
 

@@ -108,6 +108,13 @@ class GeminiCacheManager:
         name = await self._create_cache(cache_type, prompt, model)
         if name:
             await self._set_cache_name(cache_type, name)
+        else:
+            logger.warning(
+                "[GEMINI-CACHE] Cache creation returned None for cache_type=%s — "
+                "prompt may be below Gemini minimum token threshold (1,024 tokens). "
+                "All calls for this purpose will be uncached.",
+                cache_type,
+            )
 
     async def refresh_loop(self) -> None:
         """Background task: refresh caches before TTL expiry. Run indefinitely."""

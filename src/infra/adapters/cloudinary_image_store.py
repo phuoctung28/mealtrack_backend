@@ -3,6 +3,7 @@ import os
 import uuid
 from typing import Optional
 
+import httpx
 import cloudinary
 import cloudinary.api
 import cloudinary.exceptions
@@ -125,8 +126,6 @@ class CloudinaryImageStore(ImageStorePort):
         Returns:
             The raw bytes of the image if found, None otherwise
         """
-        import requests
-
         logger.debug(f"Loading image with ID: {image_id}")
 
         # Get the URL for the image
@@ -139,7 +138,7 @@ class CloudinaryImageStore(ImageStorePort):
         # Fetch the image from Cloudinary
         try:
             logger.debug(f"Fetching image from URL: {url}")
-            response = requests.get(url)
+            response = httpx.get(url)
             if response.status_code == 200:
                 logger.debug("Image successfully fetched")
                 return response.content
@@ -206,13 +205,11 @@ class CloudinaryImageStore(ImageStorePort):
 
                 # Check if the URL is accessible
                 try:
-                    import requests
-
-                    response = requests.head(url, timeout=5)
+                    response = httpx.head(url, timeout=5)
                     if response.status_code == 200:
                         logger.debug(f"Found working fallback URL: {url}")
                         return url
-                except (requests.exceptions.RequestException, Exception) as e:
+                except (httpx.RequestError, Exception) as e:
                     logger.debug(f"URL check failed for {url}: {e}")
                     continue
 
