@@ -12,6 +12,7 @@ from src.app.events.hydration.hydration_cache_invalidation_required_event import
 from src.app.events.meal.meal_cache_invalidation_required_event import (
     MealCacheInvalidationRequiredEvent,
 )
+from src.domain.model.hydration import DrinkCategory
 from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.model.nutrition.nutrition import Nutrition
 from src.domain.model.nutrition.macros import Macros
@@ -48,6 +49,8 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
         drink = find_by_id(cmd.drink_id)
         if drink is None:
             raise ValueError(f"Unknown drink: {cmd.drink_id}")
+        if drink.category != DrinkCategory.CALORIC:
+            raise ValueError("Drink is not a caloric drink")
 
         async with self.uow as uow:
             now = utc_now()
@@ -66,8 +69,8 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
                 log_date = log_dt.astimezone(tz).date()
 
             # Scale macros from per-100ml catalog values
-            carbs_100ml = drink.sugar_per_100ml
-            fat_100ml = max(0.0, (drink.kcal_per_100ml - carbs_100ml * 4) / 9)
+            fat_100ml = max(0.0, (drink.kcal_per_100ml - drink.sugar_per_100ml * 4) / 9)
+            carbs_100ml = max(0.0, (drink.kcal_per_100ml - fat_100ml * 9) / 4)
             volume_factor = cmd.volume_ml / 100.0
             credited_ml = drink.credited_ml_for_volume(cmd.volume_ml)
 
@@ -123,7 +126,8 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
             "drink_id": cmd.drink_id,
             "drink_name": localized_name(drink, cmd.language),
             "emoji": drink.emoji,
-            "volume_ml": saved.quantity,
+            "volume_ml": cmd.volume_ml,
+            "credited_ml": saved.quantity,
             "kcal": kcal,
             "calories": kcal,
             "source": "hydration",

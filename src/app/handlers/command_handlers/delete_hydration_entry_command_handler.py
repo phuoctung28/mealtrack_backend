@@ -29,18 +29,20 @@ logger = logging.getLogger(__name__)
 
 @handles(DeleteHydrationEntryCommand)
 class DeleteHydrationEntryCommandHandler(
-    EventHandler[DeleteHydrationEntryCommand, bool]
+    EventHandler[DeleteHydrationEntryCommand, dict]
 ):
     def __init__(self, uow: AsyncUnitOfWork, event_bus: Any, cache_service: Optional[CachePort] = None):
         self.uow = uow
         self.event_bus = event_bus
         self.cache_service = cache_service
 
-    async def handle(self, cmd: DeleteHydrationEntryCommand) -> bool:
+    async def handle(self, cmd: DeleteHydrationEntryCommand) -> dict:
         async with self.uow as uow:
             meal = await uow.meals.find_by_id(cmd.entry_id)
             if meal is None or meal.user_id != cmd.user_id:
-                raise ValueError(f"Hydration entry {cmd.entry_id} not found")
+                raise ValueError("Hydration entry not found")
+            if meal.meal_type != "hydration":
+                raise ValueError("Hydration entry not found")
 
             if meal.status != MealStatus.INACTIVE:
                 await uow.meals.save(meal.mark_inactive())
