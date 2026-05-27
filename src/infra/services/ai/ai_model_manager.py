@@ -1,13 +1,13 @@
 """Provider-agnostic AI model manager with fallback support."""
+
 import logging
 import threading
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
 from src.domain.ports.ai_provider_port import AICapability
 from src.infra.services.ai.provider_circuit_breaker import (
-    CircuitState,
     ProviderCircuitBreaker,
 )
 from src.infra.services.ai.providers.gemini_provider import GeminiProvider
@@ -18,36 +18,46 @@ logger = logging.getLogger(__name__)
 class ModelPurpose(Enum):
     """Purpose-based model selection."""
 
-    MEAL_SCAN        = "meal_scan"
-    INGREDIENT_SCAN  = "ingredient_scan"
-    PARSE_TEXT       = "parse_text"
-    BARCODE          = "barcode"
-    MEAL_NAMES       = "meal_names"
-    RECIPE           = "recipe"
-    DISCOVERY        = "discovery"
-    GENERAL          = "general"
+    MEAL_SCAN = "meal_scan"
+    INGREDIENT_SCAN = "ingredient_scan"
+    PARSE_TEXT = "parse_text"
+    BARCODE = "barcode"
+    MEAL_NAMES = "meal_names"
+    RECIPE = "recipe"
+    DISCOVERY = "discovery"
+    GENERAL = "general"
 
 
-FALLBACK_CHAINS: Dict[ModelPurpose, List[str]] = {
+FALLBACK_CHAINS: dict[ModelPurpose, list[str]] = {
     # ==========================================================================
-    # VISION TASKS (critical): Gemini Flash first → Flash-Lite as fallback
+    # VISION / SHORT STRUCTURED TASKS: Gemini Flash-Lite first → Flash fallback
     # ==========================================================================
-    ModelPurpose.MEAL_SCAN:       ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    ModelPurpose.MEAL_SCAN: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
     ModelPurpose.INGREDIENT_SCAN: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
-
     # ==========================================================================
-    # TEXT TASKS: Flash-Lite first (cheaper) → Flash as fallback
+    # SHORT STRUCTURED TEXT: Gemini Flash-Lite first → Flash fallback
     # ==========================================================================
-    ModelPurpose.PARSE_TEXT:  ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.BARCODE:     ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.MEAL_NAMES:  ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.DISCOVERY:   ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.GENERAL:     ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
-
+    ModelPurpose.PARSE_TEXT: [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+    ],
+    ModelPurpose.BARCODE: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.MEAL_NAMES: [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+    ],
+    ModelPurpose.DISCOVERY: [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+    ],
+    ModelPurpose.GENERAL: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
     # ==========================================================================
-    # RECIPE TASKS: Flash-Lite primary (cheaper, less 503 pressure) → Flash fallback
+    # RECIPE TASKS: Gemini Flash-Lite first → Flash fallback
     # ==========================================================================
-    ModelPurpose.RECIPE:      ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.RECIPE: [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+    ],
 }
 
 
@@ -78,7 +88,7 @@ class AIModelManager:
             cls._instance = None
 
     def __init__(self) -> None:
-        self._cache_manager: Optional[Any] = None
+        self._cache_manager: Any | None = None
         self._circuit_breaker = ProviderCircuitBreaker()
         self._gemini = GeminiProvider()
         self._providers = {"gemini": self._gemini}
@@ -87,9 +97,11 @@ class AIModelManager:
         """Wire in GeminiCacheManager after startup warmup."""
         self._cache_manager = cache_manager
 
-    def get_fallback_chain(self, purpose: ModelPurpose) -> List[str]:
+    def get_fallback_chain(self, purpose: ModelPurpose) -> list[str]:
         """Get fallback chain for a purpose."""
-        return FALLBACK_CHAINS.get(purpose, FALLBACK_CHAINS[ModelPurpose.GENERAL]).copy()
+        return FALLBACK_CHAINS.get(
+            purpose, FALLBACK_CHAINS[ModelPurpose.GENERAL]
+        ).copy()
 
     def _get_provider_for_model(self, model: str):
         """Get provider that owns a model."""
@@ -103,10 +115,10 @@ class AIModelManager:
         prompt: str,
         system_message: str,
         response_type: str = "json",
-        max_tokens: Optional[int] = None,
-        schema: Optional[type] = None,
+        max_tokens: int | None = None,
+        schema: type | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate with automatic fallback.
 
@@ -117,24 +129,28 @@ class AIModelManager:
         available = self._circuit_breaker.filter_available(chain)
 
         if not available:
-            logger.warning(f"[ALL-CIRCUITS-OPEN] purpose={purpose.value} | forcing first model")
+            logger.warning(
+                f"[ALL-CIRCUITS-OPEN] purpose={purpose.value} | forcing first model"
+            )
             available = [chain[0]]
 
         # Look up warm Gemini context cache for this purpose
-        cache_name: Optional[str] = None
+        cache_name: str | None = None
         if self._cache_manager is not None:
             purpose_to_cache_type = {
-                ModelPurpose.RECIPE:     "recipe",
-                ModelPurpose.MEAL_SCAN:  "vision",
+                ModelPurpose.RECIPE: "recipe",
+                ModelPurpose.MEAL_SCAN: "vision",
                 ModelPurpose.PARSE_TEXT: "text_parse",
-                ModelPurpose.BARCODE:    "text_parse",
+                ModelPurpose.BARCODE: "text_parse",
             }
             cache_type = purpose_to_cache_type.get(purpose)
-            if cache_type:
+            if cache_type and any(model.startswith("gemini") for model in available):
                 try:
                     cache_name = await self._cache_manager.get_cache_name(cache_type)
                 except Exception as e:
-                    logger.warning("[AI-CACHE-LOOKUP-FAILED] purpose=%s error=%s", purpose.value, e)
+                    logger.warning(
+                        "[AI-CACHE-LOOKUP-FAILED] purpose=%s error=%s", purpose.value, e
+                    )
 
         attempted = []
         last_error = None
@@ -156,8 +172,8 @@ class AIModelManager:
                     response_type=response_type,
                     max_tokens=max_tokens,
                     schema=schema,
-                    purpose_hint=purpose.value,   # NEW: pass real purpose to provider
-                    cache_name=cache_name,
+                    purpose_hint=purpose.value,  # NEW: pass real purpose to provider
+                    cache_name=cache_name if model.startswith("gemini") else None,
                     **kwargs,
                 )
 
@@ -194,9 +210,9 @@ class AIModelManager:
         purpose: ModelPurpose,
         prompt: str,
         image_data: bytes,
-        system_message: Optional[str] = None,
+        system_message: str | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate with vision, with automatic fallback."""
         chain = self.get_fallback_chain(purpose)
         available = self._circuit_breaker.filter_available(chain)
@@ -223,7 +239,7 @@ class AIModelManager:
                     prompt=prompt,
                     image_data=image_data,
                     system_message=system_message,
-                    purpose_hint=purpose.value,   # NEW
+                    purpose_hint=purpose.value,  # NEW
                     **kwargs,
                 )
 

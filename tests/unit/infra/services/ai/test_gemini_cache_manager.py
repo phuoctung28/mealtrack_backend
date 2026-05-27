@@ -1,6 +1,8 @@
 """Unit tests for GeminiCacheManager."""
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
@@ -48,8 +50,12 @@ async def test_warm_one_skips_if_already_cached(cache_manager, mock_redis):
     """_warm_one does not call _create_cache when cache already exists in Redis."""
     mock_redis.get.return_value = "cachedContents/existing123"
 
-    with patch.object(cache_manager, "_create_cache", new_callable=AsyncMock) as mock_create:
-        await cache_manager._warm_one("recipe", "some system prompt", "gemini-2.5-flash")
+    with patch.object(
+        cache_manager, "_create_cache", new_callable=AsyncMock
+    ) as mock_create:
+        await cache_manager._warm_one(
+            "recipe", "some system prompt", "gemini-2.5-flash"
+        )
         mock_create.assert_not_awaited()
 
 
@@ -59,12 +65,19 @@ async def test_warm_one_creates_and_stores_cache(cache_manager, mock_redis):
     mock_redis.get.return_value = None
 
     with patch.object(
-        cache_manager, "_create_cache", new_callable=AsyncMock, return_value="cachedContents/new456"
+        cache_manager,
+        "_create_cache",
+        new_callable=AsyncMock,
+        return_value="cachedContents/new456",
     ) as mock_create, patch.object(
         cache_manager, "_set_cache_name", new_callable=AsyncMock
     ) as mock_set:
-        await cache_manager._warm_one("recipe", "some system prompt", "gemini-2.5-flash")
-        mock_create.assert_awaited_once_with("recipe", "some system prompt", "gemini-2.5-flash")
+        await cache_manager._warm_one(
+            "recipe", "some system prompt", "gemini-2.5-flash"
+        )
+        mock_create.assert_awaited_once_with(
+            "recipe", "some system prompt", "gemini-2.5-flash"
+        )
         mock_set.assert_awaited_once_with("recipe", "cachedContents/new456")
 
 
@@ -85,23 +98,82 @@ async def test_warm_one_skips_store_when_create_returns_none(cache_manager, mock
 @pytest.mark.asyncio
 async def test_set_cache_name_stores_with_ttl(cache_manager, mock_redis):
     """_set_cache_name stores the cache name with a TTL in Redis."""
-    from src.infra.services.ai.gemini_cache_manager import TTL_SECONDS, REFRESH_BEFORE_EXPIRY
+    from src.infra.services.ai.gemini_cache_manager import (
+        REFRESH_BEFORE_EXPIRY,
+        TTL_SECONDS,
+    )
 
     await cache_manager._set_cache_name("recipe", "cachedContents/xyz")
     mock_redis.set.assert_awaited_once_with(
-        "gemini_cache:recipe", "cachedContents/xyz", ex=TTL_SECONDS + REFRESH_BEFORE_EXPIRY
+        "gemini_cache:recipe",
+        "cachedContents/xyz",
+        ex=TTL_SECONDS + REFRESH_BEFORE_EXPIRY,
     )
 
 
 @pytest.mark.asyncio
 async def test_create_cache_handles_exception_gracefully(cache_manager):
     """_create_cache returns None (not raises) when the Gemini API call fails."""
-    # Patch the import inside _create_cache so the test works without google-generativeai installed
-    mock_genai = MagicMock()
-    mock_genai.caching.CachedContent.create.side_effect = Exception("API error")
-    with patch.dict("sys.modules", {"google.generativeai": mock_genai}):
-        result = await cache_manager._create_cache("recipe", "system prompt", "gemini-2.5-flash")
+    mock_client = MagicMock()
+    mock_client.caches.create.side_effect = Exception("API error")
+
+    with patch("google.genai.Client", return_value=mock_client):
+        result = await cache_manager._create_cache(
+            "recipe", "system prompt", "gemini-2.5-flash"
+        )
+
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_create_cache_uses_google_genai_client(cache_manager):
+    """_create_cache creates cached content with the installed google-genai SDK."""
+    mock_cache = MagicMock()
+    mock_cache.name = "cachedContents/new-sdk"
+    mock_client = MagicMock()
+    mock_client.models.count_tokens.return_value.total_tokens = 2048
+    mock_client.caches.create.return_value = mock_cache
+
+    with patch("google.genai.Client", return_value=mock_client) as client_cls:
+        result = await cache_manager._create_cache(
+            "recipe", "system prompt", "gemini-2.5-flash"
+        )
+
+    assert result == "cachedContents/new-sdk"
+    client_cls.assert_called_once_with(api_key="test-key")
+    mock_client.models.count_tokens.assert_called_once_with(
+        model="gemini-2.5-flash",
+        contents="system prompt",
+    )
+    mock_client.caches.create.assert_called_once()
+    _, kwargs = mock_client.caches.create.call_args
+    assert kwargs["model"] == "gemini-2.5-flash"
+    assert kwargs["config"].display_name == "mealtrack_recipe"
+    assert kwargs["config"].contents == "system prompt"
+    assert kwargs["config"].system_instruction is None
+    assert kwargs["config"].ttl == "3600s"
+
+
+@pytest.mark.asyncio
+async def test_create_cache_skips_content_under_gemini_minimum(cache_manager):
+    """_create_cache does not call Gemini cache creation for too-small prompts."""
+    mock_cache = MagicMock()
+    mock_cache.name = "cachedContents/should-not-create"
+    mock_client = MagicMock()
+    mock_client.models.count_tokens.return_value.total_tokens = 605
+    mock_client.caches.create.return_value = mock_cache
+
+    with patch("google.genai.Client", return_value=mock_client):
+        result = await cache_manager._create_cache(
+            "text_parse", "short prompt", "gemini-2.5-flash-lite"
+        )
+
+    assert result is None
+    mock_client.models.count_tokens.assert_called_once_with(
+        model="gemini-2.5-flash-lite",
+        contents="short prompt",
+    )
+    mock_client.caches.create.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -120,7 +192,9 @@ async def test_start_refresh_loop_stores_task(cache_manager):
     """start_refresh_loop stores the task handle in _refresh_task."""
     import asyncio
 
-    with patch.object(cache_manager, "refresh_loop", new_callable=AsyncMock) as mock_loop:
+    with patch.object(
+        cache_manager, "refresh_loop", new_callable=AsyncMock
+    ) as mock_loop:
         mock_loop.return_value = None
         cache_manager.start_refresh_loop()
         assert cache_manager._refresh_task is not None
