@@ -235,7 +235,7 @@ class TestLoadImage:
         with patch.object(cloudinary_store, "get_url") as mock_get_url:
             mock_get_url.return_value = "https://res.cloudinary.com/test/image.jpg"
 
-            with patch("requests.get") as mock_requests:
+            with patch("httpx.get") as mock_requests:
                 mock_requests.return_value = mock_response
 
                 result = cloudinary_store.load("test-image-id")
@@ -263,7 +263,7 @@ class TestLoadImage:
         with patch.object(cloudinary_store, "get_url") as mock_get_url:
             mock_get_url.return_value = "https://res.cloudinary.com/test/image.jpg"
 
-            with patch("requests.get") as mock_requests:
+            with patch("httpx.get") as mock_requests:
                 mock_requests.return_value = mock_response
 
                 result = cloudinary_store.load("test-image-id")
@@ -275,7 +275,7 @@ class TestLoadImage:
         with patch.object(cloudinary_store, "get_url") as mock_get_url:
             mock_get_url.return_value = "https://res.cloudinary.com/test/image.jpg"
 
-            with patch("requests.get") as mock_requests:
+            with patch("httpx.get") as mock_requests:
                 mock_requests.side_effect = Exception("Network error")
 
                 result = cloudinary_store.load("test-image-id")
@@ -291,7 +291,7 @@ class TestLoadImage:
         with patch.object(cloudinary_store, "get_url") as mock_get_url:
             mock_get_url.return_value = "https://res.cloudinary.com/test/image.jpg"
 
-            with patch("requests.get") as mock_requests:
+            with patch("httpx.get") as mock_requests:
                 mock_requests.return_value = mock_response
 
                 result = cloudinary_store.load("test-image-id")
@@ -337,7 +337,7 @@ class TestGetUrl:
         with patch("cloudinary.api.resource") as mock_resource:
             mock_resource.side_effect = Exception("API Error")
 
-            with patch("requests.head") as mock_head:
+            with patch("httpx.head") as mock_head:
                 mock_head.return_value = mock_response
 
                 result = cloudinary_store.get_url("test-id")
@@ -354,7 +354,7 @@ class TestGetUrl:
         with patch("cloudinary.api.resource") as mock_resource:
             mock_resource.side_effect = Exception("API Error")
 
-            with patch("requests.head") as mock_head:
+            with patch("httpx.head") as mock_head:
                 # First call (jpg) fails, second call (png) succeeds
                 mock_head.side_effect = [Mock(status_code=404), Mock(status_code=200)]
 
@@ -371,7 +371,7 @@ class TestGetUrl:
         with patch("cloudinary.api.resource") as mock_resource:
             mock_resource.side_effect = Exception("API Error")
 
-            with patch("requests.head") as mock_head:
+            with patch("httpx.head") as mock_head:
                 mock_head.return_value = Mock(status_code=404)
 
                 result = cloudinary_store.get_url("test-id")
@@ -407,7 +407,7 @@ class TestGetUrl:
         with patch("cloudinary.api.resource") as mock_resource:
             mock_resource.side_effect = Exception("API Error")
 
-            with patch("requests.head") as mock_head:
+            with patch("httpx.head") as mock_head:
                 mock_head.side_effect = Exception("Network error")
 
                 result = cloudinary_store.get_url("test-id")
@@ -492,7 +492,7 @@ class TestCloudinaryImageStoreIntegration:
 
         with patch("cloudinary.uploader.upload") as mock_upload, patch(
             "cloudinary.api.resource"
-        ) as mock_resource, patch("requests.get") as mock_get, patch(
+        ) as mock_resource, patch("httpx.get") as mock_get, patch(
             "cloudinary.uploader.destroy"
         ) as mock_destroy:
 
@@ -540,7 +540,7 @@ class TestCloudinaryImageStoreIntegration:
         # Load network error (should not raise, return None)
         with patch.object(cloudinary_store, "get_url") as mock_get_url:
             mock_get_url.return_value = "http://example.com/test.jpg"
-            with patch("requests.get") as mock_requests:
+            with patch("httpx.get") as mock_requests:
                 mock_requests.side_effect = Exception("Network error")
 
                 result = cloudinary_store.load(image_id)
