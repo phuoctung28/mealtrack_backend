@@ -27,6 +27,18 @@ _DRINKS: list[Drink] = [
         category=DrinkCategory.HYDRATION,
     ),
     Drink(
+        id="sparkling",
+        name="Sparkling",
+        sub="Carbonated",
+        emoji="🫧",
+        default_ml=250,
+        kcal_per_100ml=0.0,
+        sugar_per_100ml=0.0,
+        hydration_weight=1.0,
+        brand_color="#3B82F6",
+        category=DrinkCategory.HYDRATION,
+    ),
+    Drink(
         id="tea",
         name="Tea",
         sub=None,
@@ -51,6 +63,21 @@ _DRINKS: list[Drink] = [
         category=DrinkCategory.HYDRATION,
     ),
     Drink(
+        id="coke-zero",
+        name="Coke Zero",
+        sub="No sugar",
+        emoji="🥤",
+        default_ml=330,
+        kcal_per_100ml=0.0,
+        sugar_per_100ml=0.0,
+        hydration_weight=1.0,
+        brand_color="#1F2937",
+        category=DrinkCategory.HYDRATION,
+    ),
+    # -----------------------------------------------------------------------
+    # Caloric drinks
+    # -----------------------------------------------------------------------
+    Drink(
         id="electrolyte",
         name="Electrolyte",
         sub="Sports drink",
@@ -60,11 +87,8 @@ _DRINKS: list[Drink] = [
         sugar_per_100ml=0.8,
         hydration_weight=0.95,
         brand_color="#22C55E",
-        category=DrinkCategory.HYDRATION,
+        category=DrinkCategory.CALORIC,
     ),
-    # -----------------------------------------------------------------------
-    # Caloric drinks
-    # -----------------------------------------------------------------------
     Drink(
         id="milk-tea",
         name="Milk tea",
@@ -101,6 +125,54 @@ _DRINKS: list[Drink] = [
         brand_color="#F97316",
         category=DrinkCategory.CALORIC,
     ),
+    Drink(
+        id="smoothie",
+        name="Smoothie",
+        sub="Açaí blend",
+        emoji="🥤",
+        default_ml=400,
+        kcal_per_100ml=62.5,
+        sugar_per_100ml=7.5,
+        hydration_weight=0.90,
+        brand_color="#7C3AED",
+        category=DrinkCategory.CALORIC,
+    ),
+    Drink(
+        id="energy",
+        name="Energy drink",
+        sub="Red Bull",
+        emoji="⚡",
+        default_ml=250,
+        kcal_per_100ml=44.0,
+        sugar_per_100ml=10.8,
+        hydration_weight=0.85,
+        brand_color="#0EA5E9",
+        category=DrinkCategory.CALORIC,
+    ),
+    Drink(
+        id="iced-latte",
+        name="Iced latte",
+        sub="Cold brew",
+        emoji="🧊",
+        default_ml=350,
+        kcal_per_100ml=37.1,
+        sugar_per_100ml=2.9,
+        hydration_weight=0.85,
+        brand_color="#F59E0B",
+        category=DrinkCategory.CALORIC,
+    ),
+    Drink(
+        id="beer",
+        name="Beer",
+        sub="Lager",
+        emoji="🍺",
+        default_ml=330,
+        kcal_per_100ml=45.5,
+        sugar_per_100ml=1.2,
+        hydration_weight=0.60,
+        brand_color="#D97706",
+        category=DrinkCategory.CALORIC,
+    ),
 ]
 
 # Module-level constant — dict keyed by drink id for O(1) lookup.
@@ -109,12 +181,18 @@ DRINK_CATALOG: dict[str, Drink] = {drink.id: drink for drink in _DRINKS}
 _DRINK_TRANSLATIONS: dict[str, dict[str, dict[str, str | None]]] = {
     "vi": {
         "water": {"name": "Nước lọc", "sub": None},
+        "sparkling": {"name": "Nước soda", "sub": "Có ga"},
         "tea": {"name": "Trà", "sub": None},
         "coffee": {"name": "Cà phê", "sub": None},
-        "electrolyte": {"name": "Điện giải", "sub": "Nước thể thao"},
+        "electrolyte": {"name": "Nước điện giải", "sub": "Nước thể thao"},
         "milk-tea": {"name": "Trà sữa", "sub": "Trân châu"},
         "coke": {"name": "Nước ngọt", "sub": "Có ga"},
+        "coke-zero": {"name": "Coke Zero", "sub": "Không đường"},
         "oj": {"name": "Nước ép", "sub": "Ép tươi"},
+        "smoothie": {"name": "Sinh tố", "sub": "Hỗn hợp Açaí"},
+        "energy": {"name": "Nước tăng lực", "sub": "Red Bull"},
+        "iced-latte": {"name": "Latte đá", "sub": "Cold brew"},
+        "beer": {"name": "Bia", "sub": "Lager"},
     }
 }
 
