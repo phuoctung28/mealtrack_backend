@@ -467,7 +467,7 @@ class DailyContextPrecomputeService:
                     FROM user_fcm_tokens
                     WHERE user_id = ANY(:ids)
                       AND is_active = true
-                """),
+                """).execution_options(stream_results=True),
                 {"ids": user_ids},
             ):
                 tokens_by_user[row.user_id].append(row.fcm_token)
@@ -494,7 +494,7 @@ class DailyContextPrecomputeService:
                         JOIN users u ON u.id = up.user_id
                         WHERE up.user_id = ANY(:ids)
                           AND up.is_current = true
-                    """),
+                    """).execution_options(stream_results=True),
                     {"ids": user_ids},
                 )
             }
@@ -534,7 +534,7 @@ class DailyContextPrecomputeService:
                           AND m.created_at < :end
                           AND m.status = 'READY'
                         GROUP BY m.user_id
-                    """),
+                    """).execution_options(stream_results=True),
                     {
                         "ids": user_ids,
                         "start": day_start_utc.replace(tzinfo=None),
