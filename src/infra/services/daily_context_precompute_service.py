@@ -459,7 +459,8 @@ class DailyContextPrecomputeService:
             user_ids = [row.user_id for row in pref_rows]
 
             # ---- Query 2: active FCM tokens for all users ----
-            token_rows = session.execute(
+            tokens_by_user: dict[str, list[str]] = defaultdict(list)
+            for row in session.execute(
                 text("""
                     SELECT user_id, fcm_token
                     FROM user_fcm_tokens
@@ -467,37 +468,35 @@ class DailyContextPrecomputeService:
                       AND is_active = true
                 """),
                 {"ids": user_ids},
-            ).fetchall()
-
-            tokens_by_user: dict[str, list[str]] = defaultdict(list)
-            for row in token_rows:
+            ):
                 tokens_by_user[row.user_id].append(row.fcm_token)
 
             # ---- Query 3: current user profiles ----
-            profile_rows = session.execute(
-                text("""
-                    SELECT
-                        up.user_id,
-                        up.age,
-                        up.gender,
-                        up.height_cm,
-                        up.weight_kg,
-                        up.body_fat_percentage,
-                        up.job_type,
-                        up.training_days_per_week,
-                        up.training_minutes_per_session,
-                        up.fitness_goal,
-                        up.training_level,
-                        u.language_code
-                    FROM user_profiles up
-                    JOIN users u ON u.id = up.user_id
-                    WHERE up.user_id = ANY(:ids)
-                      AND up.is_current = true
-                """),
-                {"ids": user_ids},
-            ).fetchall()
-
-            profiles_by_user = {row.user_id: row for row in profile_rows}
+            profiles_by_user = {
+                row.user_id: row
+                for row in session.execute(
+                    text("""
+                        SELECT
+                            up.user_id,
+                            up.age,
+                            up.gender,
+                            up.height_cm,
+                            up.weight_kg,
+                            up.body_fat_percentage,
+                            up.job_type,
+                            up.training_days_per_week,
+                            up.training_minutes_per_session,
+                            up.fitness_goal,
+                            up.training_level,
+                            u.language_code
+                        FROM user_profiles up
+                        JOIN users u ON u.id = up.user_id
+                        WHERE up.user_id = ANY(:ids)
+                          AND up.is_current = true
+                    """),
+                    {"ids": user_ids},
+                )
+            }
 
             # ---- Query 4: calories consumed today per user ----
             # Compute UTC window for today in this timezone
@@ -512,36 +511,35 @@ class DailyContextPrecomputeService:
             day_end_utc = day_start_utc + timedelta(days=1)
 
             # Calories: P*4 + (C-fiber)*4 + fiber*2 + F*9 (canonical formula per CLAUDE.md)
-            consumed_rows = session.execute(
-                text("""
-                    SELECT
-                        m.user_id,
-                        COALESCE(
-                            SUM(
-                                (n.protein * 4.0)
-                                + (GREATEST(n.carbs - n.fiber, 0) * 4.0)
-                                + (n.fiber * 2.0)
-                                + (n.fat * 9.0)
-                            ),
-                            0
-                        ) AS consumed_calories
-                    FROM meal m
-                    JOIN nutrition n ON n.meal_id = m.meal_id
-                    WHERE m.user_id = ANY(:ids)
-                      AND m.created_at >= :start
-                      AND m.created_at < :end
-                      AND m.status = 'READY'
-                    GROUP BY m.user_id
-                """),
-                {
-                    "ids": user_ids,
-                    "start": day_start_utc.replace(tzinfo=None),
-                    "end": day_end_utc.replace(tzinfo=None),
-                },
-            ).fetchall()
-
             consumed_by_user: dict[str, float] = {
-                row.user_id: float(row.consumed_calories) for row in consumed_rows
+                row.user_id: float(row.consumed_calories)
+                for row in session.execute(
+                    text("""
+                        SELECT
+                            m.user_id,
+                            COALESCE(
+                                SUM(
+                                    (n.protein * 4.0)
+                                    + (GREATEST(n.carbs - n.fiber, 0) * 4.0)
+                                    + (n.fiber * 2.0)
+                                    + (n.fat * 9.0)
+                                ),
+                                0
+                            ) AS consumed_calories
+                        FROM meal m
+                        JOIN nutrition n ON n.meal_id = m.meal_id
+                        WHERE m.user_id = ANY(:ids)
+                          AND m.created_at >= :start
+                          AND m.created_at < :end
+                          AND m.status = 'READY'
+                        GROUP BY m.user_id
+                    """),
+                    {
+                        "ids": user_ids,
+                        "start": day_start_utc.replace(tzinfo=None),
+                        "end": day_end_utc.replace(tzinfo=None),
+                    },
+                )
             }
 
             # ---- Compute calorie goals via TDEE (per user, with fallback) ----
