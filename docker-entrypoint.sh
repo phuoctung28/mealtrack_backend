@@ -39,4 +39,6 @@ exec uvicorn src.api.main:app \
     --host 0.0.0.0 \
     --port "$PORT" \
     --workers "$WORKERS" \
-    --loop uvloop
+    --loop uvloop \
+    --max-requests 500 \
+    --max-requests-jitter 50
