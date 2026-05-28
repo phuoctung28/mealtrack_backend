@@ -13,14 +13,10 @@ def test_cache_evicts_oldest_at_max():
     from src.domain.services.meal_discovery.food_image_search_service import (
         FoodImageSearchService,
     )
-    import unittest.mock as mock
+    from collections import OrderedDict
 
     service = FoodImageSearchService.__new__(FoodImageSearchService)
-    from collections import OrderedDict
     service._cache = OrderedDict()
-    service._cache_lock = mock.MagicMock()
-    service._cache_lock.__enter__ = mock.MagicMock(return_value=None)
-    service._cache_lock.__exit__ = mock.MagicMock(return_value=False)
 
     import time
     for i in range(501):
