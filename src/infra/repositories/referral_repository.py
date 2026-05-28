@@ -56,13 +56,22 @@ class ReferralRepository:
 
     # === Conversion Operations ===
 
-    async def get_conversion_by_referred_user(self, user_id: str) -> Optional[ReferralConversion]:
-        result = await self.session.execute(
-            select(ReferralConversion).where(ReferralConversion.referred_user_id == user_id)
+    async def get_conversion_by_referred_user(
+        self, user_id: str, for_update: bool = False
+    ) -> Optional[ReferralConversion]:
+        stmt = select(ReferralConversion).where(
+            ReferralConversion.referred_user_id == user_id
         )
+        if for_update:
+            # Serialize concurrent/duplicate webhook deliveries: the second txn
+            # blocks until the first commits, then re-reads the updated status.
+            stmt = stmt.with_for_update()
+        result = await self.session.execute(stmt)
         return result.scalars().first()
 
-    async def get_conversions_by_referrer(self, user_id: str) -> List[ReferralConversion]:
+    async def get_conversions_by_referrer(
+        self, user_id: str
+    ) -> List[ReferralConversion]:
         result = await self.session.execute(
             select(ReferralConversion)
             .where(ReferralConversion.referrer_user_id == user_id)
@@ -95,10 +104,15 @@ class ReferralRepository:
 
     # === Wallet Operations ===
 
-    async def get_or_create_wallet(self, user_id: str) -> ReferralWallet:
-        result = await self.session.execute(
-            select(ReferralWallet).where(ReferralWallet.user_id == user_id)
-        )
+    async def get_or_create_wallet(
+        self, user_id: str, for_update: bool = False
+    ) -> ReferralWallet:
+        stmt = select(ReferralWallet).where(ReferralWallet.user_id == user_id)
+        if for_update:
+            # Lock the wallet row so concurrent credits/revokes serialize their
+            # read-modify-write of balance instead of losing updates.
+            stmt = stmt.with_for_update()
+        result = await self.session.execute(stmt)
         wallet = result.scalars().first()
         if not wallet:
             wallet = ReferralWallet(
@@ -113,14 +127,14 @@ class ReferralRepository:
         return wallet
 
     async def credit_wallet(self, user_id: str, amount: int) -> ReferralWallet:
-        wallet = await self.get_or_create_wallet(user_id)
+        wallet = await self.get_or_create_wallet(user_id, for_update=True)
         wallet.balance += amount
         wallet.total_earned += amount
         wallet.updated_at = utc_now()
         return wallet
 
     async def revoke_from_wallet(self, user_id: str, amount: int) -> ReferralWallet:
-        wallet = await self.get_or_create_wallet(user_id)
+        wallet = await self.get_or_create_wallet(user_id, for_update=True)
         wallet.balance = max(0, wallet.balance - amount)
         wallet.total_revoked += amount
         wallet.updated_at = utc_now()

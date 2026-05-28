@@ -58,6 +58,9 @@ class ScheduledNotificationService:
 
     LOOP_INTERVAL_SECONDS = 60
     LOOP_ERROR_RETRY_SECONDS = 30
+    # Rows claimed for sending sit in 'processing' only for one tick (seconds);
+    # anything still 'processing' this long past its send time was abandoned.
+    STALE_PROCESSING_MINUTES = 10
 
     def __init__(
         self,
@@ -183,6 +186,10 @@ class ScheduledNotificationService:
     async def _send_due_notifications(self, now: datetime) -> None:
         """Fetch due rows, fetch calories_consumed from DB, render, batch FCM, mark sent."""
 
+        # Recover rows stranded in 'processing' by a worker that died mid-send,
+        # otherwise they would never be delivered.
+        await asyncio.to_thread(self._recover_stale_processing)
+
         def _claim_due():
             with UnitOfWork() as uow:
                 due_rows = ReminderQueryBuilder.find_due_notifications(
@@ -201,8 +208,7 @@ class ScheduledNotificationService:
         # Batch-fetch real-time calories_consumed from DB for meal reminders.
         # daily_summary uses the JSONB snapshot; trial_expiry ignores calories.
         meal_reminder_ids = [
-            n.user_id for n in due
-            if n.notification_type.startswith("meal_reminder")
+            n.user_id for n in due if n.notification_type.startswith("meal_reminder")
         ]
         consumed_map: dict[str, int] = {}
         if meal_reminder_ids:
@@ -211,7 +217,8 @@ class ScheduledNotificationService:
             )
 
         hydration_user_ids = [
-            n.user_id for n in due
+            n.user_id
+            for n in due
             if n.notification_type.startswith("hydration_reminder")
         ]
         hydration_map: dict[str, tuple[int, int]] = {}
@@ -350,6 +357,30 @@ class ScheduledNotificationService:
                 text("DELETE FROM notifications WHERE expires_at < NOW()")
             )
             logger.info("Cleaned up %d expired notification rows", result.rowcount)
+
+    def _recover_stale_processing(self) -> None:
+        """Reset notifications stranded in 'processing' back to 'pending'.
+
+        A row is set to 'processing' when claimed for sending; if the worker
+        dies before marking it sent/failed it would otherwise stay 'processing'
+        forever and never be delivered. Anything still 'processing' well past
+        its scheduled time was abandoned by a dead worker.
+        """
+        cutoff = utc_now() - timedelta(minutes=self.STALE_PROCESSING_MINUTES)
+        with UnitOfWork() as uow:
+            result = uow.session.execute(
+                text("""
+                    UPDATE notifications
+                    SET status = 'pending'
+                    WHERE status = 'processing' AND scheduled_for_utc < :cutoff
+                    """),
+                {"cutoff": cutoff},
+            )
+            if result.rowcount:
+                logger.warning(
+                    "Recovered %d stale 'processing' notifications → pending",
+                    result.rowcount,
+                )
 
     async def _handle_failed_tokens(self, failed_tokens: list[dict]) -> None:
         to_deactivate = [

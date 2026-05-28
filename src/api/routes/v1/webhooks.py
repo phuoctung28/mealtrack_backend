@@ -3,11 +3,12 @@ Webhook handlers for RevenueCat events.
 
 Syncs subscription data to local database.
 """
+
 import hmac
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select, text
@@ -52,8 +53,7 @@ def _get_email_service() -> EmailService:
 
 @router.post("/revenuecat")
 async def revenuecat_webhook(
-    request: Request,
-    authorization: str | None = Header(None)
+    request: Request, authorization: str | None = Header(None)
 ):
     """
     Handle RevenueCat webhook events.
@@ -84,7 +84,9 @@ async def revenuecat_webhook(
     event_type = event.get("type")
     app_user_id = event.get("app_user_id")
 
-    logger.info(f"RevenueCat webhook received: {event_type} for app_user_id={app_user_id}")
+    logger.info(
+        f"RevenueCat webhook received: {event_type} for app_user_id={app_user_id}"
+    )
 
     # Get user
     async with AsyncUnitOfWork() as uow:
@@ -144,7 +146,9 @@ def _candidate_revenuecat_ids(event: dict) -> list[str]:
     return [
         candidate
         for candidate in candidates
-        if isinstance(candidate, str) and candidate and not (candidate in seen or seen.add(candidate))
+        if isinstance(candidate, str)
+        and candidate
+        and not (candidate in seen or seen.add(candidate))
     ]
 
 
@@ -158,10 +162,19 @@ async def find_user_for_revenuecat_event(uow, event: dict) -> User | None:
         if user:
             return user
 
-        result = await uow.session.execute(select(User).where(User.id == candidate))
-        user = result.scalars().first()
-        if user:
-            return user
+        # User.id stores UUID values as strings; skip anonymous/non-UUID
+        # RevenueCat IDs here so only valid internal IDs hit this fallback.
+        try:
+            candidate_uuid = uuid.UUID(candidate)
+        except (ValueError, AttributeError, TypeError):
+            candidate_uuid = None
+        if candidate_uuid is not None:
+            result = await uow.session.execute(
+                select(User).where(User.id == str(candidate_uuid))
+            )
+            user = result.scalars().first()
+            if user:
+                return user
 
         subscription = await uow.subscriptions.find_by_revenuecat_id(candidate)
         if subscription:
@@ -218,9 +231,15 @@ async def handle_transfer(uow, event):
 def _preferred_transfer_target(transferred_to: list[str]) -> str | None:
     """Prefer a custom app user ID over RevenueCat anonymous IDs."""
     for candidate in transferred_to:
-        if isinstance(candidate, str) and candidate and not candidate.startswith("$RCAnonymousID:"):
+        if (
+            isinstance(candidate, str)
+            and candidate
+            and not candidate.startswith("$RCAnonymousID:")
+        ):
             return candidate
-    return next((item for item in transferred_to if isinstance(item, str) and item), None)
+    return next(
+        (item for item in transferred_to if isinstance(item, str) and item), None
+    )
 
 
 async def handle_purchase(uow, user, event):
@@ -228,10 +247,7 @@ async def handle_purchase(uow, user, event):
     logger.info(f"Creating subscription for user {user.id}")
 
     # Check if subscription already exists
-    existing = await get_subscription_by_revenuecat_id(
-        uow,
-        event.get("app_user_id")
-    )
+    existing = await get_subscription_by_revenuecat_id(uow, event.get("app_user_id"))
 
     if existing:
         logger.warning(f"Subscription already exists for {user.id}, updating instead")
@@ -262,15 +278,16 @@ async def handle_purchase(uow, user, event):
 async def handle_renewal(uow, user, event):
     """Handle subscription renewal."""
     subscription = await get_subscription_by_revenuecat_id(
-        uow,
-        event.get("app_user_id")
+        uow, event.get("app_user_id")
     )
 
     if subscription:
         subscription.expires_at = parse_timestamp(event.get("expiration_at_ms"))
         subscription.status = "active"
         subscription.updated_at = utc_now()
-        logger.info(f"User {user.id} renewed subscription until {subscription.expires_at}")
+        logger.info(
+            f"User {user.id} renewed subscription until {subscription.expires_at}"
+        )
     else:
         logger.warning("Subscription not found for renewal, creating new one")
         await handle_purchase(uow, user, event)
@@ -281,14 +298,12 @@ async def handle_renewal(uow, user, event):
     # "your trial ends tomorrow" push for a sub that just auto-renewed.
     try:
         await uow.session.execute(
-            text(
-                """
+            text("""
                 DELETE FROM notifications
                 WHERE user_id = :uid
                   AND notification_type LIKE 'trial_expiry%'
                   AND status = 'pending'
-                """
-            ),
+                """),
             {"uid": user.id},
         )
     except Exception:
@@ -307,9 +322,13 @@ async def handle_cancellation(uow, user, event):
         subscription.cancelled_at = utc_now()
         subscription.updated_at = utc_now()
         # Note: User still has access until expires_at
-        logger.info(f"User {user.id} cancelled subscription (expires {subscription.expires_at})")
+        logger.info(
+            f"User {user.id} cancelled subscription (expires {subscription.expires_at})"
+        )
 
-    await capture_subscription_lifecycle_event(user, event, "CANCELLATION", subscription)
+    await capture_subscription_lifecycle_event(
+        user, event, "CANCELLATION", subscription
+    )
 
     # Send cancellation email
     if not user.email_opt_out:
@@ -342,7 +361,9 @@ async def handle_billing_issue(uow, user, event):
         subscription.updated_at = utc_now()
         logger.warning(f"Billing issue for user {user.id}")
 
-    await capture_subscription_lifecycle_event(user, event, "BILLING_ISSUE", subscription)
+    await capture_subscription_lifecycle_event(
+        user, event, "BILLING_ISSUE", subscription
+    )
 
 
 async def handle_product_change(uow, user, event):
@@ -356,7 +377,9 @@ async def handle_product_change(uow, user, event):
         subscription.updated_at = utc_now()
         logger.info(f"User {user.id} changed to {subscription.product_id}")
 
-    await capture_subscription_lifecycle_event(user, event, "PRODUCT_CHANGE", subscription)
+    await capture_subscription_lifecycle_event(
+        user, event, "PRODUCT_CHANGE", subscription
+    )
 
 
 async def handle_refund(uow, user, event):
@@ -372,7 +395,9 @@ async def handle_refund(uow, user, event):
     await _revoke_referral_on_refund(uow, str(user.id))
 
 
-async def capture_subscription_lifecycle_event(user, event, event_type, subscription) -> None:
+async def capture_subscription_lifecycle_event(
+    user, event, event_type, subscription
+) -> None:
     """Mirror RevenueCat lifecycle webhooks into PostHog when configured."""
     posthog_event = POSTHOG_LIFECYCLE_EVENTS.get(event_type)
     if not posthog_event:
@@ -380,7 +405,8 @@ async def capture_subscription_lifecycle_event(user, event, event_type, subscrip
 
     properties = {
         "revenuecat_event_type": event_type,
-        "product_id": event.get("product_id") or getattr(subscription, "product_id", None),
+        "product_id": event.get("product_id")
+        or getattr(subscription, "product_id", None),
         "platform": parse_platform(event.get("store")),
         "store": event.get("store"),
         "environment": event.get("environment"),
@@ -394,15 +420,18 @@ async def capture_subscription_lifecycle_event(user, event, event_type, subscrip
     await PostHogAdapter().capture(
         distinct_id=getattr(user, "firebase_uid", None) or str(user.id),
         event=posthog_event,
-        properties={key: value for key, value in properties.items() if value is not None},
+        properties={
+            key: value for key, value in properties.items() if value is not None
+        },
     )
 
 
 async def _credit_referral_on_purchase(uow, user_id: str) -> None:
     """Credit the referrer's wallet when a referred user completes their first purchase."""
     from src.infra.repositories.referral_repository import ReferralRepository
+
     repo = ReferralRepository(uow.session)
-    conversion = await repo.get_conversion_by_referred_user(user_id)
+    conversion = await repo.get_conversion_by_referred_user(user_id, for_update=True)
     if conversion and conversion.status == "pending":
         conversion.status = "converted"
         conversion.converted_at = utc_now()
@@ -421,8 +450,9 @@ async def _credit_referral_on_purchase(uow, user_id: str) -> None:
 async def _revoke_referral_on_refund(uow, user_id: str) -> None:
     """Revoke the referrer's wallet credit when a referred user is refunded."""
     from src.infra.repositories.referral_repository import ReferralRepository
+
     repo = ReferralRepository(uow.session)
-    conversion = await repo.get_conversion_by_referred_user(user_id)
+    conversion = await repo.get_conversion_by_referred_user(user_id, for_update=True)
     if conversion and conversion.status == "converted":
         conversion.status = "revoked"
         conversion.revoked_at = utc_now()
@@ -438,10 +468,14 @@ async def _revoke_referral_on_refund(uow, user_id: str) -> None:
 
 async def get_or_create_subscription(uow, user, event):
     """Get existing subscription or create one if missing (handles missed INITIAL_PURCHASE)."""
-    subscription = await uow.subscriptions.find_by_revenuecat_id(event.get("app_user_id"))
+    subscription = await uow.subscriptions.find_by_revenuecat_id(
+        event.get("app_user_id")
+    )
 
     if not subscription:
-        logger.warning(f"No subscription found for user {user.id}, creating record (missed INITIAL_PURCHASE)")
+        logger.warning(
+            f"No subscription found for user {user.id}, creating record (missed INITIAL_PURCHASE)"
+        )
         subscription = Subscription(
             id=str(uuid.uuid4()),
             user_id=user.id,
@@ -485,7 +519,7 @@ def parse_timestamp(ms: int | None) -> datetime | None:
     if ms is None:
         return None
     try:
-        return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+        return datetime.fromtimestamp(ms / 1000, tz=UTC)
     except Exception as e:
         logger.error(f"Error parsing timestamp {ms}: {e}")
         return None
