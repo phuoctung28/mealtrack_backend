@@ -8,7 +8,7 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select, text
@@ -162,15 +162,15 @@ async def find_user_for_revenuecat_event(uow, event: dict) -> User | None:
         if user:
             return user
 
-        # User.id is a UUID column; non-UUID candidates (e.g. $RCAnonymousID:...)
-        # would raise asyncpg DataError → 500 → RevenueCat retry storm.
+        # User.id stores UUID values as strings; skip anonymous/non-UUID
+        # RevenueCat IDs here so only valid internal IDs hit this fallback.
         try:
             candidate_uuid = uuid.UUID(candidate)
         except (ValueError, AttributeError, TypeError):
             candidate_uuid = None
         if candidate_uuid is not None:
             result = await uow.session.execute(
-                select(User).where(User.id == candidate_uuid)
+                select(User).where(User.id == str(candidate_uuid))
             )
             user = result.scalars().first()
             if user:
@@ -519,7 +519,7 @@ def parse_timestamp(ms: int | None) -> datetime | None:
     if ms is None:
         return None
     try:
-        return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+        return datetime.fromtimestamp(ms / 1000, tz=UTC)
     except Exception as e:
         logger.error(f"Error parsing timestamp {ms}: {e}")
         return None

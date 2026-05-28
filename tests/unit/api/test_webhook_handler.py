@@ -8,6 +8,7 @@ import pytest
 from fastapi import HTTPException
 
 from src.api.routes.v1.webhooks import (
+    find_user_for_revenuecat_event,
     handle_billing_issue,
     handle_cancellation,
     handle_expiration,
@@ -178,6 +179,25 @@ class TestWebhookHandler:
                 result = await revenuecat_webhook(mock_request, authorization="test_secret")
 
                 assert result == {"status": "ignored", "reason": "user_not_found"}
+
+    async def test_find_user_for_revenuecat_event_matches_uuid_string_user_id(self):
+        """UUID-shaped RevenueCat IDs must be compared against string User.id values."""
+        user_id = "1d599ac9-1f3f-4697-b11f-92e30584bb2b"
+        mock_user = MagicMock(id=user_id)
+        mock_uow = MagicMock()
+        mock_uow.session.execute = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.side_effect = [None, mock_user]
+        mock_uow.session.execute.return_value = mock_result
+
+        result = await find_user_for_revenuecat_event(
+            mock_uow,
+            {"app_user_id": user_id},
+        )
+
+        assert result is mock_user
+        id_lookup = mock_uow.session.execute.await_args_list[1].args[0]
+        assert id_lookup.compile().params["id_1"] == user_id
 
     async def test_webhook_transfer_without_user_acknowledged(self, mock_request):
         """Test RevenueCat TRANSFER webhooks do not require app_user_id lookup."""
