@@ -5,6 +5,7 @@ Generation logic: parallel_recipe_generator.py
 TDEE helpers: suggestion_tdee_helpers.py
 """
 
+import asyncio
 import logging
 import uuid
 from typing import List, Optional, Tuple, Callable, Any, AsyncGenerator, Dict
@@ -281,7 +282,8 @@ class SuggestionOrchestrationService:
             raise RuntimeError(
                 "Profile provider not configured for SuggestionOrchestrationService"
             )
-        profile = self._profile_provider(user_id)
+        # profile_provider uses a sync Session; offload so the event loop isn't blocked.
+        profile = await asyncio.to_thread(self._profile_provider, user_id)
         if not profile:
             raise ValueError(f"User {user_id} profile not found")
 

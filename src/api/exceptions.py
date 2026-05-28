@@ -123,6 +123,6 @@ def handle_exception(exc: Exception) -> HTTPException:
         detail={
             "error_code": "INTERNAL_ERROR",
             "message": "An unexpected error occurred",
-            "details": {"error": str(exc)},
+            "details": {},
         },
     )

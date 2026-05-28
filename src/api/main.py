@@ -207,7 +207,6 @@ async def lifespan(app: FastAPI):
         if os.getenv("FAIL_ON_CACHE_ERROR", "false").lower() == "true":
             raise
 
-
     # Initialize Gemini explicit context caches
     gemini_cache_manager = None
     try:
@@ -221,6 +220,7 @@ async def lifespan(app: FastAPI):
             gemini_cache_manager.start_refresh_loop()
             logger.info("Gemini context caches warmed")
             from src.infra.services.ai.ai_model_manager import AIModelManager
+
             AIModelManager.get_instance().set_cache_manager(gemini_cache_manager)
             logger.info("GeminiCacheManager wired into AIModelManager")
         else:
@@ -228,6 +228,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Gemini cache warmup failed (non-fatal): {e}")
 
+    # Eagerly build singleton event buses during single-threaded startup so
+    # concurrent first requests never race the lazy initializer (which would
+    # otherwise build several throwaway buses on a cold start).
+    try:
+        from src.api.dependencies.event_bus import (
+            get_configured_event_bus,
+            get_food_search_event_bus,
+        )
+
+        get_configured_event_bus()
+        get_food_search_event_bus()
+        logger.info("Event buses initialized")
+    except Exception as e:
+        logger.warning("Event bus eager init failed (non-fatal): %s", e)
 
     logger.info("MealTrack API started successfully!")
     yield
@@ -241,7 +255,6 @@ async def lifespan(app: FastAPI):
             await gemini_cache_manager.stop()
         except Exception as e:
             logger.warning(f"Gemini cache manager stop failed: {e}")
-
 
     # Disconnect cache
     await shutdown_cache_layer()

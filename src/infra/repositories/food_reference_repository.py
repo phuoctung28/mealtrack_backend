@@ -298,10 +298,16 @@ class FoodReferenceRepository:
             }
             update_fields = {k: v for k, v in values.items() if k != "name_normalized"}
             stmt = pg_insert(FoodReferenceModel).values(**values)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["name_normalized"],
-                set_=update_fields,
-            )
+            on_conflict_kwargs: Dict[str, Any] = {
+                "index_elements": ["name_normalized"],
+                "set_": update_fields,
+            }
+            if not is_verified:
+                # Atomically refuse to overwrite a curated (verified) row with
+                # unverified data — closes the race the SELECT above leaves open
+                # if a concurrent writer verifies the row between the two steps.
+                on_conflict_kwargs["where"] = FoodReferenceModel.is_verified.is_(False)
+            stmt = stmt.on_conflict_do_update(**on_conflict_kwargs)
             session.execute(stmt)
             session.commit()
 
