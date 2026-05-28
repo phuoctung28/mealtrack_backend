@@ -10,6 +10,7 @@ Architecture:
 """
 
 import asyncio
+import gc
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -320,6 +321,8 @@ class ScheduledNotificationService:
         # Mark sent/failed
         if sent_ids or failed_ids:
             await asyncio.to_thread(self._mark_notifications, sent_ids, failed_ids)
+
+        gc.collect()
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

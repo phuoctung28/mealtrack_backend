@@ -1,6 +1,7 @@
 """Batch pre-compute user notification context per timezone group."""
 
 import asyncio
+import gc
 import logging
 import uuid
 from collections import defaultdict
@@ -454,6 +455,7 @@ class DailyContextPrecomputeService:
             ).fetchall()
 
             if not pref_rows:
+                gc.collect()
                 return 0
 
             user_ids = [row.user_id for row in pref_rows]
@@ -579,7 +581,8 @@ class DailyContextPrecomputeService:
                 )
                 session.execute(stmt)
 
-            return len(pref_rows)
+        gc.collect()
+        return len(pref_rows)
 
     # ------------------------------------------------------------------
     # Notification row builder
