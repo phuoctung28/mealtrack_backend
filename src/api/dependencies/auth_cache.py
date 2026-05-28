@@ -10,8 +10,9 @@ from cachetools import TTLCache
 logger = logging.getLogger(__name__)
 
 # 10-minute in-process cache. Avoids a Redis round-trip on every authenticated
-# request. maxsize=15_000 covers 10K+ active users with headroom.
-_uid_cache: TTLCache[str, dict] = TTLCache(maxsize=15_000, ttl=600)
+# request. maxsize=500 is sufficient at current traffic levels (56 req/min peak),
+# saving ~15 MB per worker vs the previous 15k limit.
+_uid_cache: TTLCache[str, dict] = TTLCache(maxsize=500, ttl=600)
 
 
 async def get_cached_user_id(

@@ -53,3 +53,22 @@ async def test_cache_service_arg_is_ignored():
     from src.api.dependencies.auth_cache import get_cached_user_id, set_cached_user_id
     await set_cached_user_id(None, "uid-x", "user-x", is_active=True)
     assert await get_cached_user_id(None, "uid-x") == "user-x"
+
+
+def test_auth_cache_maxsize():
+    from src.api.dependencies.auth_cache import _uid_cache
+    assert _uid_cache.maxsize == 500
+
+
+def test_auth_cache_ttl():
+    from src.api.dependencies.auth_cache import _uid_cache
+    assert _uid_cache.ttl == 600
+
+
+def test_auth_cache_evicts_at_maxsize():
+    from src.api.dependencies.auth_cache import _uid_cache
+    _uid_cache.clear()
+    for i in range(501):
+        _uid_cache[f"uid_{i}"] = {"user_id": str(i), "is_active": True}
+    assert len(_uid_cache) == 500
+    _uid_cache.clear()
