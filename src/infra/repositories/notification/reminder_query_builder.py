@@ -157,6 +157,7 @@ class ReminderQueryBuilder:
                 status_filter,
             )
             .order_by(NotificationORM.scheduled_for_utc, NotificationORM.created_at)
+            .limit(500)
         )
         if lock_rows:
             query = query.with_for_update(skip_locked=True)

@@ -22,6 +22,7 @@ def test_find_due_notifications_queries_pending_due_rows():
     mock_query = MagicMock()
     mock_query.filter.return_value = mock_query
     mock_query.order_by.return_value = mock_query
+    mock_query.limit.return_value = mock_query
     mock_query.all.return_value = [mock_notif]
 
     db = MagicMock()
@@ -45,6 +46,7 @@ def test_find_due_notifications_can_lock_rows_for_scheduler_claims():
     mock_query = MagicMock()
     mock_query.filter.return_value = mock_query
     mock_query.order_by.return_value = mock_query
+    mock_query.limit.return_value = mock_query
     mock_query.with_for_update.return_value = mock_query
     mock_query.all.return_value = [mock_notif]
 
