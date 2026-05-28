@@ -455,7 +455,6 @@ class DailyContextPrecomputeService:
             ).fetchall()
 
             if not pref_rows:
-                gc.collect()
                 return 0
 
             user_ids = [row.user_id for row in pref_rows]
