@@ -1,7 +1,7 @@
 """
 Food image search service with in-memory LRU cache.
 Search chain: adapter list (injected) → first hit wins.
-Cache: 7-day TTL, max 5000 entries with LRU eviction.
+Cache: 1-day TTL, max 500 entries with LRU eviction.
 Confidence scoring: measures how well the image describes the meal name.
 """
 
@@ -17,8 +17,8 @@ from src.domain.services.meal_discovery import extract_words
 
 logger = logging.getLogger(__name__)
 
-CACHE_TTL_SECONDS = 7 * 24 * 3600  # 7 days
-CACHE_MAX_ENTRIES = 5_000
+CACHE_TTL_SECONDS = 24 * 3600  # 1 day
+CACHE_MAX_ENTRIES = 500
 
 # Minimum confidence to accept an image (below this → emoji fallback)
 MIN_ACCEPT_CONFIDENCE = 0.3
