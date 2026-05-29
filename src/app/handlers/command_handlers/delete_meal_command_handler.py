@@ -9,7 +9,7 @@ on nutrition/meal records.
 import logging
 from typing import Any, Dict
 
-from src.api.exceptions import ResourceNotFoundException, AuthorizationException
+from src.api.exceptions import AuthorizationException
 from src.app.commands.meal import DeleteMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal.meal_cache_invalidation_required_event import (
@@ -34,9 +34,7 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
         async with self.uow as uow:
             meal = await uow.meals.find_by_id(command.meal_id)
             if not meal:
-                raise ResourceNotFoundException(
-                    f"Meal with ID {command.meal_id} not found"
-                )
+                return {"meal_id": command.meal_id, "message": "Meal already deleted"}
 
             if meal.user_id != command.user_id:
                 raise AuthorizationException(

@@ -35,15 +35,12 @@ class TestDeleteMealCommandHandler:
         assert updated is None
 
     @pytest.mark.asyncio
-    async def test_soft_delete_nonexistent_meal_raises(self, event_bus, test_session):
-        # Arrange
-        user_id = "123e4567-e89b-12d3-a456-426614174000"  # Sample user ID
-        command = DeleteMealCommand(
-            meal_id="00000000-0000-0000-0000-000000000000", user_id=user_id
-        )
+    async def test_delete_nonexistent_meal_is_idempotent(self, event_bus, test_session):
+        meal_id = "00000000-0000-0000-0000-000000000000"
+        user_id = "123e4567-e89b-12d3-a456-426614174000"
+        command = DeleteMealCommand(meal_id=meal_id, user_id=user_id)
 
-        # Act / Assert - handler now receives UoW via constructor injection
-        from src.api.exceptions import ResourceNotFoundException
+        result = await event_bus.send(command)
 
-        with pytest.raises(ResourceNotFoundException):
-            await event_bus.send(command)
+        assert result["meal_id"] == meal_id
+        assert result["message"] == "Meal already deleted"
