@@ -51,7 +51,7 @@ def format_iso_utc(dt: Optional[datetime]) -> Optional[str]:
     # If naive, assume UTC
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.isoformat()
+    return dt.astimezone(timezone.utc).isoformat()
 
 
 def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:

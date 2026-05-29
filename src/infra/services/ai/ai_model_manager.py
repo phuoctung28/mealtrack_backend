@@ -11,7 +11,6 @@ from src.infra.services.ai.provider_circuit_breaker import (
     ProviderCircuitBreaker,
 )
 from src.infra.services.ai.providers.gemini_provider import GeminiProvider
-from src.infra.services.ai.providers.mistral_provider import MistralProvider
 
 logger = logging.getLogger(__name__)
 
@@ -19,41 +18,36 @@ logger = logging.getLogger(__name__)
 class ModelPurpose(Enum):
     """Purpose-based model selection."""
 
-    MEAL_SCAN = "meal_scan"
-    INGREDIENT_SCAN = "ingredient_scan"
-    PARSE_TEXT = "parse_text"
-    BARCODE = "barcode"
-    MEAL_NAMES = "meal_names"
-    RECIPE_PRIMARY = "recipe_primary"
-    RECIPE_SECONDARY = "recipe_secondary"
-    DISCOVERY = "discovery"
-    GENERAL = "general"
+    MEAL_SCAN        = "meal_scan"
+    INGREDIENT_SCAN  = "ingredient_scan"
+    PARSE_TEXT       = "parse_text"
+    BARCODE          = "barcode"
+    MEAL_NAMES       = "meal_names"
+    RECIPE           = "recipe"
+    DISCOVERY        = "discovery"
+    GENERAL          = "general"
 
 
 FALLBACK_CHAINS: Dict[ModelPurpose, List[str]] = {
     # ==========================================================================
-    # VISION TASKS (critical): Gemini first → Mistral-large as emergency fallback
-    # Gemini is reliable; Mistral-large ($2/$6 per 1M) only if Gemini fails
+    # VISION TASKS (critical): Gemini Flash first → Flash-Lite as fallback
     # ==========================================================================
-    ModelPurpose.MEAL_SCAN: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "mistral-large-latest"],
-    ModelPurpose.INGREDIENT_SCAN: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "mistral-large-latest"],
+    ModelPurpose.MEAL_SCAN:       ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    ModelPurpose.INGREDIENT_SCAN: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
 
     # ==========================================================================
-    # TEXT TASKS: Mistral-small first (cheaper: $0.15/$0.60) → Gemini as fallback
-    # Mistral-small is 2x cheaper on input, 4x cheaper on output than Gemini Flash
+    # TEXT TASKS: Flash-Lite first (cheaper) → Flash as fallback
     # ==========================================================================
-    ModelPurpose.PARSE_TEXT: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.BARCODE: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.MEAL_NAMES: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.DISCOVERY: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
-    ModelPurpose.GENERAL: ["mistral-small-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.PARSE_TEXT:  ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.BARCODE:     ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.MEAL_NAMES:  ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.DISCOVERY:   ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.GENERAL:     ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
 
     # ==========================================================================
-    # RECIPE TASKS: Gemini first (quality) → Gemini-lite fallback (no Mistral-large)
-    # Recipe generation needs quality; Mistral-large too expensive for fallback
+    # RECIPE TASKS: Flash-Lite primary (cheaper, less 503 pressure) → Flash fallback
     # ==========================================================================
-    ModelPurpose.RECIPE_PRIMARY: ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
-    ModelPurpose.RECIPE_SECONDARY: ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+    ModelPurpose.RECIPE:      ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
 }
 
 
@@ -84,19 +78,14 @@ class AIModelManager:
             cls._instance = None
 
     def __init__(self) -> None:
+        self._cache_manager: Optional[Any] = None
         self._circuit_breaker = ProviderCircuitBreaker()
         self._gemini = GeminiProvider()
-        self._mistral = MistralProvider()
-        self._providers = {
-            "gemini": self._gemini,
-            "mistral": self._mistral,
-        }
+        self._providers = {"gemini": self._gemini}
 
-        # Log provider availability
-        if self._mistral.is_available():
-            logger.info("[AI-MANAGER] Mistral provider available as fallback")
-        else:
-            logger.warning("[AI-MANAGER] Mistral provider not configured (MISTRAL_API_KEY missing)")
+    def set_cache_manager(self, cache_manager) -> None:
+        """Wire in GeminiCacheManager after startup warmup."""
+        self._cache_manager = cache_manager
 
     def get_fallback_chain(self, purpose: ModelPurpose) -> List[str]:
         """Get fallback chain for a purpose."""
@@ -106,11 +95,6 @@ class AIModelManager:
         """Get provider that owns a model."""
         if model.startswith("gemini"):
             return self._gemini
-        if model.startswith("mistral"):
-            if self._mistral.is_available():
-                return self._mistral
-            logger.debug(f"[SKIP-MISTRAL] model={model} | reason=not configured")
-            return None
         return None
 
     async def generate(
@@ -136,6 +120,22 @@ class AIModelManager:
             logger.warning(f"[ALL-CIRCUITS-OPEN] purpose={purpose.value} | forcing first model")
             available = [chain[0]]
 
+        # Look up warm Gemini context cache for this purpose
+        cache_name: Optional[str] = None
+        if self._cache_manager is not None:
+            purpose_to_cache_type = {
+                ModelPurpose.RECIPE:     "recipe",
+                ModelPurpose.MEAL_SCAN:  "vision",
+                ModelPurpose.PARSE_TEXT: "text_parse",
+                ModelPurpose.BARCODE:    "text_parse",
+            }
+            cache_type = purpose_to_cache_type.get(purpose)
+            if cache_type:
+                try:
+                    cache_name = await self._cache_manager.get_cache_name(cache_type)
+                except Exception as e:
+                    logger.warning("[AI-CACHE-LOOKUP-FAILED] purpose=%s error=%s", purpose.value, e)
+
         attempted = []
         last_error = None
 
@@ -156,6 +156,8 @@ class AIModelManager:
                     response_type=response_type,
                     max_tokens=max_tokens,
                     schema=schema,
+                    purpose_hint=purpose.value,   # NEW: pass real purpose to provider
+                    cache_name=cache_name,
                     **kwargs,
                 )
 
@@ -221,6 +223,7 @@ class AIModelManager:
                     prompt=prompt,
                     image_data=image_data,
                     system_message=system_message,
+                    purpose_hint=purpose.value,   # NEW
                     **kwargs,
                 )
 

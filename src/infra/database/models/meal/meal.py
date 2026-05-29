@@ -51,6 +51,9 @@ class MealORM(Base, TimestampMixin):
     # Source tracking (scanner, prompt, food_search, manual)
     source = Column(String(20), nullable=True)
 
+    # Generic serving quantity: grams for food meals, ml for hydration meals
+    quantity = Column(Integer, nullable=True)
+
     # Recipe details (populated for AI suggestions)
     description = Column(Text, nullable=True)
     instructions = Column(JSON, nullable=True)  # List[str]

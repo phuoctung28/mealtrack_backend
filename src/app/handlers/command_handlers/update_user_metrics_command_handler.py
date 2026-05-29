@@ -43,6 +43,8 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 command.target_weight_kg,
                 command.goal_start_weight_kg,
                 command.goal_started_at,
+                command.daily_water_goal_ml,
+                command.reset_water_goal,
             ]
         ):
             raise ValidationException("At least one metric must be provided")
@@ -151,6 +153,12 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
                 )
                 profile.goal_started_at = command.goal_started_at
 
+            if command.reset_water_goal:
+                profile.daily_water_goal_ml = None
+            elif command.daily_water_goal_ml is not None:
+                if command.daily_water_goal_ml <= 0:
+                    raise ValidationException("Daily water goal must be greater than 0")
+                profile.daily_water_goal_ml = command.daily_water_goal_ml
 
             # Ensure this profile is marked as current
             profile.is_current = True
@@ -191,3 +199,15 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
             await self.cache_service.invalidate_pattern(weekly_pattern)
         except Exception as e:
             logger.warning(f"Failed to invalidate weekly budget pattern for user {user_id}: {e}")
+
+        hydration_pattern = f"user:{user_id}:hydration:*"
+        try:
+            await self.cache_service.invalidate_pattern(hydration_pattern)
+        except Exception as e:
+            logger.warning(f"Failed to invalidate hydration pattern for user {user_id}: {e}")
+
+        weekly_hydration_pattern = f"user:{user_id}:hydration_weekly:*"
+        try:
+            await self.cache_service.invalidate_pattern(weekly_hydration_pattern)
+        except Exception as e:
+            logger.warning(f"Failed to invalidate weekly hydration pattern for user {user_id}: {e}")

@@ -1,6 +1,6 @@
 # Backend API Endpoints Reference
 
-**Last Updated:** May 6, 2026
+**Last Updated:** May 27, 2026
 **Base URL:** `http://localhost:8000` (dev) or deployed host
 **API Docs:** `/docs` (Swagger UI)
 **Auth:** Firebase JWT — `Authorization: Bearer <firebase-id-token>`
@@ -143,11 +143,11 @@ Dev mode: `X-Dev-User-Id` header (requires `DEV_MODE=true`)
 
 ## Referrals
 
-Referral codes are 3–15 characters. Commission rates are configurable via `REFERRAL_COMMISSIONS` env var (per-currency JSON; default: `{"USD": 2, "VND": 50000, "EUR": 1.8, "default": 2}`).
+Codes are 3–15 characters. Commission rates set via `REFERRAL_COMMISSIONS` env var. See `external-services.md`.
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| POST | `/v1/referrals/validate` | Validate referral code (3–15 chars) |
+| POST | `/v1/referrals/validate` | Validate referral code |
 | POST | `/v1/referrals/apply` | Apply referral code |
 | GET | `/v1/referrals/my-code` | Get user's referral code |
 | GET | `/v1/referrals/stats` | Get referral stats |
@@ -176,7 +176,17 @@ Referral codes are 3–15 characters. Commission rates are configurable via `REF
 
 ---
 
+## Codes
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/v1/codes/validate` | Validate promo or referral code before purchase (does not redeem) |
+
+---
+
 ## Webhooks
+
+Handles RevenueCat lifecycle events (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE, PRODUCT_CHANGE, REFUND, TRANSFER). Signature verified via constant-time HMAC; events mirrored to PostHog when `POSTHOG_API_KEY` is set.
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|

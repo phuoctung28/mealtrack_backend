@@ -1,6 +1,6 @@
 # Backend System Architecture Overview
 
-**Last Updated:** May 15, 2026
+**Last Updated:** May 27, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
 **Codebase:** 430 files, ~38.5K LOC across 4 layers
@@ -40,7 +40,7 @@
 | API | 76 | ~8,605 | 17 route modules, 34 Pydantic schemas, 8 mappers, 3 middleware |
 | App | 140 | ~6,229 | 30 commands, 31 queries, 19 events, 51+ handlers, 3 app services |
 | Domain | 133 | ~14,556 | 8 bounded contexts, 30+ entities, 50+ services, 17 port interfaces |
-| Infra | 80 | ~8,895 | 13+ DB tables, 10+ repos, Redis, PyMediator, external adapters |
+| Infra | 80 | ~8,895 | 13+ DB tables, 10+ repos, Redis, PyMediator, external adapters, push payload builders |
 | **Total** | **430** | **~38,300** | |
 
 **Layer rule:** Domain has ZERO external dependencies. See `cqrs-guide.md` for handler patterns.
@@ -77,7 +77,7 @@ Smart sync (diff-based updates), eager loading via pre-defined `joinedload` opti
 | User | User, UserProfile, Activity, TdeeRequest |
 | Meal Planning | MealPlan, PlannedMeal, DayPlan, UserPreferences |
 | Conversation | Conversation, Message, ConversationState |
-| Notification | UserFcmToken, NotificationPreferences, PushNotification |
+| Notification | UserFcmToken, NotificationPreferences, PushNotification, NotificationSentLog |
 | AI | GPTAnalysisResponse, GPTFoodItem, GPTResponseError |
 | Chat | Thread, Message, ThreadStatus, MessageRole |
 

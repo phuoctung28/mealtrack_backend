@@ -5,6 +5,7 @@ Each handler is in its own file for better maintainability.
 
 # Activity handlers
 from .get_daily_activities_query_handler import GetDailyActivitiesQueryHandler
+from .get_bulk_activities_query_handler import GetBulkActivitiesQueryHandler
 from .get_daily_breakdown_query_handler import GetDailyBreakdownQueryHandler
 from .get_daily_macros_query_handler import GetDailyMacrosQueryHandler
 from .get_streak_query_handler import GetStreakQueryHandler
@@ -38,6 +39,11 @@ from .search_foods_query_handler import SearchFoodsQueryHandler
 from .get_saved_suggestions_query_handler import GetSavedSuggestionsQueryHandler
 from .get_weekly_budget_query_handler import GetWeeklyBudgetQueryHandler
 
+# Hydration handlers
+from .get_daily_hydration_query_handler import GetDailyHydrationQueryHandler
+from .get_drink_catalog_query_handler import GetDrinkCatalogQueryHandler
+from .get_weekly_hydration_query_handler import GetWeeklyHydrationQueryHandler
+
 __all__ = [
     # TDEE
     "GetUserTdeeQueryHandler",
@@ -56,6 +62,7 @@ __all__ = [
     "GetUserMetricsQueryHandler",
     # Activity
     "GetDailyActivitiesQueryHandler",
+    "GetBulkActivitiesQueryHandler",
     # Meal Plan
     "GetMealsByDateQueryHandler",
     # Progress
@@ -66,4 +73,8 @@ __all__ = [
     "GetWeeklyBudgetQueryHandler",
     # Saved suggestion
     "GetSavedSuggestionsQueryHandler",
+    # Hydration
+    "GetDailyHydrationQueryHandler",
+    "GetDrinkCatalogQueryHandler",
+    "GetWeeklyHydrationQueryHandler",
 ]

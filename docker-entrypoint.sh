@@ -22,7 +22,7 @@ else
 fi
 
 # Render defaults web services to port 10000 if a custom port is not configured.
-# Railway injects PORT; local Docker defaults to 8000.
+# Local Docker defaults to 8000.
 if [ -z "${PORT:-}" ]; then
     if [ "${RENDER:-}" = "true" ]; then
         PORT="10000"

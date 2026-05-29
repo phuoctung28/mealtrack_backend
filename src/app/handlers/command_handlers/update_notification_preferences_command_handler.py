@@ -62,6 +62,7 @@ class UpdateNotificationPreferencesCommandHandler(
                 updated_prefs = saved_prefs.update_preferences(
                     meal_reminders_enabled=command.meal_reminders_enabled,
                     daily_summary_enabled=command.daily_summary_enabled,
+                    hydration_reminders_enabled=command.hydration_reminders_enabled,
                     breakfast_time_minutes=command.breakfast_time_minutes,
                     lunch_time_minutes=command.lunch_time_minutes,
                     dinner_time_minutes=command.dinner_time_minutes,

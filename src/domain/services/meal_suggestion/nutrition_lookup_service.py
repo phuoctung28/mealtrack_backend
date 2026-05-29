@@ -167,8 +167,9 @@ class NutritionLookupService:
 
         _cache_metrics["redis_misses"] += 1
 
-        # T1: exact match on name_normalized
-        ref = self._repo.find_by_normalized_name(normalized)
+        # T1: exact match on name_normalized.
+        # Repo uses a sync Session; offload so the event loop isn't blocked.
+        ref = await asyncio.to_thread(self._repo.find_by_normalized_name, normalized)
         if ref:
             _cache_metrics["t1_hits"] += 1
             result = self._calculate_from_ref(

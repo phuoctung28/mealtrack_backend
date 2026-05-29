@@ -120,7 +120,10 @@ class WeeklyBudgetService:
         tz = get_zone_info(user_timezone) if user_timezone else None
 
         meals = await uow.meals.find_by_date_range(
-            user_id, week_start, week_end, user_timezone=user_timezone,
+            user_id,
+            week_start,
+            week_end,
+            user_timezone=user_timezone,
         )
 
         total_calories = 0.0
@@ -134,55 +137,7 @@ class WeeklyBudgetService:
                 if (exclude_date or exclude_dates_set) and meal.created_at:
                     aware_dt = ensure_utc(meal.created_at)
                     meal_local_date = (
-                        aware_dt.astimezone(tz).date() if tz
-                        else aware_dt.date()
-                    )
-                    if exclude_date and meal_local_date == exclude_date:
-                        continue
-                    if meal_local_date in exclude_dates_set:
-                        continue
-                total_calories += meal.nutrition.calories or 0
-                total_protein += meal.nutrition.macros.protein or 0
-                total_carbs += meal.nutrition.macros.carbs or 0
-                total_fat += meal.nutrition.macros.fat or 0
-
-        return {
-            "calories": total_calories,
-            "protein": total_protein,
-            "carbs": total_carbs,
-            "fat": total_fat,
-        }
-
-    @staticmethod
-    async def calculate_weekly_consumed_async(
-        uow: Any,
-        user_id: str,
-        week_start: date,
-        exclude_date: Optional[date] = None,
-        exclude_dates: Optional[List[date]] = None,
-        user_timezone: Optional[str] = None,
-    ) -> Dict[str, float]:
-        """Async version of calculate_weekly_consumed for AsyncUnitOfWork."""
-        week_end = week_start + timedelta(days=6)
-        tz = get_zone_info(user_timezone) if user_timezone else None
-
-        meals = await uow.meals.find_by_date_range(
-            user_id, week_start, week_end, user_timezone=user_timezone,
-        )
-
-        total_calories = 0.0
-        total_protein = 0.0
-        total_carbs = 0.0
-        total_fat = 0.0
-
-        exclude_dates_set = set(exclude_dates) if exclude_dates else set()
-        for meal in meals:
-            if meal.status == MealStatus.READY and meal.nutrition:
-                if (exclude_date or exclude_dates_set) and meal.created_at:
-                    aware_dt = ensure_utc(meal.created_at)
-                    meal_local_date = (
-                        aware_dt.astimezone(tz).date() if tz
-                        else aware_dt.date()
+                        aware_dt.astimezone(tz).date() if tz else aware_dt.date()
                     )
                     if exclude_date and meal_local_date == exclude_date:
                         continue
@@ -427,31 +382,43 @@ class WeeklyBudgetService:
         past_days_count = (target_date - week_start).days
         if past_days_count > 0:
             daily_counts = await uow.meals.get_daily_meal_counts(
-                user_id, week_start, past_end,
+                user_id,
+                week_start,
+                past_end,
                 user_timezone=user_timezone,
             )
             logged_past_days = len(daily_counts)
             skipped_days = past_days_count - logged_past_days
 
             total_logged = logged_past_days + 1
-            if (total_logged < WeeklyBudgetConstants.MIN_LOGGED_DAYS_FOR_REDISTRIBUTION
-                    and past_days_count >= 3):
+            if (
+                total_logged < WeeklyBudgetConstants.MIN_LOGGED_DAYS_FOR_REDISTRIBUTION
+                and past_days_count >= 3
+            ):
                 show_logging_prompt = True
 
         redistribution_logged_days = max(0, logged_past_days - past_cheat_count)
 
         # --- Calculate consumed totals from actual meals ---
         consumed_total = await calc.calculate_weekly_consumed_async(
-            uow, user_id, week_start, user_timezone=user_timezone,
+            uow,
+            user_id,
+            week_start,
+            user_timezone=user_timezone,
         )
         consumed_before_today = await calc.calculate_weekly_consumed_async(
-            uow, user_id, week_start,
-            exclude_date=target_date, user_timezone=user_timezone,
+            uow,
+            user_id,
+            week_start,
+            exclude_date=target_date,
+            user_timezone=user_timezone,
         )
 
         if past_cheat_dates:
             consumed_for_redistribution = await calc.calculate_weekly_consumed_async(
-                uow, user_id, week_start,
+                uow,
+                user_id,
+                week_start,
                 exclude_date=target_date,
                 exclude_dates=past_cheat_dates,
                 user_timezone=user_timezone,
@@ -462,13 +429,19 @@ class WeeklyBudgetService:
         # --- Calculate adjusted daily ---
         if show_logging_prompt:
             adjusted = calc.calculate_adjusted_daily(
-                replace(weekly_budget, consumed_calories=0, consumed_protein=0,
-                        consumed_carbs=0, consumed_fat=0),
+                replace(
+                    weekly_budget,
+                    consumed_calories=0,
+                    consumed_protein=0,
+                    consumed_carbs=0,
+                    consumed_fat=0,
+                ),
                 standard_daily_calories=base_daily_cal,
                 standard_daily_carbs=base_daily_carbs,
                 standard_daily_fat=base_daily_fat,
                 standard_daily_protein=base_daily_protein,
-                bmr=bmr, remaining_days=7,
+                bmr=bmr,
+                remaining_days=7,
             )
         else:
             effective_week_days = redistribution_logged_days + remaining_days
@@ -499,7 +472,9 @@ class WeeklyBudgetService:
             )
 
         # --- Budget cap ---
-        remaining_before_today = weekly_budget.target_calories - consumed_before_today["calories"]
+        remaining_before_today = (
+            weekly_budget.target_calories - consumed_before_today["calories"]
+        )
         if remaining_days > 0 and remaining_before_today > 0:
             max_daily = remaining_before_today / remaining_days
             if adjusted.calories > max_daily:

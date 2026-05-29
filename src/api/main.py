@@ -33,7 +33,6 @@ from firebase_admin import credentials
 
 from src.api.base_dependencies import (
     initialize_cache_layer,
-    initialize_scheduled_notification_service,
     shutdown_cache_layer,
 )
 from src.api.middleware.accept_language import AcceptLanguageMiddleware
@@ -45,6 +44,7 @@ from src.api.routes.v1.cheat_days import router as cheat_days_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
 from src.api.routes.v1.health import router as health_router
+from src.api.routes.v1.hydration import router as hydration_router
 from src.api.routes.v1.ingredients import router as ingredients_router
 from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
 from src.api.routes.v1.meals import router as meals_router
@@ -64,10 +64,6 @@ from src.infra.config.settings import settings
 from src.infra.database.config import engine
 from src.infra.database.config_async import async_engine
 from src.infra.monitoring.sentry import initialize_sentry
-from src.infra.services.scheduled_email_service import ScheduledEmailService
-from src.infra.services.email_template_renderer import EmailTemplateRenderer
-from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
-from src.domain.services.email_service import EmailService
 from src.api.routes.well_known import router as well_known_router
 from src.api.routes.app_download import router as app_download_router
 
@@ -154,6 +150,33 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting MealTrack API...")
 
+    # PostHog LLM Analytics via OpenTelemetry — must run before any LangChain calls
+    _posthog_key = os.getenv("POSTHOG_API_KEY")
+    if _posthog_key:
+        try:
+            from opentelemetry import trace
+            from opentelemetry.sdk.trace import TracerProvider
+            from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+            from posthog.ai.otel import PostHogSpanProcessor
+            from opentelemetry.instrumentation.langchain import LangchainInstrumentor
+
+            _otel_provider = TracerProvider(
+                resource=Resource(attributes={SERVICE_NAME: "mealtrack-backend"})
+            )
+            _otel_provider.add_span_processor(
+                PostHogSpanProcessor(
+                    api_key=_posthog_key,
+                    host=os.getenv("POSTHOG_HOST", "https://us.i.posthog.com"),
+                )
+            )
+            trace.set_tracer_provider(_otel_provider)
+            LangchainInstrumentor().instrument()
+            logger.info("PostHog LLM Analytics instrumented via OpenTelemetry")
+        except Exception as e:
+            logger.warning(f"PostHog LLM Analytics init failed (non-fatal): {e}")
+    else:
+        logger.info("POSTHOG_API_KEY not set — LLM analytics disabled")
+
     # Initialize Firebase Admin SDK
     try:
         initialize_firebase()
@@ -184,34 +207,41 @@ async def lifespan(app: FastAPI):
         if os.getenv("FAIL_ON_CACHE_ERROR", "false").lower() == "true":
             raise
 
-    # Initialize and start scheduled notification service
-    scheduled_service = None
+    # Initialize Gemini explicit context caches
+    gemini_cache_manager = None
     try:
-        logger.info("Initializing scheduled notification service...")
-        scheduled_service = initialize_scheduled_notification_service()
-        # Expose trial_push for the RevenueCat RENEWAL webhook handler.
-        app.state.trial_push_service = getattr(
-            scheduled_service, "trial_push_service", None
-        )
-        await scheduled_service.start()
-        logger.info("Scheduled notification service started successfully!")
+        from src.infra.services.ai.gemini_cache_manager import GeminiCacheManager
+        from src.api.base_dependencies import get_raw_redis_client
+
+        _raw_redis = get_raw_redis_client()
+        if _raw_redis is not None:
+            gemini_cache_manager = GeminiCacheManager(redis_client=_raw_redis)
+            await gemini_cache_manager.warm_all()
+            gemini_cache_manager.start_refresh_loop()
+            logger.info("Gemini context caches warmed")
+            from src.infra.services.ai.ai_model_manager import AIModelManager
+
+            AIModelManager.get_instance().set_cache_manager(gemini_cache_manager)
+            logger.info("GeminiCacheManager wired into AIModelManager")
+        else:
+            logger.warning("Redis not available — Gemini cache skipped")
     except Exception as e:
-        logger.error(f"Failed to start scheduled notification service: {e}")
-        # Continue running the API even if notification service fails
+        logger.warning(f"Gemini cache warmup failed (non-fatal): {e}")
 
-    # Start scheduled email service
-    if os.getenv("SCHEDULED_EMAIL_ENABLED", "false").lower() == "true":
-        email_adapter = ResendEmailAdapter()
-        email_renderer = EmailTemplateRenderer()
-        email_service = EmailService(email_adapter=email_adapter, template_renderer=email_renderer)
-        scheduled_email_service = ScheduledEmailService(email_service=email_service)
+    # Eagerly build singleton event buses during single-threaded startup so
+    # concurrent first requests never race the lazy initializer (which would
+    # otherwise build several throwaway buses on a cold start).
+    try:
+        from src.api.dependencies.event_bus import (
+            get_configured_event_bus,
+            get_food_search_event_bus,
+        )
 
-        try:
-            await scheduled_email_service.check_and_send_emails()
-        except Exception as e:
-            logger.error(f"Scheduled email check failed: {e}")
-    else:
-        logger.info("Scheduled email service disabled (SCHEDULED_EMAIL_ENABLED=false)")
+        get_configured_event_bus()
+        get_food_search_event_bus()
+        logger.info("Event buses initialized")
+    except Exception as e:
+        logger.warning("Event bus eager init failed (non-fatal): %s", e)
 
     logger.info("MealTrack API started successfully!")
     yield
@@ -219,14 +249,12 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down MealTrack API...")
 
-    # Stop scheduled notification service
-    if scheduled_service:
+    # Stop Gemini cache refresh loop before disconnecting Redis
+    if gemini_cache_manager is not None:
         try:
-            logger.info("Stopping scheduled notification service...")
-            await scheduled_service.stop()
-            logger.info("Scheduled notification service stopped successfully!")
+            await gemini_cache_manager.stop()
         except Exception as e:
-            logger.error(f"Error stopping scheduled notification service: {e}")
+            logger.warning(f"Gemini cache manager stop failed: {e}")
 
     # Disconnect cache
     await shutdown_cache_layer()
@@ -280,6 +308,7 @@ app.include_router(foods_router)
 app.include_router(monitoring_router)
 app.include_router(webhooks_router)
 app.include_router(notifications_router)
+app.include_router(hydration_router)
 app.include_router(ingredients_router)
 app.include_router(tdee_router)
 app.include_router(saved_suggestions_router)

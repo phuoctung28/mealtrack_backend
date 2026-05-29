@@ -2,7 +2,7 @@
 Activities API endpoints - Event-driven architecture.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -11,7 +11,7 @@ from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import ValidationException, handle_exception
 from src.api.middleware.accept_language import get_request_language
-from src.app.queries.activity import GetDailyActivitiesQuery
+from src.app.queries.activity import GetDailyActivitiesQuery, GetBulkActivitiesQuery
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.event_bus import EventBus
 
@@ -66,6 +66,41 @@ async def get_daily_activities(
         activities = await event_bus.send(query)
 
         return activities
+
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.get("/bulk", response_model=None)
+async def get_bulk_activities(
+    request: Request,
+    start: date = Query(..., description="Start date (inclusive), YYYY-MM-DD"),
+    end: date = Query(..., description="End date (inclusive), YYYY-MM-DD"),
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    Get all activities for a date range, grouped by date.
+
+    Returns a dict of { "YYYY-MM-DD": [activities] } for each date in the range.
+    Max range: 60 days.
+    """
+    try:
+        if start > end:
+            raise ValidationException("Start date must be before or equal to end date")
+        if (end - start).days > 60:
+            raise ValidationException("Date range cannot exceed 60 days")
+
+        language = get_request_language(request)
+        header_tz = request.headers.get("X-Timezone")
+        query = GetBulkActivitiesQuery(
+            user_id=user_id,
+            start_date=start,
+            end_date=end,
+            language=language,
+            header_timezone=header_tz,
+        )
+        return await event_bus.send(query)
 
     except Exception as e:
         raise handle_exception(e) from e

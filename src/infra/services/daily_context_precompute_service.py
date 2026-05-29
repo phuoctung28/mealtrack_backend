@@ -16,27 +16,29 @@ from src.domain.services.meal_suggestion.suggestion_tdee_helpers import (
 from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.cache.redis_client import RedisClient
 from src.infra.database.models.notification.notification import NotificationORM
 from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
-_CONTEXT_TTL = 86_400  # 24 h
-_SENTINEL_TTL = 25 * 3_600  # 25 h — survives the full day
 _NOTIF_EXPIRY_DAYS = 7
+
+# Single-process sentinel: the leader lock ensures only one process runs this.
+# Cleared on restart, which is correct — startup catch-up reruns the precompute.
+_precomputed_today: set[tuple[str, str]] = set()
 
 _DEFAULT_BREAKFAST_MINUTES = 510  # 08:30
 _DEFAULT_LUNCH_MINUTES = 690  # 11:30
 _DEFAULT_DINNER_MINUTES = 1_080  # 18:00
 _DEFAULT_SUMMARY_MINUTES = 1_260  # 21:00
+_DEFAULT_AFTERNOON_MINUTES = 780  # 13:00
+_DEFAULT_EVENING_MINUTES = 1_080  # 18:00 — intentionally same as dinner per design spec
 
 
 class DailyContextPrecomputeService:
     """Pre-computes calorie_goal, calories_consumed, gender, language per user at timezone midnight."""
 
-    def __init__(self, redis_client: RedisClient):
-        self._redis = redis_client
+    def __init__(self) -> None:
         self._tdee_service = TdeeCalculationService()
         self._locks: dict[str, asyncio.Lock] = {}
 
@@ -45,29 +47,49 @@ class DailyContextPrecomputeService:
     # ------------------------------------------------------------------
 
     def sentinel_key(self, today: date, tz_name: str) -> str:
+        """Kept for logging and test assertions."""
         return f"precomputed:{today.isoformat()}:{tz_name}"
-
-    def context_key(self, user_id: str) -> str:
-        return f"user_daily_context:{user_id}"
 
     # ------------------------------------------------------------------
     # Public async entry point
     # ------------------------------------------------------------------
 
+    def _check_db_sentinel(self, tz_name: str, today: date) -> bool:
+        """Check DB for existing notifications for this timezone+date.
+
+        Used as a fallback when the in-memory sentinel is empty (e.g. fresh
+        cron process). One fast query prevents re-running precompute every run.
+        """
+        with UnitOfWork() as uow:
+            row = uow.session.execute(
+                text("""
+                    SELECT 1 FROM notifications n
+                    JOIN users u ON u.id = n.user_id
+                    WHERE u.timezone = :tz_name
+                      AND n.scheduled_date = :today
+                    LIMIT 1
+                """),
+                {"tz_name": tz_name, "today": today},
+            ).fetchone()
+        return row is not None
+
     async def is_precomputed(self, today: date, tz_name: str) -> bool:
-        return await self._redis.exists(self.sentinel_key(today, tz_name))
+        if (today.isoformat(), tz_name) in _precomputed_today:
+            return True
+        # DB fallback: repopulate in-memory sentinel for fresh cron processes.
+        already = await asyncio.to_thread(self._check_db_sentinel, tz_name, today)
+        if already:
+            _precomputed_today.add((today.isoformat(), tz_name))
+        return already
 
     async def precompute_for_timezone(self, tz_name: str, today: date) -> None:
         """No-op if sentinel exists; otherwise runs DB sync work in thread pool."""
-        # Fast path — sentinel already set (common case once run each day)
         if await self.is_precomputed(today, tz_name):
             logger.debug(
                 "Pre-compute sentinel hit for %s on %s — skipping", tz_name, today
             )
             return
 
-        # Serialize concurrent callers for the same (date, tz) pair. Startup catch-up
-        # and the midnight loop tick can overlap; lock + recheck prevents double execution.
         lock_key = f"{today.isoformat()}:{tz_name}"
         if lock_key not in self._locks:
             self._locks[lock_key] = asyncio.Lock()
@@ -81,24 +103,13 @@ class DailyContextPrecomputeService:
             logger.debug(
                 "Pre-computing notification context for %s on %s", tz_name, today
             )
-            redis_items = await asyncio.to_thread(
+            count = await asyncio.to_thread(
                 self._precompute_db_sync, tz_name, today
             )
-
-            if redis_items:
-                ok = await self._redis.hset_batch(redis_items)
-                if not ok:
-                    logger.error(
-                        "hset_batch failed for %s — sentinel will NOT be set, retry next tick",
-                        tz_name,
-                    )
-                    return
-
-            await self._redis.set(
-                self.sentinel_key(today, tz_name), "1", ttl=_SENTINEL_TTL
-            )
+            if count > 0:
+                _precomputed_today.add((today.isoformat(), tz_name))
             logger.debug(
-                "Pre-compute complete for %s: %d users", tz_name, len(redis_items)
+                "Pre-compute complete for %s: %d users", tz_name, count
             )
 
     async def reschedule_user_notifications(self, user_id: str) -> int:
@@ -160,6 +171,7 @@ class DailyContextPrecomputeService:
             pref_row = session.execute(
                 text("""
                     SELECT meal_reminders_enabled, daily_summary_enabled,
+                           hydration_reminders_enabled,
                            breakfast_time_minutes, lunch_time_minutes,
                            dinner_time_minutes, daily_summary_time_minutes, language
                     FROM notification_preferences
@@ -309,6 +321,32 @@ class DailyContextPrecomputeService:
                         }
                     )
 
+            if pref_row.hydration_reminders_enabled:
+                hydration_context = {
+                    "fcm_tokens": tokens,
+                    "gender": gender,
+                    "language_code": language_code,
+                }
+                for notif_type, local_minutes in [
+                    ("hydration_reminder_afternoon", _DEFAULT_AFTERNOON_MINUTES),
+                    ("hydration_reminder_evening", _DEFAULT_EVENING_MINUTES),
+                ]:
+                    scheduled_utc = _local_minutes_to_utc(today, local_minutes, tz_name)
+                    if scheduled_utc and scheduled_utc > now:
+                        rows.append(
+                            {
+                                "id": str(uuid.uuid4()),
+                                "user_id": user_id,
+                                "notification_type": notif_type,
+                                "scheduled_date": today,
+                                "scheduled_for_utc": scheduled_utc,
+                                "status": "pending",
+                                "context": hydration_context,
+                                "created_at": now,
+                                "expires_at": expires_at,
+                            }
+                        )
+
             # Insert new notifications (upsert to handle race conditions)
             if rows:
                 stmt = pg_insert(NotificationORM).values(rows)
@@ -380,12 +418,11 @@ class DailyContextPrecomputeService:
     # Synchronous DB work (runs in thread pool via asyncio.to_thread)
     # ------------------------------------------------------------------
 
-    def _precompute_db_sync(
-        self, tz_name: str, today: date
-    ) -> list[tuple[str, dict, int]]:
+    def _precompute_db_sync(self, tz_name: str, today: date) -> int:
         """
         All DB work: 5 SQL queries + 1 bulk INSERT.
-        Returns list of (redis_key, mapping, ttl) for async Redis batch write.
+        Returns count of users processed.
+        Only processes users with at least one active FCM token.
         """
         with UnitOfWork() as uow:
             session = uow.session
@@ -397,6 +434,7 @@ class DailyContextPrecomputeService:
                         np.user_id,
                         np.meal_reminders_enabled,
                         np.daily_summary_enabled,
+                        np.hydration_reminders_enabled,
                         np.breakfast_time_minutes,
                         np.lunch_time_minutes,
                         np.dinner_time_minutes,
@@ -407,12 +445,16 @@ class DailyContextPrecomputeService:
                     WHERE u.timezone = :tz_name
                       AND u.is_active = true
                       AND np.is_deleted = false
+                      AND EXISTS (
+                          SELECT 1 FROM user_fcm_tokens t
+                          WHERE t.user_id = np.user_id AND t.is_active = true
+                      )
                 """),
                 {"tz_name": tz_name},
             ).fetchall()
 
             if not pref_rows:
-                return []
+                return 0
 
             user_ids = [row.user_id for row in pref_rows]
 
@@ -539,28 +581,7 @@ class DailyContextPrecomputeService:
                 )
                 session.execute(stmt)
 
-            # ---- Build Redis items ----
-            redis_items: list[tuple[str, dict, int]] = []
-            for pref_row in pref_rows:
-                user_id = pref_row.user_id
-                profile = profiles_by_user.get(user_id)
-                gender = (profile.gender if profile else None) or "male"
-                language_code = _resolve_notification_language(
-                    pref_row.language,
-                    profile.language_code if profile else None,
-                )
-
-                mapping = {
-                    "calorie_goal": str(calorie_goals.get(user_id, 2000)),
-                    "calories_consumed": str(
-                        int(round(consumed_by_user.get(user_id, 0.0)))
-                    ),
-                    "gender": gender,
-                    "language_code": language_code,
-                }
-                redis_items.append((self.context_key(user_id), mapping, _CONTEXT_TTL))
-
-            return redis_items
+            return len(pref_rows)
 
     # ------------------------------------------------------------------
     # Notification row builder
@@ -652,6 +673,33 @@ class DailyContextPrecomputeService:
                             "scheduled_for_utc": scheduled_utc,
                             "status": "pending",
                             "context": context,
+                            "created_at": now,
+                            "expires_at": expires_at,
+                        }
+                    )
+
+            if pref.hydration_reminders_enabled:
+                hydration_context = {
+                    "fcm_tokens": tokens,
+                    "gender": gender,
+                    "language_code": language_code,
+                }
+                for notif_type, local_minutes in [
+                    ("hydration_reminder_afternoon", _DEFAULT_AFTERNOON_MINUTES),
+                    ("hydration_reminder_evening", _DEFAULT_EVENING_MINUTES),
+                ]:
+                    scheduled_utc = _local_minutes_to_utc(today, local_minutes, tz_name)
+                    if scheduled_utc is None:
+                        continue
+                    rows.append(
+                        {
+                            "id": str(uuid.uuid4()),
+                            "user_id": user_id,
+                            "notification_type": notif_type,
+                            "scheduled_date": today,
+                            "scheduled_for_utc": scheduled_utc,
+                            "status": "pending",
+                            "context": hydration_context,
                             "created_at": now,
                             "expires_at": expires_at,
                         }

@@ -248,10 +248,16 @@ async def parse_meal_text(
     User types "2 eggs and toast" → Gemini parses → returns structured items with nutrition.
     """
     try:
+        sanitized_text = sanitize_user_description(payload.text)
+        if not sanitized_text:
+            raise ValidationException(
+                message="Invalid or empty meal description.",
+                error_code="INVALID_MEAL_TEXT",
+            )
         # Use Accept-Language header as single source of truth for locale
         language = get_request_language(request)
         command = ParseMealTextCommand(
-            text=payload.text,
+            text=sanitized_text,
             language=language,
             user_id=user_id,
             current_items=payload.current_items,
@@ -393,7 +399,7 @@ async def delete_meal(
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
-    """Mark a meal as INACTIVE (soft delete)."""
+    """Hard-delete a meal (idempotent — returns success if already deleted)."""
     try:
         command = DeleteMealCommand(meal_id=meal_id, user_id=user_id)
         result = await event_bus.send(command)
@@ -450,7 +456,6 @@ async def update_meal_ingredients(
     Requires authentication - users can only modify their own meals.
     """
     try:
-
         logger.info("Updating meal ingredients for meal %s", meal_id)
         # Convert request to command
         food_item_changes = []

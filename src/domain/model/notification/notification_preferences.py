@@ -16,6 +16,8 @@ NOTIFICATION_TYPE_TO_FIELD = {
     NotificationType.MEAL_REMINDER_LUNCH: "meal_reminders_enabled",
     NotificationType.MEAL_REMINDER_DINNER: "meal_reminders_enabled",
     NotificationType.DAILY_SUMMARY: "daily_summary_enabled",
+    NotificationType.HYDRATION_REMINDER_AFTERNOON: "hydration_reminders_enabled",
+    NotificationType.HYDRATION_REMINDER_EVENING: "hydration_reminders_enabled",
 }
 
 
@@ -29,6 +31,7 @@ class NotificationPreferences:
     user_id: str  # UUID as string
     meal_reminders_enabled: bool = True
     daily_summary_enabled: bool = True
+    hydration_reminders_enabled: bool = True
     breakfast_time_minutes: int | None = None  # minutes from midnight (0-1439)
     lunch_time_minutes: int | None = None
     dinner_time_minutes: int | None = None
@@ -75,6 +78,7 @@ class NotificationPreferences:
             user_id=user_id,
             meal_reminders_enabled=True,
             daily_summary_enabled=True,
+            hydration_reminders_enabled=True,
             breakfast_time_minutes=510,  # 8:30 AM
             lunch_time_minutes=690,  # 11:30 AM
             dinner_time_minutes=1080,  # 6:00 PM
@@ -88,6 +92,7 @@ class NotificationPreferences:
         self,
         meal_reminders_enabled: bool | None = None,
         daily_summary_enabled: bool | None = None,
+        hydration_reminders_enabled: bool | None = None,
         breakfast_time_minutes: int | None = None,
         lunch_time_minutes: int | None = None,
         dinner_time_minutes: int | None = None,
@@ -120,6 +125,11 @@ class NotificationPreferences:
                 daily_summary_enabled
                 if daily_summary_enabled is not None
                 else self.daily_summary_enabled
+            ),
+            hydration_reminders_enabled=(
+                hydration_reminders_enabled
+                if hydration_reminders_enabled is not None
+                else self.hydration_reminders_enabled
             ),
             breakfast_time_minutes=(
                 breakfast_time_minutes
@@ -169,6 +179,7 @@ class NotificationPreferences:
             "user_id": self.user_id,
             "meal_reminders_enabled": self.meal_reminders_enabled,
             "daily_summary_enabled": self.daily_summary_enabled,
+            "hydration_reminders_enabled": self.hydration_reminders_enabled,
             "breakfast_time_minutes": self.breakfast_time_minutes,
             "lunch_time_minutes": self.lunch_time_minutes,
             "dinner_time_minutes": self.dinner_time_minutes,

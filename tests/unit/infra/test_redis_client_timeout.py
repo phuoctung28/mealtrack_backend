@@ -1,5 +1,6 @@
 """Unit test: RedisClient ConnectionPool must include socket timeouts."""
 
+import pytest
 from unittest.mock import patch, MagicMock
 
 from src.infra.cache.redis_client import RedisClient
@@ -47,3 +48,30 @@ def test_connection_pool_timeout_custom_value():
         call_kwargs = mock_from_url.call_args[1]
         assert call_kwargs["socket_timeout"] == 1.5
         assert call_kwargs["socket_connect_timeout"] == 2.5
+
+
+@pytest.mark.asyncio
+async def test_delete_pattern_uses_scan_not_keys():
+    """delete_pattern must use scan_iter, never client.keys (blocking)."""
+    from src.infra.cache.redis_client import RedisClient
+    from unittest.mock import AsyncMock
+
+    client = RedisClient.__new__(RedisClient)
+
+    deleted_keys = []
+
+    async def fake_scan_iter(match):
+        for k in ["user:abc:macros:2026-01-01", "user:abc:macros:2026-01-02"]:
+            yield k
+
+    mock_client = AsyncMock()
+    mock_client.scan_iter = fake_scan_iter
+    mock_client.delete = AsyncMock(side_effect=lambda k: deleted_keys.append(k))
+    client.client = mock_client
+
+    count = await client.delete_pattern("user:abc:macros:*")
+
+    assert count == 2
+    assert "user:abc:macros:2026-01-01" in deleted_keys
+    assert "user:abc:macros:2026-01-02" in deleted_keys
+    assert mock_client.keys.call_count == 0  # must NOT use blocking KEYS
