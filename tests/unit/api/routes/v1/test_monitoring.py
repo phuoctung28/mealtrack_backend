@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
+import asyncio
 
 
 def test_cache_metrics_returns_snapshot():
@@ -9,11 +10,7 @@ def test_cache_metrics_returns_snapshot():
     mock_monitor = MagicMock()
     mock_monitor.snapshot.return_value = {"hits": 10, "misses": 5}
 
-    import asyncio
-
-    result = asyncio.get_event_loop().run_until_complete(
-        cache_metrics(cache_monitor=mock_monitor)
-    )
+    result = asyncio.run(cache_metrics(cache_monitor=mock_monitor))
 
     assert result == {"hits": 10, "misses": 5}
     mock_monitor.snapshot.assert_called_once()
