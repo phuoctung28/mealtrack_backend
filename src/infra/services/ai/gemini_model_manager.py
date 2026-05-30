@@ -185,6 +185,7 @@ class GeminiModelManager:
     def get_model_for_purpose(
         self,
         purpose: GeminiModelPurpose = GeminiModelPurpose.GENERAL,
+        model_name: Optional[str] = None,
         temperature: Optional[float] = None,   # None = use PURPOSE_TEMPERATURES lookup
         max_output_tokens: Optional[int] = None,
         response_mime_type: Optional[str] = None,
@@ -195,7 +196,7 @@ class GeminiModelManager:
             temperature = PURPOSE_TEMPERATURES.get(purpose, 0.4)
 
         env_var = PURPOSE_ENV_VARS.get(purpose, "GEMINI_MODEL")
-        model_name = os.getenv(
+        selected_model_name = model_name or os.getenv(
             env_var, PURPOSE_MODEL_DEFAULTS.get(purpose, self.model_name)
         )
 
@@ -203,7 +204,7 @@ class GeminiModelManager:
             kwargs.setdefault("thinking_budget", 0)
 
         config_key = self._get_config_key(
-            model_name=model_name,
+            model_name=selected_model_name,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
             response_mime_type=response_mime_type,
@@ -212,7 +213,7 @@ class GeminiModelManager:
         with self._model_lock:
             return self._get_or_create_model(
                 config_key,
-                model_name,
+                selected_model_name,
                 temperature,
                 max_output_tokens,
                 response_mime_type,
