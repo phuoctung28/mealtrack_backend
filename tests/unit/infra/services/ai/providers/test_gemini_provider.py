@@ -68,6 +68,45 @@ class TestGenerate:
                 system_message="test",
             )
 
+    @pytest.mark.asyncio
+    async def test_generate_forwards_selected_fallback_model(
+        self, provider, mock_model_manager
+    ):
+        mock_llm = Mock()
+        mock_llm.invoke = Mock(return_value=Mock(content='{"result": "ok"}'))
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+        await provider.generate(
+            model="gemini-2.5-flash-lite",
+            prompt="test",
+            system_message="system",
+            purpose_hint="meal_scan",
+        )
+
+        call_kwargs = mock_model_manager.get_model_for_purpose.call_args[1]
+        assert call_kwargs["model_name"] == "gemini-2.5-flash-lite"
+
+
+class TestGenerateWithVision:
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_forwards_selected_fallback_model(
+        self, provider, mock_model_manager
+    ):
+        mock_llm = Mock()
+        mock_llm.invoke = Mock(return_value=Mock(content='{"result": "ok"}'))
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+        await provider.generate_with_vision(
+            model="gemini-2.5-flash-lite",
+            prompt="test",
+            image_data=b"fake-image",
+            system_message="system",
+            purpose_hint="meal_scan",
+        )
+
+        call_kwargs = mock_model_manager.get_model_for_purpose.call_args[1]
+        assert call_kwargs["model_name"] == "gemini-2.5-flash-lite"
+
 
 class TestErrorExtraction:
     def test_extract_status_code_from_503(self, provider):
