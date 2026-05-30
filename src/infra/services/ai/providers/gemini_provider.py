@@ -81,6 +81,7 @@ class GeminiProvider(AIProviderPort):
 
         llm = self._model_manager.get_model_for_purpose(
             purpose=purpose,
+            model_name=model,
             max_output_tokens=max_tokens,
             response_mime_type=response_mime_type,
             **extra_kwargs,
@@ -131,6 +132,7 @@ class GeminiProvider(AIProviderPort):
 
         llm = self._model_manager.get_model_for_purpose(
             purpose=purpose,
+            model_name=model,
             max_output_tokens=kwargs.get("max_tokens", 4096),
         )
 
