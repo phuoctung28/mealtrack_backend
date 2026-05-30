@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import text
+from sqlalchemy import Text, bindparam, text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Session
 
 from src.domain.model.meal_image_cache import CachedImage, CachedImageUpsert
@@ -18,11 +19,15 @@ class PgvectorMealImageCacheRepository:
     def __init__(self, session: Session):
         self._session = session
 
-    async def query_nearest(self, text_embedding: list[float]) -> Optional[CachedImage]:
+    async def query_nearest(
+        self,
+        text_embedding: list[float],
+    ) -> Optional[CachedImage]:
         # Use pgvector cosine distance operator (<=>)
         emb_literal = str(text_embedding)
         stmt = text(
-            "SELECT id, meal_name, name_slug, image_url, thumbnail_url, source, "
+            "SELECT id, meal_name, name_slug, image_url, thumbnail_url, "
+            "source, "
             "confidence, text_embedding <=> CAST(:emb AS vector) AS distance "
             "FROM meal_image_cache "
             "ORDER BY distance ASC LIMIT 1"
@@ -66,7 +71,7 @@ class PgvectorMealImageCacheRepository:
                 SELECT
                     (row_number() OVER ()) - 1 AS idx,
                     emb::vector AS emb
-                FROM UNNEST(:emb_array::text[]) AS t(emb)
+                FROM UNNEST(:emb_array) AS t(emb)
             )
             SELECT DISTINCT ON (q.idx)
                 q.idx,
@@ -84,9 +89,16 @@ class PgvectorMealImageCacheRepository:
                 LIMIT 1
             ) c
             ORDER BY q.idx, distance
-        """)
+        """).bindparams(
+            bindparam("emb_array", type_=ARRAY(Text())),
+        )
 
-        rows = self._session.execute(stmt, {"emb_array": emb_strs}).fetchall()
+        try:
+            params = {"emb_array": emb_strs}
+            rows = self._session.execute(stmt, params).fetchall()
+        except Exception:
+            self._session.rollback()
+            raise
         results: list[Optional[CachedImage]] = [None] * len(text_embeddings)
 
         for row in rows:
@@ -107,8 +119,10 @@ class PgvectorMealImageCacheRepository:
         emb_literal = str(record.text_embedding)
         stmt = text(
             "INSERT INTO meal_image_cache "
-            "(meal_name, name_slug, text_embedding, image_url, thumbnail_url, source, confidence) "
-            "VALUES (:meal_name, :name_slug, CAST(:emb AS vector), :image_url, "
+            "(meal_name, name_slug, text_embedding, image_url, thumbnail_url, "
+            "source, confidence) "
+            "VALUES (:meal_name, :name_slug, CAST(:emb AS vector), "
+            ":image_url, "
             "        :thumbnail_url, :source, :confidence) "
             "ON CONFLICT (name_slug) DO UPDATE SET "
             "  text_embedding = CAST(:emb AS vector), "
