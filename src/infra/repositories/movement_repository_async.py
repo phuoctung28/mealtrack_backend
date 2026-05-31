@@ -69,6 +69,32 @@ class AsyncMovementRepository:
         )
         return float(result.scalar_one() or 0.0)
 
+    async def update(
+        self,
+        user_id: str,
+        entry_id: str,
+        duration_min: int,
+        kcal_burned: float,
+        intensity: str,
+        include_in_balance: bool,
+    ) -> MovementEntry | None:
+        result = await self.session.execute(
+            select(MovementEntryORM).where(
+                MovementEntryORM.id == entry_id,
+                MovementEntryORM.user_id == user_id,
+            )
+        )
+        row = result.scalars().first()
+        if row is None:
+            return None
+        row.duration_min = duration_min
+        row.kcal_burned = kcal_burned
+        row.intensity = intensity
+        row.include_in_balance = include_in_balance
+        await self.session.flush()
+        await self.session.refresh(row)
+        return movement_entry_orm_to_domain(row)
+
     async def delete(self, user_id: str, entry_id: str) -> bool:
         result = await self.session.execute(
             delete(MovementEntryORM).where(

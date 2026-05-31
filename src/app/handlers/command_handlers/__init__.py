@@ -58,6 +58,7 @@ from .delete_hydration_entry_command_handler import DeleteHydrationEntryCommandH
 # Movement handlers
 from .log_movement_command_handler import LogMovementCommandHandler
 from .delete_movement_entry_command_handler import DeleteMovementEntryCommandHandler
+from .update_movement_entry_command_handler import UpdateMovementEntryCommandHandler
 
 __all__ = [
     # Meal handlers
@@ -99,4 +100,5 @@ __all__ = [
     # Movement handlers
     "LogMovementCommandHandler",
     "DeleteMovementEntryCommandHandler",
+    "UpdateMovementEntryCommandHandler",
 ]

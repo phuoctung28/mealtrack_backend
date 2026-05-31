@@ -2,10 +2,13 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from src.api.exceptions import ResourceNotFoundException, ValidationException
-from src.app.commands.movement import DeleteMovementEntryCommand, LogMovementCommand
+from src.api.exceptions import AuthorizationException, ResourceNotFoundException, ValidationException
+from src.app.commands.movement import DeleteMovementEntryCommand, LogMovementCommand, UpdateMovementEntryCommand
 from src.app.handlers.command_handlers.delete_movement_entry_command_handler import (
     DeleteMovementEntryCommandHandler,
+)
+from src.app.handlers.command_handlers.update_movement_entry_command_handler import (
+    UpdateMovementEntryCommandHandler,
 )
 from src.app.handlers.command_handlers import log_movement_command_handler
 from src.app.handlers.command_handlers.log_movement_command_handler import (
@@ -203,6 +206,13 @@ class _FakeMovementEntries:
     async def delete(self, user_id, entry_id):
         return self.deleted
 
+    async def update(self, user_id, entry_id, **kwargs):
+        if self.entry is None:
+            return None
+        for k, v in kwargs.items():
+            setattr(self.entry, k, v)
+        return self.entry
+
 
 class _FakeUow:
     def __init__(self, timezone="UTC"):
@@ -334,3 +344,90 @@ async def test_delete_movement_handler_deletes_commits_and_invalidates_daily_cac
     assert uow.committed is True
     assert "user:user-1:macros:2026-05-31" in cache.invalidated
     assert "user:user-1:activities:2026-05-31:*" in cache.patterns
+
+
+@pytest.mark.asyncio
+async def test_update_movement_handler_raises_not_found_when_missing():
+    uow = _FakeUow()
+    handler = UpdateMovementEntryCommandHandler(uow=uow)
+
+    with pytest.raises(ResourceNotFoundException) as exc:
+        await handler.handle(
+            UpdateMovementEntryCommand(
+                user_id="user-1",
+                entry_id="missing",
+                duration_min=30,
+                kcal_burned=100.0,
+                intensity="light",
+                include_in_balance=True,
+            )
+        )
+
+    assert exc.value.error_code == "ENTRY_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_update_movement_handler_rejects_apple_health_entries():
+    uow = _FakeUow(timezone="Asia/Ho_Chi_Minh")
+    uow.movement_entries.entry = log_movement_command_handler.MovementEntry(
+        id="mvmt_apple",
+        user_id="user-1",
+        activity_name="Running",
+        duration_min=60,
+        kcal_burned=300.0,
+        intensity="hard",
+        include_in_balance=True,
+        source="apple_health",
+        logged_at=datetime(2026, 5, 30, 5, 0, tzinfo=timezone.utc),
+    )
+    handler = UpdateMovementEntryCommandHandler(uow=uow)
+
+    with pytest.raises(AuthorizationException) as exc:
+        await handler.handle(
+            UpdateMovementEntryCommand(
+                user_id="user-1",
+                entry_id="mvmt_apple",
+                duration_min=45,
+                kcal_burned=200.0,
+                intensity="moderate",
+                include_in_balance=True,
+            )
+        )
+
+    assert exc.value.error_code == "APPLE_HEALTH_NOT_EDITABLE"
+
+
+@pytest.mark.asyncio
+async def test_update_movement_handler_updates_and_invalidates_caches():
+    uow = _FakeUow(timezone="Asia/Ho_Chi_Minh")
+    cache = _FakeCache()
+    uow.movement_entries.entry = log_movement_command_handler.MovementEntry(
+        id="mvmt_123",
+        user_id="user-1",
+        activity_name="Badminton",
+        duration_min=60,
+        kcal_burned=231.0,
+        intensity="moderate",
+        include_in_balance=True,
+        source="manual",
+        logged_at=datetime(2026, 5, 30, 18, 0, tzinfo=timezone.utc),
+    )
+    handler = UpdateMovementEntryCommandHandler(uow=uow, cache_service=cache)
+
+    result = await handler.handle(
+        UpdateMovementEntryCommand(
+            user_id="user-1",
+            entry_id="mvmt_123",
+            duration_min=45,
+            kcal_burned=173.0,
+            intensity="hard",
+            include_in_balance=False,
+        )
+    )
+
+    assert result["duration_min"] == 45
+    assert result["kcal_burned"] == 173.0
+    assert result["intensity"] == "hard"
+    assert result["include_in_balance"] is False
+    assert uow.committed is True
+    assert "user:user-1:macros:2026-05-31" in cache.invalidated

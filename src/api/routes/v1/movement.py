@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import ValidationException, handle_exception
-from src.api.schemas.request.movement_requests import LogMovementRequest
-from src.app.commands.movement import DeleteMovementEntryCommand, LogMovementCommand
+from src.api.schemas.request.movement_requests import LogMovementRequest, UpdateMovementRequest
+from src.app.commands.movement import DeleteMovementEntryCommand, LogMovementCommand, UpdateMovementEntryCommand
 from src.app.queries.movement import GetDailyMovementQuery, GetMovementCatalogQuery
 from src.infra.event_bus import EventBus
 
@@ -74,6 +74,27 @@ async def get_daily_movement(
             header_timezone=request.headers.get("X-Timezone"),
         )
         return await event_bus.send(query)
+    except Exception as exc:
+        raise handle_exception(exc) from exc
+
+
+@router.patch("/{entry_id}")
+async def update_movement_entry(
+    entry_id: str,
+    body: UpdateMovementRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    try:
+        command = UpdateMovementEntryCommand(
+            user_id=user_id,
+            entry_id=entry_id,
+            duration_min=body.duration_min,
+            kcal_burned=body.kcal_burned,
+            intensity=body.intensity,
+            include_in_balance=body.include_in_balance,
+        )
+        return await event_bus.send(command)
     except Exception as exc:
         raise handle_exception(exc) from exc
 

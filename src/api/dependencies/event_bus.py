@@ -155,8 +155,8 @@ from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
 from src.app.queries.movement import GetMovementCatalogQuery, GetDailyMovementQuery
-from src.app.commands.movement import LogMovementCommand, DeleteMovementEntryCommand
-from src.app.handlers.command_handlers import LogMovementCommandHandler, DeleteMovementEntryCommandHandler
+from src.app.commands.movement import LogMovementCommand, DeleteMovementEntryCommand, UpdateMovementEntryCommand
+from src.app.handlers.command_handlers import LogMovementCommandHandler, DeleteMovementEntryCommandHandler, UpdateMovementEntryCommandHandler
 from src.app.handlers.query_handlers import GetDailyMovementQueryHandler
 
 # Import all queries
@@ -461,6 +461,10 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         DeleteMovementEntryCommand,
         DeleteMovementEntryCommandHandler(uow=AsyncUnitOfWork(), cache_service=cache_service),
+    )
+    event_bus.register_handler(
+        UpdateMovementEntryCommand,
+        UpdateMovementEntryCommandHandler(uow=AsyncUnitOfWork(), cache_service=cache_service),
     )
 
     event_bus.register_handler(GetMealsByDateQuery, GetMealsByDateQueryHandler())
