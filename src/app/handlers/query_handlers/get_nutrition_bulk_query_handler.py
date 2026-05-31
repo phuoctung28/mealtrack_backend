@@ -59,18 +59,19 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                 if meal_date:
                     meals_by_date.setdefault(meal_date, []).append(meal)
 
+            # Single query for the full range; bucket by local date in Python.
             movement_by_date: Dict[date, float] = {}
-            current = query.start_date
-            while current <= query.end_date:
-                try:
-                    start_utc, end_utc = self._local_day_utc_range(current, user_tz_str)
-                    movement_by_date[current] = await uow.movement_entries.sum_included_kcal_for_range(
-                        query.user_id, start_utc, end_utc
-                    )
-                except Exception as exc:
-                    logger.warning("Failed to fetch movement for %s: %s", current, exc)
-                    movement_by_date[current] = 0.0
-                current += timedelta(days=1)
+            try:
+                overall_start, _ = self._local_day_utc_range(query.start_date, user_tz_str)
+                _, overall_end = self._local_day_utc_range(query.end_date, user_tz_str)
+                included = await uow.movement_entries.fetch_included_kcal_for_range(
+                    query.user_id, overall_start, overall_end
+                )
+                for logged_at, kcal in included:
+                    local_date = logged_at.astimezone(user_tz).date()
+                    movement_by_date[local_date] = movement_by_date.get(local_date, 0.0) + kcal
+            except Exception as exc:
+                logger.warning("Failed to fetch bulk movement data: %s", exc)
 
             dates_result: Dict[str, Dict[str, Any]] = {}
             current = query.start_date

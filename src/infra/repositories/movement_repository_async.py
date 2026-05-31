@@ -69,6 +69,26 @@ class AsyncMovementRepository:
         )
         return float(result.scalar_one() or 0.0)
 
+    async def fetch_included_kcal_for_range(
+        self,
+        user_id: str,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[tuple[datetime, float]]:
+        """Return (logged_at, kcal_burned) for all include_in_balance entries.
+
+        Single query covering the full range — callers bucket by local date.
+        """
+        result = await self.session.execute(
+            select(MovementEntryORM.logged_at, MovementEntryORM.kcal_burned).where(
+                MovementEntryORM.user_id == user_id,
+                MovementEntryORM.include_in_balance.is_(True),
+                MovementEntryORM.logged_at >= start_utc,
+                MovementEntryORM.logged_at < end_utc,
+            )
+        )
+        return [(row.logged_at, float(row.kcal_burned)) for row in result.all()]
+
     async def update(
         self,
         user_id: str,
