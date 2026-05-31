@@ -34,7 +34,7 @@ class UpdateMovementEntryCommandHandler(
             raise ValidationException("kcal_burned must be non-negative", "INVALID_KCAL")
         if cmd.kcal_burned > 5000:
             raise ValidationException("kcal_burned exceeds maximum allowed (5000)", "INVALID_KCAL")
-        if cmd.kcal_burned > cmd.duration_min * 25:
+        if cmd.kcal_burned > cmd.duration_min * 30:
             raise ValidationException("kcal_burned is unreasonably high for the given duration", "INVALID_KCAL")
         if cmd.intensity not in {item.value for item in MovementIntensity}:
             raise ValidationException("Invalid movement intensity", "INVALID_INTENSITY")
@@ -57,7 +57,6 @@ class UpdateMovementEntryCommandHandler(
                 intensity=cmd.intensity,
                 include_in_balance=cmd.include_in_balance,
             )
-            await uow.commit()
 
         if self.cache_service:
             await _flush_movement_caches(self.cache_service, cmd.user_id, log_date)

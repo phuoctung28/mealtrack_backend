@@ -13,7 +13,7 @@ class UpdateMovementRequest(BaseModel):
 
 
 class LogMovementRequest(BaseModel):
-    activity_id: Optional[str] = Field(None, max_length=64)
+    activity_id: Optional[str] = Field(None, min_length=1, max_length=64)
     activity_name: str = Field(..., min_length=1, max_length=100)
     duration_min: int = Field(..., ge=1, le=600)
     kcal_burned: float = Field(..., ge=0)

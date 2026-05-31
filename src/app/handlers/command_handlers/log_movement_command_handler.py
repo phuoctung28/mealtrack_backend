@@ -52,7 +52,7 @@ def _validate_log_movement(cmd: LogMovementCommand) -> None:
         raise ValidationException(
             "kcal_burned exceeds maximum allowed (5000)", "INVALID_KCAL"
         )
-    if cmd.kcal_burned > cmd.duration_min * 25:
+    if cmd.kcal_burned > cmd.duration_min * 30:
         raise ValidationException(
             "kcal_burned is unreasonably high for the given duration", "INVALID_KCAL"
         )
@@ -131,7 +131,6 @@ class LogMovementCommandHandler(EventHandler[LogMovementCommand, dict]):
                 logged_at=logged_at,
             )
             saved = await uow.movement_entries.add(entry)
-            await uow.commit()
 
         if self.cache_service:
             await _flush_movement_caches(self.cache_service, cmd.user_id, log_date)

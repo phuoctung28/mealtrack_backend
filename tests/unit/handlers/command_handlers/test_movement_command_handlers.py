@@ -224,6 +224,8 @@ class _FakeUow:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if not exc_type:
+            await self.commit()
         return False
 
     async def commit(self):
@@ -461,7 +463,7 @@ def test_validate_log_movement_rejects_kcal_unreasonable_for_duration():
                 activity_id=None,
                 activity_name="Run",
                 duration_min=30,
-                kcal_burned=800.0,  # > 30 * 25 = 750
+                kcal_burned=950.0,  # > 30 * 30 = 900
                 intensity="hard",
                 include_in_balance=True,
             )

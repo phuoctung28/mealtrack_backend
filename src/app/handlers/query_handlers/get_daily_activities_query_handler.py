@@ -36,11 +36,13 @@ class GetDailyActivitiesQueryHandler(
 
     async def handle(self, query: GetDailyActivitiesQuery) -> List[Dict[str, Any]]:
         """Get all activities for the specified date."""
-        target_date = (
-            query.target_date.date()
-            if hasattr(query.target_date, "date")
-            else query.target_date
-        )
+        raw = query.target_date
+        if hasattr(raw, "tzinfo") and raw.tzinfo is not None and query.header_timezone:
+            target_date = raw.astimezone(get_zone_info(query.header_timezone)).date()
+        elif hasattr(raw, "date"):
+            target_date = raw.date()
+        else:
+            target_date = raw
         cache_key, ttl = CacheKeys.daily_activities(
             query.user_id, target_date, query.language or "en"
         )
@@ -112,11 +114,16 @@ class GetDailyActivitiesQueryHandler(
                     query.user_id, uow, query.header_timezone
                 )
                 tz = get_zone_info(user_tz_str)
-                target_date = (
-                    query.target_date.date()
-                    if hasattr(query.target_date, "date")
-                    else query.target_date
-                )
+                # Mirror the meals path: convert tz-aware datetimes to user-local
+                # before extracting the date, so the no-`date` route (utc_now())
+                # uses the correct local day for UTC+N users.
+                raw = query.target_date
+                if hasattr(raw, "tzinfo") and raw.tzinfo is not None:
+                    target_date = raw.astimezone(tz).date()
+                elif hasattr(raw, "date"):
+                    target_date = raw.date()
+                else:
+                    target_date = raw
                 start_utc = datetime.combine(target_date, time.min, tzinfo=tz).astimezone(timezone.utc)
                 end_utc = start_utc + timedelta(days=1)
 

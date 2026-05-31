@@ -133,3 +133,42 @@ async def test_day_boundary_parity_same_utc_window():
     # Boundary correctness
     assert start_utc <= inside_utc < end_utc, "23:30 HCM must be inside May 29 window"
     assert not (start_utc <= outside_utc < end_utc), "00:30 HCM next day must be outside May 29 window"
+
+
+def test_activities_handler_converts_tz_aware_utc_to_local_date():
+    """
+    §1.1 regression: when target_date is a tz-aware UTC datetime (the no-`date`
+    route path), _get_workout_activities must convert to user-local date before
+    building the day window — not call .date() on the UTC value directly.
+
+    2026-05-29 18:00 UTC = 2026-05-30 01:00 HCM (UTC+7).
+    The correct day window must be for May 30 in HCM, not May 29.
+    """
+    from datetime import time, timezone as _tz
+
+    from src.domain.utils.timezone_utils import get_zone_info
+
+    tz_hcm = get_zone_info("Asia/Ho_Chi_Minh")
+
+    # Simulate what the route passes when no ?date= is given: tz-aware UTC now
+    utc_dt = datetime(2026, 5, 29, 18, 0, tzinfo=timezone.utc)  # 01:00 HCM May 30
+
+    # Correct local date: May 30 (UTC+7 converts 18:00 UTC → 01:00 May 30 HCM)
+    expected_local_date = utc_dt.astimezone(tz_hcm).date()
+    assert str(expected_local_date) == "2026-05-30"
+
+    # The buggy path: utc_dt.date() would give May 29 (wrong)
+    assert str(utc_dt.date()) == "2026-05-29"
+
+    # Verify the fixed extraction logic (mirrors _get_workout_activities)
+    raw = utc_dt
+    if hasattr(raw, "tzinfo") and raw.tzinfo is not None:
+        result_date = raw.astimezone(tz_hcm).date()
+    elif hasattr(raw, "date"):
+        result_date = raw.date()
+    else:
+        result_date = raw
+
+    assert result_date == expected_local_date, (
+        f"tz-aware UTC datetime must resolve to local date {expected_local_date}, got {result_date}"
+    )

@@ -34,15 +34,3 @@ class MealActivityResponse(BaseModel):
 
 
 
-class ActivityResponse(BaseModel):
-    """Generic activity response that can be either meal or workout."""
-
-    id: str
-    type: str
-    timestamp: str
-    title: str
-
-    # Additional fields stored as dict for flexibility
-    # This allows both meal and workout activities to use same response
-    class Config:
-        extra = "allow"

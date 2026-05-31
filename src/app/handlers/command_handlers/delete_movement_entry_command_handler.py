@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from src.api.exceptions import ResourceNotFoundException
+from src.api.exceptions import AuthorizationException, ResourceNotFoundException
 from src.app.commands.movement import DeleteMovementEntryCommand
 from src.app.events.base import EventHandler, handles
 from src.app.handlers.command_handlers.log_movement_command_handler import (
@@ -30,6 +30,10 @@ class DeleteMovementEntryCommandHandler(EventHandler[DeleteMovementEntryCommand,
                 raise ResourceNotFoundException(
                     "Movement entry not found", "ENTRY_NOT_FOUND"
                 )
+            if entry.source == "apple_health":
+                raise AuthorizationException(
+                    "Apple Health entries cannot be deleted", "APPLE_HEALTH_NOT_EDITABLE"
+                )
             user_tz = await resolve_user_timezone_async(cmd.user_id, uow)
             log_date = entry.logged_at.astimezone(get_zone_info(user_tz)).date()
             deleted = await uow.movement_entries.delete(cmd.user_id, cmd.entry_id)
@@ -37,7 +41,6 @@ class DeleteMovementEntryCommandHandler(EventHandler[DeleteMovementEntryCommand,
                 raise ResourceNotFoundException(
                     "Movement entry not found", "ENTRY_NOT_FOUND"
                 )
-            await uow.commit()
 
         if self.cache_service:
             await _flush_movement_caches(self.cache_service, cmd.user_id, log_date)
