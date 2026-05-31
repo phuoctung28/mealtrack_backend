@@ -32,6 +32,10 @@ class UpdateMovementEntryCommandHandler(
             raise ValidationException("duration_min must be between 1 and 600", "INVALID_DURATION")
         if cmd.kcal_burned < 0:
             raise ValidationException("kcal_burned must be non-negative", "INVALID_KCAL")
+        if cmd.kcal_burned > 5000:
+            raise ValidationException("kcal_burned exceeds maximum allowed (5000)", "INVALID_KCAL")
+        if cmd.kcal_burned > cmd.duration_min * 25:
+            raise ValidationException("kcal_burned is unreasonably high for the given duration", "INVALID_KCAL")
         if cmd.intensity not in {item.value for item in MovementIntensity}:
             raise ValidationException("Invalid movement intensity", "INVALID_INTENSITY")
 

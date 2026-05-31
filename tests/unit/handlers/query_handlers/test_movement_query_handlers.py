@@ -96,3 +96,40 @@ async def test_daily_movement_query_serializes_entries_for_local_day():
         datetime(2026, 5, 28, 17, 0, tzinfo=timezone.utc),
         datetime(2026, 5, 29, 17, 0, tzinfo=timezone.utc),
     )
+
+
+@pytest.mark.asyncio
+async def test_day_boundary_parity_same_utc_window():
+    """
+    Both /movement/daily and /activities/daily must compute identical UTC windows
+    for a given local date.
+
+    HCM (UTC+7) day window for 2026-05-29:
+      start = 2026-05-28 17:00 UTC
+      end   = 2026-05-29 17:00 UTC
+
+    An entry at 23:30 HCM (=16:30 UTC) must fall inside this window.
+    An entry at 00:30 HCM next day (=17:30 UTC) must fall OUTSIDE this window.
+    """
+    inside_utc = datetime(2026, 5, 29, 16, 30, tzinfo=timezone.utc)   # 23:30 HCM May 29
+    outside_utc = datetime(2026, 5, 29, 17, 30, tzinfo=timezone.utc)  # 00:30 HCM May 30
+
+    uow = _FakeUow([])
+    handler = GetDailyMovementQueryHandler(uow=uow)
+    await handler.handle(
+        GetDailyMovementQuery(
+            user_id="user-1",
+            target_date=date(2026, 5, 29),
+            header_timezone="Asia/Ho_Chi_Minh",
+        )
+    )
+
+    _, start_utc, end_utc = uow.movement_entries.range_args
+
+    # Window must be [2026-05-28 17:00 UTC, 2026-05-29 17:00 UTC)
+    assert start_utc == datetime(2026, 5, 28, 17, 0, tzinfo=timezone.utc)
+    assert end_utc == datetime(2026, 5, 29, 17, 0, tzinfo=timezone.utc)
+
+    # Boundary correctness
+    assert start_utc <= inside_utc < end_utc, "23:30 HCM must be inside May 29 window"
+    assert not (start_utc <= outside_utc < end_utc), "00:30 HCM next day must be outside May 29 window"

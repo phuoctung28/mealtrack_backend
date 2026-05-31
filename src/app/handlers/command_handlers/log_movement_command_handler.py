@@ -48,6 +48,14 @@ def _validate_log_movement(cmd: LogMovementCommand) -> None:
         raise ValidationException(
             "Calories burned cannot be negative", "INVALID_KCAL"
         )
+    if cmd.kcal_burned > 5000:
+        raise ValidationException(
+            "kcal_burned exceeds maximum allowed (5000)", "INVALID_KCAL"
+        )
+    if cmd.kcal_burned > cmd.duration_min * 25:
+        raise ValidationException(
+            "kcal_burned is unreasonably high for the given duration", "INVALID_KCAL"
+        )
     valid_intensities = {item.value for item in MovementIntensity}
     if cmd.intensity not in valid_intensities:
         raise ValidationException("Invalid movement intensity", "INVALID_INTENSITY")

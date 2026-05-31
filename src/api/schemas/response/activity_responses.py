@@ -33,19 +33,6 @@ class MealActivityResponse(BaseModel):
     image_url: Optional[str] = None
 
 
-class WorkoutActivityResponse(BaseModel):
-    """Response schema for workout activity."""
-
-    id: str
-    type: str = "workout"
-    timestamp: str
-    title: str
-    description: str
-    exercise_type: str
-    duration_minutes: int
-    calories_burned: float
-    notes: Optional[str] = None
-
 
 class ActivityResponse(BaseModel):
     """Generic activity response that can be either meal or workout."""

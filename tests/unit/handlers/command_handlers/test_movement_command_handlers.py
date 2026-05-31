@@ -435,3 +435,35 @@ async def test_update_movement_handler_updates_and_invalidates_caches():
     assert uow.committed is True
     assert "user:user-1:macros:2026-05-31" in cache.invalidated
     assert "user:user-1:weekly_budget:2026-05-25" in cache.invalidated
+
+
+def test_validate_log_movement_rejects_kcal_above_absolute_max():
+    with pytest.raises(ValidationException) as exc:
+        _validate_log_movement(
+            LogMovementCommand(
+                user_id="user-1",
+                activity_id=None,
+                activity_name="Run",
+                duration_min=600,
+                kcal_burned=5001.0,
+                intensity="hard",
+                include_in_balance=True,
+            )
+        )
+    assert exc.value.error_code == "INVALID_KCAL"
+
+
+def test_validate_log_movement_rejects_kcal_unreasonable_for_duration():
+    with pytest.raises(ValidationException) as exc:
+        _validate_log_movement(
+            LogMovementCommand(
+                user_id="user-1",
+                activity_id=None,
+                activity_name="Run",
+                duration_min=30,
+                kcal_burned=800.0,  # > 30 * 25 = 750
+                intensity="hard",
+                include_in_balance=True,
+            )
+        )
+    assert exc.value.error_code == "INVALID_KCAL"
