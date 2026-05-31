@@ -180,26 +180,33 @@ def test_validate_log_movement_rejects_preset_activity_unsupported_intensity(
 
 
 class _FakeUsers:
+    def __init__(self, timezone="UTC"):
+        self.timezone = timezone
+
     async def find_by_id(self, user_id):
-        return None
+        return self
 
 
 class _FakeMovementEntries:
     def __init__(self):
         self.added = []
         self.deleted = True
+        self.entry = None
 
     async def add(self, entry):
         self.added.append(entry)
         return entry
+
+    async def find_by_id(self, user_id, entry_id):
+        return self.entry
 
     async def delete(self, user_id, entry_id):
         return self.deleted
 
 
 class _FakeUow:
-    def __init__(self):
-        self.users = _FakeUsers()
+    def __init__(self, timezone="UTC"):
+        self.users = _FakeUsers(timezone=timezone)
         self.movement_entries = _FakeMovementEntries()
         self.committed = False
 
@@ -259,9 +266,37 @@ async def test_log_movement_handler_saves_entry_and_invalidates_daily_caches():
 
 
 @pytest.mark.asyncio
-async def test_delete_movement_handler_raises_not_found_when_delete_returns_false():
+async def test_log_movement_without_target_date_uses_current_utc_time(monkeypatch):
+    fixed_now = datetime(2026, 5, 30, 23, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(log_movement_command_handler, "utc_now", lambda: fixed_now)
+    uow = _FakeUow(timezone="Asia/Ho_Chi_Minh")
+    cache = _FakeCache()
+    handler = LogMovementCommandHandler(uow=uow, cache_service=cache)
+
+    result = await handler.handle(
+        LogMovementCommand(
+            user_id="user-1",
+            activity_id="badminton",
+            activity_name="Badminton",
+            duration_min=45,
+            kcal_burned=200.5,
+            intensity="moderate",
+            include_in_balance=True,
+            target_date=None,
+            header_timezone="Asia/Ho_Chi_Minh",
+        )
+    )
+
+    saved = uow.movement_entries.added[0]
+    assert saved.logged_at == fixed_now
+    assert result["logged_at"] == "2026-05-30T23:30:00+00:00"
+    assert "user:user-1:macros:2026-05-31" in cache.invalidated
+    assert "user:user-1:activities:2026-05-31:*" in cache.patterns
+
+
+@pytest.mark.asyncio
+async def test_delete_movement_handler_raises_not_found_when_entry_missing():
     uow = _FakeUow()
-    uow.movement_entries.deleted = False
     handler = DeleteMovementEntryCommandHandler(uow=uow)
 
     with pytest.raises(ResourceNotFoundException) as exc:
@@ -270,3 +305,32 @@ async def test_delete_movement_handler_raises_not_found_when_delete_returns_fals
         )
 
     assert exc.value.error_code == "ENTRY_NOT_FOUND"
+    assert uow.committed is False
+
+
+@pytest.mark.asyncio
+async def test_delete_movement_handler_deletes_commits_and_invalidates_daily_caches():
+    uow = _FakeUow(timezone="Asia/Ho_Chi_Minh")
+    cache = _FakeCache()
+    uow.movement_entries.entry = log_movement_command_handler.MovementEntry(
+        id="mvmt_123",
+        user_id="user-1",
+        activity_id="badminton",
+        activity_name="Badminton",
+        duration_min=45,
+        kcal_burned=200.5,
+        intensity="moderate",
+        include_in_balance=True,
+        logged_at=datetime(2026, 5, 30, 18, 0, tzinfo=timezone.utc),
+    )
+    handler = DeleteMovementEntryCommandHandler(uow=uow, cache_service=cache)
+
+    result = await handler.handle(
+        DeleteMovementEntryCommand(user_id="user-1", entry_id="mvmt_123")
+    )
+
+    assert result == {}
+    assert uow.movement_entries.deleted is True
+    assert uow.committed is True
+    assert "user:user-1:macros:2026-05-31" in cache.invalidated
+    assert "user:user-1:activities:2026-05-31:*" in cache.patterns

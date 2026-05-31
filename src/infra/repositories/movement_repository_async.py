@@ -24,6 +24,16 @@ class AsyncMovementRepository:
         await self.session.refresh(db)
         return movement_entry_orm_to_domain(db)
 
+    async def find_by_id(self, user_id: str, entry_id: str) -> MovementEntry | None:
+        result = await self.session.execute(
+            select(MovementEntryORM).where(
+                MovementEntryORM.id == entry_id,
+                MovementEntryORM.user_id == user_id,
+            )
+        )
+        db = result.scalars().first()
+        return movement_entry_orm_to_domain(db) if db else None
+
     async def find_by_user_and_logged_range(
         self,
         user_id: str,

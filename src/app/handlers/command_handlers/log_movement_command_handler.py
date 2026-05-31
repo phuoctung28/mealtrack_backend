@@ -13,9 +13,10 @@ from src.domain.ports.cache_port import CachePort
 from src.domain.services.movement_catalog_service import get_activity, get_met
 from src.domain.utils.timezone_utils import (
     format_iso_utc,
+    get_zone_info,
     noon_utc_for_date,
     resolve_user_timezone_async,
-    user_today,
+    utc_now,
 )
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -95,12 +96,17 @@ class LogMovementCommandHandler(EventHandler[LogMovementCommand, dict]):
             user_tz = await resolve_user_timezone_async(
                 cmd.user_id, uow, cmd.header_timezone
             )
-            log_date = cmd.target_date or user_today(user_tz)
-            if log_date > user_today(user_tz) + timedelta(days=1):
+            now_utc = utc_now()
+            today = now_utc.astimezone(get_zone_info(user_tz)).date()
+            log_date = cmd.target_date or today
+            if log_date > today + timedelta(days=1):
                 raise ValidationException(
                     "Movement date cannot be more than one day in the future",
                     "INVALID_DATE",
                 )
+            logged_at = (
+                noon_utc_for_date(log_date, user_tz) if cmd.target_date else now_utc
+            )
 
             entry = MovementEntry(
                 user_id=cmd.user_id,
@@ -110,7 +116,7 @@ class LogMovementCommandHandler(EventHandler[LogMovementCommand, dict]):
                 kcal_burned=cmd.kcal_burned,
                 intensity=cmd.intensity,
                 include_in_balance=cmd.include_in_balance,
-                logged_at=noon_utc_for_date(log_date, user_tz),
+                logged_at=logged_at,
             )
             saved = await uow.movement_entries.add(entry)
             await uow.commit()

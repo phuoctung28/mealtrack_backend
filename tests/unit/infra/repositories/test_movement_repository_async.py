@@ -14,6 +14,9 @@ class _FakeScalarResult:
     def all(self):
         return self._rows
 
+    def first(self):
+        return self._rows[0] if self._rows else None
+
     def scalar_one(self):
         return self._scalar_value
 
@@ -96,6 +99,19 @@ async def test_sum_included_kcal_for_range_filters_to_balance_entries():
     assert "movement_entries.include_in_balance IS true" in sql
     assert "movement_entries.logged_at >= '2026-05-31 00:00:00+00:00'" in sql
     assert "movement_entries.logged_at < '2026-06-01 00:00:00+00:00'" in sql
+
+
+@pytest.mark.asyncio
+async def test_find_by_id_scopes_by_user_and_entry_id():
+    session = _FakeSession()
+    repository = AsyncMovementRepository(session)
+
+    entry = await repository.find_by_id("user-1", "mvmt_123")
+
+    assert entry is None
+    sql = _compiled_sql(session.statements[0])
+    assert "movement_entries.id = 'mvmt_123'" in sql
+    assert "movement_entries.user_id = 'user-1'" in sql
 
 
 @pytest.mark.asyncio
