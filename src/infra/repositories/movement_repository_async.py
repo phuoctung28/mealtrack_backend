@@ -1,0 +1,69 @@
+"""Async movement repository."""
+
+from datetime import datetime
+
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.domain.model.movement import MovementEntry
+from src.infra.database.models.movement_entry import MovementEntryORM
+from src.infra.mappers.movement_entry_mapper import (
+    movement_entry_domain_to_orm,
+    movement_entry_orm_to_domain,
+)
+
+
+class AsyncMovementRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def add(self, entry: MovementEntry) -> MovementEntry:
+        db = movement_entry_domain_to_orm(entry)
+        self.session.add(db)
+        await self.session.flush()
+        await self.session.refresh(db)
+        return movement_entry_orm_to_domain(db)
+
+    async def find_by_user_and_logged_range(
+        self,
+        user_id: str,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[MovementEntry]:
+        result = await self.session.execute(
+            select(MovementEntryORM)
+            .where(
+                MovementEntryORM.user_id == user_id,
+                MovementEntryORM.logged_at >= start_utc,
+                MovementEntryORM.logged_at < end_utc,
+            )
+            .order_by(
+                MovementEntryORM.logged_at.desc(), MovementEntryORM.created_at.desc()
+            )
+        )
+        return [movement_entry_orm_to_domain(row) for row in result.scalars().all()]
+
+    async def sum_included_kcal_for_range(
+        self,
+        user_id: str,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> float:
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(MovementEntryORM.kcal_burned), 0.0)).where(
+                MovementEntryORM.user_id == user_id,
+                MovementEntryORM.include_in_balance.is_(True),
+                MovementEntryORM.logged_at >= start_utc,
+                MovementEntryORM.logged_at < end_utc,
+            )
+        )
+        return float(result.scalar_one() or 0.0)
+
+    async def delete(self, user_id: str, entry_id: str) -> bool:
+        result = await self.session.execute(
+            delete(MovementEntryORM).where(
+                MovementEntryORM.id == entry_id,
+                MovementEntryORM.user_id == user_id,
+            )
+        )
+        return result.rowcount > 0
