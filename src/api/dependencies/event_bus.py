@@ -138,6 +138,7 @@ from src.app.handlers.query_handlers import (
     GetUserOnboardingStatusQueryHandler,
     GetDailyActivitiesQueryHandler,
     GetBulkActivitiesQueryHandler,
+    GetMovementCatalogQueryHandler,
     GetMealsByDateQueryHandler,
     GetUserMetricsQueryHandler,
     GetStreakQueryHandler,
@@ -153,6 +154,7 @@ from src.app.queries.activity import GetDailyActivitiesQuery, GetBulkActivitiesQ
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
+from src.app.queries.movement import GetMovementCatalogQuery
 
 # Import all queries
 from src.app.queries.meal import (
@@ -440,6 +442,10 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         GetBulkActivitiesQuery,
         GetBulkActivitiesQueryHandler(cache_service=cache_service),
+    )
+    event_bus.register_handler(
+        GetMovementCatalogQuery,
+        GetMovementCatalogQueryHandler(),
     )
 
     event_bus.register_handler(GetMealsByDateQuery, GetMealsByDateQueryHandler())
