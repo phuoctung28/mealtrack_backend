@@ -27,11 +27,11 @@ def _local_day_utc_range(target_date, user_tz_str: str) -> tuple[datetime, datet
 
 @handles(GetDailyMovementQuery)
 class GetDailyMovementQueryHandler(EventHandler[GetDailyMovementQuery, dict]):
-    def __init__(self, uow: AsyncUnitOfWork):
-        self.uow = uow
+    def __init__(self, uow: AsyncUnitOfWork = None):
+        self._uow = uow
 
     async def handle(self, query: GetDailyMovementQuery) -> dict:
-        async with self.uow as uow:
+        async with (self._uow if self._uow is not None else AsyncUnitOfWork()) as uow:
             user_tz = await resolve_user_timezone_async(
                 query.user_id, uow, query.header_timezone
             )

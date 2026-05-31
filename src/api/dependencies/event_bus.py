@@ -456,11 +456,11 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         LogMovementCommand,
-        LogMovementCommandHandler(cache_service=cache_service),
+        LogMovementCommandHandler(uow=AsyncUnitOfWork(), cache_service=cache_service),
     )
     event_bus.register_handler(
         DeleteMovementEntryCommand,
-        DeleteMovementEntryCommandHandler(cache_service=cache_service),
+        DeleteMovementEntryCommandHandler(uow=AsyncUnitOfWork(), cache_service=cache_service),
     )
 
     event_bus.register_handler(GetMealsByDateQuery, GetMealsByDateQueryHandler())
