@@ -17,7 +17,7 @@ from src.infra.database.config import (
     engine,
 )
 
-router = APIRouter(tags=["Health"])
+router = APIRouter(prefix="/v1", tags=["Health"])
 
 
 def _deployment_info() -> Dict[str, Optional[str]]:
