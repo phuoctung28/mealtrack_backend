@@ -9,6 +9,7 @@ from .get_bulk_activities_query_handler import GetBulkActivitiesQueryHandler
 from .get_daily_breakdown_query_handler import GetDailyBreakdownQueryHandler
 from .get_daily_macros_query_handler import GetDailyMacrosQueryHandler
 from .get_movement_catalog_query_handler import GetMovementCatalogQueryHandler
+from .get_daily_movement_query_handler import GetDailyMovementQueryHandler
 from .get_streak_query_handler import GetStreakQueryHandler
 from .get_food_details_query_handler import GetFoodDetailsQueryHandler
 
@@ -65,6 +66,7 @@ __all__ = [
     "GetDailyActivitiesQueryHandler",
     "GetBulkActivitiesQueryHandler",
     "GetMovementCatalogQueryHandler",
+    "GetDailyMovementQueryHandler",
     # Meal Plan
     "GetMealsByDateQueryHandler",
     # Progress
