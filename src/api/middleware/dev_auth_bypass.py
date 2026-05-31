@@ -108,8 +108,6 @@ def add_dev_auth_bypass(app: FastAPI) -> None:
         # Load fresh per request to avoid cross-session ORM usage
         user = await _ensure_dev_user_async()
         if user is not None:
-            await _seed_dev_meals_async(user.id)
-
             # Provide only what downstream code expects
             request.state.user = SimpleNamespace(
                 id=user.id,

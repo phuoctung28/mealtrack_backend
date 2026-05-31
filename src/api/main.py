@@ -60,6 +60,7 @@ from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
+from src.api.routes.v1.movement import router as movement_router
 from src.infra.config.settings import settings
 from src.infra.database.config import engine
 from src.infra.database.config_async import async_engine
@@ -318,6 +319,7 @@ app.include_router(promo_codes_router)
 app.include_router(codes_router)
 app.include_router(nutrition_router)
 app.include_router(weight_entries_router)
+app.include_router(movement_router)
 app.include_router(well_known_router)
 app.include_router(app_download_router)
 

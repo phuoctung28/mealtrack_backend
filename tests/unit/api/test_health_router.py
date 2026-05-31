@@ -8,7 +8,7 @@ def test_health_accepts_head_requests():
     app = FastAPI()
     app.include_router(router)
 
-    response = TestClient(app).head("/health")
+    response = TestClient(app).head("/v1/health")
 
     assert response.status_code == 200
 
@@ -19,7 +19,7 @@ def test_health_exposes_deployment_identity(monkeypatch):
     app = FastAPI()
     app.include_router(router)
 
-    response = TestClient(app).get("/health")
+    response = TestClient(app).get("/v1/health")
 
     assert response.status_code == 200
     deployment = response.json()["deployment"]

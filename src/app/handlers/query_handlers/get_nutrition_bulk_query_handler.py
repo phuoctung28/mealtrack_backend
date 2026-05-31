@@ -59,12 +59,27 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                 if meal_date:
                     meals_by_date.setdefault(meal_date, []).append(meal)
 
+            # Single query for the full range; bucket by local date in Python.
+            movement_by_date: Dict[date, float] = {}
+            try:
+                overall_start, _ = self._local_day_utc_range(query.start_date, user_tz_str)
+                _, overall_end = self._local_day_utc_range(query.end_date, user_tz_str)
+                included = await uow.movement_entries.fetch_included_kcal_for_range(
+                    query.user_id, overall_start, overall_end
+                )
+                for logged_at, kcal in included:
+                    local_date = logged_at.astimezone(user_tz).date()
+                    movement_by_date[local_date] = movement_by_date.get(local_date, 0.0) + kcal
+            except Exception as exc:
+                logger.warning("Failed to fetch bulk movement data: %s", exc)
+
             dates_result: Dict[str, Dict[str, Any]] = {}
             current = query.start_date
             while current <= query.end_date:
                 day_meals = meals_by_date.get(current, [])
                 dates_result[current.isoformat()] = self._build_date_summary(
-                    day_meals, target_calories, target_macros
+                    day_meals, target_calories, target_macros,
+                    movement_kcal=movement_by_date.get(current, 0.0),
                 )
                 current += timedelta(days=1)
 
@@ -105,6 +120,13 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
             "cache_version": cache_version,
         }
 
+    def _local_day_utc_range(self, target: date, user_tz_str: str):
+        from datetime import datetime, time, timezone
+        tz = get_zone_info(user_tz_str)
+        start_local = datetime.combine(target, time.min, tzinfo=tz)
+        end_local = start_local + timedelta(days=1)
+        return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
     def _get_meal_date(self, meal, user_tz_str: str) -> Optional[date]:
         """Extract local date from meal's created_at timestamp."""
         if not meal.created_at:
@@ -119,6 +141,7 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
         meals: list,
         target_calories: Optional[float],
         target_macros: Optional[Dict],
+        movement_kcal: float = 0.0,
     ) -> Dict[str, Any]:
         """Build summary for a single date."""
         total_protein = 0.0
@@ -136,12 +159,13 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                     total_fat += meal.nutrition.macros.fat or 0
                     total_fiber += meal.nutrition.macros.fiber or 0
 
-        total_calories = Macros(
+        food_calories = Macros(
             protein=total_protein,
             carbs=total_carbs,
             fat=total_fat,
             fiber=total_fiber,
         ).total_calories
+        net_calories = food_calories - movement_kcal
 
         target_cal = target_calories or 2000
         target_prot = (target_macros or {}).get("protein", 70)
@@ -151,9 +175,11 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
         return {
             "has_meals": meal_count > 0,
             "meal_count": meal_count,
+            "food_calories": round(food_calories, 1),
+            "movement_kcal_burned": round(movement_kcal, 1),
             "totals": {
                 "consumed": {
-                    "calories": round(total_calories, 1),
+                    "calories": round(net_calories, 1),
                     "protein": round(total_protein, 1),
                     "carbs": round(total_carbs, 1),
                     "fat": round(total_fat, 1),
@@ -165,7 +191,7 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                     "fat": round(target_fat_val, 1),
                 },
                 "remaining": {
-                    "calories": round(target_cal - total_calories, 1),
+                    "calories": round(target_cal - net_calories, 1),
                     "protein": round(target_prot - total_protein, 1),
                     "carbs": round(target_carb - total_carbs, 1),
                     "fat": round(target_fat_val - total_fat, 1),
