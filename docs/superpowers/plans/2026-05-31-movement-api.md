@@ -61,7 +61,7 @@ Modify:
 - Test: `tests/unit/domain/services/test_movement_catalog_service.py`
 - Test: `tests/unit/handlers/query_handlers/test_movement_query_handlers.py`
 
-- [ ] **Step 1: Write failing catalog service tests**
+- [x] **Step 1: Write failing catalog service tests**
 
 Add `tests/unit/domain/services/test_movement_catalog_service.py`:
 
@@ -93,7 +93,7 @@ def test_get_met_returns_intensity_value_or_none():
     assert get_met("badminton", "very_hard") is None
 ```
 
-- [ ] **Step 2: Run catalog tests to verify RED**
+- [x] **Step 2: Run catalog tests to verify RED**
 
 Run:
 
@@ -103,7 +103,7 @@ pytest tests/unit/domain/services/test_movement_catalog_service.py -v
 
 Expected: FAIL with `ModuleNotFoundError` for `movement_catalog_service`.
 
-- [ ] **Step 3: Implement movement enums and catalog service**
+- [x] **Step 3: Implement movement enums and catalog service**
 
 Create `src/domain/model/movement/movement_enums.py`:
 
@@ -237,7 +237,7 @@ def get_met(activity_id: str | None, intensity: str) -> float | None:
     return float(value) if value is not None else None
 ```
 
-- [ ] **Step 4: Run catalog tests to verify GREEN**
+- [x] **Step 4: Run catalog tests to verify GREEN**
 
 Run:
 
@@ -247,7 +247,7 @@ pytest tests/unit/domain/services/test_movement_catalog_service.py -v
 
 Expected: PASS.
 
-- [ ] **Step 5: Add query handler test**
+- [x] **Step 5: Add query handler test**
 
 Add to `tests/unit/handlers/query_handlers/test_movement_query_handlers.py`:
 
@@ -270,7 +270,7 @@ async def test_get_movement_catalog_query_returns_activities():
     assert any(item["id"] == "badminton" for item in result["activities"])
 ```
 
-- [ ] **Step 6: Run query handler test to verify RED**
+- [x] **Step 6: Run query handler test to verify RED**
 
 Run:
 
@@ -280,7 +280,7 @@ pytest tests/unit/handlers/query_handlers/test_movement_query_handlers.py::test_
 
 Expected: FAIL with missing query or handler module.
 
-- [ ] **Step 7: Implement catalog query files**
+- [x] **Step 7: Implement catalog query files**
 
 Create `src/app/queries/movement/get_movement_catalog_query.py`:
 
@@ -327,7 +327,7 @@ class GetMovementCatalogQueryHandler(
         return {"activities": get_all_activities()}
 ```
 
-- [ ] **Step 8: Run catalog query tests to verify GREEN**
+- [x] **Step 8: Run catalog query tests to verify GREEN**
 
 Run:
 
@@ -337,7 +337,7 @@ pytest tests/unit/domain/services/test_movement_catalog_service.py tests/unit/ha
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit catalog work**
+- [x] **Step 9: Commit catalog work**
 
 ```bash
 git add src/domain/model/movement/movement_enums.py src/domain/services/movement_catalog_service.py src/app/queries/movement src/app/handlers/query_handlers/get_movement_catalog_query_handler.py tests/unit/domain/services/test_movement_catalog_service.py tests/unit/handlers/query_handlers/test_movement_query_handlers.py
@@ -357,7 +357,7 @@ git commit -m "feat: add movement catalog"
 - Modify: `src/infra/database/uow_async.py`
 - Test: `tests/unit/infra/repositories/test_movement_repository_async.py`
 
-- [ ] **Step 1: Write failing repository tests**
+- [x] **Step 1: Write failing repository tests**
 
 Add `tests/unit/infra/repositories/test_movement_repository_async.py` with fake-session-light tests for query construction:
 
@@ -382,7 +382,7 @@ def test_movement_entry_defaults_to_manual_source_and_include_in_balance():
     assert entry.include_in_balance is True
 ```
 
-- [ ] **Step 2: Run persistence tests to verify RED**
+- [x] **Step 2: Run persistence tests to verify RED**
 
 Run:
 
@@ -392,7 +392,7 @@ pytest tests/unit/infra/repositories/test_movement_repository_async.py -v
 
 Expected: FAIL with missing `MovementEntry`.
 
-- [ ] **Step 3: Implement domain model**
+- [x] **Step 3: Implement domain model**
 
 Create `src/domain/model/movement/movement_entry.py`:
 
@@ -442,7 +442,7 @@ from .movement_enums import MovementIntensity, MovementSource
 __all__ = ["MovementEntry", "MovementIntensity", "MovementSource"]
 ```
 
-- [ ] **Step 4: Run domain test to verify GREEN**
+- [x] **Step 4: Run domain test to verify GREEN**
 
 Run:
 
@@ -452,7 +452,7 @@ pytest tests/unit/infra/repositories/test_movement_repository_async.py::test_mov
 
 Expected: PASS.
 
-- [ ] **Step 5: Implement ORM, mapper, repository, UoW, and migration**
+- [x] **Step 5: Implement ORM, mapper, repository, UoW, and migration**
 
 Create `src/infra/database/models/movement_entry.py`:
 
@@ -664,7 +664,7 @@ from .movement_entry import MovementEntryORM
 
 and add `"MovementEntryORM"` to `__all__`.
 
-- [ ] **Step 6: Run focused import tests**
+- [x] **Step 6: Run focused import tests**
 
 Run:
 
@@ -675,7 +675,7 @@ python -m compileall src/domain/model/movement src/infra/repositories/movement_r
 
 Expected: PASS and compile succeeds.
 
-- [ ] **Step 7: Commit persistence work**
+- [x] **Step 7: Commit persistence work**
 
 ```bash
 git add src/domain/model/movement src/infra/database/models/movement_entry.py src/infra/database/models/__init__.py src/infra/mappers/movement_entry_mapper.py src/infra/repositories/movement_repository_async.py src/infra/database/uow_async.py migrations/versions/060_add_movement_entries_table.py tests/unit/infra/repositories/test_movement_repository_async.py
@@ -692,7 +692,7 @@ git commit -m "feat: add movement persistence"
 - Modify: movement `__init__.py` exports
 - Test: command and query handler tests
 
-- [ ] **Step 1: Write failing handler tests**
+- [x] **Step 1: Write failing handler tests**
 
 Add to `tests/unit/handlers/command_handlers/test_movement_command_handlers.py`:
 
@@ -737,7 +737,7 @@ def test_validate_log_movement_rejects_unknown_activity_id():
     assert exc.value.error_code == "INVALID_ACTIVITY"
 ```
 
-- [ ] **Step 2: Run handler tests to verify RED**
+- [x] **Step 2: Run handler tests to verify RED**
 
 Run:
 
@@ -747,7 +747,7 @@ pytest tests/unit/handlers/command_handlers/test_movement_command_handlers.py -v
 
 Expected: FAIL with missing command/handler.
 
-- [ ] **Step 3: Implement commands, daily query, handlers**
+- [x] **Step 3: Implement commands, daily query, handlers**
 
 Create `src/app/commands/movement/log_movement_command.py`:
 
@@ -1016,7 +1016,7 @@ class GetDailyMovementQueryHandler(
         }
 ```
 
-- [ ] **Step 4: Run handler tests**
+- [x] **Step 4: Run handler tests**
 
 Run:
 
@@ -1026,7 +1026,7 @@ pytest tests/unit/handlers/command_handlers/test_movement_command_handlers.py te
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit handler work**
+- [x] **Step 5: Commit handler work**
 
 ```bash
 git add src/app/commands/movement src/app/queries/movement src/app/handlers/command_handlers/*movement* src/app/handlers/query_handlers/*movement* tests/unit/handlers/command_handlers/test_movement_command_handlers.py tests/unit/handlers/query_handlers/test_movement_query_handlers.py
@@ -1043,7 +1043,7 @@ git commit -m "feat: add movement handlers"
 - Modify: handler package `__init__.py` files
 - Test: `tests/unit/api/routes/test_movement_routes.py`
 
-- [ ] **Step 1: Write failing route tests**
+- [x] **Step 1: Write failing route tests**
 
 Add `tests/unit/api/routes/test_movement_routes.py`:
 
@@ -1077,7 +1077,7 @@ def test_movement_catalog_route_returns_activities(monkeypatch):
     assert response.json()["activities"][0]["id"] == "badminton"
 ```
 
-- [ ] **Step 2: Run route tests to verify RED**
+- [x] **Step 2: Run route tests to verify RED**
 
 Run:
 
@@ -1087,7 +1087,7 @@ pytest tests/unit/api/routes/test_movement_routes.py -v
 
 Expected: FAIL with missing route module.
 
-- [ ] **Step 3: Implement request schemas and router**
+- [x] **Step 3: Implement request schemas and router**
 
 Create `src/api/schemas/request/movement_requests.py`:
 
@@ -1205,7 +1205,7 @@ async def delete_movement_entry(
         raise handle_exception(exc) from exc
 ```
 
-- [ ] **Step 4: Register router and event handlers**
+- [x] **Step 4: Register router and event handlers**
 
 Modify `src/api/main.py`:
 
@@ -1234,7 +1234,7 @@ event_bus.register_handler(GetDailyMovementQuery, GetDailyMovementQueryHandler()
 
 Update command/query handler `__init__.py` exports for the four new handlers.
 
-- [ ] **Step 5: Run route tests**
+- [x] **Step 5: Run route tests**
 
 Run:
 
@@ -1244,7 +1244,7 @@ pytest tests/unit/api/routes/test_movement_routes.py tests/unit/api/test_app_smo
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit API work**
+- [x] **Step 6: Commit API work**
 
 ```bash
 git add src/api/routes/v1/movement.py src/api/schemas/request/movement_requests.py src/api/main.py src/api/dependencies/event_bus.py src/app/handlers/command_handlers/__init__.py src/app/handlers/query_handlers/__init__.py tests/unit/api/routes/test_movement_routes.py
@@ -1258,7 +1258,7 @@ git commit -m "feat: expose movement api"
 - Modify: `src/app/handlers/query_handlers/get_nutrition_bulk_query_handler.py`
 - Test: `tests/unit/handlers/query_handlers/test_movement_balance_integration.py`
 
-- [ ] **Step 1: Write failing daily balance test**
+- [x] **Step 1: Write failing daily balance test**
 
 Add `tests/unit/handlers/query_handlers/test_movement_balance_integration.py`:
 
@@ -1285,7 +1285,7 @@ def test_bulk_date_summary_uses_net_calories_after_movement():
     assert result["movement_kcal_burned"] == 300.0
 ```
 
-- [ ] **Step 2: Run balance test to verify RED**
+- [x] **Step 2: Run balance test to verify RED**
 
 Run:
 
@@ -1295,7 +1295,7 @@ pytest tests/unit/handlers/query_handlers/test_movement_balance_integration.py -
 
 Expected: FAIL because `_build_date_summary` does not accept `movement_kcal`.
 
-- [ ] **Step 3: Implement bulk summary adjustment**
+- [x] **Step 3: Implement bulk summary adjustment**
 
 Change `_build_date_summary` signature in `get_nutrition_bulk_query_handler.py`:
 
@@ -1323,7 +1323,7 @@ Use `net_calories` for consumed/remaining calories and add:
 "movement_kcal_burned": round(movement_kcal, 1),
 ```
 
-- [ ] **Step 4: Fetch movement kcal in bulk handler**
+- [x] **Step 4: Fetch movement kcal in bulk handler**
 
 Inside `handle`, after meals are grouped and before the per-date loop, compute a date map:
 
@@ -1354,7 +1354,7 @@ def _local_day_utc_range(self, target: date, user_tz_str: str):
 
 Pass `movement_kcal=movement_by_date.get(current, 0.0)` into `_build_date_summary`.
 
-- [ ] **Step 5: Implement daily macros movement adjustment**
+- [x] **Step 5: Implement daily macros movement adjustment**
 
 In `get_daily_macros_query_handler.py`, inside the existing UoW and after `target_date` is known:
 
@@ -1391,7 +1391,7 @@ Set result fields:
 
 Pass `net_calories` to `_get_weekly_context`.
 
-- [ ] **Step 6: Run balance tests**
+- [x] **Step 6: Run balance tests**
 
 Run:
 
@@ -1401,7 +1401,7 @@ pytest tests/unit/handlers/query_handlers/test_movement_balance_integration.py t
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit balance integration**
+- [x] **Step 7: Commit balance integration**
 
 ```bash
 git add src/app/handlers/query_handlers/get_daily_macros_query_handler.py src/app/handlers/query_handlers/get_nutrition_bulk_query_handler.py tests/unit/handlers/query_handlers/test_movement_balance_integration.py
@@ -1413,7 +1413,7 @@ git commit -m "feat: apply movement calories to nutrition balance"
 **Files:**
 - No new source files.
 
-- [ ] **Step 1: Run focused movement and nutrition tests**
+- [x] **Step 1: Run focused movement and nutrition tests**
 
 Run:
 
@@ -1423,7 +1423,7 @@ pytest tests/unit/domain/services/test_movement_catalog_service.py tests/unit/ha
 
 Expected: PASS.
 
-- [ ] **Step 2: Run migration graph test**
+- [x] **Step 2: Run migration graph test**
 
 Run:
 
@@ -1433,7 +1433,7 @@ pytest tests/migrations/test_alembic_revision_graph.py -v
 
 Expected: PASS.
 
-- [ ] **Step 3: Run existing impacted tests**
+- [x] **Step 3: Run existing impacted tests**
 
 Run:
 
@@ -1443,7 +1443,7 @@ pytest tests/unit/handlers/query_handlers/test_daily_macros_uow_consolidation.py
 
 Expected: PASS.
 
-- [ ] **Step 4: Run lint/format on touched files**
+- [x] **Step 4: Run lint/format on touched files**
 
 Run:
 
@@ -1454,7 +1454,7 @@ flake8 src/
 
 Expected: no errors.
 
-- [ ] **Step 5: Final status check**
+- [x] **Step 5: Final status check**
 
 Run:
 
