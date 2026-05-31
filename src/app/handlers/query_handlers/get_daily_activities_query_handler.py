@@ -103,8 +103,45 @@ class GetDailyActivitiesQueryHandler(
         self,
         query: GetDailyActivitiesQuery,
     ) -> List[Dict[str, Any]]:
-        """Fetch workout activities for the query date/user. Reserved for future use."""
-        return []
+        """Fetch movement entries for the query date/user."""
+        try:
+            from datetime import time, timedelta, timezone
+
+            async with AsyncUnitOfWork() as uow:
+                user_tz_str = await resolve_user_timezone_async(
+                    query.user_id, uow, query.header_timezone
+                )
+                tz = get_zone_info(user_tz_str)
+                target_date = (
+                    query.target_date.date()
+                    if hasattr(query.target_date, "date")
+                    else query.target_date
+                )
+                start_utc = datetime.combine(target_date, time.min, tzinfo=tz).astimezone(timezone.utc)
+                end_utc = start_utc + timedelta(days=1)
+
+                entries = await uow.movement_entries.find_by_user_and_logged_range(
+                    query.user_id, start_utc, end_utc
+                )
+
+            return [self._build_movement_activity(entry) for entry in entries]
+        except Exception as e:
+            logger.error(f"Error getting workout activities: {str(e)}", exc_info=True)
+            return []
+
+    def _build_movement_activity(self, entry) -> Dict[str, Any]:
+        return {
+            "id": entry.id,
+            "type": "movement",
+            "timestamp": format_iso_utc(entry.logged_at),
+            "title": entry.activity_name,
+            "activity_id": entry.activity_id,
+            "intensity": entry.intensity,
+            "duration_min": entry.duration_min,
+            "kcal_burned": entry.kcal_burned,
+            "source": entry.source,
+            "include_in_balance": entry.include_in_balance,
+        }
 
     def _build_meal_activity(
         self, meal, target_date: datetime, language: str = "en"
