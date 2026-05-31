@@ -45,6 +45,23 @@ def test_validate_log_movement_rejects_unknown_activity_id():
     assert exc.value.error_code == "INVALID_ACTIVITY"
 
 
+def test_validate_log_movement_rejects_empty_activity_id():
+    with pytest.raises(ValidationException) as exc:
+        _validate_log_movement(
+            LogMovementCommand(
+                user_id="user-1",
+                activity_id="",
+                activity_name="Custom walk",
+                duration_min=60,
+                kcal_burned=231.0,
+                intensity="moderate",
+                include_in_balance=True,
+            )
+        )
+
+    assert exc.value.error_code == "INVALID_ACTIVITY"
+
+
 @pytest.mark.parametrize("activity_name", ["", "   ", "x" * 101])
 def test_validate_log_movement_rejects_invalid_activity_name(activity_name):
     with pytest.raises(ValidationException) as exc:

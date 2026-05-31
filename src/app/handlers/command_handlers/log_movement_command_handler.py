@@ -50,7 +50,7 @@ def _validate_log_movement(cmd: LogMovementCommand) -> None:
     valid_intensities = {item.value for item in MovementIntensity}
     if cmd.intensity not in valid_intensities:
         raise ValidationException("Invalid movement intensity", "INVALID_INTENSITY")
-    if cmd.activity_id:
+    if cmd.activity_id is not None:
         if get_activity(cmd.activity_id) is None:
             raise ValidationException("Unknown movement activity", "INVALID_ACTIVITY")
         if get_met(cmd.activity_id, cmd.intensity) is None:
