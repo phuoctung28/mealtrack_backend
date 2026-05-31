@@ -10,7 +10,7 @@ from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.movement import MovementEntry, MovementIntensity
 from src.domain.ports.cache_port import CachePort
-from src.domain.services.movement_catalog_service import get_activity
+from src.domain.services.movement_catalog_service import get_activity, get_met
 from src.domain.utils.timezone_utils import (
     format_iso_utc,
     noon_utc_for_date,
@@ -37,19 +37,26 @@ def _movement_response(entry: MovementEntry) -> dict:
 
 
 def _validate_log_movement(cmd: LogMovementCommand) -> None:
-    if cmd.activity_id and get_activity(cmd.activity_id) is None:
-        raise ValidationException("Unknown movement activity", "INVALID_ACTIVITY")
-    if cmd.duration_min <= 0:
+    if not cmd.activity_name.strip() or len(cmd.activity_name) > 100:
+        raise ValidationException("Invalid movement activity", "INVALID_ACTIVITY")
+    if cmd.duration_min < 1 or cmd.duration_min > 600:
         raise ValidationException(
-            "Duration must be greater than zero", "INVALID_DURATION"
+            "Duration must be between 1 and 600 minutes", "INVALID_DURATION"
         )
-    if cmd.kcal_burned <= 0:
+    if cmd.kcal_burned < 0:
         raise ValidationException(
-            "Calories burned must be greater than zero", "INVALID_KCAL"
+            "Calories burned cannot be negative", "INVALID_KCAL"
         )
     valid_intensities = {item.value for item in MovementIntensity}
     if cmd.intensity not in valid_intensities:
         raise ValidationException("Invalid movement intensity", "INVALID_INTENSITY")
+    if cmd.activity_id:
+        if get_activity(cmd.activity_id) is None:
+            raise ValidationException("Unknown movement activity", "INVALID_ACTIVITY")
+        if get_met(cmd.activity_id, cmd.intensity) is None:
+            raise ValidationException(
+                "Activity does not support movement intensity", "INVALID_INTENSITY"
+            )
 
 
 async def _flush_movement_caches(

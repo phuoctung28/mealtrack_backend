@@ -7,6 +7,7 @@ from src.app.commands.movement import DeleteMovementEntryCommand, LogMovementCom
 from src.app.handlers.command_handlers.delete_movement_entry_command_handler import (
     DeleteMovementEntryCommandHandler,
 )
+from src.app.handlers.command_handlers import log_movement_command_handler
 from src.app.handlers.command_handlers.log_movement_command_handler import (
     LogMovementCommandHandler,
     _validate_log_movement,
@@ -44,9 +45,27 @@ def test_validate_log_movement_rejects_unknown_activity_id():
     assert exc.value.error_code == "INVALID_ACTIVITY"
 
 
+@pytest.mark.parametrize("activity_name", ["", "   ", "x" * 101])
+def test_validate_log_movement_rejects_invalid_activity_name(activity_name):
+    with pytest.raises(ValidationException) as exc:
+        _validate_log_movement(
+            LogMovementCommand(
+                user_id="user-1",
+                activity_id=None,
+                activity_name=activity_name,
+                duration_min=60,
+                kcal_burned=231.0,
+                intensity="moderate",
+                include_in_balance=True,
+            )
+        )
+
+    assert exc.value.error_code == "INVALID_ACTIVITY"
+
+
 @pytest.mark.parametrize(
     ("duration_min", "error_code"),
-    [(0, "INVALID_DURATION"), (-1, "INVALID_DURATION")],
+    [(0, "INVALID_DURATION"), (-1, "INVALID_DURATION"), (601, "INVALID_DURATION")],
 )
 def test_validate_log_movement_rejects_invalid_duration(duration_min, error_code):
     with pytest.raises(ValidationException) as exc:
@@ -65,8 +84,21 @@ def test_validate_log_movement_rejects_invalid_duration(duration_min, error_code
     assert exc.value.error_code == error_code
 
 
-@pytest.mark.parametrize("kcal_burned", [0.0, -1.0])
-def test_validate_log_movement_rejects_invalid_kcal(kcal_burned):
+def test_validate_log_movement_accepts_zero_kcal():
+    _validate_log_movement(
+        LogMovementCommand(
+            user_id="user-1",
+            activity_id=None,
+            activity_name="Custom walk",
+            duration_min=60,
+            kcal_burned=0.0,
+            intensity="moderate",
+            include_in_balance=True,
+        )
+    )
+
+
+def test_validate_log_movement_rejects_negative_kcal():
     with pytest.raises(ValidationException) as exc:
         _validate_log_movement(
             LogMovementCommand(
@@ -74,7 +106,7 @@ def test_validate_log_movement_rejects_invalid_kcal(kcal_burned):
                 activity_id="badminton",
                 activity_name="Badminton",
                 duration_min=60,
-                kcal_burned=kcal_burned,
+                kcal_burned=-1.0,
                 intensity="moderate",
                 include_in_balance=True,
             )
@@ -93,6 +125,36 @@ def test_validate_log_movement_rejects_invalid_intensity():
                 duration_min=60,
                 kcal_burned=231.0,
                 intensity="extreme",
+                include_in_balance=True,
+            )
+        )
+
+    assert exc.value.error_code == "INVALID_INTENSITY"
+
+
+def test_validate_log_movement_rejects_preset_activity_unsupported_intensity(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        log_movement_command_handler,
+        "get_activity",
+        lambda activity_id: {"id": activity_id},
+    )
+    monkeypatch.setattr(
+        log_movement_command_handler,
+        "get_met",
+        lambda activity_id, intensity: None,
+    )
+
+    with pytest.raises(ValidationException) as exc:
+        _validate_log_movement(
+            LogMovementCommand(
+                user_id="user-1",
+                activity_id="badminton",
+                activity_name="Badminton",
+                duration_min=60,
+                kcal_burned=231.0,
+                intensity="moderate",
                 include_in_balance=True,
             )
         )
