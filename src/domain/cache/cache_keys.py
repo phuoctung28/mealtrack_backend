@@ -17,6 +17,7 @@ class CacheKeys:
     TTL_1_DAY = 86400
     TTL_7_DAYS = 604_800
     TTL_30_DAYS = 2_592_000
+    CRAVE_DECK_TTL = 900
 
     @staticmethod
     def user_profile(user_id: str) -> tuple[str, int]:
@@ -108,6 +109,11 @@ class CacheKeys:
     def saved_suggestions(user_id: str) -> tuple[str, int]:
         """Cache key for user's saved suggestions. 1h TTL."""
         return (f"user:{user_id}:saved_suggestions", CacheKeys.TTL_1_HOUR)
+
+    @staticmethod
+    def crave_deck(user_id: str, meal_type: str) -> tuple[str, int]:
+        """Cache key for Crave meal suggestion deck."""
+        return (f"user:{user_id}:crave:{meal_type}", CacheKeys.CRAVE_DECK_TTL)
 
     @staticmethod
     def notification_prefs(user_id: str) -> tuple[str, int]:

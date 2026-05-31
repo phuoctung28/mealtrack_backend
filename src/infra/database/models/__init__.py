@@ -46,6 +46,14 @@ from .feature_flag import FeatureFlag
 # Saved suggestions
 from .saved_suggestion import SavedSuggestionModel
 
+# Crave swipe engine
+from .crave import (
+    MealCatalog,
+    UserTasteProfile,
+    CraveSwipeEvent,
+    CraveSeen,
+)
+
 # Weekly budgets
 from .weekly.weekly_macro_budget import WeeklyMacroBudgetORM
 
@@ -107,6 +115,11 @@ __all__ = [
     "FeatureFlag",
     # Saved suggestions
     "SavedSuggestionModel",
+    # Crave swipe engine
+    "MealCatalog",
+    "UserTasteProfile",
+    "CraveSwipeEvent",
+    "CraveSeen",
     # Weekly budgets
     "WeeklyMacroBudgetORM",
     # Cheat days

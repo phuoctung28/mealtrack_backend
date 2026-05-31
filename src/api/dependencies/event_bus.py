@@ -4,6 +4,7 @@ Event bus dependency for FastAPI with proper type registrations.
 
 from typing import Optional
 
+from src.app.commands.crave import RecordSwipesCommand
 from src.app.commands.ingredient import RecognizeIngredientCommand
 
 # Import all commands
@@ -40,6 +41,7 @@ from src.app.commands.user.sync_user_command import (
 )
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.meal import MealImageUploadedEvent
+from src.app.events.crave import MealSwipedEvent
 
 # Import all command handlers from module
 from src.app.handlers.command_handlers import (
@@ -79,6 +81,7 @@ from src.app.handlers.command_handlers import (
     SaveSuggestionCommandHandler,
     DeleteSavedSuggestionCommandHandler,
 )
+from src.app.handlers.command_handlers.crave import RecordSwipesCommandHandler
 from src.app.commands.saved_suggestion import (
     SaveSuggestionCommand,
     DeleteSavedSuggestionCommand,
@@ -119,6 +122,9 @@ from src.app.handlers.query_handlers.get_cheat_days_query_handler import (
 from src.app.handlers.event_handlers.meal_analysis_event_handler import (
     MealAnalysisEventHandler,
 )
+from src.app.handlers.event_handlers.taste_profile_update_handler import (
+    TasteProfileUpdateHandler,
+)
 from src.app.handlers.query_handlers import (
     GetNotificationPreferencesQueryHandler,
 )
@@ -143,6 +149,10 @@ from src.app.handlers.query_handlers import (
     GetStreakQueryHandler,
     GetDailyBreakdownQueryHandler,
 )
+from src.app.handlers.query_handlers.crave import (
+    GetCraveDeckQueryHandler,
+    GetCraveRecipeQueryHandler,
+)
 from src.app.handlers.query_handlers.get_nutrition_bulk_query_handler import (
     GetNutritionBulkQueryHandler,
 )
@@ -153,6 +163,7 @@ from src.app.queries.activity import GetDailyActivitiesQuery, GetBulkActivitiesQ
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
 from src.app.queries.food.search_foods_query import SearchFoodsQuery
+from src.app.queries.crave import GetCraveDeckQuery, GetCraveRecipeQuery
 
 # Import all queries
 from src.app.queries.meal import (
@@ -583,6 +594,18 @@ def get_configured_event_bus() -> EventBus:
         GetSavedSuggestionsQuery,
         GetSavedSuggestionsQueryHandler(cache_service=cache_service),
     )
+    event_bus.register_handler(
+        GetCraveDeckQuery,
+        GetCraveDeckQueryHandler(cache=cache_service),
+    )
+    event_bus.register_handler(
+        RecordSwipesCommand,
+        RecordSwipesCommandHandler(bus=event_bus),
+    )
+    event_bus.register_handler(
+        GetCraveRecipeQuery,
+        GetCraveRecipeQueryHandler(),
+    )
 
     # Register domain event subscribers
     meal_analysis_handler = MealAnalysisEventHandler(
@@ -610,6 +633,9 @@ def get_configured_event_bus() -> EventBus:
     if cache_service is not None:
         hydration_cache_handler = HydrationCacheInvalidationEventHandler(cache=cache_service)
         event_bus.subscribe(HydrationCacheInvalidationRequiredEvent, hydration_cache_handler.handle)
+
+    taste_profile_handler = TasteProfileUpdateHandler()
+    event_bus.subscribe(MealSwipedEvent, taste_profile_handler.handle)
 
     _configured_event_bus = event_bus
     return _configured_event_bus

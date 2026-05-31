@@ -13,6 +13,8 @@ class SavedSuggestionModel(Base):
     id = Column(String(36), primary_key=True)
     user_id = Column(String(128), nullable=False)
     suggestion_id = Column(String(64), nullable=False)
+    catalog_meal_id = Column(String(36), nullable=True)
+    source = Column(String(24), nullable=False, default="generated")
     meal_type = Column(String(20), nullable=False)
     portion_multiplier = Column(Integer, default=1)
     suggestion_data = Column(JSON, nullable=False)
@@ -22,4 +24,5 @@ class SavedSuggestionModel(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "suggestion_id", name="uq_user_suggestion"),
         Index("idx_user_saved", "user_id", "saved_at"),
+        Index("idx_saved_catalog", "user_id", "catalog_meal_id"),
     )
