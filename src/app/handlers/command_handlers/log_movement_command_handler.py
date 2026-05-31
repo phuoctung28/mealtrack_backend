@@ -63,7 +63,11 @@ def _validate_log_movement(cmd: LogMovementCommand) -> None:
 async def _flush_movement_caches(
     cache: CachePort, user_id: str, log_date: date
 ) -> None:
-    keys_to_delete = [CacheKeys.daily_macros(user_id, log_date)[0]]
+    week_start = log_date - timedelta(days=log_date.weekday())
+    keys_to_delete = [
+        CacheKeys.daily_macros(user_id, log_date)[0],
+        CacheKeys.weekly_budget(user_id, week_start)[0],
+    ]
     for key in keys_to_delete:
         try:
             await cache.invalidate(key)

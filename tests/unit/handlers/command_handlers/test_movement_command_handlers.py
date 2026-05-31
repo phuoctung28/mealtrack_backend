@@ -272,6 +272,7 @@ async def test_log_movement_handler_saves_entry_and_invalidates_daily_caches():
     assert result["id"] == saved.id
     assert result["logged_at"] == "2026-05-30T05:00:00+00:00"
     assert "user:user-1:macros:2026-05-30" in cache.invalidated
+    assert "user:user-1:weekly_budget:2026-05-25" in cache.invalidated
     assert "user:user-1:activities:2026-05-30:*" in cache.patterns
 
 
@@ -301,6 +302,7 @@ async def test_log_movement_without_target_date_uses_current_utc_time(monkeypatc
     assert saved.logged_at == fixed_now
     assert result["logged_at"] == "2026-05-30T23:30:00+00:00"
     assert "user:user-1:macros:2026-05-31" in cache.invalidated
+    assert "user:user-1:weekly_budget:2026-05-25" in cache.invalidated
     assert "user:user-1:activities:2026-05-31:*" in cache.patterns
 
 
@@ -343,6 +345,7 @@ async def test_delete_movement_handler_deletes_commits_and_invalidates_daily_cac
     assert uow.movement_entries.deleted is True
     assert uow.committed is True
     assert "user:user-1:macros:2026-05-31" in cache.invalidated
+    assert "user:user-1:weekly_budget:2026-05-25" in cache.invalidated
     assert "user:user-1:activities:2026-05-31:*" in cache.patterns
 
 
@@ -431,3 +434,4 @@ async def test_update_movement_handler_updates_and_invalidates_caches():
     assert result["include_in_balance"] is False
     assert uow.committed is True
     assert "user:user-1:macros:2026-05-31" in cache.invalidated
+    assert "user:user-1:weekly_budget:2026-05-25" in cache.invalidated
