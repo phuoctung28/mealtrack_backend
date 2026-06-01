@@ -1,10 +1,10 @@
-"""Scheduled email service for re-engagement and trial expiring emails."""
+"""Cron helper for re-engagement and trial-expiring lifecycle emails."""
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select
 
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
@@ -16,8 +16,8 @@ from src.infra.database.uow_async import AsyncUnitOfWork
 logger = logging.getLogger(__name__)
 
 
-class ScheduledEmailService:
-    """Checks for and sends scheduled lifecycle emails."""
+class CronLifecycleEmailService:
+    """Checks for and sends lifecycle emails from the email cron."""
 
     INACTIVITY_THRESHOLD_DAYS = 3
     TRIAL_EXPIRING_DAYS = 2
@@ -27,9 +27,9 @@ class ScheduledEmailService:
         self._email_service = email_service
 
     async def check_and_send_emails(self) -> None:
-        """Main entry point — check and send all scheduled emails."""
+        """Main entry point for email cron."""
         now = utc_now()
-        logger.info("Running scheduled email check")
+        logger.info("Running lifecycle email cron")
 
         # 1. Re-engagement emails (inactive trial users)
         inactive_users = await self._find_inactive_trial_users(now)
@@ -46,7 +46,7 @@ class ScheduledEmailService:
             await self._send_trial_expiring(user, days_left)
 
         logger.info(
-            f"Scheduled email check complete: "
+            f"Lifecycle email cron complete: "
             f"{len(inactive_users)} inactive, {len(expiring)} expiring"
         )
 
@@ -129,7 +129,9 @@ class ScheduledEmailService:
             await self._log_email(user.id, "trial_expiring", result.message_id)
             logger.info(f"Trial expiring email sent to user {user.id}")
 
-    async def _log_email(self, user_id: str, email_type: str, message_id: str | None) -> None:
+    async def _log_email(
+        self, user_id: str, email_type: str, message_id: str | None
+    ) -> None:
         """Log sent email to database."""
         async with AsyncUnitOfWork() as uow:
             email_log = EmailLog(

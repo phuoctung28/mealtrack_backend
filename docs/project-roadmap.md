@@ -1,7 +1,7 @@
 # MealTrack Backend - Project Roadmap
 
 **Version:** 0.6.3
-**Last Updated:** May 27, 2026
+**Last Updated:** June 1, 2026
 **Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 681+ tests, 70%+ coverage.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
@@ -9,18 +9,23 @@
 
 ## Completed Phases
 
+### June 2026: iOS Notification Payload Hardening
+- [x] Removed obsolete direct notification service wiring and direct meal/summary helper sends.
+- [x] Removed background push scheduler lifecycle, scheduler leader lock, stale test notification route, and misleading legacy push/email service names; cron entrypoints now own notification/email work.
+- [x] `FirebaseService` rejects blank display text before sending APNs payloads and mobile `data` fields.
+- [x] iOS/APNs payload tests cover non-empty alert title/body for valid sends and fail-closed behavior for blank-input sends.
+
 ### May 2026 (late): Notification Overhaul, RevenueCat Webhook Expansion, Meal-Suggestion Parallel Generator
 - [x] Platform-specific FCM payload builders: `android_payload_builder.py` (high-priority, channel IDs), `apns_payload_builder.py` (APNs Time Sensitive, `interruption-level` in payload body)
-- [x] Trial-expiry push notifications at T-2d and T-1d via `ScheduledSubscriptionPushService`
+- [x] Trial-expiry push notifications at T-2d and T-1d via `CronTrialPushService`
 - [x] Timezone-change notification reschedule in `UpdateTimezoneCommandHandler` and `RegisterFcmTokenCommandHandler`
-- [x] Scheduler leader election: `SchedulerLeaderLock` (flock + PostgreSQL advisory lock) prevents duplicate scheduled sends across replicas
-- [x] `DailyContextPrecomputeService`: batch pre-computes user calorie context at timezone midnight
-- [x] `ScheduledNotificationService`: 60-second tick loop with timezone-midnight detection and batch FCM send
+- [x] `DailyContextPrecomputeService`: batch pre-computes user calorie context for timezone-local dates
+- [x] `src/cron/push.py`: Render cron pipeline for precompute, trial-expiry scheduling, due-row FCM dispatch, and expired-row cleanup
 - [x] RevenueCat webhook full lifecycle: INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE, PRODUCT_CHANGE, REFUND, TRANSFER
 - [x] PostHog lifecycle mirroring for subscription events via `PostHogAdapter`
 - [x] Referral credit/revoke wired to INITIAL_PURCHASE / REFUND webhooks
 - [x] Parallel recipe generator: 3-phase pipeline (name generation → parallel generation → translation)
-- [x] Scheduled email service: re-engagement and trial-expiry emails at startup
+- [x] `src/cron/email.py`: Render cron pipeline for re-engagement and trial-expiry lifecycle emails
 
 ### May 2026 (early): Nutrition Fixes, Referral Improvements, Email Deep Links
 - [x] Configurable referral commission rates via `REFERRAL_COMMISSIONS` env var (per-currency JSON)

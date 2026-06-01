@@ -1,5 +1,4 @@
-"""Scheduler that inserts T-2d / T-1d trial-expiry push rows for the
-existing ScheduledNotificationService loop to send."""
+"""Cron helper that inserts T-2d / T-1d trial-expiry push rows."""
 
 import logging
 import uuid
@@ -21,28 +20,28 @@ _FIRE_OFFSET_MINUTES = 30       # send at lunch + 30
 _FALLBACK_FIRE_LOCAL = time(12, 0)  # if lunch_time_minutes missing → noon local
 
 
-class ScheduledSubscriptionPushService:
+class CronTrialPushService:
     """Inserts trial-expiry push notifications at T-2d and T-1d.
 
-    Does not send. The existing ScheduledNotificationService loop polls
-    `notifications` and sends due rows on its 60s tick.
+    Does not send. The cron push job claims and sends due rows from
+    `notifications`.
     """
 
     def __init__(self) -> None:
-        # Stateless; constructed once per process in main.py lifespan.
+        # Stateless; constructed by the cron job for each run.
         pass
 
     def check_and_schedule_pushes(self, now: datetime | None = None) -> int:
         """Run T-2d + T-1d windows. Returns total rows inserted (excludes
         conflict-do-nothing skips)."""
         moment = now or utc_now()
-        logger.info("Trial-push scheduler: starting run at %s", moment.isoformat())
+        logger.info("Trial-push cron: starting run at %s", moment.isoformat())
 
         scheduled = 0
         scheduled += self._schedule_window(moment, days_left=2)
         scheduled += self._schedule_window(moment, days_left=1)
 
-        logger.info("Trial-push scheduler: complete, inserted=%s", scheduled)
+        logger.info("Trial-push cron: complete, inserted=%s", scheduled)
         return scheduled
 
     # ---- window pipeline ------------------------------------------------
@@ -98,7 +97,8 @@ class ScheduledSubscriptionPushService:
                     u.language_code
                 FROM notification_preferences np
                 JOIN users u ON u.id = np.user_id
-                LEFT JOIN user_profiles up ON up.user_id = np.user_id AND up.is_current = true
+                LEFT JOIN user_profiles up
+                  ON up.user_id = np.user_id AND up.is_current = true
                 WHERE np.user_id = ANY(:ids) AND np.is_deleted = false
                 """
             ),

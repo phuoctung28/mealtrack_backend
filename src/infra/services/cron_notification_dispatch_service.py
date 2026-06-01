@@ -1,190 +1,51 @@
-"""
-Scheduled notification service — batch pre-compute + batch send.
+"""Cron notification dispatch helper.
 
-Architecture:
-  Phase 1 (every tick): detect which timezones just hit local midnight →
-          trigger DailyContextPrecomputeService for that group.
-  Phase 2 (every tick): fetch due notifications from PostgreSQL →
-          fetch calories_consumed from DB → render messages →
-          batch FCM send → mark sent.
+Cron push owns notification scheduling/precompute. This helper only claims due
+notification rows, renders display text, sends FCM batches, and marks rows sent.
 """
 
 import asyncio
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import datetime, timedelta
 
 from sqlalchemy import bindparam, text
 
-from src.domain.model.notification import NotificationType
 from src.domain.services.notification_messages import get_messages
-from src.domain.services.notification_service import DEACTIVATABLE_FCM_ERRORS
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.uow import UnitOfWork
 from src.infra.repositories.notification.reminder_query_builder import (
     ReminderQueryBuilder,
 )
-from src.infra.services.daily_context_precompute_service import (
-    DailyContextPrecomputeService,
-)
 from src.infra.services.firebase_service import FirebaseService
-from src.infra.services.scheduled_subscription_push_service import (
-    ScheduledSubscriptionPushService,
-)
-from src.infra.services.scheduler_leader_lock import SchedulerLeaderLock
 
 logger = logging.getLogger(__name__)
 
-_CLEANUP_TICKS = 60  # clean expired notifications every ~60 min
+DEACTIVATABLE_FCM_ERRORS = {
+    "invalid-registration-token",
+    "registration-token-not-registered",
+    "NOT_FOUND",
+    "UNREGISTERED",
+    "INVALID_ARGUMENT",
+    "UNAUTHENTICATED",
+    "PERMISSION_DENIED",
+}
 
 
-def _timezones_at_midnight(tz_names: list[str], now_utc: datetime) -> list[str]:
-    """Return timezone names where local time is currently HH:MM == 00:00."""
-    result = []
-    for tz_name in tz_names:
-        try:
-            local = now_utc.astimezone(ZoneInfo(tz_name))
-            if local.hour == 0 and local.minute == 0:
-                result.append(tz_name)
-        except Exception:
-            pass
-    return result
+class CronNotificationDispatchService:
+    """Batch-send notifications that cron has already scheduled."""
 
-
-class ScheduledNotificationService:
-    """Batch-sends scheduled notifications. One leader per host via flock."""
-
-    LOOP_INTERVAL_SECONDS = 60
-    LOOP_ERROR_RETRY_SECONDS = 30
     # Rows claimed for sending sit in 'processing' only for one tick (seconds);
     # anything still 'processing' this long past its send time was abandoned.
     STALE_PROCESSING_MINUTES = 10
 
-    def __init__(
-        self,
-        firebase_service: FirebaseService,
-        trial_push_service: "ScheduledSubscriptionPushService | None" = None,
-    ):
+    def __init__(self, firebase_service: FirebaseService):
         self._firebase = firebase_service
-        self._precompute = DailyContextPrecomputeService()
-        self._trial_push = trial_push_service
-        self._running = False
-        self._tasks: List[asyncio.Task] = []
-        self._leader_lock = SchedulerLeaderLock()
-        self._leader_acquired = False
-        self._cleanup_counter = 0
-        self._distinct_timezones: list[str] = []
 
-        if self._trial_push is None:
-            logger.warning(
-                "ScheduledNotificationService constructed without "
-                "trial_push_service — trial reminders disabled"
-            )
-        else:
-            logger.info("ScheduledNotificationService: trial_push scheduler active")
-
-    # ── Lifecycle ──────────────────────────────────────────────────────────────
-
-    async def start(self) -> None:
-        if self._running:
-            logger.warning("Scheduler already running")
-            return
-        if not self._leader_lock.try_acquire():
-            logger.info("Scheduler skipped: another worker holds the lock")
-            return
-        self._leader_acquired = True
-        self._running = True
-        self._distinct_timezones = await asyncio.to_thread(
-            self._fetch_distinct_timezones
-        )
-        self._tasks.append(asyncio.create_task(self._scheduling_loop()))
-        self._tasks.append(asyncio.create_task(self._startup_catchup()))
-        logger.info("Scheduled notification service started (leader)")
-
-    async def stop(self) -> None:
-        if not self._leader_acquired:
-            return
-        self._running = False
-        for t in self._tasks:
-            if not t.done():
-                t.cancel()
-        if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
-        self._tasks.clear()
-        self._leader_lock.release()
-        self._leader_acquired = False
-        logger.info("Scheduled notification service stopped")
-
-    def is_running(self) -> bool:
-        return self._running
-
-    # ── Main loop ─────────────────────────────────────────────────────────────
-
-    async def _scheduling_loop(self) -> None:
-        while self._running:
-            try:
-                now = utc_now()
-                await self._check_midnight_precompute(now)
-                await self._send_due_notifications(now)
-                self._cleanup_counter += 1
-                if self._cleanup_counter >= _CLEANUP_TICKS:
-                    self._cleanup_counter = 0
-                    await asyncio.to_thread(self._cleanup_expired_notifications)
-                await asyncio.sleep(_seconds_until_next_minute(now))
-            except asyncio.CancelledError:
-                break
-            except Exception as exc:
-                logger.error("Scheduler loop error: %s", exc)
-                await asyncio.sleep(self.LOOP_ERROR_RETRY_SECONDS)
-
-    # ── Startup catch-up ──────────────────────────────────────────────────────
-
-    async def _startup_catchup(self) -> None:
-        """Pre-compute context for all timezones that missed today's midnight run."""
-        now = utc_now()
-        for tz_name in self._distinct_timezones:
-            try:
-                today = now.astimezone(ZoneInfo(tz_name)).date()
-                await self._precompute.precompute_for_timezone(tz_name, today)
-            except Exception as exc:
-                logger.error("Startup catch-up failed for %s: %s", tz_name, exc)
-        logger.info(
-            "Startup catch-up complete for %d timezones", len(self._distinct_timezones)
-        )
-
-        if self._trial_push is not None:
-            try:
-                await asyncio.to_thread(self._trial_push.check_and_schedule_pushes, now)
-            except Exception:
-                logger.exception("Startup trial-push catchup failed")
-
-    # ── Phase 1: Midnight pre-compute ─────────────────────────────────────────
-
-    async def _check_midnight_precompute(self, now: datetime) -> None:
-        """For each timezone currently at local midnight, trigger pre-compute."""
-        at_midnight = _timezones_at_midnight(self._distinct_timezones, now)
-        for tz_name in at_midnight:
-            try:
-                # Use the local date for this timezone, not the UTC date
-                today = now.astimezone(ZoneInfo(tz_name)).date()
-                await self._precompute.precompute_for_timezone(tz_name, today)
-            except Exception as exc:
-                logger.error("Pre-compute failed for %s: %s", tz_name, exc)
-
-            if self._trial_push is not None:
-                try:
-                    await asyncio.to_thread(
-                        self._trial_push.check_and_schedule_pushes, now
-                    )
-                except Exception:
-                    logger.exception("Trial-push scheduling failed for tz=%s", tz_name)
-
-    # ── Phase 2: Send due notifications ───────────────────────────────────────
+    # ── Send due notifications ───────────────────────────────────────────────
 
     async def _send_due_notifications(self, now: datetime) -> None:
-        """Fetch due rows, fetch calories_consumed from DB, render, batch FCM, mark sent."""
+        """Fetch due rows, render messages, batch-send FCM, and mark sent."""
 
         # Recover rows stranded in 'processing' by a worker that died mid-send,
         # otherwise they would never be delivered.
@@ -323,13 +184,6 @@ class ScheduledNotificationService:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
-    def _fetch_distinct_timezones(self) -> list[str]:
-        with UnitOfWork() as uow:
-            rows = uow.session.execute(
-                text("SELECT DISTINCT timezone FROM users WHERE timezone IS NOT NULL")
-            ).fetchall()
-            return [r.timezone for r in rows]
-
     def _mark_notifications(self, sent_ids: list[str], failed_ids: list[str]) -> None:
         with UnitOfWork() as uow:
             if sent_ids:
@@ -351,7 +205,7 @@ class ScheduledNotificationService:
                     {"ids": failed_ids},
                 )
 
-    def _cleanup_expired_notifications(self) -> None:
+    def cleanup_expired_notifications(self) -> None:
         with UnitOfWork() as uow:
             result = uow.session.execute(
                 text("DELETE FROM notifications WHERE expires_at < NOW()")
@@ -397,34 +251,13 @@ class ScheduledNotificationService:
     def _deactivate_tokens(self, tokens: list[str]) -> None:
         with UnitOfWork() as uow:
             uow.session.execute(
-                text(
-                    "UPDATE user_fcm_tokens SET is_active = false WHERE fcm_token IN :tokens"
-                ).bindparams(bindparam("tokens", expanding=True)),
+                text("""
+                    UPDATE user_fcm_tokens
+                    SET is_active = false
+                    WHERE fcm_token IN :tokens
+                    """).bindparams(bindparam("tokens", expanding=True)),
                 {"tokens": tokens},
             )
-
-    async def send_test_notification(self, user_id: str) -> Dict:
-        """Send a test notification to a user (on-demand, no pre-compute)."""
-        tokens = await asyncio.to_thread(self._get_tokens_for_user, user_id)
-        if not tokens:
-            return {"success": False, "reason": "no_tokens"}
-        return await asyncio.to_thread(
-            self._firebase.send_multicast,
-            tokens,
-            "Test Notification",
-            "This is a test notification from the backend",
-            str(NotificationType.DAILY_SUMMARY),
-        )
-
-    def _get_tokens_for_user(self, user_id: str) -> list[str]:
-        with UnitOfWork() as uow:
-            rows = uow.session.execute(
-                text(
-                    "SELECT fcm_token FROM user_fcm_tokens WHERE user_id = :uid AND is_active = true"
-                ),
-                {"uid": user_id},
-            ).fetchall()
-            return [r.fcm_token for r in rows]
 
 
 # ── Module-level helpers ───────────────────────────────────────────────────────
@@ -441,7 +274,7 @@ def _render_message(
     goal_ml: int = 2000,
     remaining_ml: int = 0,
 ) -> tuple[str, str]:
-    """Render title + body for a notification type. Title is empty for Time Sensitive."""
+    """Render non-empty title + body for a notification type."""
     messages = get_messages(lang, gender)
     if notification_type == "meal_reminder_breakfast":
         cfg = messages["meal_reminder"]["breakfast"]
@@ -581,12 +414,3 @@ def _fetch_hydration_data_batch(
         result[user_id] = (consumed_ml, goal_ml)
 
     return result
-
-
-def _seconds_until_next_minute(now: datetime) -> float:
-    """Sleep until the next minute boundary without looking ahead."""
-    seconds = now.second + (now.microsecond / 1_000_000)
-    remaining = 60 - seconds
-    if remaining <= 0 or remaining > 60:
-        return float(ScheduledNotificationService.LOOP_INTERVAL_SECONDS)
-    return remaining
