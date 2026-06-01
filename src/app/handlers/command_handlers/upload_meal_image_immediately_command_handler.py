@@ -87,7 +87,7 @@ class UploadMealImageImmediatelyHandler(
                     strategy = AnalysisStrategyFactory.create_user_context_strategy(
                         command.user_description
                     )
-                    return self.vision_service.analyze_with_strategy(
+                    return await self.vision_service.analyze_with_strategy(
                         command.file_contents, strategy
                     )
 
@@ -95,7 +95,7 @@ class UploadMealImageImmediatelyHandler(
                     f"[PHASE-1-START] meal={meal_id} | "
                     f"vision analysis | attempt={attempt}/{max_attempts}"
                 )
-                return self.vision_service.analyze(command.file_contents)
+                return await self.vision_service.analyze(command.file_contents)
             except Exception as e:
                 last_error = e
                 logger.warning(

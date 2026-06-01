@@ -82,7 +82,7 @@ class RecognizeIngredientCommandHandler(
             strategy = (
                 AnalysisStrategyFactory.create_ingredient_identification_strategy()
             )
-            result = self.vision_service.analyze_with_strategy(image_bytes, strategy)
+            result = await self.vision_service.analyze_with_strategy(image_bytes, strategy)
 
             # Parse structured_data from response
             data = result.get("structured_data", {})

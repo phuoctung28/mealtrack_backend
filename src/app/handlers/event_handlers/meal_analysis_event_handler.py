@@ -98,7 +98,7 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
                 )
 
             logger.info(f"Performing real AI analysis for meal {meal.meal_id}")
-            vision_result = self.vision_service.analyze(image_contents)
+            vision_result = await self.vision_service.analyze(image_contents)
 
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
             dish_name = self.gpt_parser.parse_dish_name(vision_result)
