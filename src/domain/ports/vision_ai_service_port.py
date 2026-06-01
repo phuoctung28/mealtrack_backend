@@ -16,7 +16,7 @@ class VisionAIServicePort(ABC):
     """
 
     @abstractmethod
-    def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
+    async def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
         """
         Analyze a food image to extract nutritional information.
 
@@ -32,7 +32,7 @@ class VisionAIServicePort(ABC):
         pass
 
     @abstractmethod
-    def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
+    async def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
         """
         Analyze a food image from a public URL.
 
@@ -45,7 +45,7 @@ class VisionAIServicePort(ABC):
         pass
 
     @abstractmethod
-    def analyze_by_url_with_strategy(
+    async def analyze_by_url_with_strategy(
         self, image_url: str, strategy: MealAnalysisStrategy
     ) -> Dict[str, Any]:
         """
@@ -61,7 +61,7 @@ class VisionAIServicePort(ABC):
         pass
 
     @abstractmethod
-    def analyze_with_ingredients_context(
+    async def analyze_with_ingredients_context(
         self, image_bytes: bytes, ingredients: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
@@ -80,7 +80,7 @@ class VisionAIServicePort(ABC):
         pass
 
     @abstractmethod
-    def analyze_with_portion_context(
+    async def analyze_with_portion_context(
         self, image_bytes: bytes, portion_size: float, unit: str
     ) -> Dict[str, Any]:
         """
@@ -100,7 +100,7 @@ class VisionAIServicePort(ABC):
         pass
 
     @abstractmethod
-    def analyze_with_weight_context(
+    async def analyze_with_weight_context(
         self, image_bytes: bytes, weight_grams: float
     ) -> Dict[str, Any]:
         """

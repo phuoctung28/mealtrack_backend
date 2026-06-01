@@ -11,6 +11,7 @@ from typing import Any, TypeVar
 from pymediator import Mediator as PyMediator
 from pymediator import SingletonRegistry
 
+from src.api.exceptions import MealTrackException
 from src.domain.events.base import DomainEvent, Event, EventHandler
 
 from .event_bus import EventBus
@@ -170,6 +171,9 @@ class PyMediatorEventBus(EventBus):
                         await self.publish(domain_event)
             return result
 
+        except MealTrackException as e:
+            logger.warning(f"Error handling {event_type.__name__}: {str(e)}")
+            raise
         except Exception as e:
             logger.error(
                 f"Error handling {event_type.__name__}: {str(e)}", exc_info=True

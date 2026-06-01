@@ -67,7 +67,8 @@ def test_compress_image_fallback_on_corrupt_bytes():
     assert result == corrupt
 
 
-def test_analyze_with_strategy_compresses_before_sending():
+@pytest.mark.asyncio
+async def test_analyze_with_strategy_compresses_before_sending():
     service = _make_service()
 
     large_bytes = _make_jpeg(2000, 1500)
@@ -76,7 +77,7 @@ def test_analyze_with_strategy_compresses_before_sending():
 
     strategy = AnalysisStrategyFactory.create_basic_strategy()
 
-    service.analyze_with_strategy(large_bytes, strategy)
+    await service.analyze_with_strategy(large_bytes, strategy)
 
     # Verify generate_with_vision was called with compressed image data
     call_kwargs = service._ai_manager.generate_with_vision.call_args
@@ -87,26 +88,28 @@ def test_analyze_with_strategy_compresses_before_sending():
     assert max(img.size) <= 768
 
 
-def test_analyze_with_strategy_passes_max_tokens_1024():
+@pytest.mark.asyncio
+async def test_analyze_with_strategy_passes_max_tokens_1024():
     """Vision calls must pass max_tokens=1024, not use the 4096 default."""
     service = _make_service()
     from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
     strategy = AnalysisStrategyFactory.create_basic_strategy()
 
     image = _make_jpeg(400, 300)
-    service.analyze_with_strategy(image, strategy)
+    await service.analyze_with_strategy(image, strategy)
 
     call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
     assert call_kwargs.get("max_tokens") == 1024
 
 
-def test_analyze_by_url_passes_max_tokens_1024():
+@pytest.mark.asyncio
+async def test_analyze_by_url_passes_max_tokens_1024():
     """analyze_by_url_with_strategy must also pass max_tokens=1024."""
     service = _make_service()
     from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
     strategy = AnalysisStrategyFactory.create_basic_strategy()
 
-    service.analyze_by_url_with_strategy("http://example.com/food.jpg", strategy)
+    await service.analyze_by_url_with_strategy("http://example.com/food.jpg", strategy)
 
     call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
     assert call_kwargs.get("max_tokens") == 1024

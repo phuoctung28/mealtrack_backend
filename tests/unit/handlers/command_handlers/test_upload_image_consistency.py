@@ -129,7 +129,7 @@ async def test_successful_upload_creates_meal_with_verified_url():
 
     # Vision service returns valid analysis
     handler.vision_service = MagicMock()
-    handler.vision_service.analyze.return_value = {"dish_name": "Test Dish"}
+    handler.vision_service.analyze = AsyncMock(return_value={"dish_name": "Test Dish"})
 
     # Parser returns valid nutrition
     handler.gpt_parser = MagicMock()
