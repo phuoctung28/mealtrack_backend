@@ -172,6 +172,7 @@ class PyMediatorEventBus(EventBus):
             return result
 
         except MealTrackException as e:
+            logger.debug(f"Application exception handling {event_type.__name__}: {str(e)}")
             logger.warning(f"Error handling {event_type.__name__}: {str(e)}")
             raise
         except Exception as e:
