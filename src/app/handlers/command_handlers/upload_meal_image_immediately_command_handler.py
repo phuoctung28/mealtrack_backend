@@ -66,7 +66,7 @@ class UploadMealImageImmediatelyHandler(
         else:
             self._fast_path_policy = fast_path_policy
 
-    def _run_vision_analysis(
+    async def _run_vision_analysis(
         self, command: UploadMealImageImmediatelyCommand, meal_id: str
     ) -> Any:
         max_attempts = max(1, self._fast_path_policy.max_attempts)
@@ -155,9 +155,7 @@ class UploadMealImageImmediatelyHandler(
         analysis_start = time.time()
 
         try:
-            analysis_result = await loop.run_in_executor(
-                None, self._run_vision_analysis, command, image_id
-            )
+            analysis_result = await self._run_vision_analysis(command, image_id)
         except Exception as e:
             logger.error(f"[ANALYSIS-FAILED] image_id={image_id} | error={e}")
             # Image uploaded but analysis failed - acceptable orphan in Cloudinary

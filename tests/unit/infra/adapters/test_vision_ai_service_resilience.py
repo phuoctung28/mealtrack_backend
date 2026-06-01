@@ -31,48 +31,54 @@ def service(mock_ai_manager):
         return VisionAIService()
 
 
-def test_analyze_uses_ai_manager(service, mock_ai_manager):
-    result = service.analyze(b"fake_image_bytes")
+@pytest.mark.asyncio
+async def test_analyze_uses_ai_manager(service, mock_ai_manager):
+    result = await service.analyze(b"fake_image_bytes")
 
     mock_ai_manager.generate_with_vision.assert_called_once()
     assert "structured_data" in result
 
 
-def test_analyze_with_strategy(service, mock_ai_manager, mock_strategy):
-    result = service.analyze_with_strategy(b"fake_image", mock_strategy)
+@pytest.mark.asyncio
+async def test_analyze_with_strategy(service, mock_ai_manager, mock_strategy):
+    result = await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
     assert result["strategy_used"] == "BasicAnalysis"
 
 
-def test_analyze_with_strategy_returns_structured_data(service, mock_ai_manager, mock_strategy):
-    result = service.analyze_with_strategy(b"fake_image", mock_strategy)
+@pytest.mark.asyncio
+async def test_analyze_with_strategy_returns_structured_data(service, mock_ai_manager, mock_strategy):
+    result = await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
     assert result["structured_data"] == {"dish_name": "test meal", "calories": 500}
     assert "raw_response" in result
 
 
-def test_analyze_with_strategy_calls_correct_purpose(service, mock_ai_manager, mock_strategy):
+@pytest.mark.asyncio
+async def test_analyze_with_strategy_calls_correct_purpose(service, mock_ai_manager, mock_strategy):
     from src.infra.services.ai.ai_model_manager import ModelPurpose
 
-    service.analyze_with_strategy(b"fake_image", mock_strategy)
+    await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
     call_kwargs = mock_ai_manager.generate_with_vision.call_args
     assert call_kwargs.kwargs["purpose"] == ModelPurpose.MEAL_SCAN
 
 
-def test_analyze_with_strategy_passes_prompt_from_strategy(service, mock_ai_manager, mock_strategy):
-    service.analyze_with_strategy(b"fake_image", mock_strategy)
+@pytest.mark.asyncio
+async def test_analyze_with_strategy_passes_prompt_from_strategy(service, mock_ai_manager, mock_strategy):
+    await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
     call_kwargs = mock_ai_manager.generate_with_vision.call_args
     assert call_kwargs.kwargs["prompt"] == "What food is this?"
     assert call_kwargs.kwargs["system_message"] == "Analyze this food"
 
 
-def test_analyze_with_strategy_raises_runtime_error_on_failure(service, mock_ai_manager, mock_strategy):
+@pytest.mark.asyncio
+async def test_analyze_with_strategy_raises_runtime_error_on_failure(service, mock_ai_manager, mock_strategy):
     mock_ai_manager.generate_with_vision = AsyncMock(side_effect=Exception("AI failure"))
 
     with pytest.raises(RuntimeError, match="Failed to analyze image"):
-        service.analyze_with_strategy(b"fake_image", mock_strategy)
+        await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
 
 def test_compress_image_still_works(service):
