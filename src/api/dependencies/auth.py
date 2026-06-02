@@ -59,9 +59,12 @@ async def verify_firebase_token(
             user_id = token['uid']
             return {"message": f"Hello {user_id}"}
     """
-    # Dev mode bypass: check if dev middleware injected a user
+    # Dev mode bypass: check if dev middleware injected a user. Requires the same
+    # two-flag opt-in as the middleware (ENVIRONMENT=development AND
+    # ENABLE_DEV_AUTH_BYPASS=1) so a single stray env var can't bypass auth.
     if (
         os.getenv("ENVIRONMENT") == "development"
+        and os.getenv("ENABLE_DEV_AUTH_BYPASS") == "1"
         and hasattr(request.state, "user")
         and hasattr(request.state.user, "firebase_uid")
         and hasattr(request.state.user, "id")
@@ -256,7 +259,15 @@ async def require_admin(
     allowlist = {
         e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()
     }
-    if not email or email.strip().lower() not in allowlist:
+    if not email:
+        # Authenticated (token verified) but no email claim — e.g. a phone-only
+        # account. Denied, but logged so an admin who loses email is visible.
+        logger.warning("Admin check denied: verified token has no email claim")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    if email.strip().lower() not in allowlist:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",
