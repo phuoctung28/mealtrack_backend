@@ -416,6 +416,34 @@ class TestMealMapper:
         assert result.remaining_macros.protein == 50.0
         assert result.completion_percentage["calories"] == 75.0
         assert result.completion_percentage["protein"] == pytest.approx(66.67, rel=0.01)
+        # Gross/burn fields default safely when the payload omits them.
+        assert result.food_calories is None
+        assert result.movement_kcal_burned == 0.0
+
+    def test_to_daily_nutrition_response_surfaces_gross_food_and_burn(self):
+        """consumed_calories stays NET; gross food_calories + burn are surfaced.
+
+        Pins the contract that lets burn-owning clients avoid double-subtraction:
+        consumed_calories is net (food - burn), food_calories is the gross intake.
+        """
+        daily_macros_data = {
+            "date": "2025-01-17",
+            "user_id": "user-789",
+            "target_calories": 2000.0,
+            "target_macros": {"protein": 150.0, "carbs": 250.0, "fat": 67.0},
+            "total_calories": 1500.0,  # NET (gross 1800 - 300 burn)
+            "food_calories": 1800.0,
+            "movement_kcal_burned": 300.0,
+            "total_protein": 100.0,
+            "total_carbs": 180.0,
+            "total_fat": 50.0,
+        }
+
+        result = MealMapper.to_daily_nutrition_response(daily_macros_data)
+
+        assert result.consumed_calories == 1500.0  # NET, unchanged
+        assert result.food_calories == 1800.0  # GROSS surfaced separately
+        assert result.movement_kcal_burned == 300.0
 
     def test_to_daily_nutrition_response_missing_target_calories(self):
         """Test error when target_calories is missing."""
