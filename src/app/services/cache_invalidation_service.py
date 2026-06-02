@@ -60,6 +60,7 @@ class CacheInvalidationService:
         await self._invalidate_pattern(
             f"user:{user_id}:activities:{meal_date.isoformat()}:*"
         )
+        await self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*")
         await self._invalidate_key(CacheKeys.daily_macros(user_id, meal_date)[0])
         await self._invalidate_key(CacheKeys.weekly_budget(user_id, meal_week_start)[0])
 
@@ -83,6 +84,7 @@ class CacheInvalidationService:
         await self._invalidate_pattern(
             f"user:{user_id}:activities:{log_date.isoformat()}:*"
         )
+        await self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*")
         await self._invalidate_key(CacheKeys.daily_macros(user_id, log_date)[0])
         await self._invalidate_key(CacheKeys.weekly_budget(user_id, week_start)[0])
         await self._invalidate_key(CacheKeys.daily_breakdown(user_id, week_start)[0])
@@ -107,6 +109,7 @@ class CacheInvalidationService:
         await self._invalidate_pattern(
             f"user:{user_id}:activities:{log_date.isoformat()}:*"
         )
+        await self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*")
         await self._invalidate_pattern(
             f"user:{user_id}:hydration:{log_date.isoformat()}:*"
         )
@@ -133,6 +136,7 @@ class CacheInvalidationService:
         await self._invalidate_key(CacheKeys.user_profile(user_id)[0])
         # Purge ALL daily_macros for this user (targets are embedded in cached response)
         await self._invalidate_pattern(f"user:{user_id}:macros:*")
+        await self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*")
         # Weekly budget for current and next week (covers timezone skew)
         today = date.today()
         this_week = _get_week_start(today)

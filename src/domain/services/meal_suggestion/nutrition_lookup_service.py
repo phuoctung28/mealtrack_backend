@@ -129,15 +129,55 @@ class NutritionLookupService:
         Returns:
             MealMacros with aggregated totals and per-ingredient breakdown.
         """
-        tasks = [
-            self._lookup_ingredient(
+        # Normalize names and convert to grams once per ingredient.
+        prepared = [
+            (
                 ing["name"],
+                normalize_food_name(ing["name"]),
                 self._to_grams(ing["name"], float(ing["amount"]), ing["unit"]),
             )
             for ing in ingredients
         ]
-        results: List[IngredientMacros] = await asyncio.gather(*tasks)
-        meal = self._aggregate(list(results))
+
+        # Tier 0 (Redis): check every key concurrently.
+        results: List[Optional[IngredientMacros]] = list(
+            await asyncio.gather(
+                *(
+                    self._check_redis_cache(normalized, name, quantity_g)
+                    for name, normalized, quantity_g in prepared
+                )
+            )
+        )
+
+        # Tier 1 (food_reference): resolve every Redis miss with ONE batched
+        # query instead of N concurrent single-row lookups — each of which would
+        # open its own sync session, churning the connection pool under fan-out.
+        miss_normalized = [
+            normalized
+            for (name, normalized, quantity_g), cached in zip(prepared, results)
+            if cached is None
+        ]
+        t1_map: Dict[str, Dict[str, Any]] = {}
+        if miss_normalized:
+            t1_map = await asyncio.to_thread(
+                self._repo.find_batch_by_normalized_names, miss_normalized
+            )
+
+        # Resolve the Redis misses concurrently: T1 from the batch map → T2 → T3.
+        pending = [i for i, cached in enumerate(results) if cached is None]
+
+        async def _resolve(index: int) -> IngredientMacros:
+            name, normalized, quantity_g = prepared[index]
+            _cache_metrics["redis_misses"] += 1
+            return await self._resolve_uncached(
+                name, normalized, quantity_g, t1_map.get(normalized)
+            )
+
+        resolved = await asyncio.gather(*(_resolve(i) for i in pending))
+        for index, macros in zip(pending, resolved):
+            results[index] = macros
+
+        meal = self._aggregate([m for m in results if m is not None])
         total = _cache_metrics["redis_hits"] + _cache_metrics["redis_misses"]
         if total > 0 and total % 100 == 0:
             self.log_cache_metrics()
@@ -147,33 +187,48 @@ class NutritionLookupService:
     # Three-tier lookup
     # ------------------------------------------------------------------
 
-    async def _lookup_ingredient(
-        self, name: str, quantity_g: float
+    async def _check_redis_cache(
+        self, normalized: str, name: str, quantity_g: float
+    ) -> Optional[IngredientMacros]:
+        """Tier 0: return cached macros from Redis, or None on miss/disabled/error.
+
+        Increments the redis_hits metric on a hit; misses are counted by the
+        caller so the totals are identical whether lookups run singly (via
+        _lookup_ingredient) or batched (via calculate_meal_macros).
+        """
+        if not self._redis:
+            return None
+        cache_key = f"nutrition:{normalized}"
+        try:
+            cached = await self._redis.get(cache_key)
+            if cached:
+                data = json.loads(cached)
+                _cache_metrics["redis_hits"] += 1
+                return self._build_from_cached(data, name, quantity_g)
+        except Exception as exc:
+            logger.warning("Redis get failed for %s: %s", cache_key, exc)
+        return None
+
+    async def _resolve_uncached(
+        self,
+        name: str,
+        normalized: str,
+        quantity_g: float,
+        t1_ref: Optional[Dict[str, Any]],
     ) -> IngredientMacros:
-        """Resolve macros for one ingredient: Redis → T1 → T2 → T3."""
-        normalized = normalize_food_name(name)
+        """Resolve a Redis-missed ingredient: T1 (caller-supplied ref) → T2 → T3.
+
+        ``t1_ref`` is the food_reference row for ``normalized`` (or None), fetched
+        by the caller either singly or in one batch. The resolved per-100g macros
+        are cached back to Redis.
+        """
         cache_key = f"nutrition:{normalized}"
 
-        # Check Redis cache first
-        if self._redis:
-            try:
-                cached = await self._redis.get(cache_key)
-                if cached:
-                    data = json.loads(cached)
-                    _cache_metrics["redis_hits"] += 1
-                    return self._build_from_cached(data, name, quantity_g)
-            except Exception as exc:
-                logger.warning("Redis get failed for %s: %s", cache_key, exc)
-
-        _cache_metrics["redis_misses"] += 1
-
-        # T1: exact match on name_normalized.
-        # Repo uses a sync Session; offload so the event loop isn't blocked.
-        ref = await asyncio.to_thread(self._repo.find_by_normalized_name, normalized)
-        if ref:
+        # T1: exact match on name_normalized (already fetched by the caller).
+        if t1_ref:
             _cache_metrics["t1_hits"] += 1
             result = self._calculate_from_ref(
-                ref, name, quantity_g, "T1_food_reference"
+                t1_ref, name, quantity_g, "T1_food_reference"
             )
             await self._cache_result(cache_key, result)
             return result
@@ -213,6 +268,24 @@ class NutritionLookupService:
                 sugar=0.0,
                 source_tier="T3_ai_estimate",
             )
+
+    async def _lookup_ingredient(
+        self, name: str, quantity_g: float
+    ) -> IngredientMacros:
+        """Resolve macros for one ingredient: Redis → T1 → T2 → T3.
+
+        Standalone per-ingredient path. calculate_meal_macros batches the T1
+        tier across all ingredients rather than calling this in a loop, but the
+        resolution semantics are identical.
+        """
+        normalized = normalize_food_name(name)
+        cached = await self._check_redis_cache(normalized, name, quantity_g)
+        if cached is not None:
+            return cached
+        _cache_metrics["redis_misses"] += 1
+        # Repo uses a sync Session; offload so the event loop isn't blocked.
+        ref = await asyncio.to_thread(self._repo.find_by_normalized_name, normalized)
+        return await self._resolve_uncached(name, normalized, quantity_g, ref)
 
     # ------------------------------------------------------------------
     # Redis cache helpers

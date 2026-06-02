@@ -30,10 +30,33 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
         self.cache_service = cache_service
 
     async def handle(self, query: GetNutritionBulkQuery) -> Dict[str, Any]:
-        """Fetch nutrition summaries for all dates in range."""
+        """Fetch nutrition summaries for all dates in range (cache-aside).
+
+        The full response is cached under a short-TTL per-range key. The short
+        TTL bounds staleness from day-rollover (the weekly summary is relative
+        to "today") and from rare target changes not on the high-frequency
+        write paths; meal/movement/hydration/custom-macro writes purge this key
+        synchronously (CacheInvalidationService) for instant freshness.
+        """
         if (query.end_date - query.start_date).days > MAX_DATE_RANGE:
             raise ValueError(f"Date range cannot exceed {MAX_DATE_RANGE} days")
 
+        if self.cache_service is None:
+            return await self._compute(query)
+
+        key, ttl = CacheKeys.nutrition_bulk(
+            query.user_id, query.start_date, query.end_date
+        )
+        cached_or_fresh = await self.cache_service.get_or_set(
+            key, lambda: self._compute(query), ttl
+        )
+        if cached_or_fresh is not None:
+            return cached_or_fresh
+        # get_or_set returns None only if the factory did; _compute never does.
+        return await self._compute(query)
+
+    async def _compute(self, query: GetNutritionBulkQuery) -> Dict[str, Any]:
+        """Build the bulk nutrition response (uncached)."""
         async with AsyncUnitOfWork() as uow:
             user_tz_str = await resolve_user_timezone_async(
                 query.user_id, uow, query.header_timezone
