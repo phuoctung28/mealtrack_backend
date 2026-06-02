@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # endpoints (e.g. feature-flag mutations). Empty means no admins.
     ADMIN_EMAILS: str = Field(default="")
 
+    # Shared service token for infra monitoring endpoints (health pool/connection
+    # stats, cache metrics) — scrapers send it as the X-Monitoring-Token header.
+    # Empty = those endpoints are closed to everyone (fail-closed).
+    MONITORING_API_TOKEN: str = Field(default="")
+
     # Database configuration
     DATABASE_URL: str | None = Field(default=None)
     DB_USER: str = Field(default="nutree")

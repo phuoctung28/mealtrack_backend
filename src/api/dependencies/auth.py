@@ -7,6 +7,7 @@ Provides Firebase token verification and user extraction.
 import asyncio
 import logging
 import os
+import secrets
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.params import Depends as DependsMarker
@@ -273,6 +274,22 @@ async def require_admin(
             detail="Admin access required",
         )
     return email
+
+
+async def require_monitoring_access(request: Request) -> None:
+    """Authorize infra monitoring endpoints via a shared service token.
+
+    Automated monitoring has no Firebase identity, so it presents the
+    X-Monitoring-Token header instead. Fail-closed: if MONITORING_API_TOKEN is
+    unset, the endpoints are closed to everyone.
+    """
+    expected = settings.MONITORING_API_TOKEN
+    provided = request.headers.get("X-Monitoring-Token", "")
+    if not expected or not secrets.compare_digest(provided, expected):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Monitoring access required",
+        )
 
 
 async def optional_authentication(
