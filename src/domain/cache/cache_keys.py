@@ -55,6 +55,23 @@ class CacheKeys:
         )
 
     @staticmethod
+    def nutrition_bulk(
+        user_id: str, start_date: date, end_date: date
+    ) -> tuple[str, int]:
+        """Cache key for a bulk-nutrition date range. Short TTL.
+
+        The cached response embeds a weekly summary computed relative to the
+        current day, so the TTL is deliberately short to bound day-rollover
+        drift and any target change (weight/metrics) not on the high-frequency
+        write paths. Meal/movement/hydration/custom-macro writes purge these
+        keys synchronously (see CacheInvalidationService) for instant freshness.
+        """
+        return (
+            f"user:{user_id}:nutrition_bulk:{start_date.isoformat()}:{end_date.isoformat()}",
+            CacheKeys.TTL_5_MIN,
+        )
+
+    @staticmethod
     def food_search(query: str) -> tuple[str, int]:
         normalized = query.lower().strip()[:64]
         return (f"food:search:{normalized}", CacheKeys.TTL_7_DAYS)

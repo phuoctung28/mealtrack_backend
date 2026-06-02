@@ -249,7 +249,7 @@ async def test_calculate_meal_macros_runs_lookups_in_parallel():
         return PerHundredGramsMacros(protein=10.0, carbs=10.0, fat=5.0)
 
     repo = MagicMock()
-    repo.find_by_normalized_name.return_value = None  # force T2
+    repo.find_batch_by_normalized_names.return_value = {}  # no T1 → force T2
     resolver = MagicMock()
     resolver.resolve = slow_resolve
     gen = MagicMock()
@@ -278,6 +278,47 @@ async def test_calculate_meal_macros_runs_lookups_in_parallel():
     # Both "start" events appear before any "end" confirms actual concurrency
     starts = [e for e in call_order if e.startswith("start")]
     assert len(starts) == 3
+
+
+@pytest.mark.asyncio
+async def test_calculate_meal_macros_batches_t1_lookups():
+    """T1 tier resolves via ONE batched repo call, never per-ingredient lookups.
+
+    Guards the connection-pool-churn fix: the per-row find_by_normalized_name
+    must not be called from the meal-level path (it would open one sync session
+    per ingredient under fan-out).
+    """
+    refs = {
+        "chicken": _make_ref(protein=23.0, carbs=0.0, fat=2.5, ref_id=1),
+        "rice": _make_ref(protein=2.0, carbs=22.0, fat=0.3, ref_id=2),
+    }
+
+    def find_batch(names):
+        return {n: refs[k] for n in names for k in refs if k in n}
+
+    repo = MagicMock()
+    repo.find_batch_by_normalized_names.side_effect = find_batch
+    resolver = MagicMock()
+    resolver.resolve = AsyncMock(return_value=None)
+    gen = MagicMock()
+
+    svc = NutritionLookupService(
+        food_ref_repo=repo,
+        ingredient_nutrition_resolver=resolver,
+        generation_service=gen,
+    )
+
+    meal = await svc.calculate_meal_macros(
+        [
+            {"name": "chicken breast", "amount": 100.0, "unit": "g"},
+            {"name": "white rice", "amount": 100.0, "unit": "g"},
+        ]
+    )
+
+    repo.find_batch_by_normalized_names.assert_called_once()
+    repo.find_by_normalized_name.assert_not_called()
+    assert meal.t1_count == 2
+    assert meal.t2_count == 0
 
 
 # ---------------------------------------------------------------------------
@@ -490,7 +531,9 @@ async def test_chicken_fried_rice_realistic_totals():
         return None
 
     repo = MagicMock()
-    repo.find_by_normalized_name.side_effect = find_ref
+    repo.find_batch_by_normalized_names.side_effect = lambda names: {
+        n: find_ref(n) for n in names if find_ref(n) is not None
+    }
     resolver = MagicMock()
     resolver.resolve = AsyncMock(return_value=None)  # force T1 path
     gen = MagicMock()

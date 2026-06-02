@@ -86,12 +86,21 @@ async def test_after_meal_write_backdated_also_invalidates_current_week(service,
 
 @pytest.mark.asyncio
 async def test_after_meal_write_retries_on_invalidate_pattern_failure(cache_mock):
-    """Transient failure on first attempt triggers one retry."""
-    cache_mock.invalidate_pattern.side_effect = [ConnectionError("redis down"), None]
+    """Transient failure on the first pattern triggers one retry on the same key."""
+    patterns_called = []
+
+    def flaky(pattern):
+        patterns_called.append(pattern)
+        if len(patterns_called) == 1:
+            raise ConnectionError("redis down")
+        return 1
+
+    cache_mock.invalidate_pattern.side_effect = flaky
     svc = CacheInvalidationService(cache_mock)
-    # Should not raise — error is swallowed after 2 attempts
+    # Should not raise — the transient failure is retried, then succeeds.
     await svc.after_meal_write("user1", date(2026, 6, 2))
-    assert cache_mock.invalidate_pattern.call_count == 2
+    # The failed key was retried (attempted twice in a row) before moving on.
+    assert patterns_called[0] == patterns_called[1]
 
 
 @pytest.mark.asyncio
@@ -217,6 +226,35 @@ async def test_after_custom_macros_update_invalidates_current_and_next_week_budg
 
     cache_mock.invalidate.assert_any_call(this_budget_key)
     cache_mock.invalidate.assert_any_call(next_budget_key)
+
+
+# ---------------------------------------------------------------------------
+# nutrition_bulk purge (cached date ranges covering any changed date)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_meal_write_purges_nutrition_bulk(service, cache_mock):
+    await service.after_meal_write("user1", date(2026, 6, 2))
+    cache_mock.invalidate_pattern.assert_any_call("user:user1:nutrition_bulk:*")
+
+
+@pytest.mark.asyncio
+async def test_movement_write_purges_nutrition_bulk(service, cache_mock):
+    await service.after_movement_write("user2", date(2026, 6, 2))
+    cache_mock.invalidate_pattern.assert_any_call("user:user2:nutrition_bulk:*")
+
+
+@pytest.mark.asyncio
+async def test_hydration_write_purges_nutrition_bulk(service, cache_mock):
+    await service.after_hydration_write("user3", date(2026, 6, 2))
+    cache_mock.invalidate_pattern.assert_any_call("user:user3:nutrition_bulk:*")
+
+
+@pytest.mark.asyncio
+async def test_custom_macros_update_purges_nutrition_bulk(service, cache_mock):
+    await service.after_custom_macros_update("user4")
+    cache_mock.invalidate_pattern.assert_any_call("user:user4:nutrition_bulk:*")
 
 
 # ---------------------------------------------------------------------------
