@@ -1,24 +1,16 @@
 """Command handler for logging a hydration (non-caloric) drink entry."""
 
 import logging
-from datetime import date, timedelta
-from typing import Any, Optional
+from typing import Optional
 from uuid import uuid4
 
 from src.app.commands.hydration.log_hydration_command import LogHydrationCommand
 from src.app.events.base import EventHandler, handles
-from src.app.events.hydration.hydration_cache_invalidation_required_event import (
-    HydrationCacheInvalidationRequiredEvent,
-)
-from src.app.events.meal.meal_cache_invalidation_required_event import (
-    MealCacheInvalidationRequiredEvent,
-)
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.hydration import DrinkCategory
 from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.model.nutrition.nutrition import Nutrition
 from src.domain.model.nutrition.macros import Macros
-from src.domain.ports.cache_port import CachePort
 from src.domain.services.hydration_catalog_service import find_by_id, localized_name
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.domain.utils.timezone_utils import (
@@ -32,49 +24,15 @@ from src.domain.utils.timezone_utils import (
 logger = logging.getLogger(__name__)
 
 
-async def _flush_hydration_caches(
-    cache: CachePort, user_id: str, log_date: date
-) -> None:
-    """Synchronously flush all caches affected by a hydration mutation."""
-    week_start = log_date - timedelta(days=log_date.weekday())
-    keys_to_delete = [
-        CacheKeys.weekly_hydration(user_id, week_start)[0],
-        CacheKeys.daily_macros(user_id, log_date)[0],
-    ]
-    for key in keys_to_delete:
-        try:
-            await cache.invalidate(key)
-        except Exception as exc:
-            logger.warning("Cache invalidation failed for key=%s: %s", key, exc)
-
-    activities_pattern = f"user:{user_id}:activities:{log_date.isoformat()}:*"
-    try:
-        await cache.invalidate_pattern(activities_pattern)
-    except Exception as exc:
-        logger.warning(
-            "Cache pattern invalidation failed for %s: %s", activities_pattern, exc
-        )
-
-    hydration_pattern = f"user:{user_id}:hydration:{log_date.isoformat()}:*"
-    try:
-        await cache.invalidate_pattern(hydration_pattern)
-    except Exception as exc:
-        logger.warning(
-            "Cache pattern invalidation failed for %s: %s", hydration_pattern, exc
-        )
-
-
 @handles(LogHydrationCommand)
 class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, dict]):
     def __init__(
         self,
         uow: AsyncUnitOfWork,
-        event_bus: Any,
-        cache_service: Optional[CachePort] = None,
+        cache_invalidation: Optional[CacheInvalidationService] = None,
     ):
         self.uow = uow
-        self.event_bus = event_bus
-        self.cache_service = cache_service
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, cmd: LogHydrationCommand) -> dict:
         drink = find_by_id(cmd.drink_id)
@@ -137,24 +95,10 @@ class LogHydrationCommandHandler(EventHandler[LogHydrationCommand, dict]):
             )
             saved = await uow.meals.save(meal)
 
-        # Synchronous cache flush (before fire-and-forget event bus publish)
-        if self.cache_service:
-            await _flush_hydration_caches(self.cache_service, cmd.user_id, log_date)
+        # Synchronous invalidation guarantees Redis is cleared before the response returns
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_hydration_write(cmd.user_id, log_date)
 
-        await self.event_bus.publish(
-            MealCacheInvalidationRequiredEvent(
-                aggregate_id=cmd.user_id,
-                user_id=cmd.user_id,
-                meal_date=log_date,
-            )
-        )
-        await self.event_bus.publish(
-            HydrationCacheInvalidationRequiredEvent(
-                aggregate_id=cmd.user_id,
-                user_id=cmd.user_id,
-                hydration_date=log_date,
-            )
-        )
         kcal = round(saved.nutrition.calories if saved.nutrition else 0.0, 1)
         return {
             "id": saved.meal_id,

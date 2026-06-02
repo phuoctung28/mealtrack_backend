@@ -319,6 +319,11 @@ def get_configured_event_bus() -> EventBus:
     suggestion_service = get_suggestion_orchestration_service()
 
     from src.infra.database.uow_async import AsyncUnitOfWork
+    from src.app.services.cache_invalidation_service import CacheInvalidationService
+
+    # Synchronous invalidation service — handlers await this before returning,
+    # eliminating the fire-and-forget race condition.
+    cache_invalidation_service = CacheInvalidationService(cache_service)
 
     event_bus = PyMediatorEventBus()
 
@@ -334,6 +339,7 @@ def get_configured_event_bus() -> EventBus:
             vision_service=vision_service,
             gpt_parser=gpt_parser,
             meal_translation_service=meal_translation_service,
+            cache_invalidation=cache_invalidation_service,
         ),
     )
     event_bus.register_handler(
@@ -344,6 +350,7 @@ def get_configured_event_bus() -> EventBus:
             vision_service=vision_service,
             gpt_parser=gpt_parser,
             meal_translation_service=meal_translation_service,
+            cache_invalidation=cache_invalidation_service,
         ),
     )
 
@@ -352,7 +359,7 @@ def get_configured_event_bus() -> EventBus:
         EditMealCommand,
         EditMealCommandHandler(
             uow=AsyncUnitOfWork(),
-            event_bus=event_bus,
+            cache_invalidation=cache_invalidation_service,
         ),
     )
 
@@ -360,7 +367,7 @@ def get_configured_event_bus() -> EventBus:
         AddCustomIngredientCommand,
         AddCustomIngredientCommandHandler(
             uow=AsyncUnitOfWork(),
-            event_bus=event_bus,
+            cache_invalidation=cache_invalidation_service,
         ),
     )
 
@@ -368,7 +375,7 @@ def get_configured_event_bus() -> EventBus:
         DeleteMealCommand,
         DeleteMealCommandHandler(
             uow=AsyncUnitOfWork(),
-            event_bus=event_bus,
+            cache_invalidation=cache_invalidation_service,
         ),
     )
 
@@ -376,7 +383,7 @@ def get_configured_event_bus() -> EventBus:
         CreateManualMealCommand,
         CreateManualMealCommandHandler(
             uow=AsyncUnitOfWork(),
-            event_bus=event_bus,
+            cache_invalidation=cache_invalidation_service,
         ),
     )
 
@@ -456,15 +463,15 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         LogMovementCommand,
-        LogMovementCommandHandler(uow=AsyncUnitOfWork(), cache_service=cache_service),
+        LogMovementCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service),
     )
     event_bus.register_handler(
         DeleteMovementEntryCommand,
-        DeleteMovementEntryCommandHandler(uow=AsyncUnitOfWork(), cache_service=cache_service),
+        DeleteMovementEntryCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service),
     )
     event_bus.register_handler(
         UpdateMovementEntryCommand,
-        UpdateMovementEntryCommandHandler(uow=AsyncUnitOfWork(), cache_service=cache_service),
+        UpdateMovementEntryCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service),
     )
 
     event_bus.register_handler(GetMealsByDateQuery, GetMealsByDateQueryHandler())
@@ -480,7 +487,7 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         SaveMealSuggestionCommand,
-        SaveMealSuggestionCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus),
+        SaveMealSuggestionCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service),
     )
 
     # Register user handlers
@@ -516,7 +523,7 @@ def get_configured_event_bus() -> EventBus:
     )
     event_bus.register_handler(
         UpdateCustomMacrosCommand,
-        UpdateCustomMacrosCommandHandler(cache_service=cache_service),
+        UpdateCustomMacrosCommandHandler(cache_invalidation=cache_invalidation_service),
     )
     event_bus.register_handler(
         GetUserProfileQuery,
@@ -583,12 +590,10 @@ def get_configured_event_bus() -> EventBus:
     from src.app.queries.hydration import GetDailyHydrationQuery, GetDrinkCatalogQuery, GetWeeklyHydrationQuery
     from src.app.handlers.command_handlers import LogHydrationCommandHandler, LogCaloricDrinkCommandHandler, DeleteHydrationEntryCommandHandler
     from src.app.handlers.query_handlers import GetDailyHydrationQueryHandler, GetDrinkCatalogQueryHandler, GetWeeklyHydrationQueryHandler
-    from src.app.events.hydration import HydrationCacheInvalidationRequiredEvent
-    from src.app.handlers.event_handlers.hydration_cache_invalidation_event_handler import HydrationCacheInvalidationEventHandler
 
-    event_bus.register_handler(LogHydrationCommand, LogHydrationCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus, cache_service=cache_service))
-    event_bus.register_handler(LogCaloricDrinkCommand, LogCaloricDrinkCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus, cache_service=cache_service))
-    event_bus.register_handler(DeleteHydrationEntryCommand, DeleteHydrationEntryCommandHandler(uow=AsyncUnitOfWork(), event_bus=event_bus, cache_service=cache_service))
+    event_bus.register_handler(LogHydrationCommand, LogHydrationCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service))
+    event_bus.register_handler(LogCaloricDrinkCommand, LogCaloricDrinkCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service))
+    event_bus.register_handler(DeleteHydrationEntryCommand, DeleteHydrationEntryCommandHandler(uow=AsyncUnitOfWork(), cache_invalidation=cache_invalidation_service))
     event_bus.register_handler(GetDailyHydrationQuery, GetDailyHydrationQueryHandler(cache_service=cache_service))
     event_bus.register_handler(GetDrinkCatalogQuery, GetDrinkCatalogQueryHandler())
     event_bus.register_handler(GetWeeklyHydrationQuery, GetWeeklyHydrationQueryHandler(cache_service=cache_service))
@@ -617,24 +622,6 @@ def get_configured_event_bus() -> EventBus:
         meal_translation_service=meal_translation_service,
     )
     event_bus.subscribe(MealImageUploadedEvent, meal_analysis_handler.handle)
-
-    # Subscribe cache invalidation handler to meal mutation events
-    from src.app.events.meal.meal_cache_invalidation_required_event import (
-        MealCacheInvalidationRequiredEvent,
-    )
-    from src.app.handlers.event_handlers.cache_invalidation_event_handler import (
-        CacheInvalidationEventHandler,
-    )
-
-    if cache_service is not None:
-        cache_invalidation_handler = CacheInvalidationEventHandler(cache=cache_service)
-        event_bus.subscribe(
-            MealCacheInvalidationRequiredEvent, cache_invalidation_handler.handle
-        )
-
-    if cache_service is not None:
-        hydration_cache_handler = HydrationCacheInvalidationEventHandler(cache=cache_service)
-        event_bus.subscribe(HydrationCacheInvalidationRequiredEvent, hydration_cache_handler.handle)
 
     _configured_event_bus = event_bus
     return _configured_event_bus

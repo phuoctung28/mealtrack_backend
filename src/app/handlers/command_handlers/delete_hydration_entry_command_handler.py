@@ -1,27 +1,18 @@
 """Command handler for soft-deleting a hydration log entry."""
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from src.app.commands.hydration.delete_hydration_entry_command import (
     DeleteHydrationEntryCommand,
 )
 from src.app.events.base import EventHandler, handles
-from src.app.events.hydration.hydration_cache_invalidation_required_event import (
-    HydrationCacheInvalidationRequiredEvent,
-)
-from src.app.events.meal.meal_cache_invalidation_required_event import (
-    MealCacheInvalidationRequiredEvent,
-)
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal import MealStatus
-from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.domain.utils.timezone_utils import (
     resolve_user_timezone_async,
     get_zone_info,
-)
-from src.app.handlers.command_handlers.log_hydration_command_handler import (
-    _flush_hydration_caches,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,10 +22,13 @@ logger = logging.getLogger(__name__)
 class DeleteHydrationEntryCommandHandler(
     EventHandler[DeleteHydrationEntryCommand, dict]
 ):
-    def __init__(self, uow: AsyncUnitOfWork, event_bus: Any, cache_service: Optional[CachePort] = None):
+    def __init__(
+        self,
+        uow: AsyncUnitOfWork,
+        cache_invalidation: Optional[CacheInvalidationService] = None,
+    ):
         self.uow = uow
-        self.event_bus = event_bus
-        self.cache_service = cache_service
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, cmd: DeleteHydrationEntryCommand) -> dict:
         async with self.uow as uow:
@@ -51,21 +45,8 @@ class DeleteHydrationEntryCommandHandler(
             tz = get_zone_info(user_tz)
             log_date = meal.created_at.astimezone(tz).date()
 
-        if self.cache_service:
-            await _flush_hydration_caches(self.cache_service, cmd.user_id, log_date)
+        # Synchronous invalidation guarantees Redis is cleared before the response returns
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_hydration_write(cmd.user_id, log_date)
 
-        await self.event_bus.publish(
-            HydrationCacheInvalidationRequiredEvent(
-                aggregate_id=cmd.user_id,
-                user_id=cmd.user_id,
-                hydration_date=log_date,
-            )
-        )
-        await self.event_bus.publish(
-            MealCacheInvalidationRequiredEvent(
-                aggregate_id=cmd.user_id,
-                user_id=cmd.user_id,
-                meal_date=log_date,
-            )
-        )
         return {"success": True}

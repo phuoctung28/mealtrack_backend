@@ -7,14 +7,12 @@ on nutrition/meal records.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from src.api.exceptions import AuthorizationException
 from src.app.commands.meal import DeleteMealCommand
 from src.app.events.base import EventHandler, handles
-from src.app.events.meal.meal_cache_invalidation_required_event import (
-    MealCacheInvalidationRequiredEvent,
-)
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
 
@@ -25,9 +23,13 @@ logger = logging.getLogger(__name__)
 class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
     """Handler for hard-deleting a meal with data preservation."""
 
-    def __init__(self, uow: UnitOfWorkPort, event_bus: Any):
+    def __init__(
+        self,
+        uow: UnitOfWorkPort,
+        cache_invalidation: Optional[CacheInvalidationService] = None,
+    ):
         self.uow = uow
-        self.event_bus = event_bus
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, command: DeleteMealCommand) -> Dict[str, Any]:
         """Handle meal deletion with data preservation."""
@@ -44,13 +46,8 @@ class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
             await uow.meals.delete(command.meal_id)
 
         meal_date = (meal.created_at or utc_now()).date()
-        await self.event_bus.publish(
-            MealCacheInvalidationRequiredEvent(
-                aggregate_id=command.user_id,
-                user_id=command.user_id,
-                meal_date=meal_date,
-            )
-        )
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
 
         return {
             "meal_id": command.meal_id,

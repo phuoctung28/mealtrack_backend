@@ -7,9 +7,7 @@ from typing import Any, Dict, Optional
 
 from src.app.commands.meal import AddCustomIngredientCommand
 from src.app.events.base import EventHandler, handles
-from src.app.events.meal.meal_cache_invalidation_required_event import (
-    MealCacheInvalidationRequiredEvent,
-)
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal.food_item_change import FoodItemChange
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.services.meal_service import MealService
@@ -24,9 +22,13 @@ class AddCustomIngredientCommandHandler(
 ):
     """Handler for adding custom ingredients to meals."""
 
-    def __init__(self, uow: UnitOfWorkPort, event_bus: Any):
+    def __init__(
+        self,
+        uow: UnitOfWorkPort,
+        cache_invalidation: Optional[CacheInvalidationService] = None,
+    ):
         self.uow = uow
-        self.event_bus = event_bus
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, command: AddCustomIngredientCommand) -> Dict[str, Any]:
         """Handle adding custom ingredient to meal."""
@@ -49,13 +51,8 @@ class AddCustomIngredientCommandHandler(
                 saved_meal = await uow.meals.save(updated_meal)
 
             meal_date = (saved_meal.created_at or utc_now()).date()
-            await self.event_bus.publish(
-                MealCacheInvalidationRequiredEvent(
-                    aggregate_id=saved_meal.user_id,
-                    user_id=saved_meal.user_id,
-                    meal_date=meal_date,
-                )
-            )
+            if self.cache_invalidation:
+                await self.cache_invalidation.after_meal_write(saved_meal.user_id, meal_date)
 
             return {
                 "success": True,

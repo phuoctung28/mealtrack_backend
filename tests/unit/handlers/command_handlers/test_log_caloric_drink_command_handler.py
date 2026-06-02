@@ -37,8 +37,7 @@ class _Uow:
 
 @pytest.mark.asyncio
 async def test_log_caloric_drink_response_exposes_calories_alias():
-    event_bus = AsyncMock()
-    handler = LogCaloricDrinkCommandHandler(uow=_Uow(), event_bus=event_bus)
+    handler = LogCaloricDrinkCommandHandler(uow=_Uow())
 
     result = await handler.handle(
         LogCaloricDrinkCommand(
@@ -58,9 +57,8 @@ async def test_log_caloric_drink_response_exposes_calories_alias():
 
 @pytest.mark.asyncio
 async def test_log_caloric_drink_credits_hydration_weight_and_localizes_name():
-    event_bus = AsyncMock()
     uow = _Uow()
-    handler = LogCaloricDrinkCommandHandler(uow=uow, event_bus=event_bus)
+    handler = LogCaloricDrinkCommandHandler(uow=uow)
 
     result = await handler.handle(
         LogCaloricDrinkCommand(
