@@ -140,4 +140,11 @@ class UserDeleteResponse(BaseModel):
 
     firebase_uid: str = Field(..., description="Firebase user unique identifier")
     deleted: bool = Field(..., description="Whether deletion was successful")
+    firebase_deleted: bool = Field(
+        True,
+        description="Whether the Firebase auth account was deleted; false means an orphaned account remains and a retry is pending",
+    )
+    tokens_revoked: bool = Field(
+        True, description="Whether Firebase refresh tokens were revoked"
+    )
     message: str = Field(..., description="Operation result message")

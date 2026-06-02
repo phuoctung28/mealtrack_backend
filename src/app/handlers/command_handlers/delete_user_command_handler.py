@@ -95,18 +95,25 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, dict[str, Any]]):
                 # Step 4: Revoke refresh tokens to invalidate all active sessions
                 # This prevents the user from getting new access tokens
                 # Run in thread pool to avoid blocking the async event loop
+                tokens_revoked = False
                 try:
                     await asyncio.to_thread(
                         self.firebase_auth_service.revoke_refresh_tokens,
                         command.firebase_uid,
                     )
+                    tokens_revoked = True
                     logger.info("Successfully revoked Firebase refresh tokens")
                 except Exception as revoke_error:
                     logger.warning(f"Token revocation failed: {str(revoke_error)}")
                     # Continue - deletion is more important
 
-                # Step 5: Hard delete from Firebase Authentication
-                # Run in thread pool to avoid blocking the async event loop
+                # Step 5: Hard delete from Firebase Authentication.
+                # The DB soft-delete is already committed, so a Firebase failure
+                # here leaves an orphaned auth account (login still works but the
+                # backend rejects it as inactive). Surface it as an alertable,
+                # structured error and report it in the result so it can be
+                # retried out-of-band instead of being silently dropped.
+                firebase_deleted = False
                 try:
                     firebase_deleted = await asyncio.to_thread(
                         self.firebase_auth_service.delete_firebase_user,
@@ -115,15 +122,30 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, dict[str, Any]]):
                     if firebase_deleted:
                         logger.info("Successfully deleted user from Firebase")
                     else:
-                        logger.warning("Firebase deletion returned False")
+                        logger.error(
+                            "Firebase deletion returned False — orphaned auth account",
+                            extra={
+                                "firebase_uid": command.firebase_uid,
+                                "user_id": str(user_id),
+                                "firebase_delete_pending": True,
+                            },
+                        )
                 except Exception as firebase_error:
-                    # Log Firebase error but don't rollback DB changes
-                    logger.error(f"Firebase deletion failed: {str(firebase_error)}")
-                    # Continue - database soft delete is more important than Firebase cleanup
+                    logger.error(
+                        f"Firebase deletion failed: {str(firebase_error)}",
+                        exc_info=True,
+                        extra={
+                            "firebase_uid": command.firebase_uid,
+                            "user_id": str(user_id),
+                            "firebase_delete_pending": True,
+                        },
+                    )
 
                 return {
                     "firebase_uid": command.firebase_uid,
                     "deleted": True,
+                    "firebase_deleted": firebase_deleted,
+                    "tokens_revoked": tokens_revoked,
                     "message": "Account successfully deleted",
                 }
 
