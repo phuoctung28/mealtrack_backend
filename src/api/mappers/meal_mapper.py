@@ -453,6 +453,9 @@ class MealMapper:
             target_calories=target_calories,
             target_macros=target_macros,
             consumed_calories=consumed_calories,
+            # Gross intake + burn, so burn-owning clients avoid double-subtraction.
+            food_calories=daily_macros_data.get("food_calories"),
+            movement_kcal_burned=daily_macros_data.get("movement_kcal_burned", 0.0),
             consumed_macros=consumed_macros,
             remaining_calories=remaining_calories,
             remaining_macros=remaining_macros,
