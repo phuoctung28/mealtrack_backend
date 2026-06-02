@@ -66,7 +66,10 @@ class TestAcceptLanguageMiddleware:
         response = client.get("/test", headers={"Accept-Language": ""})
         assert response.json()["language"] == DEFAULT_LANGUAGE
 
-    @pytest.mark.parametrize("lang", list(SUPPORTED_LANGUAGES))
+    # sorted() gives a deterministic parametrize order: SUPPORTED_LANGUAGES is a
+    # set, and list(set) ordering varies by PYTHONHASHSEED across processes, which
+    # makes xdist workers disagree on collected tests ("different tests collected").
+    @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES))
     def test_all_supported_languages(self, client, lang):
         """Test all supported languages are recognized."""
         response = client.get("/test", headers={"Accept-Language": lang})
