@@ -6,11 +6,10 @@ from src.api.exceptions import AuthorizationException, ResourceNotFoundException
 from src.app.commands.movement import UpdateMovementEntryCommand
 from src.app.events.base import EventHandler, handles
 from src.app.handlers.command_handlers.log_movement_command_handler import (
-    _flush_movement_caches,
     _movement_response,
 )
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.movement import MovementIntensity
-from src.domain.ports.cache_port import CachePort
 from src.domain.utils.timezone_utils import get_zone_info, resolve_user_timezone_async
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -22,10 +21,10 @@ class UpdateMovementEntryCommandHandler(
     def __init__(
         self,
         uow: AsyncUnitOfWork,
-        cache_service: Optional[CachePort] = None,
+        cache_invalidation: Optional[CacheInvalidationService] = None,
     ):
         self.uow = uow
-        self.cache_service = cache_service
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, cmd: UpdateMovementEntryCommand) -> dict[str, Any]:
         if cmd.duration_min < 1 or cmd.duration_min > 600:
@@ -58,7 +57,7 @@ class UpdateMovementEntryCommandHandler(
                 include_in_balance=cmd.include_in_balance,
             )
 
-        if self.cache_service:
-            await _flush_movement_caches(self.cache_service, cmd.user_id, log_date)
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_movement_write(cmd.user_id, log_date)
 
         return _movement_response(updated)

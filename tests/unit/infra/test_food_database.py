@@ -163,12 +163,8 @@ async def test_create_manual_meal_command_handler_aggregates_items(monkeypatch):
     mock_uow.users = MagicMock()
     mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
     mock_uow.commit = AsyncMock()
-    mock_event_bus = MagicMock()
-    mock_event_bus.publish = AsyncMock()
-
     handler = CreateManualMealCommandHandler(
         uow=mock_uow,
-        event_bus=mock_event_bus,
         meal_repository=InMemoryMealRepository(),
     )
 

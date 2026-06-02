@@ -7,9 +7,8 @@ from typing import Optional
 from src.api.exceptions import ValidationException
 from src.app.commands.movement import LogMovementCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.movement import MovementEntry, MovementIntensity
-from src.domain.ports.cache_port import CachePort
 from src.domain.services.movement_catalog_service import get_activity, get_met
 from src.domain.utils.timezone_utils import (
     format_iso_utc,
@@ -68,38 +67,15 @@ def _validate_log_movement(cmd: LogMovementCommand) -> None:
             )
 
 
-async def _flush_movement_caches(
-    cache: CachePort, user_id: str, log_date: date
-) -> None:
-    week_start = log_date - timedelta(days=log_date.weekday())
-    keys_to_delete = [
-        CacheKeys.daily_macros(user_id, log_date)[0],
-        CacheKeys.weekly_budget(user_id, week_start)[0],
-    ]
-    for key in keys_to_delete:
-        try:
-            await cache.invalidate(key)
-        except Exception as exc:
-            logger.warning("Cache invalidation failed for key=%s: %s", key, exc)
-
-    activities_pattern = f"user:{user_id}:activities:{log_date.isoformat()}:*"
-    try:
-        await cache.invalidate_pattern(activities_pattern)
-    except Exception as exc:
-        logger.warning(
-            "Cache pattern invalidation failed for %s: %s", activities_pattern, exc
-        )
-
-
 @handles(LogMovementCommand)
 class LogMovementCommandHandler(EventHandler[LogMovementCommand, dict]):
     def __init__(
         self,
         uow: AsyncUnitOfWork,
-        cache_service: Optional[CachePort] = None,
+        cache_invalidation: Optional[CacheInvalidationService] = None,
     ):
         self.uow = uow
-        self.cache_service = cache_service
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, cmd: LogMovementCommand) -> dict:
         _validate_log_movement(cmd)
@@ -132,7 +108,7 @@ class LogMovementCommandHandler(EventHandler[LogMovementCommand, dict]):
             )
             saved = await uow.movement_entries.add(entry)
 
-        if self.cache_service:
-            await _flush_movement_caches(self.cache_service, cmd.user_id, log_date)
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_movement_write(cmd.user_id, log_date)
 
         return _movement_response(saved)

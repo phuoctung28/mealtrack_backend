@@ -449,7 +449,6 @@ def event_bus(
         EditMealCommand,
         EditMealCommandHandler(
             uow=test_uow,  # Use test UoW with test session
-            event_bus=event_bus,
         ),
     )
 
@@ -457,7 +456,6 @@ def event_bus(
         AddCustomIngredientCommand,
         AddCustomIngredientCommandHandler(
             uow=test_uow,  # Use test UoW with test session
-            event_bus=event_bus,
         ),
     )
 
@@ -466,7 +464,7 @@ def event_bus(
 
     event_bus.register_handler(
         DeleteMealCommand,
-        DeleteMealCommandHandler(uow=test_uow, event_bus=event_bus),  # Use test UoW
+        DeleteMealCommandHandler(uow=test_uow),  # Use test UoW
     )
 
     event_bus.register_handler(

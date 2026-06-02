@@ -5,10 +5,7 @@ from typing import Optional
 from src.api.exceptions import AuthorizationException, ResourceNotFoundException
 from src.app.commands.movement import DeleteMovementEntryCommand
 from src.app.events.base import EventHandler, handles
-from src.app.handlers.command_handlers.log_movement_command_handler import (
-    _flush_movement_caches,
-)
-from src.domain.ports.cache_port import CachePort
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.utils.timezone_utils import get_zone_info, resolve_user_timezone_async
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -18,10 +15,10 @@ class DeleteMovementEntryCommandHandler(EventHandler[DeleteMovementEntryCommand,
     def __init__(
         self,
         uow: AsyncUnitOfWork,
-        cache_service: Optional[CachePort] = None,
+        cache_invalidation: Optional[CacheInvalidationService] = None,
     ):
         self.uow = uow
-        self.cache_service = cache_service
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, cmd: DeleteMovementEntryCommand) -> dict:
         async with self.uow as uow:
@@ -42,7 +39,7 @@ class DeleteMovementEntryCommandHandler(EventHandler[DeleteMovementEntryCommand,
                     "Movement entry not found", "ENTRY_NOT_FOUND"
                 )
 
-        if self.cache_service:
-            await _flush_movement_caches(self.cache_service, cmd.user_id, log_date)
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_movement_write(cmd.user_id, log_date)
 
         return {}

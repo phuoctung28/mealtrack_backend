@@ -15,6 +15,7 @@ from src.app.handlers.command_handlers.log_movement_command_handler import (
     LogMovementCommandHandler,
     _validate_log_movement,
 )
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 
 
 def test_validate_log_movement_accepts_catalog_activity():
@@ -250,7 +251,7 @@ class _FakeCache:
 async def test_log_movement_handler_saves_entry_and_invalidates_daily_caches():
     uow = _FakeUow()
     cache = _FakeCache()
-    handler = LogMovementCommandHandler(uow=uow, cache_service=cache)
+    handler = LogMovementCommandHandler(uow=uow, cache_invalidation=CacheInvalidationService(cache))
 
     result = await handler.handle(
         LogMovementCommand(
@@ -284,7 +285,7 @@ async def test_log_movement_without_target_date_uses_current_utc_time(monkeypatc
     monkeypatch.setattr(log_movement_command_handler, "utc_now", lambda: fixed_now)
     uow = _FakeUow(timezone="Asia/Ho_Chi_Minh")
     cache = _FakeCache()
-    handler = LogMovementCommandHandler(uow=uow, cache_service=cache)
+    handler = LogMovementCommandHandler(uow=uow, cache_invalidation=CacheInvalidationService(cache))
 
     result = await handler.handle(
         LogMovementCommand(
@@ -337,7 +338,7 @@ async def test_delete_movement_handler_deletes_commits_and_invalidates_daily_cac
         include_in_balance=True,
         logged_at=datetime(2026, 5, 30, 18, 0, tzinfo=timezone.utc),
     )
-    handler = DeleteMovementEntryCommandHandler(uow=uow, cache_service=cache)
+    handler = DeleteMovementEntryCommandHandler(uow=uow, cache_invalidation=CacheInvalidationService(cache))
 
     result = await handler.handle(
         DeleteMovementEntryCommand(user_id="user-1", entry_id="mvmt_123")
@@ -417,7 +418,7 @@ async def test_update_movement_handler_updates_and_invalidates_caches():
         source="manual",
         logged_at=datetime(2026, 5, 30, 18, 0, tzinfo=timezone.utc),
     )
-    handler = UpdateMovementEntryCommandHandler(uow=uow, cache_service=cache)
+    handler = UpdateMovementEntryCommandHandler(uow=uow, cache_invalidation=CacheInvalidationService(cache))
 
     result = await handler.handle(
         UpdateMovementEntryCommand(
