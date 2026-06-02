@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.base_dependencies import get_cache_service
 from src.api.dependencies.auth_cache import get_cached_user_id, set_cached_user_id
 from src.domain.ports.cache_port import CachePort
+from src.infra.config.settings import settings
 from src.infra.database.config_async import get_async_db
 
 logger = logging.getLogger(__name__)
@@ -241,6 +242,26 @@ async def get_current_user_email(
         The authenticated user's email, or None if not available
     """
     return token.get("email")
+
+
+async def require_admin(
+    email: str | None = Depends(get_current_user_email),
+) -> str:
+    """Authorize privileged endpoints against the ADMIN_EMAILS allowlist.
+
+    Raises 401 when unauthenticated (via get_current_user_email →
+    verify_firebase_token) and 403 when the caller's email is not on the
+    configured allowlist.
+    """
+    allowlist = {
+        e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()
+    }
+    if not email or email.strip().lower() not in allowlist:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return email
 
 
 async def optional_authentication(

@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     MIGRATION_RETRY_ATTEMPTS: int = Field(default=3)
     MIGRATION_RETRY_DELAY: float = Field(default=2.0)
 
+    # Admin authorization — comma-separated emails allowed to call privileged
+    # endpoints (e.g. feature-flag mutations). Empty means no admins.
+    ADMIN_EMAILS: str = Field(default="")
+
     # Database configuration
     DATABASE_URL: str | None = Field(default=None)
     DB_USER: str = Field(default="nutree")
