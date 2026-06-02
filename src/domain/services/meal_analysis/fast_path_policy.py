@@ -3,10 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from src.infra.config.settings import Settings
 
 
 @dataclass(frozen=True)
@@ -17,8 +13,8 @@ class MealAnalyzeFastPathPolicy:
     max_output_tokens: int = 700
 
     @classmethod
-    def from_settings(cls, settings: "Settings | None") -> "MealAnalyzeFastPathPolicy":
-        """Build policy from settings, using sensible defaults."""
+    def from_settings(cls, settings: object | None) -> "MealAnalyzeFastPathPolicy":
+        """Build policy from a settings-like object, using sensible defaults."""
         if settings is None:
             return cls()
 

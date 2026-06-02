@@ -1,5 +1,5 @@
 """AI prompt management."""
 
-from .system_prompts import SystemPrompts
+from src.domain.services.prompts.system_prompts import SystemPrompts
 
 __all__ = ["SystemPrompts"]

@@ -4,6 +4,11 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# import-linter / grimp graph caches
+.grimp_cache/
+.import_linter_cache/
+
 env/
 build/
 develop-eggs/

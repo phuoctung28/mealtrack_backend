@@ -106,7 +106,7 @@ class GeminiCacheManager:
         Uses SystemPrompts constants; falls back gracefully if any creation fails.
         """
         try:
-            from src.infra.services.ai.prompts.system_prompts import SystemPrompts
+            from src.domain.services.prompts.system_prompts import SystemPrompts
 
             text_parse_prompt = SystemPrompts.get_meal_text_parsing_prompt()
         except Exception as e:
@@ -157,7 +157,7 @@ class GeminiCacheManager:
 
 def _get_recipe_prompt() -> str:
     try:
-        from src.infra.services.ai.prompts.system_prompts import SystemPrompts
+        from src.domain.services.prompts.system_prompts import SystemPrompts
 
         return SystemPrompts.RECIPE_GENERATION
     except Exception:
@@ -166,7 +166,7 @@ def _get_recipe_prompt() -> str:
 
 def _get_vision_prompt() -> str:
     try:
-        from src.infra.services.ai.prompts.system_prompts import SystemPrompts
+        from src.domain.services.prompts.system_prompts import SystemPrompts
 
         return SystemPrompts.VISION_ANALYSIS
     except Exception:

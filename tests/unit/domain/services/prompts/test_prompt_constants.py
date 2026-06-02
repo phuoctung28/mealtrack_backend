@@ -94,7 +94,7 @@ class TestBasicAnalysisPromptConstraints:
 
     def test_basic_analysis_prompt_requires_json_only_and_no_prose(self):
         """Ensure JSON-only output constraints are explicit in VISION_ANALYSIS."""
-        from src.infra.services.ai.prompts.system_prompts import SystemPrompts
+        from src.domain.services.prompts.system_prompts import SystemPrompts
         prompt = BasicAnalysisStrategy().get_analysis_prompt().lower()
 
         assert "json only" in prompt
@@ -103,13 +103,13 @@ class TestBasicAnalysisPromptConstraints:
 
     def test_basic_analysis_prompt_returns_vision_analysis(self):
         """BasicAnalysisStrategy must return SystemPrompts.VISION_ANALYSIS."""
-        from src.infra.services.ai.prompts.system_prompts import SystemPrompts
+        from src.domain.services.prompts.system_prompts import SystemPrompts
         prompt = BasicAnalysisStrategy().get_analysis_prompt()
         assert prompt == SystemPrompts.VISION_ANALYSIS
 
     def test_basic_analysis_strategy_optimized_flag_always_returns_vision_analysis(self):
         """optimized_prompt_enabled flag is a no-op; always returns VISION_ANALYSIS."""
-        from src.infra.services.ai.prompts.system_prompts import SystemPrompts
+        from src.domain.services.prompts.system_prompts import SystemPrompts
         prompt_default = BasicAnalysisStrategy().get_analysis_prompt()
         prompt_disabled = BasicAnalysisStrategy(
             optimized_prompt_enabled=False

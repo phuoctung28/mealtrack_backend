@@ -10,7 +10,7 @@ def test_all_5_strategies_return_vision_analysis_system_prompt():
         WeightAwareAnalysisStrategy,
         UserContextAwareAnalysisStrategy,
     )
-    from src.infra.services.ai.prompts.system_prompts import SystemPrompts
+    from src.domain.services.prompts.system_prompts import SystemPrompts
 
     strategies = [
         BasicAnalysisStrategy(),
