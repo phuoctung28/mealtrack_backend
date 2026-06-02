@@ -1,12 +1,12 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
-from enum import Enum, auto
 from typing import Dict, List, Optional
 
 from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload, selectinload, noload
 
 from src.domain.model.meal import Meal, MealStatus
+from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition import Nutrition
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.utils.timezone_utils import get_zone_info, utc_now
@@ -30,12 +30,6 @@ from src.infra.mappers.meal_mapper import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-class MealProjection(Enum):
-    MACROS_ONLY = auto()  # nutrition + food_items only
-    FULL = auto()  # image + nutrition + food_items (default)
-    FULL_WITH_TRANSLATIONS = auto()  # everything, including translations
 
 
 _PROJECTION_OPTS: dict = {

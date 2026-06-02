@@ -91,7 +91,12 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             await asyncio.sleep(1)
 
             logger.info(f"Loading image contents for meal {meal.meal_id}")
-            image_contents = self.image_store.load(meal.image.image_id)
+            # load() performs a blocking HTTP GET; run it off the event loop so a
+            # slow download doesn't stall other concurrent requests.
+            loop = asyncio.get_running_loop()
+            image_contents = await loop.run_in_executor(
+                None, self.image_store.load, meal.image.image_id
+            )
             if not image_contents:
                 raise Exception(
                     f"Could not load image contents for image_id: {meal.image.image_id}"

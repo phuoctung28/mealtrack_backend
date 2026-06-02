@@ -196,6 +196,7 @@ class TestDeleteUserCommandHandler:
                 # Assert
                 assert result["firebase_uid"] == active_user.firebase_uid
                 assert result["deleted"] is True
+                assert result["firebase_deleted"] is True
                 assert result["message"] == "Account successfully deleted"
 
                 # Verify user is soft deleted
@@ -290,8 +291,10 @@ class TestDeleteUserCommandHandler:
                 # Act
                 result = await delete_handler.handle(command)
 
-                # Assert - database changes should persist
+                # Assert - database changes should persist, and the Firebase
+                # failure is surfaced in the result for out-of-band retry.
                 assert result["deleted"] is True
+                assert result["firebase_deleted"] is False
                 deleted_user = db_session.query(User).filter(User.id == user_id).first()
                 assert deleted_user.is_active is False
                 assert deleted_user.email == f"deleted_{user_id}@deleted.local"

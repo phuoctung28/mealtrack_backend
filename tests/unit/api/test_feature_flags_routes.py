@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api.base_dependencies import get_cache_service, get_db
+from src.api.dependencies.auth import get_current_user_email, require_admin
 from src.api.routes.v1.feature_flags import router
 from src.infra.database.models.feature_flag import FeatureFlag
 
@@ -26,6 +27,9 @@ def app_no_cache():
     application = FastAPI()
     application.include_router(router)
     application.dependency_overrides[get_cache_service] = lambda: None
+    # Business-logic tests bypass the admin gate; the gate itself is covered by
+    # the dedicated admin tests at the bottom of this file.
+    application.dependency_overrides[require_admin] = lambda: "admin@test.local"
     return application
 
 
@@ -189,3 +193,51 @@ def test_update_feature_flag_not_found(app_no_cache):
     )
     assert r.status_code == 404
     app_no_cache.dependency_overrides = {}
+
+
+def test_mutations_reject_non_admin(monkeypatch):
+    """POST/PUT return 403 for an authenticated non-admin (empty allowlist)."""
+    from src.api.dependencies import auth as auth_dep
+
+    monkeypatch.setattr(auth_dep.settings, "ADMIN_EMAILS", "")
+    application = FastAPI()
+    application.include_router(router)
+    application.dependency_overrides[get_cache_service] = lambda: None
+    application.dependency_overrides[get_db] = lambda: MagicMock()
+    application.dependency_overrides[get_current_user_email] = (
+        lambda: "stranger@example.com"
+    )
+
+    client = TestClient(application)
+    assert (
+        client.post(
+            "/v1/feature-flags/", json={"name": "x", "enabled": True}
+        ).status_code
+        == 403
+    )
+    assert client.put("/v1/feature-flags/x", json={"enabled": True}).status_code == 403
+
+
+def test_mutations_allow_configured_admin(monkeypatch):
+    """A configured admin (case-insensitive) passes the gate and creates a flag."""
+    from src.api.dependencies import auth as auth_dep
+
+    monkeypatch.setattr(
+        auth_dep.settings, "ADMIN_EMAILS", "boss@nutree.ai, admin@x.com"
+    )
+    session = MagicMock()
+    session.query.return_value.filter.return_value.first.return_value = None
+    session.refresh.side_effect = lambda obj: setattr(
+        obj, "created_at", datetime(2024, 6, 1)
+    )
+
+    application = FastAPI()
+    application.include_router(router)
+    application.dependency_overrides[get_cache_service] = lambda: None
+    application.dependency_overrides[get_db] = lambda: session
+    application.dependency_overrides[get_current_user_email] = lambda: "Admin@X.com"
+
+    r = TestClient(application).post(
+        "/v1/feature-flags/", json={"name": "n", "enabled": True, "description": "d"}
+    )
+    assert r.status_code == 201

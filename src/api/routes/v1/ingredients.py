@@ -6,6 +6,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 
+from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
 from src.api.middleware.accept_language import get_request_language
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/v1/ingredients", tags=["Ingredients"])
 async def recognize_ingredient(
     request: IngredientRecognitionRequest,
     http_request: Request,
+    user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """

@@ -144,6 +144,7 @@ def test_cheat_delete_and_week(cheat_app):
 def ingredients_app():
     app = FastAPI()
     app.include_router(ingredients_mod.router)
+    app.dependency_overrides[get_current_user_id] = lambda: "u1"
     return app
 
 

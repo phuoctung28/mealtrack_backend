@@ -29,7 +29,7 @@ from src.infra.mappers.meal_mapper import (
     nutrition_domain_to_orm,
     food_item_domain_to_orm,
 )
-from src.infra.repositories.meal_repository import MealProjection
+from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 

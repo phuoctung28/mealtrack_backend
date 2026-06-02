@@ -6,10 +6,11 @@ import asyncio
 import os
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from src.api.dependencies.auth import require_monitoring_access
 from src.infra.database.config import (
     IS_NEON_POOLER,
     POOL_MAX_OVERFLOW,
@@ -70,7 +71,7 @@ async def root():
 
 
 @router.get("/health/db-pool")
-async def database_pool_status():
+async def database_pool_status(_monitor=Depends(require_monitoring_access)):
     """
     Inspect SQLAlchemy connection pool metrics.
     When using NullPool (Neon pooler), pool metrics are not available.
@@ -109,7 +110,7 @@ async def database_pool_status():
 
 
 @router.get("/health/db-connections")
-async def db_connection_status():
+async def db_connection_status(_monitor=Depends(require_monitoring_access)):
     """
     Return active PostgreSQL connection counts.
     """
@@ -165,7 +166,7 @@ async def _fetch_pg_connection_stats() -> Dict[str, Any]:
 
 
 @router.get("/health/notifications")
-async def notification_health_check():
+async def notification_health_check(_monitor=Depends(require_monitoring_access)):
     """
     Health check for push notification system.
     Checks: Firebase SDK init, APNS config status, token stats.

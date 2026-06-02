@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from src.api.base_dependencies import get_cache_service, get_db
+from src.api.dependencies.auth import require_admin
 from src.api.schemas.request.feature_flag_requests import (
     CreateFeatureFlagRequest,
     UpdateFeatureFlagRequest,
@@ -100,6 +101,7 @@ async def create_feature_flag(
     request: CreateFeatureFlagRequest,
     db: Session = Depends(get_db),
     cache_service: Optional[CacheService] = Depends(get_cache_service),
+    _admin: str = Depends(require_admin),
 ):
     """
     Create a new feature flag.
@@ -148,6 +150,7 @@ async def update_feature_flag(
     request: UpdateFeatureFlagRequest,
     db: Session = Depends(get_db),
     cache_service: Optional[CacheService] = Depends(get_cache_service),
+    _admin: str = Depends(require_admin),
 ):
     """
     Update an existing feature flag.
