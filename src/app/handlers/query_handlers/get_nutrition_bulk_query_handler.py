@@ -15,7 +15,7 @@ from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import get_user_monday, get_zone_info, resolve_user_timezone_async
 from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.meal_repository import MealProjection
+from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 

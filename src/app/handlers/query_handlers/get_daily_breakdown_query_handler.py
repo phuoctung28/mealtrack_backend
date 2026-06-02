@@ -20,7 +20,7 @@ from src.domain.utils.timezone_utils import (
     resolve_user_timezone_async,
 )
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.meal_repository import MealProjection
+from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 

@@ -30,7 +30,7 @@ from src.domain.utils.timezone_utils import (
     utc_now,
 )
 from src.infra.config.settings import get_settings
-from src.infra.repositories.meal_repository import MealProjection
+from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 

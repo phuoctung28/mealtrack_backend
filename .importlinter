@@ -34,7 +34,6 @@ forbidden_modules =
 unmatched_ignore_imports_alerting = none
 ignore_imports =
     src.app.handlers.command_handlers.add_weight_entry_command_handler -> src.infra.database.uow_async
-    src.app.handlers.command_handlers.analyze_meal_image_by_url_command_handler -> src.infra.repositories.meal_repository
     src.app.handlers.command_handlers.complete_onboarding_command_handler -> src.infra.database.uow_async
     src.app.handlers.command_handlers.delete_fcm_token_command_handler -> src.infra.database.uow_async
     src.app.handlers.command_handlers.delete_hydration_entry_command_handler -> src.infra.database.uow_async
@@ -76,7 +75,6 @@ ignore_imports =
     src.app.handlers.command_handlers.update_timezone_command_handler -> src.infra.services.daily_context_precompute_service
     src.app.handlers.command_handlers.update_user_last_accessed_command_handler -> src.infra.database.uow_async
     src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler -> src.infra.config.settings
-    src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler -> src.infra.repositories.meal_repository
     src.app.handlers.event_handlers.meal_analysis_event_handler -> src.infra.adapters.cloudinary_image_store
     src.app.handlers.event_handlers.meal_analysis_event_handler -> src.infra.adapters.vision_ai_service
     src.app.handlers.event_handlers.meal_analysis_event_handler -> src.infra.config.settings
@@ -91,21 +89,16 @@ ignore_imports =
     src.app.handlers.query_handlers.codes.validate_code_handler -> src.infra.repositories.referral_repository
     src.app.handlers.query_handlers.get_activities_presence_query_handler -> src.infra.database.uow_async
     src.app.handlers.query_handlers.get_bulk_activities_query_handler -> src.infra.database.uow_async
-    src.app.handlers.query_handlers.get_bulk_activities_query_handler -> src.infra.repositories.meal_repository
     src.app.handlers.query_handlers.get_cheat_days_query_handler -> src.infra.database.uow_async
     src.app.handlers.query_handlers.get_daily_activities_query_handler -> src.infra.database.uow_async
     src.app.handlers.query_handlers.get_daily_breakdown_query_handler -> src.infra.database.uow_async
-    src.app.handlers.query_handlers.get_daily_breakdown_query_handler -> src.infra.repositories.meal_repository
     src.app.handlers.query_handlers.get_daily_hydration_query_handler -> src.infra.database.uow_async
     src.app.handlers.query_handlers.get_daily_macros_query_handler -> src.infra.database.uow_async
-    src.app.handlers.query_handlers.get_daily_macros_query_handler -> src.infra.repositories.meal_repository
     src.app.handlers.query_handlers.get_daily_movement_query_handler -> src.infra.database.uow_async
     src.app.handlers.query_handlers.get_meal_by_id_query_handler -> src.infra.database.uow_async
-    src.app.handlers.query_handlers.get_meal_by_id_query_handler -> src.infra.repositories.meal_repository
     src.app.handlers.query_handlers.get_meals_by_date_query_handler -> src.infra.database.uow_async
     src.app.handlers.query_handlers.get_notification_preferences_query_handler -> src.infra.database.uow_async
     src.app.handlers.query_handlers.get_nutrition_bulk_query_handler -> src.infra.database.uow_async
-    src.app.handlers.query_handlers.get_nutrition_bulk_query_handler -> src.infra.repositories.meal_repository
     src.app.handlers.query_handlers.get_saved_suggestions_query_handler -> src.infra.database.uow_async
     src.app.handlers.query_handlers.get_streak_query_handler -> src.infra.database.uow_async
     src.app.handlers.query_handlers.get_user_by_firebase_uid_query_handler -> src.infra.database.uow_async
