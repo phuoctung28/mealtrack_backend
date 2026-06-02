@@ -1,17 +1,27 @@
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
+
+from src.domain.exceptions.ai_exceptions import AIUnavailableError
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 from src.infra.services.ai.provider_circuit_breaker import CircuitState
-from src.domain.exceptions.ai_exceptions import AIUnavailableError
 
 
 @pytest.fixture
 def mock_gemini_provider():
     from src.domain.ports.ai_provider_port import AICapability
+
     provider = Mock()
     provider.provider_name = "gemini"
-    provider.get_available_models.return_value = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
-    provider.supported_capabilities = {AICapability.TEXT_GENERATION, AICapability.VISION, AICapability.STRUCTURED_OUTPUT}
+    provider.get_available_models.return_value = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+    ]
+    provider.supported_capabilities = {
+        AICapability.TEXT_GENERATION,
+        AICapability.VISION,
+        AICapability.STRUCTURED_OUTPUT,
+    }
     provider.generate = AsyncMock(return_value={"result": "success"})
     provider.generate_with_vision = AsyncMock(return_value={"result": "vision_success"})
     provider.extract_error_code = Mock(return_value=503)
@@ -34,61 +44,95 @@ def manager(mock_gemini_provider, mock_circuit_breaker):
     with patch(
         "src.infra.services.ai.ai_model_manager.GeminiProvider",
         return_value=mock_gemini_provider,
+    ), patch(
+        "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
+        return_value=mock_circuit_breaker,
     ):
-        with patch(
-            "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
-            return_value=mock_circuit_breaker,
-        ):
-            return AIModelManager()
+        return AIModelManager()
 
 
 class TestModelSelection:
     def test_get_fallback_chain_for_meal_scan(self, manager):
-        """Vision tasks use Gemini Flash first, Flash-Lite as fallback."""
+        """Vision tasks use Gemini Flash-Lite first, Flash as fallback."""
         chain = manager.get_fallback_chain(ModelPurpose.MEAL_SCAN)
-        assert chain[0] == "gemini-2.5-flash"
-        assert chain[1] == "gemini-2.5-flash-lite"
-        assert len(chain) == 2
+        assert chain == ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
+
+    def test_get_fallback_chain_for_ingredient_scan(self, manager):
+        """Ingredient scan uses Gemini Flash-Lite first, Flash as fallback."""
+        chain = manager.get_fallback_chain(ModelPurpose.INGREDIENT_SCAN)
+        assert chain == ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
 
     def test_get_fallback_chain_for_barcode(self, manager):
         """Barcode uses Flash-Lite (cheaper) first, Flash as fallback."""
         chain = manager.get_fallback_chain(ModelPurpose.BARCODE)
-        assert chain[0] == "gemini-2.5-flash-lite"
-        assert chain[1] == "gemini-2.5-flash"
-        assert len(chain) == 2
+        assert chain == ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
+
+    def test_get_fallback_chain_for_parse_text(self, manager):
+        """Parse text uses Gemini Lite first for short structured tasks."""
+        chain = manager.get_fallback_chain(ModelPurpose.PARSE_TEXT)
+        assert chain == ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
 
     def test_recipe_purpose_exists(self, manager):
         """RECIPE is a valid purpose; RECIPE_PRIMARY and RECIPE_SECONDARY do not exist."""
         from src.infra.services.ai.ai_model_manager import ModelPurpose
+
         assert hasattr(ModelPurpose, "RECIPE")
         assert not hasattr(ModelPurpose, "RECIPE_PRIMARY")
         assert not hasattr(ModelPurpose, "RECIPE_SECONDARY")
 
     def test_recipe_chain_uses_flash_lite_first(self, manager):
-        """Flash-Lite is primary for recipes (cheaper, less 503 pressure)."""
+        """Recipes use Gemini Flash-Lite first, Flash as fallback."""
         chain = manager.get_fallback_chain(ModelPurpose.RECIPE)
-        assert chain[0] == "gemini-2.5-flash-lite"
-        assert chain[1] == "gemini-2.5-flash"
+        assert chain == ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
         assert "mistral" not in " ".join(chain)
+
+    def test_gemini_lite_prioritized_for_all_purposes(self, manager):
+        """All model purposes use Gemini Flash-Lite first, Flash as fallback."""
+        for purpose in (
+            ModelPurpose.MEAL_SCAN,
+            ModelPurpose.INGREDIENT_SCAN,
+            ModelPurpose.BARCODE,
+            ModelPurpose.PARSE_TEXT,
+            ModelPurpose.MEAL_NAMES,
+            ModelPurpose.DISCOVERY,
+            ModelPurpose.RECIPE,
+            ModelPurpose.GENERAL,
+        ):
+            assert manager.get_fallback_chain(purpose) == [
+                "gemini-2.5-flash-lite",
+                "gemini-2.5-flash",
+            ]
 
     def test_no_mistral_in_any_fallback_chain(self, manager):
         """No fallback chain should reference Mistral after removal."""
         from src.infra.services.ai.ai_model_manager import FALLBACK_CHAINS
+
         all_models = [m for chain in FALLBACK_CHAINS.values() for m in chain]
         assert not any("mistral" in m for m in all_models)
 
     def test_no_kimi_in_any_fallback_chain(self, manager):
         from src.infra.services.ai.ai_model_manager import FALLBACK_CHAINS
+
         all_models = [m for chain in FALLBACK_CHAINS.values() for m in chain]
         assert not any("kimi" in m for m in all_models)
+
+    def test_no_deepseek_in_any_fallback_chain(self, manager):
+        from src.infra.services.ai.ai_model_manager import FALLBACK_CHAINS
+
+        all_models = [m for chain in FALLBACK_CHAINS.values() for m in chain]
+        assert not any("deepseek" in m for m in all_models)
 
     def test_mistral_provider_not_imported(self, manager):
         """AIModelManager must not import or reference MistralProvider."""
         import inspect
+
         import src.infra.services.ai.ai_model_manager as module
+
         source = inspect.getsource(module)
         assert "MistralProvider" not in source
         assert "mistral_provider" not in source
+        assert "DeepSeekProvider" not in source
+        assert "deepseek_provider" not in source
 
 
 class TestGenerate:
@@ -154,6 +198,21 @@ class TestGenerate:
 
         call_args = mock_gemini_provider.generate.call_args
         assert call_args[1]["model"] == "gemini-2.5-flash-lite"
+
+    @pytest.mark.asyncio
+    async def test_generate_uses_gemini_lite_first_for_parse_text(
+        self, manager, mock_gemini_provider
+    ):
+        mock_gemini_provider.generate = AsyncMock(return_value={"result": "gemini"})
+
+        result = await manager.generate(
+            purpose=ModelPurpose.PARSE_TEXT,
+            prompt="test",
+            system_message="system",
+        )
+
+        assert result == {"result": "gemini"}
+        mock_gemini_provider.generate.assert_awaited_once()
 
 
 class TestVision:
