@@ -1,12 +1,12 @@
-"""Unit tests for ScheduledSubscriptionPushService."""
+"""Unit tests for CronTrialPushService."""
 
 import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
-from src.infra.services.scheduled_subscription_push_service import (
-    ScheduledSubscriptionPushService,
+from src.infra.services.cron_trial_push_service import (
+    CronTrialPushService,
 )
 
 NOW_UTC = datetime(2026, 5, 17, 5, 0, 0, tzinfo=timezone.utc)
@@ -34,17 +34,17 @@ def _patch_uow_with_subs(subs):
 
 
 def test_schedules_row_for_active_expiring_sub_with_token():
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     user_id = str(uuid.uuid4())
     sub = _make_sub(user_id, NOW_UTC + timedelta(days=2, hours=6))
 
     uow_ctx, _uow = _patch_uow_with_subs([sub])
 
     with patch(
-        "src.infra.services.scheduled_subscription_push_service.UnitOfWork",
+        "src.infra.services.cron_trial_push_service.UnitOfWork",
         return_value=uow_ctx,
     ), patch.object(
-        ScheduledSubscriptionPushService,
+        CronTrialPushService,
         "_fetch_prefs",
         return_value={
             user_id: {
@@ -55,7 +55,7 @@ def test_schedules_row_for_active_expiring_sub_with_token():
             }
         },
     ), patch.object(
-        ScheduledSubscriptionPushService,
+        CronTrialPushService,
         "_fetch_fcm_tokens",
         return_value={user_id: ["tok1", "tok2"]},
     ):
@@ -64,17 +64,17 @@ def test_schedules_row_for_active_expiring_sub_with_token():
 
 
 def test_skips_user_without_fcm_token():
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     user_id = str(uuid.uuid4())
     sub = _make_sub(user_id, NOW_UTC + timedelta(days=2))
 
     uow_ctx, _uow = _patch_uow_with_subs([sub])
 
     with patch(
-        "src.infra.services.scheduled_subscription_push_service.UnitOfWork",
+        "src.infra.services.cron_trial_push_service.UnitOfWork",
         return_value=uow_ctx,
     ), patch.object(
-        ScheduledSubscriptionPushService,
+        CronTrialPushService,
         "_fetch_prefs",
         return_value={
             user_id: {
@@ -85,7 +85,7 @@ def test_skips_user_without_fcm_token():
             }
         },
     ), patch.object(
-        ScheduledSubscriptionPushService,
+        CronTrialPushService,
         "_fetch_fcm_tokens",
         return_value={},  # no tokens
     ):
@@ -94,17 +94,17 @@ def test_skips_user_without_fcm_token():
 
 
 def test_returns_zero_when_no_subs_in_window():
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     uow_ctx, _uow = _patch_uow_with_subs([])
     with patch(
-        "src.infra.services.scheduled_subscription_push_service.UnitOfWork",
+        "src.infra.services.cron_trial_push_service.UnitOfWork",
         return_value=uow_ctx,
     ):
         assert svc.check_and_schedule_pushes(NOW_UTC) == 0
 
 
 def test_compute_scheduled_at_uses_lunch_plus_30():
-    out_utc, _ = ScheduledSubscriptionPushService._compute_scheduled_at(
+    out_utc, _ = CronTrialPushService._compute_scheduled_at(
         now_utc=NOW_UTC,                                 # 05:00 UTC = 12:00 ICT
         tz=ZoneInfo("Asia/Ho_Chi_Minh"),
         lunch_time_minutes=720,                          # 12:00 local
@@ -114,7 +114,7 @@ def test_compute_scheduled_at_uses_lunch_plus_30():
 
 
 def test_compute_scheduled_at_fallback_noon_when_lunch_missing():
-    out_utc, _ = ScheduledSubscriptionPushService._compute_scheduled_at(
+    out_utc, _ = CronTrialPushService._compute_scheduled_at(
         now_utc=NOW_UTC,
         tz=ZoneInfo("Asia/Ho_Chi_Minh"),
         lunch_time_minutes=None,
@@ -125,7 +125,7 @@ def test_compute_scheduled_at_fallback_noon_when_lunch_missing():
 
 def test_compute_scheduled_at_returns_local_date_not_utc_date():
     """05:00 UTC on May 17 = 12:00 May 17 ICT; scheduled_date must be local."""
-    _, scheduled_date = ScheduledSubscriptionPushService._compute_scheduled_at(
+    _, scheduled_date = CronTrialPushService._compute_scheduled_at(
         now_utc=NOW_UTC,
         tz=ZoneInfo("Asia/Ho_Chi_Minh"),
         lunch_time_minutes=720,
@@ -134,7 +134,7 @@ def test_compute_scheduled_at_returns_local_date_not_utc_date():
 
 
 def test_runs_both_windows():
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     with patch.object(svc, "_schedule_window", return_value=0) as sw:
         svc.check_and_schedule_pushes(NOW_UTC)
         assert sw.call_count == 2
@@ -157,7 +157,7 @@ def test_language_resolution_falls_back_to_users_language_code():
     row.language_code = "vi"
     session.execute.return_value.fetchall.return_value = [row]
 
-    out = ScheduledSubscriptionPushService._fetch_prefs(session, ["u1"])
+    out = CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "vi"
 
 
@@ -172,7 +172,7 @@ def test_language_resolution_pref_overrides_user():
     row.language_code = "vi"
     session.execute.return_value.fetchall.return_value = [row]
 
-    out = ScheduledSubscriptionPushService._fetch_prefs(session, ["u1"])
+    out = CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "en"
 
 
@@ -187,13 +187,13 @@ def test_language_resolution_unknown_falls_back_to_en():
     row.language_code = "de"
     session.execute.return_value.fetchall.return_value = [row]
 
-    out = ScheduledSubscriptionPushService._fetch_prefs(session, ["u1"])
+    out = CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "en"
 
 
 def test_build_row_skips_if_scheduled_time_already_passed():
     """Mid-day midnight-trigger run shouldn't insert a row that fires in the past."""
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     user_id = "u1"
     # User in UTC, lunch_time=00 → fires at 00:30 UTC. `now` is 05:00 UTC.
     pref = {
@@ -213,7 +213,7 @@ def test_build_row_skips_if_scheduled_time_already_passed():
 
 
 def test_build_row_returns_full_row_when_in_future():
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     pref = {
         "lunch_time_minutes": 720,
         "language": "vi",

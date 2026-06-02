@@ -1,21 +1,19 @@
 """Unit tests for the push notification cron entry point."""
-import asyncio
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 
 @pytest.mark.asyncio
-async def test_push_cron_happy_path_runs_all_three_phases():
-    """All three phases execute when DB is reachable."""
+async def test_push_cron_happy_path_runs_all_phases():
+    """All cron phases execute when DB is reachable."""
     with (
         patch("src.cron.push.initialize_sentry"),
         patch("src.cron.push.engine") as mock_engine,
-        patch("src.cron.push.FirebaseService") as mock_firebase_cls,
+        patch("src.cron.push.FirebaseService"),
         patch("src.cron.push.DailyContextPrecomputeService") as mock_precompute_cls,
-        patch("src.cron.push.ScheduledSubscriptionPushService") as mock_trial_cls,
-        patch("src.cron.push.ScheduledNotificationService") as mock_svc_cls,
+        patch("src.cron.push.CronTrialPushService") as mock_trial_cls,
+        patch("src.cron.push.CronNotificationDispatchService") as mock_svc_cls,
         patch("src.cron.push.UnitOfWork") as mock_uow_cls,
         patch("sentry_sdk.flush"),
     ):
@@ -30,7 +28,9 @@ async def test_push_cron_happy_path_runs_all_three_phases():
             MagicMock(timezone="Asia/Ho_Chi_Minh"),
             MagicMock(timezone="UTC"),
         ]
-        mock_uow_cls.return_value.__enter__ = MagicMock(return_value=MagicMock(session=mock_session))
+        mock_uow_cls.return_value.__enter__ = MagicMock(
+            return_value=MagicMock(session=mock_session)
+        )
         mock_uow_cls.return_value.__exit__ = MagicMock(return_value=False)
 
         # Precompute service
@@ -46,15 +46,17 @@ async def test_push_cron_happy_path_runs_all_three_phases():
         # FCM dispatch service
         mock_svc = MagicMock()
         mock_svc._send_due_notifications = AsyncMock()
+        mock_svc.cleanup_expired_notifications = MagicMock()
         mock_svc_cls.return_value = mock_svc
 
         from src.cron.push import run
         await run()
 
-        # All three phases were invoked
-        assert mock_precompute.precompute_for_timezone.call_count == 2  # one per timezone
+        # All phases were invoked
+        assert mock_precompute.precompute_for_timezone.call_count == 2
         mock_trial.check_and_schedule_pushes.assert_called_once()
         mock_svc._send_due_notifications.assert_called_once()
+        mock_svc.cleanup_expired_notifications.assert_called_once()
         mock_engine.dispose.assert_called_once()
 
 
@@ -66,8 +68,8 @@ async def test_push_cron_aborts_on_db_warmup_failure():
         patch("src.cron.push.engine") as mock_engine,
         patch("src.cron.push.FirebaseService"),
         patch("src.cron.push.DailyContextPrecomputeService") as mock_precompute_cls,
-        patch("src.cron.push.ScheduledSubscriptionPushService") as mock_trial_cls,
-        patch("src.cron.push.ScheduledNotificationService") as mock_svc_cls,
+        patch("src.cron.push.CronTrialPushService") as mock_trial_cls,
+        patch("src.cron.push.CronNotificationDispatchService") as mock_svc_cls,
         patch("sentry_sdk.flush"),
     ):
         # DB warm-up raises
@@ -88,9 +90,9 @@ async def test_push_cron_phase_failure_does_not_abort_subsequent_phases():
         patch("src.cron.push.initialize_sentry"),
         patch("src.cron.push.engine") as mock_engine,
         patch("src.cron.push.FirebaseService"),
-        patch("src.cron.push.DailyContextPrecomputeService") as mock_precompute_cls,
-        patch("src.cron.push.ScheduledSubscriptionPushService") as mock_trial_cls,
-        patch("src.cron.push.ScheduledNotificationService") as mock_svc_cls,
+        patch("src.cron.push.DailyContextPrecomputeService"),
+        patch("src.cron.push.CronTrialPushService") as mock_trial_cls,
+        patch("src.cron.push.CronNotificationDispatchService") as mock_svc_cls,
         patch("src.cron.push.UnitOfWork") as mock_uow_cls,
         patch("sentry_sdk.flush"),
     ):
@@ -100,7 +102,9 @@ async def test_push_cron_phase_failure_does_not_abort_subsequent_phases():
         mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
 
         # Phase 1 raises
-        mock_uow_cls.return_value.__enter__ = MagicMock(side_effect=RuntimeError("db error"))
+        mock_uow_cls.return_value.__enter__ = MagicMock(
+            side_effect=RuntimeError("db error")
+        )
         mock_uow_cls.return_value.__exit__ = MagicMock(return_value=False)
 
         # Phase 2 and 3 services
@@ -110,6 +114,7 @@ async def test_push_cron_phase_failure_does_not_abort_subsequent_phases():
 
         mock_svc = MagicMock()
         mock_svc._send_due_notifications = AsyncMock()
+        mock_svc.cleanup_expired_notifications = MagicMock()
         mock_svc_cls.return_value = mock_svc
 
         from src.cron.push import run
@@ -117,3 +122,4 @@ async def test_push_cron_phase_failure_does_not_abort_subsequent_phases():
 
         mock_trial.check_and_schedule_pushes.assert_called_once()
         mock_svc._send_due_notifications.assert_called_once()
+        mock_svc.cleanup_expired_notifications.assert_called_once()

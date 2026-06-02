@@ -1,23 +1,13 @@
+from datetime import UTC, date, datetime
+from unittest.mock import MagicMock, patch
+
 import pytest
-from datetime import date, datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
-
-
-@pytest.mark.asyncio
-async def test_detects_midnight_timezone():
-    from src.infra.services.scheduled_notification_service import _timezones_at_midnight
-
-    # 2026-04-22 17:00 UTC = 2026-04-23 00:00 Asia/Ho_Chi_Minh (UTC+7)
-    now = datetime(2026, 4, 22, 17, 0, 0, tzinfo=timezone.utc)
-    result = _timezones_at_midnight(["Asia/Ho_Chi_Minh", "UTC"], now)
-    assert "Asia/Ho_Chi_Minh" in result
-    assert "UTC" not in result
 
 
 @pytest.mark.asyncio
 async def test_send_loop_marks_notifications_sent():
-    from src.infra.services.scheduled_notification_service import (
-        ScheduledNotificationService,
+    from src.infra.services.cron_notification_dispatch_service import (
+        CronNotificationDispatchService,
     )
 
     mock_notif = MagicMock()
@@ -36,22 +26,21 @@ async def test_send_loop_marks_notifications_sent():
         return_value={"success": True, "failed_tokens": []}
     )
 
-    svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
+    svc = CronNotificationDispatchService.__new__(CronNotificationDispatchService)
     svc._firebase = mock_firebase
-    svc._running = True
 
     with patch(
-        "src.infra.services.scheduled_notification_service.ReminderQueryBuilder"
+        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
     ) as mock_qb, patch(
-        "src.infra.services.scheduled_notification_service.UnitOfWork"
+        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
     ) as mock_uow, patch(
-        "src.infra.services.scheduled_notification_service._fetch_calories_consumed_batch",
+        "src.infra.services.cron_notification_dispatch_service._fetch_calories_consumed_batch",
         return_value={"user-1": 400},
     ):
         mock_qb.find_due_notifications.return_value = [mock_notif]
         mock_uow.return_value.__enter__.return_value.session = MagicMock()
 
-        now = datetime(2026, 4, 22, 5, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 4, 22, 5, 0, 0, tzinfo=UTC)
         await svc._send_due_notifications(now)
 
     mock_firebase.send_multicast.assert_called_once()
@@ -67,7 +56,7 @@ async def test_send_loop_marks_notifications_sent():
 
 
 def test_render_message_daily_summary_zero_logs():
-    from src.infra.services.scheduled_notification_service import _render_message
+    from src.infra.services.cron_notification_dispatch_service import _render_message
 
     title, body = _render_message(
         "daily_summary", 2000, "male", "en", calories_consumed=0, calorie_goal=2000
@@ -77,8 +66,38 @@ def test_render_message_daily_summary_zero_logs():
     assert "log" in body.lower()
 
 
+@pytest.mark.parametrize(
+    "notification_type,kwargs",
+    [
+        ("meal_reminder_breakfast", {}),
+        ("meal_reminder_lunch", {}),
+        ("meal_reminder_dinner", {}),
+        ("daily_summary", {"calories_consumed": 0, "calorie_goal": 2000}),
+        ("trial_expiry_2d", {}),
+        ("trial_expiry_1d", {}),
+        (
+            "hydration_reminder_afternoon",
+            {"consumed_ml": 500, "goal_ml": 2000, "remaining_ml": 1500},
+        ),
+        (
+            "hydration_reminder_evening",
+            {"consumed_ml": 1200, "goal_ml": 2000, "remaining_ml": 800},
+        ),
+    ],
+)
+def test_render_known_notification_types_have_ios_display_text(
+    notification_type, kwargs
+):
+    from src.infra.services.cron_notification_dispatch_service import _render_message
+
+    title, body = _render_message(notification_type, 1000, "male", "en", **kwargs)
+
+    assert title.strip()
+    assert body.strip()
+
+
 def test_render_message_daily_summary_on_target():
-    from src.infra.services.scheduled_notification_service import _render_message
+    from src.infra.services.cron_notification_dispatch_service import _render_message
 
     title, body = _render_message(
         "daily_summary", 0, "male", "en", calories_consumed=1980, calorie_goal=2000
@@ -87,7 +106,7 @@ def test_render_message_daily_summary_on_target():
 
 
 def test_render_message_daily_summary_under_goal():
-    from src.infra.services.scheduled_notification_service import _render_message
+    from src.infra.services.cron_notification_dispatch_service import _render_message
 
     title, body = _render_message(
         "daily_summary", 500, "male", "en", calories_consumed=1500, calorie_goal=2000
@@ -96,7 +115,7 @@ def test_render_message_daily_summary_under_goal():
 
 
 def test_render_message_daily_summary_slightly_over():
-    from src.infra.services.scheduled_notification_service import _render_message
+    from src.infra.services.cron_notification_dispatch_service import _render_message
 
     title, body = _render_message(
         "daily_summary", 0, "male", "en", calories_consumed=2200, calorie_goal=2000
@@ -105,7 +124,7 @@ def test_render_message_daily_summary_slightly_over():
 
 
 def test_render_message_daily_summary_way_over():
-    from src.infra.services.scheduled_notification_service import _render_message
+    from src.infra.services.cron_notification_dispatch_service import _render_message
 
     title, body = _render_message(
         "daily_summary", 0, "male", "en", calories_consumed=2600, calorie_goal=2000
@@ -113,30 +132,11 @@ def test_render_message_daily_summary_way_over():
     assert "600" in body
 
 
-@pytest.mark.asyncio
-async def test_startup_catchup_calls_precompute_for_each_timezone():
-    from src.infra.services.scheduled_notification_service import (
-        ScheduledNotificationService,
-    )
-
-    mock_precompute = AsyncMock()
-    mock_precompute.precompute_for_timezone = AsyncMock()
-
-    svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
-    svc._precompute = mock_precompute
-    svc._distinct_timezones = ["UTC", "Asia/Ho_Chi_Minh"]
-    svc._trial_push = None  # disable trial-push branch for this test
-
-    await svc._startup_catchup()
-
-    assert mock_precompute.precompute_for_timezone.call_count == 2
-
-
 # ── Trial-expiry coverage ──────────────────────────────────────────────────────
 
 
 def test_render_trial_expiry_2d_en_male_returns_2_day_body():
-    from src.infra.services.scheduled_notification_service import _render_message
+    from src.infra.services.cron_notification_dispatch_service import _render_message
 
     title, body = _render_message("trial_expiry_2d", 0, "male", "en")
     assert title == "Nutree"
@@ -144,7 +144,7 @@ def test_render_trial_expiry_2d_en_male_returns_2_day_body():
 
 
 def test_render_trial_expiry_1d_en_female_returns_1_day_body():
-    from src.infra.services.scheduled_notification_service import _render_message
+    from src.infra.services.cron_notification_dispatch_service import _render_message
 
     title, body = _render_message("trial_expiry_1d", 0, "female", "en")
     assert title == "Nutree"
@@ -152,7 +152,7 @@ def test_render_trial_expiry_1d_en_female_returns_1_day_body():
 
 
 def test_render_trial_expiry_2d_vi_male_returns_vietnamese():
-    from src.infra.services.scheduled_notification_service import _render_message
+    from src.infra.services.cron_notification_dispatch_service import _render_message
 
     title, body = _render_message("trial_expiry_2d", 0, "male", "vi")
     assert "2 ngày" in body
@@ -160,7 +160,7 @@ def test_render_trial_expiry_2d_vi_male_returns_vietnamese():
 
 
 def test_render_trial_expiry_1d_vi_female_returns_vietnamese():
-    from src.infra.services.scheduled_notification_service import _render_message
+    from src.infra.services.cron_notification_dispatch_service import _render_message
 
     _, body = _render_message("trial_expiry_1d", 0, "female", "vi")
     assert "bạn ơi" in body
@@ -168,20 +168,10 @@ def test_render_trial_expiry_1d_vi_female_returns_vietnamese():
 
 
 def test_render_unknown_type_falls_through_to_generic_stub():
-    from src.infra.services.scheduled_notification_service import _render_message
+    from src.infra.services.cron_notification_dispatch_service import _render_message
 
     _, body = _render_message("totally_unknown", 0, "male", "en")
     assert body == "You have a notification 📬"
-
-
-def test_seconds_until_next_minute_aligns_scheduler_tick():
-    from src.infra.services.scheduled_notification_service import (
-        _seconds_until_next_minute,
-    )
-
-    now = datetime(2026, 4, 22, 5, 0, 58, 500_000, tzinfo=timezone.utc)
-
-    assert _seconds_until_next_minute(now) == 1.5
 
 
 def _make_trial_notif(notif_type: str = "trial_expiry_2d"):
@@ -204,29 +194,28 @@ async def test_send_due_normalizes_trial_fcm_type():
     """trial_expiry_2d in DB → 'trial_expiry' in FCM data.type."""
     import asyncio as _asyncio
 
-    from src.infra.services.scheduled_notification_service import (
-        ScheduledNotificationService,
+    from src.infra.services.cron_notification_dispatch_service import (
+        CronNotificationDispatchService,
     )
 
-    svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
+    svc = CronNotificationDispatchService.__new__(CronNotificationDispatchService)
     svc._firebase = MagicMock()
     svc._firebase.send_multicast = MagicMock(
         return_value={"success": True, "failed_tokens": []}
     )
-    svc._running = True
 
     async def _passthrough(fn, *a, **kw):
         return fn(*a, **kw)
 
     with patch(
-        "src.infra.services.scheduled_notification_service.ReminderQueryBuilder"
+        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
     ) as Q, patch(
-        "src.infra.services.scheduled_notification_service.UnitOfWork"
+        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
     ), patch.object(
         _asyncio, "to_thread", new=_passthrough
     ):
         Q.find_due_notifications.return_value = [_make_trial_notif("trial_expiry_2d")]
-        await svc._send_due_notifications(datetime(2026, 5, 17, tzinfo=timezone.utc))
+        await svc._send_due_notifications(datetime(2026, 5, 17, tzinfo=UTC))
 
     call_kwargs = svc._firebase.send_multicast.call_args.kwargs
     assert call_kwargs["notification_type"] == "trial_expiry"
@@ -237,31 +226,30 @@ async def test_send_due_trial_skips_redis_lookup(caplog):
     """Trial rows must NOT log Redis cache-miss WARNING."""
     import asyncio as _asyncio
 
-    from src.infra.services.scheduled_notification_service import (
-        ScheduledNotificationService,
+    from src.infra.services.cron_notification_dispatch_service import (
+        CronNotificationDispatchService,
     )
 
-    svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
+    svc = CronNotificationDispatchService.__new__(CronNotificationDispatchService)
     svc._firebase = MagicMock()
     svc._firebase.send_multicast = MagicMock(
         return_value={"success": True, "failed_tokens": []}
     )
-    svc._running = True
 
     async def _passthrough(fn, *a, **kw):
         return fn(*a, **kw)
 
     with patch(
-        "src.infra.services.scheduled_notification_service.ReminderQueryBuilder"
+        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
     ) as Q, patch(
-        "src.infra.services.scheduled_notification_service.UnitOfWork"
+        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
     ), patch.object(
         _asyncio, "to_thread", new=_passthrough
     ):
         Q.find_due_notifications.return_value = [_make_trial_notif("trial_expiry_1d")]
         with caplog.at_level("WARNING"):
             await svc._send_due_notifications(
-                datetime(2026, 5, 17, tzinfo=timezone.utc)
+                datetime(2026, 5, 17, tzinfo=UTC)
             )
 
     assert "Redis cache miss" not in caplog.text
@@ -270,8 +258,6 @@ async def test_send_due_trial_skips_redis_lookup(caplog):
 def test_build_notification_rows_includes_hydration_reminders_when_enabled():
     from src.infra.services.daily_context_precompute_service import (
         DailyContextPrecomputeService,
-        _DEFAULT_AFTERNOON_MINUTES,
-        _DEFAULT_EVENING_MINUTES,
     )
 
     svc = DailyContextPrecomputeService.__new__(DailyContextPrecomputeService)
@@ -306,35 +292,43 @@ def test_build_notification_rows_includes_hydration_reminders_when_enabled():
 @pytest.mark.asyncio
 async def test_hydration_reminder_skipped_when_above_threshold():
     """Afternoon reminder skipped when user has consumed >= 50% of goal."""
-    from src.infra.services.scheduled_notification_service import ScheduledNotificationService
+    from datetime import datetime
     from unittest.mock import MagicMock, patch
-    from datetime import datetime, timezone
+
+    from src.infra.services.cron_notification_dispatch_service import (
+        CronNotificationDispatchService,
+    )
 
     mock_notif = MagicMock()
     mock_notif.notification_type = "hydration_reminder_afternoon"
-    mock_notif.context = {"fcm_tokens": ["tok1"], "gender": "male", "language_code": "en"}
+    mock_notif.context = {
+        "fcm_tokens": ["tok1"],
+        "gender": "male",
+        "language_code": "en",
+    }
     mock_notif.id = "hydration-notif-1"
     mock_notif.user_id = "user-h1"
 
     mock_firebase = MagicMock()
-    mock_firebase.send_multicast = MagicMock(return_value={"success": True, "failed_tokens": []})
+    mock_firebase.send_multicast = MagicMock(
+        return_value={"success": True, "failed_tokens": []}
+    )
 
-    svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
+    svc = CronNotificationDispatchService.__new__(CronNotificationDispatchService)
     svc._firebase = mock_firebase
-    svc._running = True
 
     # consumed_ml=1500, goal_ml=2000 → 75% → above 50% afternoon threshold → skip FCM
     with patch(
-        "src.infra.services.scheduled_notification_service.ReminderQueryBuilder"
+        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
     ) as mock_qb, patch(
-        "src.infra.services.scheduled_notification_service.UnitOfWork"
+        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
     ) as mock_uow, patch(
-        "src.infra.services.scheduled_notification_service._fetch_hydration_data_batch",
+        "src.infra.services.cron_notification_dispatch_service._fetch_hydration_data_batch",
         return_value={"user-h1": (1500, 2000)},
     ):
         mock_qb.find_due_notifications.return_value = [mock_notif]
         mock_uow.return_value.__enter__.return_value.session = MagicMock()
-        now = datetime(2026, 5, 23, 6, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 5, 23, 6, 0, 0, tzinfo=UTC)
         await svc._send_due_notifications(now)
 
     # FCM not called because threshold met
@@ -344,42 +338,52 @@ async def test_hydration_reminder_skipped_when_above_threshold():
 @pytest.mark.asyncio
 async def test_hydration_reminder_sent_when_below_threshold():
     """Evening reminder fires when user has consumed < 80% of goal."""
-    from src.infra.services.scheduled_notification_service import ScheduledNotificationService
+    from datetime import datetime
     from unittest.mock import MagicMock, patch
-    from datetime import datetime, timezone
+
+    from src.infra.services.cron_notification_dispatch_service import (
+        CronNotificationDispatchService,
+    )
 
     mock_notif = MagicMock()
     mock_notif.notification_type = "hydration_reminder_evening"
-    mock_notif.context = {"fcm_tokens": ["tok1"], "gender": "male", "language_code": "en"}
+    mock_notif.context = {
+        "fcm_tokens": ["tok1"],
+        "gender": "male",
+        "language_code": "en",
+    }
     mock_notif.id = "hydration-notif-2"
     mock_notif.user_id = "user-h2"
 
     mock_firebase = MagicMock()
-    mock_firebase.send_multicast = MagicMock(return_value={"success": True, "failed_tokens": []})
+    mock_firebase.send_multicast = MagicMock(
+        return_value={"success": True, "failed_tokens": []}
+    )
 
-    svc = ScheduledNotificationService.__new__(ScheduledNotificationService)
+    svc = CronNotificationDispatchService.__new__(CronNotificationDispatchService)
     svc._firebase = mock_firebase
-    svc._running = True
 
     # consumed_ml=1200, goal_ml=2000 → 60% → below 80% evening threshold → send
     with patch(
-        "src.infra.services.scheduled_notification_service.ReminderQueryBuilder"
+        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
     ) as mock_qb, patch(
-        "src.infra.services.scheduled_notification_service.UnitOfWork"
+        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
     ) as mock_uow, patch(
-        "src.infra.services.scheduled_notification_service._fetch_hydration_data_batch",
+        "src.infra.services.cron_notification_dispatch_service._fetch_hydration_data_batch",
         return_value={"user-h2": (1200, 2000)},
     ):
         mock_qb.find_due_notifications.return_value = [mock_notif]
         mock_uow.return_value.__enter__.return_value.session = MagicMock()
-        now = datetime(2026, 5, 23, 11, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 5, 23, 11, 0, 0, tzinfo=UTC)
         await svc._send_due_notifications(now)
 
     mock_firebase.send_multicast.assert_called_once()
 
 
 def test_build_notification_rows_skips_hydration_when_disabled():
-    from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+    )
 
     svc = DailyContextPrecomputeService.__new__(DailyContextPrecomputeService)
     svc._tdee_service = MagicMock()

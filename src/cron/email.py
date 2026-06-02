@@ -20,14 +20,14 @@ from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
 from src.infra.database.config import engine
 from src.infra.database.config_async import async_engine
 from src.infra.monitoring.sentry import initialize_sentry
+from src.infra.services.cron_lifecycle_email_service import CronLifecycleEmailService
 from src.infra.services.email_template_renderer import EmailTemplateRenderer
-from src.infra.services.scheduled_email_service import ScheduledEmailService
 
 logger = logging.getLogger(__name__)
 
 
 async def run() -> None:
-    """Check for and send all scheduled lifecycle emails, then exit."""
+    """Check for and send all lifecycle cron emails, then exit."""
     logging.basicConfig(level=logging.INFO)
     initialize_sentry()
 
@@ -46,8 +46,8 @@ async def run() -> None:
         email_service = EmailService(
             email_adapter=email_adapter, template_renderer=email_renderer
         )
-        scheduled_email = ScheduledEmailService(email_service=email_service)
-        await scheduled_email.check_and_send_emails()
+        lifecycle_email = CronLifecycleEmailService(email_service=email_service)
+        await lifecycle_email.check_and_send_emails()
     except Exception:
         logger.exception("Email cron failed")
 

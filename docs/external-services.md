@@ -1,6 +1,6 @@
 # Backend External Services Integration
 
-**Last Updated:** May 27, 2026
+**Last Updated:** June 1, 2026
 **Services:** Firebase, Cloudinary, Google Gemini, RevenueCat, PostHog, Redis, Sentry
 **All services gracefully degrade on failure** (except Firebase Auth and DB which fail fast)
 
@@ -21,12 +21,13 @@
 - Platform-specific payload builders in `src/infra/services/push/`
   - `android_payload_builder.py`: high-priority Android config with channel ID (`meal_reminders` or `daily_summary`)
   - `apns_payload_builder.py`: APNs Time Sensitive payload with `interruption-level` in payload body (not headers), priority 10
+- `FirebaseService` rejects blank title/body before building APNs payloads and mobile `data` fields
 - Multi-device support via `user_fcm_tokens` table
 - Deduplication across workers via `notification_sent_log` table (migration 047)
-- Trial-expiry pushes at T-2d and T-1d via `ScheduledSubscriptionPushService` (`src/infra/services/scheduled_subscription_push_service.py`)
+- Trial-expiry pushes at T-2d and T-1d via `CronTrialPushService` (`src/infra/services/cron_trial_push_service.py`)
 - Notifications rescheduled automatically on timezone changes — triggered from `UpdateTimezoneCommandHandler` and `RegisterFcmTokenCommandHandler`
-- Scheduler leader election: `SchedulerLeaderLock` (`src/infra/services/scheduler_leader_lock.py`) uses `fcntl.flock` (per-process) + PostgreSQL advisory lock (cross-container) to ensure a single scheduler leader
-- Batch loop in `ScheduledNotificationService` (`src/infra/services/scheduled_notification_service.py`): 60-second tick, detects timezone midnights for `DailyContextPrecomputeService`, fetches due notifications, batch-sends, marks sent
+- Cron push entrypoint (`src/cron/push.py`) owns all push scheduling: precompute notification rows, schedule trial-expiry rows, claim due rows, batch-send, mark sent, clean expired rows
+- Cron dispatch helper (`CronNotificationDispatchService`) uses database row claiming (`pending` → `processing`) plus stale-processing recovery instead of a background loop or leader lock
 - APNs diagnostics surfaced at `/health/notifications` via `apns_diagnostics()` to verify `interruption-level` placement
 
 ---
