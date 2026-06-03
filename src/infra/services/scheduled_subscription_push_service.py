@@ -1,10 +1,10 @@
-"""Scheduler that inserts T-2d / T-1d trial-expiry push rows for the
-existing ScheduledNotificationService loop to send."""
+"""Scheduler that inserts a single trial-expiry push shortly before the trial
+converts to paid, for the existing ScheduledNotificationService loop to send."""
 
 import logging
 import uuid
 from collections.abc import Iterable
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
@@ -16,13 +16,17 @@ from src.infra.database.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_LUNCH_MINUTES = 690    # 11:30 — mirrors daily_context_precompute_service
-_FIRE_OFFSET_MINUTES = 30       # send at lunch + 30
-_FALLBACK_FIRE_LOCAL = time(12, 0)  # if lunch_time_minutes missing → noon local
+# Fire the reminder this long before the trial charges — a last-minute nudge
+# so the user knows the charge is imminent.
+_CHARGE_LEAD = timedelta(hours=2)
+# Consider subscriptions charging within the next day; the row sits pending
+# until its scheduled_for_utc, so a generous lookahead just means it is
+# created early, never sent early.
+_LOOKAHEAD_DAYS = 1
 
 
 class ScheduledSubscriptionPushService:
-    """Inserts trial-expiry push notifications at T-2d and T-1d.
+    """Inserts one trial-expiry push per subscription, ~2h before its charge.
 
     Does not send. The existing ScheduledNotificationService loop polls
     `notifications` and sends due rows on its 60s tick.
@@ -33,24 +37,23 @@ class ScheduledSubscriptionPushService:
         pass
 
     def check_and_schedule_pushes(self, now: datetime | None = None) -> int:
-        """Run T-2d + T-1d windows. Returns total rows inserted (excludes
-        conflict-do-nothing skips)."""
+        """Schedule the pre-charge push for subs charging soon. Returns rows
+        inserted (excludes conflict-do-nothing skips)."""
         moment = now or utc_now()
         logger.info("Trial-push scheduler: starting run at %s", moment.isoformat())
 
-        scheduled = 0
-        scheduled += self._schedule_window(moment, days_left=2)
-        scheduled += self._schedule_window(moment, days_left=1)
+        scheduled = self._schedule_due_pushes(moment)
 
         logger.info("Trial-push scheduler: complete, inserted=%s", scheduled)
         return scheduled
 
-    # ---- window pipeline ------------------------------------------------
+    # ---- scheduling pipeline --------------------------------------------
 
-    def _schedule_window(self, now: datetime, days_left: int) -> int:
+    def _schedule_due_pushes(self, now: datetime) -> int:
         with UnitOfWork() as uow:
+            # Active subs whose trial converts to paid within the next day.
             subs = uow.subscriptions.find_expiring_in_window(
-                from_days=days_left, to_days=days_left + 1, now=now
+                from_days=0, to_days=_LOOKAHEAD_DAYS, now=now
             )
             if not subs:
                 return 0
@@ -61,15 +64,14 @@ class ScheduledSubscriptionPushService:
 
             rows: list[dict] = []
             for sub in subs:
-                pref = prefs.get(sub.user_id)
                 tokens = tokens_by_user.get(sub.user_id, [])
                 if not tokens:
                     continue
                 row = self._build_row(
                     user_id=sub.user_id,
-                    days_left=days_left,
+                    charge_at=sub.expires_at,
                     tokens=tokens,
-                    pref=pref,
+                    pref=prefs.get(sub.user_id),
                     now=now,
                 )
                 if row is not None:
@@ -87,11 +89,9 @@ class ScheduledSubscriptionPushService:
         if not user_ids:
             return {}
         result = session.execute(
-            text(
-                """
+            text("""
                 SELECT
                     np.user_id,
-                    np.lunch_time_minutes,
                     np.language,
                     u.timezone,
                     up.gender,
@@ -100,8 +100,7 @@ class ScheduledSubscriptionPushService:
                 JOIN users u ON u.id = np.user_id
                 LEFT JOIN user_profiles up ON up.user_id = np.user_id AND up.is_current = true
                 WHERE np.user_id = ANY(:ids) AND np.is_deleted = false
-                """
-            ),
+                """),
             {"ids": user_ids},
         ).fetchall()
 
@@ -115,7 +114,6 @@ class ScheduledSubscriptionPushService:
 
         return {
             r.user_id: {
-                "lunch_time_minutes": r.lunch_time_minutes,
                 "language": _resolve_lang(r.language, r.language_code),
                 "timezone": r.timezone or "UTC",
                 "gender": r.gender or "male",
@@ -128,13 +126,11 @@ class ScheduledSubscriptionPushService:
         if not user_ids:
             return {}
         result = session.execute(
-            text(
-                """
+            text("""
                 SELECT user_id, fcm_token
                 FROM user_fcm_tokens
                 WHERE user_id = ANY(:ids) AND is_active = true
-                """
-            ),
+                """),
             {"ids": user_ids},
         ).fetchall()
         tokens: dict[str, list[str]] = {}
@@ -147,38 +143,45 @@ class ScheduledSubscriptionPushService:
     def _build_row(
         self,
         user_id: str,
-        days_left: int,
+        charge_at: datetime | None,
         tokens: list[str],
         pref: dict | None,
         now: datetime,
     ) -> dict | None:
+        if charge_at is None or charge_at <= now:
+            # No known charge moment, or the trial already converted — nothing
+            # to warn about.
+            return None
+
         tz_name = (pref or {}).get("timezone", "UTC")
         try:
             tz = ZoneInfo(tz_name)
         except Exception:
             tz = ZoneInfo("UTC")
 
-        scheduled_utc, scheduled_local_date = self._compute_scheduled_at(
-            now_utc=now,
-            tz=tz,
-            lunch_time_minutes=(pref or {}).get("lunch_time_minutes"),
-        )
+        # Fire shortly before the charge. If the sub only surfaced once we are
+        # already inside that lead window (e.g. loop downtime), send on the next
+        # tick — still before the charge.
+        scheduled_utc = charge_at - _CHARGE_LEAD
+        if scheduled_utc < now:
+            scheduled_utc = now
 
-        if scheduled_utc <= now:
-            # Window already passed today in this tz — skip; tomorrow's
-            # midnight run will pick it up if still in window.
-            return None
+        # Dedup date is pinned to the charge (stable per sub), so repeated ticks
+        # and the clamp above never produce a second row for the same user.
+        scheduled_local_date = charge_at.astimezone(tz).date()
 
         return {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
-            "notification_type": f"trial_expiry_{days_left}d",
+            # "_1d" selects the single trial-expiry message variant; the suffix
+            # is retained for dispatch routing and analytics continuity.
+            "notification_type": "trial_expiry_1d",
             "scheduled_date": scheduled_local_date,
             "scheduled_for_utc": scheduled_utc,
             "status": "pending",
             "context": {
                 "fcm_tokens": tokens,
-                "calorie_goal": 2000,    # non-zero sentinel; trial render ignores it
+                "calorie_goal": 2000,  # non-zero sentinel; trial render ignores it
                 "calories_consumed": 0,
                 "gender": (pref or {}).get("gender", "male"),
                 "language_code": (pref or {}).get("language", "en"),
@@ -186,34 +189,6 @@ class ScheduledSubscriptionPushService:
             "created_at": utc_now(),
             "expires_at": scheduled_utc + timedelta(days=2),
         }
-
-    @staticmethod
-    def _compute_scheduled_at(
-        now_utc: datetime,
-        tz: ZoneInfo,
-        lunch_time_minutes: int | None,
-    ) -> tuple[datetime, date]:
-        """Returns (UTC datetime to fire at, local date the push fires)."""
-        local_now = now_utc.astimezone(tz)
-        local_today = local_now.date()
-
-        if lunch_time_minutes is None:
-            fire_local = datetime.combine(local_today, _FALLBACK_FIRE_LOCAL, tz)
-        else:
-            minutes = lunch_time_minutes + _FIRE_OFFSET_MINUTES
-            hour, minute = divmod(minutes, 60)
-            # Wrap to next day if lunch+30 overflows past midnight (extreme edge).
-            extra_days, hour = divmod(hour, 24)
-            fire_local = datetime.combine(
-                local_today + timedelta(days=extra_days),
-                time(hour, minute),
-                tz,
-            )
-
-        return (
-            fire_local.astimezone(now_utc.tzinfo or ZoneInfo("UTC")),
-            fire_local.date(),
-        )
 
     # ---- insert ----------------------------------------------------------
 
