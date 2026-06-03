@@ -148,7 +148,7 @@ def test_render_trial_expiry_1d_en_female_returns_1_day_body():
 
     title, body = _render_message("trial_expiry_1d", 0, "female", "en")
     assert title == "Nutree"
-    assert "tomorrow" in body.lower()
+    assert "soon" in body.lower()
 
 
 def test_render_trial_expiry_2d_vi_male_returns_vietnamese():
@@ -164,7 +164,7 @@ def test_render_trial_expiry_1d_vi_female_returns_vietnamese():
 
     _, body = _render_message("trial_expiry_1d", 0, "female", "vi")
     assert "bạn ơi" in body
-    assert "mai" in body.lower()
+    assert "sắp" in body.lower()
 
 
 def test_render_unknown_type_falls_through_to_generic_stub():

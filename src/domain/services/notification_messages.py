@@ -52,7 +52,7 @@ NOTIFICATION_MESSAGES = {
                 },
                 "1d": {
                     "title": "Nutree",
-                    "body": "Last day, bro — trial ends tomorrow\nKeep your progress going 🔥",
+                    "body": "Heads up, bro — your free trial ends soon\nKeep your progress going 🔥",
                 },
             },
             "hydration_reminder": {
@@ -100,7 +100,7 @@ NOTIFICATION_MESSAGES = {
                 },
                 "1d": {
                     "title": "Nutree",
-                    "body": "Last day, mate — trial ends tomorrow\nKeep your progress going 🔥",
+                    "body": "Heads up, mate — your free trial ends soon\nKeep your progress going 🔥",
                 },
             },
             "hydration_reminder": {
@@ -150,7 +150,7 @@ NOTIFICATION_MESSAGES = {
                 },
                 "1d": {
                     "title": "Nutree",
-                    "body": "Mai hết trial rồi bro\nĐừng để mất tiến độ nha 🔥",
+                    "body": "Sắp hết free trial rồi bro\nĐừng để mất tiến độ nha 🔥",
                 },
             },
             "hydration_reminder": {
@@ -198,7 +198,7 @@ NOTIFICATION_MESSAGES = {
                 },
                 "1d": {
                     "title": "Nutree",
-                    "body": "Mai hết trial rồi bạn ơi\nĐừng để mất tiến độ nha 🔥",
+                    "body": "Sắp hết free trial rồi bạn ơi\nĐừng để mất tiến độ nha 🔥",
                 },
             },
             "hydration_reminder": {
