@@ -172,8 +172,11 @@ class PyMediatorEventBus(EventBus):
             return result
 
         except MealTrackException as e:
+            # Controlled application exceptions (not-found, validation, etc.) are
+            # converted to proper HTTP responses and logged by the API layer. Keep
+            # this at debug so routine 4xx control flow doesn't spam WARNING. The
+            # re-raise preserves all existing handling.
             logger.debug(f"Application exception handling {event_type.__name__}: {str(e)}")
-            logger.warning(f"Error handling {event_type.__name__}: {str(e)}")
             raise
         except Exception as e:
             logger.error(

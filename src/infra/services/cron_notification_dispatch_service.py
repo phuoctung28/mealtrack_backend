@@ -92,11 +92,12 @@ class CronNotificationDispatchService:
                 logger.warning("Failed to fetch hydration data batch: %s", exc)
 
         # Render messages per notification and group by (type, title, body)
-        groups: dict[tuple[str, str, str], dict[str, list[str]]] = defaultdict(
-            lambda: {"tokens": [], "ids": []}
+        groups: dict[tuple[str, str, str], dict[str, list]] = defaultdict(
+            lambda: {"tokens": [], "ids": [], "row_ids": []}
         )
-        sent_ids = []
-        failed_ids = []
+        sent_ids = []  # delivered (sent without FCM, or FCM batch confirmed success)
+        failed_ids = []  # no usable tokens — give up
+        retry_ids = []  # FCM batch failed wholesale — return to queue for next tick
 
         for notif in due:
             ctx = notif.context  # JSONB dict from PostgreSQL
@@ -134,7 +135,7 @@ class CronNotificationDispatchService:
                 group = groups[(notif.notification_type, title, body)]
                 group["tokens"].extend(tokens)
                 group["ids"].append(str(notif.id))
-                sent_ids.append(notif.id)
+                group["row_ids"].append(notif.id)
                 continue
             else:
                 # meal_reminder_* — real-time DB data
@@ -152,7 +153,7 @@ class CronNotificationDispatchService:
             group = groups[(notif.notification_type, title, body)]
             group["tokens"].extend(tokens)
             group["ids"].append(str(notif.id))
-            sent_ids.append(notif.id)
+            group["row_ids"].append(notif.id)
 
         # Batch FCM — 500 tokens per call.
         # DB stores trial_expiry_2d / trial_expiry_1d so the UNIQUE
@@ -167,6 +168,11 @@ class CronNotificationDispatchService:
                 "notification_count": str(len(group["ids"])),
             }
             tokens = group["tokens"]
+            # A batch is delivered only if every chunk's FCM call succeeds. A
+            # wholesale send failure (network/auth) returns success=False with no
+            # failed_tokens; those rows must NOT be marked sent or they are lost
+            # forever with zero delivery — return them to the queue to retry.
+            group_delivered = True
             for chunk in _chunked(tokens, 500):
                 result = self._firebase.send_multicast(
                     tokens=chunk,
@@ -175,16 +181,29 @@ class CronNotificationDispatchService:
                     notification_type=fcm_type,
                     data=data,
                 )
+                if not result.get("success"):
+                    group_delivered = False
                 if result.get("failed_tokens"):
                     await self._handle_failed_tokens(result["failed_tokens"])
+            if group_delivered:
+                sent_ids.extend(group["row_ids"])
+            else:
+                retry_ids.extend(group["row_ids"])
 
-        # Mark sent/failed
-        if sent_ids or failed_ids:
-            await asyncio.to_thread(self._mark_notifications, sent_ids, failed_ids)
+        # Mark sent / failed / retry
+        if sent_ids or failed_ids or retry_ids:
+            await asyncio.to_thread(
+                self._mark_notifications, sent_ids, failed_ids, retry_ids
+            )
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
-    def _mark_notifications(self, sent_ids: list[str], failed_ids: list[str]) -> None:
+    def _mark_notifications(
+        self,
+        sent_ids: list,
+        failed_ids: list,
+        retry_ids: list | None = None,
+    ) -> None:
         with UnitOfWork() as uow:
             if sent_ids:
                 uow.session.execute(
@@ -203,6 +222,17 @@ class CronNotificationDispatchService:
                         WHERE status = 'processing' AND id IN :ids
                         """).bindparams(bindparam("ids", expanding=True)),
                     {"ids": failed_ids},
+                )
+            if retry_ids:
+                # FCM send failed wholesale — return rows to the queue so the next
+                # cron tick re-claims and re-sends them instead of losing them.
+                uow.session.execute(
+                    text("""
+                        UPDATE notifications
+                        SET status = 'pending'
+                        WHERE status = 'processing' AND id IN :ids
+                        """).bindparams(bindparam("ids", expanding=True)),
+                    {"ids": retry_ids},
                 )
 
     def cleanup_expired_notifications(self) -> None:
