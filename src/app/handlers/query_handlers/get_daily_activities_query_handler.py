@@ -60,6 +60,7 @@ class GetDailyActivitiesQueryHandler(
         meal_activities: List[Dict[str, Any]] = []
         workout_activities: List[Dict[str, Any]] = []
 
+        fetch_ok = False
         try:
             async with AsyncUnitOfWork() as uow:
                 user_tz_str = await resolve_user_timezone_async(
@@ -80,6 +81,7 @@ class GetDailyActivitiesQueryHandler(
                 workout_activities = await self._get_workout_activities(
                     query, uow, tz, local_date
                 )
+                fetch_ok = True
         except Exception as e:
             logger.error(f"Error getting activities: {str(e)}", exc_info=True)
 
@@ -87,7 +89,9 @@ class GetDailyActivitiesQueryHandler(
         logger.info(
             f"Retrieved {len(activities)} activities for user {query.user_id} on {local_date}"
         )
-        if self.cache_service:
+        # Only cache a fully-successful fetch. Caching on the error path would
+        # pin an empty/partial feed for the whole TTL after a transient DB blip.
+        if self.cache_service and fetch_ok:
             await self.cache_service.set_json(cache_key, activities, ttl)
         return activities
 

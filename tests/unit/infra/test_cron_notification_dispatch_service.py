@@ -55,6 +55,53 @@ async def test_send_loop_marks_notifications_sent():
     )
 
 
+@pytest.mark.asyncio
+async def test_wholesale_fcm_failure_requeues_instead_of_marking_sent():
+    """A whole-batch FCM failure must requeue rows (pending), never mark 'sent'.
+
+    Regression guard: send_multicast returning success=False with no failed_tokens
+    (transient Firebase/network/auth outage) previously marked the notification
+    'sent' with zero delivery and no retry. The row must go to retry_ids instead.
+    """
+    from src.infra.services.cron_notification_dispatch_service import (
+        CronNotificationDispatchService,
+    )
+
+    mock_notif = MagicMock()
+    mock_notif.notification_type = "trial_expiry_2d"
+    mock_notif.context = {
+        "fcm_tokens": ["tok1"],
+        "gender": "male",
+        "language_code": "en",
+    }
+    mock_notif.id = "trial-notif-1"
+    mock_notif.user_id = "user-1"
+
+    mock_firebase = MagicMock()
+    mock_firebase.send_multicast = MagicMock(
+        return_value={"success": False, "reason": "send_error"}
+    )
+
+    svc = CronNotificationDispatchService.__new__(CronNotificationDispatchService)
+    svc._firebase = mock_firebase
+    svc._mark_notifications = MagicMock()
+
+    with patch(
+        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
+    ) as mock_qb, patch(
+        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
+    ) as mock_uow:
+        mock_qb.find_due_notifications.return_value = [mock_notif]
+        mock_uow.return_value.__enter__.return_value.session = MagicMock()
+
+        await svc._send_due_notifications(datetime(2026, 5, 17, tzinfo=UTC))
+
+    mock_firebase.send_multicast.assert_called_once()
+    sent_ids, failed_ids, retry_ids = svc._mark_notifications.call_args.args
+    assert "trial-notif-1" not in sent_ids, "must not mark sent on FCM failure"
+    assert "trial-notif-1" in retry_ids, "must requeue for retry on FCM failure"
+
+
 def test_render_message_daily_summary_zero_logs():
     from src.infra.services.cron_notification_dispatch_service import _render_message
 
