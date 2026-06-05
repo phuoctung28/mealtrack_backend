@@ -4,7 +4,7 @@
 
 **Goal:** Implement lifecycle email triggers (welcome, re-engagement, trial expiring, cancellation) using Resend.
 
-**Architecture:** Event-driven email system. WelcomeEmailHandler listens to UserOnboardedEvent. ScheduledEmailService runs daily for re-engagement and trial expiring. RevenueCat webhook triggers cancellation email.
+**Architecture:** Event-driven email system. WelcomeEmailHandler listens to UserOnboardedEvent. CronLifecycleEmailService runs daily for re-engagement and trial expiring. RevenueCat webhook triggers cancellation email.
 
 **Tech Stack:** Resend SDK, Jinja2 templates, PyMediator events, Alembic migrations
 
@@ -1312,18 +1312,18 @@ git commit -m "feat: add cancellation email to RevenueCat webhook"
 
 ---
 
-## Task 10: Create ScheduledEmailService
+## Task 10: Create CronLifecycleEmailService
 
 **Files:**
-- Create: `src/infra/services/scheduled_email_service.py`
-- Test: `tests/unit/infra/services/test_scheduled_email_service.py`
+- Create: `src/infra/services/cron_lifecycle_email_service.py`
+- Test: `tests/unit/infra/services/test_cron_lifecycle_email_service.py`
 
 - [ ] **Step 1: Write the test**
 
-Create `tests/unit/infra/services/test_scheduled_email_service.py`:
+Create `tests/unit/infra/services/test_cron_lifecycle_email_service.py`:
 
 ```python
-"""Tests for ScheduledEmailService."""
+"""Tests for CronLifecycleEmailService."""
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -1331,7 +1331,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.domain.ports.email_service_port import EmailResult
-from src.infra.services.scheduled_email_service import ScheduledEmailService
+from src.infra.services.cron_lifecycle_email_service import CronLifecycleEmailService
 
 
 @pytest.fixture
@@ -1344,7 +1344,7 @@ def mock_email_service():
 
 @pytest.fixture
 def scheduled_service(mock_email_service):
-    return ScheduledEmailService(email_service=mock_email_service)
+    return CronLifecycleEmailService(email_service=mock_email_service)
 
 
 @pytest.fixture
@@ -1414,12 +1414,12 @@ async def test_skips_if_recent_email_sent(scheduled_service, mock_email_service,
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/unit/infra/services/test_scheduled_email_service.py -v`
+Run: `pytest tests/unit/infra/services/test_cron_lifecycle_email_service.py -v`
 Expected: FAIL
 
-- [ ] **Step 3: Create ScheduledEmailService**
+- [ ] **Step 3: Create CronLifecycleEmailService**
 
-Create `src/infra/services/scheduled_email_service.py`:
+Create `src/infra/services/cron_lifecycle_email_service.py`:
 
 ```python
 """Scheduled email service for re-engagement and trial expiring emails."""
@@ -1440,7 +1440,7 @@ from src.infra.database.uow_async import AsyncUnitOfWork
 logger = logging.getLogger(__name__)
 
 
-class ScheduledEmailService:
+class CronLifecycleEmailService:
     """Checks for and sends scheduled lifecycle emails."""
 
     INACTIVITY_THRESHOLD_DAYS = 3
@@ -1570,14 +1570,14 @@ class ScheduledEmailService:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pytest tests/unit/infra/services/test_scheduled_email_service.py -v`
+Run: `pytest tests/unit/infra/services/test_cron_lifecycle_email_service.py -v`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/infra/services/scheduled_email_service.py tests/unit/infra/services/test_scheduled_email_service.py
-git commit -m "feat: add ScheduledEmailService for re-engagement and trial expiring"
+git add src/infra/services/cron_lifecycle_email_service.py tests/unit/infra/services/test_cron_lifecycle_email_service.py
+git commit -m "feat: add CronLifecycleEmailService for re-engagement and trial expiring"
 ```
 
 ---
@@ -1587,32 +1587,32 @@ git commit -m "feat: add ScheduledEmailService for re-engagement and trial expir
 **Files:**
 - Modify: `src/api/main.py`
 
-- [ ] **Step 1: Add scheduled email service to lifespan**
+- [ ] **Step 1: Add lifecycle email cron service to lifespan**
 
-In `src/api/main.py`, find the lifespan function and add the scheduled email service.
+In `src/api/main.py`, find the lifespan function and add the lifecycle email cron service.
 
 Add imports near top:
 
 ```python
-from src.infra.services.scheduled_email_service import ScheduledEmailService
+from src.infra.services.cron_lifecycle_email_service import CronLifecycleEmailService
 from src.infra.services.email_template_renderer import EmailTemplateRenderer
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
 from src.domain.services.email_service import EmailService
 ```
 
-In the lifespan function, after `scheduled_notification_service.start()`, add:
+In the lifespan function, after startup service initialization, add:
 
 ```python
-    # Start scheduled email service
+    # Start lifecycle email cron service
     email_adapter = ResendEmailAdapter()
     email_renderer = EmailTemplateRenderer()
     email_service = EmailService(email_adapter=email_adapter, template_renderer=email_renderer)
-    scheduled_email_service = ScheduledEmailService(email_service=email_service)
+    cron_lifecycle_email_service = CronLifecycleEmailService(email_service=email_service)
 
     # Run email check daily (integrate with existing scheduler or run on startup)
     # For now, run on startup and rely on cron/external scheduler for daily runs
     try:
-        await scheduled_email_service.check_and_send_emails()
+        await cron_lifecycle_email_service.check_and_send_emails()
     except Exception as e:
         logger.error(f"Scheduled email check failed: {e}")
 ```
@@ -1627,7 +1627,7 @@ Check logs for "Running scheduled email check" message.
 
 ```bash
 git add src/api/main.py
-git commit -m "feat: register ScheduledEmailService in app lifespan"
+git commit -m "feat: wire CronLifecycleEmailService to email cron"
 ```
 
 ---
@@ -1817,7 +1817,7 @@ git commit -m "docs: add email triggers documentation"
 | 7 | EmailService | email_service.py |
 | 8 | WelcomeEmailHandler | welcome_email_handler.py |
 | 9 | Webhook integration | webhooks.py |
-| 10 | ScheduledEmailService | scheduled_email_service.py |
+| 10 | CronLifecycleEmailService | cron_lifecycle_email_service.py |
 | 11 | Register in main.py | main.py |
 | 12 | Integration tests | test_email_flow.py |
 | 13 | Documentation | docs, .env.example |

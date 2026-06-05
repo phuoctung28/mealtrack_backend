@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 
 from src.domain.services.prompts.prompt_constants import VISION_DECOMPOSITION_RULES
-from src.infra.services.ai.prompts.system_prompts import SystemPrompts
+from src.domain.services.prompts.system_prompts import SystemPrompts
 
 logger = logging.getLogger(__name__)
 

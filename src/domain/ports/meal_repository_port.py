@@ -28,7 +28,7 @@ class MealRepositoryPort(ABC):
 
         Args:
             meal_id: The ID of the meal to find
-            projection: Optional projection hint (e.g. MealProjection from infra layer)
+            projection: Optional projection hint (e.g. MealProjection)
                         to control which relationships are loaded.
 
         Returns:
@@ -90,7 +90,7 @@ class MealRepositoryPort(ABC):
             date_obj: The date to filter by (date object)
             user_id: Optional user ID to filter meals by specific user
             limit: Maximum number of results
-            projection: Optional projection hint (e.g. MealProjection from infra layer)
+            projection: Optional projection hint (e.g. MealProjection)
                         to control which relationships are loaded.
 
         Returns:

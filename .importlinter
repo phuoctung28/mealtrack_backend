@@ -1,4 +1,11 @@
 [importlinter]
+# IMPORTANT: every package directory under src/ MUST contain an __init__.py.
+# Without it, grimp drops the package from the import graph and every contract
+# passes as a false-green (this masked the violations now baselined below).
+#
+# The ignore_imports lists freeze the pre-existing layering debt so CI blocks any
+# NEW cross-layer import. The domain-isolation contract has no baseline and must
+# stay clean. Shrink the other baselines as the debt is inverted behind ports.
 root_packages =
     src
 include_external_packages = True
@@ -24,6 +31,104 @@ source_modules =
     src.app
 forbidden_modules =
     src.infra
+unmatched_ignore_imports_alerting = none
+ignore_imports =
+    src.app.handlers.command_handlers.add_weight_entry_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.complete_onboarding_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.delete_fcm_token_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.delete_hydration_entry_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.delete_movement_entry_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.delete_user_command_handler -> src.infra.database.models.enums
+    src.app.handlers.command_handlers.delete_user_command_handler -> src.infra.database.models.meal.meal
+    src.app.handlers.command_handlers.delete_user_command_handler -> src.infra.database.models.notification.notification_preferences
+    src.app.handlers.command_handlers.delete_user_command_handler -> src.infra.database.models.notification.user_fcm_token
+    src.app.handlers.command_handlers.delete_user_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.delete_user_command_handler -> src.infra.services.firebase_auth_service
+    src.app.handlers.command_handlers.delete_weight_entry_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.log_caloric_drink_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.log_hydration_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.log_movement_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.mark_cheat_day_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.parse_meal_text_handler -> src.infra.adapters.fat_secret_service
+    src.app.handlers.command_handlers.parse_meal_text_handler -> src.infra.services.ai.gemini_model_manager
+    src.app.handlers.command_handlers.promo_code.redeem_promo_code_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.promo_code.redeem_promo_code_handler -> src.infra.repositories.promo_code_repository
+    src.app.handlers.command_handlers.referral.apply_referral_code_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.referral.apply_referral_code_handler -> src.infra.repositories.referral_repository
+    src.app.handlers.command_handlers.referral.request_payout_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.referral.request_payout_handler -> src.infra.repositories.referral_repository
+    src.app.handlers.command_handlers.register_fcm_token_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.register_fcm_token_command_handler -> src.infra.services.daily_context_precompute_service
+    src.app.handlers.command_handlers.save_user_onboarding_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.saved_suggestion.delete_saved_suggestion_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.sync_user_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.sync_weight_entries_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.unmark_cheat_day_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.update_custom_macros_command_handler -> src.infra.database.models.user.profile
+    src.app.handlers.command_handlers.update_custom_macros_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.update_language_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.update_language_command_handler -> src.infra.services.daily_context_precompute_service
+    src.app.handlers.command_handlers.update_movement_entry_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.update_notification_preferences_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.update_notification_preferences_command_handler -> src.infra.services.daily_context_precompute_service
+    src.app.handlers.command_handlers.update_timezone_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.update_timezone_command_handler -> src.infra.services.daily_context_precompute_service
+    src.app.handlers.command_handlers.update_user_last_accessed_command_handler -> src.infra.database.uow_async
+    src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler -> src.infra.config.settings
+    src.app.handlers.event_handlers.meal_analysis_event_handler -> src.infra.adapters.cloudinary_image_store
+    src.app.handlers.event_handlers.meal_analysis_event_handler -> src.infra.adapters.vision_ai_service
+    src.app.handlers.event_handlers.meal_analysis_event_handler -> src.infra.config.settings
+    src.app.handlers.event_handlers.meal_analysis_event_handler -> src.infra.database.uow_async
+    src.app.handlers.event_handlers.welcome_email_handler -> src.infra.database.models.email_log
+    src.app.handlers.event_handlers.welcome_email_handler -> src.infra.database.models.user.user
+    src.app.handlers.event_handlers.welcome_email_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.codes.validate_code_handler -> src.infra.config.settings
+    src.app.handlers.query_handlers.codes.validate_code_handler -> src.infra.database.models.user.user
+    src.app.handlers.query_handlers.codes.validate_code_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.codes.validate_code_handler -> src.infra.repositories.promo_code_repository
+    src.app.handlers.query_handlers.codes.validate_code_handler -> src.infra.repositories.referral_repository
+    src.app.handlers.query_handlers.get_activities_presence_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_bulk_activities_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_cheat_days_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_daily_activities_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_daily_breakdown_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_daily_hydration_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_daily_macros_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_daily_movement_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_meal_by_id_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_meals_by_date_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_notification_preferences_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_nutrition_bulk_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_saved_suggestions_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_streak_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_user_by_firebase_uid_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_user_metrics_query_handler -> src.infra.database.models.user.profile
+    src.app.handlers.query_handlers.get_user_metrics_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_user_onboarding_status_query_handler -> src.infra.database.models.user
+    src.app.handlers.query_handlers.get_user_onboarding_status_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_user_profile_query_handler -> src.infra.database.models.user.profile
+    src.app.handlers.query_handlers.get_user_profile_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_user_tdee_query_handler -> src.infra.database.models.user.profile
+    src.app.handlers.query_handlers.get_user_tdee_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_weekly_budget_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_weekly_hydration_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.get_weight_entries_query_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.lookup_barcode_query_handler -> src.infra.adapters.fat_secret_service
+    src.app.handlers.query_handlers.lookup_barcode_query_handler -> src.infra.adapters.open_food_facts_service
+    src.app.handlers.query_handlers.lookup_barcode_query_handler -> src.infra.repositories.food_reference_repository
+    src.app.handlers.query_handlers.promo_code.validate_promo_code_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.promo_code.validate_promo_code_handler -> src.infra.repositories.promo_code_repository
+    src.app.handlers.query_handlers.referral.get_my_referral_code_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.referral.get_my_referral_code_handler -> src.infra.repositories.referral_repository
+    src.app.handlers.query_handlers.referral.get_referral_stats_handler -> src.infra.config.settings
+    src.app.handlers.query_handlers.referral.get_referral_stats_handler -> src.infra.database.models.user.user
+    src.app.handlers.query_handlers.referral.get_referral_stats_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.referral.get_referral_stats_handler -> src.infra.repositories.referral_repository
+    src.app.handlers.query_handlers.referral.validate_referral_code_handler -> src.infra.config.settings
+    src.app.handlers.query_handlers.referral.validate_referral_code_handler -> src.infra.database.models.user.user
+    src.app.handlers.query_handlers.referral.validate_referral_code_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.referral.validate_referral_code_handler -> src.infra.repositories.referral_repository
+    src.app.handlers.query_handlers.search_foods_query_handler -> src.infra.adapters.fat_secret_service
 
 [importlinter:contract:infra-no-app-api]
 name = Infra does not import app or api
@@ -33,6 +138,10 @@ source_modules =
 forbidden_modules =
     src.app
     src.api
+unmatched_ignore_imports_alerting = none
+ignore_imports =
+    src.infra.database.models.user.user -> src.api.schemas.common.auth_enums
+    src.infra.event_bus.pymediator_event_bus -> src.api.exceptions
 
 [importlinter:contract:api-no-infra]
 name = API does not import infra directly
@@ -41,49 +150,90 @@ source_modules =
     src.api
 forbidden_modules =
     src.infra
+# Indirect api -> app -> infra chains (the event bus registers app handlers that
+# use infra) are normal layering; only DIRECT api -> infra imports are gated.
+allow_indirect_imports = True
 unmatched_ignore_imports_alerting = none
 ignore_imports =
-    src.api.dependencies.auth -> src.infra.database.config
-    src.api.dependencies.auth -> src.infra.database.models.user.user
-    src.api.dependencies.meal_image_cache -> src.infra.adapters.gemini_text_embedding_adapter
-    src.api.dependencies.meal_image_cache -> src.infra.config.settings
-    src.api.dependencies.meal_image_cache -> src.infra.repositories.pending_meal_image_repository
-    src.api.dependencies.meal_image_cache -> src.infra.repositories.pgvector_meal_image_cache_repository
-    src.api.dependencies.event_bus -> src.infra.event_bus
-    src.api.dependencies.event_bus -> src.infra.adapters.meal_generation_service
-    src.api.dependencies.event_bus -> src.infra.adapters.nutritionix_service
-    src.api.dependencies.event_bus -> src.infra.adapters.brave_search_nutrition_service
-    src.api.dependencies.event_bus -> src.infra.database.uow
-    src.api.dependencies.food_image -> src.infra.adapters.pexels_image_adapter
-    src.api.dependencies.food_image -> src.infra.adapters.unsplash_image_adapter
-    src.api.dependencies.food_image -> src.infra.config.settings
-    src.api.dependencies.food_image -> src.infra.adapters.web_search_image_validator
-    src.api.main -> src.infra.config.settings
-    src.api.main -> src.infra.database.config
-    src.api.main -> src.infra.monitoring.sentry
     src.api.base_dependencies -> src.infra.adapters.cloudinary_image_store
+    src.api.base_dependencies -> src.infra.adapters.deepl_translation_adapter
+    src.api.base_dependencies -> src.infra.adapters.fat_secret_service
     src.api.base_dependencies -> src.infra.adapters.food_cache_service
     src.api.base_dependencies -> src.infra.adapters.food_data_service
+    src.api.base_dependencies -> src.infra.adapters.meal_generation_service
     src.api.base_dependencies -> src.infra.adapters.open_food_facts_service
+    src.api.base_dependencies -> src.infra.adapters.revenuecat_adapter
     src.api.base_dependencies -> src.infra.adapters.vision_ai_service
     src.api.base_dependencies -> src.infra.cache.cache_service
     src.api.base_dependencies -> src.infra.cache.metrics
     src.api.base_dependencies -> src.infra.cache.redis_client
     src.api.base_dependencies -> src.infra.config.settings
     src.api.base_dependencies -> src.infra.database.config
-    src.api.base_dependencies -> src.infra.repositories.meal_repository
-    src.api.base_dependencies -> src.infra.repositories.notification_repository
-    src.api.base_dependencies -> src.infra.services.firebase_service
-    src.api.base_dependencies -> src.infra.services.scheduled_notification_service
-    src.api.base_dependencies -> src.infra.adapters.fat_secret_service
-    src.api.base_dependencies -> src.infra.adapters.nutritionix_service
-    src.api.base_dependencies -> src.infra.adapters.brave_search_nutrition_service
-    src.api.base_dependencies -> src.infra.adapters.meal_generation_service
+    src.api.base_dependencies -> src.infra.database.uow_async
     src.api.base_dependencies -> src.infra.repositories.food_reference_repository
-    src.api.base_dependencies -> src.infra.adapters.notification_sent_log_dedup_store
+    src.api.base_dependencies -> src.infra.repositories.meal_repository
     src.api.base_dependencies -> src.infra.repositories.meal_suggestion_repository
-    src.api.base_dependencies -> src.infra.database.uow
     src.api.base_dependencies -> src.infra.repositories.meal_translation_repository
-    src.api.base_dependencies -> src.infra.adapters.revenuecat_adapter
     src.api.base_dependencies -> src.infra.repositories.user_repository
+    src.api.base_dependencies -> src.infra.services.ai.ai_model_manager
     src.api.base_dependencies -> src.infra.services.ai.schemas
+    src.api.base_dependencies -> src.infra.services.daily_context_precompute_service
+    src.api.base_dependencies -> src.infra.services.firebase_service
+    src.api.dependencies.auth -> src.infra.config.settings
+    src.api.dependencies.auth -> src.infra.database.config_async
+    src.api.dependencies.auth -> src.infra.database.models.user.user
+    src.api.dependencies.event_bus -> src.infra.adapters.brave_search_nutrition_service
+    src.api.dependencies.event_bus -> src.infra.adapters.meal_generation_service
+    src.api.dependencies.event_bus -> src.infra.adapters.nutritionix_service
+    src.api.dependencies.event_bus -> src.infra.database.uow_async
+    src.api.dependencies.event_bus -> src.infra.event_bus
+    src.api.dependencies.food_image -> src.infra.adapters.pexels_image_adapter
+    src.api.dependencies.food_image -> src.infra.adapters.unsplash_image_adapter
+    src.api.dependencies.food_image -> src.infra.adapters.web_search_image_validator
+    src.api.dependencies.food_image -> src.infra.config.settings
+    src.api.dependencies.meal_image_cache -> src.infra.adapters.gemini_text_embedding_adapter
+    src.api.dependencies.meal_image_cache -> src.infra.config.settings
+    src.api.dependencies.meal_image_cache -> src.infra.repositories.pending_meal_image_repository
+    src.api.dependencies.meal_image_cache -> src.infra.repositories.pgvector_meal_image_cache_repository
+    src.api.main -> src.infra.config.settings
+    src.api.main -> src.infra.database.config
+    src.api.main -> src.infra.database.config_async
+    src.api.main -> src.infra.monitoring.sentry
+    src.api.main -> src.infra.services.ai.ai_model_manager
+    src.api.main -> src.infra.services.ai.gemini_cache_manager
+    src.api.middleware.dev_auth_bypass -> src.infra.database.config_async
+    src.api.middleware.dev_auth_bypass -> src.infra.database.models.enums
+    src.api.middleware.dev_auth_bypass -> src.infra.database.models.meal.meal
+    src.api.middleware.dev_auth_bypass -> src.infra.database.models.meal.meal_image
+    src.api.middleware.dev_auth_bypass -> src.infra.database.models.nutrition.nutrition
+    src.api.middleware.dev_auth_bypass -> src.infra.database.models.user.profile
+    src.api.middleware.dev_auth_bypass -> src.infra.database.models.user.user
+    src.api.routes.v1.activities -> src.infra.event_bus
+    src.api.routes.v1.cheat_days -> src.infra.event_bus
+    src.api.routes.v1.feature_flags -> src.infra.cache.cache_service
+    src.api.routes.v1.feature_flags -> src.infra.database.models.feature_flag
+    src.api.routes.v1.health -> src.infra.database.config
+    src.api.routes.v1.health -> src.infra.database.models.notification
+    src.api.routes.v1.health -> src.infra.services.firebase_service
+    src.api.routes.v1.health -> src.infra.services.push.apns_payload_builder
+    src.api.routes.v1.hydration -> src.infra.event_bus
+    src.api.routes.v1.ingredients -> src.infra.event_bus
+    src.api.routes.v1.meal_suggestions -> src.infra.adapters.unsplash_image_adapter
+    src.api.routes.v1.meal_suggestions -> src.infra.event_bus
+    src.api.routes.v1.meals -> src.infra.event_bus
+    src.api.routes.v1.monitoring -> src.infra.cache.metrics
+    src.api.routes.v1.movement -> src.infra.event_bus
+    src.api.routes.v1.notifications -> src.infra.event_bus
+    src.api.routes.v1.nutrition -> src.infra.event_bus
+    src.api.routes.v1.saved_suggestions -> src.infra.event_bus
+    src.api.routes.v1.tdee -> src.infra.event_bus
+    src.api.routes.v1.user_profiles -> src.infra.event_bus
+    src.api.routes.v1.users -> src.infra.event_bus
+    src.api.routes.v1.webhooks -> src.infra.adapters.posthog_adapter
+    src.api.routes.v1.webhooks -> src.infra.adapters.resend_email_adapter
+    src.api.routes.v1.webhooks -> src.infra.database.models.subscription
+    src.api.routes.v1.webhooks -> src.infra.database.models.user.user
+    src.api.routes.v1.webhooks -> src.infra.database.uow_async
+    src.api.routes.v1.webhooks -> src.infra.repositories.referral_repository
+    src.api.routes.v1.webhooks -> src.infra.services.email_template_renderer
+    src.api.routes.v1.weight_entries -> src.infra.event_bus

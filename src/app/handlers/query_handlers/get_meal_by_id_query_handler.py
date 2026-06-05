@@ -10,7 +10,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetMealByIdQuery
 from src.domain.model.meal import Meal
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.meal_repository import MealProjection
+from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 

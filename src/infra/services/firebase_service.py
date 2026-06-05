@@ -1,23 +1,31 @@
 """
 Firebase Admin SDK service for push notifications.
 
-Data-only FCM contract: messages carry title/body in `data`, plus `aps.alert`
-for iOS native display. Mobile foreground/background handlers read from
-`message.data` and render via `flutter_local_notifications`.
+FCM contract: messages carry title/body in `data` for mobile handlers, plus
+`aps.alert` for iOS native display.
 """
 
 import json
 import logging
 import os
-from typing import Dict, List, Optional, Any
+from typing import Any
 
 import firebase_admin
 from firebase_admin import credentials, messaging
 
-from src.infra.services.push.apns_payload_builder import build_apns_config
 from src.infra.services.push.android_payload_builder import build_android_config
+from src.infra.services.push.apns_payload_builder import build_apns_config
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_display_text(title: str | None, body: str | None) -> tuple[str, str]:
+    """Return stripped display text or fail before sending a bad notification."""
+    display_title = title.strip() if isinstance(title, str) else ""
+    display_body = body.strip() if isinstance(body, str) else ""
+    if not display_title or not display_body:
+        raise ValueError("Notification title and body must be non-empty")
+    return display_title, display_body
 
 
 class FirebaseService:
@@ -42,7 +50,8 @@ class FirebaseService:
                     logger.info("Firebase Admin SDK initialized successfully")
                 else:
                     logger.warning(
-                        "No Firebase service account key found. Push notifications will be disabled."
+                        "No Firebase service account key found. "
+                        "Push notifications will be disabled."
                     )
             else:
                 logger.info("Firebase Admin SDK already initialized")
@@ -50,7 +59,7 @@ class FirebaseService:
             logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
             raise e
 
-    def _get_service_account_key(self) -> Optional[Dict[str, Any]]:
+    def _get_service_account_key(self) -> dict[str, Any] | None:
         """Get Firebase service account key from environment variables."""
         # Try to get from JSON string in environment variable
         service_account_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
@@ -65,9 +74,9 @@ class FirebaseService:
         service_account_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH")
         if service_account_path and os.path.exists(service_account_path):
             try:
-                with open(service_account_path, "r") as f:
+                with open(service_account_path) as f:
                     return json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
+            except (json.JSONDecodeError, OSError) as e:
                 logger.error(f"Error reading Firebase service account file: {e}")
                 return None
 
@@ -79,9 +88,9 @@ class FirebaseService:
         title: str,
         body: str,
         notification_type: str,
-        data: Optional[Dict[str, str]] = None,
-        tokens: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        data: dict[str, str] | None = None,
+        tokens: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
         Send push notification to user's devices.
 
@@ -137,34 +146,36 @@ class FirebaseService:
         return self._send_to_tokens(tokens, title, body, message_data)
 
     def _send_to_tokens(
-        self, tokens: List[str], title: str, body: str, data: Dict[str, str]
-    ) -> Dict[str, Any]:
+        self, tokens: list[str], title: str, body: str, data: dict[str, str]
+    ) -> dict[str, Any]:
         """Send notification to specific FCM tokens.
 
-        Data-only message: title/body injected into `data` so the mobile
-        message handler renders the notification through FLN (foreground +
-        Android background). iOS background/terminated relies on
-        `aps.alert` + `aps.interruption-level` for native display.
+        Title/body are injected into `data` for mobile handlers and mirrored
+        into APNs alert fields for iOS background notifications.
         """
         try:
+            display_title, display_body = _validate_display_text(title, body)
+
             # Ensure all data values are strings; inject title/body for mobile.
             string_data = {k: str(v) for k, v in data.items()} if data else {}
-            string_data["title"] = title
-            string_data["body"] = body
+            string_data["title"] = display_title
+            string_data["body"] = display_body
 
-            # Create multicast message (data-only — no top-level notification field)
+            # Create multicast message with no top-level notification field.
             message = messaging.MulticastMessage(
                 data=string_data,
                 tokens=tokens,
                 android=build_android_config(),
-                apns=build_apns_config(title=title, body=body),
+                apns=build_apns_config(title=display_title, body=display_body),
             )
 
             # Send the message
             response = messaging.send_each_for_multicast(message)
 
             logger.info(
-                f"Notification sent: {response.success_count} successful, {response.failure_count} failed"
+                "Notification sent: %s successful, %s failed",
+                response.success_count,
+                response.failure_count,
             )
 
             # Handle failed tokens
@@ -196,8 +207,8 @@ class FirebaseService:
             return {"success": False, "reason": "send_error", "error": str(e)}
 
     def send_to_topic(
-        self, topic: str, title: str, body: str, data: Optional[Dict[str, str]] = None
-    ) -> Dict[str, Any]:
+        self, topic: str, title: str, body: str, data: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         """
         Send notification to a topic.
 
@@ -214,18 +225,20 @@ class FirebaseService:
             if not firebase_admin._apps:
                 return {"success": False, "reason": "firebase_not_initialized"}
 
-            # Prepare data payload (data-only contract — title/body injected for mobile).
+            display_title, display_body = _validate_display_text(title, body)
+
+            # Prepare data payload for mobile handlers.
             message_data = {k: str(v) for k, v in (data or {}).items()}
             message_data["topic"] = topic
-            message_data["title"] = title
-            message_data["body"] = body
+            message_data["title"] = display_title
+            message_data["body"] = display_body
 
             # Create message (no top-level notification field)
             message = messaging.Message(
                 data=message_data,
                 topic=topic,
                 android=build_android_config(),
-                apns=build_apns_config(title=title, body=body),
+                apns=build_apns_config(title=display_title, body=display_body),
             )
 
             # Send the message

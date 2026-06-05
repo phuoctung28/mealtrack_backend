@@ -14,7 +14,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.schemas.meal_schemas import ParseMealTextResponseDto, ParsedFoodItemDto
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 from src.infra.services.ai.gemini_model_manager import GeminiModelManager
-from src.infra.services.ai.prompts.system_prompts import SystemPrompts
+from src.domain.services.prompts.system_prompts import SystemPrompts
 from src.infra.adapters.fat_secret_service import get_fat_secret_service
 from src.domain.services.nutrition_calculation_service import (
     scale_per_100g_nutrition,

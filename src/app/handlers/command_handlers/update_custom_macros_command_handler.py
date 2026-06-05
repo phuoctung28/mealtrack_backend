@@ -6,8 +6,7 @@ from typing import Optional
 from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_custom_macros_command import UpdateCustomMacrosCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.cache.cache_keys import CacheKeys
-from src.domain.ports.cache_port import CachePort
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -18,8 +17,8 @@ logger = logging.getLogger(__name__)
 class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, None]):
     """Set or clear custom macro overrides on user profile."""
 
-    def __init__(self, cache_service: Optional[CachePort] = None):
-        self.cache_service = cache_service
+    def __init__(self, cache_invalidation: Optional[CacheInvalidationService] = None):
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, command: UpdateCustomMacrosCommand) -> None:
         async with AsyncUnitOfWork() as uow:
@@ -54,18 +53,6 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
             action = "cleared" if non_null_count == 0 else "set"
             logger.info(f"Custom macros {action} for user {command.user_id}")
 
-        if self.cache_service:
-            tdee_key, _ = CacheKeys.user_tdee(command.user_id)
-            await self.cache_service.invalidate(tdee_key)
-            profile_key, _ = CacheKeys.user_profile(command.user_id)
-            await self.cache_service.invalidate(profile_key)
-            # Invalidate both the server's current week and adjacent week to cover
-            # timezone skew: server UTC date may differ from user's local date.
-            from datetime import date, timedelta
-
-            today = date.today()
-            this_week_start = today - timedelta(days=today.weekday())
-            next_week_start = this_week_start + timedelta(weeks=1)
-            for week_start in (this_week_start, next_week_start):
-                weekly_key, _ = CacheKeys.weekly_budget(command.user_id, week_start)
-                await self.cache_service.invalidate(weekly_key)
+        # Synchronous invalidation guarantees Redis is cleared before the response returns
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_custom_macros_update(command.user_id)

@@ -14,9 +14,7 @@ from src.api.exceptions import (
 from src.app.commands.meal import EditMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import MealEditedEvent
-from src.app.events.meal.meal_cache_invalidation_required_event import (
-    MealCacheInvalidationRequiredEvent,
-)
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition import FoodItem, Macros
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
@@ -29,9 +27,13 @@ logger = logging.getLogger(__name__)
 class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
     """Handler for editing meal ingredients."""
 
-    def __init__(self, uow: UnitOfWorkPort, event_bus: Any):
+    def __init__(
+        self,
+        uow: UnitOfWorkPort,
+        cache_invalidation: Optional[CacheInvalidationService] = None,
+    ):
         self.uow = uow
-        self.event_bus = event_bus
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, command: EditMealCommand) -> Dict[str, Any]:
         """Handle meal editing operations."""
@@ -71,13 +73,8 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, Dict[str, Any]]):
                 await uow.commit()
 
                 meal_date = (saved_meal.created_at or utc_now()).date()
-                await self.event_bus.publish(
-                    MealCacheInvalidationRequiredEvent(
-                        aggregate_id=saved_meal.user_id,
-                        user_id=saved_meal.user_id,
-                        meal_date=meal_date,
-                    )
-                )
+                if self.cache_invalidation:
+                    await self.cache_invalidation.after_meal_write(saved_meal.user_id, meal_date)
 
                 # 6. Calculate nutrition delta for event
                 nutrition_delta = self._calculate_nutrition_delta(

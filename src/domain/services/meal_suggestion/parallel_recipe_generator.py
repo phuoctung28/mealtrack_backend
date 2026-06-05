@@ -25,7 +25,7 @@ from src.domain.services.meal_suggestion.nutrition_lookup_service import (
 from src.domain.services.meal_suggestion.recipe_attempt_builder import (
     attempt_recipe_generation,
 )
-from src.infra.services.ai.prompts.system_prompts import SystemPrompts
+from src.domain.services.prompts.system_prompts import SystemPrompts
 
 logger = logging.getLogger(__name__)
 

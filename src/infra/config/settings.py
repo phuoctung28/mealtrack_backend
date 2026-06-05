@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     MIGRATION_RETRY_ATTEMPTS: int = Field(default=3)
     MIGRATION_RETRY_DELAY: float = Field(default=2.0)
 
+    # Admin authorization — comma-separated emails allowed to call privileged
+    # endpoints (e.g. feature-flag mutations). Empty means no admins.
+    ADMIN_EMAILS: str = Field(default="")
+
+    # Shared service token for infra monitoring endpoints (health pool/connection
+    # stats, cache metrics) — scrapers send it as the X-Monitoring-Token header.
+    # Empty = those endpoints are closed to everyone (fail-closed).
+    MONITORING_API_TOKEN: str = Field(default="")
+
     # Database configuration
     DATABASE_URL: str | None = Field(default=None)
     DB_USER: str = Field(default="nutree")

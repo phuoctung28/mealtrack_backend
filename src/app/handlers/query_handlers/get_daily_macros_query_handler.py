@@ -21,7 +21,7 @@ from src.domain.utils.timezone_utils import (
 )
 from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.meal_repository import MealProjection
+from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +115,20 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 consumed_water_ml = 0
                 water_goal_ml = 2000
 
+            # Fetch movement kcal burned for this day
+            movement_kcal_burned = 0.0
+            try:
+                from datetime import time, timezone as tz_module
+                start_local = datetime.combine(target_date, time.min, tzinfo=user_tz)
+                end_local = start_local + timedelta(days=1)
+                movement_kcal_burned = await uow.movement_entries.sum_included_kcal_for_range(
+                    query.user_id,
+                    start_local.astimezone(tz_module.utc),
+                    end_local.astimezone(tz_module.utc),
+                )
+            except Exception as exc:
+                logger.warning("Failed to fetch movement data for user %s: %s", query.user_id, exc)
+
         # TDEE lookup — behind Redis cache, rarely opens DB
         target_calories = None
         target_macros = None
@@ -142,10 +156,15 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 exc_info=True,
             )
 
+        food_calories = total_calories
+        net_calories = food_calories - movement_kcal_burned
+
         result = {
             "date": target_date.isoformat(),
             "user_id": query.user_id,
-            "total_calories": round(total_calories, 1),
+            "total_calories": round(net_calories, 1),
+            "food_calories": round(food_calories, 1),
+            "movement_kcal_burned": round(movement_kcal_burned, 1),
             "total_protein": round(total_protein, 1),
             "total_carbs": round(total_carbs, 1),
             "total_fat": round(total_fat, 1),
@@ -171,7 +190,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 weekly_budget,  # pre-fetched above
                 target_calories,
                 target_macros,
-                total_calories,
+                net_calories,
                 bmr,
             )
             if weekly_context:

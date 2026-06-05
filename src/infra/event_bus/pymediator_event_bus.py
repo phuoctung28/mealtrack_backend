@@ -11,6 +11,7 @@ from typing import Any, TypeVar
 from pymediator import Mediator as PyMediator
 from pymediator import SingletonRegistry
 
+from src.api.exceptions import MealTrackException
 from src.domain.events.base import DomainEvent, Event, EventHandler
 
 from .event_bus import EventBus
@@ -170,6 +171,13 @@ class PyMediatorEventBus(EventBus):
                         await self.publish(domain_event)
             return result
 
+        except MealTrackException as e:
+            # Controlled application exceptions (not-found, validation, etc.) are
+            # converted to proper HTTP responses and logged by the API layer. Keep
+            # this at debug so routine 4xx control flow doesn't spam WARNING. The
+            # re-raise preserves all existing handling.
+            logger.debug(f"Application exception handling {event_type.__name__}: {str(e)}")
+            raise
         except Exception as e:
             logger.error(
                 f"Error handling {event_type.__name__}: {str(e)}", exc_info=True

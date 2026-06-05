@@ -1,9 +1,8 @@
 """Integration-style snapshot tests for FirebaseService payload construction.
 
-Verifies that the data-only contract holds: both `_send_to_tokens` (multicast)
-and `send_to_topic` produce messages with title/body in `data`, no top-level
-notification field, and APNs `interruption-level: time-sensitive` in the
-payload body (not in headers).
+Verifies that both `_send_to_tokens` (multicast) and `send_to_topic` produce
+messages with title/body in `data`, no top-level notification field, and APNs
+display text plus `interruption-level: time-sensitive` in the payload body.
 """
 
 from unittest.mock import MagicMock, patch
@@ -29,7 +28,7 @@ class TestFirebaseServicePayload:
 
         sent_msg = mock_send.call_args[0][0]
 
-        # Data-only: no top-level notification field
+        # No top-level notification field.
         assert sent_msg.notification is None
 
         # Title/body migrated into data dict
@@ -43,6 +42,10 @@ class TestFirebaseServicePayload:
             apns_dict["payload"]["aps"]["interruption-level"] == "time-sensitive"
         )
         assert "apns-interruption-level" not in apns_dict.get("headers", {})
+        assert sent_msg.data["title"] == "T"
+        assert sent_msg.data["body"] == "B"
+        assert apns_dict["payload"]["aps"]["alert"]["title"] == "T"
+        assert apns_dict["payload"]["aps"]["alert"]["body"] == "B"
 
     def test_send_to_topic_data_only_no_notification_field(self):
         svc = FirebaseService.__new__(FirebaseService)
@@ -57,7 +60,7 @@ class TestFirebaseServicePayload:
 
         sent_msg = mock_send.call_args[0][0]
 
-        # Data-only contract
+        # No top-level notification field.
         assert sent_msg.notification is None
         assert sent_msg.data["title"] == "T"
         assert sent_msg.data["body"] == "B"
@@ -67,3 +70,39 @@ class TestFirebaseServicePayload:
         assert (
             apns_dict["payload"]["aps"]["interruption-level"] == "time-sensitive"
         )
+        assert apns_dict["payload"]["aps"]["alert"]["title"] == "T"
+        assert apns_dict["payload"]["aps"]["alert"]["body"] == "B"
+
+    def test_send_to_tokens_rejects_blank_ios_display_text(self):
+        svc = FirebaseService.__new__(FirebaseService)
+        with patch(
+            "src.infra.services.firebase_service.firebase_admin"
+        ) as mock_admin, patch(
+            "src.infra.services.firebase_service.messaging.send_each_for_multicast"
+        ) as mock_send:
+            mock_admin._apps = {"default": object()}
+            mock_send.return_value = MagicMock(
+                success_count=1, failure_count=0, responses=[]
+            )
+            result = svc._send_to_tokens(["tok"], "", "  ", {"type": "daily_summary"})
+
+        assert result["success"] is False
+        assert result["reason"] == "send_error"
+        assert "title and body must be non-empty" in result["error"]
+        mock_send.assert_not_called()
+
+    def test_send_to_topic_rejects_blank_ios_display_text(self):
+        svc = FirebaseService.__new__(FirebaseService)
+        with patch(
+            "src.infra.services.firebase_service.firebase_admin"
+        ) as mock_admin, patch(
+            "src.infra.services.firebase_service.messaging.send"
+        ) as mock_send:
+            mock_admin._apps = {"default": object()}
+            mock_send.return_value = "projects/p/messages/123"
+            result = svc.send_to_topic("test_topic", "", "  ", {"type": "summary"})
+
+        assert result["success"] is False
+        assert result["reason"] == "send_error"
+        assert "title and body must be non-empty" in result["error"]
+        mock_send.assert_not_called()

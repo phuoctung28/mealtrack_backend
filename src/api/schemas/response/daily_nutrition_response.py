@@ -50,7 +50,20 @@ class DailyNutritionResponse(BaseModel):
     date: str = Field(..., description="Date in YYYY-MM-DD format")
     target_calories: float = Field(..., description="Target calories for the day")
     target_macros: MacrosResponse = Field(..., description="Target macros for the day")
-    consumed_calories: float = Field(..., description="Calories consumed so far")
+    consumed_calories: float = Field(
+        ...,
+        description="NET calories consumed (food intake minus movement burn). "
+        "Clients must NOT subtract burn again from this value.",
+    )
+    food_calories: Optional[float] = Field(
+        None,
+        description="GROSS food calories consumed, before subtracting movement "
+        "burn. Clients that apply burn themselves should use this to avoid "
+        "double-subtraction.",
+    )
+    movement_kcal_burned: float = Field(
+        0.0, ge=0, description="Active calories burned from movement in the balance"
+    )
     consumed_macros: MacrosResponse = Field(..., description="Macros consumed so far")
     remaining_calories: float = Field(..., description="Remaining calories for the day")
     remaining_macros: MacrosResponse = Field(

@@ -30,14 +30,15 @@ omit = [
     "src/infra/database/migration_manager.py",
     "src/infra/database/uow.py",
     # External service integrations
+    "src/infra/services/cron_lifecycle_email_service.py",
+    "src/infra/services/cron_notification_dispatch_service.py",
+    "src/infra/services/cron_trial_push_service.py",
     "src/infra/services/firebase_service.py",
     "src/infra/services/pinecone_service.py",
-    "src/infra/services/scheduled_notification_service.py",
     "src/infra/services/firebase_auth_service.py",
     "src/infra/services/ai/openai_chat_service.py",
     "src/infra/websocket/connection_manager.py",
-    # Operational infrastructure (Redis locks, batch jobs, health checks)
-    "src/infra/services/scheduler_leader_lock.py",
+    # Operational infrastructure (batch jobs, health checks)
     "src/infra/services/daily_context_precompute_service.py",
     "src/api/routes/v1/health.py",
     "src/api/dependencies/meal_image_cache.py",
@@ -63,44 +64,10 @@ exclude_lines = [
 show_missing = true
 precision = 2
 
-[tool.importlinter]
-root_packages = ["src"]
-
-[[tool.importlinter.contracts]]
-name = "Domain has no external I/O dependencies"
-type = "forbidden"
-source_modules = ["src.domain"]
-forbidden_modules = [
-    "src.infra",
-    "src.app",
-    "src.api",
-    "httpx",
-    "sqlalchemy",
-    "redis",
-    "firebase_admin",
-]
-
-[[tool.importlinter.contracts]]
-name = "App layer does not import infra directly"
-type = "forbidden"
-source_modules = ["src.app"]
-forbidden_modules = ["src.infra"]
-
-[[tool.importlinter.contracts]]
-name = "Infra does not import app or api"
-type = "forbidden"
-source_modules = ["src.infra"]
-forbidden_modules = ["src.app", "src.api"]
-
-[[tool.importlinter.contracts]]
-name = "API does not import infra directly"
-type = "forbidden"
-source_modules = ["src.api"]
-forbidden_modules = ["src.infra"]
-ignore_imports = [
-    "src.api.dependencies -> src.infra",
-    "src.api.main -> src.infra",
-]
+# import-linter contracts live in ./.importlinter (import-linter reads it in
+# preference to this file). Run `lint-imports` — also a CI step — to check the
+# architecture boundaries. NOTE: every package dir under src/ must contain an
+# __init__.py, or grimp drops it from the graph and contracts pass as false-greens.
 
 [tool.ruff]
 target-version = "py311"

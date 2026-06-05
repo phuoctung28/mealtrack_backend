@@ -55,6 +55,11 @@ from .log_hydration_command_handler import LogHydrationCommandHandler
 from .log_caloric_drink_command_handler import LogCaloricDrinkCommandHandler
 from .delete_hydration_entry_command_handler import DeleteHydrationEntryCommandHandler
 
+# Movement handlers
+from .log_movement_command_handler import LogMovementCommandHandler
+from .delete_movement_entry_command_handler import DeleteMovementEntryCommandHandler
+from .update_movement_entry_command_handler import UpdateMovementEntryCommandHandler
+
 __all__ = [
     # Meal handlers
     "EditMealCommandHandler",
@@ -92,4 +97,8 @@ __all__ = [
     "LogHydrationCommandHandler",
     "LogCaloricDrinkCommandHandler",
     "DeleteHydrationEntryCommandHandler",
+    # Movement handlers
+    "LogMovementCommandHandler",
+    "DeleteMovementEntryCommandHandler",
+    "UpdateMovementEntryCommandHandler",
 ]

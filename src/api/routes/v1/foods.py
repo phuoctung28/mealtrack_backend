@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_food_search_event_bus
+from src.api.exceptions import handle_exception
 from src.api.middleware.accept_language import get_request_language
 from src.api.schemas.response.barcode_product_response import BarcodeProductResponse
 from src.app.queries.food.get_food_details_query import GetFoodDetailsQuery
@@ -31,7 +32,7 @@ async def search_foods(
         query = SearchFoodsQuery(query=q, limit=limit, language=language)
         return await event_bus.send(query)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise handle_exception(e) from e
 
 
 @router.get("/{fdc_id}/details")
@@ -44,7 +45,7 @@ async def get_food_details(
         query = GetFoodDetailsQuery(fdc_id=fdc_id)
         return await event_bus.send(query)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise handle_exception(e) from e
 
 
 @router.get("/barcode/{barcode}", response_model=BarcodeProductResponse)
@@ -67,4 +68,4 @@ async def lookup_barcode(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise handle_exception(e) from e

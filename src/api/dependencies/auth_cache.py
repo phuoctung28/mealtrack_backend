@@ -9,9 +9,12 @@ from cachetools import TTLCache
 
 logger = logging.getLogger(__name__)
 
-# 10-minute in-process cache. Avoids a Redis round-trip on every authenticated
-# request. maxsize=15_000 covers 10K+ active users with headroom.
-_uid_cache: TTLCache[str, dict] = TTLCache(maxsize=15_000, ttl=600)
+# Short-lived (60s) in-process cache. Avoids a Redis round-trip on every
+# authenticated request while keeping the stale-identity window small: the
+# eviction in invalidate_cached_user_id only reaches the local worker, so other
+# workers must expire by TTL after a user is deactivated/deleted.
+# maxsize=15_000 covers 10K+ active users with headroom.
+_uid_cache: TTLCache[str, dict] = TTLCache(maxsize=15_000, ttl=60)
 
 
 async def get_cached_user_id(

@@ -249,7 +249,10 @@ class TestGetDailyMacrosQueryHandler:
 
         # Assert
         assert result["date"] == today.isoformat()
-        assert result["total_calories"] == 300 + 400 + 500  # 1200
+        # Assert food_calories (gross), not total_calories (net = food - movement).
+        # total_calories is net and depends on movement_entries rows; food_calories
+        # is stable regardless of whether movement entries exist in the test DB.
+        assert result["food_calories"] == 300 + 400 + 500  # 1200
         assert result["total_protein"] == 20 + 25 + 30  # 75
         assert result["total_carbs"] == 30 + 40 + 50  # 120
         assert result["total_fat"] == 10 + 15 + 20  # 45

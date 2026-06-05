@@ -11,9 +11,7 @@ logger = logging.getLogger(__name__)
 
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.events.base import EventHandler
-from src.app.events.meal.meal_cache_invalidation_required_event import (
-    MealCacheInvalidationRequiredEvent,
-)
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal import MealImage
 from src.domain.ports.meal_repository_port import MealRepositoryPort
@@ -32,12 +30,12 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
     def __init__(
         self,
         uow: UnitOfWorkPort,
-        event_bus: Any,
+        cache_invalidation: Optional[CacheInvalidationService] = None,
         meal_repository: Optional[MealRepositoryPort] = None,
         nutrition_service: Optional[NutritionCalculationService] = None,
     ):
         self.uow = uow
-        self.event_bus = event_bus
+        self.cache_invalidation = cache_invalidation
         self.meal_repository = meal_repository
         self.nutrition_service = nutrition_service or NutritionCalculationService()
 
@@ -47,7 +45,11 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             return await self._process_meal(event, self.meal_repository, uow=None)
         else:
             async with self.uow as uow:
-                return await self._process_meal(event, uow.meals, uow=uow)
+                saved_meal, meal_date = await self._process_meal(event, uow.meals, uow=uow)
+            # Invalidate after commit so a concurrent read can't repopulate from a pre-commit snapshot.
+            if self.cache_invalidation:
+                await self.cache_invalidation.after_meal_write(event.user_id, meal_date)
+            return saved_meal
 
     async def _process_meal(self, event: CreateManualMealCommand, meal_repo, uow=None):
         nutrition, _ = self.nutrition_service.aggregate_from_command_items(event.items)
@@ -97,11 +99,10 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         )
 
         saved_meal = await meal_repo.save(meal)
-        await self.event_bus.publish(
-            MealCacheInvalidationRequiredEvent(
-                aggregate_id=event.user_id,
-                user_id=event.user_id,
-                meal_date=meal_date,
-            )
-        )
-        return saved_meal
+        if uow is None:
+            # injected meal_repository path: invalidate here as there is no outer UoW block
+            if self.cache_invalidation:
+                await self.cache_invalidation.after_meal_write(event.user_id, meal_date)
+            return saved_meal
+        # UoW path: return (saved_meal, meal_date) so handle() can invalidate after commit
+        return saved_meal, meal_date

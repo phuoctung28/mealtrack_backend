@@ -99,8 +99,17 @@ def add_dev_auth_bypass(app: FastAPI) -> None:
     The injected user has an `id` attribute and a `has_active_subscription()` method that returns True
     so subscription-only endpoints work in development.
     """
-    if os.getenv("ENVIRONMENT") != "development":
-        logger.info("Dev auth bypass not enabled (ENVIRONMENT != development)")
+    # Defense in depth: require BOTH a non-prod environment AND an explicit
+    # opt-in flag, so a single stray ENVIRONMENT=development in production can't
+    # silently disable Firebase auth.
+    if (
+        os.getenv("ENVIRONMENT") != "development"
+        or os.getenv("ENABLE_DEV_AUTH_BYPASS") != "1"
+    ):
+        logger.info(
+            "Dev auth bypass not enabled "
+            "(needs ENVIRONMENT=development and ENABLE_DEV_AUTH_BYPASS=1)"
+        )
         return
 
     @app.middleware("http")
@@ -108,8 +117,6 @@ def add_dev_auth_bypass(app: FastAPI) -> None:
         # Load fresh per request to avoid cross-session ORM usage
         user = await _ensure_dev_user_async()
         if user is not None:
-            await _seed_dev_meals_async(user.id)
-
             # Provide only what downstream code expects
             request.state.user = SimpleNamespace(
                 id=user.id,

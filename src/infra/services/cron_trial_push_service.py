@@ -1,5 +1,5 @@
-"""Scheduler that inserts a single trial-expiry push shortly before the trial
-converts to paid, for the existing ScheduledNotificationService loop to send."""
+"""Cron helper that inserts a single trial-expiry push shortly before the trial
+converts to paid, for the cron push job to claim and send."""
 
 import logging
 import uuid
@@ -25,26 +25,26 @@ _CHARGE_LEAD = timedelta(hours=2)
 _LOOKAHEAD_DAYS = 1
 
 
-class ScheduledSubscriptionPushService:
+class CronTrialPushService:
     """Inserts one trial-expiry push per subscription, ~2h before its charge.
 
-    Does not send. The existing ScheduledNotificationService loop polls
-    `notifications` and sends due rows on its 60s tick.
+    Does not send. The cron push job claims and sends due rows from
+    `notifications`.
     """
 
     def __init__(self) -> None:
-        # Stateless; constructed once per process in main.py lifespan.
+        # Stateless; constructed by the cron job for each run.
         pass
 
     def check_and_schedule_pushes(self, now: datetime | None = None) -> int:
         """Schedule the pre-charge push for subs charging soon. Returns rows
         inserted (excludes conflict-do-nothing skips)."""
         moment = now or utc_now()
-        logger.info("Trial-push scheduler: starting run at %s", moment.isoformat())
+        logger.info("Trial-push cron: starting run at %s", moment.isoformat())
 
         scheduled = self._schedule_due_pushes(moment)
 
-        logger.info("Trial-push scheduler: complete, inserted=%s", scheduled)
+        logger.info("Trial-push cron: complete, inserted=%s", scheduled)
         return scheduled
 
     # ---- scheduling pipeline --------------------------------------------
@@ -160,13 +160,13 @@ class ScheduledSubscriptionPushService:
             tz = ZoneInfo("UTC")
 
         # Fire shortly before the charge. If the sub only surfaced once we are
-        # already inside that lead window (e.g. loop downtime), send on the next
-        # tick — still before the charge.
+        # already inside that lead window (e.g. cron downtime), send on the next
+        # run — still before the charge.
         scheduled_utc = charge_at - _CHARGE_LEAD
         if scheduled_utc < now:
             scheduled_utc = now
 
-        # Dedup date is pinned to the charge (stable per sub), so repeated ticks
+        # Dedup date is pinned to the charge (stable per sub), so repeated runs
         # and the clamp above never produce a second row for the same user.
         scheduled_local_date = charge_at.astimezone(tz).date()
 

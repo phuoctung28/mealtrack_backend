@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 _NOTIF_EXPIRY_DAYS = 7
 
-# Single-process sentinel: the leader lock ensures only one process runs this.
-# Cleared on restart, which is correct — startup catch-up reruns the precompute.
+# Single-process sentinel for one cron invocation; DB fallback below dedups
+# repeat runs and concurrent cron processes.
 _precomputed_today: set[tuple[str, str]] = set()
 
 _DEFAULT_BREAKFAST_MINUTES = 510  # 08:30
@@ -36,7 +36,7 @@ _DEFAULT_EVENING_MINUTES = 1_080  # 18:00 — intentionally same as dinner per d
 
 
 class DailyContextPrecomputeService:
-    """Pre-computes calorie_goal, calories_consumed, gender, language per user at timezone midnight."""
+    """Pre-computes notification context per user and timezone-local date."""
 
     def __init__(self) -> None:
         self._tdee_service = TdeeCalculationService()
@@ -133,9 +133,11 @@ class DailyContextPrecomputeService:
 
             # Get user's timezone
             user_row = session.execute(
-                text(
-                    "SELECT timezone FROM users WHERE id = :user_id AND is_active = true"
-                ),
+                text("""
+                    SELECT timezone
+                    FROM users
+                    WHERE id = :user_id AND is_active = true
+                    """),
                 {"user_id": user_id},
             ).fetchone()
 
@@ -376,7 +378,8 @@ class DailyContextPrecomputeService:
             profile_row = uow.session.execute(
                 text("""
                     SELECT age, gender, height_cm, weight_kg, body_fat_percentage,
-                           job_type, training_days_per_week, training_minutes_per_session,
+                           job_type, training_days_per_week,
+                           training_minutes_per_session,
                            fitness_goal, training_level
                     FROM user_profiles
                     WHERE user_id = :user_id AND is_current = true
@@ -511,7 +514,7 @@ class DailyContextPrecomputeService:
             ).astimezone(timezone.utc)
             day_end_utc = day_start_utc + timedelta(days=1)
 
-            # Calories: P*4 + (C-fiber)*4 + fiber*2 + F*9 (canonical formula per CLAUDE.md)
+            # Canonical formula: P*4 + (C-fiber)*4 + fiber*2 + F*9.
             consumed_rows = session.execute(
                 text("""
                     SELECT
@@ -557,7 +560,8 @@ class DailyContextPrecomputeService:
                     )
                 except Exception as exc:
                     logger.warning(
-                        "TDEE calculation failed for user %s: %s — using 2000 kcal fallback",
+                        "TDEE calculation failed for user %s: %s "
+                        "— using 2000 kcal fallback",
                         user_id,
                         exc,
                     )
@@ -709,7 +713,7 @@ class DailyContextPrecomputeService:
 
 
 def _local_minutes_to_utc(local_date: date, local_minutes: int, tz_name: str):
-    """Convert local time (minutes from midnight) on local_date to UTC datetime (timezone-aware)."""
+    """Convert local minutes on a date to a timezone-aware UTC datetime."""
     try:
         tz = ZoneInfo(tz_name)
         local_dt = datetime(

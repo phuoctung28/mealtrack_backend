@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
@@ -10,26 +10,22 @@ from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.domain.ports.notification_repository_port import NotificationRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.food_mapping_service import FoodMappingService
-from src.domain.services.notification_service import NotificationService
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.food_cache_service import FoodCacheService
 from src.infra.adapters.food_data_service import FoodDataService
 from src.infra.adapters.open_food_facts_service import (
-    OpenFoodFactsService,
     get_open_food_facts_service,
 )
 from src.infra.adapters.vision_ai_service import VisionAIService
 from src.infra.cache.cache_service import CacheService
-from src.infra.services.ai.ai_model_manager import AIModelManager
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
-from src.infra.config.settings import get_settings, settings
+from src.infra.config.settings import settings
 from src.infra.database.config import get_db as get_db_from_config
 from src.infra.repositories.meal_repository import MealRepository
-from src.infra.repositories.notification_repository import NotificationRepository
+from src.infra.services.ai.ai_model_manager import AIModelManager
 from src.infra.services.firebase_service import FirebaseService
 
 if TYPE_CHECKING:
@@ -245,22 +241,6 @@ def get_food_reference_repository():
 get_barcode_product_repository = get_food_reference_repository
 
 
-# Notification Repository
-def get_notification_repository(
-    db: Session = Depends(get_db),
-) -> NotificationRepositoryPort:
-    """
-    Get the notification repository instance.
-
-    Args:
-        db: Database session
-
-    Returns:
-        NotificationRepositoryPort: The notification repository
-    """
-    return NotificationRepository(db)
-
-
 # Firebase Service (singleton pattern - create once and reuse)
 _firebase_service = None
 
@@ -276,27 +256,6 @@ def get_firebase_service() -> FirebaseService:
     if _firebase_service is None:
         _firebase_service = FirebaseService()
     return _firebase_service
-
-
-# Notification Service
-def get_notification_service(
-    notification_repository: NotificationRepositoryPort = Depends(
-        get_notification_repository
-    ),
-    firebase_service: FirebaseService = Depends(get_firebase_service),
-) -> NotificationService:
-    """
-    Get the notification service instance.
-
-    Args:
-        notification_repository: Notification repository
-        firebase_service: Firebase service
-
-    Returns:
-        NotificationService: The notification service
-    """
-    return NotificationService(notification_repository, firebase_service)
-
 
 
 def get_daily_context_precompute_service():
@@ -351,12 +310,13 @@ def get_deepl_suggestion_translation_service():
         logger.warning("DEEPL_API_KEY not set – suggestion translation will be skipped")
         return None
 
-    from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
-        DeepLSuggestionTranslationService,
+    from src.domain.services.meal_suggestion import (
+        deepl_suggestion_translation_service,
     )
 
-    _deepl_suggestion_translation_service = DeepLSuggestionTranslationService(
-        text_translation_service=text_service,
+    service_cls = deepl_suggestion_translation_service.DeepLSuggestionTranslationService
+    _deepl_suggestion_translation_service = service_cls(
+        text_translation_service=text_service
     )
     logger.info("DeepL suggestion translation service initialised")
     return _deepl_suggestion_translation_service
@@ -432,11 +392,11 @@ def get_deepl_meal_translation_service():
         logger.warning("DEEPL_API_KEY not set – meal translation will be skipped")
         return None
 
-    from src.infra.repositories.meal_translation_repository import (
-        MealTranslationRepository,
-    )
     from src.domain.services.meal_analysis.deepl_meal_translation_service import (
         DeepLMealTranslationService,
+    )
+    from src.infra.repositories.meal_translation_repository import (
+        MealTranslationRepository,
     )
 
     _deepl_meal_translation_service = DeepLMealTranslationService(
@@ -465,10 +425,10 @@ def get_deepl_text_translation_service():
         logger.warning("DEEPL_API_KEY not set – text translation will be skipped")
         return None
 
-    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
     from src.domain.services.translation.deepl_text_translation_service import (
         DeepLTextTranslationService,
     )
+    from src.infra.adapters.deepl_translation_adapter import DeepLTranslationAdapter
 
     _deepl_text_translation_service = DeepLTextTranslationService(
         deepl_port=DeepLTranslationAdapter(settings.DEEPL_API_KEY),
@@ -477,7 +437,7 @@ def get_deepl_text_translation_service():
     return _deepl_text_translation_service
 
 
-# IngredientNutritionResolver (singleton — reuses FatSecret + FoodReferenceRepository singletons)
+# IngredientNutritionResolver singleton reuses FatSecret and food references.
 _ingredient_nutrition_resolver = None
 
 
@@ -496,7 +456,7 @@ def get_ingredient_nutrition_resolver():
     return _ingredient_nutrition_resolver
 
 
-# NutritionLookupService (singleton — depends on food_ref_repo, resolver, generation_service)
+# NutritionLookupService singleton uses food refs, resolver, and generation.
 _nutrition_lookup_service = None
 
 

@@ -1,6 +1,6 @@
 # Backend Codebase Summary
 
-**Generated:** May 27, 2026
+**Generated:** June 1, 2026
 **Status:** Production-ready (430 files, ~38.5K LOC, 681+ tests, 70%+ coverage)
 **Language:** Python 3.11+ | **Framework:** FastAPI 0.115+ + SQLAlchemy 2.0
 
@@ -55,11 +55,11 @@
 
 ## Recent Features (May 2026)
 
-- **Notification / Push Overhaul:** Platform-specific payload builders (`src/infra/services/push/`); Android high-priority FCM, APNs Time Sensitive with `interruption-level` in payload body; trial-expiry pushes at T-2d and T-1d; notifications rescheduled on timezone changes; `SchedulerLeaderLock` (flock + PostgreSQL advisory lock) for multi-replica deployments; `DailyContextPrecomputeService` pre-computes calorie context at timezone midnight
+- **Notification / Push Overhaul:** Platform-specific payload builders (`src/infra/services/push/`); Android high-priority FCM, APNs Time Sensitive with `interruption-level` in payload body; trial-expiry pushes at T-2d and T-1d; notifications rescheduled on timezone changes; cron push (`src/cron/push.py`) precomputes notification rows, schedules trial-expiry rows, dispatches due rows through database row claiming, and cleans expired rows
 - **RevenueCat Webhook Expansion:** Full lifecycle coverage (INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE, PRODUCT_CHANGE, REFUND, TRANSFER); referral credit/revoke on purchase/refund; PostHog lifecycle mirroring
 - **PostHog Analytics Adapter:** `src/infra/adapters/posthog_adapter.py` — fire-and-forget async capture; enabled by `POSTHOG_API_KEY`
 - **Parallel Recipe Generator:** `src/domain/services/meal_suggestion/parallel_recipe_generator.py` with per-recipe attempt logic in `recipe_attempt_builder.py`; 3-phase pipeline: name generation → parallel recipe generation → translation
-- **Scheduled Email Service:** `ScheduledEmailService` runs re-engagement and trial-expiry emails at startup via `src/infra/services/scheduled_email_service.py`
+- **Cron Lifecycle Email Service:** `src/cron/email.py` runs re-engagement and trial-expiry lifecycle emails via `CronLifecycleEmailService`
 - **Configurable Referral Commission:** `REFERRAL_COMMISSIONS` env var (JSON dict, per-currency, default 2 USD)
 - **Variable-Length Referral Codes:** 3–15 character codes
 
@@ -84,7 +84,6 @@
 | SuggestionOrchestrationService | Session-based meal suggestions (4h Redis TTL) |
 | MealGenerationService | Multi-model Gemini for meal generation |
 | TranslationService | 7-language support (en, vi, es, fr, de, ja, zh) |
-| NotificationService | FCM push notifications with dedup; platform-specific builders; scheduler leader election |
 | MealDiscoveryService | Image-based meal discovery |
 
 ---

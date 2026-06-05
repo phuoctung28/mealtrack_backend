@@ -15,17 +15,17 @@ class MockVisionAIService(VisionAIServicePort):
         """Initialize with optional mock response."""
         self.mock_response = mock_response or self._default_response()
 
-    def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
+    async def analyze(self, image_bytes: bytes) -> Dict[str, Any]:
         """Return mock analysis result."""
         return self.mock_response
 
-    def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
+    async def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
         """Return mock analysis result for URL-based analysis."""
         response = self.mock_response.copy()
         response["image_url"] = image_url
         return response
 
-    def analyze_by_url_with_strategy(
+    async def analyze_by_url_with_strategy(
         self, image_url: str, strategy: MealAnalysisStrategy
     ) -> Dict[str, Any]:
         """Return mock analysis result for URL-based strategy analysis."""
@@ -34,17 +34,16 @@ class MockVisionAIService(VisionAIServicePort):
         response["strategy_used"] = strategy.get_strategy_name()
         return response
 
-    def analyze_with_ingredients_context(
+    async def analyze_with_ingredients_context(
         self, image_bytes: bytes, ingredients: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Return mock analysis result with ingredients context."""
         response = self.mock_response.copy()
-        # Add ingredients to the response if provided
         if ingredients:
             response["ingredients_context"] = ingredients
         return response
 
-    def analyze_with_portion_context(
+    async def analyze_with_portion_context(
         self, image_bytes: bytes, portion_size: float, unit: str
     ) -> Dict[str, Any]:
         """Return mock analysis result with portion context."""
@@ -52,13 +51,12 @@ class MockVisionAIService(VisionAIServicePort):
         response["portion_context"] = {"portion_size": portion_size, "unit": unit}
         return response
 
-    def analyze_with_weight_context(
+    async def analyze_with_weight_context(
         self, image_bytes: bytes, weight_grams: float
     ) -> Dict[str, Any]:
         """Return mock analysis result with weight context."""
         response = self.mock_response.copy()
         response["weight_context"] = {"weight_grams": weight_grams}
-        # Adjust calories based on weight (100g baseline)
         if "structured_data" in response:
             weight_factor = weight_grams / 100.0
             response["structured_data"]["total_calories"] = int(
@@ -66,6 +64,14 @@ class MockVisionAIService(VisionAIServicePort):
             )
             for food in response["structured_data"].get("foods", []):
                 food["calories"] = int(food["calories"] * weight_factor)
+        return response
+
+    async def analyze_with_strategy(
+        self, image_bytes: bytes, strategy: MealAnalysisStrategy
+    ) -> Dict[str, Any]:
+        """Return mock analysis result using a strategy."""
+        response = self.mock_response.copy()
+        response["strategy_used"] = strategy.get_strategy_name()
         return response
 
     def _default_response(self) -> Dict[str, Any]:

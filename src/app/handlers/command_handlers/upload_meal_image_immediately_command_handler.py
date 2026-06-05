@@ -10,9 +10,7 @@ from uuid import uuid4
 
 from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.app.events.base import EventHandler, handles
-from src.app.events.meal.meal_cache_invalidation_required_event import (
-    MealCacheInvalidationRequiredEvent,
-)
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.image_store_port import ImageStorePort
@@ -32,7 +30,7 @@ from src.domain.utils.timezone_utils import (
     utc_now,
 )
 from src.infra.config.settings import get_settings
-from src.infra.repositories.meal_repository import MealProjection
+from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +50,11 @@ class UploadMealImageImmediatelyHandler(
         gpt_parser: GPTResponseParser = None,
         meal_translation_service: DeepLMealTranslationService | None = None,
         fast_path_policy: MealAnalyzeFastPathPolicy | None = None,
+        cache_invalidation: CacheInvalidationService | None = None,
     ):
         self.uow = uow
         self.event_bus = event_bus
+        self.cache_invalidation = cache_invalidation
         self.image_store = image_store
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
@@ -66,7 +66,7 @@ class UploadMealImageImmediatelyHandler(
         else:
             self._fast_path_policy = fast_path_policy
 
-    def _run_vision_analysis(
+    async def _run_vision_analysis(
         self, command: UploadMealImageImmediatelyCommand, meal_id: str
     ) -> Any:
         max_attempts = max(1, self._fast_path_policy.max_attempts)
@@ -87,7 +87,7 @@ class UploadMealImageImmediatelyHandler(
                     strategy = AnalysisStrategyFactory.create_user_context_strategy(
                         command.user_description
                     )
-                    return self.vision_service.analyze_with_strategy(
+                    return await self.vision_service.analyze_with_strategy(
                         command.file_contents, strategy
                     )
 
@@ -95,7 +95,7 @@ class UploadMealImageImmediatelyHandler(
                     f"[PHASE-1-START] meal={meal_id} | "
                     f"vision analysis | attempt={attempt}/{max_attempts}"
                 )
-                return self.vision_service.analyze(command.file_contents)
+                return await self.vision_service.analyze(command.file_contents)
             except Exception as e:
                 last_error = e
                 logger.warning(
@@ -155,9 +155,7 @@ class UploadMealImageImmediatelyHandler(
         analysis_start = time.time()
 
         try:
-            analysis_result = await loop.run_in_executor(
-                None, self._run_vision_analysis, command, image_id
-            )
+            analysis_result = await self._run_vision_analysis(command, image_id)
         except Exception as e:
             logger.error(f"[ANALYSIS-FAILED] image_id={image_id} | error={e}")
             # Image uploaded but analysis failed - acceptable orphan in Cloudinary
@@ -260,13 +258,8 @@ class UploadMealImageImmediatelyHandler(
                 saved_meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
             )
 
-        await self.event_bus.publish(
-            MealCacheInvalidationRequiredEvent(
-                aggregate_id=command.user_id,
-                user_id=command.user_id,
-                meal_date=meal_date,
-            )
-        )
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
 
         return final_meal
 

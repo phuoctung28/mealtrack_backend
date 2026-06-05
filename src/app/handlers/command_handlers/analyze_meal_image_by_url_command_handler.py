@@ -9,9 +9,7 @@ from uuid import uuid4
 
 from src.app.commands.meal import AnalyzeMealImageByUrlCommand
 from src.app.events.base import EventHandler, handles
-from src.app.events.meal.meal_cache_invalidation_required_event import (
-    MealCacheInvalidationRequiredEvent,
-)
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal import Meal, MealStatus, MealImage
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
@@ -28,7 +26,7 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     utc_now,
 )
-from src.infra.repositories.meal_repository import MealProjection
+from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +42,11 @@ class AnalyzeMealImageByUrlHandler(EventHandler[AnalyzeMealImageByUrlCommand, Me
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         meal_translation_service: Optional[DeepLMealTranslationService] = None,
+        cache_invalidation: Optional[CacheInvalidationService] = None,
     ):
         self.uow = uow
         self.event_bus = event_bus
+        self.cache_invalidation = cache_invalidation
         self.vision_service = vision_service
         self.gpt_parser = gpt_parser
         self.meal_translation_service = meal_translation_service
@@ -109,11 +109,11 @@ class AnalyzeMealImageByUrlHandler(EventHandler[AnalyzeMealImageByUrlCommand, Me
                 strategy = AnalysisStrategyFactory.create_user_context_strategy(
                     command.user_description
                 )
-                vision_result = self.vision_service.analyze_by_url_with_strategy(
+                vision_result = await self.vision_service.analyze_by_url_with_strategy(
                     command.image_url, strategy
                 )
             else:
-                vision_result = self.vision_service.analyze_by_url(command.image_url)
+                vision_result = await self.vision_service.analyze_by_url(command.image_url)
             phase1_elapsed = time.time() - phase1_start
 
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
@@ -179,13 +179,8 @@ class AnalyzeMealImageByUrlHandler(EventHandler[AnalyzeMealImageByUrlCommand, Me
                     meal.meal_id, projection=MealProjection.FULL_WITH_TRANSLATIONS
                 )
 
-            await self.event_bus.publish(
-                MealCacheInvalidationRequiredEvent(
-                    aggregate_id=command.user_id,
-                    user_id=command.user_id,
-                    meal_date=meal_date,
-                )
-            )
+            if self.cache_invalidation:
+                await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
             return final_meal
         except Exception as e:
             logger.error("Failed to analyze meal by URL: %s", str(e))

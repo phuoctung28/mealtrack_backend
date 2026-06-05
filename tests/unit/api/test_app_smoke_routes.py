@@ -8,8 +8,8 @@ def client(monkeypatch) -> TestClient:
     monkeypatch.setenv("ENVIRONMENT", "test")
     # Import a fresh app module instance and patch lifespan side-effects.
     # Other tests may import `src.api.main` with different ENVIRONMENT values.
-    import sys
     import importlib
+    import sys
 
     sys.modules.pop("src.api.main", None)
     main = importlib.import_module("src.api.main")
@@ -19,25 +19,19 @@ def client(monkeypatch) -> TestClient:
     async def _noop_async(*args, **kwargs):
         return None
 
-    class _Scheduled:
-        async def start(self):
-            return None
-
-        async def stop(self):
-            return None
-
     main.initialize_cache_layer = _noop_async  # type: ignore[assignment]
     main.shutdown_cache_layer = _noop_async  # type: ignore[assignment]
-    main.initialize_scheduled_notification_service = lambda: _Scheduled()  # type: ignore[assignment]
 
     # Dependency overrides to avoid DB/event bus initialization
+    from src.api.base_dependencies import get_image_store
     from src.api.dependencies.auth import get_current_user_id, verify_firebase_token
     from src.api.dependencies.event_bus import get_configured_event_bus
-    from src.api.base_dependencies import get_image_store
 
     class _DummyBus:
         async def send(self, msg):
-            raise AssertionError("event_bus.send should not be called in these smoke tests")
+            raise AssertionError(
+                "event_bus.send should not be called in these smoke tests"
+            )
 
     class _DummyImageStore:
         def get_url(self, image_id: str) -> str:
@@ -135,4 +129,3 @@ def test_users_sync_forbidden_when_token_uid_mismatch(client: TestClient):
     }
     r = client.post("/v1/users/sync", json=payload)
     assert r.status_code == 403
-

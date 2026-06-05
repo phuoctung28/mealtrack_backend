@@ -14,7 +14,7 @@ async def test_email_cron_calls_check_and_send():
         patch("src.cron.email.ResendEmailAdapter"),
         patch("src.cron.email.EmailTemplateRenderer"),
         patch("src.cron.email.EmailService"),
-        patch("src.cron.email.ScheduledEmailService") as mock_ses_cls,
+        patch("src.cron.email.CronLifecycleEmailService") as mock_ses_cls,
         patch("sentry_sdk.flush"),
     ):
         # DB warm-up succeeds
@@ -39,7 +39,7 @@ async def test_email_cron_aborts_on_db_warmup_failure():
     with (
         patch("src.cron.email.initialize_sentry"),
         patch("src.cron.email.engine") as mock_engine,
-        patch("src.cron.email.ScheduledEmailService") as mock_ses_cls,
+        patch("src.cron.email.CronLifecycleEmailService") as mock_ses_cls,
         patch("sentry_sdk.flush"),
     ):
         mock_engine.connect.side_effect = Exception("DB down")
@@ -60,7 +60,7 @@ async def test_email_cron_logs_error_on_send_failure():
         patch("src.cron.email.ResendEmailAdapter"),
         patch("src.cron.email.EmailTemplateRenderer"),
         patch("src.cron.email.EmailService"),
-        patch("src.cron.email.ScheduledEmailService") as mock_ses_cls,
+        patch("src.cron.email.CronLifecycleEmailService") as mock_ses_cls,
         patch("sentry_sdk.flush"),
     ):
         mock_conn = MagicMock()
@@ -68,7 +68,9 @@ async def test_email_cron_logs_error_on_send_failure():
         mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
 
         mock_ses = AsyncMock()
-        mock_ses.check_and_send_emails = AsyncMock(side_effect=RuntimeError("Resend down"))
+        mock_ses.check_and_send_emails = AsyncMock(
+            side_effect=RuntimeError("Resend down")
+        )
         mock_ses_cls.return_value = mock_ses
 
         from src.cron.email import run

@@ -1,11 +1,11 @@
-"""Unit tests for ScheduledSubscriptionPushService."""
+"""Unit tests for CronTrialPushService."""
 
 import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-from src.infra.services.scheduled_subscription_push_service import (
-    ScheduledSubscriptionPushService,
+from src.infra.services.cron_trial_push_service import (
+    CronTrialPushService,
 )
 
 NOW_UTC = datetime(2026, 5, 17, 5, 0, 0, tzinfo=timezone.utc)
@@ -33,17 +33,17 @@ def _patch_uow_with_subs(subs):
 
 
 def test_schedules_row_for_active_expiring_sub_with_token():
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     user_id = str(uuid.uuid4())
     sub = _make_sub(user_id, NOW_UTC + timedelta(hours=6))
 
     uow_ctx, _uow = _patch_uow_with_subs([sub])
 
     with patch(
-        "src.infra.services.scheduled_subscription_push_service.UnitOfWork",
+        "src.infra.services.cron_trial_push_service.UnitOfWork",
         return_value=uow_ctx,
     ), patch.object(
-        ScheduledSubscriptionPushService,
+        CronTrialPushService,
         "_fetch_prefs",
         return_value={
             user_id: {
@@ -53,7 +53,7 @@ def test_schedules_row_for_active_expiring_sub_with_token():
             }
         },
     ), patch.object(
-        ScheduledSubscriptionPushService,
+        CronTrialPushService,
         "_fetch_fcm_tokens",
         return_value={user_id: ["tok1", "tok2"]},
     ):
@@ -62,17 +62,17 @@ def test_schedules_row_for_active_expiring_sub_with_token():
 
 
 def test_skips_user_without_fcm_token():
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     user_id = str(uuid.uuid4())
     sub = _make_sub(user_id, NOW_UTC + timedelta(hours=6))
 
     uow_ctx, _uow = _patch_uow_with_subs([sub])
 
     with patch(
-        "src.infra.services.scheduled_subscription_push_service.UnitOfWork",
+        "src.infra.services.cron_trial_push_service.UnitOfWork",
         return_value=uow_ctx,
     ), patch.object(
-        ScheduledSubscriptionPushService,
+        CronTrialPushService,
         "_fetch_prefs",
         return_value={
             user_id: {
@@ -82,7 +82,7 @@ def test_skips_user_without_fcm_token():
             }
         },
     ), patch.object(
-        ScheduledSubscriptionPushService,
+        CronTrialPushService,
         "_fetch_fcm_tokens",
         return_value={},  # no tokens
     ):
@@ -91,10 +91,10 @@ def test_skips_user_without_fcm_token():
 
 
 def test_returns_zero_when_no_subs_in_window():
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     uow_ctx, _uow = _patch_uow_with_subs([])
     with patch(
-        "src.infra.services.scheduled_subscription_push_service.UnitOfWork",
+        "src.infra.services.cron_trial_push_service.UnitOfWork",
         return_value=uow_ctx,
     ):
         assert svc.check_and_schedule_pushes(NOW_UTC) == 0
@@ -102,7 +102,7 @@ def test_returns_zero_when_no_subs_in_window():
 
 def test_runs_single_schedule_pass():
     """One scheduling pass per run (no separate T-2d / T-1d windows)."""
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     with patch.object(svc, "_schedule_due_pushes", return_value=0) as sd:
         svc.check_and_schedule_pushes(NOW_UTC)
         sd.assert_called_once_with(NOW_UTC)
@@ -110,10 +110,10 @@ def test_runs_single_schedule_pass():
 
 def test_queries_next_day_charge_window():
     """Subs charging within the next day are considered (from_days=0, to_days=1)."""
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     uow_ctx, uow = _patch_uow_with_subs([])
     with patch(
-        "src.infra.services.scheduled_subscription_push_service.UnitOfWork",
+        "src.infra.services.cron_trial_push_service.UnitOfWork",
         return_value=uow_ctx,
     ):
         svc.check_and_schedule_pushes(NOW_UTC)
@@ -133,7 +133,7 @@ def test_language_resolution_falls_back_to_users_language_code():
     row.language_code = "vi"
     session.execute.return_value.fetchall.return_value = [row]
 
-    out = ScheduledSubscriptionPushService._fetch_prefs(session, ["u1"])
+    out = CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "vi"
 
 
@@ -147,7 +147,7 @@ def test_language_resolution_pref_overrides_user():
     row.language_code = "vi"
     session.execute.return_value.fetchall.return_value = [row]
 
-    out = ScheduledSubscriptionPushService._fetch_prefs(session, ["u1"])
+    out = CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "en"
 
 
@@ -161,12 +161,12 @@ def test_language_resolution_unknown_falls_back_to_en():
     row.language_code = "de"
     session.execute.return_value.fetchall.return_value = [row]
 
-    out = ScheduledSubscriptionPushService._fetch_prefs(session, ["u1"])
+    out = CronTrialPushService._fetch_prefs(session, ["u1"])
     assert out["u1"]["language"] == "en"
 
 
 def test_build_row_schedules_two_hours_before_charge():
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     pref = {
         "language": "vi",
         "timezone": "Asia/Ho_Chi_Minh",
@@ -192,7 +192,7 @@ def test_build_row_schedules_two_hours_before_charge():
 
 def test_build_row_clamps_to_now_when_inside_lead_window():
     """Sub surfaced within the 2h lead → send now (still before charge), not skipped."""
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     pref = {"language": "en", "timezone": "UTC", "gender": "male"}
     charge_at = NOW_UTC + timedelta(minutes=30)  # < 2h lead
     row = svc._build_row(
@@ -207,7 +207,7 @@ def test_build_row_clamps_to_now_when_inside_lead_window():
 
 
 def test_build_row_skips_when_charge_already_passed():
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     pref = {"language": "en", "timezone": "UTC", "gender": "male"}
     row = svc._build_row(
         user_id="u1",
@@ -220,7 +220,7 @@ def test_build_row_skips_when_charge_already_passed():
 
 
 def test_build_row_skips_when_charge_unknown():
-    svc = ScheduledSubscriptionPushService()
+    svc = CronTrialPushService()
     pref = {"language": "en", "timezone": "UTC", "gender": "male"}
     row = svc._build_row(
         user_id="u1",

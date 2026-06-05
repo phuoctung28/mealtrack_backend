@@ -150,9 +150,9 @@ All templates include:
 - Checks `email_opt_out` preference
 - Logs to `email_logs` table
 
-### 7. ScheduledEmailService
+### 7. CronLifecycleEmailService
 
-**File:** `src/infra/services/scheduled_email_service.py`
+**File:** `src/infra/services/cron_lifecycle_email_service.py`
 
 Runs daily (integrated with existing scheduler pattern):
 - Find inactive trial users (3+ days since `last_accessed`)
@@ -240,7 +240,7 @@ EMAIL_ENABLED=true  # false in dev/test
 | `src/infra/templates/emails/trial_expiring.html` | Trial expiring template |
 | `src/infra/templates/emails/trial_cancelled.html` | Cancellation template |
 | `src/app/handlers/event_handlers/welcome_email_handler.py` | Welcome event handler |
-| `src/infra/services/scheduled_email_service.py` | Scheduled job |
+| `src/infra/services/cron_lifecycle_email_service.py` | Cron job |
 | `src/infra/database/models/email_log.py` | Email log model |
 | `alembic/versions/xxx_add_email_fields.py` | Migration |
 
@@ -252,7 +252,7 @@ EMAIL_ENABLED=true  # false in dev/test
 | `src/infra/config/settings.py` | Add Resend config |
 | `requirements.txt` | Add `resend` package |
 | RevenueCat webhook handler | Add cancellation email trigger |
-| `src/api/main.py` | Register scheduled email service |
+| `src/api/main.py` | Register lifecycle email cron service |
 
 ## Trial User Definition
 

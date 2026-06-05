@@ -9,9 +9,7 @@ from uuid import uuid4
 
 from src.app.commands.meal_suggestion import IngredientItem, SaveMealSuggestionCommand
 from src.app.events.base import EventHandler, handles
-from src.app.events.meal.meal_cache_invalidation_required_event import (
-    MealCacheInvalidationRequiredEvent,
-)
+from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model import FoodItem, Meal, MealImage, MealStatus, Nutrition, Macros
 from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import (
@@ -34,9 +32,13 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
     meal-level Nutrition carries the accurate aggregated values.
     """
 
-    def __init__(self, uow: UnitOfWorkPort, event_bus: Any):
+    def __init__(
+        self,
+        uow: UnitOfWorkPort,
+        cache_invalidation: Optional[CacheInvalidationService] = None,
+    ):
         self.uow = uow
-        self.event_bus = event_bus
+        self.cache_invalidation = cache_invalidation
 
     async def handle(self, command: SaveMealSuggestionCommand) -> str:
         """
@@ -115,13 +117,8 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
         async with self.uow as uow:
             saved_meal = await uow.meals.save(meal)
 
-        await self.event_bus.publish(
-            MealCacheInvalidationRequiredEvent(
-                aggregate_id=command.user_id,
-                user_id=command.user_id,
-                meal_date=meal_date,
-            )
-        )
+        if self.cache_invalidation:
+            await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
 
         logger.info(
             f"Saved meal suggestion {command.suggestion_id} as meal {saved_meal.meal_id} "

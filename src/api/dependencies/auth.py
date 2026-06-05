@@ -7,6 +7,7 @@ Provides Firebase token verification and user extraction.
 import asyncio
 import logging
 import os
+import secrets
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.params import Depends as DependsMarker
@@ -18,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.base_dependencies import get_cache_service
 from src.api.dependencies.auth_cache import get_cached_user_id, set_cached_user_id
 from src.domain.ports.cache_port import CachePort
+from src.infra.config.settings import settings
 from src.infra.database.config_async import get_async_db
 
 logger = logging.getLogger(__name__)
@@ -58,9 +60,12 @@ async def verify_firebase_token(
             user_id = token['uid']
             return {"message": f"Hello {user_id}"}
     """
-    # Dev mode bypass: check if dev middleware injected a user
+    # Dev mode bypass: check if dev middleware injected a user. Requires the same
+    # two-flag opt-in as the middleware (ENVIRONMENT=development AND
+    # ENABLE_DEV_AUTH_BYPASS=1) so a single stray env var can't bypass auth.
     if (
         os.getenv("ENVIRONMENT") == "development"
+        and os.getenv("ENABLE_DEV_AUTH_BYPASS") == "1"
         and hasattr(request.state, "user")
         and hasattr(request.state.user, "firebase_uid")
         and hasattr(request.state.user, "id")
@@ -241,6 +246,50 @@ async def get_current_user_email(
         The authenticated user's email, or None if not available
     """
     return token.get("email")
+
+
+async def require_admin(
+    email: str | None = Depends(get_current_user_email),
+) -> str:
+    """Authorize privileged endpoints against the ADMIN_EMAILS allowlist.
+
+    Raises 401 when unauthenticated (via get_current_user_email →
+    verify_firebase_token) and 403 when the caller's email is not on the
+    configured allowlist.
+    """
+    allowlist = {
+        e.strip().lower() for e in settings.ADMIN_EMAILS.split(",") if e.strip()
+    }
+    if not email:
+        # Authenticated (token verified) but no email claim — e.g. a phone-only
+        # account. Denied, but logged so an admin who loses email is visible.
+        logger.warning("Admin check denied: verified token has no email claim")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    if email.strip().lower() not in allowlist:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return email
+
+
+async def require_monitoring_access(request: Request) -> None:
+    """Authorize infra monitoring endpoints via a shared service token.
+
+    Automated monitoring has no Firebase identity, so it presents the
+    X-Monitoring-Token header instead. Fail-closed: if MONITORING_API_TOKEN is
+    unset, the endpoints are closed to everyone.
+    """
+    expected = settings.MONITORING_API_TOKEN
+    provided = request.headers.get("X-Monitoring-Token", "")
+    if not expected or not secrets.compare_digest(provided, expected):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Monitoring access required",
+        )
 
 
 async def optional_authentication(
