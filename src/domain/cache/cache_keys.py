@@ -70,6 +70,10 @@ class CacheKeys:
         return f"user:{user_id}:weekly_budget_v3:{week_start_date.isoformat()}:*"
 
     @staticmethod
+    def weekly_budget_user_pattern(user_id: str) -> str:
+        return f"user:{user_id}:weekly_budget_v3:*"
+
+    @staticmethod
     def nutrition_bulk(
         user_id: str, start_date: date, end_date: date
     ) -> tuple[str, int]:

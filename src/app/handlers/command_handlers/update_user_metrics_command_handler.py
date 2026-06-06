@@ -194,7 +194,7 @@ class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, Non
 
         # Invalidate ALL weekly budgets for this user
         # TDEE changes affect weekly targets
-        weekly_pattern = f"user:{user_id}:weekly_budget:*"
+        weekly_pattern = CacheKeys.weekly_budget_user_pattern(user_id)
         try:
             await self.cache_service.invalidate_pattern(weekly_pattern)
         except Exception as e:
