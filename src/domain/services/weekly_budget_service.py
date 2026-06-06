@@ -50,6 +50,7 @@ class WeeklyBudgetService:
         uow: Any,
         user_id: str,
         week_start: date,
+        end_date: Optional[date] = None,
         exclude_date: Optional[date] = None,
         exclude_dates: Optional[List[date]] = None,
         user_timezone: Optional[str] = None,
@@ -62,11 +63,12 @@ class WeeklyBudgetService:
             uow: Unit of work with meals repository
             user_id: User ID
             week_start: Monday of the week
+            end_date: Last local date to include. Defaults to week end.
             exclude_date: Skip meals on this user-local date (today lock)
             exclude_dates: Skip meals on these user-local dates (cheat days)
             user_timezone: IANA timezone for correct date boundary
         """
-        week_end = week_start + timedelta(days=6)
+        week_end = end_date or week_start + timedelta(days=6)
         tz = get_zone_info(user_timezone) if user_timezone else None
 
         meals = uow.meals.find_by_date_range(
@@ -84,20 +86,23 @@ class WeeklyBudgetService:
         exclude_dates_set = set(exclude_dates) if exclude_dates else set()
         for meal in meals:
             if meal.status == MealStatus.READY and meal.nutrition:
-                # Skip meals on excluded dates (today lock + cheat days)
-                if (exclude_date or exclude_dates_set) and meal.created_at:
+                # Skip meals outside/excluded local dates.
+                if (end_date or exclude_date or exclude_dates_set) and meal.created_at:
                     aware_dt = ensure_utc(meal.created_at)
                     meal_local_date = (
                         aware_dt.astimezone(tz).date() if tz else aware_dt.date()
                     )
+                    if end_date and meal_local_date > end_date:
+                        continue
                     if exclude_date and meal_local_date == exclude_date:
                         continue
                     if meal_local_date in exclude_dates_set:
                         continue
-                total_calories += meal.nutrition.calories or 0
-                total_protein += meal.nutrition.macros.protein or 0
-                total_carbs += meal.nutrition.macros.carbs or 0
-                total_fat += meal.nutrition.macros.fat or 0
+                macros = meal.nutrition.macros
+                total_protein += macros.protein or 0
+                total_carbs += macros.carbs or 0
+                total_fat += macros.fat or 0
+                total_calories += WeeklyBudgetService._derive_macro_calories(macros)
 
         return {
             "calories": total_calories,
@@ -111,12 +116,13 @@ class WeeklyBudgetService:
         uow: Any,
         user_id: str,
         week_start: date,
+        end_date: Optional[date] = None,
         exclude_date: Optional[date] = None,
         exclude_dates: Optional[List[date]] = None,
         user_timezone: Optional[str] = None,
     ) -> Dict[str, float]:
         """Async version of calculate_weekly_consumed for AsyncUnitOfWork."""
-        week_end = week_start + timedelta(days=6)
+        week_end = end_date or week_start + timedelta(days=6)
         tz = get_zone_info(user_timezone) if user_timezone else None
 
         meals = await uow.meals.find_by_date_range(
@@ -134,19 +140,22 @@ class WeeklyBudgetService:
         exclude_dates_set = set(exclude_dates) if exclude_dates else set()
         for meal in meals:
             if meal.status == MealStatus.READY and meal.nutrition:
-                if (exclude_date or exclude_dates_set) and meal.created_at:
+                if (end_date or exclude_date or exclude_dates_set) and meal.created_at:
                     aware_dt = ensure_utc(meal.created_at)
                     meal_local_date = (
                         aware_dt.astimezone(tz).date() if tz else aware_dt.date()
                     )
+                    if end_date and meal_local_date > end_date:
+                        continue
                     if exclude_date and meal_local_date == exclude_date:
                         continue
                     if meal_local_date in exclude_dates_set:
                         continue
-                total_calories += meal.nutrition.calories or 0
-                total_protein += meal.nutrition.macros.protein or 0
-                total_carbs += meal.nutrition.macros.carbs or 0
-                total_fat += meal.nutrition.macros.fat or 0
+                macros = meal.nutrition.macros
+                total_protein += macros.protein or 0
+                total_carbs += macros.carbs or 0
+                total_fat += macros.fat or 0
+                total_calories += WeeklyBudgetService._derive_macro_calories(macros)
 
         return {
             "calories": total_calories,
@@ -244,7 +253,7 @@ class WeeklyBudgetService:
             uow,
             user_id,
             week_start,
-            exclude_date=target_date,
+            end_date=past_end,
             user_timezone=user_timezone,
         )
 
@@ -254,7 +263,7 @@ class WeeklyBudgetService:
                 uow,
                 user_id,
                 week_start,
-                exclude_date=target_date,
+                end_date=past_end,
                 exclude_dates=past_cheat_dates,
                 user_timezone=user_timezone,
             )
@@ -410,7 +419,7 @@ class WeeklyBudgetService:
             uow,
             user_id,
             week_start,
-            exclude_date=target_date,
+            end_date=past_end,
             user_timezone=user_timezone,
         )
 
@@ -419,7 +428,7 @@ class WeeklyBudgetService:
                 uow,
                 user_id,
                 week_start,
-                exclude_date=target_date,
+                end_date=past_end,
                 exclude_dates=past_cheat_dates,
                 user_timezone=user_timezone,
             )
@@ -524,7 +533,22 @@ class WeeklyBudgetService:
         remaining_carbs = weekly_budget.remaining_carbs
         remaining_fat = weekly_budget.remaining_fat
 
-        adjusted_calories = remaining_calories / remaining_days
+        calorie_target = remaining_calories / remaining_days
+
+        # Deficit cap: never reduce more than MAX_DAILY_DEFICIT_RATIO below base.
+        min_allowed = standard_daily_calories * (
+            1 - WeeklyBudgetConstants.MAX_DAILY_DEFICIT_RATIO
+        )
+        max_allowed = standard_daily_calories * (
+            1 + WeeklyBudgetConstants.MAX_DAILY_SURPLUS_RATIO
+        )
+        calorie_target = min(max(calorie_target, min_allowed), max_allowed)
+
+        bmr_floor_active = False
+        if calorie_target < bmr_floor:
+            calorie_target = bmr_floor
+            bmr_floor_active = True
+
         adjusted_carbs = remaining_carbs / remaining_days
         adjusted_fat = remaining_fat / remaining_days
 
@@ -542,61 +566,43 @@ class WeeklyBudgetService:
         # Protein stays fixed regardless of weekly consumption
         adjusted_protein = standard_daily_protein
 
-        # Round macros to 1 decimal first
         rounded_protein = round(adjusted_protein, 1)
         rounded_carbs = round(adjusted_carbs, 1)
         rounded_fat = round(adjusted_fat, 1)
 
-        # Derive calories from rounded macros — single source of truth
+        rounded_carbs, rounded_fat = WeeklyBudgetService._fit_carbs_fat_to_calories(
+            calorie_target=calorie_target,
+            protein=rounded_protein,
+            carbs=rounded_carbs,
+            fat=rounded_fat,
+        )
+        rounded_carbs = WeeklyBudgetService._clamp_macro(
+            rounded_carbs,
+            minimum=standard_daily_carbs * floor,
+            maximum=standard_daily_carbs * ceil,
+        )
+        rounded_fat = WeeklyBudgetService._clamp_macro(
+            rounded_fat,
+            minimum=standard_daily_fat * floor,
+            maximum=standard_daily_fat * ceil,
+        )
+
+        # Final calories still come from macros, but the macros are fitted to
+        # the calorie-led redistribution target.
         adjusted_calories = (
             (rounded_protein * 4) + (rounded_carbs * 4) + (rounded_fat * 9)
         )
-
-        # Calorie cap: prevent macro inflation above calorie-level redistribution.
-        # When user over-eats expensive macros (fat=9cal/g) but under-eats cheap
-        # macros (carbs=4cal/g), independent macro redistribution can inflate
-        # calories above what pure calorie redistribution would give.
-        calorie_redistributed = remaining_calories / remaining_days
-        if (
-            adjusted_calories > calorie_redistributed
-            and calorie_redistributed < standard_daily_calories
+        while not bmr_floor_active and adjusted_calories > max_allowed and (
+            rounded_fat > standard_daily_fat * floor
+            or rounded_carbs > standard_daily_carbs * floor
         ):
-            protein_cal = rounded_protein * 4
-            non_protein_target = calorie_redistributed - protein_cal
-            non_protein_current = (rounded_carbs * 4) + (rounded_fat * 9)
-            if non_protein_current > 0 and non_protein_target > 0:
-                scale = non_protein_target / non_protein_current
-                rounded_carbs = round(rounded_carbs * scale, 1)
-                rounded_fat = round(rounded_fat * scale, 1)
-                adjusted_calories = (
-                    protein_cal + (rounded_carbs * 4) + (rounded_fat * 9)
-                )
-
-        # Deficit cap: never reduce more than MAX_DAILY_DEFICIT_RATIO below base
-        min_allowed = standard_daily_calories * (
-            1 - WeeklyBudgetConstants.MAX_DAILY_DEFICIT_RATIO
-        )
-        if adjusted_calories < min_allowed:
-            deficit_gap = min_allowed - adjusted_calories
-            # Scale carbs and fat up proportionally to meet minimum
-            carb_cal = rounded_carbs * 4
-            fat_cal = rounded_fat * 9
-            total_non_protein_cal = carb_cal + fat_cal
-            if total_non_protein_cal > 0:
-                carb_ratio = carb_cal / total_non_protein_cal
-                fat_ratio = fat_cal / total_non_protein_cal
-                rounded_carbs = round(rounded_carbs + (deficit_gap * carb_ratio) / 4, 1)
-                rounded_fat = round(rounded_fat + (deficit_gap * fat_ratio) / 9, 1)
-            # Re-derive calories from updated macros
+            if rounded_fat > standard_daily_fat * floor:
+                rounded_fat = round(rounded_fat - 0.1, 1)
+            elif rounded_carbs > standard_daily_carbs * floor:
+                rounded_carbs = round(rounded_carbs - 0.1, 1)
             adjusted_calories = (
                 (rounded_protein * 4) + (rounded_carbs * 4) + (rounded_fat * 9)
             )
-
-        # Check if we hit the BMR floor
-        bmr_floor_active = False
-        if adjusted_calories < bmr_floor:
-            adjusted_calories = bmr_floor
-            bmr_floor_active = True
 
         return AdjustedDailyTargets(
             calories=round(adjusted_calories, 1),
@@ -606,6 +612,42 @@ class WeeklyBudgetService:
             bmr_floor_active=bmr_floor_active,
             remaining_days=remaining_days,
         )
+
+    @staticmethod
+    def _fit_carbs_fat_to_calories(
+        *,
+        calorie_target: float,
+        protein: float,
+        carbs: float,
+        fat: float,
+    ) -> tuple[float, float]:
+        protein_calories = protein * 4
+        non_protein_target = calorie_target - protein_calories
+        non_protein_current = (carbs * 4) + (fat * 9)
+
+        if non_protein_target <= 0 or non_protein_current <= 0:
+            return carbs, fat
+
+        scale = non_protein_target / non_protein_current
+        return round(carbs * scale, 1), round(fat * scale, 1)
+
+    @staticmethod
+    def _clamp_macro(value: float, *, minimum: float, maximum: float) -> float:
+        return round(max(minimum, min(value, maximum)), 1)
+
+    @staticmethod
+    def _derive_macro_calories(macros: Any) -> float:
+        """Derive calories from macros using the canonical fiber-aware formula."""
+        protein = WeeklyBudgetService._safe_macro_value(getattr(macros, "protein", 0.0))
+        carbs = WeeklyBudgetService._safe_macro_value(getattr(macros, "carbs", 0.0))
+        fat = WeeklyBudgetService._safe_macro_value(getattr(macros, "fat", 0.0))
+        fiber = WeeklyBudgetService._safe_macro_value(getattr(macros, "fiber", 0.0))
+        net_carbs = max(0.0, carbs - fiber)
+        return protein * 4 + net_carbs * 4 + fiber * 2 + fat * 9
+
+    @staticmethod
+    def _safe_macro_value(value: Any) -> float:
+        return float(value) if isinstance(value, (int, float)) else 0.0
 
     @staticmethod
     def should_suggest_cheat_day(

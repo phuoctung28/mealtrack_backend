@@ -47,12 +47,27 @@ class CacheKeys:
         )
 
     @staticmethod
-    def weekly_budget(user_id: str, week_start_date: date) -> tuple[str, int]:
-        """Cache key for weekly macro budget. 30 min TTL."""
+    def weekly_budget(
+        user_id: str, week_start_date: date, target_date: date | None = None
+    ) -> tuple[str, int]:
+        """Cache key for weekly budget responses. 30 min TTL.
+
+        The stored weekly budget is week-scoped, but the API response contains
+        target-date-specific fields such as remaining_days and adjusted targets.
+        """
+        date_suffix = (
+            week_start_date.isoformat()
+            if target_date is None
+            else f"{week_start_date.isoformat()}:{target_date.isoformat()}"
+        )
         return (
-            f"user:{user_id}:weekly_budget:{week_start_date.isoformat()}",
+            f"user:{user_id}:weekly_budget_v3:{date_suffix}",
             CacheKeys.TTL_30_MIN,
         )
+
+    @staticmethod
+    def weekly_budget_pattern(user_id: str, week_start_date: date) -> str:
+        return f"user:{user_id}:weekly_budget_v3:{week_start_date.isoformat()}:*"
 
     @staticmethod
     def nutrition_bulk(

@@ -113,26 +113,31 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
 
             weekly_summary = None
             if weekly_budget:
-                remaining_days = WeeklyBudgetService.calculate_remaining_days(week_start, today)
                 base_daily = target_calories or (weekly_budget.target_calories / 7)
-                adjusted = WeeklyBudgetService.calculate_adjusted_daily(
-                    weekly_budget,
-                    standard_daily_calories=base_daily,
-                    standard_daily_carbs=(target_macros or {}).get("carbs", 200),
-                    standard_daily_fat=(target_macros or {}).get("fat", 70),
-                    standard_daily_protein=(target_macros or {}).get("protein", 70),
+                effective = await WeeklyBudgetService.get_effective_adjusted_daily_async(
+                    uow=uow,
+                    user_id=query.user_id,
+                    week_start=week_start,
+                    target_date=today,
+                    weekly_budget=weekly_budget,
+                    base_daily_cal=base_daily,
+                    base_daily_protein=(target_macros or {}).get("protein", 70),
+                    base_daily_carbs=(target_macros or {}).get("carbs", 200),
+                    base_daily_fat=(target_macros or {}).get("fat", 70),
                     bmr=bmr,
-                    remaining_days=remaining_days,
+                    user_timezone=user_tz_str,
                 )
+                adjusted = effective.adjusted
+                consumed = effective.consumed_total
                 weekly_summary = {
                     "week_start_date": week_start.isoformat(),
                     "target_calories": weekly_budget.target_calories,
-                    "consumed_calories": weekly_budget.consumed_calories,
+                    "consumed_calories": round(consumed["calories"], 1),
                     "remaining_calories": round(
-                        weekly_budget.target_calories - weekly_budget.consumed_calories, 1
+                        weekly_budget.target_calories - consumed["calories"], 1
                     ),
                     "adjusted_daily_calories": adjusted.calories,
-                    "remaining_days": remaining_days,
+                    "remaining_days": adjusted.remaining_days,
                 }
 
             cache_version = self._compute_cache_version(dates_result, weekly_summary)
