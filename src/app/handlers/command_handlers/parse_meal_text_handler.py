@@ -11,24 +11,23 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.events.base import EventHandler, handles
-from src.app.schemas.meal_schemas import ParseMealTextResponseDto, ParsedFoodItemDto
-from src.domain.services.prompts.input_sanitizer import sanitize_user_description
-from src.infra.services.ai.gemini_model_manager import GeminiModelManager
-from src.domain.services.prompts.system_prompts import SystemPrompts
-from src.infra.adapters.fat_secret_service import get_fat_secret_service
-from src.domain.services.nutrition_calculation_service import (
-    scale_per_100g_nutrition,
-    clamp_nutrition_values,
-)
 from src.app.handlers.command_handlers.meal_text_parsing_utils import (
     extract_json_from_response,
-    extract_usda_nutrition,
     parse_fatsecret_nutrition,
 )
+from src.app.schemas.meal_schemas import ParsedFoodItemDto, ParseMealTextResponseDto
 from src.domain.services.emoji_validator import validate_emoji
+from src.domain.services.nutrition_calculation_service import (
+    clamp_nutrition_values,
+    scale_per_100g_nutrition,
+)
+from src.domain.services.prompts.input_sanitizer import sanitize_user_description
+from src.domain.services.prompts.system_prompts import SystemPrompts
 from src.domain.services.translation.deepl_text_translation_service import (
     DeepLTextTranslationService,
 )
+from src.infra.adapters.fat_secret_service import get_fat_secret_service
+from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
 logger = logging.getLogger(__name__)
 

@@ -16,6 +16,8 @@ from src.domain.model.nutrition import Macros, Nutrition
 from src.domain.services.meal_service import MealService
 from src.domain.services.nutrition_calculation_service import (
     NutritionCalculationService,
+    clamp_nutrition_values,
+    normalize_unit_for_manual_save,
 )
 
 
@@ -93,6 +95,38 @@ def test_meal_service_add_custom_nutrition_uses_unit_grams():
     assert updated.nutrition.macros.protein == pytest.approx(12.6)
     assert updated.nutrition.macros.carbs == pytest.approx(0.7)
     assert updated.nutrition.macros.fat == pytest.approx(9.5)
+
+
+def test_normalize_unit_for_manual_save_keeps_convertible_units():
+    assert normalize_unit_for_manual_save("grams") == "g"
+    assert normalize_unit_for_manual_save("quả lớn") == "large"
+    assert normalize_unit_for_manual_save("cups cooked") == "cup"
+
+
+def test_normalize_unit_for_manual_save_falls_back_for_ai_free_text():
+    assert normalize_unit_for_manual_save("one very full noodle bowl") == "serving"
+
+
+def test_clamp_nutrition_uses_manual_save_unit_for_ai_free_text():
+    clamped = clamp_nutrition_values(
+        {
+            "name": "Pho bowl",
+            "quantity": 1.0,
+            "unit": "one very full noodle bowl",
+            "english_unit": "one very full noodle bowl",
+            "calories": 560.0,
+            "protein": 30.0,
+            "carbs": 80.0,
+            "fat": 12.0,
+        }
+    )
+
+    assert clamped == {
+        "calories": 560.0,
+        "protein": 30.0,
+        "carbs": 80.0,
+        "fat": 12.0,
+    }
 
 
 def _new_processing_meal() -> Meal:
