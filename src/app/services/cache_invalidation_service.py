@@ -51,6 +51,10 @@ class CacheInvalidationService:
                 else:
                     logger.error("Cache pattern invalidation failed for %s: %s", pattern, exc)
 
+    async def _invalidate_weekly_budget(self, user_id: str, week_start: date) -> None:
+        await self._invalidate_key(CacheKeys.weekly_budget(user_id, week_start)[0])
+        await self._invalidate_pattern(CacheKeys.weekly_budget_pattern(user_id, week_start))
+
     async def after_meal_write(self, user_id: str, meal_date: date) -> None:
         """Invalidate all caches affected by a meal create/edit/delete."""
         meal_week_start = _get_week_start(meal_date)
@@ -62,7 +66,7 @@ class CacheInvalidationService:
         )
         await self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*")
         await self._invalidate_key(CacheKeys.daily_macros(user_id, meal_date)[0])
-        await self._invalidate_key(CacheKeys.weekly_budget(user_id, meal_week_start)[0])
+        await self._invalidate_weekly_budget(user_id, meal_week_start)
 
         # Secondary keys (read on other screens, slight delay acceptable)
         await self._invalidate_key(CacheKeys.daily_breakdown(user_id, meal_week_start)[0])
@@ -70,7 +74,7 @@ class CacheInvalidationService:
 
         # Backdated meal: also invalidate current week
         if meal_week_start != current_week_start:
-            await self._invalidate_key(CacheKeys.weekly_budget(user_id, current_week_start)[0])
+            await self._invalidate_weekly_budget(user_id, current_week_start)
             await self._invalidate_key(CacheKeys.daily_breakdown(user_id, current_week_start)[0])
 
     async def after_movement_write(self, user_id: str, log_date: date) -> None:
@@ -86,12 +90,12 @@ class CacheInvalidationService:
         )
         await self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*")
         await self._invalidate_key(CacheKeys.daily_macros(user_id, log_date)[0])
-        await self._invalidate_key(CacheKeys.weekly_budget(user_id, week_start)[0])
+        await self._invalidate_weekly_budget(user_id, week_start)
         await self._invalidate_key(CacheKeys.daily_breakdown(user_id, week_start)[0])
 
         # Backdated movement: also invalidate current week
         if week_start != current_week_start:
-            await self._invalidate_key(CacheKeys.weekly_budget(user_id, current_week_start)[0])
+            await self._invalidate_weekly_budget(user_id, current_week_start)
             await self._invalidate_key(CacheKeys.daily_breakdown(user_id, current_week_start)[0])
 
     async def after_hydration_write(self, user_id: str, log_date: date) -> None:
@@ -117,13 +121,13 @@ class CacheInvalidationService:
         await self._invalidate_key(CacheKeys.weekly_hydration(user_id, week_start)[0])
 
         # Meal-related keys (caloric drinks affect energy balance)
-        await self._invalidate_key(CacheKeys.weekly_budget(user_id, week_start)[0])
+        await self._invalidate_weekly_budget(user_id, week_start)
         await self._invalidate_key(CacheKeys.daily_breakdown(user_id, week_start)[0])
         await self._invalidate_key(CacheKeys.user_streak(user_id)[0])
 
         # Backdated hydration: also invalidate current week
         if week_start != current_week_start:
-            await self._invalidate_key(CacheKeys.weekly_budget(user_id, current_week_start)[0])
+            await self._invalidate_weekly_budget(user_id, current_week_start)
             await self._invalidate_key(CacheKeys.daily_breakdown(user_id, current_week_start)[0])
 
     async def after_custom_macros_update(self, user_id: str) -> None:
@@ -141,5 +145,5 @@ class CacheInvalidationService:
         today = date.today()
         this_week = _get_week_start(today)
         next_week = this_week + timedelta(days=7)
-        await self._invalidate_key(CacheKeys.weekly_budget(user_id, this_week)[0])
-        await self._invalidate_key(CacheKeys.weekly_budget(user_id, next_week)[0])
+        await self._invalidate_weekly_budget(user_id, this_week)
+        await self._invalidate_weekly_budget(user_id, next_week)

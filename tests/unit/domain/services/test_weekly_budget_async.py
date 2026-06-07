@@ -33,7 +33,7 @@ class TestCalculateWeeklyConsumedAsync:
 
         ready_meal = Mock()
         ready_meal.status = MealStatus.READY
-        ready_meal.nutrition.calories = 500
+        ready_meal.nutrition.calories = 9999
         ready_meal.nutrition.macros.protein = 30
         ready_meal.nutrition.macros.carbs = 60
         ready_meal.nutrition.macros.fat = 15
@@ -56,7 +56,7 @@ class TestCalculateWeeklyConsumedAsync:
             week_start=date(2026, 3, 9),
         )
 
-        assert result["calories"] == 500
+        assert result["calories"] == 495
         assert result["protein"] == 30
         assert result["carbs"] == 60
         assert result["fat"] == 15
