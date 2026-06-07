@@ -218,6 +218,26 @@ class TestCreateManualMealFromFoodsRequest:
 
         assert request.source is None
 
+    def test_manual_source_allows_legacy_non_gram_prompt_payload(self):
+        request = CreateManualMealFromFoodsRequest(
+            dish_name="gà sốt cam",
+            source="manual",
+            items=[
+                {
+                    "name": "gà sốt cam",
+                    "quantity": 1.0,
+                    "unit": "đĩa gà sốt cam",
+                    "custom_nutrition": {
+                        "protein_per_100g": 3000.0,
+                        "carbs_per_100g": 5000.0,
+                        "fat_per_100g": 2000.0,
+                    },
+                }
+            ],
+        )
+
+        assert request.source == "manual"
+
     def test_missing_source_rejects_impossible_gram_macro_rates(self):
         with pytest.raises(ValidationError):
             CreateManualMealFromFoodsRequest(

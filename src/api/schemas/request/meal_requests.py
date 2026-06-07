@@ -146,6 +146,10 @@ def _has_macro_over_100(nutrition) -> bool:
     )
 
 
+def _is_gram_unit(unit: str) -> bool:
+    return unit.lower().strip() in {"g", "gram", "grams"}
+
+
 # Food database manual meal creation requests
 class ManualMealCustomNutritionRequest(BaseModel):
     """Custom nutrition for manual meal creation.
@@ -214,6 +218,7 @@ class CreateManualMealFromFoodsRequest(BaseModel):
     @model_validator(mode="after")
     def validate_custom_nutrition_bounds(self):
         source = (self.source or "").lower()
+        prompt_sources = {"prompt", "parse_text", "ai_prompt"}
 
         for item in self.items:
             if not item.custom_nutrition or not _has_macro_over_100(
@@ -221,14 +226,13 @@ class CreateManualMealFromFoodsRequest(BaseModel):
             ):
                 continue
 
-            unit = (item.unit or "").lower().strip()
-            is_legacy_prompt_payload = source == "prompt" or (
-                not source and unit not in {"g", "gram", "grams"}
+            is_legacy_prompt_payload = (
+                source in prompt_sources or not _is_gram_unit(item.unit or "")
             )
             if not is_legacy_prompt_payload:
                 raise ValueError(
                     "custom_nutrition macros must be <=100g per 100g "
-                    "unless source is prompt"
+                    "unless payload uses a legacy prompt unit"
                 )
         return self
 

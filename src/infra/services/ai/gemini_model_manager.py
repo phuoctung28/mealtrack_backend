@@ -7,19 +7,19 @@ Config constants: gemini_model_config.py | Cache logic: gemini_cache_handler.py
 import logging
 import os
 import threading
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
+import src.infra.services.ai.gemini_cache_handler as cache_handler
 from src.infra.services.ai.gemini_model_config import (
     CachedModel,
-    GeminiModelPurpose,
     DEFAULT_MAX_CACHE_SIZE,
     DEFAULT_TTL_SECONDS,
+    GeminiModelPurpose,
     MEMORY_WARNING_THRESHOLD_MB,
-    PURPOSE_MODEL_DEFAULTS,
     PURPOSE_ENV_VARS,
+    PURPOSE_MODEL_DEFAULTS,
     PURPOSE_TEMPERATURES,
 )
-import src.infra.services.ai.gemini_cache_handler as cache_handler
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +58,14 @@ class GeminiModelManager:
         self.memory_warning_threshold_mb = int(
             os.getenv("MEMORY_WARNING_THRESHOLD_MB", MEMORY_WARNING_THRESHOLD_MB)
         )
+        self.request_timeout_seconds = float(
+            os.getenv("GEMINI_REQUEST_TIMEOUT_SECONDS", "15")
+        )
+        self.max_retries = int(os.getenv("GEMINI_MAX_RETRIES", "1"))
         logger.info(
             f"GeminiModelManager initialized: model={self.model_name}, "
-            f"max_cache={self.max_cache_size}, ttl={self.ttl_seconds}s"
+            f"max_cache={self.max_cache_size}, ttl={self.ttl_seconds}s, "
+            f"timeout={self.request_timeout_seconds}s, retries={self.max_retries}"
         )
 
     @classmethod
@@ -116,6 +121,8 @@ class GeminiModelManager:
             "temperature": temperature,
             "google_api_key": self.api_key,
             "convert_system_message_to_human": True,
+            "request_timeout": self.request_timeout_seconds,
+            "retries": self.max_retries,
         }
         if max_output_tokens is not None:
             cfg["max_output_tokens"] = max_output_tokens
@@ -186,7 +193,7 @@ class GeminiModelManager:
         self,
         purpose: GeminiModelPurpose = GeminiModelPurpose.GENERAL,
         model_name: Optional[str] = None,
-        temperature: Optional[float] = None,   # None = use PURPOSE_TEMPERATURES lookup
+        temperature: Optional[float] = None,  # None = use PURPOSE_TEMPERATURES lookup
         max_output_tokens: Optional[int] = None,
         response_mime_type: Optional[str] = None,
         **kwargs,

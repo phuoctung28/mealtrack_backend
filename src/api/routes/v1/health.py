@@ -19,6 +19,7 @@ from src.infra.database.config import (
 )
 
 router = APIRouter(prefix="/v1", tags=["Health"])
+root_router = APIRouter(tags=["Health"])
 
 
 def _deployment_info() -> Dict[str, Optional[str]]:
@@ -37,6 +38,7 @@ def _deployment_info() -> Dict[str, Optional[str]]:
     }
 
 
+@root_router.api_route("/health", methods=["GET", "HEAD"], include_in_schema=False)
 @router.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     """
@@ -53,6 +55,7 @@ async def health_check():
     )
 
 
+@root_router.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 @router.api_route("/", methods=["GET", "HEAD"])
 async def root():
     """
