@@ -101,8 +101,9 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         handler = GetWeeklyBudgetQueryHandler(
             uow=injected_uow, cache_service=cache_service
         )
+        target_date = date(2024, 1, 2)
         query = GetWeeklyBudgetQuery(
-            user_id="u1", target_date=date(2024, 1, 1), header_timezone="UTC"
+            user_id="u1", target_date=target_date, header_timezone="UTC"
         )
 
         with patch(
@@ -145,8 +146,9 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         mock_uow.__aexit__ = AsyncMock(return_value=False)
 
         handler = GetWeeklyBudgetQueryHandler(cache_service=cache_service)
+        target_date = date(2024, 1, 2)
         query = GetWeeklyBudgetQuery(
-            user_id="u1", target_date=date(2024, 1, 1), header_timezone="UTC"
+            user_id="u1", target_date=target_date, header_timezone="UTC"
         )
 
         with patch(
@@ -166,7 +168,10 @@ class TestGetWeeklyBudgetQueryHandlerCache:
             result = await handler.handle(query)
 
         assert result == cached_payload
-        cache_service.get_json.assert_awaited_once()
+        expected_key, _ = CacheKeys.weekly_budget(
+            "u1", date(2024, 1, 1), target_date
+        )
+        cache_service.get_json.assert_awaited_once_with(expected_key)
         cache_service.set_json.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -230,11 +235,14 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         mock_uow.weekly_budgets.find_by_user_and_week.return_value = mock_budget
 
         handler = GetWeeklyBudgetQueryHandler(cache_service=cache_service)
+        target_date = date(2024, 1, 2)
         query = GetWeeklyBudgetQuery(
-            user_id="u1", target_date=date(2024, 1, 1), header_timezone="UTC"
+            user_id="u1", target_date=target_date, header_timezone="UTC"
         )
 
-        expected_key, expected_ttl = CacheKeys.weekly_budget("u1", week_start)
+        expected_key, expected_ttl = CacheKeys.weekly_budget(
+            "u1", week_start, target_date
+        )
 
         with patch(
             "src.app.handlers.query_handlers.get_weekly_budget_query_handler.AsyncUnitOfWork",

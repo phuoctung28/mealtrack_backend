@@ -61,8 +61,11 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                 # target_date is already a local date — no timezone re-lookup needed
                 week_start = get_user_monday(target_date, query.user_id)
 
-                # Cache check (requires week_start, computed above)
-                cache_key, ttl = CacheKeys.weekly_budget(query.user_id, week_start)
+                # Cache check uses target_date because adjusted targets and
+                # remaining days differ across dates in the same week.
+                cache_key, ttl = CacheKeys.weekly_budget(
+                    query.user_id, week_start, target_date
+                )
                 if self.cache_service:
                     cached = await self.cache_service.get_json(cache_key)
                     if cached is not None:
@@ -333,31 +336,33 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
         tz = get_zone_info(user_timezone) if user_timezone else None
         from src.domain.model.meal import MealStatus
 
-        def _sum_meals(meals, exclude_date=None, exclude_dates=None):
+        def _sum_meals(meals, end_date=None, exclude_dates=None):
             exclude_dates_set = set(exclude_dates) if exclude_dates else set()
             cal = prot = carbs = fat = 0.0
             for meal in meals:
                 if meal.status == MealStatus.READY and meal.nutrition:
-                    if (exclude_date or exclude_dates_set) and meal.created_at:
+                    if (end_date or exclude_dates_set) and meal.created_at:
                         aware_dt = ensure_utc(meal.created_at)
                         meal_local_date = (
                             aware_dt.astimezone(tz).date() if tz else aware_dt.date()
                         )
-                        if exclude_date and meal_local_date == exclude_date:
+                        if end_date and meal_local_date > end_date:
                             continue
                         if meal_local_date in exclude_dates_set:
                             continue
-                    cal += meal.nutrition.calories or 0
-                    prot += meal.nutrition.macros.protein or 0
-                    carbs += meal.nutrition.macros.carbs or 0
-                    fat += meal.nutrition.macros.fat or 0
+                    macros = meal.nutrition.macros
+                    cal += WeeklyBudgetService._derive_macro_calories(macros)
+                    prot += macros.protein or 0
+                    carbs += macros.carbs or 0
+                    fat += macros.fat or 0
             return {"calories": cal, "protein": prot, "carbs": carbs, "fat": fat}
 
         consumed_total = _sum_meals(week_meals)
-        consumed_before_today = _sum_meals(week_meals, exclude_date=target_date)
+        past_end = target_date - timedelta(days=1)
+        consumed_before_today = _sum_meals(week_meals, end_date=past_end)
         if past_cheat_dates:
             consumed_for_redistribution = _sum_meals(
-                week_meals, exclude_date=target_date, exclude_dates=past_cheat_dates
+                week_meals, end_date=past_end, exclude_dates=past_cheat_dates
             )
         else:
             consumed_for_redistribution = consumed_before_today

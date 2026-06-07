@@ -192,6 +192,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 target_macros,
                 net_calories,
                 bmr,
+                user_tz_str,
             )
             if weekly_context:
                 result["weekly_context"] = weekly_context
@@ -218,15 +219,13 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
         target_macros: Dict,
         daily_consumed: float,
         bmr: float = 1800,
+        user_timezone: str = "UTC",
     ) -> Optional[Dict[str, Any]]:
-        """Get weekly budget context. weekly_budget is pre-fetched from the shared UoW."""
+        """Get weekly budget context using the weekly-budget adjustment path."""
         if not weekly_budget:
             return None
         try:
             week_start = get_user_monday(target_date, user_id)
-            remaining_days = WeeklyBudgetService.calculate_remaining_days(
-                week_start, target_date
-            )
 
             standard_daily_calories = target_calories
             standard_daily_protein = (
@@ -237,15 +236,21 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             )
             standard_daily_fat = target_macros.get("fat", 70) if target_macros else 70
 
-            adjusted = WeeklyBudgetService.calculate_adjusted_daily(
-                weekly_budget,
-                standard_daily_calories,
-                standard_daily_carbs,
-                standard_daily_fat,
-                standard_daily_protein,
-                bmr=bmr,
-                remaining_days=remaining_days,
-            )
+            async with AsyncUnitOfWork() as uow:
+                effective = await WeeklyBudgetService.get_effective_adjusted_daily_async(
+                    uow=uow,
+                    user_id=user_id,
+                    week_start=week_start,
+                    target_date=target_date,
+                    weekly_budget=weekly_budget,
+                    base_daily_cal=standard_daily_calories,
+                    base_daily_protein=standard_daily_protein,
+                    base_daily_carbs=standard_daily_carbs,
+                    base_daily_fat=standard_daily_fat,
+                    bmr=bmr,
+                    user_timezone=user_timezone,
+                )
+            adjusted = effective.adjusted
 
             return {
                 "adjusted_target_calories": adjusted.calories,
@@ -253,7 +258,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 "adjusted_target_fat": adjusted.fat,
                 "daily_protein": adjusted.protein,
                 "bmr_floor_active": adjusted.bmr_floor_active,
-                "remaining_days": remaining_days,
+                "remaining_days": adjusted.remaining_days,
             }
         except Exception as e:
             logger.warning(f"Could not fetch weekly budget context: {e}")
