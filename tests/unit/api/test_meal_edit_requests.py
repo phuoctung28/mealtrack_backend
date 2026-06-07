@@ -6,10 +6,11 @@ import pytest
 from pydantic import ValidationError
 
 from src.api.schemas.request.meal_requests import (
-    FoodItemChangeRequest,
+    AddCustomIngredientRequest,
+    CreateManualMealFromFoodsRequest,
     CustomNutritionRequest,
     EditMealIngredientsRequest,
-    AddCustomIngredientRequest,
+    FoodItemChangeRequest,
 )
 
 
@@ -169,6 +170,89 @@ class TestCustomNutritionRequest:
                 protein_per_100g=150.0,  # Over 100 limit
                 carbs_per_100g=25.0,
                 fat_per_100g=8.0,
+            )
+
+
+@pytest.mark.unit
+class TestCreateManualMealFromFoodsRequest:
+    """Test manual meal creation request validation."""
+
+    def test_prompt_source_allows_legacy_back_calculated_macro_rates(self):
+        request = CreateManualMealFromFoodsRequest(
+            dish_name="Pho bowl",
+            source="prompt",
+            items=[
+                {
+                    "name": "Pho bowl",
+                    "quantity": 1.0,
+                    "unit": "one very full noodle bowl",
+                    "custom_nutrition": {
+                        "protein_per_100g": 3000.0,
+                        "carbs_per_100g": 8000.0,
+                        "fat_per_100g": 1200.0,
+                    },
+                }
+            ],
+        )
+
+        nutrition = request.items[0].custom_nutrition
+        assert nutrition is not None
+        assert nutrition.protein_per_100g == 3000.0
+
+    def test_missing_source_allows_legacy_non_gram_prompt_payload(self):
+        request = CreateManualMealFromFoodsRequest(
+            dish_name="Pho bowl",
+            items=[
+                {
+                    "name": "Pho bowl",
+                    "quantity": 1.0,
+                    "unit": "one very full noodle bowl",
+                    "custom_nutrition": {
+                        "protein_per_100g": 3000.0,
+                        "carbs_per_100g": 8000.0,
+                        "fat_per_100g": 1200.0,
+                    },
+                }
+            ],
+        )
+
+        assert request.source is None
+
+    def test_missing_source_rejects_impossible_gram_macro_rates(self):
+        with pytest.raises(ValidationError):
+            CreateManualMealFromFoodsRequest(
+                dish_name="Manual meal",
+                items=[
+                    {
+                        "name": "Manual meal",
+                        "quantity": 1.0,
+                        "unit": "g",
+                        "custom_nutrition": {
+                            "protein_per_100g": 3000.0,
+                            "carbs_per_100g": 10.0,
+                            "fat_per_100g": 5.0,
+                        },
+                    }
+                ],
+            )
+
+    def test_non_prompt_source_rejects_impossible_macro_rates(self):
+        with pytest.raises(ValidationError):
+            CreateManualMealFromFoodsRequest(
+                dish_name="Manual meal",
+                source="manual",
+                items=[
+                    {
+                        "name": "Manual meal",
+                        "quantity": 1.0,
+                        "unit": "g",
+                        "custom_nutrition": {
+                            "protein_per_100g": 3000.0,
+                            "carbs_per_100g": 10.0,
+                            "fat_per_100g": 5.0,
+                        },
+                    }
+                ],
             )
 
 

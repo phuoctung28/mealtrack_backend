@@ -3,9 +3,9 @@ Meal-related request DTOs.
 """
 
 import warnings
-from typing import Any, Optional, Literal
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ParseMealTextRequest(BaseModel):
@@ -139,7 +139,35 @@ class AnalyzeMealImageRequest(BaseModel):
         return normalized
 
 
+def _has_macro_over_100(nutrition) -> bool:
+    return any(
+        getattr(nutrition, field, 0) > 100
+        for field in ("protein_per_100g", "carbs_per_100g", "fat_per_100g")
+    )
+
+
 # Food database manual meal creation requests
+class ManualMealCustomNutritionRequest(BaseModel):
+    """Custom nutrition for manual meal creation.
+
+    Prompt-created meals from older mobile clients can send high per-100g values
+    after back-calculating absolute parsed macros from a non-gram display unit.
+    The manual meal handler converts them back through the same unit path.
+    """
+
+    protein_per_100g: float = Field(..., ge=0, description="Protein per 100g")
+    carbs_per_100g: float = Field(..., ge=0, description="Carbohydrates per 100g")
+    fat_per_100g: float = Field(..., ge=0, description="Fat per 100g")
+
+    @property
+    def calories_per_100g(self) -> float:
+        """Derive calories from macros: P*4 + C*4 + F*9."""
+        return round(
+            self.protein_per_100g * 4 + self.carbs_per_100g * 4 + self.fat_per_100g * 9,
+            2,
+        )
+
+
 class ManualMealItemRequest(BaseModel):
     """Single selected food item with portion to create a manual meal.
 
@@ -159,11 +187,11 @@ class ManualMealItemRequest(BaseModel):
         ..., gt=0, description="Amount relative to serving unit (e.g., grams)"
     )
     unit: str = Field(
-        "g", min_length=1, max_length=20, description="Unit, default grams"
+        "g", min_length=1, max_length=64, description="Unit, default grams"
     )
-    custom_nutrition: Optional["CustomNutritionRequest"] = Field(
+    custom_nutrition: Optional[ManualMealCustomNutritionRequest] = Field(
         None,
-        description="Custom nutrition data for non-USDA foods (e.g., barcode products)",
+        description="Custom nutrition data for non-USDA foods",
     )
 
 
@@ -182,6 +210,27 @@ class CreateManualMealFromFoodsRequest(BaseModel):
         None, description="Meal source: scanner, prompt, food_search, manual"
     )
     emoji: Optional[str] = Field(None, description="AI-assigned dish emoji")
+
+    @model_validator(mode="after")
+    def validate_custom_nutrition_bounds(self):
+        source = (self.source or "").lower()
+
+        for item in self.items:
+            if not item.custom_nutrition or not _has_macro_over_100(
+                item.custom_nutrition
+            ):
+                continue
+
+            unit = (item.unit or "").lower().strip()
+            is_legacy_prompt_payload = source == "prompt" or (
+                not source and unit not in {"g", "gram", "grams"}
+            )
+            if not is_legacy_prompt_payload:
+                raise ValueError(
+                    "custom_nutrition macros must be <=100g per 100g "
+                    "unless source is prompt"
+                )
+        return self
 
 
 # Meal Edit Feature Requests

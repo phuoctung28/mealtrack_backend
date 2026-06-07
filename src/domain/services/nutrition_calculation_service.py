@@ -36,6 +36,23 @@ UNIT_TO_GRAMS = {
 # Not exhaustive — primary fix is the dual-unit approach (unit + english_unit).
 # Fuzzy matching + smart fallback in _convert_with_allowed_units handles the rest.
 UNIT_TRANSLATION = {
+    # English long-form weight/volume units
+    "gram": "g",
+    "grams": "g",
+    "kilogram": "kg",
+    "kilograms": "kg",
+    "milliliter": "ml",
+    "milliliters": "ml",
+    "millilitre": "ml",
+    "millilitres": "ml",
+    "liter": "l",
+    "liters": "l",
+    "litre": "l",
+    "litres": "l",
+    "pound": "lb",
+    "pounds": "lb",
+    "ounce": "oz",
+    "ounces": "oz",
     # Vietnamese count/size units
     "quả lớn": "large",
     "quả to": "large",
@@ -98,6 +115,8 @@ UNIT_TRANSLATION = {
     "份": "serving",
 }
 
+CONVERTIBLE_UNITS = set(UNIT_TO_GRAMS) | {"g", "ml", "l", "liter", "litre"}
+
 
 def _normalize_unit(unit: str) -> str:
     """Normalize unit string: translate multilingual, strip qualifiers, handle plurals."""
@@ -116,6 +135,19 @@ def _normalize_unit(unit: str) -> str:
         if singular in UNIT_TO_GRAMS:
             return singular
     return base
+
+
+def normalize_unit_for_manual_save(unit: str | None) -> str:
+    """Return a client-safe unit accepted by manual meal creation."""
+    normalized = _normalize_unit(unit or "")
+    if normalized in CONVERTIBLE_UNITS:
+        return normalized
+
+    logger.warning(
+        f"Unknown parse-text unit '{unit}' (normalized: '{normalized}') - "
+        "returning 'serving' for manual-save compatibility"
+    )
+    return "serving"
 
 
 def convert_quantity_to_grams(quantity: float, unit: str, food_name: str = "") -> float:
@@ -257,7 +289,7 @@ def clamp_nutrition_values(item: dict) -> dict:
     Returns clamped values; logs a warning when clamping occurs.
     """
     quantity = item.get("quantity", 1.0)
-    unit = (item.get("unit") or "g").lower()
+    unit = normalize_unit_for_manual_save(item.get("english_unit") or item.get("unit"))
 
     # Estimate weight in grams for plausibility check
     food_name = item.get("name", "")
