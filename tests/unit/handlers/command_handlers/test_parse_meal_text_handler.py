@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from src.api.schemas.request.meal_requests import CreateManualMealFromFoodsRequest
@@ -8,11 +6,16 @@ from src.app.handlers.command_handlers.parse_meal_text_handler import (
     ParseMealTextHandler,
 )
 from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
+from src.infra.services.ai.ai_model_manager import ModelPurpose
 
 
-class _FakeModelResponse:
-    content = json.dumps(
-        {
+class _FakeAIManager:
+    def __init__(self):
+        self.call_kwargs = None
+
+    async def generate(self, **kwargs):
+        self.call_kwargs = kwargs
+        return {
             "items": [
                 {
                     "name": "Pho bowl",
@@ -26,17 +29,6 @@ class _FakeModelResponse:
                 }
             ]
         }
-    )
-
-
-class _FakeModel:
-    async def ainvoke(self, messages):
-        return _FakeModelResponse()
-
-
-class _FakeModelManager:
-    def get_model(self, **kwargs):
-        return _FakeModel()
 
 
 class _FakeFatSecretService:
@@ -46,8 +38,8 @@ class _FakeFatSecretService:
 
 @pytest.mark.asyncio
 async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
-    handler = ParseMealTextHandler()
-    handler._model_manager = _FakeModelManager()
+    ai_manager = _FakeAIManager()
+    handler = ParseMealTextHandler(ai_manager=ai_manager)
     handler._fat_secret_service = _FakeFatSecretService()
 
     response = await handler.handle(
@@ -55,6 +47,8 @@ async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
     )
     item = response.items[0]
 
+    assert ai_manager.call_kwargs["purpose"] == ModelPurpose.PARSE_TEXT
+    assert ai_manager.call_kwargs["thinking_budget"] == 0
     assert item.unit == "one very full noodle bowl"
     assert item.protein == 30
     assert item.carbs == 80

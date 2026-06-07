@@ -43,6 +43,7 @@ from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
+from src.api.routes.v1.health import root_router as root_health_router
 from src.api.routes.v1.health import router as health_router
 from src.api.routes.v1.hydration import router as hydration_router
 from src.api.routes.v1.ingredients import router as ingredients_router
@@ -298,6 +299,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 add_dev_auth_bypass(app)
 
 # Include all routers
+app.include_router(root_health_router)
 app.include_router(health_router)
 app.include_router(meals_router)
 app.include_router(activities_router)

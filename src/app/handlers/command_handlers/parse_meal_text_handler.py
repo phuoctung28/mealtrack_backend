@@ -2,12 +2,12 @@
 Handler for parsing natural language meal text into structured food items.
 """
 
+import asyncio
 import json
 import logging
+import os
 import re
 from typing import Any, Dict, List, Optional
-
-from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.events.base import EventHandler, handles
@@ -27,9 +27,13 @@ from src.domain.services.translation.deepl_text_translation_service import (
     DeepLTextTranslationService,
 )
 from src.infra.adapters.fat_secret_service import get_fat_secret_service
-from src.infra.services.ai.gemini_model_manager import GeminiModelManager
+from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_text_fatsecret_timeout_seconds() -> float:
+    return float(os.getenv("PARSE_TEXT_FATSECRET_TIMEOUT_SECONDS", "3"))
 
 
 @handles(ParseMealTextCommand)
@@ -41,8 +45,9 @@ class ParseMealTextHandler(
     def __init__(
         self,
         translation_service: Optional[DeepLTextTranslationService] = None,
+        ai_manager: Optional[AIModelManager] = None,
     ):
-        self._model_manager = GeminiModelManager.get_instance()
+        self._ai_manager = ai_manager or AIModelManager.get_instance()
         self._fat_secret_service = get_fat_secret_service()
         self._translation_service = translation_service
 
@@ -58,38 +63,31 @@ class ParseMealTextHandler(
                 "Update the meal based on my request above. Return the COMPLETE updated list."
             )
 
-        # Get model with JSON response format
-        model = self._model_manager.get_model(
-            response_mime_type="application/json",
-            temperature=0.3,  # Lower temperature for more consistent parsing
-        )
-
         # Build messages with locale-aware food names
         system_prompt = SystemPrompts.get_meal_text_parsing_prompt(
             language=command.language
         )
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=sanitized_text),
-        ]
 
-        # Call Gemini
-        response = await model.ainvoke(messages)
-        content = response.content
+        raw = await self._ai_manager.generate(
+            purpose=ModelPurpose.PARSE_TEXT,
+            prompt=sanitized_text,
+            system_message=system_prompt,
+            response_type="json",
+            max_tokens=2048,
+            thinking_budget=0,
+        )
 
         # Extract JSON from response — may be {emoji, items: [...]} or plain [...]
         emoji = None
-        try:
-            raw = json.loads(content)
-            if isinstance(raw, dict):
-                emoji = validate_emoji(raw.get("emoji"))
-                parsed_items = raw.get("items", [])
-                if not isinstance(parsed_items, list):
-                    parsed_items = [parsed_items]
-            else:
-                parsed_items = extract_json_from_response(content)
-        except (json.JSONDecodeError, TypeError):
-            parsed_items = extract_json_from_response(content)
+        if isinstance(raw, dict):
+            emoji = validate_emoji(raw.get("emoji"))
+            parsed_items = raw.get("items", [])
+            if not isinstance(parsed_items, list):
+                parsed_items = [parsed_items]
+        elif isinstance(raw, list):
+            parsed_items = raw
+        else:
+            parsed_items = extract_json_from_response(str(raw))
 
         # Enhance items with USDA/FatSecret cascade lookup
         enhanced_items = []
@@ -168,8 +166,9 @@ class ParseMealTextHandler(
         # Try FatSecret — use English name from parentheses for lookup accuracy
         lookup_name = self._extract_english_name(name)
         try:
-            fatsecret_results = await self._fat_secret_service.search_foods(
-                lookup_name, max_results=5
+            fatsecret_results = await asyncio.wait_for(
+                self._fat_secret_service.search_foods(lookup_name, max_results=5),
+                timeout=_parse_text_fatsecret_timeout_seconds(),
             )
             if fatsecret_results and len(fatsecret_results) > 0:
                 fs_food = fatsecret_results[0]
