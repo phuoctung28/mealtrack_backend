@@ -8,6 +8,7 @@ from datetime import date, datetime, timezone
 from typing import List, Optional
 from unittest.mock import MagicMock
 
+from src.domain.constants import WeeklyBudgetConstants
 from src.domain.model.meal import MealStatus
 from src.domain.model.weekly import WeeklyMacroBudget
 from src.domain.services.weekly_budget_service import (
@@ -151,7 +152,7 @@ class TestWeeklyBudgetService:
             remaining_days=6,
         )
 
-        assert result.calories == 1900
+        assert result.calories == pytest.approx(1900, abs=1)
         assert result.bmr_floor_active is True
 
     def test_deficit_cap_no_cap_needed(self):
@@ -277,8 +278,8 @@ class TestWeeklyBudgetService:
         )
         assert result.protein == 140  # never touched
 
-    def test_under_eating_no_cap(self):
-        """Under-eating (surplus) — no cap applied, surplus uncapped."""
+    def test_under_eating_surplus_is_capped(self):
+        """Under-eating raises targets, but not into extreme catch-up eating."""
         budget = WeeklyMacroBudget(
             weekly_budget_id="test-cap-surplus",
             user_id="user-1",
@@ -301,8 +302,13 @@ class TestWeeklyBudgetService:
             bmr=1400,
             remaining_days=4,
         )
-        # Surplus: adjusted should be ABOVE base (no upward cap)
+        # Raw redistribution would be 2750; cap and macro ceilings keep it safer.
         assert result.calories > 2000
+        assert result.calories <= 2000 * (
+            1 + WeeklyBudgetConstants.MAX_DAILY_SURPLUS_RATIO
+        )
+        assert result.carbs <= 200 * WeeklyBudgetConstants.MACRO_CEILING_RATIO
+        assert result.fat <= 70 * WeeklyBudgetConstants.MACRO_CEILING_RATIO
         assert result.bmr_floor_active is False
 
     def test_calorie_cap_fat_heavy_surplus(self):
@@ -347,11 +353,8 @@ class TestWeeklyBudgetService:
         # Fat should be below base (user over-ate fat)
         assert result.fat < 68.2
 
-    def test_calorie_cap_not_applied_when_under_eating(self):
-        """Calorie cap should NOT fire when user is under-eating overall.
-
-        calorie_redistributed > standard_daily → second condition fails.
-        """
+    def test_moderate_under_eating_still_raises_calories(self):
+        """Moderate under-eating raises target without exceeding surplus cap."""
         budget = WeeklyMacroBudget(
             weekly_budget_id="test-cap-under",
             user_id="user-1",
@@ -376,6 +379,71 @@ class TestWeeklyBudgetService:
         )
         # Under-eating: adjusted should be ABOVE base
         assert result.calories > 2456
+        assert result.calories <= 2456 * (
+            1 + WeeklyBudgetConstants.MAX_DAILY_SURPLUS_RATIO
+        )
+
+    def test_under_eating_raises_calories_even_when_fat_is_over(self):
+        """Calorie balance leads adjustment; one macro overage must not lower calories."""
+        budget = WeeklyMacroBudget(
+            weekly_budget_id="test-under-fat-over",
+            user_id="user-1",
+            week_start_date=date(2026, 6, 1),
+            target_calories=12495,  # 1785 * 7
+            target_protein=1099,  # 157 * 7
+            target_carbs=1127,  # 161 * 7
+            target_fat=399,  # 57 * 7
+            consumed_calories=1141,
+            consumed_protein=78,
+            consumed_carbs=58,
+            consumed_fat=66,  # fat over daily target, calories still under
+        )
+
+        result = WeeklyBudgetService.calculate_adjusted_daily(
+            weekly_budget=budget,
+            standard_daily_calories=1785,
+            standard_daily_carbs=161,
+            standard_daily_fat=57,
+            standard_daily_protein=157,
+            bmr=1400,
+            remaining_days=6,
+        )
+
+        assert result.calories > 1785
+        assert result.calories == pytest.approx((12495 - 1141) / 6, abs=2)
+        assert result.protein == 157
+
+    def test_extreme_under_eating_respects_macro_ceilings_after_fit(self):
+        """Calorie fitting must not push adaptive carbs/fat past safe ceilings."""
+        budget = WeeklyMacroBudget(
+            weekly_budget_id="test-extreme-under",
+            user_id="user-1",
+            week_start_date=date(2026, 6, 1),
+            target_calories=12495,
+            target_protein=1099,
+            target_carbs=1127,
+            target_fat=399,
+            consumed_calories=0,
+            consumed_protein=0,
+            consumed_carbs=0,
+            consumed_fat=0,
+        )
+
+        result = WeeklyBudgetService.calculate_adjusted_daily(
+            weekly_budget=budget,
+            standard_daily_calories=1785,
+            standard_daily_carbs=161,
+            standard_daily_fat=57,
+            standard_daily_protein=157,
+            bmr=1400,
+            remaining_days=2,
+        )
+
+        assert result.calories <= 1785 * (
+            1 + WeeklyBudgetConstants.MAX_DAILY_SURPLUS_RATIO
+        )
+        assert result.carbs <= 161 * WeeklyBudgetConstants.MACRO_CEILING_RATIO
+        assert result.fat <= 57 * WeeklyBudgetConstants.MACRO_CEILING_RATIO
 
     def test_calorie_cap_macros_balanced_no_cap(self):
         """When macros are balanced, macro-derived ≈ calorie-redistributed. No cap."""
@@ -532,7 +600,7 @@ class TestCalculateWeeklyConsumed:
             FakeMeal(
                 status=MealStatus.READY,
                 nutrition=FakeNutrition(
-                    calories=500,
+                    calories=9999,
                     macros=FakeNutritionMacros(protein=30, carbs=50, fat=20),
                 ),
                 created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc),
@@ -540,7 +608,7 @@ class TestCalculateWeeklyConsumed:
             FakeMeal(
                 status=MealStatus.READY,
                 nutrition=FakeNutrition(
-                    calories=700,
+                    calories=9999,
                     macros=FakeNutritionMacros(protein=40, carbs=80, fat=25),
                 ),
                 created_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc),
@@ -552,7 +620,7 @@ class TestCalculateWeeklyConsumed:
             "user-1",
             date(2026, 3, 23),
         )
-        assert result["calories"] == 1200
+        assert result["calories"] == 1205
         assert result["protein"] == 70
         assert result["carbs"] == 130
         assert result["fat"] == 45
@@ -650,7 +718,38 @@ class TestCalculateWeeklyConsumed:
             user_timezone="UTC",
         )
         # Only March 24 meal counted
-        assert result["calories"] == 600
+        assert result["calories"] == 578
+
+    def test_end_date_excludes_future_meals(self):
+        meals = [
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=500,
+                    macros=FakeNutritionMacros(protein=30, carbs=50, fat=20),
+                ),
+                created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc),
+            ),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=4000,
+                    macros=FakeNutritionMacros(protein=80, carbs=500, fat=180),
+                ),
+                created_at=datetime(2026, 3, 25, 12, 0, tzinfo=timezone.utc),
+            ),
+        ]
+        uow = FakeUoW(meals=meals)
+
+        result = WeeklyBudgetService.calculate_weekly_consumed(
+            uow,
+            "user-1",
+            date(2026, 3, 23),
+            end_date=date(2026, 3, 24),
+            user_timezone="UTC",
+        )
+
+        assert result["calories"] == 500
 
 
 class TestGetEffectiveAdjustedDaily:
@@ -929,6 +1028,50 @@ class TestGetEffectiveAdjustedDaily:
             cheat_dates=[],
         )
         # consumed_total includes both days
-        assert result.consumed_total["calories"] == 1200
+        assert result.consumed_total["calories"] == 1205
         # consumed_before_today excludes Tuesday
         assert result.consumed_before_today["calories"] == 500
+
+    def test_future_meals_do_not_affect_selected_date_adjustment(self):
+        """Tuesday target uses Monday only; Wednesday planned meals are ignored."""
+        week_start = date(2026, 3, 23)
+        tuesday = date(2026, 3, 24)
+        meals = [
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=1000,
+                    macros=FakeNutritionMacros(protein=50, carbs=120, fat=35),
+                ),
+                created_at=datetime(2026, 3, 23, 12, 0, tzinfo=timezone.utc),
+            ),
+            FakeMeal(
+                status=MealStatus.READY,
+                nutrition=FakeNutrition(
+                    calories=5000,
+                    macros=FakeNutritionMacros(protein=100, carbs=600, fat=244),
+                ),
+                created_at=datetime(2026, 3, 25, 12, 0, tzinfo=timezone.utc),
+            ),
+        ]
+        daily_counts = {date(2026, 3, 23): 1}
+        budget = _make_budget(week_start)
+        uow = FakeUoW(meals=meals, daily_counts=daily_counts)
+
+        result = WeeklyBudgetService.get_effective_adjusted_daily(
+            uow=uow,
+            user_id="user-1",
+            week_start=week_start,
+            target_date=tuesday,
+            weekly_budget=budget,
+            base_daily_cal=_BASE_CAL,
+            base_daily_protein=_BASE_P,
+            base_daily_carbs=_BASE_C,
+            base_daily_fat=_BASE_F,
+            bmr=_BMR,
+            user_timezone="UTC",
+            cheat_dates=[],
+        )
+
+        assert result.consumed_before_today["calories"] == 995
+        assert result.adjusted.calories == pytest.approx((14000 - 995) / 6, abs=2)

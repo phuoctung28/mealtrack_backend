@@ -55,9 +55,11 @@ async def test_after_meal_write_invalidates_weekly_budget_and_breakdown(service,
     # June 2 2026 is a Tuesday; week_start is June 1
     week_start = date(2026, 6, 1)
     weekly_key = CacheKeys.weekly_budget("user1", week_start)[0]
+    weekly_pattern = CacheKeys.weekly_budget_pattern("user1", week_start)
     breakdown_key = CacheKeys.daily_breakdown("user1", week_start)[0]
     await service.after_meal_write("user1", date(2026, 6, 2))
     cache_mock.invalidate.assert_any_call(weekly_key)
+    cache_mock.invalidate_pattern.assert_any_call(weekly_pattern)
     cache_mock.invalidate.assert_any_call(breakdown_key)
 
 
@@ -130,12 +132,14 @@ async def test_after_movement_write_invalidates_daily_macros_and_weekly_budget(s
     week_start = date(2026, 6, 1)
     daily_key = CacheKeys.daily_macros("user2", log_date)[0]
     weekly_key = CacheKeys.weekly_budget("user2", week_start)[0]
+    weekly_pattern = CacheKeys.weekly_budget_pattern("user2", week_start)
     breakdown_key = CacheKeys.daily_breakdown("user2", week_start)[0]
 
     await service.after_movement_write("user2", log_date)
 
     cache_mock.invalidate.assert_any_call(daily_key)
     cache_mock.invalidate.assert_any_call(weekly_key)
+    cache_mock.invalidate_pattern.assert_any_call(weekly_pattern)
     cache_mock.invalidate.assert_any_call(breakdown_key)
 
 
@@ -177,12 +181,14 @@ async def test_after_hydration_write_also_purges_meal_related_keys(service, cach
     log_date = date(2026, 6, 2)
     week_start = date(2026, 6, 1)
     budget_key = CacheKeys.weekly_budget("user3", week_start)[0]
+    budget_pattern = CacheKeys.weekly_budget_pattern("user3", week_start)
     breakdown_key = CacheKeys.daily_breakdown("user3", week_start)[0]
     streak_key = CacheKeys.user_streak("user3")[0]
 
     await service.after_hydration_write("user3", log_date)
 
     cache_mock.invalidate.assert_any_call(budget_key)
+    cache_mock.invalidate_pattern.assert_any_call(budget_pattern)
     cache_mock.invalidate.assert_any_call(breakdown_key)
     cache_mock.invalidate.assert_any_call(streak_key)
 

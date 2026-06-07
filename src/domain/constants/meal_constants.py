@@ -191,6 +191,10 @@ class WeeklyBudgetConstants:
     # -10% is within safe 0.5-1% BW/week range (Helms 2014)
     MAX_DAILY_DEFICIT_RATIO = 0.10
 
+    # Surplus cap: under-eating should not create extreme catch-up targets.
+    # Leftover weekly budget can remain unused instead of encouraging overeating.
+    MAX_DAILY_SURPLUS_RATIO = 0.25
+
     # Adjusted daily macro bounds (ratio of standard daily)
     MACRO_FLOOR_RATIO = 0.5  # Never below 50% of base
     MACRO_CEILING_RATIO = 1.5  # Never above 150% of base
