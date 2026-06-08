@@ -12,6 +12,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.queries.meal.get_daily_breakdown_query import GetDailyBreakdownQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
+from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition.macros import Macros
 from src.domain.ports.cache_port import CachePort
 from src.domain.utils.timezone_utils import (
@@ -20,7 +21,6 @@ from src.domain.utils.timezone_utils import (
     resolve_user_timezone_async,
 )
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -138,9 +138,9 @@ class GetDailyBreakdownQueryHandler(
             )
             from src.app.queries.tdee import GetUserTdeeQuery
 
-            result = await GetUserTdeeQueryHandler().handle(
-                GetUserTdeeQuery(user_id=user_id)
-            )
+            result = await GetUserTdeeQueryHandler(
+                cache_service=self.cache_service
+            ).handle(GetUserTdeeQuery(user_id=user_id))
             cal = result.get("target_calories", 2000.0)
             macros = result.get("macros", {})
             return (
@@ -157,7 +157,13 @@ class GetDailyBreakdownQueryHandler(
         if not self.cache_service:
             return None
         cache_key, _ = CacheKeys.daily_breakdown(user_id, week_start)
-        return await self.cache_service.get_json(cache_key)
+        try:
+            return await self.cache_service.get_json(cache_key)
+        except Exception as exc:
+            logger.warning(
+                "Failed to read daily breakdown cache for %s: %s", user_id, exc
+            )
+            return None
 
     async def _write_cache(
         self, user_id: str, week_start: date, payload: Dict[str, Any]
@@ -165,4 +171,9 @@ class GetDailyBreakdownQueryHandler(
         if not self.cache_service:
             return
         cache_key, ttl = CacheKeys.daily_breakdown(user_id, week_start)
-        await self.cache_service.set_json(cache_key, payload, ttl)
+        try:
+            await self.cache_service.set_json(cache_key, payload, ttl)
+        except Exception as exc:
+            logger.warning(
+                "Failed to write daily breakdown cache for %s: %s", user_id, exc
+            )

@@ -4,14 +4,16 @@ Async Redis client with connection pooling.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Optional
+from typing import Awaitable, Callable, Optional, TypeVar
 from urllib.parse import urlparse
 
 import redis.asyncio as redis
 from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 
 def _safe_redis_log_label(url: str) -> str:
@@ -34,23 +36,60 @@ class RedisClient:
         socket_connect_timeout: float = 5.0,
     ):
         self._redis_url = redis_url
-        self.pool = redis.ConnectionPool.from_url(
-            redis_url,
-            max_connections=max_connections,
-            decode_responses=True,
-            socket_timeout=socket_timeout,
-            socket_connect_timeout=socket_connect_timeout,
-        )
+        self._max_connections = max_connections
+        self._socket_timeout = socket_timeout
+        self._socket_connect_timeout = socket_connect_timeout
+        self._loop_id: Optional[int] = None
+        self.pool = self._create_pool()
         self.client: Optional[redis.Redis] = None
+
+    def _create_pool(self) -> redis.ConnectionPool:
+        return redis.ConnectionPool.from_url(
+            self._redis_url,
+            max_connections=self._max_connections,
+            decode_responses=True,
+            socket_timeout=self._socket_timeout,
+            socket_connect_timeout=self._socket_connect_timeout,
+        )
+
+    @staticmethod
+    def _current_loop_id() -> int:
+        return id(asyncio.get_running_loop())
+
+    async def _reset_client(self) -> None:
+        old_client = self.client
+        old_pool = self.pool
+        self.client = None
+        self._loop_id = None
+
+        if old_client:
+            try:
+                await old_client.aclose()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Redis client close failed during reset: %s", exc)
+        try:
+            await old_pool.disconnect()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Redis pool disconnect failed during reset: %s", exc)
+
+        self.pool = self._create_pool()
 
     async def connect(self) -> None:
         """Initialize the Redis connection."""
-        if self.client is not None:
+        current_loop_id = self._current_loop_id()
+        if (
+            self.client is not None
+            and getattr(self, "_loop_id", current_loop_id) == current_loop_id
+        ):
             return
+        if self.client is not None:
+            logger.warning("Redis client loop changed; reconnecting cache client")
+            await self._reset_client()
 
         self.client = redis.Redis(connection_pool=self.pool)
         try:
             await self.client.ping()
+            self._loop_id = current_loop_id
             logger.info("Redis connected (%s)", _safe_redis_log_label(self._redis_url))
         except RedisError as exc:  # pragma: no cover - connection errors logged
             logger.error(
@@ -60,6 +99,38 @@ class RedisClient:
             )
             raise
 
+    async def _with_client(
+        self,
+        operation_name: str,
+        operation: Callable[[redis.Redis], Awaitable[T]],
+        fallback: T,
+        key: Optional[str] = None,
+    ) -> T:
+        log_key = f" for key {key}" if key else ""
+        for attempt in range(2):
+            try:
+                await self.connect()
+                if not self.client:
+                    return fallback
+                return await operation(self.client)
+            except RuntimeError as exc:
+                if "attached to a different loop" in str(exc) and attempt == 0:
+                    logger.warning(
+                        "Redis %s loop mismatch%s; reconnecting",
+                        operation_name,
+                        log_key,
+                    )
+                    await self._reset_client()
+                    continue
+                logger.warning(
+                    "Redis %s runtime error%s: %s", operation_name, log_key, exc
+                )
+                return fallback
+            except RedisError as exc:
+                logger.warning("Redis %s error%s: %s", operation_name, log_key, exc)
+                return fallback
+        return fallback
+
     async def disconnect(self) -> None:
         """Close Redis connections."""
         if self.client:
@@ -67,110 +138,95 @@ class RedisClient:
             self.client = None
 
         await self.pool.disconnect()
+        self._loop_id = None
         logger.info("Redis disconnected")
 
     async def get(self, key: str) -> Optional[str]:
         """Retrieve a cached value."""
-        if not self.client:
-            return None
-        try:
-            return await self.client.get(key)
-        except RedisError as exc:
-            logger.warning("Redis GET error for key %s: %s", key, exc)
-            return None
+        return await self._with_client("GET", lambda client: client.get(key), None, key)
 
     async def set(self, key: str, value: str, ttl: Optional[int] = None) -> bool:
         """Store a value with optional TTL."""
-        if not self.client:
-            return False
-        try:
+
+        async def operation(client: redis.Redis) -> bool:
             if ttl:
-                await self.client.setex(key, ttl, value)
+                await client.setex(key, ttl, value)
             else:
-                await self.client.set(key, value)
+                await client.set(key, value)
             return True
-        except RedisError as exc:
-            logger.warning("Redis SET error for key %s: %s", key, exc)
-            return False
+
+        return await self._with_client("SET", operation, False, key)
 
     async def delete(self, key: str) -> bool:
         """Delete a cached key."""
-        if not self.client:
-            return False
-        try:
-            await self.client.delete(key)
+
+        async def operation(client: redis.Redis) -> bool:
+            await client.delete(key)
             return True
-        except RedisError as exc:
-            logger.warning("Redis DELETE error for key %s: %s", key, exc)
-            return False
+
+        return await self._with_client("DELETE", operation, False, key)
 
     async def delete_pattern(self, pattern: str) -> int:
         """Delete keys matching a pattern using non-blocking SCAN."""
-        if not self.client:
-            return 0
-        try:
+
+        async def operation(client: redis.Redis) -> int:
             deleted = 0
-            async for key in self.client.scan_iter(match=pattern):
-                await self.client.delete(key)
+            async for key in client.scan_iter(match=pattern):
+                await client.delete(key)
                 deleted += 1
             if deleted:
                 logger.debug("Deleted %d keys matching %s", deleted, pattern)
             return deleted
-        except RedisError as exc:
-            logger.warning("Redis delete_pattern error for %s: %s", pattern, exc)
-            return 0
+
+        return await self._with_client("delete_pattern", operation, 0, pattern)
 
     async def exists(self, key: str) -> bool:
         """Return True if a key exists."""
-        if not self.client:
-            return False
-        try:
-            return bool(await self.client.exists(key))
-        except RedisError as exc:
-            logger.warning("Redis EXISTS error for key %s: %s", key, exc)
-            return False
+
+        async def operation(client: redis.Redis) -> bool:
+            return bool(await client.exists(key))
+
+        return await self._with_client("EXISTS", operation, False, key)
 
     async def hset_with_ttl(self, key: str, mapping: dict, ttl: int) -> bool:
         """Set a hash and its TTL in a single pipeline round-trip."""
-        if not self.client:
-            return False
-        try:
-            async with self.client.pipeline(transaction=False) as pipe:
+
+        async def operation(client: redis.Redis) -> bool:
+            async with client.pipeline(transaction=False) as pipe:
                 pipe.hset(key, mapping=mapping)
                 pipe.expire(key, ttl)
                 await pipe.execute()
             return True
-        except RedisError as exc:
-            logger.warning("Redis HSET pipeline error for key %s: %s", key, exc)
-            return False
+
+        return await self._with_client("HSET pipeline", operation, False, key)
 
     async def hset_batch(self, items: list[tuple[str, dict, int]]) -> bool:
         """Set multiple hashes with TTL in a single pipeline. items: [(key, mapping, ttl)]."""
-        if not self.client:
-            return False
         if not items:
             return True
-        try:
-            async with self.client.pipeline(transaction=False) as pipe:
+
+        async def operation(client: redis.Redis) -> bool:
+            async with client.pipeline(transaction=False) as pipe:
                 for key, mapping, ttl in items:
                     pipe.hset(key, mapping=mapping)
                     pipe.expire(key, ttl)
                 await pipe.execute()
             return True
-        except RedisError as exc:
-            logger.warning("Redis batch HSET pipeline error: %s", exc)
-            return False
+
+        return await self._with_client("batch HSET pipeline", operation, False)
 
     async def hgetall_batch(self, keys: list[str]) -> list[dict]:
         """Fetch all fields of multiple hashes in a single pipeline. Returns list aligned to keys."""
-        if not self.client or not keys:
+        if not keys:
             return [{} for _ in keys]
-        try:
-            async with self.client.pipeline(transaction=False) as pipe:
+
+        async def operation(client: redis.Redis) -> list[dict]:
+            async with client.pipeline(transaction=False) as pipe:
                 for key in keys:
                     pipe.hgetall(key)
                 results = await pipe.execute()
             return [r or {} for r in results]
-        except RedisError as exc:
-            logger.warning("Redis batch HGETALL pipeline error: %s", exc)
-            return [{} for _ in keys]
+
+        return await self._with_client(
+            "batch HGETALL pipeline", operation, [{} for _ in keys]
+        )

@@ -7,7 +7,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
+from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 load_dotenv()
 
@@ -87,6 +87,10 @@ ASYNC_DATABASE_URL, _connect_args = _sanitize_asyncpg_url_and_connect_args(
 _IS_NEON_POOLER = (
     "-pooler" in ASYNC_DATABASE_URL and os.getenv("DATABASE_URL_DIRECT") is None
 )
+_USE_ASYNC_QUEUE_POOL = (
+    os.getenv("ASYNC_DB_USE_QUEUE_POOL", "false").strip().lower() == "true"
+    and not _IS_NEON_POOLER
+)
 
 _UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
 _ASYNC_POOL_SIZE = int(os.getenv("ASYNC_POOL_SIZE_PER_WORKER", "3"))
@@ -94,14 +98,17 @@ _ASYNC_POOL_OVERFLOW = int(os.getenv("ASYNC_POOL_MAX_OVERFLOW", "2"))
 _ASYNC_POOL_TIMEOUT = int(os.getenv("POOL_TIMEOUT", "10"))
 
 try:
-    if _IS_NEON_POOLER:
+    if not _USE_ASYNC_QUEUE_POOL:
         async_engine = create_async_engine(
             ASYNC_DATABASE_URL,
             echo=False,
             poolclass=NullPool,
             connect_args=_connect_args,
         )
-        logger.info("Async engine: NullPool (Neon pooler detected)")
+        logger.info(
+            "Async engine: NullPool (loop-safe async connections, neon_pooler=%s)",
+            _IS_NEON_POOLER,
+        )
     else:
         async_engine = create_async_engine(
             ASYNC_DATABASE_URL,

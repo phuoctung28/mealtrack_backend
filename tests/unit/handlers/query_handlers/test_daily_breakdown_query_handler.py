@@ -50,16 +50,20 @@ async def test_uses_single_range_query_for_week():
     )
     mock_uow.meals.find_by_date = AsyncMock()
 
-    with patch(
-        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.AsyncUnitOfWork",
-        return_value=mock_uow,
-    ), patch(
-        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.resolve_user_timezone_async",
-        new=AsyncMock(return_value="UTC"),
-    ), patch.object(
-        handler,
-        "_get_base_daily_targets",
-        AsyncMock(return_value=(2000.0, 100.0, 200.0, 70.0)),
+    with (
+        patch(
+            "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.AsyncUnitOfWork",
+            return_value=mock_uow,
+        ),
+        patch(
+            "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.resolve_user_timezone_async",
+            new=AsyncMock(return_value="UTC"),
+        ),
+        patch.object(
+            handler,
+            "_get_base_daily_targets",
+            AsyncMock(return_value=(2000.0, 100.0, 200.0, 70.0)),
+        ),
     ):
         result = await handler.handle(query)
 
@@ -89,14 +93,63 @@ async def test_returns_cached_week_without_querying_meals():
     mock_uow.__aexit__ = AsyncMock(return_value=False)
     mock_uow.meals.find_by_date_range = AsyncMock()
 
-    with patch(
-        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.AsyncUnitOfWork",
-        return_value=mock_uow,
-    ), patch(
-        "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.resolve_user_timezone_async",
-        new=AsyncMock(return_value="UTC"),
+    with (
+        patch(
+            "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.AsyncUnitOfWork",
+            return_value=mock_uow,
+        ),
+        patch(
+            "src.app.handlers.query_handlers.get_daily_breakdown_query_handler.resolve_user_timezone_async",
+            new=AsyncMock(return_value="UTC"),
+        ),
     ):
         result = await handler.handle(query)
 
     assert result == cached
     mock_uow.meals.find_by_date_range.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_base_daily_targets_passes_cache_service_to_tdee_handler():
+    cache = MagicMock()
+    cache.get_json = AsyncMock(return_value=None)
+    cache.set_json = AsyncMock()
+    handler = GetDailyBreakdownQueryHandler(cache_service=cache)
+
+    with patch(
+        "src.app.handlers.query_handlers.get_user_tdee_query_handler.GetUserTdeeQueryHandler"
+    ) as mock_tdee_cls:
+        mock_tdee = MagicMock()
+        mock_tdee.handle = AsyncMock(
+            return_value={
+                "target_calories": 2100.0,
+                "macros": {"protein": 120.0, "carbs": 220.0, "fat": 70.0},
+            }
+        )
+        mock_tdee_cls.return_value = mock_tdee
+
+        result = await handler._get_base_daily_targets(
+            "22222222-2222-2222-2222-222222222222"
+        )
+
+    mock_tdee_cls.assert_called_once_with(cache_service=cache)
+    assert result == (2100.0, 120.0, 220.0, 70.0)
+
+
+@pytest.mark.asyncio
+async def test_cache_failures_are_non_fatal():
+    cache = MagicMock()
+    cache.get_json = AsyncMock(side_effect=RuntimeError("attached to a different loop"))
+    cache.set_json = AsyncMock(side_effect=RuntimeError("attached to a different loop"))
+    handler = GetDailyBreakdownQueryHandler(cache_service=cache)
+
+    result = await handler._try_get_cached_result(
+        "22222222-2222-2222-2222-222222222222", date(2026, 4, 13)
+    )
+    await handler._write_cache(
+        "22222222-2222-2222-2222-222222222222",
+        date(2026, 4, 13),
+        {"days": []},
+    )
+
+    assert result is None

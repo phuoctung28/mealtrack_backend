@@ -2,31 +2,31 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from sqlalchemy import func, update
-from sqlalchemy.orm import Session, joinedload, selectinload, noload
+from sqlalchemy import and_, func, or_, update
+from sqlalchemy.orm import Session, joinedload, noload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus
 from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition import Nutrition
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.utils.timezone_utils import get_zone_info, utc_now
-from src.infra.database.utils.datetime_helper import local_date_expr
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.meal.meal import MealORM
-from src.infra.database.models.meal.meal_image import MealImageORM
 from src.infra.database.models.meal.food_item_translation_model import (
     FoodItemTranslationORM,
 )
+from src.infra.database.models.meal.meal import MealORM
+from src.infra.database.models.meal.meal_image import MealImageORM
 from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
 from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.database.models.nutrition.nutrition import NutritionORM
+from src.infra.database.utils.datetime_helper import local_date_expr
 from src.infra.mappers import MealStatusMapper
 from src.infra.mappers.meal_mapper import (
-    meal_orm_to_domain,
+    food_item_domain_to_orm,
     meal_domain_to_orm,
     meal_image_domain_to_orm,
+    meal_orm_to_domain,
     nutrition_domain_to_orm,
-    food_item_domain_to_orm,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,16 @@ _PROJECTION_OPTS: dict = {
         joinedload(MealORM.translations),
     ),
 }
+
+
+def _domain_hydratable_active_meal_filter():
+    return and_(
+        MealORM.status != MealStatusEnum.INACTIVE,
+        or_(
+            MealORM.status != MealStatusEnum.READY,
+            and_(MealORM.ready_at.is_not(None), MealORM.nutrition.has()),
+        ),
+    )
 
 
 class MealRepository(MealRepositoryPort):
@@ -299,7 +309,7 @@ class MealRepository(MealRepositoryPort):
             query = query.filter(MealORM.user_id == user_id)
 
         db_meals = (
-            query.filter(MealORM.status != MealStatusEnum.INACTIVE)
+            query.filter(_domain_hydratable_active_meal_filter())
             .order_by(MealORM.created_at.desc())
             .limit(limit)
             .all()
@@ -340,7 +350,7 @@ class MealRepository(MealRepositoryPort):
         )
 
         db_meals = (
-            query.filter(MealORM.status != MealStatusEnum.INACTIVE)
+            query.filter(_domain_hydratable_active_meal_filter())
             .order_by(MealORM.created_at.asc())
             .limit(limit)
             .all()
@@ -375,7 +385,7 @@ class MealRepository(MealRepositoryPort):
                 MealORM.user_id == user_id,
                 MealORM.created_at >= start_dt,
                 MealORM.created_at < end_dt,
-                MealORM.status != MealStatusEnum.INACTIVE,
+                _domain_hydratable_active_meal_filter(),
             )
             .group_by(date_expr)
             .all()
@@ -403,7 +413,7 @@ class MealRepository(MealRepositoryPort):
             self.db.query(date_expr)
             .filter(
                 MealORM.user_id == user_id,
-                MealORM.status != MealStatusEnum.INACTIVE,
+                _domain_hydratable_active_meal_filter(),
             )
             .distinct()
             .order_by(date_expr.desc())

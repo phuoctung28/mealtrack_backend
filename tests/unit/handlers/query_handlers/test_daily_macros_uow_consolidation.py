@@ -51,6 +51,7 @@ async def test_cache_miss_opens_uow_once():
             )
             mock_tdee_cls.return_value = mock_tdee
             await handler.handle(query)
+            mock_tdee_cls.assert_called_once_with(cache_service=handler.cache_service)
 
     assert (
         mock_cls.call_count == 1
@@ -96,7 +97,30 @@ async def test_weekly_budget_fetched_in_shared_uow():
             )
             mock_tdee_cls.return_value = mock_tdee
             await handler.handle(query)
+            mock_tdee_cls.assert_called_once_with(cache_service=handler.cache_service)
 
     first_uow = uow_instances[0]
     first_uow.meals.find_by_date.assert_awaited_once()
     first_uow.weekly_budgets.find_by_user_and_week.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_cache_read_failure_is_non_fatal():
+    handler = _make_handler()
+    handler.cache_service.get_json = AsyncMock(
+        side_effect=RuntimeError("attached to a different loop")
+    )
+
+    result = await handler._try_get_cached_result("u1", date(2026, 4, 18))
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_cache_write_failure_is_non_fatal():
+    handler = _make_handler()
+    handler.cache_service.set_json = AsyncMock(
+        side_effect=RuntimeError("attached to a different loop")
+    )
+
+    await handler._write_cache("u1", date(2026, 4, 18), {"ok": True})
