@@ -7,43 +7,49 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, UploadFile, Query, Request, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 
+from src.api.base_dependencies import get_image_store
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.base_dependencies import get_image_store
-from src.api.exceptions import handle_exception, ValidationException
+from src.api.exceptions import ValidationException, handle_exception
+from src.api.mappers.meal_mapper import MealMapper
 from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
-from src.api.mappers.meal_mapper import MealMapper
+from src.api.schemas.progress_schemas import DailyBreakdownResponse, StreakResponse
 from src.api.schemas.request.meal_requests import (
-    EditMealIngredientsRequest,
+    AnalyzeMealImageByUrlRequest,
     CreateManualMealFromFoodsRequest,
+    EditMealIngredientsRequest,
     ParseMealTextRequest,
 )
 from src.api.schemas.response import DetailedMealResponse, ManualMealCreationResponse
-from src.api.schemas.response.meal_responses import ParseMealTextResponse
-from src.api.schemas.progress_schemas import DailyBreakdownResponse, StreakResponse
 from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
+from src.api.schemas.response.meal_responses import ParseMealTextResponse
 from src.api.schemas.response.weekly_budget_response import WeeklyBudgetResponse
-from src.app.commands.meal import EditMealCommand, FoodItemChange, CustomNutritionData
+from src.app.commands.meal import (
+    AnalyzeMealImageByUrlCommand,
+    CustomNutritionData,
+    EditMealCommand,
+    FoodItemChange,
+)
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
     CustomNutrition,
     ManualMealItem,
 )
-from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
+from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
 )
-from src.app.queries.meal import (
-    GetMealByIdQuery,
-    GetDailyMacrosQuery,
-    GetStreakQuery,
-    GetDailyBreakdownQuery,
-)
 from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
+from src.app.queries.meal import (
+    GetDailyBreakdownQuery,
+    GetDailyMacrosQuery,
+    GetMealByIdQuery,
+    GetStreakQuery,
+)
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 from src.infra.event_bus import EventBus
 
@@ -160,6 +166,87 @@ async def analyze_meal_image_immediate(
         image_url = None
         if meal.image:
             image_url = meal.image.url or image_store.get_url(meal.image.image_id)
+
+        return MealMapper.to_detailed_response(
+            meal, image_url, target_language=language
+        )
+
+    except Exception as e:
+        raise handle_exception(e) from e
+
+
+@router.post(
+    "/image/analyze-url",
+    status_code=status.HTTP_200_OK,
+    response_model=DetailedMealResponse,
+)
+@limiter.limit("10/minute")
+async def analyze_meal_image_by_url(
+    request: Request,
+    payload: AnalyzeMealImageByUrlRequest,
+    user_id: str = Depends(get_current_user_id),
+    event_bus: EventBus = Depends(get_configured_event_bus),
+):
+    """
+    Analyze a meal image that has already been uploaded to Cloudinary.
+    """
+    try:
+        parsed_target_date = None
+        if payload.target_date:
+            try:
+                parsed_target_date = datetime.strptime(
+                    payload.target_date, "%Y-%m-%d"
+                ).date()
+            except ValueError as e:
+                raise ValidationException(
+                    message="Invalid date format. Use YYYY-MM-DD format.",
+                    error_code="INVALID_DATE_FORMAT",
+                    details={"date": payload.target_date},
+                ) from e
+
+        sanitized_description = None
+        if payload.user_description:
+            sanitized_description = sanitize_user_description(payload.user_description)
+            if not sanitized_description:
+                sanitized_description = None
+
+        language = get_request_language(request)
+        command = AnalyzeMealImageByUrlCommand(
+            user_id=user_id,
+            image_url=payload.image_url,
+            public_id=payload.public_id,
+            content_type=payload.content_type,
+            file_size_bytes=payload.file_size_bytes,
+            target_date=parsed_target_date,
+            language=language,
+            user_description=sanitized_description,
+        )
+
+        try:
+            meal = await event_bus.send(command)
+        except (RuntimeError, ValueError) as e:
+            error_msg = str(e)
+            logger.warning("Meal image URL analysis failed: %s", error_msg)
+            raise ValidationException(
+                message=(
+                    "Could not identify food in the image. "
+                    "Please try again with a food photo."
+                ),
+                error_code="NOT_FOOD_IMAGE",
+                details={"error_message": error_msg},
+            ) from e
+
+        if meal.status.value == "FAILED":
+            error_message = meal.error_message or "Analysis failed"
+            raise ValidationException(
+                message=f"Failed to analyze meal image: {error_message}",
+                error_code="FAILED_TO_ANALYZE_MEAL_IMAGE",
+                details={"error_message": error_message},
+            )
+
+        image_url = payload.image_url
+        if meal.image:
+            image_url = meal.image.url or payload.image_url
 
         return MealMapper.to_detailed_response(
             meal, image_url, target_language=language

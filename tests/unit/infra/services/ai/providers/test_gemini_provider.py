@@ -101,7 +101,7 @@ class TestJsonExtraction:
       "english_unit": "g",
       "calories": 105"""
 
-        result = provider._extract_json(content)
+        result = provider._extract_json(content, purpose_hint="parse_text")
 
         assert result == {
             "emoji": "🍮",
@@ -115,6 +115,10 @@ class TestJsonExtraction:
                 }
             ],
         }
+
+    def test_generic_response_does_not_use_meal_recovery(self, provider):
+        with pytest.raises(ValueError, match="Could not extract JSON"):
+            provider._extract_json('{"product_name": "Milk"')
 
 
 class TestGenerateWithVision:

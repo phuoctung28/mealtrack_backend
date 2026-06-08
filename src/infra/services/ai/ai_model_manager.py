@@ -139,9 +139,7 @@ class AIModelManager:
         if self._cache_manager is not None:
             purpose_to_cache_type = {
                 ModelPurpose.RECIPE: "recipe",
-                ModelPurpose.MEAL_SCAN: "vision",
                 ModelPurpose.PARSE_TEXT: "text_parse",
-                ModelPurpose.BARCODE: "text_parse",
             }
             cache_type = purpose_to_cache_type.get(purpose)
 
@@ -166,7 +164,7 @@ class AIModelManager:
                     response_type=response_type,
                     max_tokens=max_tokens,
                     schema=schema,
-                    purpose_hint=purpose.value,  # NEW: pass real purpose to provider
+                    purpose_hint=purpose.value,
                     cache_name=cache_name if model.startswith("gemini") else None,
                     **kwargs,
                 )
@@ -253,7 +251,7 @@ class AIModelManager:
                     prompt=prompt,
                     image_data=image_data,
                     system_message=system_message,
-                    purpose_hint=purpose.value,  # NEW
+                    purpose_hint=purpose.value,
                     **kwargs,
                 )
 
