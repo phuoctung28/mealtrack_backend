@@ -104,15 +104,52 @@ async def test_analyze_with_strategy_passes_max_tokens_1024():
 
 @pytest.mark.asyncio
 async def test_analyze_by_url_passes_max_tokens_1024():
-    """analyze_by_url_with_strategy must also pass max_tokens=1024."""
+    """URL analysis must fetch bytes and pass max_tokens=1024."""
+    service = _make_service()
+    from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+    strategy = AnalysisStrategyFactory.create_basic_strategy()
+    image_bytes = _make_jpeg(400, 300)
+
+    mock_response = MagicMock()
+    mock_response.headers.get_content_type.return_value = "image/jpeg"
+    mock_response.read.return_value = image_bytes
+    mock_response.__enter__.return_value = mock_response
+    with patch(
+        "src.infra.adapters.vision_ai_service.urlopen",
+        return_value=mock_response,
+    ):
+        await service.analyze_by_url_with_strategy("http://example.com/food.jpg", strategy)
+
+    call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
+    assert call_kwargs.get("max_tokens") == 1024
+    assert call_kwargs["image_data"] == image_bytes
+
+
+@pytest.mark.asyncio
+async def test_analyze_by_url_rejects_non_http_url():
     service = _make_service()
     from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
     strategy = AnalysisStrategyFactory.create_basic_strategy()
 
-    await service.analyze_by_url_with_strategy("http://example.com/food.jpg", strategy)
+    with pytest.raises(ValueError, match="HTTP"):
+        await service.analyze_by_url_with_strategy("file:///tmp/food.jpg", strategy)
 
-    call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
-    assert call_kwargs.get("max_tokens") == 1024
+
+@pytest.mark.asyncio
+async def test_analyze_by_url_rejects_non_image_content_type():
+    service = _make_service()
+    from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+    strategy = AnalysisStrategyFactory.create_basic_strategy()
+
+    mock_response = MagicMock()
+    mock_response.headers.get_content_type.return_value = "text/html"
+    mock_response.__enter__.return_value = mock_response
+
+    with patch(
+        "src.infra.adapters.vision_ai_service.urlopen",
+        return_value=mock_response,
+    ), pytest.raises(ValueError, match="content type"):
+        await service.analyze_by_url_with_strategy("https://example.com/page", strategy)
 
 
 def test_recipe_token_limit_is_1200():

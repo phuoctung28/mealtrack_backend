@@ -4,8 +4,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api.dependencies.auth import get_current_user_id
-from src.api.exceptions import ValidationException
 from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.exceptions import ValidationException
 from src.api.routes.v1 import activities as activities_mod
 from src.api.routes.v1 import cheat_days as cheat_days_mod
 from src.api.routes.v1 import foods as foods_mod
@@ -184,6 +184,26 @@ def test_ingredients_recognize_handle_exception(ingredients_app):
         json={"image_data": "abc"},
     )
     assert r.status_code == 500
+
+
+def test_ingredients_recognize_ai_unavailable(ingredients_app):
+    from src.domain.exceptions.ai_exceptions import AIUnavailableError
+
+    class _Bad:
+        async def send(self, msg):
+            raise AIUnavailableError(
+                "All vision models failed",
+                attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+                last_error="503 UNAVAILABLE",
+            )
+
+    ingredients_app.dependency_overrides[get_configured_event_bus] = lambda: _Bad()
+    r = TestClient(ingredients_app).post(
+        "/v1/ingredients/recognize",
+        json={"image_data": "abc"},
+    )
+    assert r.status_code == 503
+    assert r.json()["detail"]["error_code"] == "AI_UNAVAILABLE"
 
 
 def test_cheat_days_handle_exception(cheat_app):
