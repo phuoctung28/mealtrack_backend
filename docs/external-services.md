@@ -1,8 +1,8 @@
 # Backend External Services Integration
 
-**Last Updated:** June 1, 2026
+**Last Updated:** June 8, 2026
 **Services:** Firebase, Cloudinary, Google Gemini, RevenueCat, PostHog, Redis, Sentry
-**All services gracefully degrade on failure** (except Firebase Auth and DB which fail fast)
+**Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
 ---
 
@@ -119,22 +119,26 @@
 
 ## Redis Cache
 
-**Purpose:** Session caching, suggestion caching, performance optimization
+**Purpose:** Selective performance and AI-cost optimization. Redis is not the source of truth for user nutrition, notification delivery, FCM token ownership, or write-path correctness.
 
-- **Pattern:** Cache-aside (check → miss → fetch from DB → populate)
+- **Default posture:** Do not cache unless the value passes the cache admission checklist in `docs/superpowers/specs/2026-05-21-redis-optimize-design.md`.
+- **Pattern:** Cache-aside only for optional read caches where DB/API fallback is correct.
 - **Connection Pool:** 50 connections | **Default TTL:** 1 hour
-- **Error Handling:** Graceful degradation (continue on failure)
+- **Error Handling:** Optional caches degrade by bypassing Redis. Required Redis-backed state must be documented and health-checked separately.
 
 **Config:** `REDIS_URL=redis://host:port/db`
 
-### TTL by Data Type
+### Cache Policy by Data Type
 
-| Data | TTL |
-|------|-----|
-| User profile | 1 hour |
-| Meal suggestions | 4 hours |
-| TDEE calculations | 1 hour |
-| Food search results | 1 hour |
+| Data | Redis Policy |
+|------|--------------|
+| Food search/details | Cache; stable-ish data with high reuse |
+| Nutrition lookup | Cache; expensive lookup chain with bounded stale window |
+| Gemini explicit cache names | Cache; cost optimization only, fall back to uncached calls |
+| Daily/weekly nutrition read models | Conditional cache; short TTL plus write/event invalidation |
+| Auth UID mapping | Process-local TTL cache, not Redis |
+| Notification precompute and FCM token ownership | Do not cache; database is source of truth |
+| Meal suggestion sessions | Not cache; transient state. Prefer Postgres with `expires_at`, or treat Redis as required state store if kept |
 
 ---
 

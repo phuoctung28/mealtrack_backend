@@ -1,10 +1,10 @@
-import pytest
-from unittest.mock import AsyncMock, MagicMock
 import json
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from src.domain.services.meal_suggestion.nutrition_lookup_service import (
     NutritionLookupService,
-    IngredientMacros,
 )
 
 
@@ -47,7 +47,7 @@ async def test_lookup_caches_result_in_redis_on_miss():
     """Verify successful lookup is cached in Redis."""
     redis_mock = AsyncMock()
     redis_mock.get = AsyncMock(return_value=None)  # Cache miss
-    redis_mock.setex = AsyncMock()
+    redis_mock.set = AsyncMock(return_value=True)
 
     repo_mock = MagicMock()
     repo_mock.find_by_normalized_name = MagicMock(
@@ -70,7 +70,7 @@ async def test_lookup_caches_result_in_redis_on_miss():
 
     await svc._lookup_ingredient("chicken breast", 100.0)
 
-    redis_mock.setex.assert_called_once()
-    call_args = redis_mock.setex.call_args
+    redis_mock.set.assert_called_once()
+    call_args = redis_mock.set.call_args
     assert "nutrition:" in call_args[0][0]  # Key contains prefix
-    assert call_args[0][1] == 86400  # TTL is 24 hours
+    assert call_args.kwargs["ttl"] == 86400  # TTL is 24 hours
