@@ -389,11 +389,18 @@ def get_configured_event_bus() -> EventBus:
 
     # Get text translation service
     text_translation_service = get_deepl_text_translation_service()
+    from src.infra.adapters.meal_generation_service import MealGenerationService
+
+    meal_generation_service = MealGenerationService()
 
     # Register meal text parsing command handler
     event_bus.register_handler(
         ParseMealTextCommand,
-        ParseMealTextHandler(translation_service=text_translation_service),
+        ParseMealTextHandler(
+            meal_generation_service=meal_generation_service,
+            fat_secret_service=fat_secret_service,
+            translation_service=text_translation_service,
+        ),
     )
 
     # Register food database query handlers
