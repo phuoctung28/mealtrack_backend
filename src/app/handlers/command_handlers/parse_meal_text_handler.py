@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
 from src.app.events.base import EventHandler, handles
@@ -16,6 +16,7 @@ from src.app.handlers.command_handlers.meal_text_parsing_utils import (
     parse_fatsecret_nutrition,
 )
 from src.app.schemas.meal_schemas import ParsedFoodItemDto, ParseMealTextResponseDto
+from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.services.emoji_validator import validate_emoji
 from src.domain.services.nutrition_calculation_service import (
     clamp_nutrition_values,
@@ -26,8 +27,6 @@ from src.domain.services.prompts.system_prompts import SystemPrompts
 from src.domain.services.translation.deepl_text_translation_service import (
     DeepLTextTranslationService,
 )
-from src.infra.adapters.fat_secret_service import get_fat_secret_service
-from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +43,12 @@ class ParseMealTextHandler(
 
     def __init__(
         self,
-        translation_service: Optional[DeepLTextTranslationService] = None,
-        ai_manager: Optional[AIModelManager] = None,
+        meal_generation_service: MealGenerationServicePort,
+        fat_secret_service: Any | None = None,
+        translation_service: DeepLTextTranslationService | None = None,
     ):
-        self._ai_manager = ai_manager or AIModelManager.get_instance()
-        self._fat_secret_service = get_fat_secret_service()
+        self._meal_generation_service = meal_generation_service
+        self._fat_secret_service = fat_secret_service
         self._translation_service = translation_service
 
     async def handle(self, command: ParseMealTextCommand) -> ParseMealTextResponseDto:
@@ -68,12 +68,13 @@ class ParseMealTextHandler(
             language=command.language
         )
 
-        raw = await self._ai_manager.generate(
-            purpose=ModelPurpose.PARSE_TEXT,
+        raw = await asyncio.to_thread(
+            self._meal_generation_service.generate_meal_plan,
             prompt=sanitized_text,
             system_message=system_prompt,
             response_type="json",
             max_tokens=2048,
+            model_purpose="parse_text",
             thinking_budget=0,
         )
 
@@ -144,7 +145,7 @@ class ParseMealTextHandler(
     # Max ratio between FatSecret and AI estimate before rejecting FatSecret
     _FATSECRET_DIVERGENCE_THRESHOLD = 3.0
 
-    async def _cascade_lookup(self, item: Dict[str, Any]) -> Dict[str, Any]:
+    async def _cascade_lookup(self, item: dict[str, Any]) -> dict[str, Any]:
         """
         Cascade lookup: FatSecret -> AI estimate.
         FatSecret prioritized for precision, but rejected if result diverges
@@ -166,6 +167,10 @@ class ParseMealTextHandler(
         # Try FatSecret — use English name from parentheses for lookup accuracy
         lookup_name = self._extract_english_name(name)
         try:
+            if not self._fat_secret_service:
+                item["data_source"] = "ai_estimate"
+                return item
+
             fatsecret_results = await asyncio.wait_for(
                 self._fat_secret_service.search_foods(lookup_name, max_results=5),
                 timeout=_parse_text_fatsecret_timeout_seconds(),
@@ -217,7 +222,7 @@ class ParseMealTextHandler(
         return bool(letters) and all(ord(c) < 128 for c in letters)
 
     async def _translate_english_names_deepl(
-        self, items: List[Dict[str, Any]], language: str
+        self, items: list[dict[str, Any]], language: str
     ) -> None:
         """Detect and batch-translate any remaining English food names using DeepL."""
         english_indices = [
@@ -237,7 +242,7 @@ class ParseMealTextHandler(
             )
 
             if len(translated) == len(english_indices):
-                for idx, name in zip(english_indices, translated):
+                for idx, name in zip(english_indices, translated, strict=False):
                     if isinstance(name, str) and name.strip():
                         items[idx]["name"] = name.strip()
             else:

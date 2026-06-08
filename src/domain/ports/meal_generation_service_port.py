@@ -19,6 +19,7 @@ class MealGenerationServicePort(ABC):
         max_tokens: int | None = None,
         schema: type | None = None,
         model_purpose: str | None = None,
+        thinking_budget: int | None = None,
     ) -> dict[str, Any]:
         """
         Generate meal plan using provided prompt and system message.
@@ -30,7 +31,9 @@ class MealGenerationServicePort(ABC):
             max_tokens: Maximum output tokens
             schema: Optional Pydantic model for structured output
             model_purpose: Optional purpose for rate limit distribution
-                          ("meal_names", "recipe_primary", "recipe_secondary")
+                          ("meal_names", "discovery", "recipe", "barcode",
+                           "parse_text", "general")
+            thinking_budget: Optional model thinking budget override
 
         Returns:
             Generated meal plan data

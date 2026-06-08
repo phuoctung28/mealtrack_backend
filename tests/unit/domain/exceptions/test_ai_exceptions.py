@@ -1,8 +1,7 @@
-import pytest
 from src.domain.exceptions.ai_exceptions import (
     AIError,
-    AIUnavailableError,
     AIPartialResultError,
+    AIUnavailableError,
 )
 
 
@@ -26,6 +25,10 @@ def test_ai_unavailable_error_with_details():
     )
     assert err.attempted_models == ["flash", "flash-lite"]
     assert err.last_error == "503 UNAVAILABLE"
+    assert str(err) == (
+        "all models failed | attempted_models=['flash', 'flash-lite'] | "
+        "last_error=503 UNAVAILABLE"
+    )
 
 
 def test_ai_partial_result_error_stores_results():

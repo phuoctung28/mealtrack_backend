@@ -1,5 +1,7 @@
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
+
 from src.infra.adapters.meal_generation_service import MealGenerationService
 
 
@@ -12,9 +14,7 @@ def mock_ai_manager():
 
 @pytest.fixture
 def service(mock_ai_manager):
-    with patch(
-        "src.infra.adapters.meal_generation_service.AIModelManager"
-    ) as mock_cls:
+    with patch("src.infra.adapters.meal_generation_service.AIModelManager") as mock_cls:
         mock_cls.get_instance.return_value = mock_ai_manager
         return MealGenerationService()
 
@@ -39,3 +39,14 @@ def test_model_purpose_maps_to_enum(service, mock_ai_manager):
 
     call_kwargs = mock_ai_manager.generate.call_args[1]
     assert call_kwargs["purpose"].value == "recipe"
+
+
+def test_discovery_model_purpose_maps_to_enum(service, mock_ai_manager):
+    service.generate_meal_plan(
+        prompt="test",
+        system_message="system",
+        model_purpose="discovery",
+    )
+
+    call_kwargs = mock_ai_manager.generate.call_args[1]
+    assert call_kwargs["purpose"].value == "discovery"

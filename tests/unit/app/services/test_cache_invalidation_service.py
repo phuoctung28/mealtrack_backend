@@ -5,13 +5,13 @@ synchronously, retries once on transient failure, and handles the
 backdated-entry case by purging both the target week and the current week.
 """
 
+from datetime import date, timedelta
+from unittest.mock import AsyncMock
+
 import pytest
-from datetime import date
-from unittest.mock import AsyncMock, call
 
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.cache.cache_keys import CacheKeys
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -73,10 +73,10 @@ async def test_after_meal_write_invalidates_streak(service, cache_mock):
 @pytest.mark.asyncio
 async def test_after_meal_write_backdated_also_invalidates_current_week(service, cache_mock):
     """A meal logged for a past week must also purge the current week's budget."""
-    # May 25 2026 is a Monday (previous week relative to June 2 2026)
-    past_date = date(2026, 5, 25)
-    past_week_start = date(2026, 5, 25)
-    current_week_start = date(2026, 6, 1)  # Monday of current week
+    today = date.today()
+    current_week_start = today - timedelta(days=today.weekday())
+    past_week_start = current_week_start - timedelta(days=14)
+    past_date = past_week_start
 
     await service.after_meal_write("user1", past_date)
 
@@ -145,8 +145,9 @@ async def test_after_movement_write_invalidates_daily_macros_and_weekly_budget(s
 
 @pytest.mark.asyncio
 async def test_after_movement_write_backdated_invalidates_current_week(service, cache_mock):
-    past_date = date(2026, 5, 25)
-    current_week_start = date(2026, 6, 1)
+    today = date.today()
+    current_week_start = today - timedelta(days=today.weekday())
+    past_date = current_week_start - timedelta(days=14)
     current_budget_key = CacheKeys.weekly_budget("user2", current_week_start)[0]
 
     await service.after_movement_write("user2", past_date)

@@ -2,6 +2,7 @@
 Meal generation service implementation using AI Model Manager.
 Provides resilient AI calls with automatic fallback.
 """
+
 import asyncio
 import logging
 from typing import Any
@@ -13,9 +14,11 @@ logger = logging.getLogger(__name__)
 
 PURPOSE_MAP = {
     "meal_names": ModelPurpose.MEAL_NAMES,
-    "recipe":     ModelPurpose.RECIPE,
-    "barcode":    ModelPurpose.BARCODE,
-    "general":    ModelPurpose.GENERAL,
+    "discovery": ModelPurpose.DISCOVERY,
+    "recipe": ModelPurpose.RECIPE,
+    "barcode": ModelPurpose.BARCODE,
+    "parse_text": ModelPurpose.PARSE_TEXT,
+    "general": ModelPurpose.GENERAL,
 }
 
 
@@ -37,6 +40,7 @@ class MealGenerationService(MealGenerationServicePort):
         max_tokens: int = None,
         schema: type = None,
         model_purpose: str | None = None,
+        thinking_budget: int | None = None,
     ) -> dict[str, Any]:
         """
         Generate meal plan with automatic fallback.
@@ -68,5 +72,6 @@ class MealGenerationService(MealGenerationServicePort):
                 response_type=response_type,
                 max_tokens=max_tokens,
                 schema=schema,
+                thinking_budget=thinking_budget,
             )
         )

@@ -4,9 +4,11 @@ API Exception classes for consistent error handling.
 
 import logging
 import traceback
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 from fastapi import HTTPException, status
+
+from src.domain.exceptions.ai_exceptions import AIUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,27 @@ def create_http_exception(exc: MealTrackException) -> HTTPException:
 
 def handle_exception(exc: Exception) -> HTTPException:
     """Handle any exception and convert to appropriate HTTP exception."""
+
+    if isinstance(exc, AIUnavailableError):
+        logger.warning(
+            "AI provider unavailable: %s",
+            exc,
+            extra={
+                "error_code": "AI_UNAVAILABLE",
+                "attempted_models": exc.attempted_models,
+                "last_error": exc.last_error,
+            },
+        )
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error_code": "AI_UNAVAILABLE",
+                "message": "AI meal generation is temporarily unavailable",
+                "details": {
+                    "attempted_models": exc.attempted_models,
+                },
+            },
+        )
 
     if isinstance(exc, MealTrackException):
         logger.warning(

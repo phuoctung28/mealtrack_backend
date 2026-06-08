@@ -16,6 +16,9 @@ from src.domain.ports.meal_generation_service_port import MealGenerationServiceP
 from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
     DeepLSuggestionTranslationService,
 )
+from src.domain.services.meal_suggestion.discovery_fallback_builder import (
+    build_discovery_fallback_meals,
+)
 from src.domain.services.meal_suggestion.macro_validation_service import (
     MacroValidationService,
 )
@@ -149,9 +152,11 @@ class ParallelRecipeGenerator:
 
         discovery_schema = self._discovery_meals_schema
         if not discovery_schema:
-            raise RuntimeError(
-                "DiscoveryMealsResponse schema not provided to ParallelRecipeGenerator. "
-                "Must be injected at initialization."
+            return self._build_discovery_fallback(
+                session,
+                exclude_meal_names,
+                count,
+                "missing discovery schema",
             )
 
         start = time.time()
@@ -184,15 +189,28 @@ class ParallelRecipeGenerator:
                     "json",
                     1000,
                     discovery_schema,
-                    "meal_names",
+                    "discovery",
                 ),
                 timeout=self.DISCOVERY_TIMEOUT,
             )
         except Exception as e:
-            logger.error(
-                f"[DISCOVERY-FAILED] session={session.id} | {type(e).__name__}: {e}"
+            attempted_models = getattr(e, "attempted_models", None)
+            last_error = getattr(e, "last_error", None)
+            logger.warning(
+                "[DISCOVERY-FALLBACK] session=%s | error_type=%s | error=%s | "
+                "attempted_models=%s | last_error=%s",
+                session.id,
+                type(e).__name__,
+                e,
+                attempted_models,
+                last_error,
             )
-            raise RuntimeError(f"Discovery generation failed: {e}") from e
+            return self._build_discovery_fallback(
+                session,
+                exclude_meal_names,
+                count,
+                type(e).__name__,
+            )
 
         # Dedup + validate macros
         seen: set = set()
@@ -234,10 +252,39 @@ class ParallelRecipeGenerator:
             f"meals={[r['name'] for r in results]}"
         )
 
-        if not results:
-            raise RuntimeError("Discovery returned no valid meals")
+        if len(results) < count:
+            results.extend(
+                self._build_discovery_fallback(
+                    session,
+                    [*exclude_meal_names, *[r["name"] for r in results]],
+                    count - len(results),
+                    "partial or empty AI discovery response",
+                )
+            )
 
         return results
+
+    def _build_discovery_fallback(
+        self,
+        session: SuggestionSession,
+        exclude_meal_names: List[str],
+        count: int,
+        reason: str,
+    ) -> List[dict]:
+        meals = build_discovery_fallback_meals(
+            session=session,
+            exclude_meal_names=exclude_meal_names,
+            count=count,
+            macro_validator=self._macro_validator,
+        )
+        logger.info(
+            "[DISCOVERY-FALLBACK-COMPLETE] session=%s | reason=%s | returned=%d | meals=%s",
+            session.id,
+            reason,
+            len(meals),
+            [meal["name"] for meal in meals],
+        )
+        return meals
 
     async def generate_selected_recipes(
         self,
