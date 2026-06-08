@@ -9,7 +9,6 @@ from .ingredient_recognition_requests import IngredientRecognitionRequest
 
 # Meal requests
 from .meal_requests import (
-    AnalyzeMealImageByUrlRequest,
     AnalyzeMealImageRequest,
     CreateMealRequest,
     MacrosRequest,
@@ -45,7 +44,6 @@ __all__ = [
     "UpdateMealMacrosRequest",
     "MealSearchRequest",
     "AnalyzeMealImageRequest",
-    "AnalyzeMealImageByUrlRequest",
     "MacrosRequest",
     # TDEE
     "TdeeCalculationRequest",
