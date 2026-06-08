@@ -4,32 +4,32 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from sqlalchemy import func, update, select, delete
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, joinedload, noload
+from sqlalchemy.orm import joinedload, noload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus
+from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition import Nutrition
 from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.utils.timezone_utils import get_zone_info, utc_now
 from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.meal.meal import MealORM
-from src.infra.database.models.meal.meal_image import MealImageORM
 from src.infra.database.models.meal.food_item_translation_model import (
     FoodItemTranslationORM,
 )
+from src.infra.database.models.meal.meal import MealORM
+from src.infra.database.models.meal.meal_image import MealImageORM
 from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
 from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.mappers import MealStatusMapper
 from src.infra.mappers.meal_mapper import (
-    meal_orm_to_domain,
+    food_item_domain_to_orm,
     meal_domain_to_orm,
     meal_image_domain_to_orm,
+    meal_orm_to_domain,
     nutrition_domain_to_orm,
-    food_item_domain_to_orm,
 )
-from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,16 @@ _PROJECTION_OPTS: dict = {
         joinedload(MealORM.translations),
     ),
 }
+
+
+def _domain_hydratable_active_meal_filter():
+    return and_(
+        MealORM.status != MealStatusEnum.INACTIVE,
+        or_(
+            MealORM.status != MealStatusEnum.READY,
+            and_(MealORM.ready_at.is_not(None), MealORM.nutrition.has()),
+        ),
+    )
 
 
 class AsyncMealRepository(MealRepositoryPort):
@@ -223,7 +233,7 @@ class AsyncMealRepository(MealRepositoryPort):
             .where(
                 MealORM.created_at >= start_dt,
                 MealORM.created_at < end_dt,
-                MealORM.status != MealStatusEnum.INACTIVE,
+                _domain_hydratable_active_meal_filter(),
             )
         )
         if user_id:
@@ -243,7 +253,9 @@ class AsyncMealRepository(MealRepositoryPort):
     ) -> List[Meal]:
         """Return all meals (food + hydration) for a date, sorted by timestamp DESC."""
         tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
-        start_dt = datetime.combine(date_obj, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        start_dt = datetime.combine(
+            date_obj, datetime.min.time(), tzinfo=tz
+        ).astimezone(timezone.utc)
         end_dt = start_dt + timedelta(days=1)
 
         result = await self.session.execute(
@@ -254,13 +266,11 @@ class AsyncMealRepository(MealRepositoryPort):
                 MealORM.created_at >= start_dt,
                 MealORM.created_at < end_dt,
                 MealORM.status.in_([MealStatusEnum.READY, MealStatusEnum.ENRICHING]),
+                _domain_hydratable_active_meal_filter(),
             )
             .order_by(MealORM.created_at.desc())
         )
-        return [
-            meal_orm_to_domain(m)
-            for m in result.unique().scalars().all()
-        ]
+        return [meal_orm_to_domain(m) for m in result.unique().scalars().all()]
 
     async def sum_hydration_ml_for_date(
         self,
@@ -270,17 +280,18 @@ class AsyncMealRepository(MealRepositoryPort):
     ) -> int:
         """Return total hydration ml logged for a single date."""
         tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
-        start_dt = datetime.combine(date_obj, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        start_dt = datetime.combine(
+            date_obj, datetime.min.time(), tzinfo=tz
+        ).astimezone(timezone.utc)
         end_dt = start_dt + timedelta(days=1)
 
         result = await self.session.execute(
-            select(func.coalesce(func.sum(MealORM.quantity), 0))
-            .where(
+            select(func.coalesce(func.sum(MealORM.quantity), 0)).where(
                 MealORM.user_id == user_id,
                 MealORM.meal_type == "hydration",
                 MealORM.created_at >= start_dt,
                 MealORM.created_at < end_dt,
-                MealORM.status != MealStatusEnum.INACTIVE,
+                _domain_hydratable_active_meal_filter(),
             )
         )
         return result.scalar_one()
@@ -294,9 +305,12 @@ class AsyncMealRepository(MealRepositoryPort):
     ) -> Dict[date, int]:
         """Return per-date hydration totals (ml) for a date range."""
         tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
-        start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+        start_dt = datetime.combine(
+            start_date, datetime.min.time(), tzinfo=tz
+        ).astimezone(timezone.utc)
         end_dt = (
-            datetime.combine(end_date, datetime.min.time(), tzinfo=tz) + timedelta(days=1)
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
+            + timedelta(days=1)
         ).astimezone(timezone.utc)
 
         if user_timezone and user_timezone != "UTC":
@@ -311,7 +325,7 @@ class AsyncMealRepository(MealRepositoryPort):
                 MealORM.meal_type == "hydration",
                 MealORM.created_at >= start_dt,
                 MealORM.created_at < end_dt,
-                MealORM.status != MealStatusEnum.INACTIVE,
+                _domain_hydratable_active_meal_filter(),
             )
             .group_by(date_expr)
         )
@@ -347,7 +361,7 @@ class AsyncMealRepository(MealRepositoryPort):
                 MealORM.created_at >= start_dt,
                 MealORM.created_at < end_dt,
                 MealORM.user_id == user_id,
-                MealORM.status != MealStatusEnum.INACTIVE,
+                _domain_hydratable_active_meal_filter(),
             )
             .order_by(MealORM.created_at.asc())
             .limit(limit)
@@ -382,7 +396,7 @@ class AsyncMealRepository(MealRepositoryPort):
                 MealORM.user_id == user_id,
                 MealORM.created_at >= start_dt,
                 MealORM.created_at < end_dt,
-                MealORM.status != MealStatusEnum.INACTIVE,
+                _domain_hydratable_active_meal_filter(),
             )
             .group_by(date_expr)
         )
@@ -405,7 +419,8 @@ class AsyncMealRepository(MealRepositoryPort):
         result = await self.session.execute(
             select(date_expr)
             .where(
-                MealORM.user_id == user_id, MealORM.status != MealStatusEnum.INACTIVE
+                MealORM.user_id == user_id,
+                _domain_hydratable_active_meal_filter(),
             )
             .distinct()
             .order_by(date_expr.desc())

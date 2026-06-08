@@ -1,7 +1,8 @@
 """Unit test: RedisClient ConnectionPool must include socket timeouts."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from src.infra.cache.redis_client import RedisClient
 
@@ -51,10 +52,45 @@ def test_connection_pool_timeout_custom_value():
 
 
 @pytest.mark.asyncio
+async def test_get_reconnects_when_cached_client_belongs_to_old_loop():
+    """Loop-bound async Redis clients must be replaced before request use."""
+    old_client = MagicMock()
+    old_client.aclose = AsyncMock()
+    old_pool = MagicMock()
+    old_pool.disconnect = AsyncMock()
+
+    new_pool = MagicMock()
+    new_client = MagicMock()
+    new_client.ping = AsyncMock(return_value=True)
+    new_client.get = AsyncMock(return_value="cached-value")
+
+    with (
+        patch(
+            "src.infra.cache.redis_client.redis.ConnectionPool.from_url",
+            return_value=new_pool,
+        ),
+        patch("src.infra.cache.redis_client.redis.Redis", return_value=new_client),
+    ):
+        client = RedisClient(redis_url="redis://localhost:6379")
+        client.client = old_client
+        client.pool = old_pool
+        client._loop_id = -1
+
+        result = await client.get("cache-key")
+
+    assert result == "cached-value"
+    old_client.aclose.assert_awaited_once()
+    old_pool.disconnect.assert_awaited_once()
+    new_client.ping.assert_awaited_once()
+    new_client.get.assert_awaited_once_with("cache-key")
+
+
+@pytest.mark.asyncio
 async def test_delete_pattern_uses_scan_not_keys():
     """delete_pattern must use scan_iter, never client.keys (blocking)."""
-    from src.infra.cache.redis_client import RedisClient
     from unittest.mock import AsyncMock
+
+    from src.infra.cache.redis_client import RedisClient
 
     client = RedisClient.__new__(RedisClient)
 
