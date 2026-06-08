@@ -269,7 +269,7 @@ def get_daily_context_precompute_service():
 
 # Phase 06: Meal Suggestion Dependencies
 def get_redis_client() -> Optional[RedisClient]:
-    """Get Redis client for meal suggestions repository."""
+    """Return Redis client used by optional caches and required session stores."""
     return _redis_client
 
 
@@ -279,14 +279,15 @@ def get_raw_redis_client():
 
 
 def get_meal_suggestion_repository():
-    """Get meal suggestion repository (Phase 06)."""
+    """Get Redis-backed meal suggestion session store."""
     from src.infra.repositories.meal_suggestion_repository import (
         MealSuggestionRepository,
     )
 
     if _redis_client is None:
         raise RuntimeError(
-            "Redis client not initialized. Ensure cache layer is initialized."
+            "Redis suggestion session store not initialized. "
+            "Meal suggestion sessions require Redis until moved to durable storage."
         )
     return MealSuggestionRepository(_redis_client)
 

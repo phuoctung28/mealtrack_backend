@@ -1,12 +1,81 @@
-# Redis Command Optimization
+# Redis Cache Strategy and Command Optimization
 
 **Date:** 2026-05-21  
+**Current Review:** 2026-06-08
 **Branch:** `feature/redis-optimize` (from `delivery`)  
-**Problem:** Upstash free tier limit is 500K commands/month. With 10,000+ users, the daily notification precompute alone generates ~620K commands/month (10K users × 2 commands × 31 days), exceeding the entire budget before any user makes a request.
+**Status:** Historical command-reduction plan plus current cache admission policy.
+**Problem:** Upstash free tier limit is 500K commands/month. With 10,000+ users, the daily notification precompute alone generates ~620K commands/month (10K users x 2 commands x 31 days), exceeding the entire budget before any user makes a request.
 
 ---
 
-## Root Cause Analysis
+## Current Cache Strategy
+
+Default to **no cache**. Add Redis only when the cached value earns its complexity.
+
+A value is cacheable only when all of these are true:
+
+1. A source of truth exists outside Redis.
+2. The read is expensive enough to justify cache operations.
+3. A stale value is acceptable for a named TTL window.
+4. The invalidation trigger is known and already wired, or the TTL is short enough to bound risk.
+5. Redis failure can fall back to correct behavior, even if slower or more expensive.
+6. Command volume stays below the expected Redis budget at projected user count.
+
+If any item fails, do not cache it. Persist it in the database, compute it on demand, or model it as required state instead of pretending it is cache-aside.
+
+### Cache vs State vs Read Model
+
+| Category | Redis Role | Failure Behavior | Examples |
+|---|---|---|---|
+| Optional cache | Performance or cost optimization only | Bypass Redis and read source of truth | Food search/details, nutrition lookup, short-lived dashboard reads |
+| Required state store | Product behavior depends on it | Fail fast or move to durable storage | Meal suggestion sessions if kept in Redis |
+| Computed read model | Derived from DB and invalidated by writes/events | Recompute from DB on miss/error | Daily breakdown, weekly budget, nutrition summaries |
+| External cache pointer | Stores shared external cache IDs | Skip optimization on miss/error | Gemini explicit cache names |
+
+Do not blur these. Most current confusion comes from treating required session state as if it were optional cache.
+
+### Cache Admission Decisions
+
+| Area | Decision | Rationale |
+|---|---|---|
+| Food search and food details | Cache | Stable-ish data, high reuse, safe stale window. |
+| Nutrition lookup by normalized ingredient | Cache | Expensive lookup chain; stale per-100g nutrition is acceptable for a bounded TTL. |
+| Gemini explicit cache names | Cache | Cost optimization only; Redis miss should fall back to uncached Gemini calls. |
+| Daily breakdown, weekly budget, nutrition bulk | Conditional cache | Keep only with short TTL and reliable invalidation on meal, movement, hydration, custom macro, metric, and goal changes. |
+| Auth Firebase UID to database user mapping | Process-local TTL cache only | Redis cost/complexity is not worth it; DB remains source of truth. |
+| Notification precompute data | Do not cache | Notification correctness needs database rows and live token validation. |
+| FCM token ownership | Do not cache | `user_fcm_tokens` is source of truth at dispatch time. |
+| Meal writes and metric updates | Do not cache | Write paths persist data, then invalidate derived reads. |
+| Meal suggestion sessions | Not cache | This is transient product state. Prefer Postgres with `expires_at`; if Redis remains, name it a required session store and fail fast when unavailable. |
+| Redis hash precompute pipeline | Remove / avoid | High command volume and redundant with `notifications.context` plus DB batch queries. |
+
+### Operational Rules
+
+- `CACHE_ENABLED=false` means optional Redis caches are disabled. It must not imply every Redis-backed feature has an in-memory replacement.
+- Redis-backed required state must be documented explicitly and health-checked separately from optional cache.
+- Query caches should use `CachePort` / `CacheService`; raw Redis access should be reserved for narrowly named infrastructure adapters.
+- New cache keys must document owner, source of truth, TTL, stale tolerance, invalidation trigger, fallback behavior, and estimated command volume.
+- Avoid Redis `KEYS` in production paths. Use `SCAN` or deterministic keys/indexes.
+- Do not add Redis to notification scheduling or dispatch unless a measured database bottleneck exists and the stale-token risk is solved first.
+
+### Recommended Direction
+
+Short term:
+
+- Keep Redis for optional read caches and Gemini cache IDs.
+- Keep notification rows, notification context, and FCM token ownership database-owned.
+- Treat meal suggestion sessions as required state, not cache.
+- Fix any raw Redis client vs `RedisClient` wrapper contract mismatch before expanding cache usage.
+- Remove or quarantine unused Redis hash helpers after verifying no active callers.
+
+Long term:
+
+- Move meal suggestion sessions to Postgres with `expires_at` and cleanup if Redis reliability or command cost keeps recurring.
+- Keep Redis as an optimization layer only, so Redis outage means slower or more expensive requests, not incorrect behavior.
+
+---
+
+## Historical Root Cause Analysis
 
 At 1:37 PM snapshot (Upstash dashboard):
 
@@ -15,7 +84,7 @@ At 1:37 PM snapshot (Upstash dashboard):
 | HSET | 4.4K | `DailyContextPrecomputeService.hset_batch()` |
 | EXPIRE | 4.4K | Same — paired with every HSET |
 | GET | 4.7K | Auth UID lookup + all query handler caches |
-| HGETALL | 2.3K | `ScheduledNotificationService` — every tick |
+| HGETALL | 2.3K | Notification dispatch service — every tick |
 | SETEX | 1.4K | Nutrition lookup + standard SET ops |
 | DEL | 1.1K | Meal mutation cache invalidations |
 | KEYS | 125 | `delete_pattern()` — blocking, not SCAN |
@@ -26,7 +95,7 @@ HSET + EXPIRE + HGETALL + EXISTS = **~57% of all commands** from the notificatio
 
 ---
 
-## Solution
+## Historical Command-Reduction Solution
 
 Two changes combined:
 
@@ -66,7 +135,7 @@ This data is already written to the `notifications.context` JSONB column in the 
 
 ### Replace HGETALL with PG Batch Query at Send Time
 
-`ScheduledNotificationService._send_due_notifications()` currently:
+The notification dispatch service currently:
 1. Fetches due notification rows from PG (which already contain `calorie_goal`, `gender`, `language_code`, `fcm_tokens` in JSONB `context`)
 2. Calls `hgetall_batch()` to get a fresher `calories_consumed` from Redis for meal reminders
 
@@ -112,7 +181,7 @@ This is real-time data — more accurate than the Redis hash (which was hours st
 
 ### Replace Redis Sentinel with In-Memory Set
 
-The sentinel key `precomputed:{date}:{tz}` prevents double-running the precompute for the same `(date, timezone)`. Since the scheduler is single-leader (enforced by `SchedulerLeaderLock`), a module-level set is authoritative:
+The sentinel key `precomputed:{date}:{tz}` prevents double-running the precompute for the same `(date, timezone)`. Since notification row inserts are idempotent and cron reruns are safe, a module-level set is enough to suppress duplicate precompute work within one process:
 
 ```python
 # In DailyContextPrecomputeService
@@ -123,9 +192,9 @@ _precomputed_today: set[tuple[str, str]] = set()  # (date_isoformat, tz_name)
 
 ### Remove Redis Dependency from DailyContextPrecomputeService
 
-`DailyContextPrecomputeService.__init__` currently takes `redis_client: RedisClient`. After this change it takes no Redis dependency — only `UnitOfWork` (via sync threads). Update the constructor in `ScheduledNotificationService` accordingly.
+`DailyContextPrecomputeService.__init__` should not take `redis_client: RedisClient`. It should depend on `UnitOfWork`/database access only. The cron dispatch path should not require Redis for notification precompute or send-time calorie reads.
 
-Methods to remove from `RedisClient` (or keep unused — do not delete if other callers exist): `hset_batch`, `hgetall_batch`. Verify no other callers before removing.
+Methods removed from `RedisClient` after verifying no active callers: `hset_with_ttl`, `hset_batch`, `hgetall_batch`.
 
 ---
 
@@ -192,9 +261,9 @@ Prevents Redis blocking on large keyspaces. No behavioral change.
 | File | Change |
 |---|---|
 | `src/infra/services/daily_context_precompute_service.py` | Remove Redis dep, add in-memory sentinel set, add FCM eligibility filter to Query 1, remove Redis hash build |
-| `src/infra/services/scheduled_notification_service.py` | Remove `hgetall_batch` call, add `_fetch_calories_consumed_batch` PG helper, update `DailyContextPrecomputeService` constructor call |
+| `src/infra/services/cron_notification_dispatch_service.py` | Remove `hgetall_batch` call, add `_fetch_calories_consumed_batch` PG helper, keep `DailyContextPrecomputeService` Redis-free |
 | `src/api/dependencies/auth_cache.py` | Add `TTLCache`, replace Redis GET/SET/DEL with in-memory ops |
-| `src/infra/cache/redis_client.py` | Fix `delete_pattern()` KEYS→SCAN; optionally remove `hset_batch`/`hgetall_batch` if no other callers |
+| `src/infra/cache/redis_client.py` | Fix `delete_pattern()` KEYS→SCAN; remove unused Redis hash helpers after caller audit |
 | `src/domain/cache/cache_keys.py` | Extend `daily_breakdown` and `weekly_budget` TTLs |
 | `requirements.txt` | Add `cachetools` |
 
@@ -216,11 +285,17 @@ The precompute change alone brings the budget from >620K to 0 for the hash syste
 
 ---
 
-## What Does Not Change
+## What Does Not Change From The 2026-05-21 Plan
 
-- All query caches (TDEE, profile, macros, weekly budget, streak, activities) remain in Redis — low write frequency, high read value.
-- Nutrition lookup cache remains in Redis — write-once, 24h TTL, high reuse.
-- Food search / food detail cache remains in Redis — 7-day TTL.
-- Meal suggestion session hashes remain in Redis — short-lived, per-user.
-- Notification sending logic, FCM batch send, leader lock — unchanged.
-- No database migrations required.
+- Notification sending remains database-owned: due rows are claimed, rendered, sent through Firebase, then marked sent/failed.
+- Notification precompute remains idempotent through database constraints and safe cron reruns.
+- Nutrition lookup and food lookup remain valid cache candidates.
+- Redis remains useful for performance and AI-cost optimization.
+
+## What Changes After The 2026-06-08 Review
+
+- Do not keep all query caches by default. Each key must pass the cache admission checklist.
+- Do not describe meal suggestion sessions as cache-aside. They are transient state.
+- Prefer Postgres for meal suggestion sessions if Redis reliability or command budget is an active concern.
+- Do not claim Redis has universal graceful degradation while Redis-backed required state still exists.
+- Treat stale FCM token snapshots as a correctness risk; live `user_fcm_tokens` remains the dispatch-time source of truth.

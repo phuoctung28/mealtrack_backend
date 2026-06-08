@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -14,6 +14,11 @@ from src.domain.model.meal_suggestion import (
     SuggestionStatus,
 )
 from src.infra.repositories.meal_suggestion_repository import MealSuggestionRepository
+
+
+async def _scan_iter(keys):
+    for key in keys:
+        yield key
 
 
 @pytest.fixture
@@ -65,7 +70,7 @@ def suggestion(session):
 @pytest.mark.asyncio
 async def test_save_and_get_session_roundtrip(session):
     redis = SimpleNamespace(
-        set=AsyncMock(),
+        set=AsyncMock(return_value=True),
         get=AsyncMock(return_value=None),
         delete=AsyncMock(),
         delete_pattern=AsyncMock(return_value=0),
@@ -90,7 +95,7 @@ def test_session_serialization_preserves_discovery_meals(session):
 async def test_update_session_uses_remaining_ttl_when_available(session):
     client = SimpleNamespace(ttl=AsyncMock(return_value=123))
     redis = SimpleNamespace(
-        set=AsyncMock(),
+        set=AsyncMock(return_value=True),
         get=AsyncMock(return_value=None),
         delete=AsyncMock(),
         delete_pattern=AsyncMock(return_value=0),
@@ -108,7 +113,7 @@ async def test_update_session_uses_remaining_ttl_when_available(session):
 async def test_update_session_falls_back_to_default_ttl_when_expired(session):
     client = SimpleNamespace(ttl=AsyncMock(return_value=-1))
     redis = SimpleNamespace(
-        set=AsyncMock(),
+        set=AsyncMock(return_value=True),
         get=AsyncMock(return_value=None),
         delete=AsyncMock(),
         delete_pattern=AsyncMock(return_value=0),
@@ -122,9 +127,11 @@ async def test_update_session_falls_back_to_default_ttl_when_expired(session):
 
 
 @pytest.mark.asyncio
-async def test_save_session_with_suggestions_skips_without_client(session, suggestion):
+async def test_save_session_with_suggestions_falls_back_without_pipeline(
+    session, suggestion
+):
     redis = SimpleNamespace(
-        set=AsyncMock(),
+        set=AsyncMock(return_value=True),
         get=AsyncMock(return_value=None),
         delete=AsyncMock(),
         delete_pattern=AsyncMock(return_value=0),
@@ -132,13 +139,13 @@ async def test_save_session_with_suggestions_skips_without_client(session, sugge
     )
     repo = MealSuggestionRepository(redis)
     await repo.save_session_with_suggestions(session, [suggestion])
-    # no client => no pipeline calls
-    redis.set.assert_not_called()
+
+    assert redis.set.await_count == 3  # session + suggestion + suggestion index
 
 
 @pytest.mark.asyncio
 async def test_save_session_with_suggestions_uses_pipeline(session, suggestion):
-    pipe = SimpleNamespace(set=AsyncMock(), execute=AsyncMock())
+    pipe = SimpleNamespace(set=MagicMock(), execute=AsyncMock())
 
     class _PipelineCtx:
         async def __aenter__(self):
@@ -159,22 +166,40 @@ async def test_save_session_with_suggestions_uses_pipeline(session, suggestion):
     repo = MealSuggestionRepository(redis)
     await repo.save_session_with_suggestions(session, [suggestion])
 
-    # session + 1 suggestion
-    assert pipe.set.call_count == 2
+    # session + 1 suggestion + suggestion index
+    assert pipe.set.call_count == 3
     pipe.execute.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_get_suggestion_searches_keys_and_deserializes(session, suggestion):
-    client = SimpleNamespace(
-        keys=AsyncMock(return_value=[f"suggestion:{session.id}:{suggestion.id}"])
-    )
+async def test_get_suggestion_uses_index_and_deserializes(session, suggestion):
     serialized = MealSuggestionRepository(SimpleNamespace())._serialize_suggestion(
         suggestion
     )
     redis = SimpleNamespace(
-        set=AsyncMock(),
-        get=AsyncMock(return_value=serialized),
+        set=AsyncMock(return_value=True),
+        get=AsyncMock(side_effect=[session.id, serialized]),
+        delete=AsyncMock(),
+        delete_pattern=AsyncMock(return_value=0),
+        client=SimpleNamespace(scan_iter=MagicMock()),
+    )
+    repo = MealSuggestionRepository(redis)
+    out = await repo.get_suggestion(suggestion.id)
+    assert out is not None
+    assert out.id == suggestion.id
+    redis.client.scan_iter.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_suggestion_scans_only_for_legacy_unindexed_key(session, suggestion):
+    legacy_key = f"suggestion:{session.id}:{suggestion.id}"
+    client = SimpleNamespace(scan_iter=MagicMock(return_value=_scan_iter([legacy_key])))
+    serialized = MealSuggestionRepository(SimpleNamespace())._serialize_suggestion(
+        suggestion
+    )
+    redis = SimpleNamespace(
+        set=AsyncMock(return_value=True),
+        get=AsyncMock(side_effect=[None, serialized]),
         delete=AsyncMock(),
         delete_pattern=AsyncMock(return_value=0),
         client=client,
@@ -183,12 +208,15 @@ async def test_get_suggestion_searches_keys_and_deserializes(session, suggestion
     out = await repo.get_suggestion(suggestion.id)
     assert out is not None
     assert out.id == suggestion.id
+    client.scan_iter.assert_called_once_with(
+        match=f"suggestion:*:{suggestion.id}", count=100
+    )
 
 
 @pytest.mark.asyncio
 async def test_delete_session_deletes_session_key_and_pattern(session):
     redis = SimpleNamespace(
-        set=AsyncMock(),
+        set=AsyncMock(return_value=True),
         get=AsyncMock(return_value=None),
         delete=AsyncMock(),
         delete_pattern=AsyncMock(return_value=3),
@@ -198,3 +226,22 @@ async def test_delete_session_deletes_session_key_and_pattern(session):
     await repo.delete_session(session.id)
     redis.delete.assert_awaited_once()
     redis.delete_pattern.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_session_deletes_suggestion_indexes(session, suggestion):
+    suggestion_key = f"suggestion:{session.id}:{suggestion.id}"
+    client = SimpleNamespace(
+        scan_iter=MagicMock(return_value=_scan_iter([suggestion_key]))
+    )
+    redis = SimpleNamespace(
+        set=AsyncMock(return_value=True),
+        get=AsyncMock(return_value=None),
+        delete=AsyncMock(),
+        delete_pattern=AsyncMock(return_value=1),
+        client=client,
+    )
+    repo = MealSuggestionRepository(redis)
+    await repo.delete_session(session.id)
+
+    redis.delete.assert_any_await(f"suggestion_index:{suggestion.id}")
