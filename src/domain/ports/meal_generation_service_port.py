@@ -30,7 +30,7 @@ class MealGenerationServicePort(ABC):
             max_tokens: Maximum output tokens
             schema: Optional Pydantic model for structured output
             model_purpose: Optional purpose for rate limit distribution
-                          ("meal_names", "recipe_primary", "recipe_secondary")
+                          ("meal_names", "discovery", "recipe", "barcode", "general")
 
         Returns:
             Generated meal plan data

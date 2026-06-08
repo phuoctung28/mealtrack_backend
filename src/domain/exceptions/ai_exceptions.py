@@ -1,9 +1,11 @@
 """AI-related exception classes for resilience layer."""
+
 from typing import Any, List, Optional
 
 
 class AIError(Exception):
     """Base class for AI-related errors."""
+
     pass
 
 
@@ -19,6 +21,14 @@ class AIUnavailableError(AIError):
         super().__init__(message)
         self.attempted_models = attempted_models or []
         self.last_error = last_error
+
+    def __str__(self) -> str:
+        parts = [super().__str__()]
+        if self.attempted_models:
+            parts.append(f"attempted_models={self.attempted_models}")
+        if self.last_error:
+            parts.append(f"last_error={self.last_error}")
+        return " | ".join(parts)
 
 
 class AIPartialResultError(AIError):
