@@ -197,6 +197,25 @@ class TestGenerate:
         )
 
     @pytest.mark.asyncio
+    async def test_generate_does_not_reuse_text_parse_cache_for_barcode(
+        self, manager, mock_gemini_provider
+    ):
+        cache_manager = Mock()
+        cache_manager.get_cache_name_for_model = AsyncMock(
+            return_value="cachedContents/text-parse"
+        )
+        manager.set_cache_manager(cache_manager)
+
+        await manager.generate(
+            purpose=ModelPurpose.BARCODE,
+            prompt="barcode prompt",
+            system_message="barcode system",
+        )
+
+        cache_manager.get_cache_name_for_model.assert_not_awaited()
+        assert mock_gemini_provider.generate.call_args.kwargs["cache_name"] is None
+
+    @pytest.mark.asyncio
     async def test_generate_raises_when_all_fail(
         self, manager, mock_gemini_provider, mock_circuit_breaker
     ):

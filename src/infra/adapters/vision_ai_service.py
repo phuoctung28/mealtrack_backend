@@ -5,7 +5,7 @@ import re
 from io import BytesIO
 from typing import Any
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from PIL import Image
 
@@ -22,6 +22,14 @@ logger = logging.getLogger(__name__)
 MAX_URL_IMAGE_BYTES = 5 * 1024 * 1024
 URL_FETCH_TIMEOUT_SECONDS = 10
 ALLOWED_URL_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+CLOUDINARY_IMAGE_HOST = "res.cloudinary.com"
+CLOUDINARY_UPLOAD_PATH_MARKER = "/image/upload/"
+CLOUDINARY_MEAL_FOLDER = "mealtrack/"
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 class VisionAIService(VisionAIServicePort):
@@ -177,17 +185,18 @@ class VisionAIService(VisionAIServicePort):
         return await self.analyze_with_strategy(image_bytes, strategy)
 
     async def _fetch_image_url(self, image_url: str) -> bytes:
-        """Fetch bounded image bytes from an HTTP(S) URL."""
-        parsed = urlparse(image_url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("Image URL must be an absolute HTTP(S) URL")
+        """Fetch bounded image bytes from a trusted Cloudinary meal image URL."""
+        self._validate_cloudinary_image_url(image_url)
 
         def _fetch() -> bytes:
             request = Request(image_url, headers={"User-Agent": "MealTrack/1.0"})
-            with urlopen(request, timeout=URL_FETCH_TIMEOUT_SECONDS) as response:
+            opener = build_opener(_NoRedirectHandler)
+            with opener.open(request, timeout=URL_FETCH_TIMEOUT_SECONDS) as response:
                 content_type = response.headers.get_content_type()
                 if content_type not in ALLOWED_URL_IMAGE_CONTENT_TYPES:
-                    raise ValueError(f"Unsupported image URL content type: {content_type}")
+                    raise ValueError(
+                        f"Unsupported image URL content type: {content_type}"
+                    )
                 image_bytes = response.read(MAX_URL_IMAGE_BYTES + 1)
                 if len(image_bytes) > MAX_URL_IMAGE_BYTES:
                     raise ValueError("Image URL content too large (max 5MB)")
@@ -199,6 +208,15 @@ class VisionAIService(VisionAIServicePort):
             raise
         except Exception as e:
             raise RuntimeError(f"Failed to fetch image URL: {str(e)}") from e
+
+    def _validate_cloudinary_image_url(self, image_url: str) -> None:
+        parsed = urlparse(image_url)
+        if parsed.scheme != "https" or parsed.hostname != CLOUDINARY_IMAGE_HOST:
+            raise ValueError("Image URL must be an HTTPS Cloudinary URL")
+        if CLOUDINARY_UPLOAD_PATH_MARKER not in parsed.path:
+            raise ValueError("Image URL must point to a Cloudinary image upload")
+        if f"/{CLOUDINARY_MEAL_FOLDER}" not in parsed.path:
+            raise ValueError("Image URL must point to a MealTrack Cloudinary image")
 
     async def analyze(self, image_bytes: bytes) -> dict[str, Any]:
         """

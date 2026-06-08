@@ -26,6 +26,12 @@ def _make_service() -> VisionAIService:
         return VisionAIService()
 
 
+def _mock_url_opener(mock_response: MagicMock) -> MagicMock:
+    mock_opener = MagicMock()
+    mock_opener.open.return_value = mock_response
+    return mock_opener
+
+
 def test_vision_service_uses_ai_model_manager():
     with patch(_MGR_PATCH) as mock_cls:
         mock_manager = MagicMock()
@@ -114,11 +120,15 @@ async def test_analyze_by_url_passes_max_tokens_1024():
     mock_response.headers.get_content_type.return_value = "image/jpeg"
     mock_response.read.return_value = image_bytes
     mock_response.__enter__.return_value = mock_response
+    mock_opener = _mock_url_opener(mock_response)
     with patch(
-        "src.infra.adapters.vision_ai_service.urlopen",
-        return_value=mock_response,
+        "src.infra.adapters.vision_ai_service.build_opener",
+        return_value=mock_opener,
     ):
-        await service.analyze_by_url_with_strategy("http://example.com/food.jpg", strategy)
+        await service.analyze_by_url_with_strategy(
+            "https://res.cloudinary.com/demo/image/upload/v1/mealtrack/food.jpg",
+            strategy,
+        )
 
     call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
     assert call_kwargs.get("max_tokens") == 1024
@@ -136,6 +146,18 @@ async def test_analyze_by_url_rejects_non_http_url():
 
 
 @pytest.mark.asyncio
+async def test_analyze_by_url_rejects_non_cloudinary_url():
+    service = _make_service()
+    from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+    strategy = AnalysisStrategyFactory.create_basic_strategy()
+
+    with pytest.raises(ValueError, match="Cloudinary"):
+        await service.analyze_by_url_with_strategy(
+            "https://example.com/food.jpg", strategy
+        )
+
+
+@pytest.mark.asyncio
 async def test_analyze_by_url_rejects_non_image_content_type():
     service = _make_service()
     from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
@@ -144,12 +166,16 @@ async def test_analyze_by_url_rejects_non_image_content_type():
     mock_response = MagicMock()
     mock_response.headers.get_content_type.return_value = "text/html"
     mock_response.__enter__.return_value = mock_response
+    mock_opener = _mock_url_opener(mock_response)
 
     with patch(
-        "src.infra.adapters.vision_ai_service.urlopen",
-        return_value=mock_response,
+        "src.infra.adapters.vision_ai_service.build_opener",
+        return_value=mock_opener,
     ), pytest.raises(ValueError, match="content type"):
-        await service.analyze_by_url_with_strategy("https://example.com/page", strategy)
+        await service.analyze_by_url_with_strategy(
+            "https://res.cloudinary.com/demo/image/upload/v1/mealtrack/page",
+            strategy,
+        )
 
 
 def test_recipe_token_limit_is_1200():

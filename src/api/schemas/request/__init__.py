@@ -3,16 +3,19 @@ Request DTOs for API endpoints.
 """
 
 # Ingredient recognition requests
+# Common enums
+from ..common.auth_enums import AuthProviderEnum
 from .ingredient_recognition_requests import IngredientRecognitionRequest
 
 # Meal requests
 from .meal_requests import (
-    CreateMealRequest,
-    UpdateMealRequest,
-    UpdateMealMacrosRequest,
-    MealSearchRequest,
+    AnalyzeMealImageByUrlRequest,
     AnalyzeMealImageRequest,
+    CreateMealRequest,
     MacrosRequest,
+    MealSearchRequest,
+    UpdateMealMacrosRequest,
+    UpdateMealRequest,
 )
 
 # Onboarding requests
@@ -20,23 +23,20 @@ from .onboarding_requests import OnboardingCompleteRequest
 
 # TDEE requests
 from .tdee_requests import (
-    TdeeCalculationRequest,
     BatchTdeeCalculationRequest,
-    SexEnum,
-    JobTypeEnum,
     GoalEnum,
+    JobTypeEnum,
+    SexEnum,
+    TdeeCalculationRequest,
     UnitSystemEnum,
 )
 
 # User requests
 from .user_requests import (
+    UserCreateRequest,
     UserSyncRequest,
     UserUpdateLastAccessedRequest,
-    UserCreateRequest,
 )
-
-# Common enums
-from ..common.auth_enums import AuthProviderEnum
 
 __all__ = [
     # Meal
@@ -45,6 +45,7 @@ __all__ = [
     "UpdateMealMacrosRequest",
     "MealSearchRequest",
     "AnalyzeMealImageRequest",
+    "AnalyzeMealImageByUrlRequest",
     "MacrosRequest",
     # TDEE
     "TdeeCalculationRequest",

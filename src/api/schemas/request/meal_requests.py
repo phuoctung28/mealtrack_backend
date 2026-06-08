@@ -4,8 +4,13 @@ Meal-related request DTOs.
 
 import warnings
 from typing import Any, Literal, Optional
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+CLOUDINARY_IMAGE_HOST = "res.cloudinary.com"
+CLOUDINARY_UPLOAD_PATH_MARKER = "/image/upload/"
+CLOUDINARY_MEAL_FOLDER = "mealtrack/"
 
 
 class ParseMealTextRequest(BaseModel):
@@ -137,6 +142,64 @@ class AnalyzeMealImageRequest(BaseModel):
             )
             return "en"
         return normalized
+
+
+class AnalyzeMealImageByUrlRequest(BaseModel):
+    """Request DTO for analyzing a pre-uploaded Cloudinary meal image."""
+
+    image_url: str = Field(..., min_length=1, max_length=2048)
+    public_id: str = Field(..., min_length=1, max_length=255)
+    content_type: str = Field(..., min_length=1, max_length=50)
+    file_size_bytes: int = Field(..., gt=0, le=10 * 1024 * 1024)
+    target_date: Optional[str] = Field(
+        None,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Target date in YYYY-MM-DD format",
+    )
+    user_description: Optional[str] = Field(None, max_length=200)
+
+    @field_validator("content_type")
+    @classmethod
+    def validate_content_type(cls, value: str) -> str:
+        normalized = value.lower().strip()
+        if normalized == "image/jpg":
+            return "image/jpeg"
+        if normalized not in {"image/jpeg", "image/png"}:
+            raise ValueError("content_type must be image/jpeg or image/png")
+        return normalized
+
+    @field_validator("public_id")
+    @classmethod
+    def validate_public_id(cls, value: str) -> str:
+        normalized = value.strip().strip("/")
+        if not normalized.startswith(CLOUDINARY_MEAL_FOLDER):
+            raise ValueError("public_id must be in the mealtrack folder")
+        if ".." in normalized or "\\" in normalized or "://" in normalized:
+            raise ValueError("public_id contains invalid path characters")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_image_url(self) -> "AnalyzeMealImageByUrlRequest":
+        parsed = urlparse(self.image_url)
+        if parsed.scheme != "https" or parsed.hostname != CLOUDINARY_IMAGE_HOST:
+            raise ValueError("image_url must be an HTTPS Cloudinary URL")
+        if CLOUDINARY_UPLOAD_PATH_MARKER not in parsed.path:
+            raise ValueError("image_url must point to a Cloudinary image upload")
+        if not _cloudinary_path_contains_public_id(parsed.path, self.public_id):
+            raise ValueError("image_url does not match public_id")
+        return self
+
+
+def _cloudinary_path_contains_public_id(path: str, public_id: str) -> bool:
+    if CLOUDINARY_UPLOAD_PATH_MARKER not in path:
+        return False
+    upload_tail = path.split(CLOUDINARY_UPLOAD_PATH_MARKER, 1)[1]
+    needle = f"/{public_id}"
+    matched_tail = f"/{upload_tail}"
+    if needle not in matched_tail:
+        return False
+    suffix = matched_tail.rsplit(needle, 1)[1]
+    return suffix == "" or suffix.startswith(".")
 
 
 def _has_macro_over_100(nutrition) -> bool:

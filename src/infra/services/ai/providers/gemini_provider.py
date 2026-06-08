@@ -1,5 +1,6 @@
 """Gemini implementation of AIProviderPort."""
 import asyncio
+import json
 import logging
 import re
 from typing import Any
@@ -112,7 +113,7 @@ class GeminiProvider(AIProviderPort):
         content = response.content
 
         if response_type == "json":
-            return self._extract_json(content)
+            return self._extract_json(content, purpose_hint=purpose_hint)
         return {"raw_content": content}
 
     async def generate_with_vision(
@@ -121,7 +122,7 @@ class GeminiProvider(AIProviderPort):
         prompt: str,
         image_data: bytes,
         system_message: str | None = None,
-        purpose_hint: str | None = None,   # NEW
+        purpose_hint: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Generate with image input."""
@@ -155,7 +156,7 @@ class GeminiProvider(AIProviderPort):
         )
 
         response = await asyncio.to_thread(llm.invoke, messages)
-        return self._extract_json(response.content)
+        return self._extract_json(response.content, purpose_hint=purpose_hint)
 
     def extract_error_code(self, error: Exception) -> int | str | None:
         """Extract status code or error type from exception."""
@@ -170,6 +171,30 @@ class GeminiProvider(AIProviderPort):
 
         return None
 
-    def _extract_json(self, content: str) -> dict[str, Any]:
+    def _extract_json(
+        self, content: str, purpose_hint: str | None = None
+    ) -> dict[str, Any]:
         """Extract JSON from response content."""
-        return extract_meal_generation_json(content)
+        if purpose_hint == "parse_text":
+            return extract_meal_generation_json(content)
+
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+
+        json_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
+        if json_match:
+            try:
+                return json.loads(json_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        json_match = re.search(r"\{[\s\S]*\}", content)
+        if json_match:
+            try:
+                return json.loads(json_match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        raise ValueError(f"Could not extract JSON from response: {content[:200]}")
