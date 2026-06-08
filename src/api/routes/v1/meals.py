@@ -7,47 +7,43 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, UploadFile, Query, Request, status
 
-from src.api.base_dependencies import get_image_store
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.exceptions import ValidationException, handle_exception
-from src.api.mappers.meal_mapper import MealMapper
+from src.api.base_dependencies import get_image_store
+from src.api.exceptions import handle_exception, ValidationException
 from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
-from src.api.schemas.progress_schemas import DailyBreakdownResponse, StreakResponse
+from src.api.mappers.meal_mapper import MealMapper
 from src.api.schemas.request.meal_requests import (
-    CreateManualMealFromFoodsRequest,
     EditMealIngredientsRequest,
+    CreateManualMealFromFoodsRequest,
     ParseMealTextRequest,
 )
 from src.api.schemas.response import DetailedMealResponse, ManualMealCreationResponse
-from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.api.schemas.response.meal_responses import ParseMealTextResponse
+from src.api.schemas.progress_schemas import DailyBreakdownResponse, StreakResponse
+from src.api.schemas.response.daily_nutrition_response import DailyNutritionResponse
 from src.api.schemas.response.weekly_budget_response import WeeklyBudgetResponse
-from src.app.commands.meal import (
-    CustomNutritionData,
-    EditMealCommand,
-    FoodItemChange,
-)
+from src.app.commands.meal import EditMealCommand, FoodItemChange, CustomNutritionData
 from src.app.commands.meal.create_manual_meal_command import (
     CreateManualMealCommand,
     CustomNutrition,
     ManualMealItem,
 )
-from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 from src.app.commands.meal.parse_meal_text_command import ParseMealTextCommand
+from src.app.commands.meal.delete_meal_command import DeleteMealCommand
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
 )
-from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.app.queries.meal import (
-    GetDailyBreakdownQuery,
-    GetDailyMacrosQuery,
     GetMealByIdQuery,
+    GetDailyMacrosQuery,
     GetStreakQuery,
+    GetDailyBreakdownQuery,
 )
+from src.app.queries.get_weekly_budget_query import GetWeeklyBudgetQuery
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
 from src.infra.event_bus import EventBus
 
