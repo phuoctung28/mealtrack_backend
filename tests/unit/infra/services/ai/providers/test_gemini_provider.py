@@ -1,5 +1,7 @@
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
+
 from src.domain.ports.ai_provider_port import AICapability
 from src.infra.services.ai.providers.gemini_provider import GeminiProvider
 
@@ -87,6 +89,34 @@ class TestGenerate:
         assert call_kwargs["model_name"] == "gemini-2.5-flash-lite"
 
 
+class TestJsonExtraction:
+    def test_recovers_parse_text_response_truncated_after_scalar(self, provider):
+        content = """{
+  "emoji": "🍮",
+  "items": [
+    {
+      "name": "Đậu xanh nấu (Cooked mung beans)",
+      "quantity": 80,
+      "unit": "g",
+      "english_unit": "g",
+      "calories": 105"""
+
+        result = provider._extract_json(content)
+
+        assert result == {
+            "emoji": "🍮",
+            "items": [
+                {
+                    "name": "Đậu xanh nấu (Cooked mung beans)",
+                    "quantity": 80,
+                    "unit": "g",
+                    "english_unit": "g",
+                    "calories": 105,
+                }
+            ],
+        }
+
+
 class TestGenerateWithVision:
     @pytest.mark.asyncio
     async def test_generate_with_vision_forwards_selected_fallback_model(
@@ -128,8 +158,8 @@ class TestErrorExtraction:
 
 def test_purpose_temperatures_defined():
     from src.infra.services.ai.gemini_model_config import (
-        GeminiModelPurpose,
         PURPOSE_TEMPERATURES,
+        GeminiModelPurpose,
     )
     assert PURPOSE_TEMPERATURES[GeminiModelPurpose.BARCODE] == 0.1
     assert PURPOSE_TEMPERATURES[GeminiModelPurpose.MEAL_NAMES] == 0.7

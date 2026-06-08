@@ -134,8 +134,8 @@ class AIModelManager:
             )
             available = [chain[0]]
 
-        # Look up warm Gemini context cache for this purpose
-        cache_name: str | None = None
+        # Gemini context caches are model-specific; lookup happens per attempt.
+        cache_type: str | None = None
         if self._cache_manager is not None:
             purpose_to_cache_type = {
                 ModelPurpose.RECIPE: "recipe",
@@ -144,13 +144,6 @@ class AIModelManager:
                 ModelPurpose.BARCODE: "text_parse",
             }
             cache_type = purpose_to_cache_type.get(purpose)
-            if cache_type and any(model.startswith("gemini") for model in available):
-                try:
-                    cache_name = await self._cache_manager.get_cache_name(cache_type)
-                except Exception as e:
-                    logger.warning(
-                        "[AI-CACHE-LOOKUP-FAILED] purpose=%s error=%s", purpose.value, e
-                    )
 
         attempted = []
         last_error = None
@@ -164,6 +157,7 @@ class AIModelManager:
 
             try:
                 logger.debug(f"[AI-ATTEMPT] purpose={purpose.value} | model={model}")
+                cache_name = await self._get_cache_name_for_model(cache_type, model)
 
                 result = await provider.generate(
                     model=model,
@@ -204,6 +198,26 @@ class AIModelManager:
             attempted_models=attempted,
             last_error=last_error,
         )
+
+    async def _get_cache_name_for_model(
+        self, cache_type: str | None, model: str
+    ) -> str | None:
+        """Return Gemini cache only when cache metadata matches the attempted model."""
+        if (
+            cache_type is None
+            or self._cache_manager is None
+            or not model.startswith("gemini")
+        ):
+            return None
+        try:
+            if hasattr(self._cache_manager, "get_cache_name_for_model"):
+                return await self._cache_manager.get_cache_name_for_model(
+                    cache_type, model
+                )
+            return None
+        except Exception as e:
+            logger.warning("[AI-CACHE-LOOKUP-FAILED] cache_type=%s error=%s", cache_type, e)
+            return None
 
     async def generate_with_vision(
         self,

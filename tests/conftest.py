@@ -2,31 +2,29 @@
 Global pytest configuration and fixtures.
 """
 
+from collections.abc import Generator
 from datetime import datetime
-from typing import Generator
 
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
+from tests.fixtures.database.test_config import (
+    create_test_engine,
+    get_test_database_url,
+)
+from tests.fixtures.mock_image_store import MockImageStore
 
-from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition, FoodItem
+from src.domain.model import FoodItem, Macros, Meal, MealImage, MealStatus, Nutrition
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.infra.database.config import Base
 
 # Import all models to ensure they're registered with Base metadata
 from src.infra.database.models.meal.meal import MealORM
-from src.infra.database.models.meal.meal_image import MealImageORM
-from src.infra.mappers.meal_mapper import meal_domain_to_orm, meal_image_domain_to_orm
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
-from src.infra.event_bus import PyMediatorEventBus, EventBus
+from src.infra.event_bus import EventBus, PyMediatorEventBus
+from src.infra.mappers.meal_mapper import meal_domain_to_orm, meal_image_domain_to_orm
 from src.infra.repositories.meal_repository import MealRepository
-from tests.fixtures.database.test_config import (
-    get_test_database_url,
-    create_test_engine,
-)
-from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIService
-from tests.fixtures.mock_image_store import MockImageStore
 
 
 class AsyncSyncRepoWrapper:
@@ -90,8 +88,8 @@ class TestUnitOfWork:
 def _is_db_available() -> bool:
     """Check if the test database is available."""
     try:
-        from tests.fixtures.database.test_config import get_test_database_url
         from sqlalchemy import create_engine, text
+        from tests.fixtures.database.test_config import get_test_database_url
 
         url = get_test_database_url()
         engine = create_engine(
@@ -213,7 +211,15 @@ def test_engine(worker_id, request):
         try:
             with temp_engine.connect() as conn:
                 db_name = get_test_database_url().rsplit("/", 1)[1].split("?")[0]
-                conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
+                if temp_engine.dialect.name == "postgresql":
+                    exists = conn.execute(
+                        text("SELECT 1 FROM pg_database WHERE datname = :db_name"),
+                        {"db_name": db_name},
+                    ).scalar()
+                    if not exists:
+                        conn.execute(text(f'CREATE DATABASE "{db_name}"'))
+                elif temp_engine.dialect.name == "mysql":
+                    conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db_name}`"))
         finally:
             temp_engine.dispose()
 
@@ -224,9 +230,11 @@ def test_engine(worker_id, request):
         if worker_id in ("master", "gw0"):
             # Drop all tables first to ensure clean state
             with engine.begin() as conn:
-                conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+                if engine.dialect.name == "mysql":
+                    conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
                 Base.metadata.drop_all(bind=engine)
-                conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+                if engine.dialect.name == "mysql":
+                    conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
 
             # Create all tables
             Base.metadata.create_all(bind=engine)
@@ -234,6 +242,7 @@ def test_engine(worker_id, request):
         # Other workers wait for tables to be created
         elif worker_id != "master":
             import time
+
             from sqlalchemy import inspect
 
             # Wait up to 30 seconds for tables to be created
@@ -318,7 +327,7 @@ def mock_scoped_session(test_session, request):
 
     # For integration tests, patch ScopedSession to return test_session
     # Store original __call__ method
-    original_call = getattr(ScopedSession, "__call__", None)
+    original_call = ScopedSession.__call__
 
     # Create a function that always returns test_session
     def mock_call(*args, **kwargs):
@@ -336,7 +345,7 @@ def mock_scoped_session(test_session, request):
         # Clean up
         try:
             ScopedSession.remove()
-        except:
+        except Exception:
             pass
 
 
@@ -346,7 +355,6 @@ def reset_event_bus_singleton():
     Reset the event bus singleton before each test to prevent state leakage.
     This ensures that event bus initialization happens fresh for each test.
     """
-    from src.api.dependencies.event_bus import _configured_event_bus
 
     # Reset singleton before test
     import src.api.dependencies.event_bus as event_bus_module
@@ -366,8 +374,10 @@ def mock_image_store() -> MockImageStore:
 
 
 @pytest.fixture
-def mock_vision_service() -> MockVisionAIService:
+def mock_vision_service():
     """Mock vision AI service for testing."""
+    from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIService
+
     return MockVisionAIService()
 
 
@@ -407,42 +417,38 @@ def event_bus(
 ) -> EventBus:
     """Configured event bus for testing."""
     # Import handlers from modules
-    from src.app.handlers.command_handlers import (
-        EditMealCommandHandler,
-        AddCustomIngredientCommandHandler,
-        DeleteMealCommandHandler,
-        UploadMealImageImmediatelyHandler,
-        SaveUserOnboardingCommandHandler,
-    )
-    from src.app.handlers.query_handlers import (
-        GetMealByIdQueryHandler,
-        GetDailyMacrosQueryHandler,
-        GetUserProfileQueryHandler,
+    from src.app.commands.meal.edit_meal_command import (
+        AddCustomIngredientCommand,
+        EditMealCommand,
     )
 
     # Import commands and queries
     from src.app.commands.meal.upload_meal_image_immediately_command import (
         UploadMealImageImmediatelyCommand,
     )
-    from src.app.commands.meal.edit_meal_command import (
-        EditMealCommand,
-        AddCustomIngredientCommand,
-    )
-    from src.app.queries.meal.get_meal_by_id_query import GetMealByIdQuery
-    from src.app.queries.meal.get_daily_macros_query import GetDailyMacrosQuery
     from src.app.commands.user.save_user_onboarding_command import (
         SaveUserOnboardingCommand,
     )
+    from src.app.handlers.command_handlers import (
+        AddCustomIngredientCommandHandler,
+        DeleteMealCommandHandler,
+        EditMealCommandHandler,
+        SaveUserOnboardingCommandHandler,
+        UploadMealImageImmediatelyHandler,
+    )
+    from src.app.handlers.query_handlers import (
+        GetDailyMacrosQueryHandler,
+        GetMealByIdQueryHandler,
+        GetUserProfileQueryHandler,
+    )
+    from src.app.queries.meal.get_daily_macros_query import GetDailyMacrosQuery
+    from src.app.queries.meal.get_meal_by_id_query import GetMealByIdQuery
     from src.app.queries.user.get_user_profile_query import GetUserProfileQuery
-    from src.infra.repositories.user_repository import UserRepository
 
     event_bus = PyMediatorEventBus()
 
     # Create test UoW using the test session (doesn't close session on exit)
     test_uow = TestUnitOfWork(session=test_session)
-
-    # Create repositories
-    user_repository = UserRepository(test_session)
 
     # Register meal edit command handlers
     event_bus.register_handler(

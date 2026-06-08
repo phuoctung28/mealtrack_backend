@@ -1,8 +1,34 @@
 """Unit tests for GeminiCacheManager."""
 
+import sys
+import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def stub_google_genai(monkeypatch):
+    """Provide a patchable google.genai module when google-genai is not installed."""
+    import google
+
+    genai_module = types.ModuleType("google.genai")
+    genai_types_module = types.ModuleType("google.genai.types")
+
+    class CreateCachedContentConfig:
+        def __init__(self, displayName, contents, ttl, system_instruction=None):
+            self.display_name = displayName
+            self.contents = contents
+            self.ttl = ttl
+            self.system_instruction = system_instruction
+
+    genai_types_module.CreateCachedContentConfig = CreateCachedContentConfig
+    genai_module.Client = MagicMock()
+    genai_module.types = genai_types_module
+
+    monkeypatch.setattr(google, "genai", genai_module, raising=False)
+    monkeypatch.setitem(sys.modules, "google.genai", genai_module)
+    monkeypatch.setitem(sys.modules, "google.genai.types", genai_types_module)
 
 
 @pytest.fixture
@@ -38,6 +64,42 @@ async def test_get_cache_name_returns_stored_name(cache_manager, mock_redis):
 
 
 @pytest.mark.asyncio
+async def test_get_cache_name_for_model_returns_matching_cache(cache_manager, mock_redis):
+    """Model-aware lookup returns cache only when metadata matches."""
+    mock_redis.get.side_effect = ["cachedContents/abc123", "gemini-2.5-flash-lite"]
+
+    result = await cache_manager.get_cache_name_for_model(
+        "recipe", "gemini-2.5-flash-lite"
+    )
+
+    assert result == "cachedContents/abc123"
+
+
+@pytest.mark.asyncio
+async def test_get_cache_name_for_model_skips_mismatched_cache(cache_manager, mock_redis):
+    """Fallback model must not reuse a cache created for another Gemini model."""
+    mock_redis.get.side_effect = ["cachedContents/abc123", "gemini-2.5-flash-lite"]
+
+    result = await cache_manager.get_cache_name_for_model(
+        "recipe", "gemini-2.5-flash"
+    )
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_cache_name_for_model_skips_legacy_cache(cache_manager, mock_redis):
+    """Legacy cache names without model metadata are intentionally not reused."""
+    mock_redis.get.side_effect = ["cachedContents/legacy", None]
+
+    result = await cache_manager.get_cache_name_for_model(
+        "recipe", "gemini-2.5-flash-lite"
+    )
+
+    assert result is None
+
+
+@pytest.mark.asyncio
 async def test_get_cache_name_returns_none_for_unknown_type(cache_manager, mock_redis):
     """get_cache_name returns None for unknown cache types without hitting Redis."""
     result = await cache_manager.get_cache_name("nonexistent_type")
@@ -48,7 +110,7 @@ async def test_get_cache_name_returns_none_for_unknown_type(cache_manager, mock_
 @pytest.mark.asyncio
 async def test_warm_one_skips_if_already_cached(cache_manager, mock_redis):
     """_warm_one does not call _create_cache when cache already exists in Redis."""
-    mock_redis.get.return_value = "cachedContents/existing123"
+    mock_redis.get.side_effect = ["cachedContents/existing123", "gemini-2.5-flash"]
 
     with patch.object(
         cache_manager, "_create_cache", new_callable=AsyncMock
@@ -78,7 +140,9 @@ async def test_warm_one_creates_and_stores_cache(cache_manager, mock_redis):
         mock_create.assert_awaited_once_with(
             "recipe", "some system prompt", "gemini-2.5-flash"
         )
-        mock_set.assert_awaited_once_with("recipe", "cachedContents/new456")
+        mock_set.assert_awaited_once_with(
+            "recipe", "cachedContents/new456", "gemini-2.5-flash"
+        )
 
 
 @pytest.mark.asyncio
@@ -103,11 +167,20 @@ async def test_set_cache_name_stores_with_ttl(cache_manager, mock_redis):
         TTL_SECONDS,
     )
 
-    await cache_manager._set_cache_name("recipe", "cachedContents/xyz")
-    mock_redis.set.assert_awaited_once_with(
+    await cache_manager._set_cache_name(
+        "recipe", "cachedContents/xyz", "gemini-2.5-flash-lite"
+    )
+    ttl = TTL_SECONDS + REFRESH_BEFORE_EXPIRY
+    assert mock_redis.set.await_count == 2
+    mock_redis.set.assert_any_await(
         "gemini_cache:recipe",
         "cachedContents/xyz",
-        ex=TTL_SECONDS + REFRESH_BEFORE_EXPIRY,
+        ex=ttl,
+    )
+    mock_redis.set.assert_any_await(
+        "gemini_cache:recipe:model",
+        "gemini-2.5-flash-lite",
+        ex=ttl,
     )
 
 

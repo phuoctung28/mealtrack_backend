@@ -166,6 +166,37 @@ class TestGenerate:
         mock_circuit_breaker.record_success.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_generate_omits_cache_when_fallback_model_does_not_match(
+        self, manager, mock_gemini_provider
+    ):
+        mock_gemini_provider.generate = AsyncMock(
+            side_effect=[Exception("cache/model mismatch"), {"result": "fallback"}]
+        )
+        cache_manager = Mock()
+        cache_manager.get_cache_name_for_model = AsyncMock(
+            side_effect=["cachedContents/primary", None]
+        )
+        manager.set_cache_manager(cache_manager)
+
+        result = await manager.generate(
+            purpose=ModelPurpose.PARSE_TEXT,
+            prompt="test",
+            system_message="system",
+        )
+
+        assert result == {"result": "fallback"}
+        assert mock_gemini_provider.generate.call_args_list[0].kwargs["cache_name"] == (
+            "cachedContents/primary"
+        )
+        assert mock_gemini_provider.generate.call_args_list[1].kwargs["cache_name"] is None
+        cache_manager.get_cache_name_for_model.assert_any_await(
+            "text_parse", "gemini-2.5-flash-lite"
+        )
+        cache_manager.get_cache_name_for_model.assert_any_await(
+            "text_parse", "gemini-2.5-flash"
+        )
+
+    @pytest.mark.asyncio
     async def test_generate_raises_when_all_fail(
         self, manager, mock_gemini_provider, mock_circuit_breaker
     ):
