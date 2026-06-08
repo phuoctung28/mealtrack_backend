@@ -5,23 +5,23 @@ Auto-extracted for better maintainability.
 
 import logging
 from datetime import date, datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetDailyMacrosQuery
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
+from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition.macros import Macros
+from src.domain.ports.cache_port import CachePort
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import (
     get_user_monday,
     get_zone_info,
     resolve_user_timezone_async,
 )
-from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -107,27 +107,38 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                 user_profile = await uow.users.get_profile(UUID(query.user_id))
                 water_goal_ml = (
                     user_profile.daily_water_goal_ml
-                    if user_profile and hasattr(user_profile, "daily_water_goal_ml") and user_profile.daily_water_goal_ml is not None and user_profile.daily_water_goal_ml > 0
+                    if user_profile
+                    and hasattr(user_profile, "daily_water_goal_ml")
+                    and user_profile.daily_water_goal_ml is not None
+                    and user_profile.daily_water_goal_ml > 0
                     else 2000
                 )
             except Exception as exc:
-                logger.warning("Failed to fetch hydration data for user %s: %s", query.user_id, exc)
+                logger.warning(
+                    "Failed to fetch hydration data for user %s: %s", query.user_id, exc
+                )
                 consumed_water_ml = 0
                 water_goal_ml = 2000
 
             # Fetch movement kcal burned for this day
             movement_kcal_burned = 0.0
             try:
-                from datetime import time, timezone as tz_module
+                from datetime import time
+                from datetime import timezone as tz_module
+
                 start_local = datetime.combine(target_date, time.min, tzinfo=user_tz)
                 end_local = start_local + timedelta(days=1)
-                movement_kcal_burned = await uow.movement_entries.sum_included_kcal_for_range(
-                    query.user_id,
-                    start_local.astimezone(tz_module.utc),
-                    end_local.astimezone(tz_module.utc),
+                movement_kcal_burned = (
+                    await uow.movement_entries.sum_included_kcal_for_range(
+                        query.user_id,
+                        start_local.astimezone(tz_module.utc),
+                        end_local.astimezone(tz_module.utc),
+                    )
                 )
             except Exception as exc:
-                logger.warning("Failed to fetch movement data for user %s: %s", query.user_id, exc)
+                logger.warning(
+                    "Failed to fetch movement data for user %s: %s", query.user_id, exc
+                )
 
         # TDEE lookup — behind Redis cache, rarely opens DB
         target_calories = None
@@ -140,7 +151,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             )
             from src.app.queries.tdee import GetUserTdeeQuery
 
-            tdee_handler = GetUserTdeeQueryHandler()
+            tdee_handler = GetUserTdeeQueryHandler(cache_service=self.cache_service)
             tdee_result = await tdee_handler.handle(
                 GetUserTdeeQuery(user_id=query.user_id)
             )
@@ -237,18 +248,20 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             standard_daily_fat = target_macros.get("fat", 70) if target_macros else 70
 
             async with AsyncUnitOfWork() as uow:
-                effective = await WeeklyBudgetService.get_effective_adjusted_daily_async(
-                    uow=uow,
-                    user_id=user_id,
-                    week_start=week_start,
-                    target_date=target_date,
-                    weekly_budget=weekly_budget,
-                    base_daily_cal=standard_daily_calories,
-                    base_daily_protein=standard_daily_protein,
-                    base_daily_carbs=standard_daily_carbs,
-                    base_daily_fat=standard_daily_fat,
-                    bmr=bmr,
-                    user_timezone=user_timezone,
+                effective = (
+                    await WeeklyBudgetService.get_effective_adjusted_daily_async(
+                        uow=uow,
+                        user_id=user_id,
+                        week_start=week_start,
+                        target_date=target_date,
+                        weekly_budget=weekly_budget,
+                        base_daily_cal=standard_daily_calories,
+                        base_daily_protein=standard_daily_protein,
+                        base_daily_carbs=standard_daily_carbs,
+                        base_daily_fat=standard_daily_fat,
+                        bmr=bmr,
+                        user_timezone=user_timezone,
+                    )
                 )
             adjusted = effective.adjusted
 
@@ -268,7 +281,11 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
         if not self.cache_service:
             return None
         cache_key, _ = CacheKeys.daily_macros(user_id, target_date)
-        return await self.cache_service.get_json(cache_key)
+        try:
+            return await self.cache_service.get_json(cache_key)
+        except Exception as exc:
+            logger.warning("Failed to read daily macros cache for %s: %s", user_id, exc)
+            return None
 
     async def _write_cache(
         self, user_id: str, target_date: date, payload: Dict[str, Any]
@@ -276,4 +293,9 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
         if not self.cache_service:
             return
         cache_key, ttl = CacheKeys.daily_macros(user_id, target_date)
-        await self.cache_service.set_json(cache_key, payload, ttl)
+        try:
+            await self.cache_service.set_json(cache_key, payload, ttl)
+        except Exception as exc:
+            logger.warning(
+                "Failed to write daily macros cache for %s: %s", user_id, exc
+            )
