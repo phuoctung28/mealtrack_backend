@@ -6,14 +6,13 @@ from src.app.handlers.command_handlers.parse_meal_text_handler import (
     ParseMealTextHandler,
 )
 from src.domain.services.nutrition_calculation_service import convert_quantity_to_grams
-from src.infra.services.ai.ai_model_manager import ModelPurpose
 
 
-class _FakeAIManager:
+class _FakeMealGenerationService:
     def __init__(self):
         self.call_kwargs = None
 
-    async def generate(self, **kwargs):
+    def generate_meal_plan(self, **kwargs):
         self.call_kwargs = kwargs
         return {
             "items": [
@@ -38,17 +37,19 @@ class _FakeFatSecretService:
 
 @pytest.mark.asyncio
 async def test_parse_text_unit_stays_compatible_with_prompt_manual_save():
-    ai_manager = _FakeAIManager()
-    handler = ParseMealTextHandler(ai_manager=ai_manager)
-    handler._fat_secret_service = _FakeFatSecretService()
+    meal_generation_service = _FakeMealGenerationService()
+    handler = ParseMealTextHandler(
+        meal_generation_service=meal_generation_service,
+        fat_secret_service=_FakeFatSecretService(),
+    )
 
     response = await handler.handle(
         ParseMealTextCommand(text="1 bowl pho", user_id="user-1", language="en")
     )
     item = response.items[0]
 
-    assert ai_manager.call_kwargs["purpose"] == ModelPurpose.PARSE_TEXT
-    assert ai_manager.call_kwargs["thinking_budget"] == 0
+    assert meal_generation_service.call_kwargs["model_purpose"] == "parse_text"
+    assert meal_generation_service.call_kwargs["thinking_budget"] == 0
     assert item.unit == "one very full noodle bowl"
     assert item.protein == 30
     assert item.carbs == 80

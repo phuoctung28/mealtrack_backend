@@ -17,6 +17,7 @@ PURPOSE_MAP = {
     "discovery": ModelPurpose.DISCOVERY,
     "recipe": ModelPurpose.RECIPE,
     "barcode": ModelPurpose.BARCODE,
+    "parse_text": ModelPurpose.PARSE_TEXT,
     "general": ModelPurpose.GENERAL,
 }
 
@@ -39,6 +40,7 @@ class MealGenerationService(MealGenerationServicePort):
         max_tokens: int = None,
         schema: type = None,
         model_purpose: str | None = None,
+        thinking_budget: int | None = None,
     ) -> dict[str, Any]:
         """
         Generate meal plan with automatic fallback.
@@ -70,5 +72,6 @@ class MealGenerationService(MealGenerationServicePort):
                 response_type=response_type,
                 max_tokens=max_tokens,
                 schema=schema,
+                thinking_budget=thinking_budget,
             )
         )
