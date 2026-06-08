@@ -31,5 +31,7 @@ The system uses Pinecone Inference API with the `llama-text-embed-v2` model.
 ## Caching
 
 - **Provider**: Redis
-- **Strategy**: Cache-Aside with TTL
-- **Use Cases**: User profiles, session-based suggestions (4h TTL), feature flags.
+- **Strategy**: Selective cache-aside with TTL; default to no cache unless the value has a source of truth, safe stale window, clear invalidation, and correct fallback.
+- **Use Cases**: Food search/details, nutrition lookup, short-lived computed read models, Gemini explicit cache names.
+- **Non-Cache State**: Meal suggestion sessions are transient product state, not cache-aside. Prefer Postgres with `expires_at`, or document Redis as a required state store if retained.
+- **Do Not Cache**: Notification precompute data, FCM token ownership, meal writes, metric updates.

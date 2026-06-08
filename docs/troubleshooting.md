@@ -82,7 +82,7 @@ redis-cli ping
 **Solutions:**
 1. Check `REDIS_URL` format: `redis://host:port/db`
 2. Verify Redis is running
-3. Cache is optional — app continues without Redis (graceful degradation)
+3. Optional caches are bypassed when Redis is unavailable. Features that explicitly require Redis-backed state must fail fast or use a durable store.
 
 ---
 

@@ -154,7 +154,9 @@ class NutritionLookupService:
         # open its own sync session, churning the connection pool under fan-out.
         miss_normalized = [
             normalized
-            for (name, normalized, quantity_g), cached in zip(prepared, results)
+            for (name, normalized, quantity_g), cached in zip(
+                prepared, results, strict=False
+            )
             if cached is None
         ]
         t1_map: Dict[str, Dict[str, Any]] = {}
@@ -174,7 +176,7 @@ class NutritionLookupService:
             )
 
         resolved = await asyncio.gather(*(_resolve(i) for i in pending))
-        for index, macros in zip(pending, resolved):
+        for index, macros in zip(pending, resolved, strict=False):
             results[index] = macros
 
         meal = self._aggregate([m for m in results if m is not None])
@@ -328,9 +330,9 @@ class NutritionLookupService:
                 "sugar": round(result.sugar * factor, 2),
                 "source_tier": result.source_tier,
             }
-            await self._redis.setex(key, NUTRITION_CACHE_TTL, json.dumps(data))
+            await self._redis.set(key, json.dumps(data), ttl=NUTRITION_CACHE_TTL)
         except Exception as exc:
-            logger.warning("Redis setex failed for %s: %s", key, exc)
+            logger.warning("Redis set failed for %s: %s", key, exc)
 
     # ------------------------------------------------------------------
     # Calculation helpers

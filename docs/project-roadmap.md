@@ -94,7 +94,7 @@
 - [x] Firebase Auth & FCM with platform-specific configs.
 - [x] SQLAlchemy 2.0 with request-scoped sessions (20 connections + 10 overflow).
 - [x] RevenueCat subscription integration.
-- [x] Redis caching with graceful degradation (50 connections, 1h default TTL).
+- [x] Selective Redis caching policy documented; optional caches degrade, required state must be modeled separately.
 - [x] 11 database tables with Meal aggregate state machine.
 - [x] 3 application services (MessageOrchestrationService, AIResponseCoordinator, ChatNotificationService).
 

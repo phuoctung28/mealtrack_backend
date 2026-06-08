@@ -1,4 +1,4 @@
-"""Redis-backed meal suggestion repository (Phase 06)."""
+"""Redis-backed meal suggestion session store."""
 
 import json
 import logging
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class MealSuggestionRepository(MealSuggestionRepositoryPort):
-    """Redis-backed repository for meal suggestions with 4-hour TTL."""
+    """Required Redis-backed transient state for meal suggestion sessions."""
 
     TTL_SECONDS = 4 * 60 * 60  # 4 hours
 
@@ -23,32 +23,28 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
 
     async def save_session(self, session: SuggestionSession) -> None:
         """Save session with 4-hour TTL."""
-        key = f"suggestion_session:{session.id}"
-        data = self._serialize_session(session)
-        await self._cache.set(key, data, ttl=self.TTL_SECONDS)
+        await self._set_required(
+            self._session_key(session.id),
+            self._serialize_session(session),
+            self.TTL_SECONDS,
+        )
         logger.debug(f"Saved session {session.id}")
 
     async def get_session(self, session_id: str) -> Optional[SuggestionSession]:
         """Retrieve session by ID."""
-        key = f"suggestion_session:{session_id}"
-        data = await self._cache.get(key)
+        data = await self._cache.get(self._session_key(session_id))
         if not data:
             return None
         return self._deserialize_session(data)
 
     async def update_session(self, session: SuggestionSession) -> None:
         """Update session (maintains remaining TTL)."""
-        key = f"suggestion_session:{session.id}"
-        # Get remaining TTL
-        if self._cache.client:
-            ttl = await self._cache.client.ttl(key)
-            if ttl <= 0:
-                ttl = self.TTL_SECONDS
-        else:
-            ttl = self.TTL_SECONDS
-
-        data = self._serialize_session(session)
-        await self._cache.set(key, data, ttl=ttl)
+        key = self._session_key(session.id)
+        await self._set_required(
+            key,
+            self._serialize_session(session),
+            await self._remaining_ttl(key),
+        )
         logger.debug(f"Updated session {session.id}")
 
     async def save_session_with_suggestions(
@@ -59,20 +55,32 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
         Reduces 4 round-trips to 1 batch operation.
         """
         if not self._cache.client:
-            logger.warning("Redis client not available, skipping batch save")
+            logger.warning(
+                "Redis client not connected; saving suggestion session state "
+                "without pipeline"
+            )
+            await self.save_session(session)
+            await self.save_suggestions(suggestions)
             return
 
         async with self._cache.client.pipeline(transaction=False) as pipe:
             # Session
-            session_key = f"suggestion_session:{session.id}"
+            session_key = self._session_key(session.id)
             session_data = self._serialize_session(session)
             pipe.set(session_key, session_data, ex=self.TTL_SECONDS)
 
             # All suggestions in batch
             for suggestion in suggestions:
-                key = f"suggestion:{suggestion.session_id}:{suggestion.id}"
-                data = self._serialize_suggestion(suggestion)
-                pipe.set(key, data, ex=self.TTL_SECONDS)
+                suggestion_key = self._suggestion_key(
+                    suggestion.session_id, suggestion.id
+                )
+                index_key = self._suggestion_index_key(suggestion.id)
+                pipe.set(
+                    suggestion_key,
+                    self._serialize_suggestion(suggestion),
+                    ex=self.TTL_SECONDS,
+                )
+                pipe.set(index_key, suggestion.session_id, ex=self.TTL_SECONDS)
 
             # Execute all commands in single round-trip
             await pipe.execute()
@@ -83,34 +91,36 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
 
     async def delete_session(self, session_id: str) -> None:
         """Delete session and all associated suggestions."""
-        session_key = f"suggestion_session:{session_id}"
+        session_key = self._session_key(session_id)
         await self._cache.delete(session_key)
 
         # Delete all suggestions for this session
         pattern = f"suggestion:{session_id}:*"
+        await self._delete_suggestion_indexes_for_session(pattern)
         deleted_count = await self._cache.delete_pattern(pattern)
         logger.debug(f"Deleted session {session_id} and {deleted_count} suggestions")
 
     async def save_suggestions(self, suggestions: List[MealSuggestion]) -> None:
         """Save batch of suggestions with 4-hour TTL."""
         for suggestion in suggestions:
-            key = f"suggestion:{suggestion.session_id}:{suggestion.id}"
-            data = self._serialize_suggestion(suggestion)
-            await self._cache.set(key, data, ttl=self.TTL_SECONDS)
+            key = self._suggestion_key(suggestion.session_id, suggestion.id)
+            await self._set_required(
+                key, self._serialize_suggestion(suggestion), self.TTL_SECONDS
+            )
+            await self._set_required(
+                self._suggestion_index_key(suggestion.id),
+                suggestion.session_id,
+                self.TTL_SECONDS,
+            )
         logger.debug(f"Saved {len(suggestions)} suggestions")
 
     async def get_suggestion(self, suggestion_id: str) -> Optional[MealSuggestion]:
         """Retrieve single suggestion by ID."""
-        # Search across all sessions (not ideal but works for 4h TTL)
-        pattern = f"suggestion:*:{suggestion_id}"
-        if not self._cache.client:
+        key = await self._suggestion_key_for_id(suggestion_id)
+        if not key:
             return None
 
-        keys = await self._cache.client.keys(pattern)
-        if not keys:
-            return None
-
-        data = await self._cache.get(keys[0])
+        data = await self._cache.get(key)
         if not data:
             return None
 
@@ -118,17 +128,68 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
 
     async def update_suggestion(self, suggestion: MealSuggestion) -> None:
         """Update suggestion (e.g., status change)."""
-        key = f"suggestion:{suggestion.session_id}:{suggestion.id}"
+        key = self._suggestion_key(suggestion.session_id, suggestion.id)
+        ttl = await self._remaining_ttl(key)
+        await self._set_required(key, self._serialize_suggestion(suggestion), ttl)
+        await self._set_required(
+            self._suggestion_index_key(suggestion.id),
+            suggestion.session_id,
+            ttl,
+        )
+        logger.debug(f"Updated suggestion {suggestion.id}")
+
+    @staticmethod
+    def _session_key(session_id: str) -> str:
+        return f"suggestion_session:{session_id}"
+
+    @staticmethod
+    def _suggestion_key(session_id: str, suggestion_id: str) -> str:
+        return f"suggestion:{session_id}:{suggestion_id}"
+
+    @staticmethod
+    def _suggestion_index_key(suggestion_id: str) -> str:
+        return f"suggestion_index:{suggestion_id}"
+
+    async def _set_required(self, key: str, value: str, ttl: int) -> None:
+        saved = await self._cache.set(key, value, ttl=ttl)
+        if not saved:
+            raise RuntimeError(
+                "Redis suggestion session store write failed. "
+                "Meal suggestion sessions require Redis until moved to durable storage."
+            )
+
+    async def _remaining_ttl(self, key: str) -> int:
         if self._cache.client:
             ttl = await self._cache.client.ttl(key)
-            if ttl <= 0:
-                ttl = self.TTL_SECONDS
-        else:
-            ttl = self.TTL_SECONDS
+            if ttl > 0:
+                return int(ttl)
+        return self.TTL_SECONDS
 
-        data = self._serialize_suggestion(suggestion)
-        await self._cache.set(key, data, ttl=ttl)
-        logger.debug(f"Updated suggestion {suggestion.id}")
+    async def _suggestion_key_for_id(self, suggestion_id: str) -> Optional[str]:
+        session_id = await self._cache.get(self._suggestion_index_key(suggestion_id))
+        if session_id:
+            return self._suggestion_key(session_id, suggestion_id)
+        return await self._legacy_suggestion_key_for_id(suggestion_id)
+
+    async def _legacy_suggestion_key_for_id(self, suggestion_id: str) -> Optional[str]:
+        client = self._cache.client
+        if not client:
+            return None
+
+        pattern = f"suggestion:*:{suggestion_id}"
+        async for key in client.scan_iter(match=pattern, count=100):
+            return key.decode() if isinstance(key, bytes) else key
+        return None
+
+    async def _delete_suggestion_indexes_for_session(self, pattern: str) -> None:
+        client = self._cache.client
+        if not client:
+            return
+
+        async for key in client.scan_iter(match=pattern, count=100):
+            key_str = key.decode() if isinstance(key, bytes) else key
+            suggestion_id = key_str.rsplit(":", 1)[-1]
+            await self._cache.delete(self._suggestion_index_key(suggestion_id))
 
     def _serialize_session(self, session: SuggestionSession) -> str:
         """Serialize session to JSON string."""
@@ -217,12 +278,13 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
     def _deserialize_suggestion(self, data: str) -> MealSuggestion:
         """Deserialize JSON to suggestion object."""
         from datetime import datetime
+
         from src.domain.model.meal_suggestion import (
-            MealType,
-            SuggestionStatus,
-            MacroEstimate,
             Ingredient,
+            MacroEstimate,
+            MealType,
             RecipeStep,
+            SuggestionStatus,
         )
 
         obj = json.loads(data)
