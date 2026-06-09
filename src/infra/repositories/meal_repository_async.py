@@ -28,6 +28,7 @@ from src.infra.mappers.meal_mapper import (
     meal_domain_to_orm,
     meal_image_domain_to_orm,
     meal_orm_to_domain,
+    meal_orm_to_domain_if_hydratable,
     nutrition_domain_to_orm,
 )
 
@@ -56,9 +57,23 @@ def _domain_hydratable_active_meal_filter():
         MealORM.status != MealStatusEnum.INACTIVE,
         or_(
             MealORM.status != MealStatusEnum.READY,
-            and_(MealORM.ready_at.is_not(None), MealORM.nutrition.has()),
+            and_(
+                MealORM.ready_at.is_not(None),
+                select(NutritionORM.id)
+                .where(NutritionORM.meal_id == MealORM.meal_id)
+                .exists(),
+            ),
         ),
     )
+
+
+def _map_domain_hydratable_meals(db_meals: list[MealORM]) -> list[Meal]:
+    meals: list[Meal] = []
+    for db_meal in db_meals:
+        meal = meal_orm_to_domain_if_hydratable(db_meal)
+        if meal is not None:
+            meals.append(meal)
+    return meals
 
 
 class AsyncMealRepository(MealRepositoryPort):
@@ -243,7 +258,7 @@ class AsyncMealRepository(MealRepositoryPort):
         stmt = stmt.order_by(MealORM.created_at.desc()).limit(limit)
 
         result = await self.session.execute(stmt)
-        return [meal_orm_to_domain(m) for m in result.scalars().all()]
+        return _map_domain_hydratable_meals(result.scalars().all())
 
     async def find_activities_by_date(
         self,
@@ -270,7 +285,7 @@ class AsyncMealRepository(MealRepositoryPort):
             )
             .order_by(MealORM.created_at.desc())
         )
-        return [meal_orm_to_domain(m) for m in result.unique().scalars().all()]
+        return _map_domain_hydratable_meals(result.unique().scalars().all())
 
     async def sum_hydration_ml_for_date(
         self,
@@ -366,7 +381,7 @@ class AsyncMealRepository(MealRepositoryPort):
             .order_by(MealORM.created_at.asc())
             .limit(limit)
         )
-        return [meal_orm_to_domain(m) for m in result.unique().scalars().all()]
+        return _map_domain_hydratable_meals(result.unique().scalars().all())
 
     async def get_daily_meal_counts(
         self,

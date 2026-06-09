@@ -8,21 +8,24 @@ TDEE helpers: suggestion_tdee_helpers.py
 import asyncio
 import logging
 import uuid
-from typing import List, Optional, Tuple, Callable, Any, AsyncGenerator, Dict
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple
 
+from src.domain.exceptions.meal_suggestion_exceptions import (
+    MealSuggestionSessionStoreUnavailableError,
+)
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
+)
+from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
+    DeepLSuggestionTranslationService,
 )
 from src.domain.services.meal_suggestion.macro_validation_service import (
     MacroValidationService,
 )
 from src.domain.services.meal_suggestion.nutrition_lookup_service import (
     NutritionLookupService,
-)
-from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
-    DeepLSuggestionTranslationService,
 )
 from src.domain.services.meal_suggestion.parallel_recipe_generator import (
     ParallelRecipeGenerator,
@@ -400,10 +403,21 @@ class SuggestionOrchestrationService:
         session.discovery_meals = _merge_discovery_meals(
             getattr(session, "discovery_meals", []), meals
         )
-        if is_existing:
-            await self._repo.update_session(session)
-        else:
-            await self._repo.save_session(session)
+        try:
+            if is_existing:
+                await self._repo.update_session(session)
+            else:
+                await self._repo.save_session(session)
+        except MealSuggestionSessionStoreUnavailableError as exc:
+            logger.warning(
+                "Meal discovery session persistence skipped: %s",
+                exc,
+                extra={
+                    "session_id": session.id,
+                    "requested_session_id": session_id,
+                    "user_id": user_id,
+                },
+            )
 
         return session, meals
 

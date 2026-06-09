@@ -1,13 +1,16 @@
 # MealTrack Backend - Project Roadmap
 
 **Version:** 0.6.3
-**Last Updated:** June 1, 2026
+**Last Updated:** June 9, 2026
 **Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 681+ tests, 70%+ coverage.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
 
 ## Completed Phases
+
+### June 2026: Weekly Budget Resilience
+- [x] Weekly budget meal loading now quarantines malformed legacy `READY` rows without nutrition before domain hydration.
 
 ### June 2026: iOS Notification Payload Hardening
 - [x] Removed obsolete direct notification service wiring and direct meal/summary helper sends.

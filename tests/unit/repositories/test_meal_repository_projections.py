@@ -1,14 +1,17 @@
 """Tests that MealRepository projection parameter controls relationship loading."""
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from unittest.mock import MagicMock
+
+import pytest
 
 from src.domain.model import FoodItem, Macros, Meal, MealImage, MealStatus, Nutrition
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.meal.meal_image import MealImageORM
 from src.infra.database.models.nutrition.nutrition import NutritionORM
+from src.infra.mappers.meal_mapper import meal_orm_to_domain_if_hydratable
 from src.infra.repositories.meal_repository import MealProjection, MealRepository
 
 
@@ -120,7 +123,7 @@ def test_date_range_skips_ready_rows_without_required_domain_data(test_session):
     repository = MealRepository(test_session)
     user_id = str(uuid.uuid4())
     target_date = date.today()
-    created_at = datetime.combine(target_date, datetime.min.time(), tzinfo=timezone.utc)
+    created_at = datetime.combine(target_date, datetime.min.time(), tzinfo=UTC)
 
     invalid_meal_id = str(uuid.uuid4())
     valid_meal_id = str(uuid.uuid4())
@@ -178,3 +181,46 @@ def test_date_range_skips_ready_rows_without_required_domain_data(test_session):
     assert repository.get_daily_meal_counts(user_id, target_date, target_date) == {
         target_date: 1
     }
+
+
+def test_mapper_helper_quarantines_ready_row_without_nutrition():
+    created_at = datetime.now(UTC)
+    meal = MealORM(
+        meal_id=str(uuid.uuid4()),
+        user_id=str(uuid.uuid4()),
+        status=MealStatusEnum.READY,
+        image_id=str(uuid.uuid4()),
+        created_at=created_at,
+        updated_at=created_at,
+        ready_at=created_at,
+        dish_name="Missing Nutrition",
+    )
+    meal.image = MealImageORM(
+        image_id=meal.image_id,
+        format="jpeg",
+        size_bytes=1,
+        url="https://example.com/invalid.jpg",
+    )
+
+    assert meal_orm_to_domain_if_hydratable(meal) is None
+
+
+def test_mapper_helper_reraises_unexpected_domain_errors():
+    created_at = datetime.now(UTC)
+    meal = MealORM(
+        meal_id="not-a-uuid",
+        user_id=str(uuid.uuid4()),
+        status=MealStatusEnum.PROCESSING,
+        image_id=str(uuid.uuid4()),
+        created_at=created_at,
+        updated_at=created_at,
+    )
+    meal.image = MealImageORM(
+        image_id=meal.image_id,
+        format="jpeg",
+        size_bytes=1,
+        url="https://example.com/invalid.jpg",
+    )
+
+    with pytest.raises(ValueError, match="Invalid UUID format for meal_id"):
+        meal_orm_to_domain_if_hydratable(meal)

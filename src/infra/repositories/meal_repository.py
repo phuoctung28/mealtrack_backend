@@ -2,7 +2,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from sqlalchemy import and_, func, or_, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session, joinedload, noload, selectinload
 
 from src.domain.model.meal import Meal, MealStatus
@@ -26,6 +26,7 @@ from src.infra.mappers.meal_mapper import (
     meal_domain_to_orm,
     meal_image_domain_to_orm,
     meal_orm_to_domain,
+    meal_orm_to_domain_if_hydratable,
     nutrition_domain_to_orm,
 )
 
@@ -54,9 +55,23 @@ def _domain_hydratable_active_meal_filter():
         MealORM.status != MealStatusEnum.INACTIVE,
         or_(
             MealORM.status != MealStatusEnum.READY,
-            and_(MealORM.ready_at.is_not(None), MealORM.nutrition.has()),
+            and_(
+                MealORM.ready_at.is_not(None),
+                select(NutritionORM.id)
+                .where(NutritionORM.meal_id == MealORM.meal_id)
+                .exists(),
+            ),
         ),
     )
+
+
+def _map_domain_hydratable_meals(db_meals: list[MealORM]) -> list[Meal]:
+    meals: list[Meal] = []
+    for db_meal in db_meals:
+        meal = meal_orm_to_domain_if_hydratable(db_meal)
+        if meal is not None:
+            meals.append(meal)
+    return meals
 
 
 class MealRepository(MealRepositoryPort):
@@ -314,7 +329,7 @@ class MealRepository(MealRepositoryPort):
             .limit(limit)
             .all()
         )
-        return [meal_orm_to_domain(m) for m in db_meals]
+        return _map_domain_hydratable_meals(db_meals)
 
     def find_by_date_range(
         self,
@@ -355,7 +370,7 @@ class MealRepository(MealRepositoryPort):
             .limit(limit)
             .all()
         )
-        return [meal_orm_to_domain(m) for m in db_meals]
+        return _map_domain_hydratable_meals(db_meals)
 
     def get_daily_meal_counts(
         self,
