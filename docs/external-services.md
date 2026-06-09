@@ -153,11 +153,11 @@
 
 ---
 
-## Database (PostgreSQL/MySQL)
+## Database (PostgreSQL/Neon)
 
 See `database-guide.md` for schema, connection pool, and migration details.
 
-**Config:** `DATABASE_URL=mysql+pymysql://user:pass@host/db`
+**Config:** `DATABASE_URL=postgresql+asyncpg://user:pass@host/db`
 
 ---
 
@@ -166,7 +166,7 @@ See `database-guide.md` for schema, connection pool, and migration details.
 ```
 GET /health                    # Basic health (200 if running)
 GET /health/db-pool            # DB pool metrics
-GET /health/db-connections     # MySQL connection stats
+GET /health/db-connections     # PostgreSQL connection stats
 GET /health/notifications      # FCM health
 ```
 
@@ -177,7 +177,7 @@ GET /health/notifications      # FCM health
 | Service | Failure Mode | Recovery |
 |---------|--------------|----------|
 | Firebase Auth | Fail fast (401) | Requests rejected |
-| MySQL | Fail fast (503) | Requests rejected |
+| PostgreSQL | Fail fast (503) | Requests rejected |
 | Gemini | Fail fast (503) | Return error to client |
 | Cloudinary | Degrade (fallback URL) | Continue with best-effort image |
 | RevenueCat | Degrade (assume premium from cache) | Continue with last-known status |

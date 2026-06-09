@@ -2,27 +2,29 @@
 
 import asyncio
 import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.infra.database.config_async import AsyncSessionLocal
-from src.infra.repositories.meal_repository_async import AsyncMealRepository
-from src.infra.repositories.user_repository_async import AsyncUserRepository
-from src.infra.repositories.weekly_budget_repository_async import (
-    AsyncWeeklyBudgetRepository,
-)
 from src.infra.repositories.cheat_day_repository_async import AsyncCheatDayRepository
-from src.infra.repositories.subscription_repository_async import (
-    AsyncSubscriptionRepository,
-)
+from src.infra.repositories.hydration_repository_async import AsyncHydrationRepository
+from src.infra.repositories.meal_repository_async import AsyncMealRepository
+from src.infra.repositories.movement_repository_async import AsyncMovementRepository
 from src.infra.repositories.notification_repository_async import (
     AsyncNotificationRepository,
 )
 from src.infra.repositories.saved_suggestion_db_repository_async import (
     AsyncSavedSuggestionDbRepository,
 )
+from src.infra.repositories.subscription_repository_async import (
+    AsyncSubscriptionRepository,
+)
+from src.infra.repositories.user_repository_async import AsyncUserRepository
+from src.infra.repositories.weekly_budget_repository_async import (
+    AsyncWeeklyBudgetRepository,
+)
 from src.infra.repositories.weight_repository_async import AsyncWeightRepository
-from src.infra.repositories.movement_repository_async import AsyncMovementRepository
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,7 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
     def _init_repositories(self):
         session = self._require_session()
         self.meals = AsyncMealRepository(session)
+        self.hydration_entries = AsyncHydrationRepository(session)
         self.users = AsyncUserRepository(session)
         self.weekly_budgets = AsyncWeeklyBudgetRepository(session)
         self.cheat_days = AsyncCheatDayRepository(session)

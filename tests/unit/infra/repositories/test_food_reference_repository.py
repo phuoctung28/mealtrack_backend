@@ -10,8 +10,9 @@ Test layers:
    path, and .scalars().first() used in find_by_normalized_name (C5 defensive).
 """
 
-from typing import Dict, Any, Optional
-from unittest.mock import MagicMock, patch, call, PropertyMock
+from typing import Any
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -23,10 +24,10 @@ class InMemoryFoodReferenceStore:
     """Minimal in-memory backing store used to drive stub assertions."""
 
     def __init__(self):
-        self._rows: Dict[str, Dict[str, Any]] = {}  # keyed by name_normalized
+        self._rows: dict[str, dict[str, Any]] = {}  # keyed by name_normalized
         self._next_id = 1
 
-    def find_by_normalized_name(self, name_normalized: str) -> Optional[Dict[str, Any]]:
+    def find_by_normalized_name(self, name_normalized: str) -> dict[str, Any] | None:
         return self._rows.get(name_normalized)
 
     def upsert_by_normalized_name(
@@ -40,8 +41,8 @@ class InMemoryFoodReferenceStore:
         sugar_100g: float,
         source: str,
         is_verified: bool,
-        external_id: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        external_id: str | None = None,
+    ) -> dict[str, Any] | None:
         existing = self._rows.get(name_normalized)
 
         if existing is not None:
@@ -88,20 +89,20 @@ def store():
     return InMemoryFoodReferenceStore()
 
 
-def _upsert(store: InMemoryFoodReferenceStore, **overrides) -> Optional[Dict[str, Any]]:
+def _upsert(store: InMemoryFoodReferenceStore, **overrides) -> dict[str, Any] | None:
     """Helper that calls upsert_by_normalized_name with sensible defaults."""
-    defaults = dict(
-        name="chicken breast",
-        name_normalized="chicken breast",
-        protein_100g=23.1,
-        carbs_100g=0.0,
-        fat_100g=2.6,
-        fiber_100g=0.0,
-        sugar_100g=0.0,
-        source="fatsecret",
-        is_verified=False,
-        external_id="fs-1",
-    )
+    defaults = {
+        "name": "chicken breast",
+        "name_normalized": "chicken breast",
+        "protein_100g": 23.1,
+        "carbs_100g": 0.0,
+        "fat_100g": 2.6,
+        "fiber_100g": 0.0,
+        "sugar_100g": 0.0,
+        "source": "fatsecret",
+        "is_verified": False,
+        "external_id": "fs-1",
+    }
     defaults.update(overrides)
     return store.upsert_by_normalized_name(**defaults)
 
@@ -406,3 +407,51 @@ class TestUniqueConstraintBehavior:
         # Returned value must reflect the original verified row (protein=23.0, not 99.0)
         assert result is not None
         assert result["protein_100g"] == pytest.approx(23.0)
+
+
+def test_food_reference_nutrient_projection_preserves_legacy_scalar_shape():
+    from src.infra.database.models.food_reference_nutrient import (
+        FoodReferenceNutrientModel,
+    )
+    from src.infra.repositories.food_reference_repository import FoodReferenceRepository
+
+    model = TestUniqueConstraintBehavior()._make_model("spinach")
+    model.extra_nutrients = {"calcium_mg": 99}
+    model.nutrient_rows = [
+        FoodReferenceNutrientModel(
+            nutrient_key="calcium_mg",
+            amount=120.0,
+            unit="mg",
+        )
+    ]
+
+    result = FoodReferenceRepository._to_dict(model)
+
+    assert result["extra_nutrients"]["calcium_mg"] == 120.0
+
+
+def test_food_reference_nutrient_projection_preserves_legacy_object_shape():
+    from src.infra.database.models.food_reference_nutrient import (
+        FoodReferenceNutrientModel,
+    )
+    from src.infra.repositories.food_reference_repository import FoodReferenceRepository
+
+    model = TestUniqueConstraintBehavior()._make_model("spinach")
+    model.extra_nutrients = {
+        "calcium_mg": {"amount": 99, "unit": "mg", "source": "old"}
+    }
+    model.nutrient_rows = [
+        FoodReferenceNutrientModel(
+            nutrient_key="calcium_mg",
+            amount=120.0,
+            unit="mg",
+        )
+    ]
+
+    result = FoodReferenceRepository._to_dict(model)
+
+    assert result["extra_nutrients"]["calcium_mg"] == {
+        "amount": 120.0,
+        "unit": "mg",
+        "source": "old",
+    }

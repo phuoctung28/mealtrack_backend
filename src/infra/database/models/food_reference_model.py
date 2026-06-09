@@ -5,16 +5,17 @@ for per-100g nutrition data across barcode scans, USDA, and FatSecret.
 """
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
     Float,
     Integer,
-    JSON,
     String,
     Text,
     func,
 )
+from sqlalchemy.orm import relationship
 
 from src.infra.database.config import Base
 
@@ -54,4 +55,21 @@ class FoodReferenceModel(Base):
     is_verified = Column(Boolean, nullable=False, default=False)
     image_url = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    serving_size_rows = relationship(
+        "FoodReferenceServingSizeModel",
+        back_populates="food_reference",
+        cascade="all, delete-orphan",
+        order_by="FoodReferenceServingSizeModel.position",
+        lazy="selectin",
+    )
+    nutrient_rows = relationship(
+        "FoodReferenceNutrientModel",
+        back_populates="food_reference",
+        cascade="all, delete-orphan",
+        order_by="FoodReferenceNutrientModel.nutrient_key",
+        lazy="selectin",
+    )

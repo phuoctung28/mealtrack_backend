@@ -40,7 +40,7 @@ MealTrack Backend follows a **4-Layer Clean Architecture** combined with **CQRS*
       ┌────────────────────────────────────────┐
       │   Infrastructure Layer (src/infra)    │
       │  - Repositories                        │
-      │  - Database (MySQL)                    │
+      │  - Database (PostgreSQL/Neon)          │
       │  - External Services                   │
       └────────────────────────────────────────┘
 ```

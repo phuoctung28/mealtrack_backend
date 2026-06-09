@@ -1,13 +1,20 @@
 # MealTrack Backend - Project Roadmap
 
 **Version:** 0.6.3
-**Last Updated:** June 1, 2026
+**Last Updated:** June 9, 2026
 **Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 681+ tests, 70%+ coverage.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
 
 ## Completed Phases
+
+### June 2026: Normalized Database Foundation
+- [x] Added normalized profile preferences, hydration entries, saved suggestion items/steps, meal instruction steps, food serving sizes, and food nutrient tables.
+- [x] Added typed payout workflow fields while retaining raw payout details pending a later security/contract pass.
+- [x] Documented notification context as render snapshot only; recipient truth remains in `user_fcm_tokens`.
+- [x] Production migration runner is Alembic-only and no longer creates/stamps schema from `Base.metadata`.
+- [x] Local Postgres upgrade verified to Alembic head `20260609000006`.
 
 ### June 2026: iOS Notification Payload Hardening
 - [x] Removed obsolete direct notification service wiring and direct meal/summary helper sends.
@@ -127,6 +134,7 @@
 ## Technical Debt & Maintenance
 
 ### High Priority
+- [ ] Plan contract migration to remove or secure legacy JSON compatibility fields after production observation window.
 - [ ] Fix CORS wide open (allow_origins=["*"]) - security risk in production
 - [ ] Implement API versioning strategy beyond v1
 - [ ] Apply `require_premium` dependency to premium-only features

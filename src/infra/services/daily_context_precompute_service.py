@@ -4,7 +4,7 @@ import asyncio
 import logging
 import uuid
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import text
@@ -103,14 +103,10 @@ class DailyContextPrecomputeService:
             logger.debug(
                 "Pre-computing notification context for %s on %s", tz_name, today
             )
-            count = await asyncio.to_thread(
-                self._precompute_db_sync, tz_name, today
-            )
+            count = await asyncio.to_thread(self._precompute_db_sync, tz_name, today)
             if count > 0:
                 _precomputed_today.add((today.isoformat(), tz_name))
-            logger.debug(
-                "Pre-compute complete for %s: %d users", tz_name, count
-            )
+            logger.debug("Pre-compute complete for %s: %d users", tz_name, count)
 
     async def reschedule_user_notifications(self, user_id: str) -> int:
         """Reschedule notifications for a single user after preferences update.
@@ -230,7 +226,7 @@ class DailyContextPrecomputeService:
             # Get today's consumed calories
             day_start_utc = datetime(
                 today.year, today.month, today.day, 0, 0, 0, tzinfo=tz
-            ).astimezone(timezone.utc)
+            ).astimezone(UTC)
             day_end_utc = day_start_utc + timedelta(days=1)
 
             consumed_row = session.execute(
@@ -266,7 +262,7 @@ class DailyContextPrecomputeService:
             }
 
             expires_at = datetime(
-                today.year, today.month, today.day, tzinfo=timezone.utc
+                today.year, today.month, today.day, tzinfo=UTC
             ) + timedelta(days=_NOTIF_EXPIRY_DAYS)
             rows = []
 
@@ -298,6 +294,7 @@ class DailyContextPrecomputeService:
                                 "scheduled_for_utc": scheduled_utc,
                                 "status": "pending",
                                 "context": context,
+                                "context_schema_version": 1,
                                 "created_at": now,
                                 "expires_at": expires_at,
                             }
@@ -318,6 +315,7 @@ class DailyContextPrecomputeService:
                             "scheduled_for_utc": scheduled_utc,
                             "status": "pending",
                             "context": context,
+                            "context_schema_version": 1,
                             "created_at": now,
                             "expires_at": expires_at,
                         }
@@ -344,6 +342,7 @@ class DailyContextPrecomputeService:
                                 "scheduled_for_utc": scheduled_utc,
                                 "status": "pending",
                                 "context": hydration_context,
+                                "context_schema_version": 1,
                                 "created_at": now,
                                 "expires_at": expires_at,
                             }
@@ -357,6 +356,7 @@ class DailyContextPrecomputeService:
                     set_={
                         "scheduled_for_utc": stmt.excluded.scheduled_for_utc,
                         "context": stmt.excluded.context,
+                        "context_schema_version": stmt.excluded.context_schema_version,
                         "status": "pending",
                     },
                 )
@@ -511,7 +511,7 @@ class DailyContextPrecomputeService:
 
             day_start_utc = datetime(
                 today.year, today.month, today.day, 0, 0, 0, tzinfo=tz
-            ).astimezone(timezone.utc)
+            ).astimezone(UTC)
             day_end_utc = day_start_utc + timedelta(days=1)
 
             # Canonical formula: P*4 + (C-fiber)*4 + fiber*2 + F*9.
@@ -604,7 +604,7 @@ class DailyContextPrecomputeService:
         """Build list of dicts for bulk INSERT into notifications table."""
         now = utc_now()
         expires_at = datetime(
-            today.year, today.month, today.day, tzinfo=timezone.utc
+            today.year, today.month, today.day, tzinfo=UTC
         ) + timedelta(days=_NOTIF_EXPIRY_DAYS)
 
         rows = []
@@ -657,6 +657,7 @@ class DailyContextPrecomputeService:
                             "scheduled_for_utc": scheduled_utc,
                             "status": "pending",
                             "context": context,
+                            "context_schema_version": 1,
                             "created_at": now,
                             "expires_at": expires_at,
                         }
@@ -677,6 +678,7 @@ class DailyContextPrecomputeService:
                             "scheduled_for_utc": scheduled_utc,
                             "status": "pending",
                             "context": context,
+                            "context_schema_version": 1,
                             "created_at": now,
                             "expires_at": expires_at,
                         }
@@ -704,6 +706,7 @@ class DailyContextPrecomputeService:
                             "scheduled_for_utc": scheduled_utc,
                             "status": "pending",
                             "context": hydration_context,
+                            "context_schema_version": 1,
                             "created_at": now,
                             "expires_at": expires_at,
                         }
@@ -725,7 +728,7 @@ def _local_minutes_to_utc(local_date: date, local_minutes: int, tz_name: str):
             0,
             tzinfo=tz,
         )
-        return local_dt.astimezone(timezone.utc)
+        return local_dt.astimezone(UTC)
     except (ZoneInfoNotFoundError, ValueError) as exc:
         logger.warning(
             "Cannot compute UTC for tz=%s minutes=%d: %s", tz_name, local_minutes, exc

@@ -2,7 +2,6 @@
 
 import random
 import string
-from typing import List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,13 +24,13 @@ class ReferralRepository:
 
     # === Code Operations ===
 
-    async def get_code_by_user_id(self, user_id: str) -> Optional[ReferralCode]:
+    async def get_code_by_user_id(self, user_id: str) -> ReferralCode | None:
         result = await self.session.execute(
             select(ReferralCode).where(ReferralCode.user_id == user_id)
         )
         return result.scalars().first()
 
-    async def get_code_by_code(self, code: str) -> Optional[ReferralCode]:
+    async def get_code_by_code(self, code: str) -> ReferralCode | None:
         result = await self.session.execute(
             select(ReferralCode).where(ReferralCode.code == code.upper())
         )
@@ -58,7 +57,7 @@ class ReferralRepository:
 
     async def get_conversion_by_referred_user(
         self, user_id: str, for_update: bool = False
-    ) -> Optional[ReferralConversion]:
+    ) -> ReferralConversion | None:
         stmt = select(ReferralConversion).where(
             ReferralConversion.referred_user_id == user_id
         )
@@ -71,7 +70,7 @@ class ReferralRepository:
 
     async def get_conversions_by_referrer(
         self, user_id: str
-    ) -> List[ReferralConversion]:
+    ) -> list[ReferralConversion]:
         result = await self.session.execute(
             select(ReferralConversion)
             .where(ReferralConversion.referrer_user_id == user_id)
@@ -150,13 +149,35 @@ class ReferralRepository:
             amount=amount,
             payment_method=method,
             payment_details=details,
+            payment_account_type=self._payment_account_type(method, details),
+            payment_account_masked=self._masked_payment_destination(method, details),
+            payment_country=str(details.get("country", "VN")).upper(),
+            payment_currency=str(details.get("currency", "VND")).upper(),
             status="pending",
             requested_at=utc_now(),
         )
         self.session.add(request)
         return request
 
-    async def get_pending_payout(self, user_id: str) -> Optional[PayoutRequest]:
+    @staticmethod
+    def _payment_account_type(method: str, details: dict) -> str:
+        if method == "bank":
+            return str(details.get("bank") or "bank")
+        if method == "momo":
+            return "phone"
+        return method
+
+    @staticmethod
+    def _masked_payment_destination(method: str, details: dict) -> str | None:
+        raw = details.get("account") if method == "bank" else details.get("phone")
+        if raw is None:
+            return None
+        value = str(raw)
+        if len(value) <= 4:
+            return "*" * len(value)
+        return f"{'*' * (len(value) - 4)}{value[-4:]}"
+
+    async def get_pending_payout(self, user_id: str) -> PayoutRequest | None:
         result = await self.session.execute(
             select(PayoutRequest).where(
                 PayoutRequest.user_id == user_id,
