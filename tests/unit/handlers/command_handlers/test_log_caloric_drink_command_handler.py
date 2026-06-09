@@ -1,5 +1,4 @@
 from datetime import date
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -23,10 +22,20 @@ class _Meals:
         return meal
 
 
+class _HydrationEntries:
+    def __init__(self):
+        self.saved = None
+
+    async def add(self, entry):
+        self.saved = entry
+        return entry
+
+
 class _Uow:
     def __init__(self):
         self.users = _Users()
         self.meals = _Meals()
+        self.hydration_entries = _HydrationEntries()
 
     async def __aenter__(self):
         return self
@@ -71,6 +80,7 @@ async def test_log_caloric_drink_credits_hydration_weight_and_localizes_name():
     )
 
     assert uow.meals.saved.quantity == 333
+    assert uow.hydration_entries.saved.legacy_meal_id == uow.meals.saved.meal_id
     assert result["volume_ml"] == 350  # raw input
     assert result["credited_ml"] == 333  # hydration-weighted amount stored
     assert result["drink_name"] == "Nước ép"

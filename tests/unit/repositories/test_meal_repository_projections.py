@@ -1,7 +1,7 @@
 """Tests that MealRepository projection parameter controls relationship loading."""
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from unittest.mock import MagicMock
 
 from src.domain.model import FoodItem, Macros, Meal, MealImage, MealStatus, Nutrition
@@ -48,18 +48,18 @@ def test_projection_opt_counts():
     """Each projection must have the correct number of load options."""
     from src.infra.repositories.meal_repository import _PROJECTION_OPTS, MealProjection
 
-    # MACROS_ONLY: noload(image) + nutrition chain selectinload
+    # MACROS_ONLY: noload(image) + nutrition chain + instruction steps
     assert (
-        len(_PROJECTION_OPTS[MealProjection.MACROS_ONLY]) == 2
-    ), "MACROS_ONLY must have 2 load options (noload image, nutrition chain)"
-    # FULL: image + nutrition chain
+        len(_PROJECTION_OPTS[MealProjection.MACROS_ONLY]) == 3
+    ), "MACROS_ONLY must have 3 load options (noload image, nutrition chain, instruction steps)"
+    # FULL: image + nutrition chain + instruction steps
     assert (
-        len(_PROJECTION_OPTS[MealProjection.FULL]) == 2
-    ), "FULL must have 2 load options (image, nutrition chain)"
-    # FULL_WITH_TRANSLATIONS: image + nutrition chain + translations
+        len(_PROJECTION_OPTS[MealProjection.FULL]) == 3
+    ), "FULL must have 3 load options (image, nutrition chain, instruction steps)"
+    # FULL_WITH_TRANSLATIONS: image + nutrition chain + instruction steps + translations
     assert (
-        len(_PROJECTION_OPTS[MealProjection.FULL_WITH_TRANSLATIONS]) == 3
-    ), "FULL_WITH_TRANSLATIONS must have 3 load options (image, nutrition chain, translations)"
+        len(_PROJECTION_OPTS[MealProjection.FULL_WITH_TRANSLATIONS]) == 4
+    ), "FULL_WITH_TRANSLATIONS must have 4 load options (image, nutrition chain, instruction steps, translations)"
 
 
 def test_save_new_meal_inserts_food_items_once(test_session):
@@ -120,7 +120,7 @@ def test_date_range_skips_ready_rows_without_required_domain_data(test_session):
     repository = MealRepository(test_session)
     user_id = str(uuid.uuid4())
     target_date = date.today()
-    created_at = datetime.combine(target_date, datetime.min.time(), tzinfo=timezone.utc)
+    created_at = datetime.combine(target_date, datetime.min.time(), tzinfo=UTC)
 
     invalid_meal_id = str(uuid.uuid4())
     valid_meal_id = str(uuid.uuid4())
