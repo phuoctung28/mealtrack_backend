@@ -1,5 +1,5 @@
 """
-JSON extraction utilities for AI meal generation responses.
+JSON extraction utilities for AI responses.
 Handles parsing, cleaning, and recovery from malformed JSON.
 """
 
@@ -114,8 +114,8 @@ def clean_json_content(content: str) -> str:
     original_len = len(content)
     content = content.strip()
 
-    # Strategy: Find positions of complete top-level objects in suggestions array
-    # Look for pattern: complete {...} objects at depth 2 (inside suggestions array)
+    # Strategy: Find positions of complete top-level objects in array (e.g. suggestions or foods)
+    # Look for pattern: complete {...} objects at depth 2 (inside root array)
 
     in_string = False
     escape_next = False
@@ -152,11 +152,11 @@ def clean_json_content(content: str) -> str:
         # Track structure depth
         if char == "{":
             depth += 1
-            # Track when we enter a suggestion object (depth 2, inside suggestions array)
+            # Track when we enter a suggestion or food object (depth 2, inside an array)
             if depth == 2 and bracket_depth == 1:
                 object_start_depth = depth
         elif char == "}":
-            # Check if we're closing a suggestion object
+            # Check if we're closing a suggestion or food object
             if depth == 2 and object_start_depth == 2:
                 last_complete_suggestion_end = i + 1
                 complete_objects_count += 1
