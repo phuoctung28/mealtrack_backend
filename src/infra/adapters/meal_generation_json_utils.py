@@ -337,6 +337,9 @@ def close_json_structures(content: str) -> str:
             structure_stack.pop()
 
     # Close in reverse order
+    if in_string:
+        content += '"'
+
     for opener in reversed(structure_stack):
         content += "]" if opener == "[" else "}"
 
