@@ -1,6 +1,5 @@
 import logging
-from datetime import date, datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import and_, func, or_, update
 from sqlalchemy.orm import Session, joinedload, noload, selectinload
@@ -22,6 +21,7 @@ from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.database.utils.datetime_helper import local_date_expr
 from src.infra.mappers import MealStatusMapper
 from src.infra.mappers.meal_mapper import (
+    _instruction_steps_to_orm,
     food_item_domain_to_orm,
     meal_domain_to_orm,
     meal_image_domain_to_orm,
@@ -36,14 +36,17 @@ _PROJECTION_OPTS: dict = {
     MealProjection.MACROS_ONLY: (
         noload(MealORM.image),
         selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+        selectinload(MealORM.instruction_steps),
     ),
     MealProjection.FULL: (
         joinedload(MealORM.image),
         selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+        selectinload(MealORM.instruction_steps),
     ),
     MealProjection.FULL_WITH_TRANSLATIONS: (
         joinedload(MealORM.image),
         selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+        selectinload(MealORM.instruction_steps),
         joinedload(MealORM.translations),
     ),
 }
@@ -75,7 +78,8 @@ class MealRepository(MealRepositoryPort):
                 .options(
                     selectinload(MealORM.nutrition).selectinload(
                         NutritionORM.food_items
-                    )
+                    ),
+                    selectinload(MealORM.instruction_steps),
                 )
                 .filter(MealORM.meal_id == meal.meal_id)
                 .first()
@@ -95,6 +99,15 @@ class MealRepository(MealRepositoryPort):
                 existing_meal.edit_count = meal.edit_count
                 existing_meal.is_manually_edited = meal.is_manually_edited
                 existing_meal.emoji = meal.emoji
+                existing_meal.description = meal.description
+                existing_meal.instructions = meal.instructions
+                existing_meal.prep_time_min = meal.prep_time_min
+                existing_meal.cook_time_min = meal.cook_time_min
+                existing_meal.cuisine_type = meal.cuisine_type
+                existing_meal.origin_country = meal.origin_country
+                existing_meal.instruction_steps = _instruction_steps_to_orm(
+                    meal.instructions
+                )
 
                 # Handle image URL update
                 if meal.image and meal.image.url:
@@ -126,7 +139,8 @@ class MealRepository(MealRepositoryPort):
                     .options(
                         selectinload(MealORM.nutrition).selectinload(
                             NutritionORM.food_items
-                        )
+                        ),
+                        selectinload(MealORM.instruction_steps),
                     )
                     .filter(MealORM.meal_id == meal.meal_id)
                     .first()
@@ -162,7 +176,8 @@ class MealRepository(MealRepositoryPort):
                     .options(
                         selectinload(MealORM.nutrition).selectinload(
                             NutritionORM.food_items
-                        )
+                        ),
+                        selectinload(MealORM.instruction_steps),
                     )
                     .filter(MealORM.meal_id == db_meal.meal_id)
                     .first()
@@ -175,7 +190,7 @@ class MealRepository(MealRepositoryPort):
 
     def find_by_id(
         self, meal_id: str, projection: MealProjection = MealProjection.FULL
-    ) -> Optional[Meal]:
+    ) -> Meal | None:
         """Find a meal by ID."""
         db_meal = (
             self.db.query(MealORM)
@@ -185,7 +200,7 @@ class MealRepository(MealRepositoryPort):
         )
         return meal_orm_to_domain(db_meal) if db_meal else None
 
-    def find_by_status(self, status: MealStatus, limit: int = 10) -> List[Meal]:
+    def find_by_status(self, status: MealStatus, limit: int = 10) -> list[Meal]:
         """Find meals by status."""
         db_meals = (
             self.db.query(MealORM)
@@ -252,7 +267,7 @@ class MealRepository(MealRepositoryPort):
         # Step 2b: Hard-delete meal
         self.db.execute(MealORM.__table__.delete().where(MealORM.meal_id == meal_id))
 
-    def find_all_paginated(self, offset: int = 0, limit: int = 20) -> List[Meal]:
+    def find_all_paginated(self, offset: int = 0, limit: int = 20) -> list[Meal]:
         """Retrieves all meals with pagination."""
         db_meals = (
             self.db.query(MealORM)
@@ -281,9 +296,9 @@ class MealRepository(MealRepositoryPort):
         date_obj: date,
         user_id: str = None,
         limit: int = 50,
-        user_timezone: Optional[str] = None,
+        user_timezone: str | None = None,
         projection: MealProjection = MealProjection.FULL,
-    ) -> List[Meal]:
+    ) -> list[Meal]:
         """Find meals created on a specific date.
 
         Args:
@@ -292,10 +307,10 @@ class MealRepository(MealRepositoryPort):
                 converted to UTC for correct filtering.
             projection: Controls which relationships are loaded.
         """
-        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
+        tz = get_zone_info(user_timezone) if user_timezone else UTC
         start_datetime = datetime.combine(
             date_obj, datetime.min.time(), tzinfo=tz
-        ).astimezone(timezone.utc)
+        ).astimezone(UTC)
         end_datetime = start_datetime + timedelta(days=1)
 
         query = (
@@ -322,9 +337,9 @@ class MealRepository(MealRepositoryPort):
         start_date: date,
         end_date: date,
         limit: int = 500,
-        user_timezone: Optional[str] = None,
+        user_timezone: str | None = None,
         projection: MealProjection = MealProjection.FULL,
-    ) -> List[Meal]:
+    ) -> list[Meal]:
         """Find meals created within a date range (inclusive).
 
         Args:
@@ -332,14 +347,14 @@ class MealRepository(MealRepositoryPort):
                 dates are treated as user-local and boundaries are converted to
                 UTC for correct filtering against UTC-stored created_at.
         """
-        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
+        tz = get_zone_info(user_timezone) if user_timezone else UTC
         start_datetime = datetime.combine(
             start_date, datetime.min.time(), tzinfo=tz
-        ).astimezone(timezone.utc)
+        ).astimezone(UTC)
         end_datetime = (
             datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
             + timedelta(days=1)
-        ).astimezone(timezone.utc)
+        ).astimezone(UTC)
 
         query = (
             self.db.query(MealORM)
@@ -362,20 +377,20 @@ class MealRepository(MealRepositoryPort):
         user_id: str,
         start_date: date,
         end_date: date,
-        user_timezone: Optional[str] = None,
-    ) -> Dict[date, int]:
+        user_timezone: str | None = None,
+    ) -> dict[date, int]:
         """Return {date: meal_count} for each day in range with at least 1 meal.
 
         Uses a single GROUP BY query for efficiency.
         """
-        tz = get_zone_info(user_timezone) if user_timezone else timezone.utc
+        tz = get_zone_info(user_timezone) if user_timezone else UTC
         start_dt = datetime.combine(
             start_date, datetime.min.time(), tzinfo=tz
-        ).astimezone(timezone.utc)
+        ).astimezone(UTC)
         end_dt = (
             datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
             + timedelta(days=1)
-        ).astimezone(timezone.utc)
+        ).astimezone(UTC)
 
         date_expr = local_date_expr(self.db, MealORM.created_at, user_timezone)
 
@@ -391,7 +406,7 @@ class MealRepository(MealRepositoryPort):
             .all()
         )
 
-        result: Dict[date, int] = {}
+        result: dict[date, int] = {}
         for day_val, count in rows:
             if isinstance(day_val, str):
                 day_val = date.fromisoformat(day_val)
@@ -401,8 +416,8 @@ class MealRepository(MealRepositoryPort):
     def get_dates_with_meals(
         self,
         user_id: str,
-        user_timezone: Optional[str] = None,
-    ) -> List[date]:
+        user_timezone: str | None = None,
+    ) -> list[date]:
         """Return all distinct dates (descending) where user has ≥1 active meal.
 
         Reuses timezone logic from get_daily_meal_counts().
@@ -420,7 +435,7 @@ class MealRepository(MealRepositoryPort):
             .all()
         )
 
-        result: List[date] = []
+        result: list[date] = []
         for (day_val,) in rows:
             if isinstance(day_val, str):
                 day_val = date.fromisoformat(day_val)

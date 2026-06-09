@@ -10,13 +10,17 @@ from src.domain.model.user import UserDomainModel, UserProfileDomainModel
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
-from src.infra.mappers.user_mapper import UserMapper, UserProfileMapper
+from src.infra.mappers.user_mapper import (
+    UserMapper,
+    UserProfileMapper,
+    build_profile_preference_entries,
+)
 
 logger = logging.getLogger(__name__)
 
 
 _USER_RELATIONSHIP_LOADS = (
-    selectinload(User.profiles),
+    selectinload(User.profiles).selectinload(UserProfile.preference_entries),
     selectinload(User.subscriptions),
 )
 
@@ -137,6 +141,7 @@ class UserRepository(UserRepositoryPort):
         user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
         profile_entity = (
             self.db.query(UserProfile)
+            .options(selectinload(UserProfile.preference_entries))
             .filter(
                 UserProfile.user_id == user_id_str, UserProfile.is_current.is_(True)
             )
@@ -154,7 +159,12 @@ class UserRepository(UserRepositoryPort):
             if isinstance(profile_domain.id, UUID)
             else profile_domain.id
         )
-        profile_entity = self.db.query(UserProfile).get(profile_id_str)
+        profile_entity = (
+            self.db.query(UserProfile)
+            .options(selectinload(UserProfile.preference_entries))
+            .filter(UserProfile.id == profile_id_str)
+            .first()
+        )
 
         if not profile_entity:
             # Create new profile if it doesn't exist
@@ -166,6 +176,9 @@ class UserRepository(UserRepositoryPort):
             for key, value in profile_data.items():
                 if hasattr(profile_entity, key) and key != "_sa_instance_state":
                     setattr(profile_entity, key, value)
+            profile_entity.preference_entries = build_profile_preference_entries(
+                profile_domain
+            )
 
         self.db.commit()
         self.db.refresh(profile_entity)
@@ -198,4 +211,6 @@ class UserRepository(UserRepositoryPort):
             .update({"language_code": language_code})
         )
         self.db.commit()
-        logger.debug(f"Language update: user={user_id} lang={language_code} rows={rows}")
+        logger.debug(
+            f"Language update: user={user_id} lang={language_code} rows={rows}"
+        )

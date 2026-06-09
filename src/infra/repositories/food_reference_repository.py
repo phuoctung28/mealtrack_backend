@@ -4,27 +4,38 @@ Replaces barcode_product_repository with extended functionality.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from src.infra.database.config import SessionLocal
 from src.infra.database.models.food_reference_model import FoodReferenceModel
+from src.infra.database.models.food_reference_nutrient import FoodReferenceNutrientModel
+from src.infra.database.models.food_reference_serving_size import (
+    FoodReferenceServingSizeModel,
+)
 
 logger = logging.getLogger(__name__)
+
+_FOOD_REFERENCE_LOAD_OPTIONS = (
+    selectinload(FoodReferenceModel.serving_size_rows),
+    selectinload(FoodReferenceModel.nutrient_rows),
+)
 
 
 class FoodReferenceRepository:
     """Repository for food reference CRUD operations."""
 
-    def get_by_barcode(self, barcode: str) -> Optional[Dict[str, Any]]:
+    def get_by_barcode(self, barcode: str) -> dict[str, Any] | None:
         """Get food reference entry by barcode."""
         session: Session = SessionLocal()
         try:
-            stmt = select(FoodReferenceModel).where(
-                FoodReferenceModel.barcode == barcode
+            stmt = (
+                select(FoodReferenceModel)
+                .where(FoodReferenceModel.barcode == barcode)
+                .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
             )
             result = session.execute(stmt).scalar_one_or_none()
             return self._to_dict(result) if result else None
@@ -34,11 +45,15 @@ class FoodReferenceRepository:
         finally:
             session.close()
 
-    def get_by_id(self, ref_id: int) -> Optional[Dict[str, Any]]:
+    def get_by_id(self, ref_id: int) -> dict[str, Any] | None:
         """Get food reference by ID."""
         session: Session = SessionLocal()
         try:
-            stmt = select(FoodReferenceModel).where(FoodReferenceModel.id == ref_id)
+            stmt = (
+                select(FoodReferenceModel)
+                .where(FoodReferenceModel.id == ref_id)
+                .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+            )
             result = session.execute(stmt).scalar_one_or_none()
             return self._to_dict(result) if result else None
         except Exception as e:
@@ -47,11 +62,15 @@ class FoodReferenceRepository:
         finally:
             session.close()
 
-    def get_by_fdc_id(self, fdc_id: int) -> Optional[Dict[str, Any]]:
+    def get_by_fdc_id(self, fdc_id: int) -> dict[str, Any] | None:
         """Get food reference by USDA FDC ID."""
         session: Session = SessionLocal()
         try:
-            stmt = select(FoodReferenceModel).where(FoodReferenceModel.fdc_id == fdc_id)
+            stmt = (
+                select(FoodReferenceModel)
+                .where(FoodReferenceModel.fdc_id == fdc_id)
+                .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
+            )
             result = session.execute(stmt).scalar_one_or_none()
             return self._to_dict(result) if result else None
         except Exception as e:
@@ -62,7 +81,7 @@ class FoodReferenceRepository:
 
     def search_by_name(
         self, query: str, region: str = "global", limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search food references by name."""
         session: Session = SessionLocal()
         try:
@@ -70,6 +89,7 @@ class FoodReferenceRepository:
                 select(FoodReferenceModel)
                 .where(FoodReferenceModel.name.ilike(f"%{query}%"))
                 .where(FoodReferenceModel.region.in_([region, "global"]))
+                .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
                 .limit(limit)
             )
             results = session.execute(stmt).scalars().all()
@@ -80,7 +100,7 @@ class FoodReferenceRepository:
         finally:
             session.close()
 
-    def upsert(self, data: Dict[str, Any]) -> None:
+    def upsert(self, data: dict[str, Any]) -> None:
         """Insert or update food reference entry (upsert by barcode)."""
         session: Session = SessionLocal()
         try:
@@ -112,6 +132,10 @@ class FoodReferenceRepository:
             )
             session.execute(stmt)
             session.commit()
+            refreshed = self._find_after_upsert(session, values)
+            if refreshed:
+                self._sync_normalized_children(session, refreshed, data)
+                session.commit()
         except Exception as e:
             logger.error(f"Error upserting food_reference {data.get('barcode')}: {e}")
             session.rollback()
@@ -141,16 +165,16 @@ class FoodReferenceRepository:
         "image_url",
     }
 
-    def upsert_seed(self, data: Dict[str, Any]) -> str:
+    def upsert_seed(self, data: dict[str, Any]) -> str:
         """Upsert a seed food entry. Returns 'inserted', 'updated', or 'skipped'."""
         session: Session = SessionLocal()
         try:
             if data.get("barcode"):
                 existing = (
                     session.execute(
-                        select(FoodReferenceModel).where(
-                            FoodReferenceModel.barcode == data["barcode"]
-                        )
+                        select(FoodReferenceModel)
+                        .where(FoodReferenceModel.barcode == data["barcode"])
+                        .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
                     )
                     .scalars()
                     .first()
@@ -158,11 +182,13 @@ class FoodReferenceRepository:
             else:
                 existing = (
                     session.execute(
-                        select(FoodReferenceModel).where(
+                        select(FoodReferenceModel)
+                        .where(
                             FoodReferenceModel.name_vi == data.get("name_vi"),
                             FoodReferenceModel.source == data.get("source"),
                             FoodReferenceModel.region == data.get("region", "VN"),
                         )
+                        .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
                     )
                     .scalars()
                     .first()
@@ -179,11 +205,14 @@ class FoodReferenceRepository:
             if existing:
                 for key, val in safe_data.items():
                     setattr(existing, key, val)
+                self._sync_normalized_children(session, existing, data)
                 session.commit()
                 return "updated"
             else:
                 entry = FoodReferenceModel(**safe_data)
                 session.add(entry)
+                session.flush()
+                self._sync_normalized_children(session, entry, data)
                 session.commit()
                 return "inserted"
         except Exception as e:
@@ -196,8 +225,8 @@ class FoodReferenceRepository:
             session.close()
 
     def find_batch_by_normalized_names(
-        self, names_normalized: List[str]
-    ) -> Dict[str, Dict[str, Any]]:
+        self, names_normalized: list[str]
+    ) -> dict[str, dict[str, Any]]:
         """Batch lookup by normalized ingredient names.
 
         Returns dict keyed by name_normalized for O(1) lookup.
@@ -208,8 +237,10 @@ class FoodReferenceRepository:
 
         session: Session = SessionLocal()
         try:
-            stmt = select(FoodReferenceModel).where(
-                FoodReferenceModel.name_normalized.in_(names_normalized)
+            stmt = (
+                select(FoodReferenceModel)
+                .where(FoodReferenceModel.name_normalized.in_(names_normalized))
+                .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
             )
             results = session.execute(stmt).scalars().all()
             return {
@@ -223,12 +254,14 @@ class FoodReferenceRepository:
         finally:
             session.close()
 
-    def find_by_normalized_name(self, name_normalized: str) -> Optional[Dict[str, Any]]:
+    def find_by_normalized_name(self, name_normalized: str) -> dict[str, Any] | None:
         """Exact-match lookup by normalized ingredient name."""
         session: Session = SessionLocal()
         try:
-            stmt = select(FoodReferenceModel).where(
-                FoodReferenceModel.name_normalized == name_normalized
+            stmt = (
+                select(FoodReferenceModel)
+                .where(FoodReferenceModel.name_normalized == name_normalized)
+                .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
             )
             # .first() instead of scalar_one_or_none() — defensive against
             # hypothetical duplicates that exist before the unique constraint was added.
@@ -253,8 +286,8 @@ class FoodReferenceRepository:
         sugar_100g: float,
         source: str,
         is_verified: bool,
-        external_id: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        external_id: str | None = None,
+    ) -> dict[str, Any] | None:
         """Insert or update food_reference matched on name_normalized.
 
         Preservation rule: if an existing entry has is_verified=True and
@@ -271,9 +304,9 @@ class FoodReferenceRepository:
             # Step 1: check is_verified protection
             existing = (
                 session.execute(
-                    select(FoodReferenceModel).where(
-                        FoodReferenceModel.name_normalized == name_normalized
-                    )
+                    select(FoodReferenceModel)
+                    .where(FoodReferenceModel.name_normalized == name_normalized)
+                    .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
                 )
                 .scalars()
                 .first()
@@ -298,7 +331,7 @@ class FoodReferenceRepository:
             }
             update_fields = {k: v for k, v in values.items() if k != "name_normalized"}
             stmt = pg_insert(FoodReferenceModel).values(**values)
-            on_conflict_kwargs: Dict[str, Any] = {
+            on_conflict_kwargs: dict[str, Any] = {
                 "index_elements": ["name_normalized"],
                 "set_": update_fields,
             }
@@ -314,9 +347,9 @@ class FoodReferenceRepository:
             # Re-fetch to return the authoritative persisted row
             refreshed = (
                 session.execute(
-                    select(FoodReferenceModel).where(
-                        FoodReferenceModel.name_normalized == name_normalized
-                    )
+                    select(FoodReferenceModel)
+                    .where(FoodReferenceModel.name_normalized == name_normalized)
+                    .options(*_FOOD_REFERENCE_LOAD_OPTIONS)
                 )
                 .scalars()
                 .first()
@@ -332,7 +365,7 @@ class FoodReferenceRepository:
             session.close()
 
     @staticmethod
-    def _to_dict(model: FoodReferenceModel) -> Dict[str, Any]:
+    def _to_dict(model: FoodReferenceModel) -> dict[str, Any]:
         """Convert model to dict."""
         return {
             "id": model.id,
@@ -348,11 +381,145 @@ class FoodReferenceRepository:
             "fat_100g": model.fat_100g,
             "fiber_100g": model.fiber_100g,
             "sugar_100g": model.sugar_100g,
-            "serving_sizes": model.serving_sizes,
+            "serving_sizes": FoodReferenceRepository._serving_sizes_to_dict(model),
             "density": model.density,
             "serving_size": model.serving_size,
-            "extra_nutrients": model.extra_nutrients,
+            "extra_nutrients": FoodReferenceRepository._nutrients_to_dict(model),
             "source": model.source,
             "is_verified": model.is_verified,
             "image_url": model.image_url,
         }
+
+    @staticmethod
+    def _find_after_upsert(
+        session: Session,
+        values: dict[str, Any],
+    ) -> FoodReferenceModel | None:
+        if values.get("barcode"):
+            stmt = select(FoodReferenceModel).where(
+                FoodReferenceModel.barcode == values["barcode"]
+            )
+        elif values.get("fdc_id"):
+            stmt = select(FoodReferenceModel).where(
+                FoodReferenceModel.fdc_id == values["fdc_id"]
+            )
+        else:
+            return None
+        return (
+            session.execute(stmt.options(*_FOOD_REFERENCE_LOAD_OPTIONS))
+            .scalars()
+            .first()
+        )
+
+    @staticmethod
+    def _sync_normalized_children(
+        session: Session,
+        model: FoodReferenceModel,
+        data: dict[str, Any],
+    ) -> None:
+        serving_sizes = data.get("serving_sizes")
+        extra_nutrients = data.get("extra_nutrients")
+        if serving_sizes is not None:
+            model.serving_size_rows = FoodReferenceRepository._build_serving_rows(
+                serving_sizes
+            )
+        if extra_nutrients is not None:
+            model.nutrient_rows = FoodReferenceRepository._build_nutrient_rows(
+                extra_nutrients
+            )
+        session.flush()
+
+    @staticmethod
+    def _build_serving_rows(raw: Any) -> list[FoodReferenceServingSizeModel]:
+        if not isinstance(raw, list):
+            return []
+        rows: list[FoodReferenceServingSizeModel] = []
+        for idx, item in enumerate(raw):
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or item.get("label") or "").strip()
+            if not name:
+                continue
+            rows.append(
+                FoodReferenceServingSizeModel(
+                    name=name[:100],
+                    grams=FoodReferenceRepository._as_float(item.get("grams")),
+                    milliliters=FoodReferenceRepository._as_float(
+                        item.get("milliliters") or item.get("ml")
+                    ),
+                    is_default=bool(item.get("is_default", idx == 0)),
+                    position=idx,
+                )
+            )
+        return rows
+
+    @staticmethod
+    def _build_nutrient_rows(raw: Any) -> list[FoodReferenceNutrientModel]:
+        if not isinstance(raw, dict):
+            return []
+        rows: list[FoodReferenceNutrientModel] = []
+        for key, value in sorted(raw.items()):
+            if isinstance(value, dict):
+                amount = FoodReferenceRepository._as_float(value.get("amount"))
+                unit = value.get("unit")
+            else:
+                amount = FoodReferenceRepository._as_float(value)
+                unit = None
+            if amount is None:
+                continue
+            rows.append(
+                FoodReferenceNutrientModel(
+                    nutrient_key=str(key)[:100],
+                    amount=amount,
+                    unit=str(unit)[:32] if unit else None,
+                )
+            )
+        return rows
+
+    @staticmethod
+    def _serving_sizes_to_dict(model: FoodReferenceModel) -> Any:
+        rows = getattr(model, "serving_size_rows", None)
+        if not rows:
+            return model.serving_sizes
+        return [
+            {
+                "name": row.name,
+                "grams": row.grams,
+                "milliliters": row.milliliters,
+                "is_default": row.is_default,
+            }
+            for row in rows
+        ]
+
+    @staticmethod
+    def _nutrients_to_dict(model: FoodReferenceModel) -> Any:
+        rows = getattr(model, "nutrient_rows", None)
+        if not rows:
+            return model.extra_nutrients
+        raw = model.extra_nutrients if isinstance(model.extra_nutrients, dict) else {}
+        projected = dict(raw)
+        for row in rows:
+            legacy_value = raw.get(row.nutrient_key)
+            if isinstance(legacy_value, dict):
+                projected[row.nutrient_key] = {
+                    **legacy_value,
+                    "amount": row.amount,
+                    "unit": row.unit,
+                }
+            elif row.nutrient_key in raw:
+                projected[row.nutrient_key] = row.amount
+            else:
+                projected[row.nutrient_key] = {
+                    "amount": row.amount,
+                    "unit": row.unit,
+                }
+        return projected
+
+    @staticmethod
+    def _as_float(value: Any) -> float | None:
+        if value in (None, ""):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None

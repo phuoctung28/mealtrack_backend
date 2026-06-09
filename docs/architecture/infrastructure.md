@@ -23,10 +23,10 @@ The system uses Pinecone Inference API with the `llama-text-embed-v2` model.
 
 ## Database Design
 
-- **Primary DB**: MySQL 8.0
+- **Primary DB**: PostgreSQL (Neon)
 - **ORM**: SQLAlchemy 2.0 (Async)
-- **Migrations**: Alembic (12 migrations)
-- **Key Tables**: `users`, `meals`, `nutrition`, `food_items`, `meal_plans`, `chat_threads`, `suggestion_sessions`.
+- **Migrations**: Alembic
+- **Key Tables**: `users`, `user_profiles`, `meal`, `mealimage`, `nutrition`, `food_item`, `food_reference`, `notifications`, `saved_suggestions`, `movement_entries`.
 
 ## Caching
 

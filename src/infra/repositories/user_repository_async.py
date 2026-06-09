@@ -13,12 +13,16 @@ from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
-from src.infra.mappers.user_mapper import UserMapper, UserProfileMapper
+from src.infra.mappers.user_mapper import (
+    UserMapper,
+    UserProfileMapper,
+    build_profile_preference_entries,
+)
 
 logger = logging.getLogger(__name__)
 
 _USER_LOADS = (
-    selectinload(User.profiles),
+    selectinload(User.profiles).selectinload(UserProfile.preference_entries),
     selectinload(User.subscriptions),
 )
 
@@ -123,9 +127,9 @@ class AsyncUserRepository(UserRepositoryPort):
     async def get_profile(self, user_id: UUID) -> UserProfileDomainModel | None:
         user_id_str = str(user_id) if isinstance(user_id, UUID) else user_id
         result = await self.session.execute(
-            select(UserProfile).where(
-                UserProfile.user_id == user_id_str, UserProfile.is_current.is_(True)
-            )
+            select(UserProfile)
+            .options(selectinload(UserProfile.preference_entries))
+            .where(UserProfile.user_id == user_id_str, UserProfile.is_current.is_(True))
         )
         entity = result.scalars().first()
         return UserProfileMapper.to_domain(entity) if entity else None
@@ -140,7 +144,12 @@ class AsyncUserRepository(UserRepositoryPort):
             if isinstance(profile_domain.id, UUID)
             else profile_domain.id
         )
-        entity = await self.session.get(UserProfile, profile_id_str)
+        result = await self.session.execute(
+            select(UserProfile)
+            .options(selectinload(UserProfile.preference_entries))
+            .where(UserProfile.id == profile_id_str)
+        )
+        entity = result.scalars().first()
         if not entity:
             entity = UserProfileMapper.to_persistence(profile_domain)
             self.session.add(entity)
@@ -154,6 +163,7 @@ class AsyncUserRepository(UserRepositoryPort):
                     # Only mark a column dirty when its value truly changes.
                     if new_val != old_val:
                         setattr(entity, col_name, new_val)
+            entity.preference_entries = build_profile_preference_entries(profile_domain)
 
         # Data hygiene: legacy rows may have NULL timestamps despite NOT NULL constraints.
         # Backfill them so any subsequent UPDATE does not violate constraints.

@@ -9,22 +9,19 @@ This script runs Alembic migrations with:
 - Clean error handling
 """
 
-import sys
 import logging
+import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import inspect, text
-from sqlalchemy.exc import OperationalError, DatabaseError
-
-from src.infra.database.config import Base
 from migrations.utils import migration_engine as engine
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import DatabaseError, OperationalError
 
 # Configure logging with timestamp
 logging.basicConfig(
@@ -76,7 +73,7 @@ def wait_for_database(max_retries: int = MAX_RETRIES) -> bool:
     return False
 
 
-def get_alembic_config() -> Optional[Config]:
+def get_alembic_config() -> Config | None:
     """
     Load and validate Alembic configuration.
 
@@ -102,7 +99,7 @@ def get_alembic_config() -> Optional[Config]:
 
 def initialize_first_deployment(alembic_cfg: Config) -> bool:
     """
-    Initialize database for first deployment.
+    Validate that first deployment can run through Alembic from base.
 
     Args:
         alembic_cfg: Alembic configuration object
@@ -119,27 +116,21 @@ def initialize_first_deployment(alembic_cfg: Config) -> bool:
         # Check if we have any application tables (excluding alembic_version)
         app_tables = [t for t in tables if t != "alembic_version"]
 
-        if not app_tables:
-            logger.info("Empty database detected, creating initial schema...")
-            # Import all models to ensure they're registered
-            from src.infra.database import models  # noqa: F401
+        if app_tables:
+            logger.error(
+                "Existing application tables found without alembic_version: %s. "
+                "Refusing to stamp or create schema automatically; repair this "
+                "database with an explicit Alembic baseline plan.",
+                ", ".join(app_tables[:10]),
+            )
+            return False
 
-            Base.metadata.create_all(bind=engine)
-            logger.info("✅ Initial schema created")
-        else:
-            logger.info(f"Database has existing tables: {', '.join(app_tables[:5])}...")
-
-        # Stamp database with latest revision (not hardcoded)
         script_dir = ScriptDirectory.from_config(alembic_cfg)
         head_revision = script_dir.get_current_head()
-
-        if head_revision:
-            logger.info(f"Stamping database with revision: {head_revision}")
-            command.stamp(alembic_cfg, head_revision)
-            logger.info("✅ Database stamped successfully")
-        else:
-            logger.warning("No head revision found, stamping with 'head'")
-            command.stamp(alembic_cfg, "head")
+        logger.info(
+            "Empty database detected; Alembic will upgrade from base to head=%s",
+            head_revision or "<none>",
+        )
 
         return True
 
@@ -212,6 +203,7 @@ def run_migrations() -> bool:
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         print(f"❌ Migration failed: {e}", file=sys.stderr, flush=True)
         logger.error(f"❌ Migration failed: {e}", exc_info=True)
@@ -236,6 +228,7 @@ if __name__ == "__main__":
         sys.exit(130)  # Standard exit code for SIGINT
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         print(f"💥 Unexpected error: {e}", file=sys.stderr, flush=True)
         logger.error(f"💥 Unexpected error: {e}", exc_info=True)

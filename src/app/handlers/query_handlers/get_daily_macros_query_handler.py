@@ -4,8 +4,8 @@ Auto-extracted for better maintainability.
 """
 
 import logging
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Any
 from uuid import UUID
 
 from src.app.events.base import EventHandler, handles
@@ -27,16 +27,16 @@ logger = logging.getLogger(__name__)
 
 
 @handles(GetDailyMacrosQuery)
-class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any]]):
+class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, dict[str, Any]]):
     """Handler for calculating daily macronutrient totals with user targets."""
 
     def __init__(
         self,
-        cache_service: Optional[CachePort] = None,
+        cache_service: CachePort | None = None,
     ):
         self.cache_service = cache_service
 
-    async def handle(self, query: GetDailyMacrosQuery) -> Dict[str, Any]:
+    async def handle(self, query: GetDailyMacrosQuery) -> dict[str, Any]:
         """Calculate daily macros for a given date with user targets."""
         # One UoW for all DB reads: timezone, meals, weekly budget
         async with AsyncUnitOfWork() as uow:
@@ -65,10 +65,13 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             total_fiber = 0.0
             meal_count = 0
             meals_with_nutrition = 0
+            has_legacy_hydration = False
 
             for meal in meals:
                 if meal.status == MealStatus.INACTIVE:
                     continue
+                if meal.meal_type == "hydration":
+                    has_legacy_hydration = True
                 meal_count += 1
                 if meal.nutrition and meal.status in [
                     MealStatus.READY,
@@ -80,6 +83,20 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
                         total_carbs += meal.nutrition.macros.carbs or 0
                         total_fat += meal.nutrition.macros.fat or 0
                         total_fiber += meal.nutrition.macros.fiber or 0
+
+            if not has_legacy_hydration:
+                hydration_entries = await uow.hydration_entries.find_by_date(
+                    target_date,
+                    user_id=query.user_id,
+                    user_timezone=user_tz_str,
+                )
+                for entry in hydration_entries:
+                    meal_count += 1
+                    meals_with_nutrition += 1
+                    total_protein += entry.protein_g or 0
+                    total_carbs += entry.carbs_g or 0
+                    total_fat += entry.fat_g or 0
+                    total_fiber += entry.fiber_g or 0
 
             total_calories = Macros(
                 protein=total_protein,
@@ -98,11 +115,17 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
 
             # Fetch hydration summary
             try:
-                consumed_water_ml = await uow.meals.sum_hydration_ml_for_date(
+                consumed_water_ml = await uow.hydration_entries.sum_ml_for_date(
                     date_obj=target_date,
                     user_id=query.user_id,
                     user_timezone=user_tz_str,
                 )
+                if consumed_water_ml == 0:
+                    consumed_water_ml = await uow.meals.sum_hydration_ml_for_date(
+                        date_obj=target_date,
+                        user_id=query.user_id,
+                        user_timezone=user_tz_str,
+                    )
                 # Get water goal from profile (default 2000 if not set)
                 user_profile = await uow.users.get_profile(UUID(query.user_id))
                 water_goal_ml = (
@@ -124,15 +147,14 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             movement_kcal_burned = 0.0
             try:
                 from datetime import time
-                from datetime import timezone as tz_module
 
                 start_local = datetime.combine(target_date, time.min, tzinfo=user_tz)
                 end_local = start_local + timedelta(days=1)
                 movement_kcal_burned = (
                     await uow.movement_entries.sum_included_kcal_for_range(
                         query.user_id,
-                        start_local.astimezone(tz_module.utc),
-                        end_local.astimezone(tz_module.utc),
+                        start_local.astimezone(timezone.utc),  # noqa: UP017
+                        end_local.astimezone(timezone.utc),  # noqa: UP017
                     )
                 )
             except Exception as exc:
@@ -227,11 +249,11 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
         target_date: date,
         weekly_budget,  # pre-fetched by caller; None → returns None
         target_calories: float,
-        target_macros: Dict,
+        target_macros: dict,
         daily_consumed: float,
         bmr: float = 1800,
         user_timezone: str = "UTC",
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Get weekly budget context using the weekly-budget adjustment path."""
         if not weekly_budget:
             return None
@@ -288,7 +310,7 @@ class GetDailyMacrosQueryHandler(EventHandler[GetDailyMacrosQuery, Dict[str, Any
             return None
 
     async def _write_cache(
-        self, user_id: str, target_date: date, payload: Dict[str, Any]
+        self, user_id: str, target_date: date, payload: dict[str, Any]
     ):
         if not self.cache_service:
             return
