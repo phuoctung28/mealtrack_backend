@@ -11,6 +11,24 @@ class MealGenerationServicePort(ABC):
     """Unified port for all meal generation using single LLM with different prompts."""
 
     @abstractmethod
+    async def generate_meal_plan_async(
+        self,
+        prompt: str,
+        system_message: str,
+        response_type: str = "json",
+        max_tokens: int | None = None,
+        schema: type | None = None,
+        model_purpose: str | None = None,
+        thinking_budget: int | None = None,
+    ) -> dict[str, Any]:
+        """Async version of generate_meal_plan — runs on the caller's event loop.
+
+        Use this from async handlers/services instead of wrapping the sync version
+        in asyncio.to_thread(), which causes event-loop mismatch with async-client
+        resources (Redis, HTTP) that are bound to the main event loop.
+        """
+
+    @abstractmethod
     def generate_meal_plan(
         self,
         prompt: str,

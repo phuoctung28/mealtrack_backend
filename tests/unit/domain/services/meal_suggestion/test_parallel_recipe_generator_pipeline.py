@@ -127,7 +127,7 @@ async def test_generate_discovery_falls_back_when_ai_unavailable():
         attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
         last_error="429 RESOURCE_EXHAUSTED",
     )
-    gen._generation.generate_meal_plan.side_effect = unavailable
+    gen._generation.generate_meal_plan_async = AsyncMock(side_effect=unavailable)
 
     meals = await gen.generate_discovery(session, exclude_meal_names=[], count=4)
 
@@ -135,7 +135,7 @@ async def test_generate_discovery_falls_back_when_ai_unavailable():
     assert all(meal["id"].startswith("disc_") for meal in meals)
     assert all(meal["name"] == meal["english_name"] for meal in meals)
     assert all(meal["calories"] > 0 for meal in meals)
-    call_args = gen._generation.generate_meal_plan.call_args.args
+    call_args = gen._generation.generate_meal_plan_async.call_args.args
     assert call_args[-1] == "discovery"
 
 
@@ -143,7 +143,7 @@ async def test_generate_discovery_falls_back_when_ai_unavailable():
 async def test_generate_discovery_tops_up_partial_ai_results():
     gen, _ = _make_generator()
     session = _make_real_session()
-    gen._generation.generate_meal_plan.return_value = {
+    gen._generation.generate_meal_plan_async = AsyncMock(return_value={
         "meals": [
             {
                 "name": "Chicken Rice Bowl",
@@ -153,7 +153,7 @@ async def test_generate_discovery_tops_up_partial_ai_results():
                 "fat": 15,
             }
         ]
-    }
+    })
 
     meals = await gen.generate_discovery(
         session,

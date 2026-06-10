@@ -67,8 +67,7 @@ async def attempt_recipe_generation(
     marker = "[RETRY]" if is_retry else ""
     try:
         raw = await asyncio.wait_for(
-            asyncio.to_thread(
-                generation_service.generate_meal_plan,
+            generation_service.generate_meal_plan_async(
                 prompt,
                 recipe_system,
                 "json",

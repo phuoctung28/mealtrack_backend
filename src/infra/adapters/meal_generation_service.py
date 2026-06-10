@@ -32,6 +32,28 @@ class MealGenerationService(MealGenerationServicePort):
         """Initialize with AI model manager."""
         self._ai_manager = AIModelManager.get_instance()
 
+    async def generate_meal_plan_async(
+        self,
+        prompt: str,
+        system_message: str,
+        response_type: str = "json",
+        max_tokens: int = None,
+        schema: type = None,
+        model_purpose: str | None = None,
+        thinking_budget: int | None = None,
+    ):
+        """Async path — runs directly on the caller's event loop without threading."""
+        purpose = PURPOSE_MAP.get(model_purpose, ModelPurpose.GENERAL)
+        return await self._ai_manager.generate(
+            purpose=purpose,
+            prompt=prompt,
+            system_message=system_message,
+            response_type=response_type,
+            max_tokens=max_tokens,
+            schema=schema,
+            thinking_budget=thinking_budget,
+        )
+
     def generate_meal_plan(
         self,
         prompt: str,

@@ -66,9 +66,9 @@ def _make_service(
 
     gen = MagicMock()
     if gen_result is not None:
-        gen.generate_meal_plan.return_value = gen_result
+        gen.generate_meal_plan_async = AsyncMock(return_value=gen_result)
     else:
-        gen.generate_meal_plan.side_effect = RuntimeError("AI unavailable")
+        gen.generate_meal_plan_async = AsyncMock(side_effect=RuntimeError("AI unavailable"))
 
     return NutritionLookupService(
         food_ref_repo=repo,
@@ -182,7 +182,7 @@ async def test_t1_t2_miss_uses_t3_ai_fallback(caplog):
 async def test_t3_ai_failure_returns_zero_macros_no_exception():
     """T3 AI failure → zero macros returned, no exception bubbled."""
     svc = _make_service(ref_result=None, resolver_result=None, gen_result=None)
-    # gen_result=None causes generate_meal_plan to raise RuntimeError
+    # gen_result=None causes generate_meal_plan_async to raise RuntimeError
 
     result = await svc._lookup_ingredient("mystery ingredient", 50.0)
 
@@ -417,18 +417,14 @@ def test_to_grams_unknown_unit_assumes_grams(caplog):
 
 @pytest.mark.asyncio
 async def test_t3_ai_estimate_does_not_block_event_loop():
-    """C2: _ai_estimate wraps generate_meal_plan in asyncio.to_thread.
+    """_ai_estimate uses generate_meal_plan_async, keeping the event loop responsive.
 
-    If the call were made directly (not via to_thread), it would block the
-    event loop and prevent other coroutines from running. We verify that a
-    slow synchronous generate_meal_plan does NOT block a concurrent task.
+    A slow async generate_meal_plan_async must not starve concurrent coroutines.
     """
-    import time
-
     slow_completed = []
 
-    def slow_generate(*args, **kwargs):
-        time.sleep(0.05)  # 50ms blocking sleep — must not block event loop
+    async def slow_generate_async(*args, **kwargs):
+        await asyncio.sleep(0.05)  # 50ms async yield — event loop stays responsive
         return {"protein": 10.0, "carbs": 5.0, "fat": 2.0, "fiber": 0.0, "sugar": 0.0}
 
     repo = MagicMock()
@@ -436,7 +432,7 @@ async def test_t3_ai_estimate_does_not_block_event_loop():
     resolver = MagicMock()
     resolver.resolve = AsyncMock(return_value=None)
     gen = MagicMock()
-    gen.generate_meal_plan.side_effect = slow_generate
+    gen.generate_meal_plan_async = slow_generate_async
 
     svc = NutritionLookupService(
         food_ref_repo=repo,
@@ -448,38 +444,34 @@ async def test_t3_ai_estimate_does_not_block_event_loop():
         await asyncio.sleep(0.01)
         slow_completed.append(True)
 
-    # Run both concurrently; if _ai_estimate blocks, concurrent_task can't run
+    # Run both concurrently; cooperative scheduling lets both tasks progress
     await asyncio.gather(
         svc._lookup_ingredient("mystery herb", 10.0),
         concurrent_task(),
     )
 
-    # concurrent_task must have run (proves event loop was NOT blocked)
-    assert (
-        slow_completed
-    ), "Concurrent task was blocked — _ai_estimate is not using to_thread"
+    assert slow_completed, "Concurrent task was blocked — event loop not cooperative"
 
 
 @pytest.mark.asyncio
 async def test_t3_ai_estimate_respects_10s_timeout():
-    """C2: _ai_estimate wraps generate_meal_plan in wait_for(timeout=10.0).
+    """_ai_estimate wraps generate_meal_plan_async in wait_for(timeout=10.0).
 
     Verify that when wait_for raises TimeoutError (the internal 10s budget),
-    _ai_estimate catches it via 'except Exception' and returns zero-macro fallback
-    instead of propagating the error.
+    _ai_estimate catches it and returns zero-macro fallback instead of propagating.
     """
     repo = MagicMock()
     repo.find_by_normalized_name.return_value = None
     resolver = MagicMock()
     resolver.resolve = AsyncMock(return_value=None)
     gen = MagicMock()
-    gen.generate_meal_plan.return_value = {
+    gen.generate_meal_plan_async = AsyncMock(return_value={
         "protein": 5.0,
         "carbs": 5.0,
         "fat": 1.0,
         "fiber": 0.0,
         "sugar": 0.0,
-    }
+    })
 
     svc = NutritionLookupService(
         food_ref_repo=repo,
@@ -506,7 +498,7 @@ async def test_t3_ai_estimate_respects_10s_timeout():
 
 @pytest.mark.asyncio
 async def test_t3_ai_estimate_passes_correct_positional_args():
-    """C3: generate_meal_plan called with (prompt, system_message, 'json', 256, schema, None)."""
+    """generate_meal_plan_async called with (prompt, system_message, 'json', 256, schema, None)."""
     from src.domain.services.meal_suggestion.nutrition_lookup_service import (
         SingleIngredientSchema,
     )
@@ -516,13 +508,13 @@ async def test_t3_ai_estimate_passes_correct_positional_args():
     resolver = MagicMock()
     resolver.resolve = AsyncMock(return_value=None)
     gen = MagicMock()
-    gen.generate_meal_plan.return_value = {
+    gen.generate_meal_plan_async = AsyncMock(return_value={
         "protein": 8.0,
         "carbs": 3.0,
         "fat": 1.0,
         "fiber": 0.0,
         "sugar": 0.0,
-    }
+    })
 
     svc = NutritionLookupService(
         food_ref_repo=repo,
@@ -532,8 +524,8 @@ async def test_t3_ai_estimate_passes_correct_positional_args():
 
     await svc._lookup_ingredient("truffle oil", 20.0)
 
-    gen.generate_meal_plan.assert_called_once()
-    args = gen.generate_meal_plan.call_args[0]  # positional args passed to to_thread
+    gen.generate_meal_plan_async.assert_called_once()
+    args = gen.generate_meal_plan_async.call_args[0]
     assert len(args) == 6, f"Expected 6 positional args, got {len(args)}: {args}"
     assert args[2] == "json"  # response_type
     assert args[3] == 256  # max_tokens
