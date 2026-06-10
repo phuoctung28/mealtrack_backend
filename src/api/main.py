@@ -39,8 +39,10 @@ from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.middleware.rate_limit import limiter
 from src.api.middleware.request_logger import RequestLoggerMiddleware
+from src.api.routes.app_download import router as app_download_router
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
+from src.api.routes.v1.codes import router as codes_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
 from src.api.routes.v1.health import root_router as root_health_router
@@ -50,24 +52,21 @@ from src.api.routes.v1.ingredients import router as ingredients_router
 from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.monitoring import router as monitoring_router
+from src.api.routes.v1.movement import router as movement_router
 from src.api.routes.v1.notifications import router as notifications_router
-from src.api.routes.v1.referrals import router as referrals_router
+from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.promo_codes import router as promo_codes_router
-from src.api.routes.v1.codes import router as codes_router
+from src.api.routes.v1.referrals import router as referrals_router
 from src.api.routes.v1.saved_suggestions import router as saved_suggestions_router
 from src.api.routes.v1.tdee import router as tdee_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
-from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
-from src.api.routes.v1.movement import router as movement_router
+from src.api.routes.well_known import router as well_known_router
 from src.infra.config.settings import settings
-from src.infra.database.config import engine
 from src.infra.database.config_async import async_engine
 from src.infra.monitoring.sentry import initialize_sentry
-from src.api.routes.well_known import router as well_known_router
-from src.api.routes.app_download import router as app_download_router
 
 load_dotenv()
 
@@ -78,6 +77,18 @@ initialize_sentry()
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
 logger = logging.getLogger(__name__)
+
+
+async def warm_database_connection() -> None:
+    """Warm the async database connection so cold Neon compute wakes before traffic."""
+    if async_engine is None:
+        raise RuntimeError("Async database engine is not initialized")
+
+    from sqlalchemy import text
+
+    async with async_engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+        await conn.commit()
 
 
 def initialize_firebase():
@@ -157,10 +168,10 @@ async def lifespan(app: FastAPI):
     if _posthog_key:
         try:
             from opentelemetry import trace
-            from opentelemetry.sdk.trace import TracerProvider
-            from opentelemetry.sdk.resources import Resource, SERVICE_NAME
-            from posthog.ai.otel import PostHogSpanProcessor
             from opentelemetry.instrumentation.langchain import LangchainInstrumentor
+            from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+            from opentelemetry.sdk.trace import TracerProvider
+            from posthog.ai.otel import PostHogSpanProcessor
 
             _otel_provider = TracerProvider(
                 resource=Resource(attributes={SERVICE_NAME: "mealtrack-backend"})
@@ -192,11 +203,7 @@ async def lifespan(app: FastAPI):
 
     # Warm database connection — triggers Neon compute wakeup on cold start
     try:
-        from sqlalchemy import text
-
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-            conn.commit()
+        await warm_database_connection()
         logger.info("Database connection warmed successfully")
     except Exception as e:
         logger.warning("Database connection warming failed: %s", e)
@@ -212,8 +219,8 @@ async def lifespan(app: FastAPI):
     # Initialize Gemini explicit context caches
     gemini_cache_manager = None
     try:
-        from src.infra.services.ai.gemini_cache_manager import GeminiCacheManager
         from src.api.base_dependencies import get_raw_redis_client
+        from src.infra.services.ai.gemini_cache_manager import GeminiCacheManager
 
         _raw_redis = get_raw_redis_client()
         if _raw_redis is not None:

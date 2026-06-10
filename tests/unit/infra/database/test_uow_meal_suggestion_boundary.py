@@ -1,6 +1,6 @@
 import pytest
 
-from src.infra.database.uow import UnavailableMealSuggestionSessionStore
+from src.infra.database.uow_async import UnavailableMealSuggestionSessionStore
 
 
 @pytest.mark.asyncio

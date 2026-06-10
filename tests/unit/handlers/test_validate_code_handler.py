@@ -1,15 +1,18 @@
 # tests/unit/handlers/test_validate_code_handler.py
 """Unit tests for ValidateCodeQueryHandler — unified promo + referral validation."""
-import pytest
 from contextlib import contextmanager
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.app.queries.codes.validate_code_query import ValidateCodeQuery, CodeValidationError
+import pytest
+
+from src.app.queries.codes.validate_code_query import (
+    CodeValidationError,
+    ValidateCodeQuery,
+)
 from src.infra.database.models.promo_code import PromoCode, PromoCodeRedemption
 from src.infra.database.models.referral.referral_code import ReferralCode
 from src.infra.database.models.referral.referral_conversion import ReferralConversion
-
 
 # ── Factories ────────────────────────────────────────────────────────────────
 
@@ -64,6 +67,8 @@ def _mock_uow(promo=None, promo_redemption=None, referral=None, conversion=None,
     mock_referral_repo = AsyncMock()
     mock_referral_repo.get_code_by_code = AsyncMock(return_value=referral)
     mock_referral_repo.get_conversion_by_referred_user = AsyncMock(return_value=conversion)
+    mock_uow.promo_codes = mock_promo_repo
+    mock_uow.referrals = mock_referral_repo
 
     return mock_uow, mock_promo_repo, mock_referral_repo
 
@@ -73,9 +78,9 @@ HANDLER_PATH = "src.app.handlers.query_handlers.codes.validate_code_handler"
 
 @contextmanager
 def _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-    with patch(f"{HANDLER_PATH}.AsyncUnitOfWork", return_value=mock_uow), \
-         patch(f"{HANDLER_PATH}.PromoCodeRepository", return_value=mock_promo_repo), \
-         patch(f"{HANDLER_PATH}.ReferralRepository", return_value=mock_referral_repo):
+    assert mock_uow.promo_codes is mock_promo_repo
+    assert mock_uow.referrals is mock_referral_repo
+    with patch(f"{HANDLER_PATH}.AsyncUnitOfWork", return_value=mock_uow):
         yield
 
 
@@ -87,7 +92,9 @@ async def test_valid_promo_code_returns_promo_type():
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=promo)
 
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         result = await ValidateCodeQueryHandler().handle(
             ValidateCodeQuery(code="SUMMER30", user_id="user-abc")
         )
@@ -108,7 +115,9 @@ async def test_valid_referral_code_returns_referral_type():
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(referral=referral, referrer_row=row)
 
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         result = await ValidateCodeQueryHandler().handle(
             ValidateCodeQuery(code="ALEX123", user_id="user-456")
         )
@@ -129,7 +138,9 @@ async def test_unknown_code_raises_404():
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=None, referral=None)
 
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         with pytest.raises(CodeValidationError) as exc_info:
             await ValidateCodeQueryHandler().handle(
                 ValidateCodeQuery(code="DOESNOTEXIST", user_id="user-abc")
@@ -145,7 +156,9 @@ async def test_own_referral_code_raises_422():
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(referral=referral)
 
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         with pytest.raises(CodeValidationError) as exc_info:
             await ValidateCodeQueryHandler().handle(
                 ValidateCodeQuery(code="ALEX123", user_id="same-user")
@@ -157,12 +170,14 @@ async def test_own_referral_code_raises_422():
 
 @pytest.mark.asyncio
 async def test_expired_promo_raises_422():
-    past = datetime.now(timezone.utc) - timedelta(days=1)
+    past = datetime.now(UTC) - timedelta(days=1)
     promo = _make_promo(expires_at=past)
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=promo)
 
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         with pytest.raises(CodeValidationError) as exc_info:
             await ValidateCodeQueryHandler().handle(
                 ValidateCodeQuery(code="SUMMER30", user_id="user-abc")
@@ -178,7 +193,9 @@ async def test_exhausted_promo_raises_422():
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=promo)
 
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         with pytest.raises(CodeValidationError) as exc_info:
             await ValidateCodeQueryHandler().handle(
                 ValidateCodeQuery(code="SUMMER30", user_id="user-abc")
@@ -195,7 +212,9 @@ async def test_already_redeemed_promo_raises_422():
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=promo, promo_redemption=redemption)
 
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         with pytest.raises(CodeValidationError) as exc_info:
             await ValidateCodeQueryHandler().handle(
                 ValidateCodeQuery(code="SUMMER30", user_id="user-abc")
@@ -214,7 +233,9 @@ async def test_already_referred_user_raises_422():
     )
 
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         with pytest.raises(CodeValidationError) as exc_info:
             await ValidateCodeQueryHandler().handle(
                 ValidateCodeQuery(code="ALEX123", user_id="user-456")
@@ -230,7 +251,9 @@ async def test_inactive_promo_raises_422():
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=promo)
 
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         with pytest.raises(CodeValidationError) as exc_info:
             await ValidateCodeQueryHandler().handle(
                 ValidateCodeQuery(code="SUMMER30", user_id="user-abc")
@@ -249,7 +272,9 @@ async def test_referral_falls_back_to_display_name():
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(referral=referral, referrer_row=row)
 
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         result = await ValidateCodeQueryHandler().handle(
             ValidateCodeQuery(code="ALEX123", user_id="user-456")
         )
@@ -263,7 +288,9 @@ async def test_referral_falls_back_to_friend_when_no_name():
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(referral=referral, referrer_row=None)
 
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         result = await ValidateCodeQueryHandler().handle(
             ValidateCodeQuery(code="ALEX123", user_id="user-456")
         )
@@ -287,7 +314,9 @@ async def test_commission_rewards_match_runtime_settings():
     with _patch(mock_uow, mock_promo_repo, mock_referral_repo), \
          patch(f"{HANDLER_PATH}.settings") as mock_settings:
         mock_settings.REFERRAL_COMMISSIONS = overridden
-        from src.app.handlers.query_handlers.codes.validate_code_handler import ValidateCodeQueryHandler
+        from src.app.handlers.query_handlers.codes.validate_code_handler import (
+            ValidateCodeQueryHandler,
+        )
         result = await ValidateCodeQueryHandler().handle(
             ValidateCodeQuery(code="ALEX123", user_id="user-456")
         )

@@ -5,14 +5,14 @@ Auto-extracted for better maintainability.
 
 import logging
 import re
-from typing import Dict, Any, Optional
+from typing import Any
 
 from src.app.commands.user.sync_user_command import SyncUserCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.auth.auth_provider import AuthProvider
 from src.domain.model.notification import NotificationPreferences
 from src.domain.model.user import UserDomainModel
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)
 
 
 @handles(SyncUserCommand)
-class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
+class SyncUserCommandHandler(EventHandler[SyncUserCommand, dict[str, Any]]):
     """Handler for syncing user data from Firebase authentication."""
 
-    def __init__(self, uow: Optional[UnitOfWorkPort] = None):
+    def __init__(self, uow: AsyncUnitOfWorkPort | None = None):
         self.uow = uow
 
-    async def handle(self, command: SyncUserCommand) -> Dict[str, Any]:
+    async def handle(self, command: SyncUserCommand) -> dict[str, Any]:
         """Sync user data from Firebase authentication."""
         # Use provided UoW or create default
         uow = self.uow or AsyncUnitOfWork()
@@ -164,7 +164,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, Dict[str, Any]]):
                 raise
 
     def _create_new_user(
-        self, command: SyncUserCommand, uow: UnitOfWorkPort
+        self, command: SyncUserCommand, uow: AsyncUnitOfWorkPort
     ) -> UserDomainModel:
         """Create a new user domain model from Firebase data."""
         # Generate username if not provided

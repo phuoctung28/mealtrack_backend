@@ -7,31 +7,31 @@ on nutrition/meal records.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from src.api.exceptions import AuthorizationException
 from src.app.commands.meal import DeleteMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
 
 @handles(DeleteMealCommand)
-class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, Dict[str, Any]]):
+class DeleteMealCommandHandler(EventHandler[DeleteMealCommand, dict[str, Any]]):
     """Handler for hard-deleting a meal with data preservation."""
 
     def __init__(
         self,
-        uow: UnitOfWorkPort,
-        cache_invalidation: Optional[CacheInvalidationService] = None,
+        uow: AsyncUnitOfWorkPort,
+        cache_invalidation: CacheInvalidationService | None = None,
     ):
         self.uow = uow
         self.cache_invalidation = cache_invalidation
 
-    async def handle(self, command: DeleteMealCommand) -> Dict[str, Any]:
+    async def handle(self, command: DeleteMealCommand) -> dict[str, Any]:
         """Handle meal deletion with data preservation."""
         async with self.uow as uow:
             meal = await uow.meals.find_by_id(command.meal_id)

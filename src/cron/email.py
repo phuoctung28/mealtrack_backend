@@ -17,7 +17,6 @@ from sqlalchemy import text
 
 from src.domain.services.email_service import EmailService
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
-from src.infra.database.config import engine
 from src.infra.database.config_async import async_engine
 from src.infra.monitoring.sentry import initialize_sentry
 from src.infra.services.cron_lifecycle_email_service import CronLifecycleEmailService
@@ -33,8 +32,10 @@ async def run() -> None:
 
     # DB warm-up — triggers Neon compute wakeup; abort if unreachable
     try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+        if async_engine is None:
+            raise RuntimeError("Async database engine is not initialized")
+        async with async_engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
     except Exception as exc:
         logger.error("DB warm-up failed: %s", exc)
         sentry_sdk.flush(timeout=5)
@@ -51,7 +52,6 @@ async def run() -> None:
     except Exception:
         logger.exception("Email cron failed")
 
-    engine.dispose()
     if async_engine is not None:
         await async_engine.dispose()
     sentry_sdk.flush(timeout=5)

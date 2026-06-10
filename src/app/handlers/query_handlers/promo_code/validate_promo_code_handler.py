@@ -7,7 +7,6 @@ from src.app.queries.promo_code.validate_promo_code_query import (
 )
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.promo_code_repository import PromoCodeRepository
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +14,7 @@ logger = logging.getLogger(__name__)
 class ValidatePromoCodeQueryHandler:
     async def handle(self, query: ValidatePromoCodeQuery) -> dict:
         async with AsyncUnitOfWork() as uow:
-            repo = PromoCodeRepository(uow.session)
+            repo = uow.promo_codes
 
             promo = await repo.get_by_code(query.code)
             if not promo:

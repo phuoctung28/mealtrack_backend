@@ -1,7 +1,6 @@
 """Fake subscription repository for testing."""
 
 from datetime import datetime, timedelta
-from typing import List, Optional
 
 from src.domain.model.subscription import Subscription
 from src.domain.ports.subscription_repository_port import SubscriptionRepositoryPort
@@ -18,15 +17,15 @@ class FakeSubscriptionRepository(SubscriptionRepositoryPort):
         self._subscriptions[subscription.id] = subscription
         return subscription
 
-    async def find_by_id(self, subscription_id: str) -> Optional[Subscription]:
+    async def find_by_id(self, subscription_id: str) -> Subscription | None:
         """Find a subscription by ID."""
         return self._subscriptions.get(subscription_id)
 
-    async def find_by_user_id(self, user_id: str) -> List[Subscription]:
+    async def find_by_user_id(self, user_id: str) -> list[Subscription]:
         """Find all subscriptions for a user."""
         return [sub for sub in self._subscriptions.values() if sub.user_id == user_id]
 
-    async def find_active_by_user_id(self, user_id: str) -> Optional[Subscription]:
+    async def find_active_by_user_id(self, user_id: str) -> Subscription | None:
         """Find active subscription for a user."""
         for sub in self._subscriptions.values():
             if (
@@ -39,7 +38,7 @@ class FakeSubscriptionRepository(SubscriptionRepositoryPort):
 
     async def find_expiring_soon(
         self, days_until_expiry: int = 7
-    ) -> List[Subscription]:
+    ) -> list[Subscription]:
         """Find subscriptions expiring within specified days."""
         cutoff = datetime.now() + timedelta(days=days_until_expiry)
         return [
@@ -48,12 +47,12 @@ class FakeSubscriptionRepository(SubscriptionRepositoryPort):
             if sub.expires_at and datetime.now() < sub.expires_at <= cutoff
         ]
 
-    def find_expiring_in_window(
+    async def find_expiring_in_window(
         self,
         from_days: int,
         to_days: int,
-        now: Optional[datetime] = None,
-    ) -> List[Subscription]:
+        now: datetime | None = None,
+    ) -> list[Subscription]:
         """Active subs whose expires_at falls within the [from_days, to_days) window."""
         reference = now or datetime.now()
         lower = reference + timedelta(days=from_days)

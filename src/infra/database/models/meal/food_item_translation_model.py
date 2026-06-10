@@ -7,7 +7,7 @@ See meal-translation-model.py for full implementation.
 from sqlalchemy import Column, String, Text, ForeignKey, Integer, Boolean
 from sqlalchemy.orm import relationship
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 
 
 class FoodItemTranslationORM(Base):

@@ -1,13 +1,15 @@
 """Unit tests for ValidatePromoCodeQueryHandler."""
-import pytest
+from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.app.handlers.query_handlers.promo_code.validate_promo_code_handler import (
     ValidatePromoCodeQueryHandler,
 )
 from src.app.queries.promo_code.validate_promo_code_query import (
-    ValidatePromoCodeQuery,
     PromoCodeValidationError,
+    ValidatePromoCodeQuery,
 )
 from src.infra.database.models.promo_code import PromoCode
 
@@ -33,6 +35,7 @@ def _mock_uow(promo=None, redemption=None):
     mock_repo = AsyncMock()
     mock_repo.get_by_code = AsyncMock(return_value=promo)
     mock_repo.get_redemption = AsyncMock(return_value=redemption)
+    mock_uow.promo_codes = mock_repo
 
     return mock_uow, mock_repo
 
@@ -45,9 +48,6 @@ async def test_validate_returns_success_for_valid_code():
     with patch(
         "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.AsyncUnitOfWork",
         return_value=mock_uow,
-    ), patch(
-        "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.PromoCodeRepository",
-        return_value=mock_repo,
     ):
         handler = ValidatePromoCodeQueryHandler()
         result = await handler.handle(
@@ -66,9 +66,6 @@ async def test_validate_raises_404_when_code_not_found():
     with patch(
         "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.AsyncUnitOfWork",
         return_value=mock_uow,
-    ), patch(
-        "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.PromoCodeRepository",
-        return_value=mock_repo,
     ):
         handler = ValidatePromoCodeQueryHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:
@@ -87,9 +84,6 @@ async def test_validate_raises_422_when_inactive():
     with patch(
         "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.AsyncUnitOfWork",
         return_value=mock_uow,
-    ), patch(
-        "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.PromoCodeRepository",
-        return_value=mock_repo,
     ):
         handler = ValidatePromoCodeQueryHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:
@@ -108,9 +102,6 @@ async def test_validate_raises_422_when_max_uses_reached():
     with patch(
         "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.AsyncUnitOfWork",
         return_value=mock_uow,
-    ), patch(
-        "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.PromoCodeRepository",
-        return_value=mock_repo,
     ):
         handler = ValidatePromoCodeQueryHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:
@@ -133,9 +124,6 @@ async def test_validate_raises_422_when_already_redeemed():
     with patch(
         "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.AsyncUnitOfWork",
         return_value=mock_uow,
-    ), patch(
-        "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.PromoCodeRepository",
-        return_value=mock_repo,
     ):
         handler = ValidatePromoCodeQueryHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:
@@ -149,17 +137,14 @@ async def test_validate_raises_422_when_already_redeemed():
 
 @pytest.mark.asyncio
 async def test_validate_raises_422_when_expired():
-    from datetime import datetime, timezone, timedelta
-    past = datetime.now(timezone.utc) - timedelta(days=1)
+    from datetime import datetime, timedelta
+    past = datetime.now(UTC) - timedelta(days=1)
     promo = _make_promo(expires_at=past)
     mock_uow, mock_repo = _mock_uow(promo=promo)
 
     with patch(
         "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.AsyncUnitOfWork",
         return_value=mock_uow,
-    ), patch(
-        "src.app.handlers.query_handlers.promo_code.validate_promo_code_handler.PromoCodeRepository",
-        return_value=mock_repo,
     ):
         handler = ValidatePromoCodeQueryHandler()
         with pytest.raises(PromoCodeValidationError) as exc_info:

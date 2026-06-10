@@ -7,7 +7,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 import pytest
-from tests.conftest import TestUnitOfWork
+from tests.conftest import TestUnitOfWork, TestUserRepository
 
 from src.api.exceptions import ValidationException
 from src.app.commands.user import SaveUserOnboardingCommand
@@ -55,9 +55,7 @@ class TestSaveUserOnboardingCommandHandler:
         ), f"User {user_id} must be queryable directly in test_session"
 
         # Verify repository can find user with UUID conversion
-        from src.infra.repositories.user_repository import UserRepository
-
-        test_repo = UserRepository(test_session)
+        test_repo = TestUserRepository(test_session)
         repo_user = test_repo.find_by_id(UUID(user_id))
         assert (
             repo_user is not None

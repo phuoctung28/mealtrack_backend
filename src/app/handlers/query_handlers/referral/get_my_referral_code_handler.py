@@ -6,7 +6,6 @@ from src.app.queries.referral.get_my_referral_code_query import (
     ReferralCodeResult,
 )
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.referral_repository import ReferralRepository
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +13,7 @@ logger = logging.getLogger(__name__)
 class GetMyReferralCodeQueryHandler:
     async def handle(self, query: GetMyReferralCodeQuery) -> ReferralCodeResult:
         async with AsyncUnitOfWork() as uow:
-            repo = ReferralRepository(uow.session)
+            repo = uow.referrals
 
             code = await repo.get_code_by_user_id(query.user_id)
             if not code:

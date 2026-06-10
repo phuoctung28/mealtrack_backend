@@ -4,7 +4,7 @@ All items must provide their own nutrition (via custom_nutrition).
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -12,27 +12,26 @@ logger = logging.getLogger(__name__)
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
 from src.app.events.base import EventHandler
 from src.app.services.cache_invalidation_service import CacheInvalidationService
-from src.domain.model.meal import Meal, MealStatus
-from src.domain.model.meal import MealImage
+from src.domain.model.meal import Meal, MealImage, MealStatus
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.meal_repository_port import MealRepositoryPort
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from src.domain.utils.timezone_utils import (
-    utc_now,
-    noon_utc_for_date,
-    resolve_user_timezone_async,
-)
 from src.domain.services.nutrition_calculation_service import (
     NutritionCalculationService,
+)
+from src.domain.utils.timezone_utils import (
+    noon_utc_for_date,
+    resolve_user_timezone_async,
+    utc_now,
 )
 
 
 class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any]):
     def __init__(
         self,
-        uow: UnitOfWorkPort,
-        cache_invalidation: Optional[CacheInvalidationService] = None,
-        meal_repository: Optional[MealRepositoryPort] = None,
-        nutrition_service: Optional[NutritionCalculationService] = None,
+        uow: AsyncUnitOfWorkPort,
+        cache_invalidation: CacheInvalidationService | None = None,
+        meal_repository: MealRepositoryPort | None = None,
+        nutrition_service: NutritionCalculationService | None = None,
     ):
         self.uow = uow
         self.cache_invalidation = cache_invalidation

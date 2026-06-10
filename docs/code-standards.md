@@ -129,7 +129,7 @@ async def handle(self, query: GetMealByIdQuery) -> Meal:
 - [ ] `snake_case.py` file names
 - [ ] Pattern-based naming (command/query/event/handler/service/repo)
 - [ ] No `dynamic` types (always explicit)
-- [ ] Run before commit: `black src/ && flake8 src/ && mypy src/`
+- [ ] Run before commit: `black src/ tests/ && ruff check src/ && mypy src/`
 
 ---
 

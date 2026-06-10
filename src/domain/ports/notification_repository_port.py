@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
-from typing import List, Optional
 
-from src.domain.model.notification import UserFcmToken, NotificationPreferences
+from src.domain.model.notification import NotificationPreferences, UserFcmToken
 
 
 class NotificationRepositoryPort(ABC):
@@ -10,7 +8,7 @@ class NotificationRepositoryPort(ABC):
 
     # FCM Token operations
     @abstractmethod
-    def save_fcm_token(self, token: UserFcmToken) -> UserFcmToken:
+    async def save_fcm_token(self, token: UserFcmToken) -> UserFcmToken:
         """
         Persists an FCM token.
 
@@ -23,7 +21,7 @@ class NotificationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def find_fcm_token_by_token(self, fcm_token: str) -> Optional[UserFcmToken]:
+    async def find_fcm_token_by_token(self, fcm_token: str) -> UserFcmToken | None:
         """
         Finds an FCM token by the token string.
 
@@ -36,7 +34,9 @@ class NotificationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def find_active_fcm_tokens_by_user(self, user_id: str) -> List[UserFcmToken]:
+    async def find_active_fcm_tokens_by_user(
+        self, user_id: str
+    ) -> list[UserFcmToken]:
         """
         Finds all active FCM tokens for a user.
 
@@ -49,7 +49,7 @@ class NotificationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def deactivate_fcm_token(self, fcm_token: str) -> bool:
+    async def deactivate_fcm_token(self, fcm_token: str) -> bool:
         """
         Deactivates an FCM token.
 
@@ -62,7 +62,7 @@ class NotificationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def delete_fcm_token(self, fcm_token: str) -> bool:
+    async def delete_fcm_token(self, fcm_token: str) -> bool:
         """
         Deletes an FCM token.
 
@@ -76,7 +76,7 @@ class NotificationRepositoryPort(ABC):
 
     # Notification Preferences operations
     @abstractmethod
-    def save_notification_preferences(
+    async def save_notification_preferences(
         self, preferences: NotificationPreferences
     ) -> NotificationPreferences:
         """
@@ -91,9 +91,9 @@ class NotificationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def find_notification_preferences_by_user(
+    async def find_notification_preferences_by_user(
         self, user_id: str
-    ) -> Optional[NotificationPreferences]:
+    ) -> NotificationPreferences | None:
         """
         Finds notification preferences by user ID.
 
@@ -106,7 +106,7 @@ class NotificationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def update_notification_preferences(
+    async def update_notification_preferences(
         self, user_id: str, preferences: NotificationPreferences
     ) -> NotificationPreferences:
         """
@@ -122,7 +122,7 @@ class NotificationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def update_notification_language(self, user_id: str, language: str) -> int:
+    async def update_notification_language(self, user_id: str, language: str) -> int:
         """
         Updates the notification language for an existing preferences row.
 
@@ -136,7 +136,7 @@ class NotificationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def delete_notification_preferences(self, user_id: str) -> bool:
+    async def delete_notification_preferences(self, user_id: str) -> bool:
         """
         Deletes notification preferences for a user.
 
@@ -145,37 +145,5 @@ class NotificationRepositoryPort(ABC):
 
         Returns:
             True if preferences were found and deleted, False otherwise
-        """
-        pass
-
-    # Utility operations
-    @abstractmethod
-    def find_users_for_meal_reminder(
-        self, meal_type: str, current_utc: datetime
-    ) -> List[str]:
-        """
-        Finds user IDs who should receive meal reminders at current UTC time.
-
-        Converts UTC to each user's local time for matching.
-
-        Args:
-            meal_type: The meal type (breakfast, lunch, dinner)
-            current_utc: Current UTC datetime
-
-        Returns:
-            List of user IDs who should receive the reminder
-        """
-        pass
-
-    @abstractmethod
-    def find_users_for_daily_summary(self, current_utc: datetime) -> List[str]:
-        """
-        Finds user IDs who should receive daily summary at 9PM local time.
-
-        Args:
-            current_utc: Current UTC datetime
-
-        Returns:
-            List of user IDs due for daily summary at configured time
         """
         pass

@@ -1,16 +1,16 @@
 """Async subscription repository."""
 
 from datetime import datetime, timedelta
-from typing import List, Optional
 
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.ports.subscription_repository_port import SubscriptionRepositoryPort
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.subscription import Subscription
 
 
-class AsyncSubscriptionRepository:
+class AsyncSubscriptionRepository(SubscriptionRepositoryPort):
     """Async repository for subscription data. Never calls session.commit()."""
 
     def __init__(self, session: AsyncSession):
@@ -34,21 +34,21 @@ class AsyncSubscriptionRepository:
         await self.session.flush()
         return merged
 
-    async def find_by_id(self, subscription_id: str) -> Optional[Subscription]:
+    async def find_by_id(self, subscription_id: str) -> Subscription | None:
         """Find a subscription by its primary key."""
         result = await self.session.execute(
             select(Subscription).where(Subscription.id == subscription_id)
         )
         return result.scalars().first()
 
-    async def find_by_user_id(self, user_id: str) -> List[Subscription]:
+    async def find_by_user_id(self, user_id: str) -> list[Subscription]:
         """Find all subscriptions for a user."""
         result = await self.session.execute(
             select(Subscription).where(Subscription.user_id == user_id)
         )
         return list(result.scalars().all())
 
-    async def find_active_by_user_id(self, user_id: str) -> Optional[Subscription]:
+    async def find_active_by_user_id(self, user_id: str) -> Subscription | None:
         """Find the active subscription for a user."""
         result = await self.session.execute(
             select(Subscription).where(
@@ -62,7 +62,7 @@ class AsyncSubscriptionRepository:
 
     async def find_by_revenuecat_id(
         self, revenuecat_subscriber_id: str
-    ) -> Optional[Subscription]:
+    ) -> Subscription | None:
         """Find a subscription by RevenueCat subscriber ID."""
         result = await self.session.execute(
             select(Subscription).where(
@@ -70,6 +70,44 @@ class AsyncSubscriptionRepository:
             )
         )
         return result.scalars().first()
+
+    async def find_expiring_soon(
+        self, days_until_expiry: int = 7
+    ) -> list[Subscription]:
+        """Find active subscriptions expiring within specified days."""
+        now = utc_now()
+        expiry_threshold = now + timedelta(days=days_until_expiry)
+        result = await self.session.execute(
+            select(Subscription).where(
+                and_(
+                    Subscription.status == "active",
+                    Subscription.expires_at <= expiry_threshold,
+                    Subscription.expires_at > now,
+                )
+            )
+        )
+        return list(result.scalars().all())
+
+    async def find_expiring_in_window(
+        self,
+        from_days: int,
+        to_days: int,
+        now: datetime | None = None,
+    ) -> list[Subscription]:
+        """Active subs whose expires_at falls within [reference+from_days, reference+to_days)."""
+        reference = now or utc_now()
+        lower = reference + timedelta(days=from_days)
+        upper = reference + timedelta(days=to_days)
+        result = await self.session.execute(
+            select(Subscription).where(
+                and_(
+                    Subscription.status == "active",
+                    Subscription.expires_at >= lower,
+                    Subscription.expires_at < upper,
+                )
+            )
+        )
+        return list(result.scalars().all())
 
     async def cancel(self, subscription_id: str, reason: str = None) -> bool:
         """Cancel a subscription."""
@@ -123,7 +161,7 @@ class AsyncSubscriptionRepository:
             return True
         return False
 
-    async def get_expired_subscriptions(self) -> List[Subscription]:
+    async def get_expired_subscriptions(self) -> list[Subscription]:
         """Get all active subscriptions that have passed their expiry date."""
         result = await self.session.execute(
             select(Subscription).where(
@@ -139,8 +177,8 @@ class AsyncSubscriptionRepository:
         self,
         subscription_id: str,
         status: str,
-        expires_at: Optional[datetime] = None,
-    ) -> Optional[Subscription]:
+        expires_at: datetime | None = None,
+    ) -> Subscription | None:
         """Update subscription status."""
         subscription = await self.find_by_id(subscription_id)
         if subscription:

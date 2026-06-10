@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.notification.notification import NotificationORM
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -36,31 +36,31 @@ class CronTrialPushService:
         # Stateless; constructed by the cron job for each run.
         pass
 
-    def check_and_schedule_pushes(self, now: datetime | None = None) -> int:
+    async def check_and_schedule_pushes(self, now: datetime | None = None) -> int:
         """Schedule the pre-charge push for subs charging soon. Returns rows
         inserted (excludes conflict-do-nothing skips)."""
         moment = now or utc_now()
         logger.info("Trial-push cron: starting run at %s", moment.isoformat())
 
-        scheduled = self._schedule_due_pushes(moment)
+        scheduled = await self._schedule_due_pushes(moment)
 
         logger.info("Trial-push cron: complete, inserted=%s", scheduled)
         return scheduled
 
     # ---- scheduling pipeline --------------------------------------------
 
-    def _schedule_due_pushes(self, now: datetime) -> int:
-        with UnitOfWork() as uow:
+    async def _schedule_due_pushes(self, now: datetime) -> int:
+        async with AsyncUnitOfWork() as uow:
             # Active subs whose trial converts to paid within the next day.
-            subs = uow.subscriptions.find_expiring_in_window(
+            subs = await uow.subscriptions.find_expiring_in_window(
                 from_days=0, to_days=_LOOKAHEAD_DAYS, now=now
             )
             if not subs:
                 return 0
 
             user_ids = [s.user_id for s in subs]
-            prefs = self._fetch_prefs(uow.session, user_ids)
-            tokens_by_user = self._fetch_fcm_tokens(uow.session, user_ids)
+            prefs = await self._fetch_prefs(uow.session, user_ids)
+            tokens_by_user = await self._fetch_fcm_tokens(uow.session, user_ids)
 
             rows: list[dict] = []
             for sub in subs:
@@ -80,15 +80,15 @@ class CronTrialPushService:
             if not rows:
                 return 0
 
-            return self._insert_with_dedup(uow.session, rows)
+            return await self._insert_with_dedup(uow.session, rows)
 
     # ---- pref + token fetch (batch) -------------------------------------
 
     @staticmethod
-    def _fetch_prefs(session, user_ids: list[str]) -> dict[str, dict]:
+    async def _fetch_prefs(session, user_ids: list[str]) -> dict[str, dict]:
         if not user_ids:
             return {}
-        result = session.execute(
+        result = await session.execute(
             text("""
                 SELECT
                     np.user_id,
@@ -102,7 +102,8 @@ class CronTrialPushService:
                 WHERE np.user_id = ANY(:ids) AND np.is_deleted = false
                 """),
             {"ids": user_ids},
-        ).fetchall()
+        )
+        rows = result.fetchall()
 
         def _resolve_lang(pref_lang, user_lang) -> str:
             # Matches daily_context_precompute_service.py:194
@@ -118,23 +119,24 @@ class CronTrialPushService:
                 "timezone": r.timezone or "UTC",
                 "gender": r.gender or "male",
             }
-            for r in result
+            for r in rows
         }
 
     @staticmethod
-    def _fetch_fcm_tokens(session, user_ids: list[str]) -> dict[str, list[str]]:
+    async def _fetch_fcm_tokens(session, user_ids: list[str]) -> dict[str, list[str]]:
         if not user_ids:
             return {}
-        result = session.execute(
+        result = await session.execute(
             text("""
                 SELECT user_id, fcm_token
                 FROM user_fcm_tokens
                 WHERE user_id = ANY(:ids) AND is_active = true
                 """),
             {"ids": user_ids},
-        ).fetchall()
+        )
+        rows = result.fetchall()
         tokens: dict[str, list[str]] = {}
-        for r in result:
+        for r in rows:
             tokens.setdefault(r.user_id, []).append(r.fcm_token)
         return tokens
 
@@ -193,7 +195,7 @@ class CronTrialPushService:
     # ---- insert ----------------------------------------------------------
 
     @staticmethod
-    def _insert_with_dedup(session, rows: Iterable[dict]) -> int:
+    async def _insert_with_dedup(session, rows: Iterable[dict]) -> int:
         rows_list = list(rows)
         if not rows_list:
             return 0
@@ -201,7 +203,8 @@ class CronTrialPushService:
         stmt = stmt.on_conflict_do_nothing(
             index_elements=["user_id", "notification_type", "scheduled_date"],
         )
-        result = session.execute(stmt)
+        result = await session.execute(stmt)
+        await session.flush()
         # rowcount reflects rows actually inserted (excludes conflict skips).
         # Some drivers return -1 when count is unknown; treat as 0 for logging.
         return result.rowcount if (result.rowcount or 0) >= 0 else 0

@@ -4,7 +4,6 @@ import logging
 
 from src.app.commands.referral.request_payout_command import RequestPayoutCommand
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.referral_repository import ReferralRepository
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ class RequestPayoutCommandHandler:
             command.payment_details,
         )
         async with AsyncUnitOfWork() as uow:
-            repo = ReferralRepository(uow.session)
+            repo = uow.referrals
 
             pending = await repo.get_pending_payout(command.user_id)
             if pending:

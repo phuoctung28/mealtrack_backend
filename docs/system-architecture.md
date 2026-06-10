@@ -1,6 +1,6 @@
 # Backend System Architecture Overview
 
-**Last Updated:** May 27, 2026
+**Last Updated:** June 9, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
 **Codebase:** 430 files, ~38.5K LOC across 4 layers
@@ -64,7 +64,7 @@ await event_bus.publish(MealCreatedEvent(...))           # fire-and-forget
 ```
 
 ### Repository Pattern
-Smart sync (diff-based updates), eager loading via pre-defined `joinedload` options.
+Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW owns commit/rollback boundaries; repositories flush only when generated IDs or relationship state are needed.
 
 ---
 
@@ -103,6 +103,7 @@ Smart sync (diff-based updates), eager loading via pre-defined `joinedload` opti
 - `CloudinaryImageStore` instantiated directly in routes (not via DI)
 - Hardcoded constants (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) not in config
 - `AsyncUnitOfWork` uses `asyncio.Lock`; concurrent reuse within one instance will block (by design — use separate instances per handler, enforced by event bus handler cloning)
+- Database runtime is async-only: request paths, cron jobs, and handlers use `config_async.py`, `AsyncSession`, `AsyncUnitOfWork`, and async repositories. Alembic uses its separate migration engine.
 
 ---
 

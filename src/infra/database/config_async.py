@@ -2,19 +2,22 @@
 
 import logging
 import os
-from typing import Optional, Tuple
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
+
+from src.infra.database.connection_policy import (
+    DatabaseConnectionPolicy,
+    resolve_connection_policy,
+)
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 
-def _sanitize_asyncpg_url_and_connect_args(url: str) -> Tuple[str, dict]:
+def _sanitize_asyncpg_url_and_connect_args(url: str) -> tuple[str, dict]:
     """
     Remove libpq-only URL params that asyncpg cannot accept as connect kwargs.
 
@@ -24,7 +27,7 @@ def _sanitize_asyncpg_url_and_connect_args(url: str) -> Tuple[str, dict]:
     try:
         parts = urlsplit(url)
         query_pairs = parse_qsl(parts.query, keep_blank_values=True)
-        sslmode: Optional[str] = None
+        sslmode: str | None = None
         filtered: list[tuple[str, str]] = []
         connect_args: dict = {}
         for k, v in query_pairs:
@@ -32,12 +35,10 @@ def _sanitize_asyncpg_url_and_connect_args(url: str) -> Tuple[str, dict]:
                 sslmode = v
                 continue
             if k == "channel_binding":
-                # libpq option; asyncpg.connect() doesn't accept it.
                 continue
             filtered.append((k, v))
 
         if sslmode and sslmode.lower() not in {"disable", "allow", "prefer"}:
-            # asyncpg expects `ssl` instead of `sslmode`.
             connect_args["ssl"] = True
 
         if sslmode is None and len(filtered) == len(query_pairs):
@@ -49,81 +50,70 @@ def _sanitize_asyncpg_url_and_connect_args(url: str) -> Tuple[str, dict]:
         )
         return sanitized, connect_args
     except Exception:  # noqa: BLE001
-        # If parsing fails, keep original URL; engine init will surface any issues.
         return url, {}
 
 
-_raw_url = (
-    os.getenv("DATABASE_URL_DIRECT")
-    or os.getenv("DATABASE_URL")
-    or "postgresql+asyncpg://{user}:{pw}@{host}:{port}/{db}".format(
-        user=os.getenv("DB_USER", "nutree"),
-        pw=os.getenv("DB_PASSWORD", ""),
-        host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-        db=os.getenv("DB_NAME", "nutree"),
-    )
-)
+def _normalize_asyncpg_url(raw_url: str) -> str:
+    """Ensure the URL uses the postgresql+asyncpg:// driver prefix."""
+    if raw_url.startswith("postgres://"):
+        return raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
+    if raw_url.startswith("postgresql://") and "+asyncpg" not in raw_url:
+        return raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if raw_url.startswith("postgresql+psycopg2://"):
+        return raw_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    return raw_url
 
-# Normalise driver to asyncpg
-if _raw_url.startswith("postgres://"):
-    ASYNC_DATABASE_URL = _raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
-elif _raw_url.startswith("postgresql://") and "+asyncpg" not in _raw_url:
-    ASYNC_DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-elif _raw_url.startswith("postgresql+psycopg2://"):
-    ASYNC_DATABASE_URL = _raw_url.replace(
-        "postgresql+psycopg2://", "postgresql+asyncpg://", 1
-    )
-else:
-    ASYNC_DATABASE_URL = _raw_url
 
-# Render/Neon style URLs may include libpq params (sslmode/channel_binding),
-# which must be translated/removed for asyncpg.
-ASYNC_DATABASE_URL, _connect_args = _sanitize_asyncpg_url_and_connect_args(
+# Resolve connection policy from environment.
+# URL priority: APP_DATABASE_URL > DATABASE_URL > component fallback.
+# DATABASE_URL_DIRECT is reserved for migration tooling; it is NOT used here.
+_policy: DatabaseConnectionPolicy = resolve_connection_policy()
+
+# Normalize driver and sanitize asyncpg URL params
+ASYNC_DATABASE_URL = _normalize_asyncpg_url(_policy.app_url)
+ASYNC_DATABASE_URL, _url_connect_args = _sanitize_asyncpg_url_and_connect_args(
     ASYNC_DATABASE_URL
 )
 
-# Detect Neon pooler — use NullPool (PgBouncer manages connections)
-_IS_NEON_POOLER = (
-    "-pooler" in ASYNC_DATABASE_URL and os.getenv("DATABASE_URL_DIRECT") is None
-)
-_USE_ASYNC_QUEUE_POOL = (
-    os.getenv("ASYNC_DB_USE_QUEUE_POOL", "false").strip().lower() == "true"
-    and not _IS_NEON_POOLER
-)
+# Merge connect_args: url-level (ssl from sslmode) first, then policy-level
+# (prepared_statement_cache_size=0 for pooler) so policy settings take precedence.
+_connect_args = {**_url_connect_args, **_policy.connect_args}
+
+# Expose connection mode for health endpoint and observability
+CONNECTION_MODE = _policy.mode
+_IS_NEON_POOLER = _policy.mode == "neon_pooler"  # backward-compat alias
 
 _UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
-_ASYNC_POOL_SIZE = int(os.getenv("ASYNC_POOL_SIZE_PER_WORKER", "3"))
-_ASYNC_POOL_OVERFLOW = int(os.getenv("ASYNC_POOL_MAX_OVERFLOW", "2"))
-_ASYNC_POOL_TIMEOUT = int(os.getenv("POOL_TIMEOUT", "10"))
+_ASYNC_POOL_SIZE = _policy.pool_size // _UVICORN_WORKERS if _UVICORN_WORKERS > 0 else 0
+_ASYNC_POOL_OVERFLOW = _policy.max_overflow
 
 try:
-    if not _USE_ASYNC_QUEUE_POOL:
+    if _policy.mode == "neon_pooler":
         async_engine = create_async_engine(
             ASYNC_DATABASE_URL,
             echo=False,
-            poolclass=NullPool,
+            poolclass=_policy.pool_class,
             connect_args=_connect_args,
         )
         logger.info(
-            "Async engine: NullPool (loop-safe async connections, neon_pooler=%s)",
-            _IS_NEON_POOLER,
+            "Async engine: NullPool mode=neon_pooler (PgBouncer manages connection reuse)",
         )
     else:
         async_engine = create_async_engine(
             ASYNC_DATABASE_URL,
             echo=False,
-            poolclass=AsyncAdaptedQueuePool,
-            pool_size=_UVICORN_WORKERS * _ASYNC_POOL_SIZE,
-            max_overflow=_ASYNC_POOL_OVERFLOW,
-            pool_recycle=120,
-            pool_timeout=_ASYNC_POOL_TIMEOUT,
+            poolclass=_policy.pool_class,
+            pool_size=_policy.pool_size,
+            max_overflow=_policy.max_overflow,
+            pool_recycle=_policy.pool_recycle,
+            pool_timeout=_policy.pool_timeout,
+            pool_pre_ping=True,
             connect_args=_connect_args,
         )
         logger.info(
-            "Async engine: AsyncAdaptedQueuePool pool_size=%s max_overflow=%s",
-            _UVICORN_WORKERS * _ASYNC_POOL_SIZE,
-            _ASYNC_POOL_OVERFLOW,
+            "Async engine: AsyncAdaptedQueuePool mode=direct_pool pool_size=%s max_overflow=%s",
+            _policy.pool_size,
+            _policy.max_overflow,
         )
 
     AsyncSessionLocal = async_sessionmaker(
@@ -134,8 +124,6 @@ try:
         expire_on_commit=False,
     )
 except Exception as _engine_init_error:  # noqa: BLE001
-    # asyncpg not installed (e.g. unit-test environment without the driver).
-    # Defer the error to first actual database use so imports succeed.
     logger.warning(
         "Async engine could not be initialised at import time (%s); "
         "any attempt to open an AsyncUnitOfWork will raise.",

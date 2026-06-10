@@ -168,12 +168,15 @@ ignore_imports =
     src.api.base_dependencies -> src.infra.cache.metrics
     src.api.base_dependencies -> src.infra.cache.redis_client
     src.api.base_dependencies -> src.infra.config.settings
+    src.api.base_dependencies -> src.infra.database.config_async
     src.api.base_dependencies -> src.infra.database.config
     src.api.base_dependencies -> src.infra.database.uow_async
     src.api.base_dependencies -> src.infra.repositories.food_reference_repository
+    src.api.base_dependencies -> src.infra.repositories.food_reference_uow_adapter
     src.api.base_dependencies -> src.infra.repositories.meal_repository
     src.api.base_dependencies -> src.infra.repositories.meal_suggestion_repository
     src.api.base_dependencies -> src.infra.repositories.meal_translation_repository
+    src.api.base_dependencies -> src.infra.repositories.meal_translation_uow_adapter
     src.api.base_dependencies -> src.infra.repositories.user_repository
     src.api.base_dependencies -> src.infra.services.ai.ai_model_manager
     src.api.base_dependencies -> src.infra.services.ai.schemas
@@ -193,8 +196,11 @@ ignore_imports =
     src.api.dependencies.food_image -> src.infra.config.settings
     src.api.dependencies.meal_image_cache -> src.infra.adapters.gemini_text_embedding_adapter
     src.api.dependencies.meal_image_cache -> src.infra.config.settings
+    src.api.dependencies.meal_image_cache -> src.infra.database.config_async
     src.api.dependencies.meal_image_cache -> src.infra.repositories.pending_meal_image_repository
+    src.api.dependencies.meal_image_cache -> src.infra.repositories.pending_meal_image_repository_async
     src.api.dependencies.meal_image_cache -> src.infra.repositories.pgvector_meal_image_cache_repository
+    src.api.dependencies.meal_image_cache -> src.infra.repositories.pgvector_meal_image_cache_repository_async
     src.api.main -> src.infra.config.settings
     src.api.main -> src.infra.database.config
     src.api.main -> src.infra.database.config_async
@@ -211,13 +217,17 @@ ignore_imports =
     src.api.routes.v1.activities -> src.infra.event_bus
     src.api.routes.v1.cheat_days -> src.infra.event_bus
     src.api.routes.v1.feature_flags -> src.infra.cache.cache_service
+    src.api.routes.v1.feature_flags -> src.infra.database.config_async
     src.api.routes.v1.feature_flags -> src.infra.database.models.feature_flag
     src.api.routes.v1.health -> src.infra.database.config
+    src.api.routes.v1.health -> src.infra.database.config_async
+    src.api.routes.v1.health -> src.infra.database.uow_async
     src.api.routes.v1.health -> src.infra.database.models.notification
     src.api.routes.v1.health -> src.infra.services.firebase_service
     src.api.routes.v1.health -> src.infra.services.push.apns_payload_builder
     src.api.routes.v1.hydration -> src.infra.event_bus
     src.api.routes.v1.ingredients -> src.infra.event_bus
+    src.api.routes.v1.meal_suggestions -> src.infra.database.config_async
     src.api.routes.v1.meal_suggestions -> src.infra.adapters.unsplash_image_adapter
     src.api.routes.v1.meal_suggestions -> src.infra.event_bus
     src.api.routes.v1.meals -> src.infra.event_bus

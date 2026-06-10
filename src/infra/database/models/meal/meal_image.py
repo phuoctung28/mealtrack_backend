@@ -4,7 +4,7 @@ Meal image model for storing image metadata.
 
 from sqlalchemy import Column, String, Integer
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import TimestampMixin
 
 

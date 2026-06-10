@@ -12,7 +12,7 @@ from migrations.utils import MIGRATION_URL, migration_engine
 from sqlalchemy import text
 
 import src.infra.database.models  # noqa: F401
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

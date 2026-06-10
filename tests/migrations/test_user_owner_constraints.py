@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import src.infra.database.models  # noqa: F401
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 
 MIGRATION_PATH = (
     Path(__file__).parents[2]

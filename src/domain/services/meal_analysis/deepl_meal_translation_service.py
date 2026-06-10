@@ -6,12 +6,15 @@ Uses the core DeepLTextTranslationService internally for actual API calls.
 Checks the meal_translation table first; only calls DeepL when a fully-
 cached translation does not yet exist.
 """
+import asyncio
+import inspect
 import logging
-from typing import List, Optional
 
 from src.domain.model.meal import Meal, MealTranslation
 from src.domain.model.nutrition import FoodItem
-from src.domain.ports.meal_translation_repository_port import MealTranslationRepositoryPort
+from src.domain.ports.meal_translation_repository_port import (
+    MealTranslationRepositoryPort,
+)
 from src.domain.services.translation.deepl_text_translation_service import (
     DeepLTextTranslationService,
 )
@@ -40,10 +43,10 @@ class DeepLMealTranslationService:
         self,
         meal: Meal,
         dish_name: str,
-        food_items: List[FoodItem],
+        food_items: list[FoodItem],
         target_language: str,
-        instructions: Optional[list] = None,
-    ) -> Optional[MealTranslation]:
+        instructions: list | None = None,
+    ) -> MealTranslation | None:
         """
         Translate a meal to target_language.
 
@@ -62,7 +65,9 @@ class DeepLMealTranslationService:
 
         try:
             # --- Cache check ---
-            existing = self._repo.get_by_meal_and_language(meal.meal_id, target_language)
+            existing = await self._get_by_meal_and_language(
+                meal.meal_id, target_language
+            )
             if existing and existing.is_fully_cached():
                 logger.debug(
                     "Translation cache hit: meal=%s lang=%s",
@@ -71,7 +76,7 @@ class DeepLMealTranslationService:
                 return existing
 
             # --- Normalise instructions to List[dict] ---
-            normalised_steps: List[dict] = []
+            normalised_steps: list[dict] = []
             if instructions:
                 for step in instructions:
                     if isinstance(step, dict):
@@ -103,14 +108,18 @@ class DeepLMealTranslationService:
             m = len(instruction_texts)
             translated_instruction_texts = translated[1 + n:1 + n + m]
 
-            translated_instruction_list: Optional[list] = None
+            translated_instruction_list: list | None = None
             if normalised_steps:
                 translated_instruction_list = []
-                for orig_step, trans_text in zip(normalised_steps, translated_instruction_texts):
-                    translated_instruction_list.append({
-                        "instruction": trans_text,
-                        "duration_minutes": orig_step.get("duration_minutes"),
-                    })
+                for orig_step, trans_text in zip(
+                    normalised_steps, translated_instruction_texts, strict=False
+                ):
+                    translated_instruction_list.append(
+                        {
+                            "instruction": trans_text,
+                            "duration_minutes": orig_step.get("duration_minutes"),
+                        }
+                    )
 
             translation = MealTranslation(
                 meal_id=meal.meal_id,
@@ -122,7 +131,7 @@ class DeepLMealTranslationService:
                 translated_at=utc_now(),
             )
 
-            saved = self._repo.save(translation)
+            saved = await self._save(translation)
             logger.info(
                 "DeepL translation saved: meal=%s lang=%s dish='%s'",
                 meal.meal_id, target_language, translated_dish_name
@@ -135,3 +144,17 @@ class DeepLMealTranslationService:
                 meal.meal_id, target_language, exc
             )
             return None
+
+    async def _get_by_meal_and_language(
+        self, meal_id: str, language: str
+    ) -> MealTranslation | None:
+        method = self._repo.get_by_meal_and_language
+        if inspect.iscoroutinefunction(method):
+            return await method(meal_id, language)
+        return await asyncio.to_thread(method, meal_id, language)
+
+    async def _save(self, translation: MealTranslation) -> MealTranslation:
+        method = self._repo.save
+        if inspect.iscoroutinefunction(method):
+            return await method(translation)
+        return await asyncio.to_thread(method, translation)

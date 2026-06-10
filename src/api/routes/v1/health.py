@@ -2,27 +2,30 @@
 Health check endpoints for monitoring and status.
 """
 
-import asyncio
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 
 from src.api.dependencies.auth import require_monitoring_access
-from src.infra.database.config import (
-    IS_NEON_POOLER,
-    POOL_MAX_OVERFLOW,
-    TOTAL_POOL_CAPACITY,
-    engine,
+from src.infra.database.config_async import (
+    _ASYNC_POOL_OVERFLOW,
+    _ASYNC_POOL_SIZE,
+    _IS_NEON_POOLER,
+    _UVICORN_WORKERS,
+    CONNECTION_MODE,
+    async_engine,
 )
+from src.infra.database.models.notification import UserFcmTokenORM as DBToken
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 router = APIRouter(prefix="/v1", tags=["Health"])
 root_router = APIRouter(tags=["Health"])
 
 
-def _deployment_info() -> Dict[str, Optional[str]]:
+def _deployment_info() -> dict[str, str | None]:
     """Expose non-sensitive deploy identity for staging/runtime verification."""
     return {
         "environment": os.getenv("ENVIRONMENT"),
@@ -79,30 +82,35 @@ async def database_pool_status(_monitor=Depends(require_monitoring_access)):
     Inspect SQLAlchemy connection pool metrics.
     When using NullPool (Neon pooler), pool metrics are not available.
     """
-    if IS_NEON_POOLER:
+    if _IS_NEON_POOLER:
         return {
             "status": "healthy",
+            "connection_mode": CONNECTION_MODE,
             "pool_type": "NullPool",
             "note": "Neon pooler (PgBouncer) handles connection reuse",
         }
 
     try:
-        pool = engine.pool
+        if async_engine is None:
+            raise RuntimeError("Async database engine is not initialized")
+        pool = async_engine.sync_engine.pool
         checked_out = pool.checkedout()
         pool_size = pool.size()
         overflow = pool.overflow()
         available = max(pool_size - checked_out, 0)
         utilization_pct = (checked_out / pool_size) * 100 if pool_size > 0 else 0.0
+        total_capacity = (_UVICORN_WORKERS * _ASYNC_POOL_SIZE) + _ASYNC_POOL_OVERFLOW
 
         return {
             "status": "healthy",
+            "connection_mode": CONNECTION_MODE,
             "pool_type": "QueuePool",
             "pool_size": pool_size,
-            "max_overflow": POOL_MAX_OVERFLOW,
+            "max_overflow": _ASYNC_POOL_OVERFLOW,
             "checked_out": checked_out,
             "available": available,
             "overflow": overflow,
-            "total_capacity": TOTAL_POOL_CAPACITY,
+            "total_capacity": total_capacity,
             "utilization_pct": round(utilization_pct, 2),
         }
     except Exception as exc:
@@ -127,45 +135,42 @@ async def db_connection_status(_monitor=Depends(require_monitoring_access)):
         )
 
 
-async def _fetch_pg_connection_stats() -> Dict[str, Any]:
-    db_name = engine.url.database
+async def _fetch_pg_connection_stats() -> dict[str, Any]:
+    if async_engine is None:
+        raise RuntimeError("Async database engine is not initialized")
 
-    def _query() -> Dict[str, Any]:
-        with engine.connect() as connection:
-            # pg_stat_activity works through PgBouncer (it's a regular SELECT)
-            active_result = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM pg_stat_activity "
-                    "WHERE datname = :db_name AND state IS NOT NULL"
-                ),
-                {"db_name": db_name},
-            )
-            active_connections = active_result.scalar_one()
+    db_name = async_engine.url.database
+    async with async_engine.connect() as connection:
+        # pg_stat_activity works through PgBouncer (it's a regular SELECT)
+        active_result = await connection.execute(
+            text(
+                "SELECT COUNT(*) FROM pg_stat_activity "
+                "WHERE datname = :db_name AND state IS NOT NULL"
+            ),
+            {"db_name": db_name},
+        )
+        active_connections = active_result.scalar_one()
 
-            # SHOW commands may fail through PgBouncer in transaction mode
-            max_connections: Optional[int] = None
-            try:
-                max_conn_row = connection.execute(
-                    text("SHOW max_connections")
-                ).fetchone()
-                if max_conn_row:
-                    max_connections = int(max_conn_row[0])
-            except Exception:
-                pass
+        # SHOW commands may fail through PgBouncer in transaction mode
+        max_connections: int | None = None
+        try:
+            max_conn_row = (await connection.execute(text("SHOW max_connections"))).fetchone()
+            if max_conn_row:
+                max_connections = int(max_conn_row[0])
+        except Exception:
+            pass
 
-            utilization_pct: Optional[float] = None
-            if max_connections:
-                utilization_pct = (active_connections / max_connections) * 100
+        utilization_pct: float | None = None
+        if max_connections:
+            utilization_pct = (active_connections / max_connections) * 100
 
-            return {
-                "active_connections": active_connections,
-                "max_connections": max_connections,
-                "utilization_pct": (
-                    round(utilization_pct, 2) if utilization_pct is not None else None
-                ),
-            }
-
-    return await asyncio.to_thread(_query)
+        return {
+            "active_connections": active_connections,
+            "max_connections": max_connections,
+            "utilization_pct": (
+                round(utilization_pct, 2) if utilization_pct is not None else None
+            ),
+        }
 
 
 @router.get("/health/notifications")
@@ -176,9 +181,6 @@ async def notification_health_check(_monitor=Depends(require_monitoring_access))
     """
     try:
         from src.infra.services.firebase_service import FirebaseService
-        from src.infra.database.config import SessionLocal
-        from src.infra.database.models.notification import UserFcmTokenORM as DBToken
-        from sqlalchemy import func
 
         firebase_service = FirebaseService()
 
@@ -207,34 +209,35 @@ async def notification_health_check(_monitor=Depends(require_monitoring_access))
             }
 
         # Get token stats from database
-        db = SessionLocal()
-        try:
-            total_tokens = db.query(func.count(DBToken.id)).scalar()
+        async with AsyncUnitOfWork() as uow:
+            total_tokens = (
+                await uow.session.execute(select(func.count(DBToken.id)))
+            ).scalar_one()
             active_tokens = (
-                db.query(func.count(DBToken.id)).filter(DBToken.is_active).scalar()
-            )
+                await uow.session.execute(
+                    select(func.count(DBToken.id)).where(DBToken.is_active.is_(True))
+                )
+            ).scalar_one()
             inactive_tokens = total_tokens - active_tokens
 
-            health_status["components"]["fcm_tokens"] = {
-                "status": "healthy",
-                "total": total_tokens,
-                "active": active_tokens,
-                "inactive": inactive_tokens,
-                "inactive_rate": (
-                    round(inactive_tokens / total_tokens * 100, 2)
-                    if total_tokens > 0
-                    else 0
-                ),
-            }
+        health_status["components"]["fcm_tokens"] = {
+            "status": "healthy",
+            "total": total_tokens,
+            "active": active_tokens,
+            "inactive": inactive_tokens,
+            "inactive_rate": (
+                round(inactive_tokens / total_tokens * 100, 2)
+                if total_tokens > 0
+                else 0
+            ),
+        }
 
-            # Warn if high inactive rate
-            if total_tokens > 0 and (inactive_tokens / total_tokens) > 0.5:
-                health_status["status"] = "warning"
-                health_status["components"]["fcm_tokens"][
-                    "message"
-                ] = "High inactive token rate"
-        finally:
-            db.close()
+        # Warn if high inactive rate
+        if total_tokens > 0 and (inactive_tokens / total_tokens) > 0.5:
+            health_status["status"] = "warning"
+            health_status["components"]["fcm_tokens"][
+                "message"
+            ] = "High inactive token rate"
 
         return JSONResponse(
             status_code=200 if health_status["status"] == "healthy" else 503,

@@ -1,5 +1,5 @@
 from datetime import UTC, date, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -28,18 +28,18 @@ async def test_send_loop_marks_notifications_sent():
 
     svc = CronNotificationDispatchService.__new__(CronNotificationDispatchService)
     svc._firebase = mock_firebase
+    svc._recover_stale_processing = AsyncMock()
+    async def _claim_due(_now):
+        mock_notif.status = "processing"
+        return [mock_notif]
+
+    svc._claim_due_notifications = AsyncMock(side_effect=_claim_due)
+    svc._mark_notifications = AsyncMock()
 
     with patch(
-        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
-    ) as mock_qb, patch(
-        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
-    ) as mock_uow, patch(
         "src.infra.services.cron_notification_dispatch_service._fetch_calories_consumed_batch",
-        return_value={"user-1": 400},
+        AsyncMock(return_value={"user-1": 400}),
     ):
-        mock_qb.find_due_notifications.return_value = [mock_notif]
-        mock_uow.return_value.__enter__.return_value.session = MagicMock()
-
         now = datetime(2026, 4, 22, 5, 0, 0, tzinfo=UTC)
         await svc._send_due_notifications(now)
 
@@ -84,17 +84,11 @@ async def test_wholesale_fcm_failure_requeues_instead_of_marking_sent():
 
     svc = CronNotificationDispatchService.__new__(CronNotificationDispatchService)
     svc._firebase = mock_firebase
-    svc._mark_notifications = MagicMock()
+    svc._recover_stale_processing = AsyncMock()
+    svc._claim_due_notifications = AsyncMock(return_value=[mock_notif])
+    svc._mark_notifications = AsyncMock()
 
-    with patch(
-        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
-    ) as mock_qb, patch(
-        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
-    ) as mock_uow:
-        mock_qb.find_due_notifications.return_value = [mock_notif]
-        mock_uow.return_value.__enter__.return_value.session = MagicMock()
-
-        await svc._send_due_notifications(datetime(2026, 5, 17, tzinfo=UTC))
+    await svc._send_due_notifications(datetime(2026, 5, 17, tzinfo=UTC))
 
     mock_firebase.send_multicast.assert_called_once()
     sent_ids, failed_ids, retry_ids = svc._mark_notifications.call_args.args
@@ -239,8 +233,6 @@ def _make_trial_notif(notif_type: str = "trial_expiry_2d"):
 @pytest.mark.asyncio
 async def test_send_due_normalizes_trial_fcm_type():
     """trial_expiry_2d in DB → 'trial_expiry' in FCM data.type."""
-    import asyncio as _asyncio
-
     from src.infra.services.cron_notification_dispatch_service import (
         CronNotificationDispatchService,
     )
@@ -250,19 +242,13 @@ async def test_send_due_normalizes_trial_fcm_type():
     svc._firebase.send_multicast = MagicMock(
         return_value={"success": True, "failed_tokens": []}
     )
+    svc._recover_stale_processing = AsyncMock()
+    svc._claim_due_notifications = AsyncMock(
+        return_value=[_make_trial_notif("trial_expiry_2d")]
+    )
+    svc._mark_notifications = AsyncMock()
 
-    async def _passthrough(fn, *a, **kw):
-        return fn(*a, **kw)
-
-    with patch(
-        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
-    ) as Q, patch(
-        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
-    ), patch.object(
-        _asyncio, "to_thread", new=_passthrough
-    ):
-        Q.find_due_notifications.return_value = [_make_trial_notif("trial_expiry_2d")]
-        await svc._send_due_notifications(datetime(2026, 5, 17, tzinfo=UTC))
+    await svc._send_due_notifications(datetime(2026, 5, 17, tzinfo=UTC))
 
     call_kwargs = svc._firebase.send_multicast.call_args.kwargs
     assert call_kwargs["notification_type"] == "trial_expiry"
@@ -271,8 +257,6 @@ async def test_send_due_normalizes_trial_fcm_type():
 @pytest.mark.asyncio
 async def test_send_due_trial_skips_redis_lookup(caplog):
     """Trial rows must NOT log Redis cache-miss WARNING."""
-    import asyncio as _asyncio
-
     from src.infra.services.cron_notification_dispatch_service import (
         CronNotificationDispatchService,
     )
@@ -282,22 +266,14 @@ async def test_send_due_trial_skips_redis_lookup(caplog):
     svc._firebase.send_multicast = MagicMock(
         return_value={"success": True, "failed_tokens": []}
     )
+    svc._recover_stale_processing = AsyncMock()
+    svc._claim_due_notifications = AsyncMock(
+        return_value=[_make_trial_notif("trial_expiry_1d")]
+    )
+    svc._mark_notifications = AsyncMock()
 
-    async def _passthrough(fn, *a, **kw):
-        return fn(*a, **kw)
-
-    with patch(
-        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
-    ) as Q, patch(
-        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
-    ), patch.object(
-        _asyncio, "to_thread", new=_passthrough
-    ):
-        Q.find_due_notifications.return_value = [_make_trial_notif("trial_expiry_1d")]
-        with caplog.at_level("WARNING"):
-            await svc._send_due_notifications(
-                datetime(2026, 5, 17, tzinfo=UTC)
-            )
+    with caplog.at_level("WARNING"):
+        await svc._send_due_notifications(datetime(2026, 5, 17, tzinfo=UTC))
 
     assert "Redis cache miss" not in caplog.text
 
@@ -363,18 +339,15 @@ async def test_hydration_reminder_skipped_when_above_threshold():
 
     svc = CronNotificationDispatchService.__new__(CronNotificationDispatchService)
     svc._firebase = mock_firebase
+    svc._recover_stale_processing = AsyncMock()
+    svc._claim_due_notifications = AsyncMock(return_value=[mock_notif])
+    svc._mark_notifications = AsyncMock()
 
     # consumed_ml=1500, goal_ml=2000 → 75% → above 50% afternoon threshold → skip FCM
     with patch(
-        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
-    ) as mock_qb, patch(
-        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
-    ) as mock_uow, patch(
         "src.infra.services.cron_notification_dispatch_service._fetch_hydration_data_batch",
-        return_value={"user-h1": (1500, 2000)},
+        AsyncMock(return_value={"user-h1": (1500, 2000)}),
     ):
-        mock_qb.find_due_notifications.return_value = [mock_notif]
-        mock_uow.return_value.__enter__.return_value.session = MagicMock()
         now = datetime(2026, 5, 23, 6, 0, 0, tzinfo=UTC)
         await svc._send_due_notifications(now)
 
@@ -409,18 +382,15 @@ async def test_hydration_reminder_sent_when_below_threshold():
 
     svc = CronNotificationDispatchService.__new__(CronNotificationDispatchService)
     svc._firebase = mock_firebase
+    svc._recover_stale_processing = AsyncMock()
+    svc._claim_due_notifications = AsyncMock(return_value=[mock_notif])
+    svc._mark_notifications = AsyncMock()
 
     # consumed_ml=1200, goal_ml=2000 → 60% → below 80% evening threshold → send
     with patch(
-        "src.infra.services.cron_notification_dispatch_service.ReminderQueryBuilder"
-    ) as mock_qb, patch(
-        "src.infra.services.cron_notification_dispatch_service.UnitOfWork"
-    ) as mock_uow, patch(
         "src.infra.services.cron_notification_dispatch_service._fetch_hydration_data_batch",
-        return_value={"user-h2": (1200, 2000)},
+        AsyncMock(return_value={"user-h2": (1200, 2000)}),
     ):
-        mock_qb.find_due_notifications.return_value = [mock_notif]
-        mock_uow.return_value.__enter__.return_value.session = MagicMock()
         now = datetime(2026, 5, 23, 11, 0, 0, tzinfo=UTC)
         await svc._send_due_notifications(now)
 

@@ -11,7 +11,7 @@ from sqlalchemy import (
     String,
 )
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import BaseMixin
 
 
