@@ -12,9 +12,10 @@ Safe to run multiple times — it skips setup if tables already exist.
 Usage:
     python scripts/init_postgres_db.py
 
-Environment:
-    DATABASE_URL  — Neon direct connection string (not pooled)
-                    e.g. postgresql://user:pass@ep-xxx.neon.tech/dbname?sslmode=require
+Environment (highest to lowest priority):
+    MIGRATION_DATABASE_URL  — preferred; direct Neon endpoint for migrations
+    DATABASE_URL_DIRECT     — direct Neon endpoint (migration alias)
+    DATABASE_URL            — fallback if neither above is set
 """
 
 import os
@@ -26,18 +27,27 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import inspect, text
+from sqlalchemy import create_engine, inspect, text
 
 # Override DATABASE_URL before importing the engine so it picks up the direct
 # connection string (MIGRATION_DATABASE_URL) if provided.
-migration_url = os.getenv("MIGRATION_DATABASE_URL") or os.getenv("DATABASE_URL")
+migration_url = os.getenv("MIGRATION_DATABASE_URL") or os.getenv("DATABASE_URL_DIRECT") or os.getenv("DATABASE_URL")
 if not migration_url:
-    print("ERROR: DATABASE_URL is not set.")
+    print("ERROR: Set MIGRATION_DATABASE_URL, DATABASE_URL_DIRECT, or DATABASE_URL.")
     sys.exit(1)
 
-os.environ["DATABASE_URL"] = migration_url
+# Normalise to psycopg2 driver for the sync engine used by this script.
+_sync_url = migration_url
+if _sync_url.startswith("postgres://"):
+    _sync_url = _sync_url.replace("postgres://", "postgresql://", 1)
+if "+asyncpg" in _sync_url:
+    _sync_url = _sync_url.replace("+asyncpg", "", 1)
+if "+psycopg2" not in _sync_url and _sync_url.startswith("postgresql://"):
+    _sync_url = _sync_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 
-from src.infra.database.config import engine, Base  # noqa: E402 — must come after env override
+engine = create_engine(_sync_url, pool_pre_ping=True)
+
+from src.infra.database.base import Base  # noqa: E402
 
 # Import every model so they register themselves on Base.metadata
 import src.infra.database.models  # noqa: F401, E402
