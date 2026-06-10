@@ -1,7 +1,6 @@
 """Handler for updating custom macro targets."""
 
 import logging
-from typing import Optional
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_custom_macros_command import UpdateCustomMacrosCommand
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, None]):
     """Set or clear custom macro overrides on user profile."""
 
-    def __init__(self, cache_invalidation: Optional[CacheInvalidationService] = None):
+    def __init__(self, cache_invalidation: CacheInvalidationService | None = None):
         self.cache_invalidation = cache_invalidation
 
     async def handle(self, command: UpdateCustomMacrosCommand) -> None:
@@ -48,7 +47,6 @@ class UpdateCustomMacrosCommandHandler(EventHandler[UpdateCustomMacrosCommand, N
             profile.custom_protein_g = command.protein_g
             profile.custom_carbs_g = command.carbs_g
             profile.custom_fat_g = command.fat_g
-            await uow.session.commit()
 
             action = "cleared" if non_null_count == 0 else "set"
             logger.info(f"Custom macros {action} for user {command.user_id}")

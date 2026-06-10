@@ -19,8 +19,9 @@ def service(mock_ai_manager):
         return MealGenerationService()
 
 
-def test_generate_meal_plan_uses_ai_manager(service, mock_ai_manager):
-    result = service.generate_meal_plan(
+@pytest.mark.asyncio
+async def test_generate_meal_plan_uses_ai_manager(service, mock_ai_manager):
+    result = await service.generate_meal_plan_async(
         prompt="test prompt",
         system_message="test system",
         model_purpose="meal_names",
@@ -29,9 +30,10 @@ def test_generate_meal_plan_uses_ai_manager(service, mock_ai_manager):
     assert result == {"meal": "test"}
 
 
-def test_model_purpose_maps_to_enum(service, mock_ai_manager):
+@pytest.mark.asyncio
+async def test_model_purpose_maps_to_enum(service, mock_ai_manager):
     """recipe purpose maps to RECIPE enum (collapsed from PRIMARY/SECONDARY)."""
-    service.generate_meal_plan(
+    await service.generate_meal_plan_async(
         prompt="test",
         system_message="system",
         model_purpose="recipe",
@@ -41,8 +43,9 @@ def test_model_purpose_maps_to_enum(service, mock_ai_manager):
     assert call_kwargs["purpose"].value == "recipe"
 
 
-def test_discovery_model_purpose_maps_to_enum(service, mock_ai_manager):
-    service.generate_meal_plan(
+@pytest.mark.asyncio
+async def test_discovery_model_purpose_maps_to_enum(service, mock_ai_manager):
+    await service.generate_meal_plan_async(
         prompt="test",
         system_message="system",
         model_purpose="discovery",

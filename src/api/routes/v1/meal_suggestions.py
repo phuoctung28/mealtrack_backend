@@ -99,10 +99,7 @@ async def discover_meals(
 
         # --- meal-image-cache integration (always enabled) ---
         from src.api.dependencies.food_image import get_food_image_service
-        from src.api.dependencies.meal_image_cache import (
-            get_meal_image_cache_service,
-            get_pending_queue,
-        )
+        from src.api.dependencies.meal_image_cache import get_meal_image_cache_service
         from src.domain.model.meal_image_cache import PendingItem
         from src.domain.services.meal_image_cache.name_canonicalizer import (
             slug as _slug,
@@ -110,7 +107,6 @@ async def discover_meals(
 
         image_service = get_food_image_service()
         cache_svc = await get_meal_image_cache_service(session=db)
-        pending_repo = await get_pending_queue(session=db)
         english_names = [m["english_name"] for m in meals]
         cache_hits = await cache_svc.lookup_batch(english_names)
 
@@ -160,9 +156,18 @@ async def discover_meals(
                 )
             )
 
-        if pending_repo and misses:
-            await pending_repo.enqueue_many(misses)
-            await db.commit()
+        if misses:
+            try:
+                from src.infra.database.uow_async import AsyncUnitOfWork
+                from src.infra.repositories.pending_meal_image_repository_async import (
+                    AsyncPendingMealImageRepository,
+                )
+
+                async with AsyncUnitOfWork() as uow:
+                    await AsyncPendingMealImageRepository(uow.session).enqueue_many(misses)
+                # UoW __aexit__ commits on clean exit
+            except Exception as _enqueue_err:
+                logger.warning("Pending image queue enqueue failed (non-fatal): %s", _enqueue_err)
 
         images = images_list
         # --- end integration ---
@@ -344,23 +349,16 @@ async def save_meal_suggestion(
 
         meal_id = await event_bus.send(command)
 
-        # Unsplash API compliance: trigger download event (fire-and-forget)
+        # Unsplash API compliance: trigger download event (fire-and-forget, managed)
         if request.unsplash_download_location:
             from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
+            from src.infra.event_bus.task_manager_singleton import get_task_manager
 
-            task = asyncio.create_task(
+            get_task_manager().spawn(
+                "unsplash_download",
                 UnsplashImageAdapter.trigger_download(
                     request.unsplash_download_location
-                )
-            )
-            task.add_done_callback(
-                lambda t: (
-                    logger.warning(
-                        "Unsplash download trigger failed: %s", t.exception()
-                    )
-                    if t.exception()
-                    else None
-                )
+                ),
             )
 
         return SaveMealSuggestionResponse(
