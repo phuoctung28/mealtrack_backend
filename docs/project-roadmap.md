@@ -16,6 +16,16 @@
 - [x] Production migration runner is Alembic-only and no longer creates/stamps schema from `Base.metadata`.
 - [x] Local Postgres upgrade verified to Alembic head `20260609000006`.
 
+### June 2026: Neon Direct Pool + Async Library Alignment
+- [x] Explicit DB connection mode resolver: `direct_pool` uses `AsyncAdaptedQueuePool` against direct Neon URL; `neon_pooler` uses `NullPool` with PgBouncer-safe asyncpg settings.
+- [x] `APP_DATABASE_URL` is the app runtime URL; `DATABASE_URL_DIRECT` is migration/admin only — no silent priority drift.
+- [x] `FoodDataService` converted from `requests` to `httpx.AsyncClient`.
+- [x] Cloudinary blocking SDK calls wrapped with `asyncio.to_thread` off-loop boundary.
+- [x] Static guard blocks uncontained `requests` imports under `src/infra/adapters`.
+- [x] Health endpoint (`/v1/health/db-pool`) reports connection mode, pool type, and capacity.
+- [x] `.env.example`, `docs/database-guide.md`, and `docs/external-services.md` updated to match runtime contract.
+- [x] Completed 2026-06-10.
+
 ### June 2026: Async Repository Consolidation
 - [x] Runtime database access consolidated to async SQLAlchemy: FastAPI dependencies, cron jobs, handlers, repositories, and UoW use `AsyncSession`.
 - [x] Deleted sync `UnitOfWork`, sync database config, and legacy sync repositories after replacing remaining test consumers with explicit test-only facades.
