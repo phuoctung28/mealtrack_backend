@@ -10,7 +10,6 @@ from src.app.queries.referral.validate_referral_code_query import (
 from src.infra.config.settings import settings
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.referral_repository import ReferralRepository
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,7 @@ logger = logging.getLogger(__name__)
 class ValidateReferralCodeQueryHandler:
     async def handle(self, query: ValidateReferralCodeQuery) -> ValidateCodeResult:
         async with AsyncUnitOfWork() as uow:
-            repo = ReferralRepository(uow.session)
+            repo = uow.referrals
 
             code = await repo.get_code_by_code(query.code)
             if not code:

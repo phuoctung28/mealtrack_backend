@@ -1,7 +1,7 @@
 # Backend Database Guide
 
-**Last Updated:** June 9, 2026
-**Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 (psycopg2 sync / asyncpg async)
+**Last Updated:** June 10, 2026
+**Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg)
 **Migrations:** Alembic with auto-migration on startup
 **Tables:** 30+ (core tables + normalized profile/hydration/recipe/food/referral tables)
 
@@ -25,14 +25,23 @@ Non-negotiable database rules:
 ## Connection Configuration
 
 ```python
-# src/infra/database/config.py
-DATABASE_URL = "postgresql+psycopg2://user:pass@host/db"
+# src/infra/database/config_async.py
+DATABASE_URL = "postgresql+asyncpg://user:pass@host/db"
 
-pool_size = 20       # Base connections
-max_overflow = 10    # Additional under load
-pool_recycle = 3600  # Recycle hourly
-pool_pre_ping = True # Verify before use
+async_engine = create_async_engine(
+    DATABASE_URL,
+    pool_size=20,       # Base connections
+    max_overflow=10,    # Additional under load
+    pool_recycle=3600,  # Recycle hourly
+    pool_pre_ping=True, # Verify before use
+)
+
+AsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
 ```
+
+Runtime code uses `get_async_db` and `AsyncUnitOfWork` for request and handler
+transaction boundaries. Alembic uses its migration-specific engine utilities
+instead of the request/runtime session factory.
 
 ---
 
@@ -147,11 +156,13 @@ Auto-migrate runs on startup with retry logic. Use timestamp naming for new migr
 
 ## Repository Pattern
 
-**Smart Sync:** Update existing or insert new record, with diff-based updates for nested entities.
+**Smart Async:** Update existing or insert new record, with diff-based updates for nested entities.
 
 **Eager Loading:** Pre-defined `joinedload` options per repository — avoids N+1 queries consistently.
 
-**Session Scope:** Request-scoped sessions via FastAPI dependency injection. One session per request, never shared across requests.
+**Session Scope:** Async sessions are scoped to FastAPI dependencies, background
+handler UoW scopes, or explicit test fixtures. A session is never shared across
+concurrent requests.
 
 ---
 

@@ -3,13 +3,14 @@ import logging
 
 from sqlalchemy import select
 
-from src.app.queries.codes.validate_code_query import CodeValidationError, ValidateCodeQuery
+from src.app.queries.codes.validate_code_query import (
+    CodeValidationError,
+    ValidateCodeQuery,
+)
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.config.settings import settings
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.promo_code_repository import PromoCodeRepository
-from src.infra.repositories.referral_repository import ReferralRepository
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +18,8 @@ logger = logging.getLogger(__name__)
 class ValidateCodeQueryHandler:
     async def handle(self, query: ValidateCodeQuery) -> dict:
         async with AsyncUnitOfWork() as uow:
-            promo_repo = PromoCodeRepository(uow.session)
-            referral_repo = ReferralRepository(uow.session)
+            promo_repo = uow.promo_codes
+            referral_repo = uow.referrals
 
             # ── Promo code lookup (wins on namespace collision) ──────────────
             promo = await promo_repo.get_by_code(query.code)

@@ -2,18 +2,17 @@
 
 import logging
 import uuid
-from datetime import date
-from typing import Dict, Any, Optional
+from typing import Any
 
 from src.api.exceptions import ValidationException
 from src.app.commands.cheat_day import MarkCheatDayCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.cheat_day import CheatDay
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.utils.timezone_utils import (
-    utc_now,
     resolve_user_timezone_async,
     user_today,
+    utc_now,
 )
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -21,12 +20,12 @@ logger = logging.getLogger(__name__)
 
 
 @handles(MarkCheatDayCommand)
-class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, Dict[str, Any]]):
+class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, dict[str, Any]]):
 
-    def __init__(self, uow: Optional[UnitOfWorkPort] = None):
+    def __init__(self, uow: AsyncUnitOfWorkPort | None = None):
         self.uow = uow
 
-    async def handle(self, command: MarkCheatDayCommand) -> Dict[str, Any]:
+    async def handle(self, command: MarkCheatDayCommand) -> dict[str, Any]:
         uow = self.uow or AsyncUnitOfWork()
         async with uow:
             try:

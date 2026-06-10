@@ -7,6 +7,7 @@ warms automatically over time.
 """
 
 import asyncio
+import inspect
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -135,20 +136,25 @@ class IngredientNutritionResolver:
         external_id: Optional[str] = food.get("food_id")
 
         try:
-            # Repo uses a sync Session; offload so the event loop isn't blocked.
-            await asyncio.to_thread(
-                self._repo.upsert_by_normalized_name,
-                name=name,
-                name_normalized=name_normalized,
-                protein_100g=macros.protein,
-                carbs_100g=macros.carbs,
-                fat_100g=macros.fat,
-                fiber_100g=macros.fiber,
-                sugar_100g=macros.sugar,
-                source="fatsecret",
-                is_verified=False,
-                external_id=external_id,
-            )
+            kwargs = {
+                "name": name,
+                "name_normalized": name_normalized,
+                "protein_100g": macros.protein,
+                "carbs_100g": macros.carbs,
+                "fat_100g": macros.fat,
+                "fiber_100g": macros.fiber,
+                "sugar_100g": macros.sugar,
+                "source": "fatsecret",
+                "is_verified": False,
+                "external_id": external_id,
+            }
+            if inspect.iscoroutinefunction(self._repo.upsert_by_normalized_name):
+                await self._repo.upsert_by_normalized_name(**kwargs)
+            else:
+                await asyncio.to_thread(
+                    self._repo.upsert_by_normalized_name,
+                    **kwargs,
+                )
         except Exception as exc:
             # Non-fatal: cache warm-up failure must not break the resolver
             logger.warning("Failed to upsert food_reference for '%s': %s", name, exc)

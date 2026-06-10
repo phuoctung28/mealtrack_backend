@@ -2,48 +2,602 @@
 Global pytest configuration and fixtures.
 """
 
-from datetime import datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Generator
 
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import and_, create_engine, func, or_, text, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, joinedload, noload, selectinload, sessionmaker
 
-from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition, FoodItem
+from src.domain.model import FoodItem, Macros, Meal, MealImage, MealStatus, Nutrition
+from src.domain.model.meal_projection import MealProjection
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
-from src.infra.database.config import Base
+from src.domain.utils.timezone_utils import get_zone_info, utc_now
+from src.infra.database.base import Base
 
 # Import all models to ensure they're registered with Base metadata
+from src.infra.database.models.enums import MealStatusEnum
+from src.infra.database.models.meal.food_item_translation_model import (
+    FoodItemTranslationORM,
+)
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.meal.meal_image import MealImageORM
-from src.infra.mappers.meal_mapper import meal_domain_to_orm, meal_image_domain_to_orm
+from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
+from src.infra.database.models.nutrition.food_item import FoodItemORM
+from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.user import User
-from src.infra.event_bus import PyMediatorEventBus, EventBus
-from src.infra.repositories.meal_repository import MealRepository
+from src.infra.event_bus import EventBus, PyMediatorEventBus
+from src.infra.mappers import MealStatusMapper
+from src.infra.mappers.meal_mapper import (
+    _instruction_steps_to_orm,
+    food_item_domain_to_orm,
+    meal_domain_to_orm,
+    meal_image_domain_to_orm,
+    meal_orm_to_domain,
+    nutrition_domain_to_orm,
+)
+from src.infra.mappers.user_mapper import (
+    UserMapper,
+    UserProfileMapper,
+    build_profile_preference_entries,
+)
 from tests.fixtures.database.test_config import (
-    get_test_database_url,
     create_test_engine,
+    get_test_database_url,
 )
 from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIService
 from tests.fixtures.mock_image_store import MockImageStore
 
+TEST_MEAL_PROJECTION_OPTS: dict = {
+    MealProjection.MACROS_ONLY: (
+        noload(MealORM.image),
+        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+        selectinload(MealORM.instruction_steps),
+    ),
+    MealProjection.FULL: (
+        joinedload(MealORM.image),
+        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+        selectinload(MealORM.instruction_steps),
+    ),
+    MealProjection.FULL_WITH_TRANSLATIONS: (
+        joinedload(MealORM.image),
+        selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+        selectinload(MealORM.instruction_steps),
+        joinedload(MealORM.translations),
+    ),
+}
 
-class AsyncSyncRepoWrapper:
-    """Wraps a sync repository so every method is also awaitable."""
 
-    def __init__(self, sync_repo):
-        self._sync = sync_repo
+def _test_domain_hydratable_active_meal_filter():
+    return and_(
+        MealORM.status != MealStatusEnum.INACTIVE,
+        or_(
+            MealORM.status != MealStatusEnum.READY,
+            and_(MealORM.ready_at.is_not(None), MealORM.nutrition.has()),
+        ),
+    )
 
-    def __getattr__(self, name):
-        attr = getattr(self._sync, name)
-        if callable(attr):
 
-            async def _async_wrapper(*args, **kwargs):
-                return attr(*args, **kwargs)
+class TestMealRepository:
+    """Sync-session repository facade used only by legacy SQLite tests."""
 
-            return _async_wrapper
-        return attr
+    def __init__(self, session: Session):
+        self.db = session
+
+    def save(self, meal: Meal) -> Meal:
+        existing_meal = (
+            self.db.query(MealORM)
+            .options(
+                selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+                selectinload(MealORM.instruction_steps),
+            )
+            .filter(MealORM.meal_id == meal.meal_id)
+            .first()
+        )
+        if existing_meal:
+            existing_meal.status = MealStatusMapper.to_db(meal.status)
+            existing_meal.dish_name = meal.dish_name
+            existing_meal.meal_type = meal.meal_type
+            existing_meal.ready_at = meal.ready_at
+            existing_meal.error_message = meal.error_message
+            existing_meal.raw_ai_response = meal.raw_gpt_json
+            existing_meal.updated_at = meal.updated_at or utc_now()
+            existing_meal.last_edited_at = meal.last_edited_at
+            existing_meal.edit_count = meal.edit_count
+            existing_meal.is_manually_edited = meal.is_manually_edited
+            existing_meal.emoji = meal.emoji
+            existing_meal.description = meal.description
+            existing_meal.instructions = meal.instructions
+            existing_meal.prep_time_min = meal.prep_time_min
+            existing_meal.cook_time_min = meal.cook_time_min
+            existing_meal.cuisine_type = meal.cuisine_type
+            existing_meal.origin_country = meal.origin_country
+            existing_meal.instruction_steps = _instruction_steps_to_orm(
+                meal.instructions
+            )
+            if meal.image and meal.image.url:
+                existing_image = (
+                    self.db.query(MealImageORM)
+                    .filter(MealImageORM.image_id == meal.image.image_id)
+                    .first()
+                )
+                if existing_image and existing_image.url != meal.image.url:
+                    existing_image.url = meal.image.url
+            if meal.nutrition:
+                if existing_meal.nutrition is None:
+                    existing_meal.nutrition = nutrition_domain_to_orm(
+                        meal.nutrition, meal_id=meal.meal_id
+                    )
+                else:
+                    self._update_nutrition(existing_meal.nutrition, meal.nutrition)
+            self.db.commit()
+        else:
+            db_meal = meal_domain_to_orm(meal)
+            if meal.image:
+                existing_image = (
+                    self.db.query(MealImageORM)
+                    .filter(MealImageORM.image_id == meal.image.image_id)
+                    .first()
+                )
+                if not existing_image:
+                    self.db.add(meal_image_domain_to_orm(meal.image))
+                    self.db.flush()
+                db_meal.image_id = str(meal.image.image_id)
+            self.db.add(db_meal)
+            self.db.commit()
+
+        persisted = (
+            self.db.query(MealORM)
+            .options(
+                selectinload(MealORM.nutrition).selectinload(NutritionORM.food_items),
+                selectinload(MealORM.instruction_steps),
+            )
+            .filter(MealORM.meal_id == meal.meal_id)
+            .first()
+        )
+        return meal_orm_to_domain(persisted)
+
+    def find_by_id(
+        self, meal_id: str, projection: MealProjection = MealProjection.FULL
+    ) -> Meal | None:
+        entity = (
+            self.db.query(MealORM)
+            .options(*TEST_MEAL_PROJECTION_OPTS[projection])
+            .filter(MealORM.meal_id == meal_id)
+            .first()
+        )
+        return meal_orm_to_domain(entity) if entity else None
+
+    def delete(self, meal_id: str) -> None:
+        nutrition = (
+            self.db.query(NutritionORM).filter(NutritionORM.meal_id == meal_id).first()
+        )
+        if nutrition:
+            self.db.execute(
+                update(FoodItemORM)
+                .where(FoodItemORM.nutrition_id == nutrition.id)
+                .values(is_deleted=True, nutrition_id=None)
+            )
+
+        meal_translation_ids = [
+            mt.id
+            for mt in self.db.query(MealTranslationORM.id)
+            .filter(MealTranslationORM.meal_id == meal_id)
+            .all()
+        ]
+        self.db.execute(
+            update(MealTranslationORM)
+            .where(MealTranslationORM.meal_id == meal_id)
+            .values(is_deleted=True, meal_id=None)
+        )
+        if meal_translation_ids:
+            self.db.execute(
+                update(FoodItemTranslationORM)
+                .where(
+                    FoodItemTranslationORM.meal_translation_id.in_(meal_translation_ids)
+                )
+                .values(is_deleted=True)
+            )
+        self.db.execute(
+            NutritionORM.__table__.delete().where(NutritionORM.meal_id == meal_id)
+        )
+        self.db.execute(MealORM.__table__.delete().where(MealORM.meal_id == meal_id))
+
+    def find_by_date(
+        self,
+        date_obj: date,
+        user_id: str = None,
+        limit: int = 50,
+        user_timezone: str | None = None,
+        projection: MealProjection = MealProjection.FULL,
+    ) -> list[Meal]:
+        tz = get_zone_info(user_timezone) if user_timezone else UTC
+        start_dt = datetime.combine(
+            date_obj, datetime.min.time(), tzinfo=tz
+        ).astimezone(UTC)
+        end_dt = start_dt + timedelta(days=1)
+        query = (
+            self.db.query(MealORM)
+            .options(*TEST_MEAL_PROJECTION_OPTS[projection])
+            .filter(MealORM.created_at >= start_dt)
+            .filter(MealORM.created_at < end_dt)
+        )
+        if user_id:
+            query = query.filter(MealORM.user_id == user_id)
+        rows = (
+            query.filter(_test_domain_hydratable_active_meal_filter())
+            .order_by(MealORM.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [meal_orm_to_domain(m) for m in rows]
+
+    def find_by_date_range(
+        self,
+        user_id: str,
+        start_date: date,
+        end_date: date,
+        limit: int = 500,
+        user_timezone: str | None = None,
+        projection: MealProjection = MealProjection.FULL,
+    ) -> list[Meal]:
+        tz = get_zone_info(user_timezone) if user_timezone else UTC
+        start_dt = datetime.combine(
+            start_date, datetime.min.time(), tzinfo=tz
+        ).astimezone(UTC)
+        end_dt = (
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
+            + timedelta(days=1)
+        ).astimezone(UTC)
+        rows = (
+            self.db.query(MealORM)
+            .options(*TEST_MEAL_PROJECTION_OPTS[projection])
+            .filter(MealORM.created_at >= start_dt)
+            .filter(MealORM.created_at < end_dt)
+            .filter(MealORM.user_id == user_id)
+            .filter(_test_domain_hydratable_active_meal_filter())
+            .order_by(MealORM.created_at.asc())
+            .limit(limit)
+            .all()
+        )
+        return [meal_orm_to_domain(m) for m in rows]
+
+    def sum_hydration_ml_for_date(
+        self, date_obj: date, user_id: str, user_timezone: str | None = None
+    ) -> int:
+        tz = get_zone_info(user_timezone) if user_timezone else UTC
+        start_dt = datetime.combine(
+            date_obj, datetime.min.time(), tzinfo=tz
+        ).astimezone(UTC)
+        end_dt = start_dt + timedelta(days=1)
+        return (
+            self.db.query(func.coalesce(func.sum(MealORM.quantity), 0))
+            .filter(
+                MealORM.user_id == user_id,
+                MealORM.meal_type == "hydration",
+                MealORM.created_at >= start_dt,
+                MealORM.created_at < end_dt,
+                _test_domain_hydratable_active_meal_filter(),
+            )
+            .scalar()
+        )
+
+    def sum_hydration_ml_by_date_range(
+        self,
+        user_id: str,
+        start_date: date,
+        end_date: date,
+        user_timezone: str | None = None,
+    ) -> dict[date, int]:
+        tz = get_zone_info(user_timezone) if user_timezone else UTC
+        start_dt = datetime.combine(
+            start_date, datetime.min.time(), tzinfo=tz
+        ).astimezone(UTC)
+        end_dt = (
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
+            + timedelta(days=1)
+        ).astimezone(UTC)
+        date_expr = func.date(MealORM.created_at)
+        rows = (
+            self.db.query(date_expr, func.coalesce(func.sum(MealORM.quantity), 0))
+            .filter(
+                MealORM.user_id == user_id,
+                MealORM.meal_type == "hydration",
+                MealORM.created_at >= start_dt,
+                MealORM.created_at < end_dt,
+                _test_domain_hydratable_active_meal_filter(),
+            )
+            .group_by(date_expr)
+            .all()
+        )
+        out: dict[date, int] = {}
+        for day_val, total in rows:
+            if isinstance(day_val, str):
+                day_val = date.fromisoformat(day_val)
+            out[day_val] = int(total)
+        return out
+
+    def get_daily_meal_counts(
+        self,
+        user_id: str,
+        start_date: date,
+        end_date: date,
+        user_timezone: str | None = None,
+    ) -> dict[date, int]:
+        tz = get_zone_info(user_timezone) if user_timezone else UTC
+        start_dt = datetime.combine(
+            start_date, datetime.min.time(), tzinfo=tz
+        ).astimezone(UTC)
+        end_dt = (
+            datetime.combine(end_date, datetime.min.time(), tzinfo=tz)
+            + timedelta(days=1)
+        ).astimezone(UTC)
+        date_expr = func.date(MealORM.created_at)
+        rows = (
+            self.db.query(date_expr, func.count())
+            .filter(
+                MealORM.user_id == user_id,
+                MealORM.created_at >= start_dt,
+                MealORM.created_at < end_dt,
+                _test_domain_hydratable_active_meal_filter(),
+            )
+            .group_by(date_expr)
+            .all()
+        )
+        out: dict[date, int] = {}
+        for day_val, count in rows:
+            if isinstance(day_val, str):
+                day_val = date.fromisoformat(day_val)
+            out[day_val] = count
+        return out
+
+    def get_dates_with_meals(
+        self, user_id: str, user_timezone: str | None = None
+    ) -> list[date]:
+        date_expr = func.date(MealORM.created_at)
+        rows = (
+            self.db.query(date_expr)
+            .filter(
+                MealORM.user_id == user_id,
+                _test_domain_hydratable_active_meal_filter(),
+            )
+            .distinct()
+            .order_by(date_expr.desc())
+            .all()
+        )
+        out: list[date] = []
+        for (day_val,) in rows:
+            if isinstance(day_val, str):
+                day_val = date.fromisoformat(day_val)
+            if isinstance(day_val, date):
+                out.append(day_val)
+        return out
+
+    def count_by_source(self, user_id: str, source: str) -> int:
+        return (
+            self.db.query(MealORM)
+            .filter(MealORM.user_id == user_id, MealORM.source == source)
+            .count()
+        )
+
+    def _update_nutrition(
+        self, db_nutrition: NutritionORM, domain_nutrition: Nutrition
+    ) -> None:
+        db_nutrition.protein = domain_nutrition.macros.protein
+        db_nutrition.carbs = domain_nutrition.macros.carbs
+        db_nutrition.fat = domain_nutrition.macros.fat
+        db_nutrition.confidence_score = domain_nutrition.confidence_score
+        for item in db_nutrition.food_items:
+            self.db.delete(item)
+        if domain_nutrition.food_items:
+            for idx, item in enumerate(domain_nutrition.food_items):
+                db_item = food_item_domain_to_orm(item, nutrition_id=db_nutrition.id)
+                db_item.order_index = idx
+                self.db.add(db_item)
+
+
+class TestUserRepository:
+    """Sync-session repository facade used only by legacy SQLite tests."""
+
+    _USER_LOADS = (
+        selectinload(User.profiles).selectinload(UserProfile.preference_entries),
+        selectinload(User.subscriptions),
+    )
+
+    def __init__(self, session: Session):
+        self.db = session
+
+    def save(self, user_domain):
+        user_entity = UserMapper.to_persistence(user_domain)
+        user_entity.profiles = [
+            UserProfileMapper.to_persistence(p) for p in user_domain.profiles
+        ]
+        if not user_entity.id:
+            self.db.add(user_entity)
+        else:
+            user_entity = self.db.merge(user_entity)
+        try:
+            self.db.commit()
+        except IntegrityError as e:
+            self.db.rollback()
+            error_msg = str(e.orig).lower() if e.orig else str(e).lower()
+            if "email" in error_msg:
+                raise ValueError("User with this email already exists") from e
+            if "firebase_uid" in error_msg:
+                raise ValueError("Firebase UID already registered") from e
+            raise ValueError("User with this email or username already exists") from e
+        user_entity = (
+            self.db.query(User)
+            .options(*self._USER_LOADS)
+            .filter(User.id == str(user_entity.id))
+            .first()
+        )
+        return UserMapper.to_domain(user_entity)
+
+    def find_by_id(self, user_id):
+        entity = (
+            self.db.query(User)
+            .options(*self._USER_LOADS)
+            .filter(User.id == str(user_id), User.is_active.is_(True))
+            .first()
+        )
+        return UserMapper.to_domain(entity) if entity else None
+
+    def find_by_email(self, email: str):
+        entity = (
+            self.db.query(User)
+            .options(*self._USER_LOADS)
+            .filter(User.email == email, User.is_active.is_(True))
+            .first()
+        )
+        return UserMapper.to_domain(entity) if entity else None
+
+    def find_by_firebase_uid(self, firebase_uid: str):
+        entity = (
+            self.db.query(User)
+            .options(*self._USER_LOADS)
+            .filter(User.firebase_uid == firebase_uid, User.is_active.is_(True))
+            .first()
+        )
+        return UserMapper.to_domain(entity) if entity else None
+
+    def find_deleted_by_firebase_uid(self, firebase_uid: str):
+        entity = (
+            self.db.query(User)
+            .options(*self._USER_LOADS)
+            .filter(User.firebase_uid == firebase_uid, User.is_active.is_(False))
+            .first()
+        )
+        return UserMapper.to_domain(entity) if entity else None
+
+    def delete(self, user_id) -> bool:
+        entity = self.db.query(User).filter(User.id == str(user_id)).first()
+        if not entity:
+            return False
+        entity.is_active = False
+        self.db.commit()
+        return True
+
+    def get_profile(self, user_id):
+        entity = (
+            self.db.query(UserProfile)
+            .options(selectinload(UserProfile.preference_entries))
+            .filter(
+                UserProfile.user_id == str(user_id), UserProfile.is_current.is_(True)
+            )
+            .first()
+        )
+        return UserProfileMapper.to_domain(entity) if entity else None
+
+    def update_profile(self, profile_domain):
+        profile_id = str(profile_domain.id) if profile_domain.id else None
+        entity = (
+            self.db.query(UserProfile)
+            .options(selectinload(UserProfile.preference_entries))
+            .filter(UserProfile.id == profile_id)
+            .first()
+            if profile_id
+            else None
+        )
+        if entity is None:
+            entity = UserProfileMapper.to_persistence(profile_domain)
+            self.db.add(entity)
+        else:
+            updated = UserProfileMapper.to_persistence(profile_domain)
+            for col in UserProfile.__table__.columns:
+                if col.key not in {"id", "created_at", "updated_at"}:
+                    setattr(entity, col.key, getattr(updated, col.key, None))
+            entity.preference_entries = build_profile_preference_entries(profile_domain)
+        self.db.commit()
+        self.db.refresh(entity)
+        return UserProfileMapper.to_domain(entity)
+
+    def update_user_timezone(self, user_id, timezone: str) -> None:
+        self.db.query(User).filter(User.id == str(user_id)).update(
+            {"timezone": timezone}
+        )
+        self.db.commit()
+
+    def get_user_timezone(self, user_id) -> str | None:
+        entity = (
+            self.db.query(User)
+            .filter(User.id == str(user_id), User.is_active.is_(True))
+            .first()
+        )
+        return entity.timezone if entity else None
+
+
+class AsyncTestMealRepository:
+    """Explicit async test facade for legacy sync-session handler tests."""
+
+    def __init__(self, session: Session):
+        self._repo = TestMealRepository(session)
+
+    async def find_by_id(self, *args, **kwargs):
+        return self._repo.find_by_id(*args, **kwargs)
+
+    async def save(self, *args, **kwargs):
+        return self._repo.save(*args, **kwargs)
+
+    async def delete(self, *args, **kwargs):
+        return self._repo.delete(*args, **kwargs)
+
+    async def find_by_date(self, *args, **kwargs):
+        return self._repo.find_by_date(*args, **kwargs)
+
+    async def find_by_date_range(self, *args, **kwargs):
+        return self._repo.find_by_date_range(*args, **kwargs)
+
+    async def sum_hydration_ml_for_date(self, *args, **kwargs):
+        return self._repo.sum_hydration_ml_for_date(*args, **kwargs)
+
+    async def sum_hydration_ml_by_date_range(self, *args, **kwargs):
+        return self._repo.sum_hydration_ml_by_date_range(*args, **kwargs)
+
+    async def get_daily_meal_counts(self, *args, **kwargs):
+        return self._repo.get_daily_meal_counts(*args, **kwargs)
+
+    async def get_dates_with_meals(self, *args, **kwargs):
+        return self._repo.get_dates_with_meals(*args, **kwargs)
+
+    async def count_by_source(self, *args, **kwargs):
+        return self._repo.count_by_source(*args, **kwargs)
+
+
+class AsyncTestUserRepository:
+    """Explicit async test facade for legacy sync-session handler tests."""
+
+    def __init__(self, session: Session):
+        self._repo = TestUserRepository(session)
+
+    async def save(self, *args, **kwargs):
+        return self._repo.save(*args, **kwargs)
+
+    async def find_by_id(self, *args, **kwargs):
+        return self._repo.find_by_id(*args, **kwargs)
+
+    async def find_by_email(self, *args, **kwargs):
+        return self._repo.find_by_email(*args, **kwargs)
+
+    async def find_by_firebase_uid(self, *args, **kwargs):
+        return self._repo.find_by_firebase_uid(*args, **kwargs)
+
+    async def find_deleted_by_firebase_uid(self, *args, **kwargs):
+        return self._repo.find_deleted_by_firebase_uid(*args, **kwargs)
+
+    async def get_profile(self, *args, **kwargs):
+        return self._repo.get_profile(*args, **kwargs)
+
+    async def update_profile(self, *args, **kwargs):
+        return self._repo.update_profile(*args, **kwargs)
+
+    async def update_user_timezone(self, *args, **kwargs):
+        return self._repo.update_user_timezone(*args, **kwargs)
+
+    async def get_user_timezone(self, *args, **kwargs):
+        return self._repo.get_user_timezone(*args, **kwargs)
 
 
 class TestUnitOfWork:
@@ -54,12 +608,9 @@ class TestUnitOfWork:
     """
 
     def __init__(self, session: Session):
-        from src.infra.repositories.meal_repository import MealRepository
-        from src.infra.repositories.user_repository import UserRepository
-
         self.session = session
-        self.meals = AsyncSyncRepoWrapper(MealRepository(session))
-        self.users = AsyncSyncRepoWrapper(UserRepository(session))
+        self.meals = AsyncTestMealRepository(session)
+        self.users = AsyncTestUserRepository(session)
 
     def __enter__(self):
         return self
@@ -90,8 +641,8 @@ class TestUnitOfWork:
 def _is_db_available() -> bool:
     """Check if the test database is available."""
     try:
-        from tests.fixtures.database.test_config import get_test_database_url
         from sqlalchemy import create_engine, text
+        from tests.fixtures.database.test_config import get_test_database_url
 
         url = get_test_database_url()
         engine = create_engine(
@@ -234,6 +785,7 @@ def test_engine(worker_id, request):
         # Other workers wait for tables to be created
         elif worker_id != "master":
             import time
+
             from sqlalchemy import inspect
 
             # Wait up to 30 seconds for tables to be created
@@ -298,55 +850,11 @@ def test_session(test_engine) -> Generator[Session, None, None]:
 
 
 @pytest.fixture(autouse=True)
-def mock_scoped_session(test_session, request):
-    """
-    Automatically patch ScopedSession to return test_session for integration tests only.
-
-    Unit tests can use their own mocks by patching ScopedSession within their test methods.
-    Integration tests get the real database session (MySQL).
-    """
-    from src.infra.database.config import ScopedSession
-
-    # Only patch for integration tests
-    test_path = str(request.node.fspath)
-    is_integration_test = "tests/integration" in test_path
-
-    if not is_integration_test:
-        # For unit tests, don't patch - let them use their own mocks
-        yield
-        return
-
-    # For integration tests, patch ScopedSession to return test_session
-    # Store original __call__ method
-    original_call = getattr(ScopedSession, "__call__", None)
-
-    # Create a function that always returns test_session
-    def mock_call(*args, **kwargs):
-        return test_session
-
-    # Patch __call__ method for integration tests
-    ScopedSession.__call__ = mock_call
-
-    try:
-        yield
-    finally:
-        # Restore original
-        if original_call is not None:
-            ScopedSession.__call__ = original_call
-        # Clean up
-        try:
-            ScopedSession.remove()
-        except:
-            pass
-
-
-@pytest.fixture(autouse=True)
 def reset_event_bus_singleton():
     """
     Reset the event bus singleton before each test to prevent state leakage.
     This ensures that event bus initialization happens fresh for each test.
     """
-    from src.api.dependencies.event_bus import _configured_event_bus
 
     # Reset singleton before test
     import src.api.dependencies.event_bus as event_bus_module
@@ -378,9 +886,9 @@ def gpt_parser() -> GPTResponseParser:
 
 
 @pytest.fixture
-def meal_repository(test_session) -> MealRepository:
+def meal_repository(test_session) -> TestMealRepository:
     """Meal repository with test database session."""
-    return MealRepository(test_session)
+    return TestMealRepository(test_session)
 
 
 @pytest.fixture
@@ -403,46 +911,42 @@ def strict_session(test_session) -> Session:
 
 @pytest.fixture
 def event_bus(
-    test_session, mock_image_store, mock_vision_service, gpt_parser, meal_repository
+    test_session, mock_image_store, mock_vision_service, gpt_parser
 ) -> EventBus:
     """Configured event bus for testing."""
     # Import handlers from modules
-    from src.app.handlers.command_handlers import (
-        EditMealCommandHandler,
-        AddCustomIngredientCommandHandler,
-        DeleteMealCommandHandler,
-        UploadMealImageImmediatelyHandler,
-        SaveUserOnboardingCommandHandler,
-    )
-    from src.app.handlers.query_handlers import (
-        GetMealByIdQueryHandler,
-        GetDailyMacrosQueryHandler,
-        GetUserProfileQueryHandler,
+    from src.app.commands.meal.edit_meal_command import (
+        AddCustomIngredientCommand,
+        EditMealCommand,
     )
 
     # Import commands and queries
     from src.app.commands.meal.upload_meal_image_immediately_command import (
         UploadMealImageImmediatelyCommand,
     )
-    from src.app.commands.meal.edit_meal_command import (
-        EditMealCommand,
-        AddCustomIngredientCommand,
-    )
-    from src.app.queries.meal.get_meal_by_id_query import GetMealByIdQuery
-    from src.app.queries.meal.get_daily_macros_query import GetDailyMacrosQuery
     from src.app.commands.user.save_user_onboarding_command import (
         SaveUserOnboardingCommand,
     )
+    from src.app.handlers.command_handlers import (
+        AddCustomIngredientCommandHandler,
+        DeleteMealCommandHandler,
+        EditMealCommandHandler,
+        SaveUserOnboardingCommandHandler,
+        UploadMealImageImmediatelyHandler,
+    )
+    from src.app.handlers.query_handlers import (
+        GetDailyMacrosQueryHandler,
+        GetMealByIdQueryHandler,
+        GetUserProfileQueryHandler,
+    )
+    from src.app.queries.meal.get_daily_macros_query import GetDailyMacrosQuery
+    from src.app.queries.meal.get_meal_by_id_query import GetMealByIdQuery
     from src.app.queries.user.get_user_profile_query import GetUserProfileQuery
-    from src.infra.repositories.user_repository import UserRepository
 
     event_bus = PyMediatorEventBus()
 
     # Create test UoW using the test session (doesn't close session on exit)
     test_uow = TestUnitOfWork(session=test_session)
-
-    # Create repositories
-    user_repository = UserRepository(test_session)
 
     # Register meal edit command handlers
     event_bus.register_handler(
@@ -491,12 +995,9 @@ def event_bus(
     save_user_handler = SaveUserOnboardingCommandHandler(cache_service=None)
     event_bus.register_handler(SaveUserOnboardingCommand, save_user_handler)
 
-    # Note: GetUserProfileQueryHandler might still need test_session - check its signature
-    # Note: GetUserProfileQueryHandler now uses ScopedSession internally
-    # It only takes tdee_service parameter (optional)
+    # GetUserProfileQueryHandler resolves dependencies through the async UoW.
     event_bus.register_handler(GetUserProfileQuery, GetUserProfileQueryHandler())
 
-    # DeleteUserCommandHandler doesn't take any parameters (uses ScopedSession internally)
     from src.app.commands.user import DeleteUserCommand
     from src.app.handlers.command_handlers.delete_user_command_handler import (
         DeleteUserCommandHandler,

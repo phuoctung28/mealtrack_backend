@@ -1,7 +1,7 @@
 """Weight entry database model."""
 
 from sqlalchemy import Column, String, Float, DateTime, UniqueConstraint, Index, ForeignKey
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import BaseMixin
 
 

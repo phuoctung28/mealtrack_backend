@@ -7,21 +7,21 @@ Tests the streamlined 2-phase generation process:
 - Error handling for insufficient name/recipe generation is tested.
 """
 
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from src.domain.model.meal_suggestion import (
-    SuggestionSession,
     MealSuggestion,
+    SuggestionSession,
+)
+from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+    IngredientMacros,
+    MealMacros,
+    NutritionLookupService,
 )
 from src.domain.services.meal_suggestion.parallel_recipe_generator import (
     ParallelRecipeGenerator,
-)
-from src.domain.services.meal_suggestion.nutrition_lookup_service import (
-    NutritionLookupService,
-    MealMacros,
-    IngredientMacros,
 )
 from src.domain.services.meal_suggestion.recipe_attempt_builder import (
     PARALLEL_SINGLE_MEAL_TIMEOUT,
@@ -102,7 +102,11 @@ def recipe_generator(mock_generation_service):
     from src.domain.services.meal_suggestion.macro_validation_service import (
         MacroValidationService,
     )
-    from src.infra.services.ai.schemas import MealNamesResponse, DiscoveryMealsResponse, RecipeDetailsResponse
+    from src.infra.services.ai.schemas import (
+        DiscoveryMealsResponse,
+        MealNamesResponse,
+        RecipeDetailsResponse,
+    )
 
     meal_macros = _make_meal_macros()
     nutrition_lookup = AsyncMock(spec=NutritionLookupService)
@@ -328,8 +332,8 @@ class TestSessionCreationInvariants:
         nutrition_lookup.scale_to_target = Mock(return_value=None)
 
         from src.infra.services.ai.schemas import (
-            MealNamesResponse,
             DiscoveryMealsResponse,
+            MealNamesResponse,
             RecipeDetailsResponse,
         )
 
@@ -444,7 +448,11 @@ async def test_generate_discovery_appends_existing_discovery_meals_on_load_more(
     from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
         SuggestionOrchestrationService,
     )
-    from src.infra.services.ai.schemas import DiscoveryMealsResponse, MealNamesResponse, RecipeDetailsResponse
+    from src.infra.services.ai.schemas import (
+        DiscoveryMealsResponse,
+        MealNamesResponse,
+        RecipeDetailsResponse,
+    )
 
     existing_session = SuggestionSession(
         id="sess-discovery",
@@ -508,3 +516,53 @@ async def test_generate_discovery_appends_existing_discovery_meals_on_load_more(
         "disc_new",
     ]
     repo.update_session.assert_awaited_once_with(session)
+
+
+@pytest.mark.asyncio
+async def test_generate_discovery_accepts_async_profile_provider(mock_generation_service):
+    from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
+        SuggestionOrchestrationService,
+    )
+    from src.infra.services.ai.schemas import (
+        DiscoveryMealsResponse,
+        MealNamesResponse,
+        RecipeDetailsResponse,
+    )
+
+    repo = AsyncMock()
+    nutrition_lookup = AsyncMock(spec=NutritionLookupService)
+    profile_provider = AsyncMock(return_value=Mock(meals_per_day=3, allergies=[]))
+    service = SuggestionOrchestrationService(
+        generation_service=mock_generation_service,
+        suggestion_repo=repo,
+        nutrition_lookup=nutrition_lookup,
+        meal_names_schema_class=MealNamesResponse,
+        discovery_meals_schema_class=DiscoveryMealsResponse,
+        recipe_details_schema_class=RecipeDetailsResponse,
+        profile_provider=profile_provider,
+    )
+    service._recipe_generator.generate_discovery = AsyncMock(
+        return_value=[
+            {
+                "id": "disc_async",
+                "name": "Async Bowl",
+                "english_name": "Async Bowl",
+                "calories": 400,
+                "protein": 30,
+                "carbs": 40,
+                "fat": 12,
+            }
+        ]
+    )
+
+    session, meals = await service.generate_discovery(
+        user_id="user-1",
+        meal_type="lunch",
+        meal_portion_type="main",
+        ingredients=["tofu"],
+        count=1,
+    )
+
+    profile_provider.assert_awaited_once_with("user-1")
+    repo.save_session.assert_awaited_once_with(session)
+    assert meals[0]["id"] == "disc_async"

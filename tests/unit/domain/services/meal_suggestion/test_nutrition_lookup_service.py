@@ -15,17 +15,17 @@ Covers:
 
 import asyncio
 import logging
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.domain.services.meal_suggestion.nutrition_lookup_service import (
-    IngredientMacros,
-    MealMacros,
-    NutritionLookupService,
-    _derive_calories,
-)
+import pytest
+
 from src.domain.services.meal_suggestion.ingredient_nutrition_resolver import (
     PerHundredGramsMacros,
+)
+from src.domain.services.meal_suggestion.nutrition_lookup_service import (
+    IngredientMacros,
+    NutritionLookupService,
+    _derive_calories,
 )
 
 # ---------------------------------------------------------------------------
@@ -319,6 +319,49 @@ async def test_calculate_meal_macros_batches_t1_lookups():
     repo.find_by_normalized_name.assert_not_called()
     assert meal.t1_count == 2
     assert meal.t2_count == 0
+
+
+@pytest.mark.asyncio
+async def test_calculate_meal_macros_awaits_async_t1_batch_lookup():
+    repo = MagicMock()
+    repo.find_batch_by_normalized_names = AsyncMock(
+        return_value={"rice": _make_ref(protein=2.0, carbs=22.0, fat=0.3, ref_id=2)}
+    )
+    resolver = MagicMock()
+    resolver.resolve = AsyncMock(return_value=None)
+    gen = MagicMock()
+    svc = NutritionLookupService(
+        food_ref_repo=repo,
+        ingredient_nutrition_resolver=resolver,
+        generation_service=gen,
+    )
+
+    meal = await svc.calculate_meal_macros(
+        [{"name": "rice", "amount": 100.0, "unit": "g"}]
+    )
+
+    repo.find_batch_by_normalized_names.assert_awaited_once()
+    assert meal.t1_count == 1
+
+
+@pytest.mark.asyncio
+async def test_lookup_ingredient_awaits_async_t1_single_lookup():
+    repo = MagicMock()
+    repo.find_by_normalized_name = AsyncMock(return_value=_make_ref(ref_id=9))
+    resolver = MagicMock()
+    resolver.resolve = AsyncMock(return_value=None)
+    gen = MagicMock()
+    svc = NutritionLookupService(
+        food_ref_repo=repo,
+        ingredient_nutrition_resolver=resolver,
+        generation_service=gen,
+    )
+
+    result = await svc._lookup_ingredient("rice", 100.0)
+
+    repo.find_by_normalized_name.assert_awaited_once()
+    assert result.source_tier == "T1_food_reference"
+    assert result.food_reference_id == 9
 
 
 # ---------------------------------------------------------------------------

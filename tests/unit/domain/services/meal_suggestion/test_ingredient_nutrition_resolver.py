@@ -4,8 +4,9 @@ Unit tests for IngredientNutritionResolver.
 All FatSecret interactions are mocked — no real API calls.
 """
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.domain.services.meal_suggestion.ingredient_nutrition_resolver import (
     IngredientNutritionResolver,
@@ -105,6 +106,22 @@ async def test_resolve_calls_upsert_on_hit(resolver, mock_fatsecret, mock_repo):
     assert call_kwargs["source"] == "fatsecret"
     assert call_kwargs["is_verified"] is False
     assert call_kwargs["protein_100g"] == pytest.approx(23.1)
+
+
+@pytest.mark.asyncio
+async def test_resolve_awaits_async_food_reference_repo(mock_fatsecret):
+    """Async food reference repos are awaited directly, not sent through to_thread."""
+    repo = MagicMock()
+    repo.upsert_by_normalized_name = AsyncMock(return_value={"id": 1})
+    resolver = IngredientNutritionResolver(
+        fatsecret=mock_fatsecret,
+        food_ref_repo=repo,
+    )
+    mock_fatsecret.search_foods.return_value = [_make_generic_result()]
+
+    await resolver.resolve("chicken breast")
+
+    repo.upsert_by_normalized_name.assert_awaited_once()
 
 
 @pytest.mark.asyncio

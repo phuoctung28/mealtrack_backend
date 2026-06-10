@@ -4,18 +4,17 @@ SaveMealSuggestionCommandHandler - Handler for saving meal suggestions as regula
 
 import logging
 from datetime import datetime
-from typing import Any, List, Optional
 from uuid import uuid4
 
 from src.app.commands.meal_suggestion import IngredientItem, SaveMealSuggestionCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
-from src.domain.model import FoodItem, Meal, MealImage, MealStatus, Nutrition, Macros
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
+from src.domain.model import FoodItem, Macros, Meal, MealImage, MealStatus, Nutrition
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.utils.timezone_utils import (
-    utc_now,
     noon_utc_for_date,
     resolve_user_timezone_async,
+    utc_now,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,8 +33,8 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
 
     def __init__(
         self,
-        uow: UnitOfWorkPort,
-        cache_invalidation: Optional[CacheInvalidationService] = None,
+        uow: AsyncUnitOfWorkPort,
+        cache_invalidation: CacheInvalidationService | None = None,
     ):
         self.uow = uow
         self.cache_invalidation = cache_invalidation
@@ -130,11 +129,11 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
 
     def _build_food_items(
         self,
-        ingredients: List[IngredientItem],
+        ingredients: list[IngredientItem],
         total_protein: float,
         total_carbs: float,
         total_fat: float,
-    ) -> List[FoodItem]:
+    ) -> list[FoodItem]:
         """
         Convert suggestion ingredients into FoodItem domain objects.
 
@@ -200,11 +199,11 @@ class SaveMealSuggestionCommandHandler(EventHandler[SaveMealSuggestionCommand, s
 
     def _distribute_nutrition(
         self,
-        items: List[FoodItem],
+        items: list[FoodItem],
         total_protein: float,
         total_carbs: float,
         total_fat: float,
-    ) -> List[FoodItem]:
+    ) -> list[FoodItem]:
         """Distribute meal-level macro totals proportionally by estimated weight."""
         total_weight = sum(
             self._estimate_weight_grams(item.quantity, item.unit) for item in items

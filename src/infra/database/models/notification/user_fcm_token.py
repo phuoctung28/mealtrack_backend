@@ -4,7 +4,7 @@ User FCM token model for push notifications.
 
 from sqlalchemy import Boolean, Column, Enum, ForeignKey, Index, String
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import BaseMixin
 
 

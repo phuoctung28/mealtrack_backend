@@ -7,7 +7,7 @@ from sqlalchemy.orm import relationship
 
 from src.api.schemas.common.auth_enums import AuthProviderEnum
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import BaseMixin
 
 

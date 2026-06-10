@@ -1,5 +1,5 @@
 import src.infra.database.models as model_registry
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 
 
 def test_model_registry_imports_expected_tables() -> None:

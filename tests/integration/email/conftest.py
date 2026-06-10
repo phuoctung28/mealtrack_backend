@@ -7,7 +7,7 @@ so the autouse mock_scoped_session fixture chain can resolve without a live DB.
 import pytest
 from sqlalchemy import create_engine
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 
 
 @pytest.fixture(scope="session")

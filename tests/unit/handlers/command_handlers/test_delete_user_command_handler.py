@@ -2,89 +2,66 @@
 Unit tests for DeleteUserCommandHandler.
 """
 
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from tests.conftest import TestUserRepository
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user import DeleteUserCommand
 from src.app.handlers.command_handlers.delete_user_command_handler import (
     DeleteUserCommandHandler,
 )
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.user import User
-from src.infra.database.models.meal.meal import MealORM
-from src.infra.database.models.enums import MealStatusEnum
-from src.infra.database.models.notification.notification_preferences import (
-    NotificationPreferencesORM as NotificationPreferences,
-)
-from src.infra.database.models.notification.user_fcm_token import (
-    UserFcmTokenORM as UserFcmToken,
-)
-from src.infra.repositories.user_repository import UserRepository
 
 
-class AsyncSessionWrapper:
-    """Wraps a sync SQLAlchemy session so execute() and flush() are awaitable."""
+class AsyncSqliteBulkSession:
+    """Async test double for the bulk SQL operations used by delete-user."""
 
-    def __init__(self, sync_session):
-        self._sync = sync_session
+    def __init__(self, session):
+        self._session = session
 
     async def execute(self, *args, **kwargs):
-        return self._sync.execute(*args, **kwargs)
+        return self._session.execute(*args, **kwargs)
 
     async def flush(self, *args, **kwargs):
-        return self._sync.flush(*args, **kwargs)
-
-    def query(self, *args, **kwargs):
-        return self._sync.query(*args, **kwargs)
-
-    def add(self, *args, **kwargs):
-        return self._sync.add(*args, **kwargs)
-
-    def commit(self):
-        return self._sync.commit()
-
-    def rollback(self):
-        return self._sync.rollback()
-
-    def refresh(self, *args, **kwargs):
-        return self._sync.refresh(*args, **kwargs)
+        return self._session.flush(*args, **kwargs)
 
 
-class AsyncUserRepositoryWrapper:
-    """Wraps the sync UserRepository so each method is awaitable."""
+class AsyncSqliteUserRepository:
+    """Async test double for user repository calls used by delete-user."""
 
-    def __init__(self, sync_repo):
-        self._sync = sync_repo
+    def __init__(self, session):
+        self._repo = TestUserRepository(session)
 
     async def find_by_firebase_uid(self, *args, **kwargs):
-        return self._sync.find_by_firebase_uid(*args, **kwargs)
+        return self._repo.find_by_firebase_uid(*args, **kwargs)
 
     async def find_by_id(self, *args, **kwargs):
-        return self._sync.find_by_id(*args, **kwargs)
+        return self._repo.find_by_id(*args, **kwargs)
 
     async def save(self, *args, **kwargs):
-        return self._sync.save(*args, **kwargs)
+        return self._repo.save(*args, **kwargs)
 
     async def delete(self, *args, **kwargs):
-        return self._sync.delete(*args, **kwargs)
+        return self._repo.delete(*args, **kwargs)
 
 
 class DummyUnitOfWork:
     """
     Lightweight UnitOfWork for tests that:
     - Uses the provided session (e.g., in-memory SQLite)
-    - Exposes a real UserRepository wrapped for async access
+    - Exposes explicit async SQLite-backed test doubles
     - Commits/rolls back but NEVER closes the session
     """
 
     def __init__(self, session):
-        self.session = AsyncSessionWrapper(session)
+        self.session = AsyncSqliteBulkSession(session)
         self._raw_session = session
-        self.users = AsyncUserRepositoryWrapper(UserRepository(session))
+        self.users = AsyncSqliteUserRepository(session)
 
     def __enter__(self):
         return self

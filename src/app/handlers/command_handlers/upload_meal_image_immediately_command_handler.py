@@ -12,9 +12,10 @@ from src.app.commands.meal import UploadMealImageImmediatelyCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal import Meal, MealImage, MealStatus
+from src.domain.model.meal_projection import MealProjection
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.image_store_port import ImageStorePort
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_analysis.deepl_meal_translation_service import (
     DeepLMealTranslationService,
@@ -30,7 +31,6 @@ from src.domain.utils.timezone_utils import (
     utc_now,
 )
 from src.infra.config.settings import get_settings
-from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class UploadMealImageImmediatelyHandler(
 
     def __init__(
         self,
-        uow: UnitOfWorkPort,
+        uow: AsyncUnitOfWorkPort,
         event_bus: Any,
         image_store: ImageStorePort = None,
         vision_service: VisionAIServicePort = None,

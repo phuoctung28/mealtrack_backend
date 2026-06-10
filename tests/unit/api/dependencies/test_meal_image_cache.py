@@ -1,5 +1,6 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
 
 @pytest.mark.asyncio
@@ -7,7 +8,7 @@ async def test_get_meal_image_cache_service_returns_service():
     mock_session = MagicMock()
 
     with patch(
-        "src.api.dependencies.meal_image_cache.PgvectorMealImageCacheRepository"
+        "src.api.dependencies.meal_image_cache.AsyncPgvectorMealImageCacheRepository"
     ) as mock_repo, patch(
         "src.api.dependencies.meal_image_cache.get_gemini_text_embedder"
     ) as mock_embedder, patch(
@@ -32,7 +33,7 @@ async def test_get_pending_queue_returns_repository():
     mock_session = MagicMock()
 
     with patch(
-        "src.api.dependencies.meal_image_cache.PendingMealImageRepository"
+        "src.api.dependencies.meal_image_cache.AsyncPendingMealImageRepository"
     ) as mock_repo:
         mock_repo.return_value = MagicMock()
 

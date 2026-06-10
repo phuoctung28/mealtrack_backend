@@ -1,9 +1,10 @@
 """Command handler — record a referred user's code application as a pending conversion."""
 import logging
 
-from src.app.commands.referral.apply_referral_code_command import ApplyReferralCodeCommand
+from src.app.commands.referral.apply_referral_code_command import (
+    ApplyReferralCodeCommand,
+)
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.referral_repository import ReferralRepository
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 class ApplyReferralCodeCommandHandler:
     async def handle(self, command: ApplyReferralCodeCommand) -> None:
         async with AsyncUnitOfWork() as uow:
-            repo = ReferralRepository(uow.session)
+            repo = uow.referrals
 
             code = await repo.get_code_by_code(command.code)
             if not code:

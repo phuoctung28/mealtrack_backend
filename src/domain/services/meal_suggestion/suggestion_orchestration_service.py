@@ -6,23 +6,24 @@ TDEE helpers: suggestion_tdee_helpers.py
 """
 
 import asyncio
+import inspect
 import logging
 import uuid
-from typing import List, Optional, Tuple, Callable, Any, AsyncGenerator, Dict
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple
 
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
 )
+from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
+    DeepLSuggestionTranslationService,
+)
 from src.domain.services.meal_suggestion.macro_validation_service import (
     MacroValidationService,
 )
 from src.domain.services.meal_suggestion.nutrition_lookup_service import (
     NutritionLookupService,
-)
-from src.domain.services.meal_suggestion.deepl_suggestion_translation_service import (
-    DeepLSuggestionTranslationService,
 )
 from src.domain.services.meal_suggestion.parallel_recipe_generator import (
     ParallelRecipeGenerator,
@@ -39,7 +40,7 @@ logger = logging.getLogger(__name__)
 class SuggestionOrchestrationService:
     """
     Orchestrates meal suggestion generation with session tracking.
-    Singleton in the event bus; uses ScopedSession for request isolation.
+    Singleton in the event bus; DB work is provided through async repositories/UoW.
     """
 
     def __init__(
@@ -282,8 +283,11 @@ class SuggestionOrchestrationService:
             raise RuntimeError(
                 "Profile provider not configured for SuggestionOrchestrationService"
             )
-        # profile_provider uses a sync Session; offload so the event loop isn't blocked.
-        profile = await asyncio.to_thread(self._profile_provider, user_id)
+        if inspect.iscoroutinefunction(self._profile_provider):
+            profile = await self._profile_provider(user_id)
+        else:
+            # Legacy test/providers may still be synchronous during the migration.
+            profile = await asyncio.to_thread(self._profile_provider, user_id)
         if not profile:
             raise ValueError(f"User {user_id} profile not found")
 

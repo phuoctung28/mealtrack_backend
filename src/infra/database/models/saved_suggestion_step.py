@@ -3,7 +3,7 @@
 from sqlalchemy import Column, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 
 
 class SavedSuggestionStepModel(Base):

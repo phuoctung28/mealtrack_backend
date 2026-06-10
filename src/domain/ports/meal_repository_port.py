@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from src.domain.model.meal import Meal, MealStatus
 
@@ -9,7 +9,7 @@ class MealRepositoryPort(ABC):
     """Port interface for meal persistence operations."""
 
     @abstractmethod
-    def save(self, meal: Meal) -> Meal:
+    async def save(self, meal: Meal) -> Meal:
         """
         Persists a meal entity.
 
@@ -22,7 +22,7 @@ class MealRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def find_by_id(self, meal_id: str, projection: Any = None) -> Optional[Meal]:
+    async def find_by_id(self, meal_id: str, projection: Any = None) -> Meal | None:
         """
         Finds a meal by its ID.
 
@@ -37,7 +37,7 @@ class MealRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def find_by_status(self, status: MealStatus, limit: int = 10) -> List[Meal]:
+    async def find_by_status(self, status: MealStatus, limit: int = 10) -> list[Meal]:
         """
         Finds meals by status.
 
@@ -51,7 +51,7 @@ class MealRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def find_all_paginated(self, offset: int = 0, limit: int = 20) -> List[Meal]:
+    async def find_all_paginated(self, offset: int = 0, limit: int = 20) -> list[Meal]:
         """
         Retrieves all meals with pagination.
 
@@ -65,7 +65,7 @@ class MealRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def count(self) -> int:
+    async def count(self) -> int:
         """
         Counts the total number of meals.
 
@@ -75,14 +75,14 @@ class MealRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def find_by_date(
+    async def find_by_date(
         self,
         date_obj: date,
         user_id: str = None,
         limit: int = 50,
-        user_timezone: Optional[str] = None,
+        user_timezone: str | None = None,
         projection: Any = None,
-    ) -> List[Meal]:
+    ) -> list[Meal]:
         """
         Finds meals created on a specific date, optionally filtered by user.
 
@@ -98,29 +98,29 @@ class MealRepositoryPort(ABC):
         """
         pass
 
-    def find_by_date_range(
+    async def find_by_date_range(
         self,
         user_id: str,
         start_date: date,
         end_date: date,
         limit: int = 500,
-        user_timezone: Optional[str] = None,
+        user_timezone: str | None = None,
         projection: Any = None,
-    ) -> List[Meal]:
+    ) -> list[Meal]:
         """Find meals created within a local date range, inclusive."""
         return []
 
     @abstractmethod
-    def delete(self, meal_id: str) -> None:
+    async def delete(self, meal_id: str) -> None:
         """Delete a meal by ID with data preservation."""
         pass
 
-    def get_daily_meal_counts(
+    async def get_daily_meal_counts(
         self,
         user_id: str,
         start_date: date,
         end_date: date,
-        user_timezone: Optional[str] = None,
-    ) -> Dict[date, int]:
+        user_timezone: str | None = None,
+    ) -> dict[date, int]:
         """Return {date: meal_count} for each day in range with at least 1 meal."""
         return {}

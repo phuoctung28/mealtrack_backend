@@ -4,15 +4,16 @@ Handler for immediate meal image analysis using pre-uploaded image URL.
 
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 from src.app.commands.meal import AnalyzeMealImageByUrlCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
-from src.domain.model.meal import Meal, MealStatus, MealImage
+from src.domain.model.meal import Meal, MealImage, MealStatus
+from src.domain.model.meal_projection import MealProjection
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_analysis.deepl_meal_translation_service import (
     DeepLMealTranslationService,
@@ -26,7 +27,6 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     utc_now,
 )
-from src.domain.model.meal_projection import MealProjection
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +37,12 @@ class AnalyzeMealImageByUrlHandler(EventHandler[AnalyzeMealImageByUrlCommand, Me
 
     def __init__(
         self,
-        uow: UnitOfWorkPort,
+        uow: AsyncUnitOfWorkPort,
         event_bus: Any,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
-        meal_translation_service: Optional[DeepLMealTranslationService] = None,
-        cache_invalidation: Optional[CacheInvalidationService] = None,
+        meal_translation_service: DeepLMealTranslationService | None = None,
+        cache_invalidation: CacheInvalidationService | None = None,
     ):
         self.uow = uow
         self.event_bus = event_bus

@@ -4,19 +4,16 @@ Cron push owns notification scheduling/precompute. This helper only claims due
 notification rows, renders display text, sends FCM batches, and marks rows sent.
 """
 
-import asyncio
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import and_, bindparam, or_, select, text
 
 from src.domain.services.notification_messages import get_messages
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.database.uow import UnitOfWork
-from src.infra.repositories.notification.reminder_query_builder import (
-    ReminderQueryBuilder,
-)
+from src.infra.database.models.notification.notification import NotificationORM
+from src.infra.database.uow_async import AsyncUnitOfWork
 from src.infra.services.firebase_service import FirebaseService
 
 logger = logging.getLogger(__name__)
@@ -30,6 +27,8 @@ DEACTIVATABLE_FCM_ERRORS = {
     "UNAUTHENTICATED",
     "PERMISSION_DENIED",
 }
+
+PROCESSING_RECLAIM_AFTER = timedelta(minutes=10)
 
 
 class CronNotificationDispatchService:
@@ -49,18 +48,8 @@ class CronNotificationDispatchService:
 
         # Recover rows stranded in 'processing' by a worker that died mid-send,
         # otherwise they would never be delivered.
-        await asyncio.to_thread(self._recover_stale_processing)
-
-        def _claim_due():
-            with UnitOfWork() as uow:
-                due_rows = ReminderQueryBuilder.find_due_notifications(
-                    uow.session, now, lock_rows=True
-                )
-                for row in due_rows:
-                    row.status = "processing"
-                return due_rows
-
-        due = await asyncio.to_thread(_claim_due)
+        await self._recover_stale_processing()
+        due = await self._claim_due_notifications(now)
         if not due:
             return
 
@@ -73,9 +62,7 @@ class CronNotificationDispatchService:
         ]
         consumed_map: dict[str, int] = {}
         if meal_reminder_ids:
-            consumed_map = await asyncio.to_thread(
-                _fetch_calories_consumed_batch, meal_reminder_ids, now
-            )
+            consumed_map = await _fetch_calories_consumed_batch(meal_reminder_ids, now)
 
         hydration_user_ids = [
             n.user_id
@@ -85,8 +72,8 @@ class CronNotificationDispatchService:
         hydration_map: dict[str, tuple[int, int]] = {}
         if hydration_user_ids:
             try:
-                hydration_map = await asyncio.to_thread(
-                    _fetch_hydration_data_batch, hydration_user_ids, now
+                hydration_map = await _fetch_hydration_data_batch(
+                    hydration_user_ids, now
                 )
             except Exception as exc:
                 logger.warning("Failed to fetch hydration data batch: %s", exc)
@@ -192,21 +179,47 @@ class CronNotificationDispatchService:
 
         # Mark sent / failed / retry
         if sent_ids or failed_ids or retry_ids:
-            await asyncio.to_thread(
-                self._mark_notifications, sent_ids, failed_ids, retry_ids
-            )
+            await self._mark_notifications(sent_ids, failed_ids, retry_ids)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
-    def _mark_notifications(
+    async def _claim_due_notifications(self, now: datetime) -> list[NotificationORM]:
+        """Claim pending due rows without blocking other cron workers."""
+        status_filter = NotificationORM.status == "pending"
+        stale_processing_before = now - PROCESSING_RECLAIM_AFTER
+        status_filter = or_(
+            status_filter,
+            and_(
+                NotificationORM.status == "processing",
+                NotificationORM.scheduled_for_utc <= stale_processing_before,
+            ),
+        )
+
+        async with AsyncUnitOfWork() as uow:
+            result = await uow.session.execute(
+                select(NotificationORM)
+                .where(
+                    NotificationORM.scheduled_for_utc <= now,
+                    status_filter,
+                )
+                .order_by(NotificationORM.scheduled_for_utc, NotificationORM.created_at)
+                .with_for_update(skip_locked=True)
+            )
+            due_rows = list(result.scalars().all())
+            for row in due_rows:
+                row.status = "processing"
+            await uow.session.flush()
+            return due_rows
+
+    async def _mark_notifications(
         self,
         sent_ids: list,
         failed_ids: list,
         retry_ids: list | None = None,
     ) -> None:
-        with UnitOfWork() as uow:
+        async with AsyncUnitOfWork() as uow:
             if sent_ids:
-                uow.session.execute(
+                await uow.session.execute(
                     text("""
                         UPDATE notifications
                         SET status = 'sent'
@@ -215,7 +228,7 @@ class CronNotificationDispatchService:
                     {"ids": sent_ids},
                 )
             if failed_ids:
-                uow.session.execute(
+                await uow.session.execute(
                     text("""
                         UPDATE notifications
                         SET status = 'failed'
@@ -226,7 +239,7 @@ class CronNotificationDispatchService:
             if retry_ids:
                 # FCM send failed wholesale — return rows to the queue so the next
                 # cron tick re-claims and re-sends them instead of losing them.
-                uow.session.execute(
+                await uow.session.execute(
                     text("""
                         UPDATE notifications
                         SET status = 'pending'
@@ -235,14 +248,14 @@ class CronNotificationDispatchService:
                     {"ids": retry_ids},
                 )
 
-    def cleanup_expired_notifications(self) -> None:
-        with UnitOfWork() as uow:
-            result = uow.session.execute(
+    async def cleanup_expired_notifications(self) -> None:
+        async with AsyncUnitOfWork() as uow:
+            result = await uow.session.execute(
                 text("DELETE FROM notifications WHERE expires_at < NOW()")
             )
             logger.info("Cleaned up %d expired notification rows", result.rowcount)
 
-    def _recover_stale_processing(self) -> None:
+    async def _recover_stale_processing(self) -> None:
         """Reset notifications stranded in 'processing' back to 'pending'.
 
         A row is set to 'processing' when claimed for sending; if the worker
@@ -251,8 +264,8 @@ class CronNotificationDispatchService:
         its scheduled time was abandoned by a dead worker.
         """
         cutoff = utc_now() - timedelta(minutes=self.STALE_PROCESSING_MINUTES)
-        with UnitOfWork() as uow:
-            result = uow.session.execute(
+        async with AsyncUnitOfWork() as uow:
+            result = await uow.session.execute(
                 text("""
                     UPDATE notifications
                     SET status = 'pending'
@@ -276,11 +289,11 @@ class CronNotificationDispatchService:
             )
         ]
         if to_deactivate:
-            await asyncio.to_thread(self._deactivate_tokens, to_deactivate)
+            await self._deactivate_tokens(to_deactivate)
 
-    def _deactivate_tokens(self, tokens: list[str]) -> None:
-        with UnitOfWork() as uow:
-            uow.session.execute(
+    async def _deactivate_tokens(self, tokens: list[str]) -> None:
+        async with AsyncUnitOfWork() as uow:
+            await uow.session.execute(
                 text("""
                     UPDATE user_fcm_tokens
                     SET is_active = false
@@ -360,7 +373,7 @@ def _chunked(lst: list, size: int):
         yield lst[i : i + size]
 
 
-def _fetch_calories_consumed_batch(
+async def _fetch_calories_consumed_batch(
     user_ids: list[str], now: datetime
 ) -> dict[str, int]:
     """Batch-fetch calories consumed in the last 24 hours per user.
@@ -370,8 +383,8 @@ def _fetch_calories_consumed_batch(
     This replaces the Redis HGETALL that fetched a stale midnight snapshot.
     """
     window_start = now - timedelta(hours=24)
-    with UnitOfWork() as uow:
-        rows = uow.session.execute(
+    async with AsyncUnitOfWork() as uow:
+        result = await uow.session.execute(
             text("""
                 SELECT m.user_id,
                        COALESCE(SUM(
@@ -391,11 +404,12 @@ def _fetch_calories_consumed_batch(
                 "ids": user_ids,
                 "start": window_start,
             },
-        ).fetchall()
+        )
+        rows = result.fetchall()
     return {row.user_id: int(round(row.consumed_calories)) for row in rows}
 
 
-def _fetch_hydration_data_batch(
+async def _fetch_hydration_data_batch(
     user_ids: list[str], now: datetime
 ) -> dict[str, tuple[int, int]]:
     """Fetch (consumed_ml, goal_ml) per user using a 24-hour rolling window.
@@ -405,19 +419,20 @@ def _fetch_hydration_data_batch(
     but requires per-user timezone joins. Acceptable for v1 threshold checks.
     """
     window_start = now - timedelta(hours=24)
-    with UnitOfWork() as uow:
-        profile_rows = uow.session.execute(
+    async with AsyncUnitOfWork() as uow:
+        profile_result = await uow.session.execute(
             text("""
                 SELECT up.user_id, up.daily_water_goal_ml, up.weight_kg
                 FROM user_profiles up
                 WHERE up.user_id = ANY(:ids) AND up.is_current = true
             """),
             {"ids": user_ids},
-        ).fetchall()
+        )
+        profile_rows = profile_result.fetchall()
 
         profile_by_user = {r.user_id: r for r in profile_rows}
 
-        hydration_rows = uow.session.execute(
+        hydration_result = await uow.session.execute(
             text("""
                 SELECT user_id, COALESCE(SUM(quantity), 0) AS consumed_ml
                 FROM meal
@@ -428,7 +443,8 @@ def _fetch_hydration_data_batch(
                 GROUP BY user_id
             """),
             {"ids": user_ids, "start": window_start},
-        ).fetchall()
+        )
+        hydration_rows = hydration_result.fetchall()
 
         consumed_by_user = {r.user_id: int(r.consumed_ml) for r in hydration_rows}
 

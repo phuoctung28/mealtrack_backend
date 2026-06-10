@@ -3,21 +3,19 @@ Event handler for meal analysis events.
 """
 
 import logging
-from typing import Optional
 
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import MealImageUploadedEvent
 from src.domain.model.meal import MealStatus
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.image_store_port import ImageStorePort
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.meal_analysis.deepl_meal_translation_service import (
     DeepLMealTranslationService,
 )
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
 from src.infra.adapters.vision_ai_service import VisionAIService
-from src.infra.config.settings import get_settings
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -29,11 +27,11 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
 
     def __init__(
         self,
-        uow: Optional[UnitOfWorkPort] = None,
+        uow: AsyncUnitOfWorkPort | None = None,
         vision_service: VisionAIServicePort = None,
         gpt_parser: GPTResponseParser = None,
         image_store: ImageStorePort = None,
-        meal_translation_service: Optional[DeepLMealTranslationService] = None,
+        meal_translation_service: DeepLMealTranslationService | None = None,
     ):
         self.uow = uow
         self.vision_service = vision_service or VisionAIService()

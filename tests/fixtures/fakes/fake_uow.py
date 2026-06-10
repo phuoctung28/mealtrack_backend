@@ -1,14 +1,15 @@
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
-from tests.fixtures.fakes.fake_user_repository import FakeUserRepository
-from tests.fixtures.fakes.fake_notification_repository import FakeNotificationRepository
-from tests.fixtures.fakes.fake_subscription_repository import FakeSubscriptionRepository
 from tests.fixtures.fakes.fake_meal_repository import FakeMealRepository
 from tests.fixtures.fakes.fake_meal_suggestion_repository import (
     FakeMealSuggestionRepository,
 )
+from tests.fixtures.fakes.fake_notification_repository import FakeNotificationRepository
+from tests.fixtures.fakes.fake_subscription_repository import FakeSubscriptionRepository
+from tests.fixtures.fakes.fake_user_repository import FakeUserRepository
+
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 
 
-class FakeUnitOfWork(UnitOfWorkPort):
+class FakeUnitOfWork(AsyncUnitOfWorkPort):
     """Fake UnitOfWork that supports both sync (legacy tests) and async (new handlers)."""
 
     def __init__(self):

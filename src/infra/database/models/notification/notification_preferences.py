@@ -4,7 +4,7 @@ Notification preferences model for user notification settings.
 
 from sqlalchemy import Boolean, CheckConstraint, Column, ForeignKey, Integer, String
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import BaseMixin
 
 

@@ -10,7 +10,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 
 
 class CheatDayORM(Base):

@@ -4,7 +4,6 @@ Auto-extracted for better maintainability.
 """
 
 import logging
-from typing import Optional
 from uuid import UUID
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException
@@ -12,7 +11,7 @@ from src.app.commands.user import SaveUserOnboardingCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.user import UserProfileDomainModel
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
 
@@ -25,8 +24,8 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
 
     def __init__(
         self,
-        uow: Optional[UnitOfWorkPort] = None,
-        cache_service: Optional[CachePort] = None,
+        uow: AsyncUnitOfWorkPort | None = None,
+        cache_service: CachePort | None = None,
     ):
         self.uow = uow
         self.cache_service = cache_service

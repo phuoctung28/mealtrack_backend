@@ -8,7 +8,7 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select, text
@@ -428,9 +428,7 @@ async def capture_subscription_lifecycle_event(
 
 async def _credit_referral_on_purchase(uow, user_id: str) -> None:
     """Credit the referrer's wallet when a referred user completes their first purchase."""
-    from src.infra.repositories.referral_repository import ReferralRepository
-
-    repo = ReferralRepository(uow.session)
+    repo = uow.referrals
     conversion = await repo.get_conversion_by_referred_user(user_id, for_update=True)
     if conversion and conversion.status == "pending":
         conversion.status = "converted"
@@ -449,9 +447,7 @@ async def _credit_referral_on_purchase(uow, user_id: str) -> None:
 
 async def _revoke_referral_on_refund(uow, user_id: str) -> None:
     """Revoke the referrer's wallet credit when a referred user is refunded."""
-    from src.infra.repositories.referral_repository import ReferralRepository
-
-    repo = ReferralRepository(uow.session)
+    repo = uow.referrals
     conversion = await repo.get_conversion_by_referred_user(user_id, for_update=True)
     if conversion and conversion.status == "converted":
         conversion.status = "revoked"
@@ -519,7 +515,7 @@ def parse_timestamp(ms: int | None) -> datetime | None:
     if ms is None:
         return None
     try:
-        return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+        return datetime.fromtimestamp(ms / 1000, tz=UTC)
     except Exception as e:
         logger.error(f"Error parsing timestamp {ms}: {e}")
         return None

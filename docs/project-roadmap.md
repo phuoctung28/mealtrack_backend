@@ -16,6 +16,12 @@
 - [x] Production migration runner is Alembic-only and no longer creates/stamps schema from `Base.metadata`.
 - [x] Local Postgres upgrade verified to Alembic head `20260609000006`.
 
+### June 2026: Async Repository Consolidation
+- [x] Runtime database access consolidated to async SQLAlchemy: FastAPI dependencies, cron jobs, handlers, repositories, and UoW use `AsyncSession`.
+- [x] Deleted sync `UnitOfWork`, sync database config, and legacy sync repositories after replacing remaining test consumers with explicit test-only facades.
+- [x] Architecture guard now expects zero sync DB runtime imports in `src` and no broad sync repository transition allowlist.
+- [x] Default validation: `pytest -q` passes (`1499 passed, 3 skipped`).
+
 ### June 2026: iOS Notification Payload Hardening
 - [x] Removed obsolete direct notification service wiring and direct meal/summary helper sends.
 - [x] Removed background push scheduler lifecycle, scheduler leader lock, stale test notification route, and misleading legacy push/email service names; cron entrypoints now own notification/email work.
@@ -99,7 +105,7 @@
 - [x] CQRS architecture with PyMediator event bus (singleton registry pattern).
 - [x] Chat with streaming AI responses (WebSocket + REST, MessageOrchestrationService, AIResponseCoordinator).
 - [x] Firebase Auth & FCM with platform-specific configs.
-- [x] SQLAlchemy 2.0 with request-scoped sessions (20 connections + 10 overflow).
+- [x] SQLAlchemy 2.0 async runtime with `AsyncUnitOfWork` transaction boundaries.
 - [x] RevenueCat subscription integration.
 - [x] Selective Redis caching policy documented; optional caches degrade, required state must be modeled separately.
 - [x] 11 database tables with Meal aggregate state machine.
