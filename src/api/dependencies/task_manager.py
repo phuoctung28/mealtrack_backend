@@ -1,7 +1,7 @@
-"""Module-level singleton for BackgroundTaskManager.
+"""Process-wide BackgroundTaskManager singleton for the API layer.
 
-Both src/api/main.py (lifecycle owner) and route handlers can import from
-here without creating circular imports between the api and infra layers.
+Lives in api/dependencies so routes and main can access it without
+crossing the api→infra direct-import boundary.
 """
 
 from src.infra.event_bus.background_task_manager import BackgroundTaskManager
@@ -9,11 +9,15 @@ from src.infra.event_bus.background_task_manager import BackgroundTaskManager
 _instance: BackgroundTaskManager | None = None
 
 
-def get_task_manager() -> BackgroundTaskManager:
-    """Return the process-wide BackgroundTaskManager instance.
+def create_task_manager() -> BackgroundTaskManager:
+    """Factory — called once during lifespan startup."""
+    return BackgroundTaskManager()
 
-    Raises RuntimeError if called before set_task_manager() (i.e. before
-    lifespan startup completes).
+
+def get_task_manager() -> BackgroundTaskManager:
+    """Return the process-wide instance.
+
+    Raises RuntimeError if called before lifespan startup completes.
     """
     if _instance is None:
         raise RuntimeError(
@@ -24,7 +28,7 @@ def get_task_manager() -> BackgroundTaskManager:
 
 
 def set_task_manager(manager: BackgroundTaskManager) -> None:
-    """Set the process-wide instance. Called once during lifespan startup."""
+    """Register the process-wide instance. Called once during lifespan startup."""
     global _instance
     _instance = manager
 

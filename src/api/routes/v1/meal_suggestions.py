@@ -157,17 +157,9 @@ async def discover_meals(
             )
 
         if misses:
-            try:
-                from src.infra.database.uow_async import AsyncUnitOfWork
-                from src.infra.repositories.pending_meal_image_repository_async import (
-                    AsyncPendingMealImageRepository,
-                )
+            from src.api.dependencies.meal_image_cache import enqueue_pending_images
 
-                async with AsyncUnitOfWork() as uow:
-                    await AsyncPendingMealImageRepository(uow.session).enqueue_many(misses)
-                # UoW __aexit__ commits on clean exit
-            except Exception as _enqueue_err:
-                logger.warning("Pending image queue enqueue failed (non-fatal): %s", _enqueue_err)
+            await enqueue_pending_images(misses)
 
         images = images_list
         # --- end integration ---
@@ -352,7 +344,7 @@ async def save_meal_suggestion(
         # Unsplash API compliance: trigger download event (fire-and-forget, managed)
         if request.unsplash_download_location:
             from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
-            from src.infra.event_bus.task_manager_singleton import get_task_manager
+            from src.api.dependencies.task_manager import get_task_manager
 
             get_task_manager().spawn(
                 "unsplash_download",

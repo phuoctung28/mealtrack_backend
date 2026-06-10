@@ -35,11 +35,11 @@ from src.api.base_dependencies import (
     initialize_cache_layer,
     shutdown_cache_layer,
 )
-from src.infra.event_bus.task_manager_singleton import (
+from src.api.dependencies.task_manager import (
+    create_task_manager,
     set_task_manager,
     clear_task_manager,
 )
-from src.infra.event_bus.background_task_manager import BackgroundTaskManager
 from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.middleware.rate_limit import limiter
@@ -170,7 +170,7 @@ async def lifespan(app: FastAPI):
 
     # Initialise the process-wide background task manager before any handler
     # that may spawn fire-and-forget coroutines.
-    _task_manager = BackgroundTaskManager()
+    _task_manager = create_task_manager()
     set_task_manager(_task_manager)
 
     # PostHog LLM Analytics via OpenTelemetry — must run before any LangChain calls
