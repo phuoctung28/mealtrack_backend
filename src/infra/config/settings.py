@@ -232,6 +232,24 @@ class Settings(BaseSettings):
     MEAL_ANALYZE_MAX_ATTEMPTS: int = Field(default=2)
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(default=700)
 
+    # Affiliate integration
+    AFFILIATE_INTEGRATION_ENABLED: bool = Field(
+        default=False,
+        description="Enable affiliate code validation via nutree-affiliate internal API",
+    )
+    AFFILIATE_API_BASE_URL: str | None = Field(
+        default=None,
+        description="Base URL of the nutree-affiliate service (e.g. https://affiliate.nutree.app)",
+    )
+    AFFILIATE_INTERNAL_SECRET: str | None = Field(
+        default=None,
+        description="Shared HMAC-SHA256 secret for MealTrack↔nutree-affiliate internal calls",
+    )
+    AFFILIATE_CODE_VALIDATE_TIMEOUT_SECONDS: float = Field(
+        default=3.0,
+        description="Timeout for affiliate code validation HTTP call",
+    )
+
     # Referral system (multi-currency)
     REFERRAL_COMMISSIONS: dict = Field(
         default={"USD": 2, "VND": 50000, "EUR": 1.8, "default": 2},

@@ -24,6 +24,9 @@ from src.infra.repositories.movement_repository_async import AsyncMovementReposi
 from src.infra.repositories.notification_repository_async import (
     AsyncNotificationRepository,
 )
+from src.infra.repositories.affiliate_event_outbox_repository import (
+    AffiliateEventOutboxRepository,
+)
 from src.infra.repositories.promo_code_repository import PromoCodeRepository
 from src.infra.repositories.referral_repository import ReferralRepository
 from src.infra.repositories.saved_suggestion_db_repository_async import (
@@ -118,6 +121,7 @@ class AsyncUnitOfWork(AsyncUnitOfWorkPort):
         self.meal_translations = AsyncMealTranslationRepository(session)
         self.promo_codes = PromoCodeRepository(session)
         self.referrals = ReferralRepository(session)
+        self.affiliate_outbox = AffiliateEventOutboxRepository(session)
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         session = self.session

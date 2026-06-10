@@ -97,6 +97,38 @@ Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW ow
 
 ---
 
+## Affiliate System Boundary
+
+MealTrack and nutree-affiliate are **separate services with separate databases**. MealTrack must never join against or directly write affiliate tables.
+
+```
+Nutree mobile ──→ MealTrack (validate/apply code)
+                       │
+                       │ same DB transaction
+                       ▼
+               affiliate_event_outbox
+                       │
+                       │ cron every 5 min
+                       ▼
+              nutree-affiliate API  ──→ nutree-affiliate DB
+                 (Vercel)              (commission ledger, payout)
+```
+
+**Identity separation:** A nutree app user and an affiliate user are distinct identities even when their email addresses match. MealTrack holds only `mealtrack_user_id`; nutree-affiliate holds only `affiliate_id`.
+
+**Ownership rules:**
+
+| Data | Owner |
+|------|-------|
+| App users, subscriptions, RevenueCat events | MealTrack |
+| Affiliate identity, codes, commission rules | nutree-affiliate |
+| Ledger credits/reversals, payout state | nutree-affiliate |
+| `affiliate_event_outbox` retry queue | MealTrack (infrastructure only) |
+
+**Integration:** See `docs/external-services.md` → nutree-affiliate section.
+
+---
+
 ## Known Issues
 
 - CORS `allow_origins=["*"]` wide open in production (security risk)

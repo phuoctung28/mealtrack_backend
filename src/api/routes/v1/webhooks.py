@@ -17,6 +17,7 @@ from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.posthog_adapter import PostHogAdapter
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
+from src.infra.config.settings import settings
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
@@ -242,6 +243,34 @@ def _preferred_transfer_target(transferred_to: list[str]) -> str | None:
     )
 
 
+async def _enqueue_affiliate_lifecycle_event(
+    uow, user, event: dict, affiliate_event_type: str
+) -> None:
+    """Enqueue a lifecycle event for nutree-affiliate (fire-and-not-fail)."""
+    if not settings.AFFILIATE_INTEGRATION_ENABLED:
+        return
+    try:
+        await uow.affiliate_outbox.enqueue(
+            event_type=affiliate_event_type,
+            payload={
+                "event_type": affiliate_event_type,
+                "mealtrack_user_id": str(user.id),
+                "product_id": event.get("product_id"),
+                "period_type": event.get("period_type"),
+                "subscription_id": event.get("transaction_id")
+                or event.get("original_transaction_id"),
+            },
+            event_id=event.get("id"),
+        )
+    except Exception:
+        logger.warning(
+            "Failed to enqueue affiliate event %s for user %s",
+            affiliate_event_type,
+            user.id,
+            exc_info=True,
+        )
+
+
 async def handle_purchase(uow, user, event):
     """Handle initial purchase."""
     logger.info(f"Creating subscription for user {user.id}")
@@ -273,6 +302,9 @@ async def handle_purchase(uow, user, event):
 
     # Credit referrer if this user has a pending referral conversion
     await _credit_referral_on_purchase(uow, str(user.id))
+    await _enqueue_affiliate_lifecycle_event(
+        uow, user, event, "subscription_initial_purchase"
+    )
 
 
 async def handle_renewal(uow, user, event):
@@ -293,6 +325,7 @@ async def handle_renewal(uow, user, event):
         await handle_purchase(uow, user, event)
 
     await capture_subscription_lifecycle_event(user, event, "RENEWAL", subscription)
+    await _enqueue_affiliate_lifecycle_event(uow, user, event, "subscription_renewal")
 
     # Purge any pending trial-expiry pushes so renewed users don't get a
     # "your trial ends tomorrow" push for a sub that just auto-renewed.
@@ -329,6 +362,7 @@ async def handle_cancellation(uow, user, event):
     await capture_subscription_lifecycle_event(
         user, event, "CANCELLATION", subscription
     )
+    await _enqueue_affiliate_lifecycle_event(uow, user, event, "subscription_canceled")
 
     # Send cancellation email
     if not user.email_opt_out:
@@ -350,6 +384,7 @@ async def handle_expiration(uow, user, event):
         logger.info(f"User {user.id} subscription expired")
 
     await capture_subscription_lifecycle_event(user, event, "EXPIRATION", subscription)
+    await _enqueue_affiliate_lifecycle_event(uow, user, event, "subscription_expired")
 
 
 async def handle_billing_issue(uow, user, event):
@@ -391,6 +426,7 @@ async def handle_refund(uow, user, event):
         logger.info(f"User {user.id} subscription refunded")
 
     await capture_subscription_lifecycle_event(user, event, "REFUND", subscription)
+    await _enqueue_affiliate_lifecycle_event(uow, user, event, "subscription_refund")
 
     await _revoke_referral_on_refund(uow, str(user.id))
 
