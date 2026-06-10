@@ -6,6 +6,7 @@ immediately after a POST would hit a stale Redis key.
 """
 
 import logging
+import time
 from datetime import date, timedelta
 from typing import Optional
 
@@ -57,25 +58,39 @@ class CacheInvalidationService:
 
     async def after_meal_write(self, user_id: str, meal_date: date) -> None:
         """Invalidate all caches affected by a meal create/edit/delete."""
+        _t0 = time.perf_counter()
         meal_week_start = _get_week_start(meal_date)
         current_week_start = _get_week_start(date.today())
 
         # Critical keys (client reads immediately after write)
+        _tc = time.perf_counter()
         await self._invalidate_pattern(
             f"user:{user_id}:activities:{meal_date.isoformat()}:*"
         )
         await self._invalidate_pattern(f"user:{user_id}:nutrition_bulk:*")
         await self._invalidate_key(CacheKeys.daily_macros(user_id, meal_date)[0])
         await self._invalidate_weekly_budget(user_id, meal_week_start)
+        _critical_ms = (time.perf_counter() - _tc) * 1000
 
         # Secondary keys (read on other screens, slight delay acceptable)
+        _ts = time.perf_counter()
         await self._invalidate_key(CacheKeys.daily_breakdown(user_id, meal_week_start)[0])
         await self._invalidate_key(CacheKeys.user_streak(user_id)[0])
+        _secondary_ms = (time.perf_counter() - _ts) * 1000
 
         # Backdated meal: also invalidate current week
         if meal_week_start != current_week_start:
             await self._invalidate_weekly_budget(user_id, current_week_start)
             await self._invalidate_key(CacheKeys.daily_breakdown(user_id, current_week_start)[0])
+
+        _total_ms = (time.perf_counter() - _t0) * 1000
+        logger.info(
+            "cache_invalidation timing: user=%s critical_ms=%.1f secondary_ms=%.1f total_ms=%.1f",
+            user_id,
+            _critical_ms,
+            _secondary_ms,
+            _total_ms,
+        )
 
     async def after_movement_write(self, user_id: str, log_date: date) -> None:
         """Invalidate all caches affected by a movement log/edit/delete."""

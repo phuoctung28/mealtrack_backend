@@ -19,6 +19,7 @@ from src.api.schemas.response.feature_flag_responses import (
     FeatureFlagUpdatedResponse,
     IndividualFeatureFlagResponse,
 )
+from src.infra.services.feature_flag_service import FeatureFlagService
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService
@@ -100,7 +101,6 @@ async def get_individual_feature_flag(
 @router.post("/", response_model=FeatureFlagCreatedResponse, status_code=201)
 async def create_feature_flag(
     request: CreateFeatureFlagRequest,
-    db: AsyncSession = Depends(get_async_db),
     cache_service: CacheService | None = Depends(get_cache_service),
     _admin: str = Depends(require_admin),
 ):
@@ -113,22 +113,8 @@ async def create_feature_flag(
 
     Returns the created feature flag information.
     """
-    # Check if feature flag already exists
-    result = await db.execute(select(FeatureFlag).where(FeatureFlag.name == request.name))
-    existing_flag = result.scalar_one_or_none()
-    if existing_flag:
-        raise HTTPException(
-            status_code=409, detail=f"Feature flag '{request.name}' already exists"
-        )
-
-    # Create new feature flag
-    new_flag = FeatureFlag(
-        name=request.name, enabled=request.enabled, description=request.description
-    )
-
-    db.add(new_flag)
-    await db.commit()
-    await db.refresh(new_flag)
+    svc = FeatureFlagService()
+    new_flag = await svc.create(request.name, request.enabled, request.description)
 
     response = FeatureFlagCreatedResponse(
         name=new_flag.name,
@@ -148,7 +134,6 @@ async def create_feature_flag(
 async def update_feature_flag(
     feature_name: str,
     request: UpdateFeatureFlagRequest,
-    db: AsyncSession = Depends(get_async_db),
     cache_service: CacheService | None = Depends(get_cache_service),
     _admin: str = Depends(require_admin),
 ):
@@ -161,24 +146,8 @@ async def update_feature_flag(
 
     Returns the updated feature flag information.
     """
-    result = await db.execute(select(FeatureFlag).where(FeatureFlag.name == feature_name))
-    feature_flag = result.scalar_one_or_none()
-
-    if not feature_flag:
-        raise HTTPException(
-            status_code=404, detail=f"Feature flag '{feature_name}' not found"
-        )
-
-    # Update only provided fields
-    if request.enabled is not None:
-        feature_flag.enabled = request.enabled
-    if request.description is not None:
-        feature_flag.description = request.description
-
-    feature_flag.updated_at = utc_now()
-
-    await db.commit()
-    await db.refresh(feature_flag)
+    svc = FeatureFlagService()
+    feature_flag = await svc.update(feature_name, request.enabled, request.description)
 
     response = FeatureFlagUpdatedResponse(
         name=feature_flag.name,

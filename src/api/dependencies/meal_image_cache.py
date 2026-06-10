@@ -22,6 +22,13 @@ from src.infra.repositories.pending_meal_image_repository_async import (
 from src.infra.repositories.pgvector_meal_image_cache_repository_async import (
     AsyncPgvectorMealImageCacheRepository,
 )
+from src.infra.services.pending_image_enqueue_service import enqueue_pending_images
+
+__all__ = [
+    "get_meal_image_cache_service",
+    "get_pending_queue",
+    "enqueue_pending_images",
+]
 
 
 async def get_meal_image_cache_service(
@@ -39,3 +46,5 @@ async def get_pending_queue(
     session: AsyncSession = Depends(get_async_db),
 ) -> AsyncPendingMealImageRepository:
     return AsyncPendingMealImageRepository(session)
+
+

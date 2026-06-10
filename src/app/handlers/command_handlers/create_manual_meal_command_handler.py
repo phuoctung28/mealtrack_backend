@@ -4,6 +4,7 @@ All items must provide their own nutrition (via custom_nutrition).
 """
 
 import logging
+import time
 from typing import Any
 from uuid import uuid4
 
@@ -43,11 +44,27 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
         if self.meal_repository:
             return await self._process_meal(event, self.meal_repository, uow=None)
         else:
+            _t_start = time.perf_counter()
+
+            _t_db_start = time.perf_counter()
             async with self.uow as uow:
                 saved_meal, meal_date = await self._process_meal(event, uow.meals, uow=uow)
+            _db_ms = (time.perf_counter() - _t_db_start) * 1000
+
             # Invalidate after commit so a concurrent read can't repopulate from a pre-commit snapshot.
+            _t_cache_start = time.perf_counter()
             if self.cache_invalidation:
                 await self.cache_invalidation.after_meal_write(event.user_id, meal_date)
+            _cache_ms = (time.perf_counter() - _t_cache_start) * 1000
+
+            _total_ms = (time.perf_counter() - _t_start) * 1000
+            logger.info(
+                "manual_save handler timing: user=%s db_ms=%.1f cache_ms=%.1f total_ms=%.1f",
+                event.user_id,
+                _db_ms,
+                _cache_ms,
+                _total_ms,
+            )
             return saved_meal
 
     async def _process_meal(self, event: CreateManualMealCommand, meal_repo, uow=None):

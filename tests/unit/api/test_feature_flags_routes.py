@@ -1,6 +1,6 @@
 """Feature flag routes with mocked DB session and optional cache."""
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -136,68 +136,71 @@ def test_get_individual_flag_found_and_cache_set(app_no_cache):
 
 
 def test_create_feature_flag_success(app_no_cache):
-    session = _async_session_for_results([])
-
-    async def refresh_side_effect(obj):
-        obj.created_at = datetime(2024, 6, 1, tzinfo=None)
-
-    session.refresh.side_effect = refresh_side_effect
-    app_no_cache.dependency_overrides[get_async_db] = lambda: session
+    new_flag = _make_flag(name="new_flag", enabled=False)
+    new_flag.created_at = datetime(2024, 6, 1, tzinfo=None)
 
     cache = AsyncMock()
     app_no_cache.dependency_overrides[get_cache_service] = lambda: cache
 
-    r = TestClient(app_no_cache).post(
-        "/v1/feature-flags/",
-        json={"name": "new_flag", "enabled": False, "description": "x"},
-    )
+    with patch(
+        "src.api.routes.v1.feature_flags.FeatureFlagService.create",
+        new=AsyncMock(return_value=new_flag),
+    ):
+        r = TestClient(app_no_cache).post(
+            "/v1/feature-flags/",
+            json={"name": "new_flag", "enabled": False, "description": "x"},
+        )
     assert r.status_code == 201
-    session.add.assert_called_once()
-    session.commit.assert_awaited_once()
     cache.invalidate.assert_awaited()
     app_no_cache.dependency_overrides = {}
 
 
 def test_create_feature_flag_conflict(app_no_cache):
-    session = _async_session_for_results([_make_flag()])
-    app_no_cache.dependency_overrides[get_async_db] = lambda: session
+    from fastapi import HTTPException
 
-    r = TestClient(app_no_cache).post(
-        "/v1/feature-flags/",
-        json={"name": "beta", "enabled": True},
-    )
+    with patch(
+        "src.api.routes.v1.feature_flags.FeatureFlagService.create",
+        new=AsyncMock(side_effect=HTTPException(status_code=409, detail="already exists")),
+    ):
+        r = TestClient(app_no_cache).post(
+            "/v1/feature-flags/",
+            json={"name": "beta", "enabled": True},
+        )
     assert r.status_code == 409
     app_no_cache.dependency_overrides = {}
 
 
 def test_update_feature_flag_success(app_no_cache):
     flag = _make_flag()
-    session = _async_session_for_results([flag])
-    app_no_cache.dependency_overrides[get_async_db] = lambda: session
+    flag.updated_at = datetime(2024, 1, 3)
 
     cache = AsyncMock()
     app_no_cache.dependency_overrides[get_cache_service] = lambda: cache
 
-    r = TestClient(app_no_cache).put(
-        "/v1/feature-flags/beta",
-        json={"enabled": False, "description": "new desc"},
-    )
+    with patch(
+        "src.api.routes.v1.feature_flags.FeatureFlagService.update",
+        new=AsyncMock(return_value=flag),
+    ):
+        r = TestClient(app_no_cache).put(
+            "/v1/feature-flags/beta",
+            json={"enabled": False, "description": "new desc"},
+        )
     assert r.status_code == 200
-    assert flag.enabled is False
-    assert flag.description == "new desc"
-    session.commit.assert_awaited_once()
     cache.invalidate.assert_awaited()
     app_no_cache.dependency_overrides = {}
 
 
 def test_update_feature_flag_not_found(app_no_cache):
-    session = _async_session_for_results([])
-    app_no_cache.dependency_overrides[get_async_db] = lambda: session
+    from fastapi import HTTPException
 
-    r = TestClient(app_no_cache).put(
-        "/v1/feature-flags/ghost",
-        json={"enabled": True},
-    )
+    with patch(
+        "src.api.routes.v1.feature_flags.FeatureFlagService.update",
+        new=AsyncMock(side_effect=HTTPException(status_code=404, detail="not found")),
+    ):
+        r = TestClient(app_no_cache).put(
+            "/v1/feature-flags/ghost",
+            json={"enabled": True},
+        )
     assert r.status_code == 404
     app_no_cache.dependency_overrides = {}
 
@@ -232,20 +235,19 @@ def test_mutations_allow_configured_admin(monkeypatch):
     monkeypatch.setattr(
         auth_dep.settings, "ADMIN_EMAILS", "boss@nutree.ai, admin@x.com"
     )
-    session = _async_session_for_results([])
-
-    async def refresh_side_effect(obj):
-        obj.created_at = datetime(2024, 6, 1)
-
-    session.refresh.side_effect = refresh_side_effect
+    new_flag = _make_flag(name="n", enabled=True)
+    new_flag.created_at = datetime(2024, 6, 1)
 
     application = FastAPI()
     application.include_router(router)
     application.dependency_overrides[get_cache_service] = lambda: None
-    application.dependency_overrides[get_async_db] = lambda: session
     application.dependency_overrides[get_current_user_email] = lambda: "Admin@X.com"
 
-    r = TestClient(application).post(
-        "/v1/feature-flags/", json={"name": "n", "enabled": True, "description": "d"}
-    )
+    with patch(
+        "src.api.routes.v1.feature_flags.FeatureFlagService.create",
+        new=AsyncMock(return_value=new_flag),
+    ):
+        r = TestClient(application).post(
+            "/v1/feature-flags/", json={"name": "n", "enabled": True, "description": "d"}
+        )
     assert r.status_code == 201

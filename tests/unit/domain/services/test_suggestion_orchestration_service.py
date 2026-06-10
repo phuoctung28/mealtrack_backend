@@ -183,14 +183,14 @@ class TestSuggestionGenerationPipeline:
             ]
         }
 
-        mock_generation_service.generate_meal_plan.side_effect = [
+        mock_generation_service.generate_meal_plan_async = AsyncMock(side_effect=[
             mock_names,
             mock_recipe_response,
             mock_recipe_response,
             mock_recipe_response,
             None,
             None,
-        ]
+        ])
 
         suggestions = await recipe_generator.generate(
             session=mock_session, exclude_meal_names=[]
@@ -199,7 +199,7 @@ class TestSuggestionGenerationPipeline:
         assert len(suggestions) == 3
         assert all(isinstance(s, MealSuggestion) for s in suggestions)
 
-        call_count = mock_generation_service.generate_meal_plan.call_count
+        call_count = mock_generation_service.generate_meal_plan_async.call_count
         assert 5 <= call_count <= 6, f"Expected 5-6 calls, got {call_count}"
 
     async def test_failure_if_not_enough_names_generated(
@@ -209,7 +209,7 @@ class TestSuggestionGenerationPipeline:
         Tests that the process fails if Phase 1 does not return enough unique meal names.
         """
         mock_names = {"meal_names": ["Spinach Omelette", "Tofu Scramble"]}
-        mock_generation_service.generate_meal_plan.return_value = mock_names
+        mock_generation_service.generate_meal_plan_async = AsyncMock(return_value=mock_names)
 
         with pytest.raises(
             RuntimeError, match="Could not generate enough unique meal names"
@@ -231,13 +231,13 @@ class TestSuggestionGenerationPipeline:
             ]
         }
 
-        mock_generation_service.generate_meal_plan.side_effect = [
+        mock_generation_service.generate_meal_plan_async = AsyncMock(side_effect=[
             mock_names,
             None,
             None,
             {"ingredients": [], "recipe_steps": [], "prep_time_minutes": 0},
             None,
-        ]
+        ])
 
         with pytest.raises(RuntimeError, match="Failed to generate any recipes"):
             await recipe_generator.generate(session=mock_session, exclude_meal_names=[])
@@ -264,17 +264,17 @@ class TestSuggestionGenerationPipeline:
                 "Avocado Toast",
             ]
         }
-        mock_generation_service.generate_meal_plan.side_effect = [
+        mock_generation_service.generate_meal_plan_async = AsyncMock(side_effect=[
             mock_names,
             mock_recipe_response,
             mock_recipe_response,
             mock_recipe_response,
             mock_recipe_response,
-        ]
+        ])
 
         await recipe_generator.generate(session=mock_session, exclude_meal_names=[])
 
-        all_calls = mock_generation_service.generate_meal_plan.call_args_list
+        all_calls = mock_generation_service.generate_meal_plan_async.call_args_list
 
         # Name generation: English-only enforcement
         name_gen_system_prompt = all_calls[0].args[1]

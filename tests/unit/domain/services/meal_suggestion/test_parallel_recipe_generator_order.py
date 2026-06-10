@@ -429,7 +429,7 @@ async def test_generate_with_retry_passes_recipe_details_schema_to_generation_se
         ],
         "prep_time_minutes": 25,
     }
-    generator._generation.generate_meal_plan.return_value = raw_recipe
+    generator._generation.generate_meal_plan_async = AsyncMock(return_value=raw_recipe)
 
     meal_macros = MagicMock()
     meal_macros.calories = 450
@@ -455,5 +455,5 @@ async def test_generate_with_retry_passes_recipe_details_schema_to_generation_se
     )
 
     assert result is not None
-    first_call = generator._generation.generate_meal_plan.call_args_list[0]
+    first_call = generator._generation.generate_meal_plan_async.call_args_list[0]
     assert first_call.args[4] is RecipeDetailsResponse

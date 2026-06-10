@@ -68,8 +68,7 @@ class ParseMealTextHandler(
             language=command.language
         )
 
-        raw = await asyncio.to_thread(
-            self._meal_generation_service.generate_meal_plan,
+        raw = await self._meal_generation_service.generate_meal_plan_async(
             prompt=sanitized_text,
             system_message=system_prompt,
             response_type="json",

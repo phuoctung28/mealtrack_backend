@@ -222,13 +222,15 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
                 "instructions": ["Grill chicken", "Serve over salad"],
             }
 
-        def generate_meal_plan(
+        async def generate_meal_plan_async(
             self,
             prompt,
             system_message,
             response_type="json",
             max_tokens=None,
             schema=None,
+            model_purpose=None,
+            thinking_budget=None,
         ):
             """Return mock meal plan or meal names based on schema."""
             # Check if this is a MealNamesResponse request (has schema with meal_names)

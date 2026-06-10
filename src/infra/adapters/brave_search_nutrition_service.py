@@ -116,7 +116,7 @@ class BraveSearchNutritionService:
 
             user_prompt = f"Barcode: {barcode}\nLanguage: {language}\n\nWeb search snippets:\n{snippets}"
 
-            result = self._meal_gen.generate_meal_plan(
+            result = await self._meal_gen.generate_meal_plan_async(
                 user_prompt,
                 system_prompt,
                 response_type="json",

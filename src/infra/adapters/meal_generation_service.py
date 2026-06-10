@@ -3,9 +3,7 @@ Meal generation service implementation using AI Model Manager.
 Provides resilient AI calls with automatic fallback.
 """
 
-import asyncio
 import logging
-from typing import Any
 
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
@@ -32,7 +30,7 @@ class MealGenerationService(MealGenerationServicePort):
         """Initialize with AI model manager."""
         self._ai_manager = AIModelManager.get_instance()
 
-    def generate_meal_plan(
+    async def generate_meal_plan_async(
         self,
         prompt: str,
         system_message: str,
@@ -41,37 +39,15 @@ class MealGenerationService(MealGenerationServicePort):
         schema: type = None,
         model_purpose: str | None = None,
         thinking_budget: int | None = None,
-    ) -> dict[str, Any]:
-        """
-        Generate meal plan with automatic fallback.
-
-        Args:
-            prompt: The generation prompt
-            system_message: System instructions
-            response_type: Response format ("json" or "text")
-            max_tokens: Maximum output tokens
-            schema: Optional Pydantic model for structured output
-            model_purpose: Purpose for model selection
-
-        Returns:
-            Generated meal plan data
-        """
+    ):
+        """Generate meal plan — runs directly on the caller's event loop."""
         purpose = PURPOSE_MAP.get(model_purpose, ModelPurpose.GENERAL)
-
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        return loop.run_until_complete(
-            self._ai_manager.generate(
-                purpose=purpose,
-                prompt=prompt,
-                system_message=system_message,
-                response_type=response_type,
-                max_tokens=max_tokens,
-                schema=schema,
-                thinking_budget=thinking_budget,
-            )
+        return await self._ai_manager.generate(
+            purpose=purpose,
+            prompt=prompt,
+            system_message=system_message,
+            response_type=response_type,
+            max_tokens=max_tokens,
+            schema=schema,
+            thinking_budget=thinking_budget,
         )

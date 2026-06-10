@@ -35,6 +35,11 @@ from src.api.base_dependencies import (
     initialize_cache_layer,
     shutdown_cache_layer,
 )
+from src.api.dependencies.task_manager import (
+    create_task_manager,
+    set_task_manager,
+    clear_task_manager,
+)
 from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.middleware.rate_limit import limiter
@@ -163,6 +168,11 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting MealTrack API...")
 
+    # Initialise the process-wide background task manager before any handler
+    # that may spawn fire-and-forget coroutines.
+    _task_manager = create_task_manager()
+    set_task_manager(_task_manager)
+
     # PostHog LLM Analytics via OpenTelemetry — must run before any LangChain calls
     _posthog_key = os.getenv("POSTHOG_API_KEY")
     if _posthog_key:
@@ -257,6 +267,15 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down MealTrack API...")
+
+    # Drain all managed background tasks before tearing down services so that
+    # in-flight work (e.g. Unsplash download triggers) can complete cleanly.
+    try:
+        await _task_manager.drain(timeout=5.0)
+    except Exception as exc:
+        logger.warning("Background task drain failed: %s", exc)
+    finally:
+        clear_task_manager()
 
     # Stop Gemini cache refresh loop before disconnecting Redis
     if gemini_cache_manager is not None:
