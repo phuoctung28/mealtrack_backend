@@ -38,3 +38,17 @@ class MockImageStore(ImageStorePort):
     def get_url(self, image_id: str) -> str:
         """Get mock URL for image."""
         return f"https://mock.cloudinary.com/images/{image_id}"
+
+    async def save_async(
+        self, image_data: bytes, content_type: str, image_id: Optional[str] = None
+    ) -> str:
+        return self.save(image_data, content_type, image_id)
+
+    async def load_async(self, image_id: str) -> Optional[bytes]:
+        return self.load(image_id)
+
+    async def get_url_async(self, image_id: str) -> Optional[str]:
+        return self.get_url(image_id)
+
+    async def delete_async(self, image_id: str) -> bool:
+        return self.delete(image_id)

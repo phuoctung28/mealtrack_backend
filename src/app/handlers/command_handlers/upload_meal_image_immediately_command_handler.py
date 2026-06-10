@@ -2,7 +2,6 @@
 Handler for immediate meal image upload and analysis.
 """
 
-import asyncio
 import logging
 import time
 from typing import Any
@@ -123,13 +122,10 @@ class UploadMealImageImmediatelyHandler(
 
         # Step 2: Upload to Cloudinary FIRST (before any DB operations)
         logger.info(f"[UPLOAD-START] image_id={image_id}")
-        loop = asyncio.get_running_loop()
         start = time.time()
 
         try:
-            image_url = await loop.run_in_executor(
-                None,
-                self.image_store.save,
+            image_url = await self.image_store.save_async(
                 command.file_contents,
                 command.content_type,
                 image_id,

@@ -63,3 +63,25 @@ class ImageStorePort(ABC):
             True if deleted successfully, False otherwise
         """
         pass
+
+    @abstractmethod
+    async def save_async(
+        self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None
+    ) -> str:
+        """Async version of save. Implementations should use asyncio.to_thread for sync SDKs."""
+        pass
+
+    @abstractmethod
+    async def load_async(self, image_id: str) -> Optional[bytes]:
+        """Async version of load."""
+        pass
+
+    @abstractmethod
+    async def get_url_async(self, image_id: str) -> Optional[str]:
+        """Async version of get_url."""
+        pass
+
+    @abstractmethod
+    async def delete_async(self, image_id: str) -> bool:
+        """Async version of delete."""
+        pass

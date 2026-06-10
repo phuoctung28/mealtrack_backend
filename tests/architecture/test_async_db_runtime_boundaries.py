@@ -12,6 +12,10 @@ ALLOWED_REPOSITORY_TRANSACTION_FILES = {
     "src/infra/repositories/pgvector_meal_image_cache_repository_async.py",
 }
 
+# Existing adapters that still use `requests` (sync HTTP) — tracked for Phase 3 removal.
+# Do NOT add new entries here; fix the offender instead.
+ALLOWED_REQUESTS_IMPORT_FILES = set()
+
 
 def _python_files(root: Path) -> list[Path]:
     return sorted(
@@ -180,3 +184,51 @@ def test_promo_referral_runtime_handlers_use_uow_repositories() -> None:
                 offenders[_relative(path)] = matches
 
     assert offenders == {}
+
+
+def test_app_runtime_config_does_not_prefer_database_url_direct() -> None:
+    """Guard: app runtime must not silently fall back to DATABASE_URL_DIRECT."""
+    import re
+
+    config_path = SRC_ROOT / "infra" / "database" / "config_async.py"
+    text = config_path.read_text(encoding="utf-8")
+
+    # The old pattern was: os.getenv("DATABASE_URL_DIRECT") or os.getenv("DATABASE_URL")
+    # This must not reappear in the app runtime config.
+    forbidden_pattern = "DATABASE_URL_DIRECT.*or.*DATABASE_URL"
+    assert not re.search(forbidden_pattern, text), (
+        "config_async.py must not prefer DATABASE_URL_DIRECT for app runtime URL. "
+        "Use APP_DATABASE_URL > DATABASE_URL priority instead."
+    )
+
+
+def test_no_requests_imports_in_async_adapter_paths() -> None:
+    """Guard: runtime adapter files must not import 'requests' (sync HTTP library).
+
+    New adapters must use httpx. Files in ALLOWED_REQUESTS_IMPORT_FILES are
+    tracked for Phase 3 migration; the allowlist must not grow.
+    """
+    adapters_root = SRC_ROOT / "infra" / "adapters"
+    offenders: dict[str, list[int]] = {}
+    for path in _python_files(adapters_root):
+        relative = _relative(path)
+        if relative in ALLOWED_REQUESTS_IMPORT_FILES:
+            continue
+        tree = _parse(path)
+        lines_with_requests = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "requests" or alias.name.startswith("requests."):
+                        lines_with_requests.append(getattr(node, "lineno", 0))
+            if isinstance(node, ast.ImportFrom):
+                if (node.module or "").startswith("requests"):
+                    lines_with_requests.append(getattr(node, "lineno", 0))
+        if lines_with_requests:
+            offenders[relative] = lines_with_requests
+
+    assert offenders == {}, (
+        f"These adapter files import 'requests' (sync HTTP library) "
+        f"in async runtime paths: {offenders}. "
+        "Replace with httpx or move to an explicit off-loop boundary."
+    )

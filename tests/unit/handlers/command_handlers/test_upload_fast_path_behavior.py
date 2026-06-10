@@ -97,9 +97,9 @@ async def test_translation_called_for_non_english_language():
         event_bus=mock_event_bus,
     )
     handler.image_store = MagicMock()
-    handler.image_store.save.return_value = (
+    handler.image_store.save_async = AsyncMock(return_value=(
         "https://res.cloudinary.com/demo/image/upload/00000000-0000-0000-0000-000000000123"
-    )
+    ))
     handler.vision_service = MagicMock()
     handler.vision_service.analyze = AsyncMock(return_value={"dish_name": "Pho"})
     handler.gpt_parser = MagicMock()
@@ -166,6 +166,7 @@ def parallel_mode_harness():
         event_bus=mock_event_bus,
     )
     handler.image_store = MagicMock()
+    handler.image_store.save_async = AsyncMock()
     handler.vision_service = MagicMock()
     handler.vision_service.analyze = AsyncMock()
     handler.gpt_parser = MagicMock()
@@ -193,13 +194,13 @@ async def test_parallel_mode_runs_upload_and_analysis_and_returns_ready(
 ):
     harness = parallel_mode_harness
 
-    def upload_side_effect(file_contents, content_type, image_id=None):
-        return "https://res.cloudinary.com/demo/image/upload/00000000-0000-0000-0000-000000000123"
+    harness.handler.image_store.save_async = AsyncMock(
+        return_value="https://res.cloudinary.com/demo/image/upload/00000000-0000-0000-0000-000000000123"
+    )
 
     def analyze_side_effect(file_contents):
         return {"dish_name": "Pho"}
 
-    harness.handler.image_store.save.side_effect = upload_side_effect
     harness.handler.vision_service.analyze.side_effect = analyze_side_effect
 
     meal = await harness.handler.handle(harness.command)
@@ -213,13 +214,11 @@ async def test_parallel_mode_marks_failed_when_upload_fails_but_analysis_succeed
 ):
     harness = parallel_mode_harness
 
-    def upload_side_effect(file_contents, content_type, image_id=None):
-        raise RuntimeError("upload failed")
+    harness.handler.image_store.save_async = AsyncMock(side_effect=RuntimeError("upload failed"))
 
     def analyze_side_effect(file_contents):
         return {"dish_name": "Pho"}
 
-    harness.handler.image_store.save.side_effect = upload_side_effect
     harness.handler.vision_service.analyze.side_effect = analyze_side_effect
 
     with pytest.raises(RuntimeError, match="Cloudinary upload failed"):
@@ -237,19 +236,19 @@ async def test_parallel_mode_marks_failed_when_analysis_fails_even_if_upload_suc
 ):
     harness = parallel_mode_harness
 
-    def upload_side_effect(file_contents, content_type, image_id=None):
-        return "https://res.cloudinary.com/demo/image/upload/00000000-0000-0000-0000-000000000123"
+    harness.handler.image_store.save_async = AsyncMock(
+        return_value="https://res.cloudinary.com/demo/image/upload/00000000-0000-0000-0000-000000000123"
+    )
 
     def analyze_side_effect(file_contents):
         raise ValueError("analysis failed")
 
-    harness.handler.image_store.save.side_effect = upload_side_effect
     harness.handler.vision_service.analyze.side_effect = analyze_side_effect
 
     with pytest.raises(ValueError, match="analysis failed"):
         await harness.handler.handle(harness.command)
 
-    assert harness.handler.image_store.save.call_count == 1
+    assert harness.handler.image_store.save_async.call_count == 1
     # No DB record created when analysis fails (upload-first flow)
     assert len(harness.saved_state["meals"]) == 0
 
@@ -260,13 +259,11 @@ async def test_parallel_mode_prioritises_analysis_error_when_both_fail(
 ):
     harness = parallel_mode_harness
 
-    def upload_side_effect(file_contents, content_type, image_id=None):
-        raise RuntimeError("upload failed")
+    harness.handler.image_store.save_async = AsyncMock(side_effect=RuntimeError("upload failed"))
 
     def analyze_side_effect(file_contents):
         raise ValueError("analysis failed")
 
-    harness.handler.image_store.save.side_effect = upload_side_effect
     harness.handler.vision_service.analyze.side_effect = analyze_side_effect
 
     # Upload-first: upload error is raised before analysis even runs

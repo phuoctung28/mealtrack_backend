@@ -33,6 +33,34 @@ class Settings(BaseSettings):
 
     # Database configuration
     DATABASE_URL: str | None = Field(default=None)
+    APP_DATABASE_URL: str | None = Field(
+        default=None,
+        description="App runtime DB URL. Prefer direct Neon URL in production.",
+    )
+    DATABASE_URL_DIRECT: str | None = Field(
+        default=None,
+        description="Direct Neon URL for Alembic migrations only. Not used by app runtime.",
+    )
+    DB_CONNECTION_MODE: str = Field(
+        default="direct_pool",
+        description="DB connection mode: 'direct_pool' (AsyncAdaptedQueuePool) or 'neon_pooler' (NullPool)",
+    )
+    ASYNC_POOL_SIZE_PER_WORKER: int | None = Field(
+        default=None,
+        description="Async pool connections per worker (overrides POOL_SIZE_PER_WORKER)",
+    )
+    ASYNC_POOL_MAX_OVERFLOW: int | None = Field(
+        default=None,
+        description="Async pool max overflow (overrides POOL_MAX_OVERFLOW)",
+    )
+    ASYNC_POOL_TIMEOUT: int | None = Field(
+        default=None,
+        description="Async pool connection timeout seconds (overrides POOL_TIMEOUT)",
+    )
+    ASYNC_POOL_RECYCLE: int = Field(
+        default=120,
+        description="Async pool connection recycle interval seconds",
+    )
     DB_USER: str = Field(default="nutree")
     DB_PASSWORD: str = Field(default="")
     DB_HOST: str = Field(default="localhost")

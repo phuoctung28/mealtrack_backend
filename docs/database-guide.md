@@ -22,6 +22,41 @@ Non-negotiable database rules:
 
 ---
 
+## DB Connection Policy
+
+The app supports two runtime modes controlled by `DB_CONNECTION_MODE`:
+
+| Mode | Pool class | When to use |
+|------|-----------|-------------|
+| `direct_pool` | `AsyncAdaptedQueuePool` | Default. Use with a direct Neon endpoint (`ep-xxx.region.aws.neon.tech`). App owns the connection pool. |
+| `neon_pooler` | `NullPool` | Use with a Neon `-pooler` endpoint. PgBouncer (transaction mode) manages connections. Prepared statement caching is disabled automatically. |
+
+### URL priority
+
+App runtime URL resolution (highest to lowest priority):
+1. `APP_DATABASE_URL` — the preferred variable for production
+2. `DATABASE_URL` — backward-compat fallback (legacy deploys)
+3. Component vars (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`) — local dev only
+
+`DATABASE_URL_DIRECT` is **not** used for app runtime. It is reserved for Alembic migration tooling only.
+
+### Pool capacity formula (direct_pool)
+
+```
+total_connections = UVICORN_WORKERS × ASYNC_POOL_SIZE_PER_WORKER + ASYNC_POOL_MAX_OVERFLOW
+```
+
+Keep this value below your Neon project's `max_connections` limit. Monitor via `GET /v1/health/db-pool`.
+
+### Pooler mode notes
+
+- Use only when direct connections would exhaust `max_connections` at scale.
+- Set `APP_DATABASE_URL` to the `-pooler` endpoint and `DB_CONNECTION_MODE=neon_pooler`.
+- PgBouncer runs in transaction mode — prepared statements are disabled automatically.
+- `ASYNC_POOL_SIZE_PER_WORKER` and related settings are ignored in pooler mode.
+
+---
+
 ## Connection Configuration
 
 ```python

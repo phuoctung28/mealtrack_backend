@@ -15,6 +15,7 @@ from src.infra.database.config_async import (
     _ASYNC_POOL_SIZE,
     _IS_NEON_POOLER,
     _UVICORN_WORKERS,
+    CONNECTION_MODE,
     async_engine,
 )
 from src.infra.database.models.notification import UserFcmTokenORM as DBToken
@@ -84,6 +85,7 @@ async def database_pool_status(_monitor=Depends(require_monitoring_access)):
     if _IS_NEON_POOLER:
         return {
             "status": "healthy",
+            "connection_mode": CONNECTION_MODE,
             "pool_type": "NullPool",
             "note": "Neon pooler (PgBouncer) handles connection reuse",
         }
@@ -101,6 +103,7 @@ async def database_pool_status(_monitor=Depends(require_monitoring_access)):
 
         return {
             "status": "healthy",
+            "connection_mode": CONNECTION_MODE,
             "pool_type": "QueuePool",
             "pool_size": pool_size,
             "max_overflow": _ASYNC_POOL_OVERFLOW,

@@ -167,6 +167,18 @@ def api_client(test_session) -> Generator[TestClient, None, None]:
             """Mock delete - always succeeds."""
             return True
 
+        async def save_async(self, image_data, content_type, image_id=None):
+            return self.save(image_data, content_type, image_id)
+
+        async def load_async(self, image_id):
+            return self.load(image_id)
+
+        async def get_url_async(self, image_id):
+            return self.get_url(image_id)
+
+        async def delete_async(self, image_id):
+            return self.delete(image_id)
+
     mock_image_store = MockImageStore()
     base_deps_module._image_store = mock_image_store
 
