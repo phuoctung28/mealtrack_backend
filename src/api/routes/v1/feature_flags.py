@@ -19,7 +19,7 @@ from src.api.schemas.response.feature_flag_responses import (
     FeatureFlagUpdatedResponse,
     IndividualFeatureFlagResponse,
 )
-from src.app.services.feature_flag_service import FeatureFlagService
+from src.infra.services.feature_flag_service import FeatureFlagService
 from src.domain.cache.cache_keys import CacheKeys
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.cache.cache_service import CacheService

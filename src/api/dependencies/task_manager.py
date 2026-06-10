@@ -4,7 +4,7 @@ Lives in api/dependencies so routes and main can access it without
 crossing the api→infra direct-import boundary.
 """
 
-from src.infra.event_bus.background_task_manager import BackgroundTaskManager
+from src.infra.event_bus import BackgroundTaskManager
 
 _instance: BackgroundTaskManager | None = None
 
