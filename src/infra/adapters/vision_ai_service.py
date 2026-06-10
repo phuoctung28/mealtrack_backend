@@ -15,6 +15,7 @@ from src.domain.strategies.meal_analysis_strategy import (
     AnalysisStrategyFactory,
     MealAnalysisStrategy,
 )
+from src.infra.config.settings import get_settings
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
 logger = logging.getLogger(__name__)
@@ -27,10 +28,15 @@ ALLOWED_URL_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 class VisionAIService(VisionAIServicePort):
     """Vision AI service with automatic fallback on failures."""
 
-    def __init__(self):
+    def __init__(self, max_output_tokens: int | None = None):
         """Initialize with AI model manager."""
         self._ai_manager = AIModelManager.get_instance()
         self._optimized_prompt_enabled = True
+        self._max_output_tokens = (
+            max_output_tokens
+            if max_output_tokens is not None
+            else get_settings().MEAL_ANALYZE_MAX_OUTPUT_TOKENS
+        )
 
     def _compress_image(self, image_bytes: bytes) -> bytes:
         """Compress image for faster upload."""
@@ -142,7 +148,7 @@ class VisionAIService(VisionAIServicePort):
                 prompt=strategy.get_user_message(),
                 image_data=image_bytes,
                 system_message=strategy.get_analysis_prompt(),
-                max_tokens=1024,
+                max_tokens=self._max_output_tokens,
             )
         except AIUnavailableError:
             raise
@@ -187,7 +193,9 @@ class VisionAIService(VisionAIServicePort):
             with urlopen(request, timeout=URL_FETCH_TIMEOUT_SECONDS) as response:
                 content_type = response.headers.get_content_type()
                 if content_type not in ALLOWED_URL_IMAGE_CONTENT_TYPES:
-                    raise ValueError(f"Unsupported image URL content type: {content_type}")
+                    raise ValueError(
+                        f"Unsupported image URL content type: {content_type}"
+                    )
                 image_bytes = response.read(MAX_URL_IMAGE_BYTES + 1)
                 if len(image_bytes) > MAX_URL_IMAGE_BYTES:
                     raise ValueError("Image URL content too large (max 5MB)")

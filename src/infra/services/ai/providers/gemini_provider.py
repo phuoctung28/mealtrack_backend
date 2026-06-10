@@ -7,8 +7,8 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
-from src.infra.adapters.meal_generation_json_utils import (
-    extract_json as extract_meal_generation_json,
+from src.infra.adapters.ai_json_utils import (
+    extract_json as extract_ai_json,
 )
 from src.infra.services.ai.gemini_model_config import GeminiModelPurpose
 from src.infra.services.ai.gemini_model_manager import GeminiModelManager
@@ -172,4 +172,4 @@ class GeminiProvider(AIProviderPort):
 
     def _extract_json(self, content: str) -> dict[str, Any]:
         """Extract JSON from response content."""
-        return extract_meal_generation_json(content)
+        return extract_ai_json(content)
