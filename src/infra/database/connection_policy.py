@@ -25,6 +25,15 @@ class DatabaseConnectionPolicy:
     pool_recycle: int = 120
 
 
+def _int_env(env: dict, *keys: str, default: int) -> int:
+    """Read the first key present (not None) as int; fall through to default."""
+    for key in keys:
+        val = env.get(key)
+        if val is not None:
+            return int(val)
+    return default
+
+
 def _url_is_neon_pooler(url: str) -> bool:
     """Return True if the host contains '-pooler' (Neon PgBouncer endpoint)."""
     try:
@@ -78,20 +87,18 @@ def resolve_connection_policy(env: dict | None = None) -> DatabaseConnectionPoli
             "Neon endpoint (no '-pooler' suffix in the hostname)."
         )
 
-    workers = int(env.get("UVICORN_WORKERS", "4"))
-    pool_size_per_worker = int(
-        env.get("ASYNC_POOL_SIZE_PER_WORKER")
-        or env.get("POOL_SIZE_PER_WORKER", "3")
-    )
-    max_overflow = int(
-        env.get("ASYNC_POOL_MAX_OVERFLOW")
-        or env.get("POOL_MAX_OVERFLOW", "2")
-    )
-    pool_timeout = int(
-        env.get("ASYNC_POOL_TIMEOUT")
-        or env.get("POOL_TIMEOUT", "10")
-    )
-    pool_recycle = int(env.get("ASYNC_POOL_RECYCLE", "120"))
+    if mode == "neon_pooler" and not _url_is_neon_pooler(raw_url):
+        raise ConnectionPolicyError(
+            "DB_CONNECTION_MODE=neon_pooler requires a Neon pooler URL "
+            "('-pooler' in hostname). The provided URL is a direct endpoint. "
+            "Either set APP_DATABASE_URL to a -pooler URL or use DB_CONNECTION_MODE=direct_pool."
+        )
+
+    workers = _int_env(env, "UVICORN_WORKERS", default=4)
+    pool_size_per_worker = _int_env(env, "ASYNC_POOL_SIZE_PER_WORKER", "POOL_SIZE_PER_WORKER", default=3)
+    max_overflow = _int_env(env, "ASYNC_POOL_MAX_OVERFLOW", "POOL_MAX_OVERFLOW", default=2)
+    pool_timeout = _int_env(env, "ASYNC_POOL_TIMEOUT", "POOL_TIMEOUT", default=10)
+    pool_recycle = _int_env(env, "ASYNC_POOL_RECYCLE", default=120)
 
     if mode == "neon_pooler":
         # NullPool: Neon PgBouncer manages connection reuse.

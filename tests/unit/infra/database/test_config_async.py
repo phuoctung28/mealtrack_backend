@@ -6,6 +6,14 @@ import pytest
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 
+@pytest.fixture(autouse=True)
+def _reset_config_async_module():
+    """Reload config_async after each test so module-level state never leaks."""
+    yield
+    import src.infra.database.config_async as cfg
+    importlib.reload(cfg)
+
+
 @pytest.mark.asyncio
 async def test_get_async_db_raises_clear_error_when_session_factory_missing(
     monkeypatch,

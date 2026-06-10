@@ -7,6 +7,7 @@ import uuid
 from unittest.mock import Mock, patch
 
 import cloudinary.exceptions
+import httpx
 import pytest
 
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
@@ -403,12 +404,12 @@ class TestGetUrl:
     def test_get_url_fallback_network_error(
         self, cloudinary_store, mock_cloudinary_env
     ):
-        """Test get_url handles network errors in fallback gracefully."""
+        """Test get_url handles httpx network errors in fallback gracefully."""
         with patch("cloudinary.api.resource") as mock_resource:
             mock_resource.side_effect = Exception("API Error")
 
             with patch("httpx.head") as mock_head:
-                mock_head.side_effect = Exception("Network error")
+                mock_head.side_effect = httpx.ConnectError("Network error")
 
                 result = cloudinary_store.get_url("test-id")
 

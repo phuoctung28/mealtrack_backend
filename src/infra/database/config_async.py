@@ -84,10 +84,7 @@ CONNECTION_MODE = _policy.mode
 _IS_NEON_POOLER = _policy.mode == "neon_pooler"  # backward-compat alias
 
 _UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
-_ASYNC_POOL_SIZE = int(
-    os.getenv("ASYNC_POOL_SIZE_PER_WORKER")
-    or os.getenv("POOL_SIZE_PER_WORKER", "3")
-)
+_ASYNC_POOL_SIZE = _policy.pool_size // _UVICORN_WORKERS if _UVICORN_WORKERS > 0 else 0
 _ASYNC_POOL_OVERFLOW = _policy.max_overflow
 
 try:

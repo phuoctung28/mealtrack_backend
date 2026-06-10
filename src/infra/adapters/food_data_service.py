@@ -43,4 +43,11 @@ class FoodDataService(FoodDataServicePort):
 
     async def get_multiple_foods(self, fdc_ids: list[int]) -> list[dict[str, Any]]:
         import asyncio
-        return list(await asyncio.gather(*[self.get_food_details(fid) for fid in fdc_ids]))
+        # Semaphore caps concurrent USDA connections regardless of batch size.
+        sem = asyncio.Semaphore(5)
+
+        async def _fetch(fid: int) -> dict[str, Any]:
+            async with sem:
+                return await self.get_food_details(fid)
+
+        return list(await asyncio.gather(*[_fetch(fid) for fid in fdc_ids]))

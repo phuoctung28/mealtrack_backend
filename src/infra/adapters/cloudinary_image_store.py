@@ -210,7 +210,7 @@ class CloudinaryImageStore(ImageStorePort):
                     if response.status_code == 200:
                         logger.debug(f"Found working fallback URL: {url}")
                         return url
-                except (httpx.RequestError, Exception) as e:
+                except httpx.RequestError as e:
                     logger.debug(f"URL check failed for {url}: {e}")
                     continue
 

@@ -125,3 +125,32 @@ def test_migration_url_guard_is_not_app_runtime_url():
     policy = resolve_connection_policy(env_only_direct)
     # Falls back to component URL, not DATABASE_URL_DIRECT
     assert "ep-xxx.neon.tech" not in policy.app_url
+
+
+def test_neon_pooler_mode_with_direct_url_raises_error():
+    """Guard: neon_pooler mode + non-pooler URL must raise, not silently misconfigure."""
+    with pytest.raises(ConnectionPolicyError, match="neon_pooler"):
+        resolve_connection_policy({
+            "APP_DATABASE_URL": "postgresql://user:pw@ep-xxx.neon.tech/db",
+            "DB_CONNECTION_MODE": "neon_pooler",
+        })
+
+
+def test_async_pool_max_overflow_zero_is_respected():
+    """ASYNC_POOL_MAX_OVERFLOW=0 must not fall through to default 2."""
+    policy = resolve_connection_policy({
+        "APP_DATABASE_URL": "postgresql://user:pw@ep-xxx.neon.tech/db",
+        "DB_CONNECTION_MODE": "direct_pool",
+        "ASYNC_POOL_MAX_OVERFLOW": "0",
+    })
+    assert policy.max_overflow == 0
+
+
+def test_async_db_use_queue_pool_env_var_is_silently_ignored():
+    """ASYNC_DB_USE_QUEUE_POOL is a legacy no-op; mode is driven by URL + DB_CONNECTION_MODE."""
+    policy = resolve_connection_policy({
+        "APP_DATABASE_URL": "postgresql://user:pw@ep-xxx.neon.tech/db",
+        "ASYNC_DB_USE_QUEUE_POOL": "true",
+    })
+    assert policy.mode == "direct_pool"
+    assert policy.pool_class is AsyncAdaptedQueuePool

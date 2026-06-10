@@ -186,18 +186,32 @@ def test_promo_referral_runtime_handlers_use_uow_repositories() -> None:
     assert offenders == {}
 
 
+def _getenv_calls_database_url_direct(tree: ast.AST) -> list[int]:
+    """Return line numbers of os.getenv('DATABASE_URL_DIRECT') calls in the AST."""
+    lines = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and func.attr == "getenv"
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "os"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value == "DATABASE_URL_DIRECT"
+            ):
+                lines.append(getattr(node, "lineno", 0))
+    return lines
+
+
 def test_app_runtime_config_does_not_prefer_database_url_direct() -> None:
-    """Guard: app runtime must not silently fall back to DATABASE_URL_DIRECT."""
-    import re
-
+    """Guard: app runtime must not call os.getenv('DATABASE_URL_DIRECT')."""
     config_path = SRC_ROOT / "infra" / "database" / "config_async.py"
-    text = config_path.read_text(encoding="utf-8")
-
-    # The old pattern was: os.getenv("DATABASE_URL_DIRECT") or os.getenv("DATABASE_URL")
-    # This must not reappear in the app runtime config.
-    forbidden_pattern = "DATABASE_URL_DIRECT.*or.*DATABASE_URL"
-    assert not re.search(forbidden_pattern, text), (
-        "config_async.py must not prefer DATABASE_URL_DIRECT for app runtime URL. "
+    hits = _getenv_calls_database_url_direct(_parse(config_path))
+    assert hits == [], (
+        f"config_async.py calls os.getenv('DATABASE_URL_DIRECT') at lines {hits}. "
+        "DATABASE_URL_DIRECT is reserved for migration tooling. "
         "Use APP_DATABASE_URL > DATABASE_URL priority instead."
     )
 
