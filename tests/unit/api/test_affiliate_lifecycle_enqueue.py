@@ -52,10 +52,9 @@ async def test_initial_purchase_enqueues_when_integration_enabled():
     uow = _make_uow()
     user = _make_user()
 
-    with patch(f"{MODULE}.settings") as mock_settings, \
+    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
          patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
          patch(f"{MODULE}._credit_referral_on_purchase", AsyncMock()):
-        mock_settings.AFFILIATE_INTEGRATION_ENABLED = True
         await handle_purchase(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()
@@ -70,10 +69,9 @@ async def test_initial_purchase_skips_enqueue_when_disabled():
     uow = _make_uow()
     user = _make_user()
 
-    with patch(f"{MODULE}.settings") as mock_settings, \
+    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "false"}), \
          patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
          patch(f"{MODULE}._credit_referral_on_purchase", AsyncMock()):
-        mock_settings.AFFILIATE_INTEGRATION_ENABLED = False
         await handle_purchase(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_not_awaited()
@@ -86,10 +84,9 @@ async def test_enqueue_failure_does_not_raise():
     uow.affiliate_outbox.enqueue = AsyncMock(side_effect=Exception("DB down"))
     user = _make_user()
 
-    with patch(f"{MODULE}.settings") as mock_settings, \
+    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
          patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
          patch(f"{MODULE}._credit_referral_on_purchase", AsyncMock()):
-        mock_settings.AFFILIATE_INTEGRATION_ENABLED = True
         # Must not raise
         await handle_purchase(uow, user, RC_EVENT)
 
@@ -101,10 +98,9 @@ async def test_renewal_enqueues_subscription_renewal():
     uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=sub)
     user = _make_user()
 
-    with patch(f"{MODULE}.settings") as mock_settings, \
+    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
          patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=sub)), \
          patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()):
-        mock_settings.AFFILIATE_INTEGRATION_ENABLED = True
         await handle_renewal(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()
@@ -117,10 +113,9 @@ async def test_cancellation_enqueues_subscription_canceled():
     sub = MagicMock()
     user = _make_user()
 
-    with patch(f"{MODULE}.settings") as mock_settings, \
+    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
          patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
          patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()):
-        mock_settings.AFFILIATE_INTEGRATION_ENABLED = True
         await handle_cancellation(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()
@@ -133,10 +128,9 @@ async def test_expiration_enqueues_subscription_expired():
     sub = MagicMock()
     user = _make_user()
 
-    with patch(f"{MODULE}.settings") as mock_settings, \
+    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
          patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
          patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()):
-        mock_settings.AFFILIATE_INTEGRATION_ENABLED = True
         await handle_expiration(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()
@@ -149,11 +143,10 @@ async def test_refund_enqueues_subscription_refund():
     sub = MagicMock()
     user = _make_user()
 
-    with patch(f"{MODULE}.settings") as mock_settings, \
+    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
          patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
          patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()), \
          patch(f"{MODULE}._revoke_referral_on_refund", AsyncMock()):
-        mock_settings.AFFILIATE_INTEGRATION_ENABLED = True
         await handle_refund(uow, user, RC_EVENT)
 
     uow.affiliate_outbox.enqueue.assert_awaited_once()

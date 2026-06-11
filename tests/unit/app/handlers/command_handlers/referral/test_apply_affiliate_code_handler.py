@@ -80,11 +80,10 @@ async def test_affiliate_path_sends_event_no_local_state():
     )
 
     with (
+        patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}),
         patch(f"{MODULE}.AsyncUnitOfWork", return_value=mock_uow),
         patch(f"{MODULE}.AffiliateServiceAdapter") as mock_svc_cls,
-        patch(f"{MODULE}.settings") as mock_settings,
     ):
-        mock_settings.AFFILIATE_INTEGRATION_ENABLED = True
         instance = mock_svc_cls.return_value
         instance.validate_code = AsyncMock(return_value=aff_result)
         instance.send_event = AsyncMock(return_value=True)
@@ -108,11 +107,10 @@ async def test_affiliate_send_failure_does_not_raise():
     )
 
     with (
+        patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}),
         patch(f"{MODULE}.AsyncUnitOfWork", return_value=mock_uow),
         patch(f"{MODULE}.AffiliateServiceAdapter") as mock_svc_cls,
-        patch(f"{MODULE}.settings") as mock_settings,
     ):
-        mock_settings.AFFILIATE_INTEGRATION_ENABLED = True
         instance = mock_svc_cls.return_value
         instance.validate_code = AsyncMock(return_value=aff_result)
         instance.send_event = AsyncMock(return_value=False)  # delivery failed
@@ -125,10 +123,9 @@ async def test_invalid_code_with_integration_disabled_raises():
     mock_uow = _make_uow()
 
     with (
+        patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "false"}),
         patch(f"{MODULE}.AsyncUnitOfWork", return_value=mock_uow),
-        patch(f"{MODULE}.settings") as mock_settings,
     ):
-        mock_settings.AFFILIATE_INTEGRATION_ENABLED = False
         with pytest.raises(ValueError, match="invalid_code"):
             await ApplyReferralCodeCommandHandler().handle(CMD)
 
@@ -139,11 +136,10 @@ async def test_affiliate_api_inactive_raises_invalid_code():
     mock_uow = _make_uow()
 
     with (
+        patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}),
         patch(f"{MODULE}.AsyncUnitOfWork", return_value=mock_uow),
         patch(f"{MODULE}.AffiliateServiceAdapter") as mock_svc_cls,
-        patch(f"{MODULE}.settings") as mock_settings,
     ):
-        mock_settings.AFFILIATE_INTEGRATION_ENABLED = True
         instance = mock_svc_cls.return_value
         instance.validate_code = AsyncMock(
             return_value=AffiliateCodeValidationResult(active=False)
