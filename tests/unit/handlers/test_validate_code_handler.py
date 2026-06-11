@@ -137,7 +137,11 @@ async def test_valid_referral_code_returns_referral_type():
 async def test_unknown_code_raises_404():
     mock_uow, mock_promo_repo, mock_referral_repo = _mock_uow(promo=None, referral=None)
 
-    with _patch(mock_uow, mock_promo_repo, mock_referral_repo):
+    with _patch(mock_uow, mock_promo_repo, mock_referral_repo), \
+         patch(f"{HANDLER_PATH}.AffiliateServiceAdapter") as MockAdapter:
+        MockAdapter.return_value.validate_code = AsyncMock(
+            return_value=MagicMock(active=False)
+        )
         from src.app.handlers.query_handlers.codes.validate_code_handler import (
             ValidateCodeQueryHandler,
         )

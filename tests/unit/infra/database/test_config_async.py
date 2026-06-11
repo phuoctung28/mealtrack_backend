@@ -76,7 +76,10 @@ def test_database_url_direct_not_used_for_app_runtime(monkeypatch):
     """Guard: DATABASE_URL_DIRECT must not silently become the app runtime URL."""
     monkeypatch.setenv("DATABASE_URL_DIRECT", "postgresql://direct-host/db")
     monkeypatch.setenv("DATABASE_URL", "postgresql://app-host/db")
-    monkeypatch.delenv("APP_DATABASE_URL", raising=False)
+    # Use setenv("", ...) rather than delenv so load_dotenv() during reload
+    # cannot re-add APP_DATABASE_URL from the .env file (override=False skips
+    # vars already present in os.environ; "" is falsy in the or-chain).
+    monkeypatch.setenv("APP_DATABASE_URL", "")
 
     import src.infra.database.config_async as cfg
 
