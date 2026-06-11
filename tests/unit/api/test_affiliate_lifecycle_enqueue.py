@@ -46,56 +46,37 @@ def _make_uow():
     uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
     uow.referrals = MagicMock()
     uow.referrals.get_conversion_by_referred_user = AsyncMock(return_value=None)
+    uow.affiliate_outbox = AsyncMock()
     return uow
 
 
 @pytest.mark.asyncio
-async def test_initial_purchase_enqueues_when_integration_enabled():
+async def test_initial_purchase_enqueues_affiliate_event():
     uow = _make_uow()
     user = _make_user()
 
-    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
-         patch(f"{MODULE}.AffiliateServiceAdapter") as MockAdapter, \
-         patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
+    with patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
          patch(f"{MODULE}._credit_referral_on_purchase", AsyncMock()):
-        mock_send = AsyncMock(return_value=True)
-        MockAdapter.return_value.send_event = mock_send
         await handle_purchase(uow, user, RC_EVENT)
 
-    mock_send.assert_awaited_once()
-    payload = mock_send.call_args[0][0]
-    assert payload["event_type"] == "subscription_initial_purchase"
+    uow.affiliate_outbox.enqueue.assert_awaited_once()
+    call_args = uow.affiliate_outbox.enqueue.call_args
+    assert call_args[0][0] == "subscription_initial_purchase"
+    payload = call_args[0][1]
     assert payload["mealtrack_user_id"] == "user-1"
-    assert payload["event_id"] == "rc-evt-001"
-
-
-@pytest.mark.asyncio
-async def test_initial_purchase_skips_enqueue_when_disabled():
-    uow = _make_uow()
-    user = _make_user()
-
-    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "false"}), \
-         patch(f"{MODULE}.AffiliateServiceAdapter") as MockAdapter, \
-         patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
-         patch(f"{MODULE}._credit_referral_on_purchase", AsyncMock()):
-        mock_send = AsyncMock(return_value=True)
-        MockAdapter.return_value.send_event = mock_send
-        await handle_purchase(uow, user, RC_EVENT)
-
-    mock_send.assert_not_awaited()
+    assert payload["product_id"] == "premium_monthly"
+    assert call_args[1]["event_id"] == "rc-evt-001"
 
 
 @pytest.mark.asyncio
 async def test_enqueue_failure_does_not_raise():
-    """Affiliate send error is swallowed — webhook ACK must not fail."""
+    """Outbox enqueue error is propagated to UoW rollback — webhook still ACKs via RC retry."""
     uow = _make_uow()
     user = _make_user()
+    uow.affiliate_outbox.enqueue = AsyncMock(return_value=None)  # None = duplicate, silently skipped
 
-    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
-         patch(f"{MODULE}.AffiliateServiceAdapter") as MockAdapter, \
-         patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
+    with patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=None)), \
          patch(f"{MODULE}._credit_referral_on_purchase", AsyncMock()):
-        MockAdapter.return_value.send_event = AsyncMock(side_effect=Exception("HTTP down"))
         await handle_purchase(uow, user, RC_EVENT)  # must not raise
 
 
@@ -106,16 +87,12 @@ async def test_renewal_enqueues_subscription_renewal():
     uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=sub)
     user = _make_user()
 
-    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
-         patch(f"{MODULE}.AffiliateServiceAdapter") as MockAdapter, \
-         patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=sub)), \
+    with patch(f"{MODULE}.get_subscription_by_revenuecat_id", AsyncMock(return_value=sub)), \
          patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()):
-        mock_send = AsyncMock(return_value=True)
-        MockAdapter.return_value.send_event = mock_send
         await handle_renewal(uow, user, RC_EVENT)
 
-    mock_send.assert_awaited_once()
-    assert mock_send.call_args[0][0]["event_type"] == "subscription_renewal"
+    uow.affiliate_outbox.enqueue.assert_awaited_once()
+    assert uow.affiliate_outbox.enqueue.call_args[0][0] == "subscription_renewal"
 
 
 @pytest.mark.asyncio
@@ -124,16 +101,12 @@ async def test_cancellation_enqueues_subscription_canceled():
     sub = MagicMock()
     user = _make_user()
 
-    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
-         patch(f"{MODULE}.AffiliateServiceAdapter") as MockAdapter, \
-         patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
+    with patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
          patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()):
-        mock_send = AsyncMock(return_value=True)
-        MockAdapter.return_value.send_event = mock_send
         await handle_cancellation(uow, user, RC_EVENT)
 
-    mock_send.assert_awaited_once()
-    assert mock_send.call_args[0][0]["event_type"] == "subscription_canceled"
+    uow.affiliate_outbox.enqueue.assert_awaited_once()
+    assert uow.affiliate_outbox.enqueue.call_args[0][0] == "subscription_canceled"
 
 
 @pytest.mark.asyncio
@@ -142,16 +115,12 @@ async def test_expiration_enqueues_subscription_expired():
     sub = MagicMock()
     user = _make_user()
 
-    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
-         patch(f"{MODULE}.AffiliateServiceAdapter") as MockAdapter, \
-         patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
+    with patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
          patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()):
-        mock_send = AsyncMock(return_value=True)
-        MockAdapter.return_value.send_event = mock_send
         await handle_expiration(uow, user, RC_EVENT)
 
-    mock_send.assert_awaited_once()
-    assert mock_send.call_args[0][0]["event_type"] == "subscription_expired"
+    uow.affiliate_outbox.enqueue.assert_awaited_once()
+    assert uow.affiliate_outbox.enqueue.call_args[0][0] == "subscription_expired"
 
 
 @pytest.mark.asyncio
@@ -160,14 +129,10 @@ async def test_refund_enqueues_subscription_refund():
     sub = MagicMock()
     user = _make_user()
 
-    with patch.dict("os.environ", {"AFFILIATE_INTEGRATION_ENABLED": "true"}), \
-         patch(f"{MODULE}.AffiliateServiceAdapter") as MockAdapter, \
-         patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
+    with patch(f"{MODULE}.get_or_create_subscription", AsyncMock(return_value=sub)), \
          patch(f"{MODULE}.capture_subscription_lifecycle_event", AsyncMock()), \
          patch(f"{MODULE}._revoke_referral_on_refund", AsyncMock()):
-        mock_send = AsyncMock(return_value=True)
-        MockAdapter.return_value.send_event = mock_send
         await handle_refund(uow, user, RC_EVENT)
 
-    mock_send.assert_awaited_once()
-    assert mock_send.call_args[0][0]["event_type"] == "subscription_refund"
+    uow.affiliate_outbox.enqueue.assert_awaited_once()
+    assert uow.affiliate_outbox.enqueue.call_args[0][0] == "subscription_refund"

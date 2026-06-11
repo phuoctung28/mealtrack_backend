@@ -73,6 +73,7 @@ class TestWebhookHandler:
         uow.session = MagicMock()
         uow.commit = AsyncMock()
         uow.rollback = AsyncMock()
+        uow.affiliate_outbox = AsyncMock()
         return uow
 
     @pytest.fixture
@@ -106,6 +107,7 @@ class TestWebhookHandler:
                 mock_uow.referrals.get_conversion_by_referred_user = AsyncMock(
                     return_value=None
                 )
+                mock_uow.affiliate_outbox.enqueue = AsyncMock(return_value=None)
                 mock_uow_class.return_value = mock_uow
 
                 # Mock user exists
