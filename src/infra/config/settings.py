@@ -246,8 +246,8 @@ class Settings(BaseSettings):
         description="Shared HMAC-SHA256 secret for MealTrack↔nutree-affiliate internal calls",
     )
     AFFILIATE_CODE_VALIDATE_TIMEOUT_SECONDS: float = Field(
-        default=3.0,
-        description="Timeout for affiliate code validation HTTP call",
+        default=10.0,
+        description="Timeout for affiliate HTTP calls (validate + send_event). 10s covers vercel dev cold starts.",
     )
 
     # Referral system (multi-currency)
