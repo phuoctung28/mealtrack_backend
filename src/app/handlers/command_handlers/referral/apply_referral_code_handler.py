@@ -42,17 +42,16 @@ class ApplyReferralCodeCommandHandler:
             if os.getenv("AFFILIATE_INTEGRATION_ENABLED", "").lower() in ("1", "true"):
                 aff_result = await AffiliateServiceAdapter().validate_code(command.code)
                 if aff_result.active and aff_result.affiliate_id:
-                    sent = await AffiliateServiceAdapter().send_event({
-                        "event_type": "affiliate_attribution_created",
-                        "mealtrack_user_id": command.user_id,
-                        "affiliate_id": aff_result.affiliate_id,
-                        "affiliate_code": command.code,
-                    })
-                    if not sent:
-                        logger.warning(
-                            "Attribution event delivery failed (will not retry): user=%s code=%s",
-                            command.user_id, command.code,
-                        )
+                    await uow.affiliate_outbox.enqueue(
+                        "affiliate_attribution_created",
+                        {
+                            "mealtrack_user_id": command.user_id,
+                            "affiliate_id": aff_result.affiliate_id,
+                            "affiliate_code": command.code,
+                        },
+                        # Stable key: one attribution per user+code, duplicates silently skipped
+                        event_id=f"attribution_{command.user_id}_{command.code}",
+                    )
                     return
 
             raise ValueError("invalid_code")

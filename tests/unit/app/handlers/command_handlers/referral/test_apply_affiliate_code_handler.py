@@ -26,6 +26,7 @@ def _make_uow(*, ref_code=None, ref_existing=None):
     uow.referrals.get_code_by_code = AsyncMock(return_value=ref_code)
     uow.referrals.get_conversion_by_referred_user = AsyncMock(return_value=ref_existing)
     uow.referrals.create_conversion = AsyncMock(return_value=MagicMock())
+    uow.affiliate_outbox = AsyncMock()
     return uow
 
 
@@ -71,8 +72,8 @@ async def test_referral_already_referred_raises():
 
 
 @pytest.mark.asyncio
-async def test_affiliate_path_sends_event_no_local_state():
-    """Affiliate apply sends event to nutree-affiliate; nothing stored in MealTrack."""
+async def test_affiliate_path_enqueues_attribution_no_local_state():
+    """Affiliate apply enqueues attribution to outbox; nothing stored in MealTrack."""
     mock_uow = _make_uow()
     aff_result = AffiliateCodeValidationResult(
         active=True, affiliate_id="aff-1", code_id="code-1",
@@ -84,23 +85,24 @@ async def test_affiliate_path_sends_event_no_local_state():
         patch(f"{MODULE}.AsyncUnitOfWork", return_value=mock_uow),
         patch(f"{MODULE}.AffiliateServiceAdapter") as mock_svc_cls,
     ):
-        instance = mock_svc_cls.return_value
-        instance.validate_code = AsyncMock(return_value=aff_result)
-        instance.send_event = AsyncMock(return_value=True)
+        mock_svc_cls.return_value.validate_code = AsyncMock(return_value=aff_result)
         await ApplyReferralCodeCommandHandler().handle(CMD)
 
-    instance.send_event.assert_called_once()
-    sent_payload = instance.send_event.call_args[0][0]
-    assert sent_payload["event_type"] == "affiliate_attribution_created"
-    assert sent_payload["mealtrack_user_id"] == "user-1"
-    assert sent_payload["affiliate_id"] == "aff-1"
-    assert sent_payload["affiliate_code"] == "AFFCODE1"
+    mock_uow.affiliate_outbox.enqueue.assert_awaited_once()
+    call = mock_uow.affiliate_outbox.enqueue.call_args
+    assert call[0][0] == "affiliate_attribution_created"
+    payload = call[0][1]
+    assert payload["mealtrack_user_id"] == "user-1"
+    assert payload["affiliate_id"] == "aff-1"
+    assert payload["affiliate_code"] == "AFFCODE1"
+    assert call[1]["event_id"] == "attribution_user-1_AFFCODE1"
 
 
 @pytest.mark.asyncio
-async def test_affiliate_send_failure_does_not_raise():
-    """If nutree-affiliate delivery fails, apply still succeeds (fire-and-not-fail)."""
+async def test_affiliate_duplicate_attribution_does_not_raise():
+    """Outbox returning None (duplicate event_id) is silently ignored."""
     mock_uow = _make_uow()
+    mock_uow.affiliate_outbox.enqueue = AsyncMock(return_value=None)
     aff_result = AffiliateCodeValidationResult(
         active=True, affiliate_id="aff-1", code_id="code-1",
         display_name="Alex", partner_type="pt",
@@ -111,11 +113,8 @@ async def test_affiliate_send_failure_does_not_raise():
         patch(f"{MODULE}.AsyncUnitOfWork", return_value=mock_uow),
         patch(f"{MODULE}.AffiliateServiceAdapter") as mock_svc_cls,
     ):
-        instance = mock_svc_cls.return_value
-        instance.validate_code = AsyncMock(return_value=aff_result)
-        instance.send_event = AsyncMock(return_value=False)  # delivery failed
-        # should not raise
-        await ApplyReferralCodeCommandHandler().handle(CMD)
+        mock_svc_cls.return_value.validate_code = AsyncMock(return_value=aff_result)
+        await ApplyReferralCodeCommandHandler().handle(CMD)  # must not raise
 
 
 @pytest.mark.asyncio
@@ -140,12 +139,10 @@ async def test_affiliate_api_inactive_raises_invalid_code():
         patch(f"{MODULE}.AsyncUnitOfWork", return_value=mock_uow),
         patch(f"{MODULE}.AffiliateServiceAdapter") as mock_svc_cls,
     ):
-        instance = mock_svc_cls.return_value
-        instance.validate_code = AsyncMock(
+        mock_svc_cls.return_value.validate_code = AsyncMock(
             return_value=AffiliateCodeValidationResult(active=False)
         )
-        instance.send_event = AsyncMock()
         with pytest.raises(ValueError, match="invalid_code"):
             await ApplyReferralCodeCommandHandler().handle(CMD)
 
-    instance.send_event.assert_not_called()
+    mock_uow.affiliate_outbox.enqueue.assert_not_awaited()
