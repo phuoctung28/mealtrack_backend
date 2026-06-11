@@ -53,6 +53,7 @@ ignore_imports =
     src.app.handlers.command_handlers.parse_meal_text_handler -> src.infra.services.ai.gemini_model_manager
     src.app.handlers.command_handlers.promo_code.redeem_promo_code_handler -> src.infra.database.uow_async
     src.app.handlers.command_handlers.promo_code.redeem_promo_code_handler -> src.infra.repositories.promo_code_repository
+    src.app.handlers.command_handlers.referral.apply_referral_code_handler -> src.infra.adapters.affiliate_service_adapter
     src.app.handlers.command_handlers.referral.apply_referral_code_handler -> src.infra.database.uow_async
     src.app.handlers.command_handlers.referral.apply_referral_code_handler -> src.infra.repositories.referral_repository
     src.app.handlers.command_handlers.referral.request_payout_handler -> src.infra.database.uow_async
@@ -82,6 +83,7 @@ ignore_imports =
     src.app.handlers.event_handlers.welcome_email_handler -> src.infra.database.models.email_log
     src.app.handlers.event_handlers.welcome_email_handler -> src.infra.database.models.user.user
     src.app.handlers.event_handlers.welcome_email_handler -> src.infra.database.uow_async
+    src.app.handlers.query_handlers.codes.validate_code_handler -> src.infra.adapters.affiliate_service_adapter
     src.app.handlers.query_handlers.codes.validate_code_handler -> src.infra.config.settings
     src.app.handlers.query_handlers.codes.validate_code_handler -> src.infra.database.models.user.user
     src.app.handlers.query_handlers.codes.validate_code_handler -> src.infra.database.uow_async

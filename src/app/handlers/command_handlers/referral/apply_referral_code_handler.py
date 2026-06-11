@@ -1,11 +1,11 @@
 """Command handler — record a referred user's code application as a pending conversion."""
 import logging
+import os
 
 from src.app.commands.referral.apply_referral_code_command import (
     ApplyReferralCodeCommand,
 )
 from src.infra.adapters.affiliate_service_adapter import AffiliateServiceAdapter
-from src.infra.config.settings import settings
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ class ApplyReferralCodeCommandHandler:
             # ── Affiliate path (feature-flagged) ────────────────────────────
             # nutree-affiliate is the source of truth for attribution state.
             # MealTrack sends an event and lets nutree-affiliate enforce dedup.
-            if settings.AFFILIATE_INTEGRATION_ENABLED:
+            if os.getenv("AFFILIATE_INTEGRATION_ENABLED", "").lower() in ("1", "true"):
                 aff_result = await AffiliateServiceAdapter().validate_code(command.code)
                 if aff_result.active and aff_result.affiliate_id:
                     sent = await AffiliateServiceAdapter().send_event({

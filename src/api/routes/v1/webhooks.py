@@ -17,7 +17,6 @@ from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.posthog_adapter import PostHogAdapter
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
-from src.infra.config.settings import settings
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
@@ -247,7 +246,7 @@ async def _enqueue_affiliate_lifecycle_event(
     uow, user, event: dict, affiliate_event_type: str
 ) -> None:
     """Enqueue a lifecycle event for nutree-affiliate (fire-and-not-fail)."""
-    if not settings.AFFILIATE_INTEGRATION_ENABLED:
+    if os.getenv("AFFILIATE_INTEGRATION_ENABLED", "").lower() not in ("1", "true"):
         return
     try:
         await uow.affiliate_outbox.enqueue(
