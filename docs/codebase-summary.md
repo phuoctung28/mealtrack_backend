@@ -31,7 +31,7 @@
 | Database Tables | 13+ (core + notification_sent_log for dedup) |
 | Repositories | 10+ with smart sync and eager loading |
 | Port Interfaces | 17 port interfaces for dependency inversion |
-| External Integrations | 9 (Gemini, Pinecone, Firebase, Cloudinary, RevenueCat, PostHog, Redis, MySQL, Sentry) |
+| External Integrations | 9 (Gemini, Pinecone, Firebase, Cloudinary, RevenueCat, PostHog, Redis, Neon Postgres, Sentry) |
 
 ---
 
@@ -72,6 +72,14 @@
 - **Tests:** `pytest` or `pytest -m unit`
 - **Migrations:** `alembic upgrade head` or `alembic revision --autogenerate -m "..."`
 
+## Architecture Guardrails
+
+- New backend features follow
+  `docs/architecture/async-cqrs-feature-alignment.md`.
+- Required gates for architecture-sensitive changes:
+  `tests/architecture/test_async_boundary_hygiene.py`,
+  `tests/architecture/test_async_db_runtime_boundaries.py`, and `lint-imports`.
+
 ---
 
 ## Core Domain Services
@@ -88,4 +96,6 @@
 
 ---
 
-See detailed docs: `system-architecture.md`, `cqrs-guide.md`, `database-guide.md`, `external-services.md`
+See detailed docs: `system-architecture.md`, `cqrs-guide.md`,
+`database-guide.md`, `external-services.md`,
+`architecture/async-cqrs-feature-alignment.md`

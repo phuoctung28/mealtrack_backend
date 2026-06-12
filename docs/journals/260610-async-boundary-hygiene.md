@@ -24,7 +24,7 @@ The feature flag routes were doing direct `await db.commit()` — bypassing the 
 
 **Phase 2 — BackgroundTaskManager**:
 - `src/infra/event_bus/background_task_manager.py`: `spawn()`, `drain()`, `cancel_all()`
-- `src/infra/event_bus/task_manager_singleton.py`: process-wide singleton (avoids circular imports with the event bus module)
+- `src/api/dependencies/task_manager.py`: process-wide singleton accessor for lifespan-owned task manager
 - `PyMediatorEventBus.publish()` migrated from bare `asyncio.create_task` to `task_manager.spawn()`
 - Lifespan in `main.py`: creates manager on startup, calls `drain()` on shutdown
 - Critical fix: `drain()` must `await task.cancel()` then `await asyncio.gather(*tasks, return_exceptions=True)` before `engine.dispose()` — without the gather, the engine can be disposed while cancelled tasks are still cleaning up, causing connection-pool errors on shutdown

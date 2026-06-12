@@ -1,6 +1,6 @@
 # Backend System Architecture Overview
 
-**Last Updated:** June 9, 2026
+**Last Updated:** June 12, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
 **Codebase:** 430 files, ~38.5K LOC across 4 layers
@@ -129,17 +129,25 @@ Nutree mobile ──→ MealTrack (validate/apply code)
 
 ---
 
-## Known Issues
+## Current Alignment And Backlog
 
-- CORS `allow_origins=["*"]` wide open in production (security risk)
-- Premium features not restricted on routes (`require_premium` dependency not applied)
-- No API versioning strategy beyond v1
-- `CloudinaryImageStore` instantiated directly in routes (not via DI)
-- Hardcoded constants (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) not in config
-- `AsyncUnitOfWork` uses `asyncio.Lock`; concurrent reuse within one instance will block (by design — use separate instances per handler, enforced by event bus handler cloning)
-- Database runtime is async-only: request paths, cron jobs, and handlers use `config_async.py`, `AsyncSession`, `AsyncUnitOfWork`, and async repositories. Alembic uses its separate migration engine.
-- Manual meal save (`POST /v1/meals/manual`) instruments `db_ms` and `cache_ms` in structured logs so DB commit and Redis cache invalidation latency are independently observable without logging food payload or auth data.
+- Database runtime is async-only: request paths, cron jobs, and handlers use
+  `config_async.py`, `AsyncSession`, `AsyncUnitOfWork`, and async repositories.
+  Alembic uses its separate migration engine.
+- `AsyncUnitOfWork` uses `asyncio.Lock`; concurrent reuse within one instance
+  will block by design. The event bus clones stateful handlers so every send
+  gets a fresh UoW instance.
+- Manual meal save (`POST /v1/meals/manual`) instruments `db_ms` and `cache_ms`
+  in structured logs so DB commit and Redis cache invalidation latency are
+  independently observable without logging food payload or auth data.
+- Future features must follow
+  `docs/architecture/async-cqrs-feature-alignment.md`.
+- Alignment backlog: move shared exceptions out of `src/api`, shrink
+  import-linter baselines, route new feature writes through CQRS handlers and
+  UoW-owned repositories, make long-lived background refresh loops use the
+  process task manager, and expand static guards for sync `httpx` calls.
 
 ---
 
-See related: `cqrs-guide.md`, `database-guide.md`, `external-services.md`, `code-standards.md`
+See related: `cqrs-guide.md`, `database-guide.md`, `external-services.md`,
+`code-standards.md`, `architecture/async-cqrs-feature-alignment.md`

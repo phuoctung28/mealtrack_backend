@@ -142,8 +142,8 @@ curl -i -X OPTIONS "http://localhost:8000/v1/meals"
 ```
 
 **Solutions:**
-1. Development: `allow_origins=["*"]` (already set)
-2. Production: Restrict to known origins via environment config
+1. Set `ALLOWED_ORIGINS` to a comma-separated list of local or production origins.
+2. Avoid wildcard origins in production.
 3. Verify preflight (OPTIONS) returns 200
 
 ---

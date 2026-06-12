@@ -128,10 +128,10 @@
 
 ## Current Priorities (Q2 2026)
 1. **Performance**: Optimize suggestion generation (target <10s from ~45s) — in progress.
-2. **Security**: Restrict CORS in production (`allow_origins=["*"]` currently wide open), add PII redaction to request logging — open.
+2. **Architecture Alignment**: Execute `plans/260612-1910-architecture-alignment-regression-audit/` to keep future features on Clean Architecture, CQRS, async runtime, and explicit security boundaries — planned.
 3. **Rate Limiting**: Tune rate limits on `meal_suggestions` endpoints (discover, generate) — open.
 4. **Testing**: Increase coverage for meal discovery and notification dedup logic — open.
-5. **Premium Gating**: Apply `require_premium` dependency to premium-only routes — open.
+5. **External Boundaries**: Keep RevenueCat webhook, affiliate HMAC, image URL, CORS, and PII boundaries documented as touched — open.
 
 ---
 
@@ -154,14 +154,15 @@
 
 ### High Priority
 - [ ] Plan contract migration to remove or secure legacy JSON compatibility fields after production observation window.
-- [ ] Fix CORS wide open (allow_origins=["*"]) - security risk in production
+- [ ] Execute architecture alignment plan: exception boundary relocation, import-linter baseline shrink, background task ownership, and guardrail expansion
+- [ ] Verify production `ALLOWED_ORIGINS` is explicit and does not use wildcard origins
 - [ ] Implement API versioning strategy beyond v1
-- [ ] Apply `require_premium` dependency to premium-only features
-- [ ] Refactor hardcoded values (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) to config
+- [ ] Keep RevenueCat as subscription source of truth; defer broad premium/admin gate rollout until product scope requires it
+- [ ] Move hardcoded operational thresholds into settings as those feature areas are touched
 
 ### Medium Priority
 - [ ] Add monitoring for Gemini API quota and Cloudinary storage limits
-- [ ] Consider using DI for CloudinaryImageStore instead of direct instantiation in routes
+- [ ] Move remaining direct infra wiring toward app-layer ports/UoW injection when touching those feature areas
 - [ ] Tune rate limiting thresholds for meal_suggestions endpoints based on usage patterns
 
 ### Low Priority

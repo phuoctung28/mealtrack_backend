@@ -6,6 +6,7 @@ A sophisticated FastAPI-based microservice for meal tracking and nutritional ana
 
 - **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Vision, goals, and requirements.
 - **[System Architecture](./docs/architecture/index.md)** - Multi-layer architecture and data flow.
+- **[Async CQRS Feature Alignment](./docs/architecture/async-cqrs-feature-alignment.md)** - Required pattern for future backend features.
 - **[Code Standards](./docs/standards/index.md)** - Development guidelines and patterns.
 - **[Codebase Summary](./docs/codebase-summary.md)** - Directory structure and file organization.
 - **[Project Roadmap](./docs/project-roadmap.md)** - Future plans and completed features.

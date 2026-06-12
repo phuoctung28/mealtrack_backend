@@ -60,18 +60,19 @@ Keep this value below your Neon project's `max_connections` limit. Monitor via `
 ## Connection Configuration
 
 ```python
-# src/infra/database/config_async.py
-DATABASE_URL = "postgresql+asyncpg://user:pass@host/db"
+# src/infra/database/config_async.py resolves this through connection_policy.py
+policy = resolve_connection_policy()
 
 async_engine = create_async_engine(
-    DATABASE_URL,
-    pool_size=20,       # Base connections
-    max_overflow=10,    # Additional under load
-    pool_recycle=3600,  # Recycle hourly
-    pool_pre_ping=True, # Verify before use
+    ASYNC_DATABASE_URL,
+    poolclass=policy.pool_class,
+    pool_size=policy.pool_size,          # direct_pool only
+    max_overflow=policy.max_overflow,    # direct_pool only
+    pool_timeout=policy.pool_timeout,
+    pool_recycle=policy.pool_recycle,
+    pool_pre_ping=True,
+    connect_args=policy.connect_args,
 )
-
-AsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
 ```
 
 Runtime code uses `get_async_db` and `AsyncUnitOfWork` for request and handler
@@ -205,7 +206,9 @@ concurrent requests.
 
 - Indexes on `firebase_uid`, `status`, date columns, and `user_id` foreign keys
 - `joinedload` / `selectinload` for known relationship paths
-- Connection pool: 20 base + 10 overflow, recycled hourly
+- Connection pool: env-driven through `connection_policy.py`; use
+  `UVICORN_WORKERS * ASYNC_POOL_SIZE_PER_WORKER + ASYNC_POOL_MAX_OVERFLOW`
+  for direct-pool capacity planning
 - Redis cache-aside for frequently read data (see `external-services.md`)
 
 ---

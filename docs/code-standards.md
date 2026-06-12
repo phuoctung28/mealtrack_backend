@@ -1,6 +1,6 @@
 # Backend Code Standards — Python Style & Conventions
 
-**Last Updated:** May 27, 2026
+**Last Updated:** June 12, 2026
 **Scope:** All code in `src/` (430 files, ~38.5K LOC)  
 **Applies To:** Typing, naming, imports, code organization, error handling
 
@@ -92,6 +92,10 @@ class MealStatus(str, Enum):
 
 ## Error Handling
 
+Shared application/domain exceptions must live outside the API layer. API owns
+HTTP conversion only. See the alignment backlog in
+`docs/architecture/async-cqrs-feature-alignment.md`.
+
 ### Exception Hierarchy
 ```
 MealTrackException (base)
@@ -133,4 +137,5 @@ async def handle(self, query: GetMealByIdQuery) -> Meal:
 
 ---
 
-See related: `testing-standards.md`, `cqrs-guide.md`
+See related: `testing-standards.md`, `cqrs-guide.md`,
+`architecture/async-cqrs-feature-alignment.md`
