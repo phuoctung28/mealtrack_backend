@@ -52,3 +52,19 @@ class MockImageStore(ImageStorePort):
 
     async def delete_async(self, image_id: str) -> bool:
         return self.delete(image_id)
+
+    def generate_upload_signature(self, image_id: str, ttl: int = 300) -> dict:
+        folder = "mealtrack"
+        public_id = f"{folder}/{image_id}"
+        return {
+            "image_id": image_id,
+            "cloud_name": "mock_cloud",
+            "api_key": "mock_api_key",
+            "timestamp": 1700000000,
+            "signature": "mock_signature",
+            "folder": folder,
+            "public_id": public_id,
+        }
+
+    async def generate_upload_signature_async(self, image_id: str, ttl: int = 300) -> dict:
+        return self.generate_upload_signature(image_id, ttl)

@@ -6,6 +6,7 @@ import cloudinary
 import cloudinary.api
 import cloudinary.exceptions
 import cloudinary.uploader
+import cloudinary.utils
 from dotenv import load_dotenv
 
 from src.domain.ports.image_store_port import ImageStorePort
@@ -260,3 +261,33 @@ class CloudinaryImageStore(ImageStorePort):
         """Async wrapper — runs blocking Cloudinary SDK delete off the event loop."""
         import asyncio
         return await asyncio.to_thread(self.delete, image_id)
+
+    def generate_upload_signature(self, image_id: str, ttl: int = 300) -> dict:
+        """Return signed Cloudinary upload params for direct client upload."""
+        import time as _time
+
+        folder = "mealtrack"
+        public_id = f"{folder}/{image_id}"
+        timestamp = int(_time.time())
+
+        params_to_sign = {
+            "public_id": public_id,
+            "timestamp": timestamp,
+        }
+        api_secret = os.getenv("CLOUDINARY_API_SECRET", "")
+        signature = cloudinary.utils.api_sign_request(params_to_sign, api_secret)
+
+        return {
+            "image_id": image_id,
+            "cloud_name": os.getenv("CLOUDINARY_CLOUD_NAME", ""),
+            "api_key": os.getenv("CLOUDINARY_API_KEY", ""),
+            "timestamp": timestamp,
+            "signature": signature,
+            "folder": folder,
+            "public_id": public_id,
+        }
+
+    async def generate_upload_signature_async(self, image_id: str, ttl: int = 300) -> dict:
+        """Async wrapper for generate_upload_signature."""
+        import asyncio
+        return await asyncio.to_thread(self.generate_upload_signature, image_id, ttl)
