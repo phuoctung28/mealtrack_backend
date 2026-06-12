@@ -27,6 +27,31 @@ _USER_LOADS = (
     selectinload(User.subscriptions),
 )
 
+_USER_SAVE_COLUMNS = (
+    "firebase_uid",
+    "email",
+    "username",
+    "password_hash",
+    "provider",
+    "is_active",
+    "onboarding_completed",
+    "last_accessed",
+    "timezone",
+    "first_name",
+    "last_name",
+    "phone_number",
+    "display_name",
+    "photo_url",
+    "deleted_at",
+)
+
+
+def _copy_user_save_columns(entity: User, updated: User) -> None:
+    for col_name in _USER_SAVE_COLUMNS:
+        new_val = getattr(updated, col_name)
+        if getattr(entity, col_name) != new_val:
+            setattr(entity, col_name, new_val)
+
 
 def _sync_profile_preference_entries(
     entity: UserProfile,
@@ -61,13 +86,23 @@ class AsyncUserRepository(UserRepositoryPort):
 
     async def save(self, user_domain: UserDomainModel) -> UserDomainModel:
         user_entity = UserMapper.to_persistence(user_domain)
-        user_entity.profiles = [
-            UserProfileMapper.to_persistence(p) for p in user_domain.profiles
-        ]
-        if user_entity.id is None:
-            self.session.add(user_entity)
+
+        if user_entity.id is not None:
+            result = await self.session.execute(
+                select(User).options(*_USER_LOADS).where(User.id == str(user_entity.id))
+            )
+            existing_entity = result.scalars().first()
         else:
-            user_entity = await self.session.merge(user_entity)
+            existing_entity = None
+
+        if existing_entity:
+            _copy_user_save_columns(existing_entity, user_entity)
+            user_entity = existing_entity
+        else:
+            user_entity.profiles = [
+                UserProfileMapper.to_persistence(p) for p in user_domain.profiles
+            ]
+            self.session.add(user_entity)
         try:
             await self.session.flush()
             # Re-fetch with eager loading to satisfy lazy="raise" on profiles/subscriptions
