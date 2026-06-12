@@ -9,6 +9,7 @@ from src.app.commands.ingredient import RecognizeIngredientCommand
 # Import all commands
 from src.app.commands.meal import (
     AnalyzeMealImageByUrlCommand,
+    ScanByUrlCommand,
     UploadMealImageImmediatelyCommand,
     EditMealCommand,
     AddCustomIngredientCommand,
@@ -54,6 +55,7 @@ from src.app.handlers.command_handlers import (
     CreateManualMealCommandHandler,
     UpdateUserMetricsCommandHandler,
     AnalyzeMealImageByUrlHandler,
+    ScanByUrlCommandHandler,
     UpdateCustomMacrosCommandHandler,
     UploadMealImageImmediatelyHandler,
     DiscoverMealsCommandHandler,
@@ -343,6 +345,17 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         AnalyzeMealImageByUrlCommand,
         AnalyzeMealImageByUrlHandler(
+            uow=AsyncUnitOfWork(),
+            event_bus=event_bus,
+            vision_service=vision_service,
+            gpt_parser=gpt_parser,
+            meal_translation_service=meal_translation_service,
+            cache_invalidation=cache_invalidation_service,
+        ),
+    )
+    event_bus.register_handler(
+        ScanByUrlCommand,
+        ScanByUrlCommandHandler(
             uow=AsyncUnitOfWork(),
             event_bus=event_bus,
             vision_service=vision_service,

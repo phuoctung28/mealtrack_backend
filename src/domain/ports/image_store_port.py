@@ -85,3 +85,22 @@ class ImageStorePort(ABC):
     async def delete_async(self, image_id: str) -> bool:
         """Async version of delete."""
         pass
+
+    @abstractmethod
+    def generate_upload_signature(self, image_id: str, ttl: int = 300) -> dict:
+        """Return signed Cloudinary upload params for direct client upload.
+
+        Args:
+            image_id: UUID for the image (becomes public_id suffix).
+            ttl: Signature validity window in seconds (default 300).
+
+        Returns:
+            Dict with keys: image_id, cloud_name, api_key, timestamp,
+            signature, folder, public_id.
+        """
+        pass
+
+    @abstractmethod
+    async def generate_upload_signature_async(self, image_id: str, ttl: int = 300) -> dict:
+        """Async version of generate_upload_signature."""
+        pass

@@ -8,6 +8,9 @@
         },
         {
             "path": "../../plans"
+        },
+        {
+            "path": "../../nutree/nutree_ai"
         }
     ]
 }

@@ -5,6 +5,7 @@ Each handler is in its own file for better maintainability.
 
 from .add_custom_ingredient_command_handler import AddCustomIngredientCommandHandler
 from .analyze_meal_image_by_url_command_handler import AnalyzeMealImageByUrlHandler
+from .scan_by_url_command_handler import ScanByUrlCommandHandler
 from .complete_onboarding_command_handler import CompleteOnboardingCommandHandler
 
 # Standalone handlers (already individual files)
@@ -84,6 +85,7 @@ __all__ = [
     "ParseMealTextHandler",
     "UploadMealImageImmediatelyHandler",
     "AnalyzeMealImageByUrlHandler",
+    "ScanByUrlCommandHandler",
     # Notification handlers
     "RegisterFcmTokenCommandHandler",
     "DeleteFcmTokenCommandHandler",

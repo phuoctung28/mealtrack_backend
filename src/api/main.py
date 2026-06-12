@@ -55,6 +55,8 @@ from src.api.routes.v1.health import router as health_router
 from src.api.routes.v1.hydration import router as hydration_router
 from src.api.routes.v1.ingredients import router as ingredients_router
 from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
+from src.api.routes.v1.meal_scan_by_url import router as meal_scan_by_url_router
+from src.api.routes.v1.meal_upload_token import router as meal_upload_token_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.monitoring import router as monitoring_router
 from src.api.routes.v1.movement import router as movement_router
@@ -328,6 +330,8 @@ add_dev_auth_bypass(app)
 app.include_router(root_health_router)
 app.include_router(health_router)
 app.include_router(meals_router)
+app.include_router(meal_upload_token_router)
+app.include_router(meal_scan_by_url_router)
 app.include_router(activities_router)
 app.include_router(feature_flags_router)
 app.include_router(meal_suggestions_router)
