@@ -9,6 +9,10 @@ from typing import Any
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.domain.services.meal_analysis.fast_path_policy import (
+    MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS,
+)
+
 
 class Settings(BaseSettings):
     """Centralized application settings."""
@@ -230,7 +234,9 @@ class Settings(BaseSettings):
 
     # Meal analysis settings
     MEAL_ANALYZE_MAX_ATTEMPTS: int = Field(default=2)
-    MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(default=700)
+    MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(
+        default=MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
+    )
 
     # Affiliate integration
     AFFILIATE_INTEGRATION_ENABLED: bool = Field(

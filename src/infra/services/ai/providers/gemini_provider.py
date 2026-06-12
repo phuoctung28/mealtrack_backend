@@ -1,15 +1,17 @@
 """Gemini implementation of AIProviderPort."""
 import asyncio
-import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
-from src.infra.services.ai.gemini_model_manager import GeminiModelManager
+from src.infra.adapters.ai_json_utils import (
+    extract_json as extract_ai_json,
+)
 from src.infra.services.ai.gemini_model_config import GeminiModelPurpose
+from src.infra.services.ai.gemini_model_manager import GeminiModelManager
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +45,14 @@ class GeminiProvider(AIProviderPort):
         return "gemini"
 
     @property
-    def supported_capabilities(self) -> Set[AICapability]:
+    def supported_capabilities(self) -> set[AICapability]:
         return {
             AICapability.TEXT_GENERATION,
             AICapability.VISION,
             AICapability.STRUCTURED_OUTPUT,
         }
 
-    def get_available_models(self) -> List[str]:
+    def get_available_models(self) -> list[str]:
         return self.AVAILABLE_MODELS.copy()
 
     async def generate(
@@ -59,12 +61,12 @@ class GeminiProvider(AIProviderPort):
         prompt: str,
         system_message: str,
         response_type: str = "json",
-        max_tokens: Optional[int] = None,
-        schema: Optional[type] = None,
-        purpose_hint: Optional[str] = None,  # ModelPurpose.value string
-        cache_name: Optional[str] = None,
+        max_tokens: int | None = None,
+        schema: type | None = None,
+        purpose_hint: str | None = None,  # ModelPurpose.value string
+        cache_name: str | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate text using Gemini."""
         if purpose_hint is not None:
             purpose = _PURPOSE_HINT_MAP.get(purpose_hint, GeminiModelPurpose.GENERAL)
@@ -118,10 +120,10 @@ class GeminiProvider(AIProviderPort):
         model: str,
         prompt: str,
         image_data: bytes,
-        system_message: Optional[str] = None,
-        purpose_hint: Optional[str] = None,   # NEW
+        system_message: str | None = None,
+        purpose_hint: str | None = None,   # NEW
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate with image input."""
         import base64
 
@@ -155,7 +157,7 @@ class GeminiProvider(AIProviderPort):
         response = await asyncio.to_thread(llm.invoke, messages)
         return self._extract_json(response.content)
 
-    def extract_error_code(self, error: Exception) -> Optional[Union[int, str]]:
+    def extract_error_code(self, error: Exception) -> int | str | None:
         """Extract status code or error type from exception."""
         error_str = str(error)
 
@@ -168,25 +170,6 @@ class GeminiProvider(AIProviderPort):
 
         return None
 
-    def _extract_json(self, content: str) -> Dict[str, Any]:
+    def _extract_json(self, content: str) -> dict[str, Any]:
         """Extract JSON from response content."""
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            pass
-
-        json_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
-        if json_match:
-            try:
-                return json.loads(json_match.group(1).strip())
-            except json.JSONDecodeError:
-                pass
-
-        json_match = re.search(r"\{[\s\S]*\}", content)
-        if json_match:
-            try:
-                return json.loads(json_match.group(0))
-            except json.JSONDecodeError:
-                pass
-
-        raise ValueError(f"Could not extract JSON from response: {content[:200]}")
+        return extract_ai_json(content)

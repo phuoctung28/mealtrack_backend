@@ -85,6 +85,13 @@ def test_get_configured_event_bus_is_singleton(monkeypatch):
     monkeypatch.setattr(deps, "get_suggestion_orchestration_service", lambda: object())
     monkeypatch.setattr(deps, "get_deepl_meal_translation_service", lambda: object())
 
+    class _MealGen:
+        pass
+
+    import src.infra.adapters.meal_generation_service as _meal_gen_mod
+
+    monkeypatch.setattr(_meal_gen_mod, "MealGenerationService", _MealGen)
+
     # Patch every handler class referenced to cheap stubs.
     # They're imported in the module, so patching attributes is enough.
     handler_names = [
@@ -195,6 +202,13 @@ async def test_configured_event_bus_can_send_movement_catalog_query(monkeypatch)
     monkeypatch.setattr(deps, "get_cache_service", lambda: object())
     monkeypatch.setattr(deps, "get_suggestion_orchestration_service", lambda: object())
     monkeypatch.setattr(deps, "get_deepl_meal_translation_service", lambda: object())
+
+    class _MealGen:
+        pass
+
+    import src.infra.adapters.meal_generation_service as _meal_gen_mod
+
+    monkeypatch.setattr(_meal_gen_mod, "MealGenerationService", _MealGen)
 
     class _StubWithHandle:
         async def handle(self, *args, **kwargs):

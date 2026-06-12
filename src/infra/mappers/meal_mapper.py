@@ -1,5 +1,6 @@
 """Meal cluster ORM <-> domain mapping functions."""
 
+import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -31,6 +32,13 @@ from src.infra.database.models.meal.meal_translation_model import MealTranslatio
 from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.database.models.nutrition.nutrition import NutritionORM
 from src.infra.mappers.status_mapper import MealStatusMapper
+
+logger = logging.getLogger(__name__)
+
+_UNHYDRATABLE_READY_MEAL_ERRORS = {
+    "Meal with READY status must have nutrition data",
+    "Meal with READY status must have ready_at timestamp",
+}
 
 
 def _to_naive_utc(dt: datetime | None) -> datetime | None:
@@ -167,6 +175,21 @@ def meal_orm_to_domain(orm: MealORM) -> DomainMeal:
         emoji=orm.emoji,
         quantity=orm.quantity,
     )
+
+
+def meal_orm_to_domain_if_hydratable(orm: MealORM) -> DomainMeal | None:
+    """Map a meal row, returning None for known malformed READY legacy rows."""
+    try:
+        return meal_orm_to_domain(orm)
+    except ValueError as exc:
+        if str(exc) in _UNHYDRATABLE_READY_MEAL_ERRORS:
+            logger.warning(
+                "Skipping unhydratable READY meal row: meal_id=%s reason=%s",
+                getattr(orm, "meal_id", None),
+                str(exc),
+            )
+            return None
+        raise
 
 
 # ---------------------------------------------------------------------------

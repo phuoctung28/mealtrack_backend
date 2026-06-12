@@ -1,5 +1,5 @@
 """
-JSON extraction utilities for AI meal generation responses.
+JSON extraction utilities for AI responses.
 Handles parsing, cleaning, and recovery from malformed JSON.
 """
 
@@ -114,8 +114,8 @@ def clean_json_content(content: str) -> str:
     original_len = len(content)
     content = content.strip()
 
-    # Strategy: Find positions of complete top-level objects in suggestions array
-    # Look for pattern: complete {...} objects at depth 2 (inside suggestions array)
+    # Strategy: Find positions of complete top-level objects in array (e.g. suggestions or foods)
+    # Look for pattern: complete {...} objects at depth 2 (inside root array)
 
     in_string = False
     escape_next = False
@@ -152,11 +152,11 @@ def clean_json_content(content: str) -> str:
         # Track structure depth
         if char == "{":
             depth += 1
-            # Track when we enter a suggestion object (depth 2, inside suggestions array)
+            # Track when we enter a suggestion or food object (depth 2, inside an array)
             if depth == 2 and bracket_depth == 1:
                 object_start_depth = depth
         elif char == "}":
-            # Check if we're closing a suggestion object
+            # Check if we're closing a suggestion or food object
             if depth == 2 and object_start_depth == 2:
                 last_complete_suggestion_end = i + 1
                 complete_objects_count += 1
@@ -249,20 +249,36 @@ def clean_json_content(content: str) -> str:
             "[JSON-CLEAN-FALLBACK] no complete objects found | "
             "attempting simple recovery"
         )
-        # Find last complete key-value pair
-        last_valid = find_last_valid_json_position(content)
-        if last_valid > 0:
-            content = content[:last_valid]
-            logger.debug(f"[JSON-CLEAN-TRUNCATE] cut at last_valid={last_valid}")
+        # First preserve recoverable scalar values at the cutoff, then close
+        # the open containers. This handles AI output truncated right after a
+        # valid number/string/bool/null value.
+        candidate = re.sub(r",\s*$", "", content)
+        candidate = re.sub(r":\s*$", ": null", candidate)  # Fix hanging colons
+        candidate = re.sub(r",(\s*[}\]])", r"\1", candidate)
+        candidate = close_json_structures(candidate)
+        try:
+            json.loads(candidate)
+            content = candidate
+            logger.debug(f"[JSON-CLEAN-CLOSED] final_len={len(content)}")
+        except json.JSONDecodeError as e:
+            logger.debug(
+                f"[JSON-CLEAN-CLOSE-AS-IS-FAILED] error={e.msg} | pos={e.pos}"
+            )
 
-        # Remove trailing incomplete content
-        content = re.sub(r",\s*$", "", content)
-        content = re.sub(r":\s*$", ": null", content)  # Fix hanging colons
-        content = re.sub(r",(\s*[}\]])", r"\1", content)
+            # Find last complete key-value pair
+            last_valid = find_last_valid_json_position(content)
+            if last_valid > 0:
+                content = content[:last_valid]
+                logger.debug(f"[JSON-CLEAN-TRUNCATE] cut at last_valid={last_valid}")
 
-        # Close structures
-        content = close_json_structures(content)
-        logger.debug(f"[JSON-CLEAN-CLOSED] final_len={len(content)}")
+            # Remove trailing incomplete content
+            content = re.sub(r",\s*$", "", content)
+            content = re.sub(r":\s*$", ": null", content)  # Fix hanging colons
+            content = re.sub(r",(\s*[}\]])", r"\1", content)
+
+            # Close structures
+            content = close_json_structures(content)
+            logger.debug(f"[JSON-CLEAN-CLOSED] final_len={len(content)}")
 
     return content
 
@@ -321,6 +337,9 @@ def close_json_structures(content: str) -> str:
             structure_stack.pop()
 
     # Close in reverse order
+    if in_string:
+        content += '"'
+
     for opener in reversed(structure_stack):
         content += "]" if opener == "[" else "}"
 

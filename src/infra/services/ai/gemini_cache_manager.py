@@ -11,6 +11,10 @@ _CACHE_REDIS_KEYS = {
     "vision": "gemini_cache:vision",
     "text_parse": "gemini_cache:text_parse",
 }
+_CACHE_MODEL_REDIS_KEYS = {
+    cache_type: f"{redis_key}:model"
+    for cache_type, redis_key in _CACHE_REDIS_KEYS.items()
+}
 
 TTL_SECONDS = 3600
 REFRESH_BEFORE_EXPIRY = 600
@@ -35,10 +39,35 @@ class GeminiCacheManager:
             return None
         return raw  # decode_responses=True — already a str
 
-    async def _set_cache_name(self, cache_type: str, name: str) -> None:
-        """Persist a Gemini cache name to Redis with an extended TTL."""
+    async def get_cache_name_for_model(self, cache_type: str, model: str) -> str | None:
+        """Return the cache name only when it was created for the same model."""
+        name = await self.get_cache_name(cache_type)
+        if name is None:
+            return None
+
+        model_key = _CACHE_MODEL_REDIS_KEYS.get(cache_type)
+        if not model_key:
+            return None
+
+        cached_model = await self._redis.get(model_key)
+        if cached_model == model:
+            return name
+
+        logger.info(
+            "[GEMINI-CACHE] Skipping cache_type=%s for model=%s: cached_model=%s",
+            cache_type,
+            model,
+            cached_model or "unknown",
+        )
+        return None
+
+    async def _set_cache_name(self, cache_type: str, name: str, model: str) -> None:
+        """Persist Gemini cache metadata to Redis with an extended TTL."""
         redis_key = _CACHE_REDIS_KEYS[cache_type]
-        await self._redis.set(redis_key, name, ex=TTL_SECONDS + REFRESH_BEFORE_EXPIRY)
+        model_key = _CACHE_MODEL_REDIS_KEYS[cache_type]
+        ttl = TTL_SECONDS + REFRESH_BEFORE_EXPIRY
+        await self._redis.set(redis_key, name, ex=ttl)
+        await self._redis.set(model_key, model, ex=ttl)
 
     async def _create_cache(
         self, cache_type: str, system_prompt: str, model: str
@@ -126,13 +155,13 @@ class GeminiCacheManager:
 
     async def _warm_one(self, cache_type: str, prompt: str, model: str) -> None:
         """Create and store a single cache if it is not already warm."""
-        existing = await self.get_cache_name(cache_type)
+        existing = await self.get_cache_name_for_model(cache_type, model)
         if existing:
             logger.info("[GEMINI-CACHE] Already warm: cache_type=%s", cache_type)
             return
         name = await self._create_cache(cache_type, prompt, model)
         if name:
-            await self._set_cache_name(cache_type, name)
+            await self._set_cache_name(cache_type, name, model)
 
     async def refresh_loop(self) -> None:
         """Background task: refresh caches before TTL expiry. Run indefinitely."""
@@ -140,7 +169,7 @@ class GeminiCacheManager:
             await asyncio.sleep(REFRESH_BEFORE_EXPIRY)
             logger.info("[GEMINI-CACHE] Refreshing caches before TTL expiry")
             # Clear stale Redis entries so _warm_one creates fresh caches
-            for redis_key in _CACHE_REDIS_KEYS.values():
+            for redis_key in [*_CACHE_REDIS_KEYS.values(), *_CACHE_MODEL_REDIS_KEYS.values()]:
                 try:
                     await self._redis.delete(redis_key)
                 except Exception as e:

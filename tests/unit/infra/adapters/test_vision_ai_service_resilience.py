@@ -1,7 +1,10 @@
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
-from src.infra.adapters.vision_ai_service import VisionAIService
+
+from src.domain.exceptions.ai_exceptions import AIUnavailableError
 from src.domain.strategies.meal_analysis_strategy import MealAnalysisStrategy
+from src.infra.adapters.vision_ai_service import VisionAIService
 
 
 @pytest.fixture
@@ -81,8 +84,29 @@ async def test_analyze_with_strategy_raises_runtime_error_on_failure(service, mo
         await service.analyze_with_strategy(b"fake_image", mock_strategy)
 
 
+@pytest.mark.asyncio
+async def test_analyze_with_strategy_preserves_ai_unavailable(
+    service, mock_ai_manager, mock_strategy
+):
+    unavailable = AIUnavailableError(
+        "All vision models failed",
+        attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+        last_error="503 UNAVAILABLE",
+    )
+    mock_ai_manager.generate_with_vision = AsyncMock(side_effect=unavailable)
+
+    with pytest.raises(AIUnavailableError) as exc_info:
+        await service.analyze_with_strategy(b"fake_image", mock_strategy)
+
+    assert exc_info.value.attempted_models == [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+    ]
+
+
 def test_compress_image_still_works(service):
     from io import BytesIO
+
     from PIL import Image
 
     img = Image.new("RGB", (400, 300), color=(128, 64, 32))

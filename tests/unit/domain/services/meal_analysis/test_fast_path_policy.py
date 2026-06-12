@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from src.domain.services.meal_analysis.fast_path_policy import (
+    MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS,
     MealAnalyzeFastPathPolicy,
 )
 
@@ -9,7 +10,7 @@ def test_defaults_from_settings_none():
     policy = MealAnalyzeFastPathPolicy.from_settings(None)
 
     assert policy.max_attempts == 2
-    assert policy.max_output_tokens == 700
+    assert policy.max_output_tokens == MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
 
 
 def test_from_settings_maps_values():
@@ -30,4 +31,4 @@ def test_from_settings_uses_defaults_for_missing_attrs():
     policy = MealAnalyzeFastPathPolicy.from_settings(settings)
 
     assert policy.max_attempts == 2
-    assert policy.max_output_tokens == 700
+    assert policy.max_output_tokens == MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS

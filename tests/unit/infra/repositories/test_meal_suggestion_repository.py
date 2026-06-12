@@ -4,6 +4,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.domain.exceptions.meal_suggestion_exceptions import (
+    MealSuggestionSessionStoreUnavailableError,
+)
 from src.domain.model.meal_suggestion import (
     Ingredient,
     MacroEstimate,
@@ -80,6 +83,21 @@ async def test_save_and_get_session_roundtrip(session):
 
     await repo.save_session(session)
     redis.set.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_save_session_raises_store_unavailable_when_required_write_fails(session):
+    redis = SimpleNamespace(
+        set=AsyncMock(return_value=False),
+        get=AsyncMock(return_value=None),
+        delete=AsyncMock(),
+        delete_pattern=AsyncMock(return_value=0),
+        client=None,
+    )
+    repo = MealSuggestionRepository(redis)
+
+    with pytest.raises(MealSuggestionSessionStoreUnavailableError):
+        await repo.save_session(session)
 
 
 def test_session_serialization_preserves_discovery_meals(session):

@@ -1,28 +1,42 @@
+import asyncio
 import json
 import logging
 import re
 from io import BytesIO
 from typing import Any
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from PIL import Image
 
+from src.domain.exceptions.ai_exceptions import AIUnavailableError
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.strategies.meal_analysis_strategy import (
     AnalysisStrategyFactory,
     MealAnalysisStrategy,
 )
+from src.infra.config.settings import get_settings
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
 
 logger = logging.getLogger(__name__)
+
+MAX_URL_IMAGE_BYTES = 5 * 1024 * 1024
+URL_FETCH_TIMEOUT_SECONDS = 10
+ALLOWED_URL_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
 class VisionAIService(VisionAIServicePort):
     """Vision AI service with automatic fallback on failures."""
 
-    def __init__(self):
+    def __init__(self, max_output_tokens: int | None = None):
         """Initialize with AI model manager."""
         self._ai_manager = AIModelManager.get_instance()
         self._optimized_prompt_enabled = True
+        self._max_output_tokens = (
+            max_output_tokens
+            if max_output_tokens is not None
+            else get_settings().MEAL_ANALYZE_MAX_OUTPUT_TOKENS
+        )
 
     def _compress_image(self, image_bytes: bytes) -> bytes:
         """Compress image for faster upload."""
@@ -134,8 +148,10 @@ class VisionAIService(VisionAIServicePort):
                 prompt=strategy.get_user_message(),
                 image_data=image_bytes,
                 system_message=strategy.get_analysis_prompt(),
-                max_tokens=1024,
+                max_tokens=self._max_output_tokens,
             )
+        except AIUnavailableError:
+            raise
         except Exception as e:
             raise RuntimeError(
                 f"Failed to analyze image with {strategy.get_strategy_name()}: {str(e)}"
@@ -163,24 +179,34 @@ class VisionAIService(VisionAIServicePort):
         Raises:
             RuntimeError: If analysis fails
         """
-        try:
-            result = await self._ai_manager.generate_with_vision(
-                purpose=ModelPurpose.MEAL_SCAN,
-                prompt=strategy.get_user_message(),
-                image_data=image_url.encode("utf-8"),
-                system_message=strategy.get_analysis_prompt(),
-                max_tokens=1024,
-            )
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to analyze image URL with {strategy.get_strategy_name()}: {str(e)}"
-            ) from e
+        image_bytes = await self._fetch_image_url(image_url)
+        return await self.analyze_with_strategy(image_bytes, strategy)
 
-        return {
-            "raw_response": json.dumps(result),
-            "structured_data": result,
-            "strategy_used": strategy.get_strategy_name(),
-        }
+    async def _fetch_image_url(self, image_url: str) -> bytes:
+        """Fetch bounded image bytes from an HTTP(S) URL."""
+        parsed = urlparse(image_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Image URL must be an absolute HTTP(S) URL")
+
+        def _fetch() -> bytes:
+            request = Request(image_url, headers={"User-Agent": "MealTrack/1.0"})
+            with urlopen(request, timeout=URL_FETCH_TIMEOUT_SECONDS) as response:
+                content_type = response.headers.get_content_type()
+                if content_type not in ALLOWED_URL_IMAGE_CONTENT_TYPES:
+                    raise ValueError(
+                        f"Unsupported image URL content type: {content_type}"
+                    )
+                image_bytes = response.read(MAX_URL_IMAGE_BYTES + 1)
+                if len(image_bytes) > MAX_URL_IMAGE_BYTES:
+                    raise ValueError("Image URL content too large (max 5MB)")
+                return image_bytes
+
+        try:
+            return await asyncio.to_thread(_fetch)
+        except ValueError:
+            raise
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch image URL: {str(e)}") from e
 
     async def analyze(self, image_bytes: bytes) -> dict[str, Any]:
         """

@@ -764,7 +764,15 @@ def test_engine(worker_id, request):
         try:
             with temp_engine.connect() as conn:
                 db_name = get_test_database_url().rsplit("/", 1)[1].split("?")[0]
-                conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name}"))
+                if temp_engine.dialect.name == "postgresql":
+                    exists = conn.execute(
+                        text("SELECT 1 FROM pg_database WHERE datname = :db_name"),
+                        {"db_name": db_name},
+                    ).scalar()
+                    if not exists:
+                        conn.execute(text(f'CREATE DATABASE "{db_name}"'))
+                elif temp_engine.dialect.name == "mysql":
+                    conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{db_name}`"))
         finally:
             temp_engine.dispose()
 
@@ -775,9 +783,11 @@ def test_engine(worker_id, request):
         if worker_id in ("master", "gw0"):
             # Drop all tables first to ensure clean state
             with engine.begin() as conn:
-                conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+                if engine.dialect.name == "mysql":
+                    conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
                 Base.metadata.drop_all(bind=engine)
-                conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+                if engine.dialect.name == "mysql":
+                    conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
 
             # Create all tables
             Base.metadata.create_all(bind=engine)
@@ -874,8 +884,10 @@ def mock_image_store() -> MockImageStore:
 
 
 @pytest.fixture
-def mock_vision_service() -> MockVisionAIService:
+def mock_vision_service():
     """Mock vision AI service for testing."""
+    from tests.fixtures.mock_adapters.mock_vision_ai_service import MockVisionAIService
+
     return MockVisionAIService()
 
 

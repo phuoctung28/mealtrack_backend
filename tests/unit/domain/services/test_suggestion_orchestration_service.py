@@ -11,6 +11,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from src.domain.exceptions.meal_suggestion_exceptions import (
+    MealSuggestionSessionStoreUnavailableError,
+)
 from src.domain.model.meal_suggestion import (
     MealSuggestion,
     SuggestionSession,
@@ -566,3 +569,70 @@ async def test_generate_discovery_accepts_async_profile_provider(mock_generation
     profile_provider.assert_awaited_once_with("user-1")
     repo.save_session.assert_awaited_once_with(session)
     assert meals[0]["id"] == "disc_async"
+
+
+@pytest.mark.asyncio
+async def test_generate_discovery_returns_meals_when_session_store_write_fails(
+    mock_generation_service,
+    monkeypatch,
+):
+    """Discovery can degrade because /recipes accepts client-selected meal objects."""
+    from src.domain.services.meal_suggestion import (
+        suggestion_orchestration_service as mod,
+    )
+    from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
+        SuggestionOrchestrationService,
+    )
+    from src.infra.services.ai.schemas import (
+        DiscoveryMealsResponse,
+        MealNamesResponse,
+        RecipeDetailsResponse,
+    )
+
+    async def _fake_adjusted(*args, **kwargs):
+        return 2000
+
+    monkeypatch.setattr(mod, "get_adjusted_daily_target", _fake_adjusted)
+
+    profile = Mock()
+    profile.meals_per_day = 3
+    profile.allergies = []
+    repo = AsyncMock()
+    repo.save_session.side_effect = MealSuggestionSessionStoreUnavailableError()
+    nutrition_lookup = AsyncMock(spec=NutritionLookupService)
+    service = SuggestionOrchestrationService(
+        generation_service=mock_generation_service,
+        suggestion_repo=repo,
+        nutrition_lookup=nutrition_lookup,
+        meal_names_schema_class=MealNamesResponse,
+        discovery_meals_schema_class=DiscoveryMealsResponse,
+        recipe_details_schema_class=RecipeDetailsResponse,
+        profile_provider=lambda user_id: profile,
+    )
+    generated_meals = [
+        {
+            "id": "disc_1",
+            "name": "Ginger Carp Steamed",
+            "english_name": "Ginger Carp Steamed",
+            "calories": 300,
+            "protein": 30,
+            "carbs": 20,
+            "fat": 8,
+        }
+    ]
+    service._recipe_generator.generate_discovery = AsyncMock(
+        return_value=generated_meals
+    )
+
+    session, meals = await service.generate_discovery(
+        user_id="user-1",
+        meal_type="lunch",
+        meal_portion_type="main",
+        ingredients=["carp"],
+        count=10,
+    )
+
+    assert meals == generated_meals
+    assert session.discovery_meals == generated_meals
+    assert session.shown_meal_names == ["Ginger Carp Steamed"]
+    repo.save_session.assert_awaited_once_with(session)
