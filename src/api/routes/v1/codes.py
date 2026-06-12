@@ -40,9 +40,18 @@ class ReferralValidatedResponse(BaseModel):
     commission_rewards: Dict[str, float] = Field(default_factory=dict)
 
 
+class AffiliateValidatedResponse(BaseModel):
+    type: Literal["affiliate_code"]
+    code: str
+    is_valid: bool
+    affiliate_id: Optional[str] = None
+    display_name: Optional[str] = None
+    partner_type: Optional[str] = None
+
+
 @router.post(
     "/validate",
-    response_model=Union[PromoValidatedResponse, ReferralValidatedResponse],
+    response_model=Union[PromoValidatedResponse, ReferralValidatedResponse, AffiliateValidatedResponse],
 )
 async def validate_code(
     request: CodeValidateRequest,

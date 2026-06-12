@@ -1,4 +1,4 @@
-"""Query handler — unified code validation: tries promo_codes first, then referral_codes."""
+"""Query handler — unified code validation: tries promo_codes first, then referral_codes, then affiliate."""
 import logging
 
 from sqlalchemy import select
@@ -8,6 +8,7 @@ from src.app.queries.codes.validate_code_query import (
     ValidateCodeQuery,
 )
 from src.domain.utils.timezone_utils import utc_now
+from src.infra.adapters.affiliate_service_adapter import AffiliateServiceAdapter
 from src.infra.config.settings import settings
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
@@ -72,5 +73,20 @@ class ValidateCodeQueryHandler:
                     "discount_annual": 499000,
                     "commission_rewards": settings.REFERRAL_COMMISSIONS,
                 }
+
+            # ── Affiliate code lookup (feature-flagged, last resort) ─────────
+            # nutree-affiliate owns duplicate-attribution enforcement; MealTrack
+            # stores no attribution state.
+            if settings.AFFILIATE_INTEGRATION_ENABLED:
+                aff_result = await AffiliateServiceAdapter().validate_code(query.code)
+                if aff_result.active:
+                    return {
+                        "type": "affiliate_code",
+                        "code": query.code,
+                        "is_valid": True,
+                        "affiliate_id": aff_result.affiliate_id,
+                        "display_name": aff_result.display_name,
+                        "partner_type": aff_result.partner_type,
+                    }
 
             raise CodeValidationError(404, "Code not found")

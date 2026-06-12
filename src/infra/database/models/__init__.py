@@ -67,6 +67,9 @@ from .weekly.weekly_macro_budget import WeeklyMacroBudgetORM
 # Backward-compatible alias
 BarcodeProductModel = FoodReferenceModel
 
+# Affiliate outbox
+from .affiliate_event_outbox import AffiliateEventOutbox
+
 # Referral system
 # Email log
 from .email_log import EmailLog
@@ -147,4 +150,6 @@ __all__ = [
     # Promo codes
     "PromoCode",
     "PromoCodeRedemption",
+    # Affiliate outbox
+    "AffiliateEventOutbox",
 ]

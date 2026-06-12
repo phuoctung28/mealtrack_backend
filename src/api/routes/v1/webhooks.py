@@ -242,6 +242,7 @@ def _preferred_transfer_target(transferred_to: list[str]) -> str | None:
     )
 
 
+
 async def handle_purchase(uow, user, event):
     """Handle initial purchase."""
     logger.info(f"Creating subscription for user {user.id}")
@@ -273,6 +274,17 @@ async def handle_purchase(uow, user, event):
 
     # Credit referrer if this user has a pending referral conversion
     await _credit_referral_on_purchase(uow, str(user.id))
+    await uow.affiliate_outbox.enqueue(
+        "subscription_initial_purchase",
+        {
+            "mealtrack_user_id": str(user.id),
+            "product_id": event.get("product_id"),
+            "period_type": event.get("period_type"),
+            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "occurred_at": (parse_timestamp(event.get("purchased_at_ms")) or utc_now()).isoformat(),
+        },
+        event_id=event.get("id"),
+    )
 
 
 async def handle_renewal(uow, user, event):
@@ -293,6 +305,17 @@ async def handle_renewal(uow, user, event):
         await handle_purchase(uow, user, event)
 
     await capture_subscription_lifecycle_event(user, event, "RENEWAL", subscription)
+    await uow.affiliate_outbox.enqueue(
+        "subscription_renewal",
+        {
+            "mealtrack_user_id": str(user.id),
+            "product_id": event.get("product_id"),
+            "period_type": event.get("period_type"),
+            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "occurred_at": (parse_timestamp(event.get("purchased_at_ms")) or utc_now()).isoformat(),
+        },
+        event_id=event.get("id"),
+    )
 
     # Purge any pending trial-expiry pushes so renewed users don't get a
     # "your trial ends tomorrow" push for a sub that just auto-renewed.
@@ -329,6 +352,16 @@ async def handle_cancellation(uow, user, event):
     await capture_subscription_lifecycle_event(
         user, event, "CANCELLATION", subscription
     )
+    await uow.affiliate_outbox.enqueue(
+        "subscription_canceled",
+        {
+            "mealtrack_user_id": str(user.id),
+            "product_id": event.get("product_id"),
+            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "occurred_at": utc_now().isoformat(),
+        },
+        event_id=event.get("id"),
+    )
 
     # Send cancellation email
     if not user.email_opt_out:
@@ -350,6 +383,16 @@ async def handle_expiration(uow, user, event):
         logger.info(f"User {user.id} subscription expired")
 
     await capture_subscription_lifecycle_event(user, event, "EXPIRATION", subscription)
+    await uow.affiliate_outbox.enqueue(
+        "subscription_expired",
+        {
+            "mealtrack_user_id": str(user.id),
+            "product_id": event.get("product_id"),
+            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "occurred_at": utc_now().isoformat(),
+        },
+        event_id=event.get("id"),
+    )
 
 
 async def handle_billing_issue(uow, user, event):
@@ -391,7 +434,16 @@ async def handle_refund(uow, user, event):
         logger.info(f"User {user.id} subscription refunded")
 
     await capture_subscription_lifecycle_event(user, event, "REFUND", subscription)
-
+    await uow.affiliate_outbox.enqueue(
+        "subscription_refund",
+        {
+            "mealtrack_user_id": str(user.id),
+            "product_id": event.get("product_id"),
+            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "occurred_at": utc_now().isoformat(),
+        },
+        event_id=event.get("id"),
+    )
     await _revoke_referral_on_refund(uow, str(user.id))
 
 
