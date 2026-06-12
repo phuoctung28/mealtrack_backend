@@ -6,7 +6,7 @@ Auto-extracted for better maintainability.
 import logging
 from uuid import UUID
 
-from src.api.exceptions import ResourceNotFoundException, ValidationException
+from src.domain.exceptions.base import ResourceNotFoundException, ValidationException
 from src.app.commands.user import SaveUserOnboardingCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys

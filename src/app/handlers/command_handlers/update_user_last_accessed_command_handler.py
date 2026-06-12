@@ -6,7 +6,7 @@ Auto-extracted for better maintainability.
 import logging
 from typing import Dict, Any
 
-from src.api.exceptions import ResourceNotFoundException
+from src.domain.exceptions.base import ResourceNotFoundException
 from src.app.commands.user.sync_user_command import UpdateUserLastAccessedCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.utils.timezone_utils import utc_now

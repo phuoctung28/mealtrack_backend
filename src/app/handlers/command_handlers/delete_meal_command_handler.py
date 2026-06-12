@@ -9,7 +9,7 @@ on nutrition/meal records.
 import logging
 from typing import Any
 
-from src.api.exceptions import AuthorizationException
+from src.domain.exceptions.base import AuthorizationException
 from src.app.commands.meal import DeleteMealCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService

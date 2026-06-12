@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from src.api.exceptions import ResourceNotFoundException
+from src.domain.exceptions.base import ResourceNotFoundException
 from src.app.commands.cheat_day import UnmarkCheatDayCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort

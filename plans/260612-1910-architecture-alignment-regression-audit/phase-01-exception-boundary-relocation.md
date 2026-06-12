@@ -10,7 +10,7 @@
 ## Overview
 
 **Priority:** P1
-**Status:** Planned
+**Status:** Complete
 
 Move reusable MealTrack exception classes out of the API layer. Keep HTTP status
 mapping and FastAPI `HTTPException` conversion in `src/api`.
@@ -62,12 +62,12 @@ Create:
 
 ## Todo List
 
-- [ ] Pick target module.
-- [ ] Move exception classes.
-- [ ] Update imports.
-- [ ] Shrink import-linter baselines.
-- [ ] Add static guard.
-- [ ] Run targeted route/handler tests.
+- [x] Pick target module. → `src/domain/exceptions/base.py`
+- [x] Move exception classes.
+- [x] Update imports. (23 app/infra files rewritten via sed)
+- [x] Shrink import-linter baselines. (removed 2 entries from infra-no-app-api)
+- [x] Add static guard. → `test_http_exception_not_imported_outside_api` in hygiene test
+- [x] Run targeted route/handler tests.
 
 ## Success Criteria
 

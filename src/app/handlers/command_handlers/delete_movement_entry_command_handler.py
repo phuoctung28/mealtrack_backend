@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from src.api.exceptions import AuthorizationException, ResourceNotFoundException
+from src.domain.exceptions.base import AuthorizationException, ResourceNotFoundException
 from src.app.commands.movement import DeleteMovementEntryCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService

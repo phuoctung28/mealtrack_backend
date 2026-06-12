@@ -10,7 +10,7 @@
 ## Overview
 
 **Priority:** P2
-**Status:** Planned
+**Status:** Complete
 
 Add small static checks for regression classes found during the docs audit.
 
@@ -56,10 +56,10 @@ Modify:
 
 ## Todo List
 
-- [ ] Add sync `httpx` guard.
-- [ ] Add non-API `HTTPException` guard.
-- [ ] Tighten import-linter after exception relocation.
-- [ ] Run architecture gates.
+- [x] Add sync `httpx` guard. → `test_no_blocking_httpx_calls_in_async_runtime_paths` (with cloudinary allowlist)
+- [x] Add non-API `HTTPException` guard. → `test_http_exception_not_imported_outside_api`
+- [x] Tighten import-linter after exception relocation. → 2 baselines removed
+- [x] Run architecture gates. → 16/16 pass, 4/4 contracts kept
 
 ## Success Criteria
 

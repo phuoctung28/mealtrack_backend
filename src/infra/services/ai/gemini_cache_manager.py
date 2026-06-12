@@ -3,6 +3,10 @@
 import asyncio
 import logging
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.infra.event_bus.background_task_manager import BackgroundTaskManager
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +31,6 @@ class GeminiCacheManager:
     def __init__(self, redis_client, api_key: str | None = None):
         self._redis = redis_client
         self._api_key = api_key or os.getenv("GOOGLE_API_KEY", "")
-        self._refresh_task: asyncio.Task | None = None
 
     async def get_cache_name(self, cache_type: str) -> str | None:
         """Return the Gemini cache name for the given type, or None if not cached."""
@@ -116,18 +119,12 @@ class GeminiCacheManager:
             )
             return None
 
-    def start_refresh_loop(self) -> None:
-        """Schedule the background refresh loop as a managed asyncio task."""
-        self._refresh_task = asyncio.create_task(self.refresh_loop())
+    def start_refresh_loop(self, task_manager: "BackgroundTaskManager") -> None:
+        """Schedule the background refresh loop via the process-wide task manager."""
+        task_manager.spawn("gemini-cache-refresh", self.refresh_loop())
 
     async def stop(self) -> None:
-        """Cancel the background refresh task and wait for it to finish."""
-        if self._refresh_task and not self._refresh_task.done():
-            self._refresh_task.cancel()
-            try:
-                await self._refresh_task
-            except asyncio.CancelledError:
-                pass
+        """No-op: lifespan drains the task manager before calling this."""
 
     async def warm_all(self) -> None:
         """Warm all 3 context caches concurrently.

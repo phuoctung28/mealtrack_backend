@@ -10,7 +10,7 @@
 ## Overview
 
 **Priority:** P2
-**Status:** Planned
+**Status:** Complete
 
 Align long-lived background work with the process task manager or make ownership
 explicit in lifespan code.
@@ -64,11 +64,11 @@ Modify:
 
 ## Todo List
 
-- [ ] Choose task ownership API.
-- [ ] Update Gemini cache manager.
-- [ ] Update lifespan wiring.
-- [ ] Add/adjust tests.
-- [ ] Run async boundary guard tests.
+- [x] Choose task ownership API. → `BackgroundTaskManager.spawn()`
+- [x] Update Gemini cache manager. → `start_refresh_loop(task_manager)` uses manager.spawn()
+- [x] Update lifespan wiring. → `main.py` passes `_task_manager`
+- [x] Add/adjust tests. → architecture gate covers unmanaged create_task
+- [x] Run async boundary guard tests. → 16/16 pass
 
 ## Success Criteria
 

@@ -2,7 +2,7 @@
 
 from sqlalchemy import select
 
-from src.api.exceptions import ConflictException, ResourceNotFoundException
+from src.domain.exceptions.base import ConflictException, ResourceNotFoundException
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.feature_flag import FeatureFlag
 from src.infra.database.uow_async import AsyncUnitOfWork

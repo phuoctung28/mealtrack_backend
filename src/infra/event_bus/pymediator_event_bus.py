@@ -11,7 +11,7 @@ from typing import Any, TypeVar
 from pymediator import Mediator as PyMediator
 from pymediator import SingletonRegistry
 
-from src.api.exceptions import MealTrackException
+from src.domain.exceptions.base import MealTrackException
 from src.domain.events.base import DomainEvent, Event, EventHandler
 
 from .background_task_manager import BackgroundTaskManager

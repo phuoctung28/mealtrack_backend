@@ -4,7 +4,7 @@ import logging
 from datetime import date, timedelta
 from typing import Optional
 
-from src.api.exceptions import ValidationException
+from src.domain.exceptions.base import ValidationException
 from src.app.commands.movement import LogMovementCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService

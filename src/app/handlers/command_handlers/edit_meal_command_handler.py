@@ -5,7 +5,7 @@ Handler for editing meal ingredients.
 import logging
 from typing import Any
 
-from src.api.exceptions import (
+from src.domain.exceptions.base import (
     AuthorizationException,
     ResourceNotFoundException,
     ValidationException,

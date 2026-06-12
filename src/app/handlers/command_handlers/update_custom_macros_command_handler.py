@@ -2,7 +2,7 @@
 
 import logging
 
-from src.api.exceptions import ResourceNotFoundException, ValidationException
+from src.domain.exceptions.base import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_custom_macros_command import UpdateCustomMacrosCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService

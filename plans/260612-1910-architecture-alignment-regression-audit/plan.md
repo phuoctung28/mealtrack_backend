@@ -46,12 +46,12 @@ kept 4 contracts with 0 broken.
 
 | Phase | Name | Status |
 |---|---|---|
-| 1 | [Exception boundary relocation](./phase-01-exception-boundary-relocation.md) | Planned |
-| 2 | [App-to-infra baseline shrink](./phase-02-app-to-infra-baseline-shrink.md) | Planned |
-| 3 | [Background task ownership](./phase-03-background-task-ownership.md) | Planned |
-| 4 | [Cache invalidation latency decision](./phase-04-cache-invalidation-latency-decision.md) | Planned |
-| 5 | [RevenueCat and external trust boundaries](./phase-05-revenuecat-external-trust-boundaries.md) | Planned |
-| 6 | [Guardrail expansion](./phase-06-guardrail-expansion.md) | Planned |
+| 1 | [Exception boundary relocation](./phase-01-exception-boundary-relocation.md) | Complete |
+| 2 | [App-to-infra baseline shrink](./phase-02-app-to-infra-baseline-shrink.md) | Planned (incremental) |
+| 3 | [Background task ownership](./phase-03-background-task-ownership.md) | Complete |
+| 4 | [Cache invalidation latency decision](./phase-04-cache-invalidation-latency-decision.md) | Planned (needs prod data) |
+| 5 | [RevenueCat and external trust boundaries](./phase-05-revenuecat-external-trust-boundaries.md) | Planned (run per feature) |
+| 6 | [Guardrail expansion](./phase-06-guardrail-expansion.md) | Complete |
 
 ## Validation Plan
 

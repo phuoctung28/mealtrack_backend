@@ -5,7 +5,7 @@ Auto-extracted for better maintainability.
 
 import logging
 
-from src.api.exceptions import ResourceNotFoundException, AuthorizationException
+from src.domain.exceptions.base import ResourceNotFoundException, AuthorizationException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.meal import GetMealByIdQuery
 from src.domain.model.meal import Meal

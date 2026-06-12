@@ -4,7 +4,7 @@ Handler for selected-discovery recipe generation.
 
 import uuid
 
-from src.api.exceptions import ExternalServiceException, ResourceNotFoundException, ValidationException
+from src.domain.exceptions.base import ExternalServiceException, ResourceNotFoundException, ValidationException
 from src.app.commands.meal_suggestion import GenerateMealRecipesCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession

@@ -4,7 +4,7 @@ Command handler for updating user metrics.
 
 import logging
 
-from src.api.exceptions import ResourceNotFoundException, ValidationException
+from src.domain.exceptions.base import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys

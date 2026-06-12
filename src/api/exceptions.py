@@ -1,90 +1,58 @@
-"""
-API Exception classes for consistent error handling.
+"""API HTTP exception mapping — domain → FastAPI HTTPException.
+
+Domain exception classes live in src.domain.exceptions.base.
+This module owns only the HTTP status mapping and logging.
+Re-exports the domain classes so existing api-layer callers don't break.
 """
 
 import logging
 import traceback
-from typing import Any, Dict, Optional
 
 from fastapi import HTTPException, status
 
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.domain.exceptions.base import (
+    AuthenticationException,
+    AuthorizationException,
+    BusinessLogicException,
+    ConflictException,
+    ExternalServiceException,
+    MealTrackException,
+    ResourceNotFoundException,
+    ValidationException,
+)
 
 logger = logging.getLogger(__name__)
 
+# Re-export so existing `from src.api.exceptions import X` in the API layer continues
+# to work without changes.
+__all__ = [
+    "MealTrackException",
+    "ValidationException",
+    "ResourceNotFoundException",
+    "BusinessLogicException",
+    "ConflictException",
+    "ExternalServiceException",
+    "AuthenticationException",
+    "AuthorizationException",
+    "create_http_exception",
+    "handle_exception",
+]
 
-class MealTrackException(Exception):
-    """Base exception for all MealTrack exceptions."""
-
-    def __init__(
-        self,
-        message: str,
-        error_code: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
-    ):
-        self.message = message
-        self.error_code = error_code or self.__class__.__name__
-        self.details = details or {}
-        super().__init__(self.message)
-
-
-class ValidationException(MealTrackException):
-    """Raised when request validation fails."""
-
-    pass
-
-
-class ResourceNotFoundException(MealTrackException):
-    """Raised when a requested resource is not found."""
-
-    pass
-
-
-class BusinessLogicException(MealTrackException):
-    """Raised when business rules are violated."""
-
-    pass
-
-
-class ConflictException(MealTrackException):
-    """Raised when a request conflicts with current resource state (e.g., cooldown)."""
-
-    pass
-
-
-class ExternalServiceException(MealTrackException):
-    """Raised when an external service fails."""
-
-    pass
-
-
-class AuthenticationException(MealTrackException):
-    """Raised when authentication fails."""
-
-    pass
-
-
-class AuthorizationException(MealTrackException):
-    """Raised when user lacks permission."""
-
-    pass
+_STATUS_MAP: dict[type, int] = {
+    ValidationException: status.HTTP_400_BAD_REQUEST,
+    ResourceNotFoundException: status.HTTP_404_NOT_FOUND,
+    BusinessLogicException: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    ExternalServiceException: status.HTTP_503_SERVICE_UNAVAILABLE,
+    AuthenticationException: status.HTTP_401_UNAUTHORIZED,
+    AuthorizationException: status.HTTP_403_FORBIDDEN,
+    ConflictException: status.HTTP_409_CONFLICT,
+}
 
 
 def create_http_exception(exc: MealTrackException) -> HTTPException:
-    """Convert domain exception to HTTP exception with appropriate status code."""
-
-    status_map = {
-        ValidationException: status.HTTP_400_BAD_REQUEST,
-        ResourceNotFoundException: status.HTTP_404_NOT_FOUND,
-        BusinessLogicException: status.HTTP_422_UNPROCESSABLE_ENTITY,
-        ExternalServiceException: status.HTTP_503_SERVICE_UNAVAILABLE,
-        AuthenticationException: status.HTTP_401_UNAUTHORIZED,
-        AuthorizationException: status.HTTP_403_FORBIDDEN,
-        ConflictException: status.HTTP_409_CONFLICT,
-    }
-
-    status_code = status_map.get(type(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    """Convert a domain exception to an HTTPException with the correct status code."""
+    status_code = _STATUS_MAP.get(type(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
     return HTTPException(
         status_code=status_code,
         detail={
@@ -96,7 +64,7 @@ def create_http_exception(exc: MealTrackException) -> HTTPException:
 
 
 def handle_exception(exc: Exception) -> HTTPException:
-    """Handle any exception and convert to appropriate HTTP exception."""
+    """Convert any exception to an HTTPException for consistent API responses."""
 
     if isinstance(exc, AIUnavailableError):
         logger.warning(
@@ -113,26 +81,27 @@ def handle_exception(exc: Exception) -> HTTPException:
             detail={
                 "error_code": "AI_UNAVAILABLE",
                 "message": "AI meal generation is temporarily unavailable",
-                "details": {
-                    "attempted_models": exc.attempted_models,
-                },
+                "details": {"attempted_models": exc.attempted_models},
             },
         )
 
     if isinstance(exc, MealTrackException):
         logger.warning(
-            f"MealTrack exception occurred: {exc.error_code} - {exc.message}",
+            "MealTrack exception occurred: %s - %s",
+            exc.error_code,
+            exc.message,
             extra={"error_code": exc.error_code, "details": exc.details},
         )
         return create_http_exception(exc)
 
     if isinstance(exc, HTTPException):
-        logger.warning(f"HTTP exception occurred: {exc.status_code} - {exc.detail}")
+        logger.warning("HTTP exception occurred: %s - %s", exc.status_code, exc.detail)
         return exc
 
-    # Unexpected exceptions - log full stack trace
     logger.error(
-        f"Unexpected exception occurred: {type(exc).__name__} - {str(exc)}",
+        "Unexpected exception occurred: %s - %s",
+        type(exc).__name__,
+        str(exc),
         exc_info=True,
         extra={
             "exception_type": type(exc).__name__,
@@ -140,7 +109,6 @@ def handle_exception(exc: Exception) -> HTTPException:
             "stack_trace": traceback.format_exc(),
         },
     )
-
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail={

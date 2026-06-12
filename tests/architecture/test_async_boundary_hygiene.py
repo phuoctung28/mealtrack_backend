@@ -162,3 +162,41 @@ def test_uow_session_commit_only_in_uow_internals() -> None:
         f"  Unexpected offenders : {offenders - ALLOWED_UOW_SESSION_COMMIT_FILES}\n"
         f"  Resolved (remove from allowlist): {ALLOWED_UOW_SESSION_COMMIT_FILES - offenders}"
     )
+
+
+def test_http_exception_not_imported_outside_api() -> None:
+    """fastapi.HTTPException must not be imported in app, domain, or infra layers.
+
+    HTTPException is a transport-layer concept. Lower layers must raise domain
+    exceptions (MealTrackException subclasses) and let the API mapper convert them.
+    Leaking HTTPException into app/domain/infra couples business logic to FastAPI.
+    """
+    _HTTP_EXCEPTION_PATTERNS = [
+        "from fastapi import HTTPException",
+        "from fastapi.exceptions import HTTPException",
+        "from fastapi import ",  # catch multi-import lines containing HTTPException
+    ]
+    scan_roots = [
+        SRC_ROOT / "app",
+        SRC_ROOT / "domain",
+        SRC_ROOT / "infra",
+    ]
+    offenders: set[str] = set()
+    for root in scan_roots:
+        if not root.exists():
+            continue
+        for path in _python_files(root):
+            text = path.read_text(encoding="utf-8")
+            # Match explicit HTTPException imports from fastapi
+            if (
+                "from fastapi import HTTPException" in text
+                or "from fastapi.exceptions import HTTPException" in text
+            ):
+                offenders.add(_relative(path))
+
+    assert offenders == set(), (
+        "fastapi.HTTPException imported outside the API layer. "
+        "Raise a domain exception (MealTrackException subclass) instead; "
+        "src/api/exceptions.py maps it to HTTP status codes.\n"
+        "  Offenders: " + ", ".join(sorted(offenders))
+    )

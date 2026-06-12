@@ -2,7 +2,7 @@
 
 from typing import Any, Optional
 
-from src.api.exceptions import AuthorizationException, ResourceNotFoundException, ValidationException
+from src.domain.exceptions.base import AuthorizationException, ResourceNotFoundException, ValidationException
 from src.app.commands.movement import UpdateMovementEntryCommand
 from src.app.events.base import EventHandler, handles
 from src.app.handlers.command_handlers.log_movement_command_handler import (

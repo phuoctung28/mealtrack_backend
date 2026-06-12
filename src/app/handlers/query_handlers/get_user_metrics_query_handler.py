@@ -6,7 +6,7 @@ Auto-extracted for better maintainability.
 import logging
 from typing import Dict, Any, Optional
 
-from src.api.exceptions import ResourceNotFoundException
+from src.domain.exceptions.base import ResourceNotFoundException
 from src.app.events.base import handles, EventHandler
 from src.app.queries.user import GetUserMetricsQuery
 from src.domain.cache.cache_keys import CacheKeys

@@ -238,7 +238,7 @@ async def lifespan(app: FastAPI):
         if _raw_redis is not None:
             gemini_cache_manager = GeminiCacheManager(redis_client=_raw_redis)
             await gemini_cache_manager.warm_all()
-            gemini_cache_manager.start_refresh_loop()
+            gemini_cache_manager.start_refresh_loop(_task_manager)
             logger.info("Gemini context caches warmed")
             from src.infra.services.ai.ai_model_manager import AIModelManager
 

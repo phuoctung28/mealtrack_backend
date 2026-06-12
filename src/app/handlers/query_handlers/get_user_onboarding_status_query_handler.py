@@ -6,7 +6,7 @@ Auto-extracted for better maintainability.
 import logging
 from typing import Dict, Any
 
-from src.api.exceptions import ResourceNotFoundException
+from src.domain.exceptions.base import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.user.get_user_onboarding_status_query import (
     GetUserOnboardingStatusQuery,

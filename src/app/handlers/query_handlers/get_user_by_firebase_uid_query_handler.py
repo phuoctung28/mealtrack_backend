@@ -7,7 +7,7 @@ import logging
 import os
 from typing import Dict, Any
 
-from src.api.exceptions import ResourceNotFoundException
+from src.domain.exceptions.base import ResourceNotFoundException
 from src.app.events.base import EventHandler, handles
 from src.app.queries.user.get_user_by_firebase_uid_query import (
     GetUserByFirebaseUidQuery,

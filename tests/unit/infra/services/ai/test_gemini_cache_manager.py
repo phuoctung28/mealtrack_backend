@@ -260,42 +260,26 @@ async def test_warm_all_calls_warm_one_for_all_types(cache_manager, mock_redis):
         assert called_types == {"recipe", "vision", "text_parse"}
 
 
-@pytest.mark.asyncio
-async def test_start_refresh_loop_stores_task(cache_manager):
-    """start_refresh_loop stores the task handle in _refresh_task."""
-    import asyncio
+def test_start_refresh_loop_delegates_to_task_manager(cache_manager):
+    """start_refresh_loop(task_manager) spawns via the managed task runner."""
+    from unittest.mock import MagicMock
+    import inspect
 
-    with patch.object(
-        cache_manager, "refresh_loop", new_callable=AsyncMock
-    ) as mock_loop:
-        mock_loop.return_value = None
-        cache_manager.start_refresh_loop()
-        assert cache_manager._refresh_task is not None
-        # Clean up the task
-        cache_manager._refresh_task.cancel()
-        try:
-            await cache_manager._refresh_task
-        except (asyncio.CancelledError, Exception):
-            pass
+    spawned_coros = []
 
+    def capturing_spawn(name, coro):
+        spawned_coros.append((name, coro))
 
-@pytest.mark.asyncio
-async def test_stop_cancels_refresh_task(cache_manager):
-    """stop() cancels the background refresh task."""
-    import asyncio
-
-    async def _long_running():
-        await asyncio.sleep(9999)
-
-    cache_manager._refresh_task = asyncio.create_task(_long_running())
-    assert not cache_manager._refresh_task.done()
-
-    await cache_manager.stop()
-    assert cache_manager._refresh_task.done()
+    task_manager = MagicMock()
+    task_manager.spawn.side_effect = capturing_spawn
+    cache_manager.start_refresh_loop(task_manager)
+    task_manager.spawn.assert_called_once()
+    assert spawned_coros[0][0] == "gemini-cache-refresh"
+    # Close the coroutine so Python doesn't warn about it being unawaited.
+    spawned_coros[0][1].close()
 
 
 @pytest.mark.asyncio
-async def test_stop_is_safe_when_no_task(cache_manager):
-    """stop() does nothing (no error) when _refresh_task is None."""
-    assert cache_manager._refresh_task is None
-    await cache_manager.stop()  # should not raise
+async def test_stop_is_noop(cache_manager):
+    """stop() is a no-op — lifecycle is owned by BackgroundTaskManager drain."""
+    await cache_manager.stop()  # must not raise

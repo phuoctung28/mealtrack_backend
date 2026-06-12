@@ -216,6 +216,58 @@ def test_app_runtime_config_does_not_prefer_database_url_direct() -> None:
     )
 
 
+# Sync httpx calls that are intentionally wrapped with asyncio.to_thread.
+# The file's public async methods call asyncio.to_thread(self.<sync_method>),
+# so the sync httpx usage never runs on the event loop directly.
+# Do NOT add new entries here; fix the offender instead.
+ALLOWED_SYNC_HTTPX_FILES = {
+    "src/infra/adapters/cloudinary_image_store.py",  # load()/get_url() reached via asyncio.to_thread
+}
+
+
+def test_no_blocking_httpx_calls_in_async_runtime_paths() -> None:
+    """Guard: sync httpx convenience functions block the event loop.
+
+    httpx.get / post / put / delete / head / patch / Client() are synchronous.
+    Use httpx.AsyncClient inside an async def, or wrap with asyncio.to_thread
+    and document the wrapper in ALLOWED_SYNC_HTTPX_FILES.
+    """
+    _BLOCKING_HTTPX_PATTERNS = [
+        "httpx.get(",
+        "httpx.post(",
+        "httpx.put(",
+        "httpx.delete(",
+        "httpx.head(",
+        "httpx.patch(",
+        "httpx.Client(",
+        "httpx.Client()",
+    ]
+    scan_roots = [
+        SRC_ROOT / "app",
+        SRC_ROOT / "infra",
+        SRC_ROOT / "domain",
+    ]
+    offenders: dict[str, list[str]] = {}
+    for root in scan_roots:
+        if not root.exists():
+            continue
+        for path in _python_files(root):
+            relative = _relative(path)
+            if relative in ALLOWED_SYNC_HTTPX_FILES:
+                continue
+            text = path.read_text(encoding="utf-8")
+            hits = [p for p in _BLOCKING_HTTPX_PATTERNS if p in text]
+            if hits:
+                offenders[relative] = hits
+
+    assert offenders == {}, (
+        "Blocking httpx calls detected in async runtime paths. "
+        "Use httpx.AsyncClient instead, or wrap with asyncio.to_thread "
+        "and document the wrapper in ALLOWED_SYNC_HTTPX_FILES:\n"
+        + "\n".join(f"  {f}: {h}" for f, h in offenders.items())
+    )
+
+
 def test_no_requests_imports_in_async_adapter_paths() -> None:
     """Guard: runtime adapter files must not import 'requests' (sync HTTP library).
 

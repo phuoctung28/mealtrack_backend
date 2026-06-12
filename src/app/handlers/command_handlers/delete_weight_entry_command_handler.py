@@ -3,7 +3,7 @@
 import logging
 from typing import Dict, Any
 
-from src.api.exceptions import ResourceNotFoundException
+from src.domain.exceptions.base import ResourceNotFoundException
 from src.app.commands.weight import DeleteWeightEntryCommand
 from src.app.events.base import EventHandler, handles
 from src.infra.database.uow_async import AsyncUnitOfWork

@@ -4,7 +4,7 @@ import logging
 import uuid
 from typing import Any
 
-from src.api.exceptions import ValidationException
+from src.domain.exceptions.base import ValidationException
 from src.app.commands.cheat_day import MarkCheatDayCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.model.cheat_day import CheatDay

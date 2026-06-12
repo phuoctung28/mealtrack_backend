@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 from src.api.dependencies.auth_cache import invalidate_cached_user_id
-from src.api.exceptions import ResourceNotFoundException
+from src.domain.exceptions.base import ResourceNotFoundException
 from src.app.commands.user import DeleteUserCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
