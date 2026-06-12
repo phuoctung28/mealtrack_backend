@@ -12,6 +12,7 @@ from src.domain.model.user import UserDomainModel, UserProfileDomainModel
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.user.profile_preference import UserProfilePreference
 from src.infra.database.models.user.user import User
 from src.infra.mappers.user_mapper import (
     UserMapper,
@@ -25,6 +26,31 @@ _USER_LOADS = (
     selectinload(User.profiles).selectinload(UserProfile.preference_entries),
     selectinload(User.subscriptions),
 )
+
+
+def _sync_profile_preference_entries(
+    entity: UserProfile,
+    profile_domain: UserProfileDomainModel,
+) -> None:
+    desired_entries = build_profile_preference_entries(profile_domain)
+    existing_by_key: dict[tuple[str, str], UserProfilePreference] = {
+        (entry.preference_type, entry.value): entry
+        for entry in entity.preference_entries
+    }
+
+    next_entries: list[UserProfilePreference] = []
+    for desired in desired_entries:
+        key = (desired.preference_type, desired.value)
+        existing = existing_by_key.pop(key, None)
+        if existing:
+            existing.position = desired.position
+            next_entries.append(existing)
+            continue
+
+        desired.profile_id = str(entity.id)
+        next_entries.append(desired)
+
+    entity.preference_entries = next_entries
 
 
 class AsyncUserRepository(UserRepositoryPort):
@@ -163,7 +189,7 @@ class AsyncUserRepository(UserRepositoryPort):
                     # Only mark a column dirty when its value truly changes.
                     if new_val != old_val:
                         setattr(entity, col_name, new_val)
-            entity.preference_entries = build_profile_preference_entries(profile_domain)
+            _sync_profile_preference_entries(entity, profile_domain)
 
         # Data hygiene: legacy rows may have NULL timestamps despite NOT NULL constraints.
         # Backfill them so any subsequent UPDATE does not violate constraints.

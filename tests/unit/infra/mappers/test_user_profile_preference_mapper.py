@@ -7,6 +7,9 @@ from src.infra.mappers.user_mapper import (
     UserProfileMapper,
     build_profile_preference_entries,
 )
+from src.infra.repositories.user_repository_async import (
+    _sync_profile_preference_entries,
+)
 
 
 def _profile_entity(**overrides) -> UserProfile:
@@ -122,4 +125,48 @@ def test_build_profile_preference_entries_skips_empty_values() -> None:
 
     assert [(entry.preference_type, entry.value) for entry in entries] == [
         ("pain_points", "busy")
+    ]
+
+
+def test_sync_profile_preference_entries_reuses_matching_rows() -> None:
+    profile_id = str(uuid4())
+    existing_classic = UserProfilePreference(
+        profile_id=profile_id,
+        preference_type="dietary_preferences",
+        value="classic",
+        position=0,
+    )
+    stale_pain_point = UserProfilePreference(
+        profile_id=profile_id,
+        preference_type="pain_points",
+        value="old",
+        position=0,
+    )
+    profile = _profile_entity(id=profile_id)
+    profile.preference_entries = [existing_classic, stale_pain_point]
+    domain = UserProfileDomainModel(
+        id=uuid4(),
+        user_id=uuid4(),
+        age=31,
+        gender="female",
+        height_cm=165,
+        weight_kg=60,
+        job_type="desk",
+        training_days_per_week=3,
+        training_minutes_per_session=45,
+        fitness_goal="maintenance",
+        meals_per_day=3,
+        dietary_preferences=["classic"],
+        pain_points=["new"],
+    )
+
+    _sync_profile_preference_entries(profile, domain)
+
+    assert profile.preference_entries[0] is existing_classic
+    assert [
+        (entry.preference_type, entry.value, entry.position)
+        for entry in profile.preference_entries
+    ] == [
+        ("dietary_preferences", "classic", 0),
+        ("pain_points", "new", 0),
     ]

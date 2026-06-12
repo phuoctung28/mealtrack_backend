@@ -1,12 +1,16 @@
 """Integration tests for AsyncUserRepository."""
 
-import pytest
 import uuid
 from datetime import datetime
 
-from src.infra.repositories.user_repository_async import AsyncUserRepository
-from src.infra.database.models.user.user import User
+import pytest
+from sqlalchemy import select
+
 from src.api.schemas.common.auth_enums import AuthProviderEnum
+from src.domain.model.user import UserProfileDomainModel
+from src.infra.database.models.user.profile_preference import UserProfilePreference
+from src.infra.database.models.user.user import User
+from src.infra.repositories.user_repository_async import AsyncUserRepository
 
 
 async def _insert_user(session, uid: str = "firebase-uid-001") -> User:
@@ -104,3 +108,49 @@ async def test_update_user_timezone(async_db_session):
 
     tz = await repo.get_user_timezone(user_id)
     assert tz == "America/New_York"
+
+
+@pytest.mark.asyncio
+async def test_update_profile_reuses_existing_preference_rows(async_db_session):
+    user = await _insert_user(async_db_session, "firebase-uid-t08")
+    repo = AsyncUserRepository(async_db_session)
+
+    profile = UserProfileDomainModel(
+        user_id=uuid.UUID(user.id),
+        age=30,
+        gender="female",
+        height_cm=165,
+        weight_kg=60,
+        job_type="desk",
+        training_days_per_week=3,
+        training_minutes_per_session=45,
+        fitness_goal="maintenance",
+        meals_per_day=3,
+        dietary_preferences=["classic"],
+        pain_points=["No motivation"],
+        referral_sources=["tiktok"],
+        training_types=["swimming"],
+    )
+
+    saved = await repo.update_profile(profile)
+    saved.age = 31
+    saved.dietary_preferences = ["classic"]
+    saved.pain_points = ["No motivation"]
+    saved.referral_sources = ["tiktok"]
+    saved.training_types = ["swimming"]
+
+    updated = await repo.update_profile(saved)
+
+    result = await async_db_session.execute(
+        select(UserProfilePreference).where(
+            UserProfilePreference.profile_id == str(updated.id)
+        )
+    )
+    rows = result.scalars().all()
+    assert updated.age == 31
+    assert sorted((row.preference_type, row.value) for row in rows) == [
+        ("dietary_preferences", "classic"),
+        ("pain_points", "No motivation"),
+        ("referral_sources", "tiktok"),
+        ("training_types", "swimming"),
+    ]
