@@ -154,3 +154,48 @@ async def test_update_profile_reuses_existing_preference_rows(async_db_session):
         ("referral_sources", "tiktok"),
         ("training_types", "swimming"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_save_existing_user_preserves_profile_preference_rows(async_db_session):
+    user = await _insert_user(async_db_session, "firebase-uid-t09")
+    repo = AsyncUserRepository(async_db_session)
+
+    profile = UserProfileDomainModel(
+        user_id=uuid.UUID(user.id),
+        age=30,
+        gender="female",
+        height_cm=165,
+        weight_kg=60,
+        job_type="desk",
+        training_days_per_week=3,
+        training_minutes_per_session=45,
+        fitness_goal="maintenance",
+        meals_per_day=3,
+        dietary_preferences=["classic"],
+        pain_points=["No motivation"],
+        referral_sources=["tiktok"],
+        training_types=["swimming"],
+    )
+    saved_profile = await repo.update_profile(profile)
+
+    loaded_user = await repo.find_by_firebase_uid("firebase-uid-t09")
+    assert loaded_user is not None
+    loaded_user.onboarding_completed = True
+    loaded_user.last_accessed = datetime.utcnow()
+
+    updated_user = await repo.save(loaded_user)
+
+    result = await async_db_session.execute(
+        select(UserProfilePreference).where(
+            UserProfilePreference.profile_id == str(saved_profile.id)
+        )
+    )
+    rows = result.scalars().all()
+    assert updated_user.onboarding_completed is True
+    assert sorted((row.preference_type, row.value) for row in rows) == [
+        ("dietary_preferences", "classic"),
+        ("pain_points", "No motivation"),
+        ("referral_sources", "tiktok"),
+        ("training_types", "swimming"),
+    ]

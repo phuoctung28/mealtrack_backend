@@ -1,13 +1,16 @@
 from uuid import uuid4
 
+from src.domain.model.auth.auth_provider import AuthProvider
 from src.domain.model.user import UserProfileDomainModel
 from src.infra.database.models.user.profile import UserProfile
 from src.infra.database.models.user.profile_preference import UserProfilePreference
+from src.infra.database.models.user.user import User
 from src.infra.mappers.user_mapper import (
     UserProfileMapper,
     build_profile_preference_entries,
 )
 from src.infra.repositories.user_repository_async import (
+    _copy_user_save_columns,
     _sync_profile_preference_entries,
 )
 
@@ -170,3 +173,43 @@ def test_sync_profile_preference_entries_reuses_matching_rows() -> None:
         ("dietary_preferences", "classic", 0),
         ("pain_points", "new", 0),
     ]
+
+
+def test_copy_user_save_columns_preserves_loaded_profiles() -> None:
+    profile = _profile_entity()
+    existing = User(
+        id=str(uuid4()),
+        firebase_uid="firebase-old",
+        email="old@example.com",
+        username="old-user",
+        password_hash="old-hash",
+        provider=AuthProvider.GOOGLE,
+        is_active=True,
+        onboarding_completed=False,
+        timezone="UTC",
+    )
+    existing.profiles = [profile]
+
+    updated = User(
+        id=existing.id,
+        firebase_uid="firebase-new",
+        email="new@example.com",
+        username="new-user",
+        password_hash="new-hash",
+        provider=AuthProvider.APPLE,
+        is_active=False,
+        onboarding_completed=True,
+        timezone="America/Los_Angeles",
+    )
+
+    _copy_user_save_columns(existing, updated)
+
+    assert existing.firebase_uid == "firebase-new"
+    assert existing.email == "new@example.com"
+    assert existing.username == "new-user"
+    assert existing.password_hash == "new-hash"
+    assert existing.provider == AuthProvider.APPLE
+    assert existing.is_active is False
+    assert existing.onboarding_completed is True
+    assert existing.timezone == "America/Los_Angeles"
+    assert existing.profiles == [profile]
