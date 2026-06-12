@@ -4,6 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from PIL import Image
 
+from src.domain.services.meal_analysis.fast_path_policy import (
+    MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS,
+)
 from src.infra.adapters.vision_ai_service import VisionAIService
 
 _MGR_PATCH = "src.infra.adapters.vision_ai_service.AIModelManager"
@@ -16,14 +19,14 @@ def _make_jpeg(width: int, height: int, quality: int = 95) -> bytes:
     return buf.getvalue()
 
 
-def _make_service() -> VisionAIService:
+def _make_service(max_output_tokens: int | None = None) -> VisionAIService:
     with patch(_MGR_PATCH) as mock_cls:
         mock_manager = MagicMock()
         mock_manager.generate_with_vision = AsyncMock(
             return_value={"dish_name": "test", "ingredients": []}
         )
         mock_cls.get_instance.return_value = mock_manager
-        return VisionAIService()
+        return VisionAIService(max_output_tokens=max_output_tokens)
 
 
 def test_vision_service_uses_ai_model_manager():
@@ -89,30 +92,90 @@ async def test_analyze_with_strategy_compresses_before_sending():
 
 
 @pytest.mark.asyncio
-async def test_analyze_with_strategy_passes_max_tokens_1024():
-    """Vision calls must pass max_tokens=1024, not use the 4096 default."""
+async def test_analyze_with_strategy_passes_meal_analyze_max_tokens():
+    """Vision calls need enough output budget for full meal-analysis JSON."""
     service = _make_service()
     from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+
     strategy = AnalysisStrategyFactory.create_basic_strategy()
 
     image = _make_jpeg(400, 300)
     await service.analyze_with_strategy(image, strategy)
 
     call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
-    assert call_kwargs.get("max_tokens") == 1024
+    assert call_kwargs.get("max_tokens") == MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
 
 
 @pytest.mark.asyncio
-async def test_analyze_by_url_passes_max_tokens_1024():
-    """analyze_by_url_with_strategy must also pass max_tokens=1024."""
-    service = _make_service()
+async def test_analyze_with_strategy_allows_max_token_override():
+    service = _make_service(max_output_tokens=4096)
     from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+
     strategy = AnalysisStrategyFactory.create_basic_strategy()
 
-    await service.analyze_by_url_with_strategy("http://example.com/food.jpg", strategy)
+    image = _make_jpeg(400, 300)
+    await service.analyze_with_strategy(image, strategy)
 
     call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
-    assert call_kwargs.get("max_tokens") == 1024
+    assert call_kwargs.get("max_tokens") == 4096
+
+
+@pytest.mark.asyncio
+async def test_analyze_by_url_passes_meal_analyze_max_tokens():
+    """URL analysis must fetch bytes and pass the meal-analysis token budget."""
+    service = _make_service()
+    from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+
+    strategy = AnalysisStrategyFactory.create_basic_strategy()
+    image_bytes = _make_jpeg(400, 300)
+
+    mock_response = MagicMock()
+    mock_response.headers.get_content_type.return_value = "image/jpeg"
+    mock_response.read.return_value = image_bytes
+    mock_response.__enter__.return_value = mock_response
+    with patch(
+        "src.infra.adapters.vision_ai_service.urlopen",
+        return_value=mock_response,
+    ):
+        await service.analyze_by_url_with_strategy(
+            "http://example.com/food.jpg", strategy
+        )
+
+    call_kwargs = service._ai_manager.generate_with_vision.call_args.kwargs
+    assert call_kwargs.get("max_tokens") == MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
+    assert call_kwargs["image_data"] == image_bytes
+
+
+@pytest.mark.asyncio
+async def test_analyze_by_url_rejects_non_http_url():
+    service = _make_service()
+    from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+
+    strategy = AnalysisStrategyFactory.create_basic_strategy()
+
+    with pytest.raises(ValueError, match="HTTP"):
+        await service.analyze_by_url_with_strategy("file:///tmp/food.jpg", strategy)
+
+
+@pytest.mark.asyncio
+async def test_analyze_by_url_rejects_non_image_content_type():
+    service = _make_service()
+    from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
+
+    strategy = AnalysisStrategyFactory.create_basic_strategy()
+
+    mock_response = MagicMock()
+    mock_response.headers.get_content_type.return_value = "text/html"
+    mock_response.__enter__.return_value = mock_response
+
+    with (
+        patch(
+            "src.infra.adapters.vision_ai_service.urlopen",
+            return_value=mock_response,
+        ),
+        pytest.raises(ValueError, match="content type"),
+    ):
+        await service.analyze_by_url_with_strategy("https://example.com/page", strategy)
 
 
 def test_recipe_token_limit_is_1200():
@@ -120,4 +183,5 @@ def test_recipe_token_limit_is_1200():
     from src.domain.services.meal_suggestion.recipe_attempt_builder import (
         PARALLEL_SINGLE_MEAL_TOKENS,
     )
+
     assert PARALLEL_SINGLE_MEAL_TOKENS == 1200

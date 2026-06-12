@@ -4,6 +4,9 @@ import json
 import logging
 from typing import List, Optional
 
+from src.domain.exceptions.meal_suggestion_exceptions import (
+    MealSuggestionSessionStoreUnavailableError,
+)
 from src.domain.model.meal_suggestion import MealSuggestion, SuggestionSession
 from src.domain.ports.meal_suggestion_repository_port import (
     MealSuggestionRepositoryPort,
@@ -153,16 +156,16 @@ class MealSuggestionRepository(MealSuggestionRepositoryPort):
     async def _set_required(self, key: str, value: str, ttl: int) -> None:
         saved = await self._cache.set(key, value, ttl=ttl)
         if not saved:
-            raise RuntimeError(
-                "Redis suggestion session store write failed. "
-                "Meal suggestion sessions require Redis until moved to durable storage."
-            )
+            raise MealSuggestionSessionStoreUnavailableError()
 
     async def _remaining_ttl(self, key: str) -> int:
         if self._cache.client:
-            ttl = await self._cache.client.ttl(key)
-            if ttl > 0:
-                return int(ttl)
+            try:
+                ttl = await self._cache.client.ttl(key)
+                if ttl > 0:
+                    return int(ttl)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Redis TTL lookup failed for %s: %s", key, exc)
         return self.TTL_SECONDS
 
     async def _suggestion_key_for_id(self, suggestion_id: str) -> Optional[str]:

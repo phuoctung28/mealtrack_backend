@@ -3,11 +3,13 @@ Handler for ingredient recognition command.
 """
 
 import base64
+import binascii
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from src.app.commands.ingredient import RecognizeIngredientCommand
 from src.app.events.base import EventHandler, handles
+from src.domain.exceptions.ai_exceptions import AIUnavailableError
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.translation.deepl_text_translation_service import (
     DeepLTextTranslationService,
@@ -16,17 +18,19 @@ from src.domain.strategies.meal_analysis_strategy import AnalysisStrategyFactory
 
 logger = logging.getLogger(__name__)
 
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
 
 @handles(RecognizeIngredientCommand)
 class RecognizeIngredientCommandHandler(
-    EventHandler[RecognizeIngredientCommand, Dict[str, Any]]
+    EventHandler[RecognizeIngredientCommand, dict[str, Any]]
 ):
     """Handler for recognizing ingredients from images."""
 
     def __init__(
         self,
         vision_service: VisionAIServicePort = None,
-        translation_service: Optional[DeepLTextTranslationService] = None,
+        translation_service: DeepLTextTranslationService | None = None,
     ):
         self.vision_service = vision_service
         self.translation_service = translation_service
@@ -38,7 +42,7 @@ class RecognizeIngredientCommandHandler(
             "translation_service", self.translation_service
         )
 
-    async def handle(self, command: RecognizeIngredientCommand) -> Dict[str, Any]:
+    async def handle(self, command: RecognizeIngredientCommand) -> dict[str, Any]:
         """
         Handle ingredient recognition from image.
 
@@ -56,8 +60,8 @@ class RecognizeIngredientCommandHandler(
         try:
             # Decode base64 image
             try:
-                image_bytes = base64.b64decode(command.image_data)
-            except Exception as e:
+                image_bytes = base64.b64decode(command.image_data, validate=True)
+            except (binascii.Error, ValueError) as e:
                 logger.warning(f"Failed to decode image data: {e}")
                 return {
                     "name": None,
@@ -67,9 +71,7 @@ class RecognizeIngredientCommandHandler(
                     "message": "Invalid image data format",
                 }
 
-            # Validate image size (max 5MB)
-            max_size_bytes = 5 * 1024 * 1024
-            if len(image_bytes) > max_size_bytes:
+            if len(image_bytes) > MAX_IMAGE_BYTES:
                 return {
                     "name": None,
                     "confidence": 0.0,
@@ -123,6 +125,8 @@ class RecognizeIngredientCommandHandler(
                 "message": None if success else "Could not identify ingredient",
             }
 
+        except AIUnavailableError:
+            raise
         except Exception as e:
             logger.error(f"Ingredient recognition failed: {e}")
             return {

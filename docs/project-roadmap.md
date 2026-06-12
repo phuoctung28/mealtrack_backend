@@ -32,6 +32,9 @@
 - [x] Architecture guard now expects zero sync DB runtime imports in `src` and no broad sync repository transition allowlist.
 - [x] Default validation: `pytest -q` passes (`1499 passed, 3 skipped`).
 
+### June 2026: Weekly Budget Resilience
+- [x] Weekly budget meal loading now quarantines malformed legacy `READY` rows without nutrition before domain hydration.
+
 ### June 2026: iOS Notification Payload Hardening
 - [x] Removed obsolete direct notification service wiring and direct meal/summary helper sends.
 - [x] Removed background push scheduler lifecycle, scheduler leader lock, stale test notification route, and misleading legacy push/email service names; cron entrypoints now own notification/email work.

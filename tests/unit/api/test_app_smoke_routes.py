@@ -86,6 +86,29 @@ def test_meals_analyze_rejects_too_large(monkeypatch, client: TestClient):
     assert r.json()["detail"]["error_code"] == "FILE_SIZE_EXCEEDS_MAXIMUM"
 
 
+def test_meals_analyze_ai_unavailable_returns_503(client: TestClient):
+    from src.api.dependencies.event_bus import get_configured_event_bus
+    from src.domain.exceptions.ai_exceptions import AIUnavailableError
+
+    class _UnavailableBus:
+        async def send(self, msg):
+            raise AIUnavailableError(
+                "All vision models failed for meal_scan",
+                attempted_models=["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+                last_error="503 UNAVAILABLE",
+            )
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _UnavailableBus()
+
+    r = client.post(
+        "/v1/meals/image/analyze",
+        files={"file": ("x.jpg", b"image-bytes", "image/jpeg")},
+    )
+
+    assert r.status_code == 503
+    assert r.json()["detail"]["error_code"] == "AI_UNAVAILABLE"
+
+
 def test_user_profiles_onboarding_invalid_birth_date(client: TestClient):
     payload = {
         "birth_year": 2000,
