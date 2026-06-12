@@ -15,7 +15,7 @@ from src.api.middleware.accept_language import get_request_language
 from src.api.schemas.response import DetailedMealResponse
 from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
 from src.domain.services.prompts.input_sanitizer import sanitize_user_description
-from src.infra.event_bus import EventBus
+from typing import Any
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/meals", tags=["Meals"])
@@ -39,7 +39,7 @@ async def scan_meal_by_url(
     request: Request,
     body: ScanByUrlRequest = Body(...),
     user_id: str = Depends(get_current_user_id),
-    event_bus: EventBus = Depends(get_configured_event_bus),
+    event_bus: Any = Depends(get_configured_event_bus),
 ):
     """Analyze a meal image already uploaded to Cloudinary via the safe bytes-download path."""
     try:

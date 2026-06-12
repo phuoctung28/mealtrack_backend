@@ -28,7 +28,7 @@ from src.domain.utils.timezone_utils import (
     noon_utc_for_date,
     utc_now,
 )
-from src.infra.utils.image_compression import compress_image
+from src.domain.utils.image_compression import compress_image
 
 logger = logging.getLogger(__name__)
 

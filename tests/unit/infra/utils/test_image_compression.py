@@ -5,7 +5,7 @@ from io import BytesIO
 import pytest
 from PIL import Image
 
-from src.infra.utils.image_compression import compress_image, _MAX_DIM, _MAX_BYTES
+from src.domain.utils.image_compression import compress_image, _MAX_DIM, _MAX_BYTES
 
 
 def _make_jpeg(width: int, height: int) -> bytes:
