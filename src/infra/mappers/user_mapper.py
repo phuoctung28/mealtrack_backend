@@ -1,8 +1,97 @@
 """Mappers for converting between domain models and persistence models."""
 
+from collections.abc import Iterable
+
+from sqlalchemy.exc import InvalidRequestError
+
 from src.domain.model.user import UserDomainModel, UserProfileDomainModel
 from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.user.profile_preference import UserProfilePreference
 from src.infra.database.models.user.user import User
+
+PROFILE_PREFERENCE_FIELDS = (
+    "dietary_preferences",
+    "health_conditions",
+    "allergies",
+    "pain_points",
+    "referral_sources",
+    "training_types",
+)
+
+
+def _preference_values(values: Iterable[object] | None) -> list[str]:
+    """Return cleaned, de-duplicated values while preserving first order."""
+    if not values:
+        return []
+
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw_value in values:
+        if raw_value is None:
+            continue
+        value = str(raw_value).strip()
+        if not value:
+            continue
+        normalized = value.casefold()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        cleaned.append(value)
+    return cleaned
+
+
+def _loaded_preference_entries(
+    profile_entity: UserProfile,
+) -> list[UserProfilePreference] | None:
+    try:
+        return list(profile_entity.preference_entries)
+    except InvalidRequestError:
+        return None
+
+
+def _values_from_normalized(
+    profile_entity: UserProfile, field_name: str
+) -> list[str] | None:
+    entries = _loaded_preference_entries(profile_entity)
+    if entries is None:
+        return None
+
+    values = [
+        entry.value
+        for entry in sorted(
+            entries, key=lambda row: (row.preference_type, row.position)
+        )
+        if entry.preference_type == field_name
+    ]
+    return _preference_values(values) if values else None
+
+
+def _profile_values(profile_entity: UserProfile, field_name: str) -> list[str]:
+    normalized_values = _values_from_normalized(profile_entity, field_name)
+    if normalized_values is not None:
+        return normalized_values
+    return _preference_values(getattr(profile_entity, field_name, None))
+
+
+def build_profile_preference_entries(
+    profile_domain: UserProfileDomainModel,
+) -> list[UserProfilePreference]:
+    entries: list[UserProfilePreference] = []
+    profile_id = str(profile_domain.id) if profile_domain.id else None
+
+    for field_name in PROFILE_PREFERENCE_FIELDS:
+        values = _preference_values(getattr(profile_domain, field_name, None))
+        for position, value in enumerate(values):
+            entries.append(
+                UserProfilePreference(
+                    profile_id=profile_id,
+                    preference_type=field_name,
+                    value=value,
+                    position=position,
+                )
+            )
+
+    return entries
 
 
 class UserMapper:
@@ -78,15 +167,15 @@ class UserProfileMapper:
             body_fat_percentage=profile_entity.body_fat_percentage,
             target_weight_kg=profile_entity.target_weight_kg,
             snacks_per_day=profile_entity.snacks_per_day,
-            dietary_preferences=profile_entity.dietary_preferences,
-            health_conditions=profile_entity.health_conditions,
-            allergies=profile_entity.allergies,
-            pain_points=profile_entity.pain_points,
+            dietary_preferences=_profile_values(profile_entity, "dietary_preferences"),
+            health_conditions=_profile_values(profile_entity, "health_conditions"),
+            allergies=_profile_values(profile_entity, "allergies"),
+            pain_points=_profile_values(profile_entity, "pain_points"),
             training_level=profile_entity.training_level,
             date_of_birth=profile_entity.date_of_birth,
-            referral_sources=profile_entity.referral_sources or [],
+            referral_sources=_profile_values(profile_entity, "referral_sources"),
             challenge_duration=profile_entity.challenge_duration,
-            training_types=profile_entity.training_types,
+            training_types=_profile_values(profile_entity, "training_types"),
             custom_protein_g=profile_entity.custom_protein_g,
             custom_carbs_g=profile_entity.custom_carbs_g,
             custom_fat_g=profile_entity.custom_fat_g,
@@ -100,7 +189,7 @@ class UserProfileMapper:
     @staticmethod
     def to_persistence(profile_domain: UserProfileDomainModel) -> UserProfile:
         """Map a UserProfileDomainModel to a UserProfile persistence entity."""
-        return UserProfile(
+        profile = UserProfile(
             id=str(profile_domain.id) if profile_domain.id else None,
             user_id=str(profile_domain.user_id) if profile_domain.user_id else None,
             age=profile_domain.age,
@@ -132,3 +221,5 @@ class UserProfileMapper:
             goal_started_at=profile_domain.goal_started_at,
             daily_water_goal_ml=profile_domain.daily_water_goal_ml,
         )
+        profile.preference_entries = build_profile_preference_entries(profile_domain)
+        return profile

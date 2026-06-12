@@ -2,9 +2,9 @@
 Weekly macro budget database model.
 """
 
-from sqlalchemy import Column, String, Date, Float, UniqueConstraint, Index
+from sqlalchemy import Column, Date, Float, ForeignKey, Index, String, UniqueConstraint
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import TimestampMixin
 
 
@@ -17,7 +17,12 @@ class WeeklyMacroBudgetORM(Base, TimestampMixin):
     weekly_budget_id = Column(String(36), primary_key=True)
 
     # User reference
-    user_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Week start date (Monday)
     week_start_date = Column(Date, nullable=False)

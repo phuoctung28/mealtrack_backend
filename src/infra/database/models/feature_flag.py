@@ -5,7 +5,7 @@ Feature flag database model for application-wide feature control.
 from sqlalchemy import Boolean, Column, String, DateTime
 
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 
 
 class FeatureFlag(Base):

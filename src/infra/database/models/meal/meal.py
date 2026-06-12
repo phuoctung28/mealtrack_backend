@@ -3,19 +3,19 @@ Meal model for the main meal entity.
 """
 
 from sqlalchemy import (
+    JSON,
+    Boolean,
     Column,
-    String,
-    Text,
+    DateTime,
     Enum,
     ForeignKey,
-    DateTime,
     Integer,
-    Boolean,
-    JSON,
+    String,
+    Text,
 )
 from sqlalchemy.orm import relationship
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import TimestampMixin
 from src.infra.database.models.enums import MealStatusEnum
 
@@ -28,7 +28,10 @@ class MealORM(Base, TimestampMixin):
     # Primary key
     meal_id = Column(String(36), primary_key=True)
     user_id = Column(
-        String(36), nullable=False, index=True
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )  # User who created this meal
     status = Column(Enum(MealStatusEnum, native_enum=False), nullable=False)
     dish_name = Column(String(255), nullable=True)  # The name of the dish
@@ -77,5 +80,12 @@ class MealORM(Base, TimestampMixin):
         "MealTranslationORM",
         back_populates="meal",
         cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    instruction_steps = relationship(
+        "MealInstructionStepORM",
+        back_populates="meal",
+        cascade="all, delete-orphan",
+        order_by="MealInstructionStepORM.position",
         lazy="selectin",
     )

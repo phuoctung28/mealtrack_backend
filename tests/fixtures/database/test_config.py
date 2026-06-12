@@ -7,7 +7,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 
 
 def get_test_database_url() -> str:

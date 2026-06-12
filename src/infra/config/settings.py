@@ -37,6 +37,34 @@ class Settings(BaseSettings):
 
     # Database configuration
     DATABASE_URL: str | None = Field(default=None)
+    APP_DATABASE_URL: str | None = Field(
+        default=None,
+        description="App runtime DB URL. Prefer direct Neon URL in production.",
+    )
+    DATABASE_URL_DIRECT: str | None = Field(
+        default=None,
+        description="Direct Neon URL for Alembic migrations only. Not used by app runtime.",
+    )
+    DB_CONNECTION_MODE: str = Field(
+        default="direct_pool",
+        description="DB connection mode: 'direct_pool' (AsyncAdaptedQueuePool) or 'neon_pooler' (NullPool)",
+    )
+    ASYNC_POOL_SIZE_PER_WORKER: int | None = Field(
+        default=None,
+        description="Async pool connections per worker (overrides POOL_SIZE_PER_WORKER)",
+    )
+    ASYNC_POOL_MAX_OVERFLOW: int | None = Field(
+        default=None,
+        description="Async pool max overflow (overrides POOL_MAX_OVERFLOW)",
+    )
+    ASYNC_POOL_TIMEOUT: int | None = Field(
+        default=None,
+        description="Async pool connection timeout seconds (overrides POOL_TIMEOUT)",
+    )
+    ASYNC_POOL_RECYCLE: int = Field(
+        default=120,
+        description="Async pool connection recycle interval seconds",
+    )
     DB_USER: str = Field(default="nutree")
     DB_PASSWORD: str = Field(default="")
     DB_HOST: str = Field(default="localhost")
@@ -208,6 +236,24 @@ class Settings(BaseSettings):
     MEAL_ANALYZE_MAX_ATTEMPTS: int = Field(default=2)
     MEAL_ANALYZE_MAX_OUTPUT_TOKENS: int = Field(
         default=MEAL_ANALYZE_DEFAULT_MAX_OUTPUT_TOKENS
+    )
+
+    # Affiliate integration
+    AFFILIATE_INTEGRATION_ENABLED: bool = Field(
+        default=False,
+        description="Enable affiliate code validation via nutree-affiliate internal API",
+    )
+    AFFILIATE_API_BASE_URL: str | None = Field(
+        default=None,
+        description="Base URL of the nutree-affiliate service (e.g. https://affiliate.nutree.app)",
+    )
+    AFFILIATE_INTERNAL_SECRET: str | None = Field(
+        default=None,
+        description="Shared HMAC-SHA256 secret for MealTrack↔nutree-affiliate internal calls",
+    )
+    AFFILIATE_CODE_VALIDATE_TIMEOUT_SECONDS: float = Field(
+        default=10.0,
+        description="Timeout for affiliate HTTP calls (validate + send_event). 10s covers vercel dev cold starts.",
     )
 
     # Referral system (multi-currency)

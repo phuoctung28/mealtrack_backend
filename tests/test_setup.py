@@ -14,8 +14,9 @@ def test_database_connection(test_session):
 
 def test_database_rollback(test_session):
     """Test that database changes are rolled back."""
-    from src.infra.database.models.user.user import User
     from datetime import datetime
+
+    from src.infra.database.models.user.user import User
 
     # Create a user
     user = User(
@@ -38,7 +39,8 @@ def test_database_rollback(test_session):
     # User will be rolled back after test completes
 
 
-def test_mock_services(mock_image_store, mock_vision_service):
+@pytest.mark.asyncio
+async def test_mock_services(mock_image_store, mock_vision_service):
     """Test that mock services are available."""
     # Test image store
     image_url = mock_image_store.save(b"test-image", "image/jpeg")
@@ -54,7 +56,7 @@ def test_mock_services(mock_image_store, mock_vision_service):
     assert image_url2.startswith("https://mock.cloudinary.com/images/")
 
     # Test vision service
-    result = mock_vision_service.analyze(b"test-image")
+    result = await mock_vision_service.analyze(b"test-image")
     assert "structured_data" in result
     assert result["structured_data"]["dish_name"] == "Grilled Chicken with Rice"
 

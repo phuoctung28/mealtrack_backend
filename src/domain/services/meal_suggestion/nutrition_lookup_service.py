@@ -11,6 +11,7 @@ Calories are ALWAYS derived: P×4 + (C−fiber)×4 + fiber×2 + F×9
 """
 
 import asyncio
+import inspect
 import json
 import logging
 from dataclasses import dataclass, field
@@ -150,8 +151,7 @@ class NutritionLookupService:
         )
 
         # Tier 1 (food_reference): resolve every Redis miss with ONE batched
-        # query instead of N concurrent single-row lookups — each of which would
-        # open its own sync session, churning the connection pool under fan-out.
+        # query instead of N concurrent single-row lookups.
         miss_normalized = [
             normalized
             for (name, normalized, quantity_g), cached in zip(
@@ -161,9 +161,7 @@ class NutritionLookupService:
         ]
         t1_map: Dict[str, Dict[str, Any]] = {}
         if miss_normalized:
-            t1_map = await asyncio.to_thread(
-                self._repo.find_batch_by_normalized_names, miss_normalized
-            )
+            t1_map = await self._find_batch_by_normalized_names(miss_normalized)
 
         # Resolve the Redis misses concurrently: T1 from the batch map → T2 → T3.
         pending = [i for i, cached in enumerate(results) if cached is None]
@@ -285,9 +283,24 @@ class NutritionLookupService:
         if cached is not None:
             return cached
         _cache_metrics["redis_misses"] += 1
-        # Repo uses a sync Session; offload so the event loop isn't blocked.
-        ref = await asyncio.to_thread(self._repo.find_by_normalized_name, normalized)
+        ref = await self._find_by_normalized_name(normalized)
         return await self._resolve_uncached(name, normalized, quantity_g, ref)
+
+    async def _find_batch_by_normalized_names(
+        self, names_normalized: list[str]
+    ) -> dict[str, dict[str, Any]]:
+        method = self._repo.find_batch_by_normalized_names
+        if inspect.iscoroutinefunction(method):
+            return await method(names_normalized)
+        return await asyncio.to_thread(method, names_normalized)
+
+    async def _find_by_normalized_name(
+        self, name_normalized: str
+    ) -> dict[str, Any] | None:
+        method = self._repo.find_by_normalized_name
+        if inspect.iscoroutinefunction(method):
+            return await method(name_normalized)
+        return await asyncio.to_thread(method, name_normalized)
 
     # ------------------------------------------------------------------
     # Redis cache helpers
@@ -409,8 +422,7 @@ class NutritionLookupService:
 
         try:
             raw = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._gen.generate_meal_plan,
+                self._gen.generate_meal_plan_async(
                     prompt,
                     system_message,
                     "json",

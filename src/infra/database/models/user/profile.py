@@ -3,22 +3,23 @@ User profile model for physical attributes and personal information.
 """
 
 from sqlalchemy import (
-    Column,
-    String,
+    JSON,
     Boolean,
-    Integer,
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
     Float,
     ForeignKey,
     Index,
-    CheckConstraint,
-    JSON,
-    Date,
-    DateTime,
+    Integer,
+    String,
 )
 from sqlalchemy.orm import relationship
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import BaseMixin
+from src.infra.database.models.user.profile_preference import UserProfilePreference
 
 
 class UserProfile(Base, BaseMixin):
@@ -109,3 +110,14 @@ class UserProfile(Base, BaseMixin):
 
     # Relationships
     user = relationship("User", back_populates="profiles")
+    preference_entries = relationship(
+        "UserProfilePreference",
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        lazy="raise",
+        order_by=lambda: (
+            UserProfilePreference.preference_type,
+            UserProfilePreference.position,
+            UserProfilePreference.id,
+        ),
+    )

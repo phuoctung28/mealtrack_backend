@@ -1,7 +1,8 @@
-import pytest
 from datetime import date
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture(autouse=True)
@@ -17,28 +18,33 @@ def clear_sentinel():
 async def test_skips_if_sentinel_in_memory():
     """Pre-compute is skipped when (date, tz) already in _precomputed_today."""
     from src.infra.services import daily_context_precompute_service as module
-    from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+    )
 
     svc = DailyContextPrecomputeService()
     today = date(2026, 4, 22)
     module._precomputed_today.add((today.isoformat(), "Asia/Ho_Chi_Minh"))
 
-    with patch.object(svc, "_precompute_db_sync") as mock_sync:
+    with patch.object(svc, "_precompute_db", new_callable=AsyncMock) as mock_precompute:
         await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
-        mock_sync.assert_not_called()
+        mock_precompute.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_runs_and_adds_to_sentinel_set():
     """Pre-compute runs and adds (date, tz) to _precomputed_today on success."""
     from src.infra.services import daily_context_precompute_service as module
-    from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+    )
 
     svc = DailyContextPrecomputeService()
     today = date(2026, 4, 22)
 
-    with patch.object(svc, "_precompute_db_sync", return_value=5), \
-         patch.object(svc, "_check_db_sentinel", return_value=False):
+    with patch.object(svc, "_precompute_db", AsyncMock(return_value=5)), patch.object(
+        svc, "_check_db_sentinel", AsyncMock(return_value=False)
+    ):
         await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
 
     assert (today.isoformat(), "Asia/Ho_Chi_Minh") in module._precomputed_today
@@ -48,13 +54,16 @@ async def test_runs_and_adds_to_sentinel_set():
 async def test_zero_users_does_not_set_sentinel():
     """When no users are eligible, sentinel must NOT be set (allows retry)."""
     from src.infra.services import daily_context_precompute_service as module
-    from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+    )
 
     svc = DailyContextPrecomputeService()
     today = date(2026, 4, 22)
 
-    with patch.object(svc, "_precompute_db_sync", return_value=0), \
-         patch.object(svc, "_check_db_sentinel", return_value=False):
+    with patch.object(svc, "_precompute_db", AsyncMock(return_value=0)), patch.object(
+        svc, "_check_db_sentinel", AsyncMock(return_value=False)
+    ):
         await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
 
     assert (today.isoformat(), "Asia/Ho_Chi_Minh") not in module._precomputed_today
@@ -63,19 +72,24 @@ async def test_zero_users_does_not_set_sentinel():
 @pytest.mark.asyncio
 async def test_db_sentinel_fallback_skips_precompute():
     """When in-memory set is empty but DB has notifications, precompute is skipped."""
-    from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+    )
 
     svc = DailyContextPrecomputeService()
     today = date(2026, 4, 22)
 
-    with patch.object(svc, "_check_db_sentinel", return_value=True), \
-         patch.object(svc, "_precompute_db_sync") as mock_sync:
+    with patch.object(
+        svc, "_check_db_sentinel", AsyncMock(return_value=True)
+    ), patch.object(svc, "_precompute_db", new_callable=AsyncMock) as mock_precompute:
         await svc.precompute_for_timezone("Asia/Ho_Chi_Minh", today)
-        mock_sync.assert_not_called()
+        mock_precompute.assert_not_awaited()
 
 
 def test_sentinel_key_format():
-    from src.infra.services.daily_context_precompute_service import DailyContextPrecomputeService
+    from src.infra.services.daily_context_precompute_service import (
+        DailyContextPrecomputeService,
+    )
 
     svc = DailyContextPrecomputeService()
     key = svc.sentinel_key(date(2026, 4, 22), "Asia/Ho_Chi_Minh")
@@ -98,7 +112,8 @@ def test_notification_language_uses_pref_when_user_language_missing():
     assert _resolve_notification_language("vi", None) == "vi"
 
 
-def test_user_calorie_goal_uses_adjusted_weekly_budget_target():
+@pytest.mark.asyncio
+async def test_user_calorie_goal_uses_adjusted_weekly_budget_target():
     from src.infra.services.daily_context_precompute_service import (
         DailyContextPrecomputeService,
     )
@@ -125,7 +140,7 @@ def test_user_calorie_goal_uses_adjusted_weekly_budget_target():
     mock_budget.target_fat = 350
 
     mock_uow = MagicMock()
-    mock_uow.weekly_budgets.find_by_user_and_week.return_value = mock_budget
+    mock_uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=mock_budget)
     mock_uow.session = MagicMock()
 
     with patch(
@@ -137,7 +152,7 @@ def test_user_calorie_goal_uses_adjusted_weekly_budget_target():
         mock_result.adjusted = mock_macros
         mock_effective.return_value = mock_result
 
-        result = svc._get_user_calorie_goal(
+        result = await svc._get_user_calorie_goal(
             mock_uow, "user-123", date(2026, 4, 22), mock_profile, "UTC"
         )
         assert result == 2000

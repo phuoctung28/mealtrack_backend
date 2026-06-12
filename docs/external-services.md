@@ -153,11 +153,11 @@
 
 ---
 
-## Database (PostgreSQL/MySQL)
+## Database (PostgreSQL/Neon)
 
 See `database-guide.md` for schema, connection pool, and migration details.
 
-**Config:** `DATABASE_URL=mysql+pymysql://user:pass@host/db`
+**Config:** `DATABASE_URL=postgresql+asyncpg://user:pass@host/db`
 
 ---
 
@@ -166,7 +166,7 @@ See `database-guide.md` for schema, connection pool, and migration details.
 ```
 GET /health                    # Basic health (200 if running)
 GET /health/db-pool            # DB pool metrics
-GET /health/db-connections     # MySQL connection stats
+GET /health/db-connections     # PostgreSQL connection stats
 GET /health/notifications      # FCM health
 ```
 
@@ -177,13 +177,81 @@ GET /health/notifications      # FCM health
 | Service | Failure Mode | Recovery |
 |---------|--------------|----------|
 | Firebase Auth | Fail fast (401) | Requests rejected |
-| MySQL | Fail fast (503) | Requests rejected |
+| PostgreSQL | Fail fast (503) | Requests rejected |
 | Gemini | Fail fast (503) | Return error to client |
 | Cloudinary | Degrade (fallback URL) | Continue with best-effort image |
 | RevenueCat | Degrade (assume premium from cache) | Continue with last-known status |
 | PostHog | Degrade (log warning) | Continue without analytics |
 | Redis | Degrade (bypass cache) | Continue without caching |
 | Sentry | Degrade (log locally) | Continue with local logging |
+
+---
+
+---
+
+## nutree-affiliate (Internal Service)
+
+**Purpose:** Affiliate identity, code management, commission ledger, and payout state for KOL/PT partner program. Runs as a separate Vercel deployment with its own Neon Postgres database.
+
+**Ownership boundary:** MealTrack must never join against or write the affiliate database directly. All affiliate state lives in nutree-affiliate.
+
+### Integration Points
+
+| Direction | Protocol | Endpoint |
+|-----------|----------|----------|
+| MealTrack → nutree-affiliate | HMAC-signed HTTP POST | `POST /api/internal/codes/validate` |
+| MealTrack → nutree-affiliate | HMAC-signed HTTP POST | `POST /api/internal/mealtrack-events` |
+
+### Request Signing (HMAC-SHA256)
+
+```
+message  = f"{unix_timestamp}.{raw_body}"
+signature = HMAC-SHA256(AFFILIATE_INTERNAL_SECRET, message)
+headers   = { X-Timestamp: unix_timestamp, X-Signature: hex_signature }
+```
+
+Replay window: ±300 seconds. Implemented in `src/infra/adapters/affiliate_service_adapter.py`. Cross-service contract test in `tests/unit/infra/adapters/test_affiliate_service_adapter_signing.py`.
+
+### Lifecycle Event Flow
+
+RevenueCat webhook → MealTrack webhook handler → `affiliate_event_outbox` (same DB transaction) → cron dispatcher → nutree-affiliate `/api/internal/mealtrack-events`.
+
+Events enqueued: `subscription_initial_purchase`, `subscription_renewal`, `subscription_canceled`, `subscription_expired`, `subscription_refund`.
+
+Events do **not** include `affiliate_id` — nutree-affiliate resolves it internally by `mealtrack_user_id`. Events for non-attributed users are silently ignored by nutree-affiliate.
+
+### Outbox Table (`affiliate_event_outbox`)
+
+| Column | Notes |
+|--------|-------|
+| `event_id` | Idempotency key forwarded to nutree-affiliate inbox |
+| `status` | `pending` / `sent` / `failed` |
+| `attempts` | Max 5; exponential back-off 1m→5m→30m→2h |
+| `next_attempt_at` | Dispatcher claims rows where `status=pending AND next_attempt_at <= now` |
+
+Permanent failures (5 attempts exhausted) capture a Sentry error. Cron: `src/cron/affiliate_outbox.py` — schedule every 5 min.
+
+### Failure Modes
+
+| Failure | MealTrack behavior |
+|---------|--------------------|
+| nutree-affiliate down during code validate | Returns `active=False`; apply raises `invalid_code` |
+| nutree-affiliate down during attribution | Logs warning; apply still succeeds; no retry |
+| nutree-affiliate down during lifecycle event | Outbox row stays `pending`; retried on next cron run |
+| Outbox row hits max retries | Status → `failed`, Sentry alert fired |
+
+**Config:** `AFFILIATE_INTEGRATION_ENABLED`, `AFFILIATE_API_BASE_URL`, `AFFILIATE_INTERNAL_SECRET`, `AFFILIATE_CODE_VALIDATE_TIMEOUT_SECONDS` (default 3.0s)
+
+### Rollout Checklist
+
+1. Create nutree-affiliate Neon database and run `npx ts-node api/migrate.ts`
+2. Set `AFFILIATE_INTERNAL_SECRET` in both nutree-affiliate and MealTrack (same value)
+3. Set `AFFILIATE_API_BASE_URL` in MealTrack (e.g. `https://nutree-affiliate.vercel.app`)
+4. Deploy nutree-affiliate **before** enabling MealTrack feature flag
+5. Set `AFFILIATE_INTEGRATION_ENABLED=true` in MealTrack
+6. Add Render cron job: `python -m src.cron.affiliate_outbox` — every 5 min
+7. Monitor `affiliate_event_outbox` for `status=failed` rows and Sentry alerts
+8. Rotate `AFFILIATE_INTERNAL_SECRET` if compromised — update both services simultaneously
 
 ---
 

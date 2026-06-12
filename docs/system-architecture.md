@@ -1,6 +1,6 @@
 # Backend System Architecture Overview
 
-**Last Updated:** May 27, 2026
+**Last Updated:** June 9, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
 **Codebase:** 430 files, ~38.5K LOC across 4 layers
@@ -63,8 +63,10 @@ result = await event_bus.send(CreateMealCommand(...))    # synchronous
 await event_bus.publish(MealCreatedEvent(...))           # fire-and-forget
 ```
 
+Background subscriber tasks are owned by `BackgroundTaskManager` (`src/infra/event_bus/background_task_manager.py`), which replaces bare `asyncio.create_task` in the event bus and routes; it exposes `spawn`, `drain`, and `shutdown` so subscriber failures are observable and app shutdown can cancel outstanding tasks cleanly.
+
 ### Repository Pattern
-Smart sync (diff-based updates), eager loading via pre-defined `joinedload` options.
+Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW owns commit/rollback boundaries; repositories flush only when generated IDs or relationship state are needed.
 
 ---
 
@@ -95,6 +97,38 @@ Smart sync (diff-based updates), eager loading via pre-defined `joinedload` opti
 
 ---
 
+## Affiliate System Boundary
+
+MealTrack and nutree-affiliate are **separate services with separate databases**. MealTrack must never join against or directly write affiliate tables.
+
+```
+Nutree mobile ──→ MealTrack (validate/apply code)
+                       │
+                       │ same DB transaction
+                       ▼
+               affiliate_event_outbox
+                       │
+                       │ cron every 5 min
+                       ▼
+              nutree-affiliate API  ──→ nutree-affiliate DB
+                 (Vercel)              (commission ledger, payout)
+```
+
+**Identity separation:** A nutree app user and an affiliate user are distinct identities even when their email addresses match. MealTrack holds only `mealtrack_user_id`; nutree-affiliate holds only `affiliate_id`.
+
+**Ownership rules:**
+
+| Data | Owner |
+|------|-------|
+| App users, subscriptions, RevenueCat events | MealTrack |
+| Affiliate identity, codes, commission rules | nutree-affiliate |
+| Ledger credits/reversals, payout state | nutree-affiliate |
+| `affiliate_event_outbox` retry queue | MealTrack (infrastructure only) |
+
+**Integration:** See `docs/external-services.md` → nutree-affiliate section.
+
+---
+
 ## Known Issues
 
 - CORS `allow_origins=["*"]` wide open in production (security risk)
@@ -103,6 +137,8 @@ Smart sync (diff-based updates), eager loading via pre-defined `joinedload` opti
 - `CloudinaryImageStore` instantiated directly in routes (not via DI)
 - Hardcoded constants (MAX_FILE_SIZE, SLOW_REQUEST_THRESHOLD) not in config
 - `AsyncUnitOfWork` uses `asyncio.Lock`; concurrent reuse within one instance will block (by design — use separate instances per handler, enforced by event bus handler cloning)
+- Database runtime is async-only: request paths, cron jobs, and handlers use `config_async.py`, `AsyncSession`, `AsyncUnitOfWork`, and async repositories. Alembic uses its separate migration engine.
+- Manual meal save (`POST /v1/meals/manual`) instruments `db_ms` and `cache_ms` in structured logs so DB commit and Redis cache invalidation latency are independently observable without logging food payload or auth data.
 
 ---
 

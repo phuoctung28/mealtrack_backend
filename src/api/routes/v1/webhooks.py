@@ -8,7 +8,7 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select, text
@@ -242,6 +242,7 @@ def _preferred_transfer_target(transferred_to: list[str]) -> str | None:
     )
 
 
+
 async def handle_purchase(uow, user, event):
     """Handle initial purchase."""
     logger.info(f"Creating subscription for user {user.id}")
@@ -273,6 +274,17 @@ async def handle_purchase(uow, user, event):
 
     # Credit referrer if this user has a pending referral conversion
     await _credit_referral_on_purchase(uow, str(user.id))
+    await uow.affiliate_outbox.enqueue(
+        "subscription_initial_purchase",
+        {
+            "mealtrack_user_id": str(user.id),
+            "product_id": event.get("product_id"),
+            "period_type": event.get("period_type"),
+            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "occurred_at": (parse_timestamp(event.get("purchased_at_ms")) or utc_now()).isoformat(),
+        },
+        event_id=event.get("id"),
+    )
 
 
 async def handle_renewal(uow, user, event):
@@ -293,6 +305,17 @@ async def handle_renewal(uow, user, event):
         await handle_purchase(uow, user, event)
 
     await capture_subscription_lifecycle_event(user, event, "RENEWAL", subscription)
+    await uow.affiliate_outbox.enqueue(
+        "subscription_renewal",
+        {
+            "mealtrack_user_id": str(user.id),
+            "product_id": event.get("product_id"),
+            "period_type": event.get("period_type"),
+            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "occurred_at": (parse_timestamp(event.get("purchased_at_ms")) or utc_now()).isoformat(),
+        },
+        event_id=event.get("id"),
+    )
 
     # Purge any pending trial-expiry pushes so renewed users don't get a
     # "your trial ends tomorrow" push for a sub that just auto-renewed.
@@ -329,6 +352,16 @@ async def handle_cancellation(uow, user, event):
     await capture_subscription_lifecycle_event(
         user, event, "CANCELLATION", subscription
     )
+    await uow.affiliate_outbox.enqueue(
+        "subscription_canceled",
+        {
+            "mealtrack_user_id": str(user.id),
+            "product_id": event.get("product_id"),
+            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "occurred_at": utc_now().isoformat(),
+        },
+        event_id=event.get("id"),
+    )
 
     # Send cancellation email
     if not user.email_opt_out:
@@ -350,6 +383,16 @@ async def handle_expiration(uow, user, event):
         logger.info(f"User {user.id} subscription expired")
 
     await capture_subscription_lifecycle_event(user, event, "EXPIRATION", subscription)
+    await uow.affiliate_outbox.enqueue(
+        "subscription_expired",
+        {
+            "mealtrack_user_id": str(user.id),
+            "product_id": event.get("product_id"),
+            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "occurred_at": utc_now().isoformat(),
+        },
+        event_id=event.get("id"),
+    )
 
 
 async def handle_billing_issue(uow, user, event):
@@ -391,7 +434,16 @@ async def handle_refund(uow, user, event):
         logger.info(f"User {user.id} subscription refunded")
 
     await capture_subscription_lifecycle_event(user, event, "REFUND", subscription)
-
+    await uow.affiliate_outbox.enqueue(
+        "subscription_refund",
+        {
+            "mealtrack_user_id": str(user.id),
+            "product_id": event.get("product_id"),
+            "subscription_id": event.get("transaction_id") or event.get("original_transaction_id"),
+            "occurred_at": utc_now().isoformat(),
+        },
+        event_id=event.get("id"),
+    )
     await _revoke_referral_on_refund(uow, str(user.id))
 
 
@@ -428,9 +480,7 @@ async def capture_subscription_lifecycle_event(
 
 async def _credit_referral_on_purchase(uow, user_id: str) -> None:
     """Credit the referrer's wallet when a referred user completes their first purchase."""
-    from src.infra.repositories.referral_repository import ReferralRepository
-
-    repo = ReferralRepository(uow.session)
+    repo = uow.referrals
     conversion = await repo.get_conversion_by_referred_user(user_id, for_update=True)
     if conversion and conversion.status == "pending":
         conversion.status = "converted"
@@ -449,9 +499,7 @@ async def _credit_referral_on_purchase(uow, user_id: str) -> None:
 
 async def _revoke_referral_on_refund(uow, user_id: str) -> None:
     """Revoke the referrer's wallet credit when a referred user is refunded."""
-    from src.infra.repositories.referral_repository import ReferralRepository
-
-    repo = ReferralRepository(uow.session)
+    repo = uow.referrals
     conversion = await repo.get_conversion_by_referred_user(user_id, for_update=True)
     if conversion and conversion.status == "converted":
         conversion.status = "revoked"
@@ -519,7 +567,7 @@ def parse_timestamp(ms: int | None) -> datetime | None:
     if ms is None:
         return None
     try:
-        return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+        return datetime.fromtimestamp(ms / 1000, tz=UTC)
     except Exception as e:
         logger.error(f"Error parsing timestamp {ms}: {e}")
         return None

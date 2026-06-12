@@ -14,11 +14,11 @@ class MockImageStore(ImageStorePort):
         """Initialize with in-memory storage."""
         self.storage: Dict[str, bytes] = {}
     
-    def save(self, image_data: bytes, content_type: str, image_id: Optional[str] = None) -> str:
+    def save(self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None) -> str:
         """Save image data and return image ID."""
         if image_id is None:
             image_id = str(uuid.uuid4())
-        self.storage[image_id] = image_data
+        self.storage[image_id] = image_bytes
         return f"https://mock.cloudinary.com/images/{image_id}"
 
     def load(self, image_id: str) -> Optional[bytes]:
@@ -38,3 +38,33 @@ class MockImageStore(ImageStorePort):
     def get_url(self, image_id: str) -> str:
         """Get mock URL for image."""
         return f"https://mock.cloudinary.com/images/{image_id}"
+
+    async def save_async(
+        self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None
+    ) -> str:
+        return self.save(image_bytes, content_type, image_id)
+
+    async def load_async(self, image_id: str) -> Optional[bytes]:
+        return self.load(image_id)
+
+    async def get_url_async(self, image_id: str) -> Optional[str]:
+        return self.get_url(image_id)
+
+    async def delete_async(self, image_id: str) -> bool:
+        return self.delete(image_id)
+
+    def generate_upload_signature(self, image_id: str, ttl: int = 300) -> dict:
+        folder = "mealtrack"
+        public_id = f"{folder}/{image_id}"
+        return {
+            "image_id": image_id,
+            "cloud_name": "mock_cloud",
+            "api_key": "mock_api_key",
+            "timestamp": 1700000000,
+            "signature": "mock_signature",
+            "folder": folder,
+            "public_id": public_id,
+        }
+
+    async def generate_upload_signature_async(self, image_id: str, ttl: int = 300) -> dict:
+        return self.generate_upload_signature(image_id, ttl)

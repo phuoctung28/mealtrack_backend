@@ -1,15 +1,17 @@
-"""Query handler — unified code validation: tries promo_codes first, then referral_codes."""
+"""Query handler — unified code validation: tries promo_codes first, then referral_codes, then affiliate."""
 import logging
 
 from sqlalchemy import select
 
-from src.app.queries.codes.validate_code_query import CodeValidationError, ValidateCodeQuery
+from src.app.queries.codes.validate_code_query import (
+    CodeValidationError,
+    ValidateCodeQuery,
+)
 from src.domain.utils.timezone_utils import utc_now
+from src.infra.adapters.affiliate_service_adapter import AffiliateServiceAdapter
 from src.infra.config.settings import settings
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.promo_code_repository import PromoCodeRepository
-from src.infra.repositories.referral_repository import ReferralRepository
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +19,8 @@ logger = logging.getLogger(__name__)
 class ValidateCodeQueryHandler:
     async def handle(self, query: ValidateCodeQuery) -> dict:
         async with AsyncUnitOfWork() as uow:
-            promo_repo = PromoCodeRepository(uow.session)
-            referral_repo = ReferralRepository(uow.session)
+            promo_repo = uow.promo_codes
+            referral_repo = uow.referrals
 
             # ── Promo code lookup (wins on namespace collision) ──────────────
             promo = await promo_repo.get_by_code(query.code)
@@ -71,5 +73,20 @@ class ValidateCodeQueryHandler:
                     "discount_annual": 499000,
                     "commission_rewards": settings.REFERRAL_COMMISSIONS,
                 }
+
+            # ── Affiliate code lookup (feature-flagged, last resort) ─────────
+            # nutree-affiliate owns duplicate-attribution enforcement; MealTrack
+            # stores no attribution state.
+            if settings.AFFILIATE_INTEGRATION_ENABLED:
+                aff_result = await AffiliateServiceAdapter().validate_code(query.code)
+                if aff_result.active:
+                    return {
+                        "type": "affiliate_code",
+                        "code": query.code,
+                        "is_valid": True,
+                        "affiliate_id": aff_result.affiliate_id,
+                        "display_name": aff_result.display_name,
+                        "partner_type": aff_result.partner_type,
+                    }
 
             raise CodeValidationError(404, "Code not found")

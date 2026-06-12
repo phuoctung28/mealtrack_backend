@@ -35,12 +35,19 @@ from src.api.base_dependencies import (
     initialize_cache_layer,
     shutdown_cache_layer,
 )
+from src.api.dependencies.task_manager import (
+    create_task_manager,
+    set_task_manager,
+    clear_task_manager,
+)
 from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
 from src.api.middleware.rate_limit import limiter
 from src.api.middleware.request_logger import RequestLoggerMiddleware
+from src.api.routes.app_download import router as app_download_router
 from src.api.routes.v1.activities import router as activities_router
 from src.api.routes.v1.cheat_days import router as cheat_days_router
+from src.api.routes.v1.codes import router as codes_router
 from src.api.routes.v1.feature_flags import router as feature_flags_router
 from src.api.routes.v1.foods import router as foods_router
 from src.api.routes.v1.health import root_router as root_health_router
@@ -48,26 +55,25 @@ from src.api.routes.v1.health import router as health_router
 from src.api.routes.v1.hydration import router as hydration_router
 from src.api.routes.v1.ingredients import router as ingredients_router
 from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
+from src.api.routes.v1.meal_scan_by_url import router as meal_scan_by_url_router
+from src.api.routes.v1.meal_upload_token import router as meal_upload_token_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.monitoring import router as monitoring_router
+from src.api.routes.v1.movement import router as movement_router
 from src.api.routes.v1.notifications import router as notifications_router
-from src.api.routes.v1.referrals import router as referrals_router
+from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.promo_codes import router as promo_codes_router
-from src.api.routes.v1.codes import router as codes_router
+from src.api.routes.v1.referrals import router as referrals_router
 from src.api.routes.v1.saved_suggestions import router as saved_suggestions_router
 from src.api.routes.v1.tdee import router as tdee_router
 from src.api.routes.v1.user_profiles import router as user_profiles_router
 from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
-from src.api.routes.v1.nutrition import router as nutrition_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
-from src.api.routes.v1.movement import router as movement_router
+from src.api.routes.well_known import router as well_known_router
 from src.infra.config.settings import settings
-from src.infra.database.config import engine
 from src.infra.database.config_async import async_engine
 from src.infra.monitoring.sentry import initialize_sentry
-from src.api.routes.well_known import router as well_known_router
-from src.api.routes.app_download import router as app_download_router
 
 load_dotenv()
 
@@ -78,6 +84,18 @@ initialize_sentry()
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
 logger = logging.getLogger(__name__)
+
+
+async def warm_database_connection() -> None:
+    """Warm the async database connection so cold Neon compute wakes before traffic."""
+    if async_engine is None:
+        raise RuntimeError("Async database engine is not initialized")
+
+    from sqlalchemy import text
+
+    async with async_engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+        await conn.commit()
 
 
 def initialize_firebase():
@@ -152,15 +170,20 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting MealTrack API...")
 
+    # Initialise the process-wide background task manager before any handler
+    # that may spawn fire-and-forget coroutines.
+    _task_manager = create_task_manager()
+    set_task_manager(_task_manager)
+
     # PostHog LLM Analytics via OpenTelemetry — must run before any LangChain calls
     _posthog_key = os.getenv("POSTHOG_API_KEY")
     if _posthog_key:
         try:
             from opentelemetry import trace
-            from opentelemetry.sdk.trace import TracerProvider
-            from opentelemetry.sdk.resources import Resource, SERVICE_NAME
-            from posthog.ai.otel import PostHogSpanProcessor
             from opentelemetry.instrumentation.langchain import LangchainInstrumentor
+            from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+            from opentelemetry.sdk.trace import TracerProvider
+            from posthog.ai.otel import PostHogSpanProcessor
 
             _otel_provider = TracerProvider(
                 resource=Resource(attributes={SERVICE_NAME: "mealtrack-backend"})
@@ -192,11 +215,7 @@ async def lifespan(app: FastAPI):
 
     # Warm database connection — triggers Neon compute wakeup on cold start
     try:
-        from sqlalchemy import text
-
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-            conn.commit()
+        await warm_database_connection()
         logger.info("Database connection warmed successfully")
     except Exception as e:
         logger.warning("Database connection warming failed: %s", e)
@@ -212,8 +231,8 @@ async def lifespan(app: FastAPI):
     # Initialize Gemini explicit context caches
     gemini_cache_manager = None
     try:
-        from src.infra.services.ai.gemini_cache_manager import GeminiCacheManager
         from src.api.base_dependencies import get_raw_redis_client
+        from src.infra.services.ai.gemini_cache_manager import GeminiCacheManager
 
         _raw_redis = get_raw_redis_client()
         if _raw_redis is not None:
@@ -250,6 +269,15 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down MealTrack API...")
+
+    # Drain all managed background tasks before tearing down services so that
+    # in-flight work (e.g. Unsplash download triggers) can complete cleanly.
+    try:
+        await _task_manager.drain(timeout=5.0)
+    except Exception as exc:
+        logger.warning("Background task drain failed: %s", exc)
+    finally:
+        clear_task_manager()
 
     # Stop Gemini cache refresh loop before disconnecting Redis
     if gemini_cache_manager is not None:
@@ -302,6 +330,8 @@ add_dev_auth_bypass(app)
 app.include_router(root_health_router)
 app.include_router(health_router)
 app.include_router(meals_router)
+app.include_router(meal_upload_token_router)
+app.include_router(meal_scan_by_url_router)
 app.include_router(activities_router)
 app.include_router(feature_flags_router)
 app.include_router(meal_suggestions_router)

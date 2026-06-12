@@ -33,7 +33,14 @@ async def test_cache_miss_opens_uow_once():
         fake_user = MagicMock()
         fake_user.timezone = "UTC"
         mock_uow.users.find_by_id = AsyncMock(return_value=fake_user)
+        mock_uow.users.get_profile = AsyncMock(return_value=None)
         mock_uow.meals.find_by_date = AsyncMock(return_value=[])
+        mock_uow.meals.sum_hydration_ml_for_date = AsyncMock(return_value=0)
+        mock_uow.hydration_entries.find_by_date = AsyncMock(return_value=[])
+        mock_uow.hydration_entries.sum_ml_for_date = AsyncMock(return_value=0)
+        mock_uow.movement_entries.sum_included_kcal_for_range = AsyncMock(
+            return_value=0
+        )
         mock_uow.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=None)
         mock_cls.return_value = mock_uow
 
@@ -71,8 +78,17 @@ async def test_weekly_budget_fetched_in_shared_uow():
             fake_user = MagicMock()
             fake_user.timezone = "UTC"
             self.users.find_by_id = AsyncMock(return_value=fake_user)
+            self.users.get_profile = AsyncMock(return_value=None)
             self.meals = AsyncMock()
             self.meals.find_by_date = AsyncMock(return_value=[])
+            self.meals.sum_hydration_ml_for_date = AsyncMock(return_value=0)
+            self.hydration_entries = AsyncMock()
+            self.hydration_entries.find_by_date = AsyncMock(return_value=[])
+            self.hydration_entries.sum_ml_for_date = AsyncMock(return_value=0)
+            self.movement_entries = AsyncMock()
+            self.movement_entries.sum_included_kcal_for_range = AsyncMock(
+                return_value=0
+            )
             self.weekly_budgets = AsyncMock()
             self.weekly_budgets.find_by_user_and_week = AsyncMock(return_value=None)
             uow_instances.append(self)

@@ -11,8 +11,8 @@ from src.api.dependencies.auth_cache import invalidate_cached_user_id
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.user import DeleteUserCommand
 from src.app.events.base import EventHandler, handles
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.enums import MealStatusEnum
 
@@ -36,7 +36,7 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, dict[str, Any]]):
 
     def __init__(
         self,
-        uow: UnitOfWorkPort | None = None,
+        uow: AsyncUnitOfWorkPort | None = None,
         cache_service: CachePort | None = None,
     ):
         self.uow = uow

@@ -3,14 +3,14 @@ Meal suggestion API endpoints (Phase 06).
 Simplified to only include generation endpoint.
 """
 
-import logging
 import asyncio
-from typing import Any, Awaitable, Callable
+import logging
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.base_dependencies import get_db
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.exceptions import handle_exception
@@ -32,6 +32,7 @@ from src.app.commands.meal_suggestion import (
     IngredientItem,
     SaveMealSuggestionCommand,
 )
+from src.infra.database.config_async import get_async_db
 from src.infra.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ async def discover_meals(
     body: DiscoverMealsRequest,
     user_id: str = Depends(get_current_user_id),
     event_bus: EventBus = Depends(get_configured_event_bus),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Lightweight discovery: single AI call → 6 meals with names + macros.
@@ -98,10 +99,7 @@ async def discover_meals(
 
         # --- meal-image-cache integration (always enabled) ---
         from src.api.dependencies.food_image import get_food_image_service
-        from src.api.dependencies.meal_image_cache import (
-            get_meal_image_cache_service,
-            get_pending_queue,
-        )
+        from src.api.dependencies.meal_image_cache import get_meal_image_cache_service
         from src.domain.model.meal_image_cache import PendingItem
         from src.domain.services.meal_image_cache.name_canonicalizer import (
             slug as _slug,
@@ -109,7 +107,6 @@ async def discover_meals(
 
         image_service = get_food_image_service()
         cache_svc = await get_meal_image_cache_service(session=db)
-        pending_repo = await get_pending_queue(session=db)
         english_names = [m["english_name"] for m in meals]
         cache_hits = await cache_svc.lookup_batch(english_names)
 
@@ -140,7 +137,7 @@ async def discover_meals(
                 image_service.search_food_image,
                 timeout=3.0,
             )
-            for idx, result in zip(miss_indices, miss_results):
+            for idx, result in zip(miss_indices, miss_results, strict=True):
                 images_list[idx] = result
 
         # Build pending queue items for misses
@@ -159,8 +156,10 @@ async def discover_meals(
                 )
             )
 
-        if pending_repo and misses:
-            await pending_repo.enqueue_many(misses)
+        if misses:
+            from src.api.dependencies.meal_image_cache import enqueue_pending_images
+
+            await enqueue_pending_images(misses)
 
         images = images_list
         # --- end integration ---
@@ -186,28 +185,28 @@ async def discover_meals(
         def _as_image_fields(x):
             """Accepts CachedImage (image_url attr) or FoodImageResult (url attr)."""
             if x is None:
-                return dict(
-                    image_url=None,
-                    thumbnail_url=None,
-                    image_source=None,
-                    photographer=None,
-                    photographer_url=None,
-                    unsplash_download_location=None,
-                    image_confidence=0.0,
-                )
+                return {
+                    "image_url": None,
+                    "thumbnail_url": None,
+                    "image_source": None,
+                    "photographer": None,
+                    "photographer_url": None,
+                    "unsplash_download_location": None,
+                    "image_confidence": 0.0,
+                }
             image_url = getattr(x, "image_url", None) or getattr(x, "url", None)
             thumbnail_url = (
                 getattr(x, "thumbnail_url", None) or image_url
             )  # fallback to full URL
-            return dict(
-                image_url=image_url,
-                thumbnail_url=thumbnail_url,
-                image_source=getattr(x, "source", None),
-                photographer=getattr(x, "photographer", None),
-                photographer_url=getattr(x, "photographer_url", None),
-                unsplash_download_location=getattr(x, "download_location", None),
-                image_confidence=float(getattr(x, "confidence", 0.0) or 0.0),
-            )
+            return {
+                "image_url": image_url,
+                "thumbnail_url": thumbnail_url,
+                "image_source": getattr(x, "source", None),
+                "photographer": getattr(x, "photographer", None),
+                "photographer_url": getattr(x, "photographer_url", None),
+                "unsplash_download_location": getattr(x, "download_location", None),
+                "image_confidence": float(getattr(x, "confidence", 0.0) or 0.0),
+            }
 
         # Build response
         from src.api.schemas.response.meal_suggestion_responses import (
@@ -342,24 +341,16 @@ async def save_meal_suggestion(
 
         meal_id = await event_bus.send(command)
 
-        # Unsplash API compliance: trigger download event (fire-and-forget)
+        # Unsplash API compliance: trigger download event (fire-and-forget, managed)
         if request.unsplash_download_location:
-            import asyncio
             from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
+            from src.api.dependencies.task_manager import get_task_manager
 
-            task = asyncio.create_task(
+            get_task_manager().spawn(
+                "unsplash_download",
                 UnsplashImageAdapter.trigger_download(
                     request.unsplash_download_location
-                )
-            )
-            task.add_done_callback(
-                lambda t: (
-                    logger.warning(
-                        "Unsplash download trigger failed: %s", t.exception()
-                    )
-                    if t.exception()
-                    else None
-                )
+                ),
             )
 
         return SaveMealSuggestionResponse(

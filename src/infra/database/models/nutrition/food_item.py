@@ -5,7 +5,7 @@ Food item model for individual food components within a meal.
 from sqlalchemy import Column, String, Float, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import PrimaryEntityMixin
 
 

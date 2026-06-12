@@ -3,16 +3,14 @@ Command handler for updating user metrics.
 """
 
 import logging
-from datetime import date
-from typing import Optional
 
 from src.api.exceptions import ResourceNotFoundException, ValidationException
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
 from src.app.events.base import EventHandler, handles
 from src.domain.cache.cache_keys import CacheKeys
-from src.domain.model.common.enums import JobType, FitnessGoal, TrainingLevel
+from src.domain.model.common.enums import FitnessGoal, JobType, TrainingLevel
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.cache_port import CachePort
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +23,7 @@ _VALID_TRAINING_LEVELS = {e.value for e in TrainingLevel}
 class UpdateUserMetricsCommandHandler(EventHandler[UpdateUserMetricsCommand, None]):
     """Handle updating user metrics (weight, job type, training, body fat)."""
 
-    def __init__(self, uow: UnitOfWorkPort, cache_service: Optional[CachePort] = None):
+    def __init__(self, uow: AsyncUnitOfWorkPort, cache_service: CachePort | None = None):
         self.uow = uow
         self.cache_service = cache_service
 

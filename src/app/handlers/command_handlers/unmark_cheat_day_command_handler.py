@@ -1,24 +1,24 @@
 """Handler for unmarking a cheat day."""
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
 
 from src.api.exceptions import ResourceNotFoundException
 from src.app.commands.cheat_day import UnmarkCheatDayCommand
 from src.app.events.base import EventHandler, handles
-from src.domain.ports.unit_of_work_port import UnitOfWorkPort
+from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
 
 @handles(UnmarkCheatDayCommand)
-class UnmarkCheatDayCommandHandler(EventHandler[UnmarkCheatDayCommand, Dict[str, Any]]):
+class UnmarkCheatDayCommandHandler(EventHandler[UnmarkCheatDayCommand, dict[str, Any]]):
 
-    def __init__(self, uow: Optional[UnitOfWorkPort] = None):
+    def __init__(self, uow: AsyncUnitOfWorkPort | None = None):
         self.uow = uow
 
-    async def handle(self, command: UnmarkCheatDayCommand) -> Dict[str, Any]:
+    async def handle(self, command: UnmarkCheatDayCommand) -> dict[str, Any]:
         uow = self.uow or AsyncUnitOfWork()
         async with uow:
             try:

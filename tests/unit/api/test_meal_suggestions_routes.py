@@ -1,12 +1,13 @@
 """Cover meal_suggestions routes with TestClient + rate limiter state."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from src.api.base_dependencies import get_db
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
 from src.api.middleware.rate_limit import limiter
@@ -23,6 +24,7 @@ from src.domain.model.meal_suggestion.meal_suggestion import (
     RecipeStep,
 )
 from src.domain.model.meal_suggestion.suggestion_session import SuggestionSession
+from src.infra.database.config_async import get_async_db
 
 
 class _BusOk:
@@ -61,7 +63,7 @@ def ms_client():
     app.dependency_overrides[get_current_user_id] = lambda: "user-1"
     bus = _BusOk()
     app.dependency_overrides[get_configured_event_bus] = lambda: bus
-    app.dependency_overrides[get_db] = lambda: None
+    app.dependency_overrides[get_async_db] = lambda: AsyncMock()
     yield TestClient(app), bus
     app.dependency_overrides = {}
 
@@ -140,19 +142,12 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
         async def lookup_batch(self, names):
             return [None for _ in names]
 
-    class _Pending:
-        async def enqueue_many(self, misses):
-            captured["misses"] = misses
-
     class _Images:
         async def search_food_image(self, name):
             return None
 
     async def _cache_service(session):
         return _Cache()
-
-    async def _pending_queue(session):
-        return _Pending()
 
     monkeypatch.setattr(
         "src.api.dependencies.food_image.get_food_image_service",
@@ -161,10 +156,6 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
     monkeypatch.setattr(
         "src.api.dependencies.meal_image_cache.get_meal_image_cache_service",
         _cache_service,
-    )
-    monkeypatch.setattr(
-        "src.api.dependencies.meal_image_cache.get_pending_queue",
-        _pending_queue,
     )
     client.app.dependency_overrides[get_configured_event_bus] = lambda: _BusDiscover()
 
@@ -178,7 +169,23 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
         "calorie_target": 450,
     }
 
-    r = client.post("/v1/meal-suggestions/discover", json=payload)
+    # Patch UoW so no real DB connection is attempted for the pending-queue enqueue.
+    # Both are local imports inside the function, so patch at their source modules.
+    mock_uow = AsyncMock()
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.session = AsyncMock()
+
+    with patch(
+        "src.infra.database.uow_async.AsyncUnitOfWork",
+        return_value=mock_uow,
+    ), patch(
+        "src.infra.repositories.pending_meal_image_repository_async.AsyncPendingMealImageRepository",
+    ) as mock_repo_cls:
+        mock_repo = AsyncMock()
+        mock_repo_cls.return_value = mock_repo
+
+        r = client.post("/v1/meal-suggestions/discover", json=payload)
 
     assert r.status_code == 200
     assert isinstance(captured["msg"], DiscoverMealsCommand)

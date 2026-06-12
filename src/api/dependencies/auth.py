@@ -166,8 +166,7 @@ async def get_current_user_id(
 
     This ensures that the user_id matches what's expected by all database queries.
 
-    Uses FastAPI's request-scoped DB session when injected. Direct unit-test calls
-    still fall back to SessionLocal for backwards compatibility.
+    Uses FastAPI's request-scoped async DB session when injected.
 
     Args:
         token: Verified Firebase token (injected by verify_firebase_token)

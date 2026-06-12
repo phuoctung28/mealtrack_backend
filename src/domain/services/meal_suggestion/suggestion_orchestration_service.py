@@ -6,6 +6,7 @@ TDEE helpers: suggestion_tdee_helpers.py
 """
 
 import asyncio
+import inspect
 import logging
 import uuid
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 class SuggestionOrchestrationService:
     """
     Orchestrates meal suggestion generation with session tracking.
-    Singleton in the event bus; uses ScopedSession for request isolation.
+    Singleton in the event bus; DB work is provided through async repositories/UoW.
     """
 
     def __init__(
@@ -285,8 +286,11 @@ class SuggestionOrchestrationService:
             raise RuntimeError(
                 "Profile provider not configured for SuggestionOrchestrationService"
             )
-        # profile_provider uses a sync Session; offload so the event loop isn't blocked.
-        profile = await asyncio.to_thread(self._profile_provider, user_id)
+        if inspect.iscoroutinefunction(self._profile_provider):
+            profile = await self._profile_provider(user_id)
+        else:
+            # Legacy test/providers may still be synchronous during the migration.
+            profile = await asyncio.to_thread(self._profile_provider, user_id)
         if not profile:
             raise ValueError(f"User {user_id} profile not found")
 

@@ -1,14 +1,28 @@
 """Cheat day database model."""
 
-from sqlalchemy import Column, String, Date, DateTime, UniqueConstraint, Index
-from src.infra.database.config import Base
+from sqlalchemy import (
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+)
+
+from src.infra.database.base import Base
 
 
 class CheatDayORM(Base):
     __tablename__ = "cheat_days"
 
     id = Column(String(36), primary_key=True)
-    user_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     date = Column(Date, nullable=False)
     marked_at = Column(DateTime(timezone=True), nullable=False)
 

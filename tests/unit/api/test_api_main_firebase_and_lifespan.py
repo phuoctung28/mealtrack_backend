@@ -1,7 +1,7 @@
 """Cover src.api.main: Firebase init branches and lifespan error paths."""
 import importlib
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,6 +19,7 @@ def _patch_lifespan_side_effects(main_mod):
     async def _noop():
         return None
 
+    main_mod.warm_database_connection = _noop  # type: ignore[assignment]
     main_mod.initialize_cache_layer = _noop  # type: ignore[assignment]
     main_mod.shutdown_cache_layer = _noop  # type: ignore[assignment]
     # Note: no scheduler stub — scheduler removed from lifespan
@@ -135,6 +136,38 @@ def test_initialize_firebase_from_credentials_file(monkeypatch, tmp_path):
         main.initialize_firebase()
     cert.assert_called_once_with(str(cred_path))
     init.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_warm_database_connection_uses_async_engine(monkeypatch):
+    main = _reload_main()
+
+    class _ConnectionContext:
+        def __init__(self):
+            self.connection = MagicMock()
+            self.connection.execute = AsyncMock()
+            self.connection.commit = AsyncMock()
+
+        async def __aenter__(self):
+            return self.connection
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _AsyncEngine:
+        def __init__(self):
+            self.context = _ConnectionContext()
+
+        def connect(self):
+            return self.context
+
+    engine = _AsyncEngine()
+    monkeypatch.setattr(main, "async_engine", engine)
+
+    await main.warm_database_connection()
+
+    engine.context.connection.execute.assert_awaited_once()
+    engine.context.connection.commit.assert_awaited_once()
 
 
 def test_development_static_uploads_mount(tmp_path, monkeypatch):

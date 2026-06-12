@@ -1,15 +1,20 @@
-import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
+
+import pytest
 
 from src.domain.model.meal.meal import Meal, MealStatus
 from src.domain.model.meal.meal_image import MealImage
 from src.domain.model.meal.meal_translation_domain_models import MealTranslation
 from src.domain.model.nutrition.macros import Macros
 from src.domain.model.nutrition.nutrition import FoodItem
-from src.domain.services.meal_analysis.deepl_meal_translation_service import DeepLMealTranslationService
-from src.domain.services.translation.deepl_text_translation_service import DeepLTextTranslationService
+from src.domain.services.meal_analysis.deepl_meal_translation_service import (
+    DeepLMealTranslationService,
+)
+from src.domain.services.translation.deepl_text_translation_service import (
+    DeepLTextTranslationService,
+)
 
 
 @pytest.fixture
@@ -52,6 +57,14 @@ def repo():
 
 
 @pytest.fixture
+def async_repo():
+    r = Mock()
+    r.get_by_meal_and_language = AsyncMock(return_value=None)
+    r.save = AsyncMock(side_effect=lambda t: t)
+    return r
+
+
+@pytest.fixture
 def text_translation_service():
     svc = AsyncMock(spec=DeepLTextTranslationService)
     svc.translate_texts = AsyncMock()
@@ -62,6 +75,14 @@ def text_translation_service():
 def service(repo, text_translation_service):
     return DeepLMealTranslationService(
         translation_repo=repo,
+        text_translation_service=text_translation_service,
+    )
+
+
+@pytest.fixture
+def async_repo_service(async_repo, text_translation_service):
+    return DeepLMealTranslationService(
+        translation_repo=async_repo,
         text_translation_service=text_translation_service,
     )
 
@@ -116,6 +137,28 @@ async def test_translate_meal_calls_deepl_and_saves(service, meal, food_items, t
     assert result.meal_instruction == [{"instruction": "Bước 1", "duration_minutes": None}]
     repo.save.assert_called_once()
     text_translation_service.translate_texts.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_translate_meal_awaits_async_translation_repo(
+    async_repo_service, async_repo, meal, food_items, text_translation_service
+):
+    text_translation_service.translate_texts.return_value = [
+        "Gà nướng",
+        "Ức gà",
+        "Cơm gạo lứt",
+    ]
+
+    result = await async_repo_service.translate_meal(
+        meal,
+        dish_name="Grilled chicken",
+        food_items=food_items,
+        target_language="vi",
+    )
+
+    assert result is not None
+    async_repo.get_by_meal_and_language.assert_awaited_once_with(meal.meal_id, "vi")
+    async_repo.save.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -179,4 +222,3 @@ async def test_translate_meal_returns_none_on_exception(service, meal, food_item
 
     assert result is None
     repo.save.assert_not_called()
-

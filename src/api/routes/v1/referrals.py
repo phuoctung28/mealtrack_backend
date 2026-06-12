@@ -1,18 +1,23 @@
 """Referral system API routes — code lookup, validation, application, stats, and payout."""
+
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
 from src.api.dependencies.auth import get_current_user_id
-from src.app.commands.referral.apply_referral_code_command import ApplyReferralCodeCommand
+from src.app.commands.referral.apply_referral_code_command import (
+    ApplyReferralCodeCommand,
+)
 from src.app.commands.referral.request_payout_command import RequestPayoutCommand
 from src.app.handlers.command_handlers.referral.apply_referral_code_handler import (
     ApplyReferralCodeCommandHandler,
 )
 from src.app.handlers.command_handlers.referral.request_payout_handler import (
+    MIN_WITHDRAWAL,
     RequestPayoutCommandHandler,
+    validate_payout_payment_details,
 )
 from src.app.handlers.query_handlers.referral.get_my_referral_code_handler import (
     GetMyReferralCodeQueryHandler,
@@ -25,13 +30,16 @@ from src.app.handlers.query_handlers.referral.validate_referral_code_handler imp
 )
 from src.app.queries.referral.get_my_referral_code_query import GetMyReferralCodeQuery
 from src.app.queries.referral.get_referral_stats_query import GetReferralStatsQuery
-from src.app.queries.referral.validate_referral_code_query import ValidateReferralCodeQuery
+from src.app.queries.referral.validate_referral_code_query import (
+    ValidateReferralCodeQuery,
+)
 
 router = APIRouter(prefix="/v1/referrals", tags=["Referrals"])
 logger = logging.getLogger(__name__)
 
 
 # ── Request / Response Schemas ────────────────────────────────────────────────
+
 
 class ValidateCodeRequest(BaseModel):
     code: str = Field(..., min_length=3, max_length=15)
@@ -44,11 +52,11 @@ class ValidateCodeRequest(BaseModel):
 
 class ValidateCodeResponse(BaseModel):
     valid: bool
-    error: Optional[str] = None
-    referrer_name: Optional[str] = None
+    error: str | None = None
+    referrer_name: str | None = None
     discount_monthly: int = 199000
     discount_annual: int = 499000
-    commission_rewards: Dict[str, float] = Field(default_factory=dict)
+    commission_rewards: dict[str, float] = Field(default_factory=dict)
 
 
 SUPPORTED_CURRENCIES = {"VND", "USD", "EUR"}
@@ -69,7 +77,9 @@ class ApplyCodeRequest(BaseModel):
     def validate_currency(cls, v: str) -> str:
         v = v.upper()
         if v not in SUPPORTED_CURRENCIES:
-            raise ValueError(f"Unsupported currency: {v}. Supported: {SUPPORTED_CURRENCIES}")
+            raise ValueError(
+                f"Unsupported currency: {v}. Supported: {SUPPORTED_CURRENCIES}"
+            )
         return v
 
 
@@ -92,18 +102,27 @@ class StatsResponse(BaseModel):
     total_withdrawn: int
     total_invited: int
     total_converted: int
-    conversions: List[ConversionDTO]
+    conversions: list[ConversionDTO]
     has_pending_payout: bool
-    commission_rewards: Dict[str, float] = Field(default_factory=dict)
+    commission_rewards: dict[str, float] = Field(default_factory=dict)
 
 
 class PayoutRequest(BaseModel):
-    amount: int
-    payment_method: str
-    payment_details: Dict
+    amount: int = Field(..., ge=MIN_WITHDRAWAL)
+    payment_method: Literal["momo", "bank"]
+    payment_details: dict[str, Any]
+
+    @field_validator("payment_details")
+    @classmethod
+    def validate_payment_details(cls, value: dict[str, Any], info) -> dict[str, Any]:
+        method = info.data.get("payment_method")
+        if method:
+            validate_payout_payment_details(method, value)
+        return value
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.post("/validate", response_model=ValidateCodeResponse)
 async def validate_code(
@@ -135,7 +154,9 @@ async def apply_code(
             ),
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
     return {"success": True}
 
 
@@ -182,5 +203,7 @@ async def request_payout(
             ),
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
     return {"success": True}

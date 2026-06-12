@@ -1,6 +1,5 @@
 """Query handler — return the user's referral code, wallet balance, and conversion history."""
 import logging
-from typing import List
 
 from sqlalchemy import select
 
@@ -12,7 +11,6 @@ from src.app.queries.referral.get_referral_stats_query import (
 from src.infra.config.settings import settings
 from src.infra.database.models.user.user import User
 from src.infra.database.uow_async import AsyncUnitOfWork
-from src.infra.repositories.referral_repository import ReferralRepository
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +18,7 @@ logger = logging.getLogger(__name__)
 class GetReferralStatsQueryHandler:
     async def handle(self, query: GetReferralStatsQuery) -> ReferralStatsResult:
         async with AsyncUnitOfWork() as uow:
-            repo = ReferralRepository(uow.session)
+            repo = uow.referrals
 
             # Ensure code exists (lazy-create so stats endpoint never errors on first call)
             code = await repo.get_code_by_user_id(query.user_id)
@@ -33,7 +31,7 @@ class GetReferralStatsQueryHandler:
 
             total_converted = sum(1 for c in conversions if c.status == "converted")
 
-            conversion_dtos: List[ReferralConversionDTO] = []
+            conversion_dtos: list[ReferralConversionDTO] = []
             for conv in conversions:
                 referred_name = await self._get_first_name(uow, conv.referred_user_id)
                 # Use VND amount for consistency with wallet (fallback for old records)

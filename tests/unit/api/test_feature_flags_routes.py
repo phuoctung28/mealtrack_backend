@@ -1,14 +1,15 @@
 """Feature flag routes with mocked DB session and optional cache."""
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.api.base_dependencies import get_cache_service, get_db
+from src.api.base_dependencies import get_cache_service
 from src.api.dependencies.auth import get_current_user_email, require_admin
 from src.api.routes.v1.feature_flags import router
+from src.infra.database.config_async import get_async_db
 from src.infra.database.models.feature_flag import FeatureFlag
 
 
@@ -20,6 +21,21 @@ def _make_flag(name="beta", enabled=True):
     f.created_at = datetime(2024, 1, 1)
     f.updated_at = datetime(2024, 1, 2)
     return f
+
+
+def _async_session_for_results(results):
+    scalars = MagicMock()
+    scalars.all.return_value = results
+
+    execute_result = MagicMock()
+    execute_result.scalars.return_value = scalars
+    execute_result.scalar_one_or_none.return_value = results[0] if results else None
+
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=execute_result)
+    session.commit = AsyncMock()
+    session.refresh = AsyncMock()
+    return session
 
 
 @pytest.fixture
@@ -34,9 +50,8 @@ def app_no_cache():
 
 
 def test_get_feature_flags_empty_db(app_no_cache):
-    session = MagicMock()
-    session.query.return_value.all.return_value = []
-    app_no_cache.dependency_overrides[get_db] = lambda: session
+    session = _async_session_for_results([])
+    app_no_cache.dependency_overrides[get_async_db] = lambda: session
 
     r = TestClient(app_no_cache).get("/v1/feature-flags/")
     assert r.status_code == 200
@@ -51,9 +66,8 @@ def test_get_feature_flags_cache_miss_then_set_json(app_no_cache):
     cache.set_json = AsyncMock()
     app_no_cache.dependency_overrides[get_cache_service] = lambda: cache
 
-    session = MagicMock()
-    session.query.return_value.all.return_value = []
-    app_no_cache.dependency_overrides[get_db] = lambda: session
+    session = _async_session_for_results([])
+    app_no_cache.dependency_overrides[get_async_db] = lambda: session
 
     r = TestClient(app_no_cache).get("/v1/feature-flags/")
     assert r.status_code == 200
@@ -69,9 +83,8 @@ def test_get_individual_flag_cache_miss_then_set_json(app_no_cache):
     app_no_cache.dependency_overrides[get_cache_service] = lambda: cache
 
     flag = _make_flag()
-    session = MagicMock()
-    session.query.return_value.filter.return_value.first.return_value = flag
-    app_no_cache.dependency_overrides[get_db] = lambda: session
+    session = _async_session_for_results([flag])
+    app_no_cache.dependency_overrides[get_async_db] = lambda: session
 
     r = TestClient(app_no_cache).get("/v1/feature-flags/beta")
     assert r.status_code == 200
@@ -86,20 +99,19 @@ def test_get_feature_flags_uses_cache_hit(app_no_cache):
     )
     app_no_cache.dependency_overrides[get_cache_service] = lambda: cache
 
-    session = MagicMock()
-    app_no_cache.dependency_overrides[get_db] = lambda: session
+    session = _async_session_for_results([])
+    app_no_cache.dependency_overrides[get_async_db] = lambda: session
 
     r = TestClient(app_no_cache).get("/v1/feature-flags/")
     assert r.status_code == 200
     assert r.json()["flags"]["x"] is True
-    session.query.assert_not_called()
+    session.execute.assert_not_awaited()
     app_no_cache.dependency_overrides = {}
 
 
 def test_get_individual_flag_not_found(app_no_cache):
-    session = MagicMock()
-    session.query.return_value.filter.return_value.first.return_value = None
-    app_no_cache.dependency_overrides[get_db] = lambda: session
+    session = _async_session_for_results([])
+    app_no_cache.dependency_overrides[get_async_db] = lambda: session
 
     r = TestClient(app_no_cache).get("/v1/feature-flags/missing")
     assert r.status_code == 404
@@ -108,9 +120,8 @@ def test_get_individual_flag_not_found(app_no_cache):
 
 def test_get_individual_flag_found_and_cache_set(app_no_cache):
     flag = _make_flag()
-    session = MagicMock()
-    session.query.return_value.filter.return_value.first.return_value = flag
-    app_no_cache.dependency_overrides[get_db] = lambda: session
+    session = _async_session_for_results([flag])
+    app_no_cache.dependency_overrides[get_async_db] = lambda: session
 
     cache = AsyncMock()
     cache.get_json = AsyncMock(return_value=None)
@@ -125,72 +136,71 @@ def test_get_individual_flag_found_and_cache_set(app_no_cache):
 
 
 def test_create_feature_flag_success(app_no_cache):
-    session = MagicMock()
-    session.query.return_value.filter.return_value.first.return_value = None
-
-    def refresh_side_effect(obj):
-        obj.created_at = datetime(2024, 6, 1, tzinfo=None)
-
-    session.refresh.side_effect = refresh_side_effect
-    app_no_cache.dependency_overrides[get_db] = lambda: session
+    new_flag = _make_flag(name="new_flag", enabled=False)
+    new_flag.created_at = datetime(2024, 6, 1, tzinfo=None)
 
     cache = AsyncMock()
     app_no_cache.dependency_overrides[get_cache_service] = lambda: cache
 
-    r = TestClient(app_no_cache).post(
-        "/v1/feature-flags/",
-        json={"name": "new_flag", "enabled": False, "description": "x"},
-    )
+    with patch(
+        "src.api.routes.v1.feature_flags.FeatureFlagService.create",
+        new=AsyncMock(return_value=new_flag),
+    ):
+        r = TestClient(app_no_cache).post(
+            "/v1/feature-flags/",
+            json={"name": "new_flag", "enabled": False, "description": "x"},
+        )
     assert r.status_code == 201
-    session.add.assert_called_once()
-    session.commit.assert_called_once()
     cache.invalidate.assert_awaited()
     app_no_cache.dependency_overrides = {}
 
 
 def test_create_feature_flag_conflict(app_no_cache):
-    session = MagicMock()
-    session.query.return_value.filter.return_value.first.return_value = _make_flag()
-    app_no_cache.dependency_overrides[get_db] = lambda: session
+    from fastapi import HTTPException
 
-    r = TestClient(app_no_cache).post(
-        "/v1/feature-flags/",
-        json={"name": "beta", "enabled": True},
-    )
+    with patch(
+        "src.api.routes.v1.feature_flags.FeatureFlagService.create",
+        new=AsyncMock(side_effect=HTTPException(status_code=409, detail="already exists")),
+    ):
+        r = TestClient(app_no_cache).post(
+            "/v1/feature-flags/",
+            json={"name": "beta", "enabled": True},
+        )
     assert r.status_code == 409
     app_no_cache.dependency_overrides = {}
 
 
 def test_update_feature_flag_success(app_no_cache):
     flag = _make_flag()
-    session = MagicMock()
-    session.query.return_value.filter.return_value.first.return_value = flag
-    app_no_cache.dependency_overrides[get_db] = lambda: session
+    flag.updated_at = datetime(2024, 1, 3)
 
     cache = AsyncMock()
     app_no_cache.dependency_overrides[get_cache_service] = lambda: cache
 
-    r = TestClient(app_no_cache).put(
-        "/v1/feature-flags/beta",
-        json={"enabled": False, "description": "new desc"},
-    )
+    with patch(
+        "src.api.routes.v1.feature_flags.FeatureFlagService.update",
+        new=AsyncMock(return_value=flag),
+    ):
+        r = TestClient(app_no_cache).put(
+            "/v1/feature-flags/beta",
+            json={"enabled": False, "description": "new desc"},
+        )
     assert r.status_code == 200
-    assert flag.enabled is False
-    assert flag.description == "new desc"
-    session.commit.assert_called_once()
     cache.invalidate.assert_awaited()
     app_no_cache.dependency_overrides = {}
 
 
 def test_update_feature_flag_not_found(app_no_cache):
-    session = MagicMock()
-    session.query.return_value.filter.return_value.first.return_value = None
-    app_no_cache.dependency_overrides[get_db] = lambda: session
+    from fastapi import HTTPException
 
-    r = TestClient(app_no_cache).put(
-        "/v1/feature-flags/ghost",
-        json={"enabled": True},
-    )
+    with patch(
+        "src.api.routes.v1.feature_flags.FeatureFlagService.update",
+        new=AsyncMock(side_effect=HTTPException(status_code=404, detail="not found")),
+    ):
+        r = TestClient(app_no_cache).put(
+            "/v1/feature-flags/ghost",
+            json={"enabled": True},
+        )
     assert r.status_code == 404
     app_no_cache.dependency_overrides = {}
 
@@ -203,7 +213,7 @@ def test_mutations_reject_non_admin(monkeypatch):
     application = FastAPI()
     application.include_router(router)
     application.dependency_overrides[get_cache_service] = lambda: None
-    application.dependency_overrides[get_db] = lambda: MagicMock()
+    application.dependency_overrides[get_async_db] = lambda: _async_session_for_results([])
     application.dependency_overrides[get_current_user_email] = (
         lambda: "stranger@example.com"
     )
@@ -225,19 +235,19 @@ def test_mutations_allow_configured_admin(monkeypatch):
     monkeypatch.setattr(
         auth_dep.settings, "ADMIN_EMAILS", "boss@nutree.ai, admin@x.com"
     )
-    session = MagicMock()
-    session.query.return_value.filter.return_value.first.return_value = None
-    session.refresh.side_effect = lambda obj: setattr(
-        obj, "created_at", datetime(2024, 6, 1)
-    )
+    new_flag = _make_flag(name="n", enabled=True)
+    new_flag.created_at = datetime(2024, 6, 1)
 
     application = FastAPI()
     application.include_router(router)
     application.dependency_overrides[get_cache_service] = lambda: None
-    application.dependency_overrides[get_db] = lambda: session
     application.dependency_overrides[get_current_user_email] = lambda: "Admin@X.com"
 
-    r = TestClient(application).post(
-        "/v1/feature-flags/", json={"name": "n", "enabled": True, "description": "d"}
-    )
+    with patch(
+        "src.api.routes.v1.feature_flags.FeatureFlagService.create",
+        new=AsyncMock(return_value=new_flag),
+    ):
+        r = TestClient(application).post(
+            "/v1/feature-flags/", json={"name": "n", "enabled": True, "description": "d"}
+        )
     assert r.status_code == 201

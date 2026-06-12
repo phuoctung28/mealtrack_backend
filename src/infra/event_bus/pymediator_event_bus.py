@@ -14,6 +14,7 @@ from pymediator import SingletonRegistry
 from src.api.exceptions import MealTrackException
 from src.domain.events.base import DomainEvent, Event, EventHandler
 
+from .background_task_manager import BackgroundTaskManager
 from .event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ class PyMediatorEventBus(EventBus):
     Uses async-native execution without thread pools for proper event loop handling.
     """
 
-    def __init__(self):
+    def __init__(self, task_manager: BackgroundTaskManager | None = None):
         # Use SingletonRegistry to ensure handlers are reused
         registry = SingletonRegistry()
         self._mediator = PyMediator(registry=registry)
@@ -66,6 +67,7 @@ class PyMediatorEventBus(EventBus):
         self._domain_event_subscribers: dict[type[DomainEvent], list[Any]] = {}
         # Store direct handler references for async execution
         self._async_handlers: dict[type[Event], EventHandler] = {}
+        self._task_manager = task_manager or BackgroundTaskManager()
 
     def register_handler(self, event_type: type[Event], handler: EventHandler) -> None:
         """Register a handler for a specific event type."""
@@ -226,9 +228,12 @@ class PyMediatorEventBus(EventBus):
                     f"Background processing completed for {event_type.__name__}"
                 )
 
-            # Schedule the task to run in the background
+            # Schedule the task to run in the background (managed lifecycle)
             logger.debug(f"Scheduling background task for {event_type.__name__}")
-            asyncio.create_task(run_tasks_in_background())
+            self._task_manager.spawn(
+                f"event_bus:{event_type.__name__}",
+                run_tasks_in_background(),
+            )
 
     def close(self):
         """Close event bus resources."""

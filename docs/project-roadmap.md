@@ -9,6 +9,29 @@
 
 ## Completed Phases
 
+### June 2026: Normalized Database Foundation
+- [x] Added normalized profile preferences, hydration entries, saved suggestion items/steps, meal instruction steps, food serving sizes, and food nutrient tables.
+- [x] Added typed payout workflow fields while retaining raw payout details pending a later security/contract pass.
+- [x] Documented notification context as render snapshot only; recipient truth remains in `user_fcm_tokens`.
+- [x] Production migration runner is Alembic-only and no longer creates/stamps schema from `Base.metadata`.
+- [x] Local Postgres upgrade verified to Alembic head `20260609000006`.
+
+### June 2026: Neon Direct Pool + Async Library Alignment
+- [x] Explicit DB connection mode resolver: `direct_pool` uses `AsyncAdaptedQueuePool` against direct Neon URL; `neon_pooler` uses `NullPool` with PgBouncer-safe asyncpg settings.
+- [x] `APP_DATABASE_URL` is the app runtime URL; `DATABASE_URL_DIRECT` is migration/admin only — no silent priority drift.
+- [x] `FoodDataService` converted from `requests` to `httpx.AsyncClient`.
+- [x] Cloudinary blocking SDK calls wrapped with `asyncio.to_thread` off-loop boundary.
+- [x] Static guard blocks uncontained `requests` imports under `src/infra/adapters`.
+- [x] Health endpoint (`/v1/health/db-pool`) reports connection mode, pool type, and capacity.
+- [x] `.env.example`, `docs/database-guide.md`, and `docs/external-services.md` updated to match runtime contract.
+- [x] Completed 2026-06-10.
+
+### June 2026: Async Repository Consolidation
+- [x] Runtime database access consolidated to async SQLAlchemy: FastAPI dependencies, cron jobs, handlers, repositories, and UoW use `AsyncSession`.
+- [x] Deleted sync `UnitOfWork`, sync database config, and legacy sync repositories after replacing remaining test consumers with explicit test-only facades.
+- [x] Architecture guard now expects zero sync DB runtime imports in `src` and no broad sync repository transition allowlist.
+- [x] Default validation: `pytest -q` passes (`1499 passed, 3 skipped`).
+
 ### June 2026: Weekly Budget Resilience
 - [x] Weekly budget meal loading now quarantines malformed legacy `READY` rows without nutrition before domain hydration.
 
@@ -95,7 +118,7 @@
 - [x] CQRS architecture with PyMediator event bus (singleton registry pattern).
 - [x] Chat with streaming AI responses (WebSocket + REST, MessageOrchestrationService, AIResponseCoordinator).
 - [x] Firebase Auth & FCM with platform-specific configs.
-- [x] SQLAlchemy 2.0 with request-scoped sessions (20 connections + 10 overflow).
+- [x] SQLAlchemy 2.0 async runtime with `AsyncUnitOfWork` transaction boundaries.
 - [x] RevenueCat subscription integration.
 - [x] Selective Redis caching policy documented; optional caches degrade, required state must be modeled separately.
 - [x] 11 database tables with Meal aggregate state machine.
@@ -130,6 +153,7 @@
 ## Technical Debt & Maintenance
 
 ### High Priority
+- [ ] Plan contract migration to remove or secure legacy JSON compatibility fields after production observation window.
 - [ ] Fix CORS wide open (allow_origins=["*"]) - security risk in production
 - [ ] Implement API versioning strategy beyond v1
 - [ ] Apply `require_premium` dependency to premium-only features

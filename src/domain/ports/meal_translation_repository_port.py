@@ -3,7 +3,6 @@ Meal translation repository port interface.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from src.domain.model.meal import MealTranslation
 
@@ -12,7 +11,7 @@ class MealTranslationRepositoryPort(ABC):
     """Port interface for meal translation persistence operations."""
 
     @abstractmethod
-    def save(self, translation: MealTranslation) -> MealTranslation:
+    async def save(self, translation: MealTranslation) -> MealTranslation:
         """
         Persist a meal translation.
 
@@ -25,9 +24,9 @@ class MealTranslationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def get_by_meal_and_language(
+    async def get_by_meal_and_language(
         self, meal_id: str, language: str
-    ) -> Optional[MealTranslation]:
+    ) -> MealTranslation | None:
         """
         Get translation for a specific meal and language.
 
@@ -41,7 +40,7 @@ class MealTranslationRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def delete_by_meal(self, meal_id: str) -> int:
+    async def delete_by_meal(self, meal_id: str) -> int:
         """
         Delete all translations for a meal.
 

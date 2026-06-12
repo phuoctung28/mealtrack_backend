@@ -2,7 +2,7 @@
 from sqlalchemy import Column, String, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import PrimaryEntityMixin
 from src.domain.utils.timezone_utils import utc_now
 

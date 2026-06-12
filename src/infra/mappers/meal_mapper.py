@@ -1,8 +1,8 @@
 """Meal cluster ORM <-> domain mapping functions."""
 
 import logging
-from datetime import datetime, timezone
-from typing import Dict, Optional
+from datetime import UTC, datetime
+from uuid import uuid4
 
 from src.domain.model.meal.meal import Meal as DomainMeal
 from src.domain.model.meal.meal_image import MealImage as DomainMealImage
@@ -27,6 +27,7 @@ from src.infra.database.models.meal.food_item_translation_model import (
 )
 from src.infra.database.models.meal.meal import MealORM
 from src.infra.database.models.meal.meal_image import MealImageORM
+from src.infra.database.models.meal.meal_instruction_step import MealInstructionStepORM
 from src.infra.database.models.meal.meal_translation_model import MealTranslationORM
 from src.infra.database.models.nutrition.food_item import FoodItemORM
 from src.infra.database.models.nutrition.nutrition import NutritionORM
@@ -40,13 +41,13 @@ _UNHYDRATABLE_READY_MEAL_ERRORS = {
 }
 
 
-def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
+def _to_naive_utc(dt: datetime | None) -> datetime | None:
     """Convert aware datetime to naive UTC for TIMESTAMP WITHOUT TIME ZONE columns."""
     if dt is None:
         return None
     if dt.tzinfo is None:
         return dt
-    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.astimezone(UTC).replace(tzinfo=None)
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +128,21 @@ def meal_translation_orm_to_domain(orm: MealTranslationORM) -> DomainMealTransla
     )
 
 
+def _instructions_from_rows(orm: MealORM) -> list | None:
+    rows = getattr(orm, "instruction_steps", None)
+    if not rows:
+        return orm.instructions
+    return [
+        {
+            "instruction": row.instruction,
+            "duration_minutes": row.duration_minutes,
+        }
+        for row in rows
+    ]
+
+
 def meal_orm_to_domain(orm: MealORM) -> DomainMeal:
-    translations_dict: Optional[Dict[str, DomainMealTranslation]] = None
+    translations_dict: dict[str, DomainMealTranslation] | None = None
     if orm.translations:
         translations_dict = {
             t.language: meal_translation_orm_to_domain(t) for t in orm.translations
@@ -153,7 +167,7 @@ def meal_orm_to_domain(orm: MealORM) -> DomainMeal:
         translations=translations_dict,
         source=orm.source,
         description=orm.description,
-        instructions=orm.instructions,
+        instructions=_instructions_from_rows(orm),
         prep_time_min=orm.prep_time_min,
         cook_time_min=orm.cook_time_min,
         cuisine_type=orm.cuisine_type,
@@ -264,6 +278,39 @@ def meal_translation_domain_to_orm(domain: DomainMealTranslation) -> MealTransla
     return translation
 
 
+def _instruction_steps_to_orm(
+    instructions: list | None,
+) -> list[MealInstructionStepORM]:
+    rows: list[MealInstructionStepORM] = []
+    if not instructions:
+        return rows
+    for idx, item in enumerate(instructions):
+        if isinstance(item, str):
+            instruction = item.strip()
+            duration = None
+        elif isinstance(item, dict):
+            instruction = str(
+                item.get("instruction")
+                or item.get("text")
+                or item.get("description")
+                or ""
+            ).strip()
+            duration = item.get("duration_minutes")
+        else:
+            continue
+        if not instruction:
+            continue
+        rows.append(
+            MealInstructionStepORM(
+                id=str(uuid4()),
+                instruction=instruction,
+                duration_minutes=int(duration) if duration is not None else None,
+                position=idx,
+            )
+        )
+    return rows
+
+
 def meal_domain_to_orm(domain: DomainMeal) -> MealORM:
     orm = MealORM(
         meal_id=str(domain.meal_id),
@@ -293,6 +340,7 @@ def meal_domain_to_orm(domain: DomainMeal) -> MealORM:
         orm.image_id = str(domain.image.image_id)
     if domain.nutrition:
         orm.nutrition = nutrition_domain_to_orm(domain.nutrition, meal_id=orm.meal_id)
+    orm.instruction_steps = _instruction_steps_to_orm(domain.instructions)
     return orm
 
 

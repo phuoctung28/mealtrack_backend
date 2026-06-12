@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import Column, DateTime, Integer, Text, func
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 
 
 class PendingMealImageResolutionModel(Base):

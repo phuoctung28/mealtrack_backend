@@ -4,7 +4,7 @@ import asyncio
 import logging
 import uuid
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import text
@@ -17,7 +17,7 @@ from src.domain.services.tdee_service import TdeeCalculationService
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.notification.notification import NotificationORM
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.uow_async import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -54,14 +54,14 @@ class DailyContextPrecomputeService:
     # Public async entry point
     # ------------------------------------------------------------------
 
-    def _check_db_sentinel(self, tz_name: str, today: date) -> bool:
+    async def _check_db_sentinel(self, tz_name: str, today: date) -> bool:
         """Check DB for existing notifications for this timezone+date.
 
         Used as a fallback when the in-memory sentinel is empty (e.g. fresh
         cron process). One fast query prevents re-running precompute every run.
         """
-        with UnitOfWork() as uow:
-            row = uow.session.execute(
+        async with AsyncUnitOfWork() as uow:
+            result = await uow.session.execute(
                 text("""
                     SELECT 1 FROM notifications n
                     JOIN users u ON u.id = n.user_id
@@ -70,14 +70,15 @@ class DailyContextPrecomputeService:
                     LIMIT 1
                 """),
                 {"tz_name": tz_name, "today": today},
-            ).fetchone()
+            )
+            row = result.fetchone()
         return row is not None
 
     async def is_precomputed(self, today: date, tz_name: str) -> bool:
         if (today.isoformat(), tz_name) in _precomputed_today:
             return True
         # DB fallback: repopulate in-memory sentinel for fresh cron processes.
-        already = await asyncio.to_thread(self._check_db_sentinel, tz_name, today)
+        already = await self._check_db_sentinel(tz_name, today)
         if already:
             _precomputed_today.add((today.isoformat(), tz_name))
         return already
@@ -103,14 +104,10 @@ class DailyContextPrecomputeService:
             logger.debug(
                 "Pre-computing notification context for %s on %s", tz_name, today
             )
-            count = await asyncio.to_thread(
-                self._precompute_db_sync, tz_name, today
-            )
+            count = await self._precompute_db(tz_name, today)
             if count > 0:
                 _precomputed_today.add((today.isoformat(), tz_name))
-            logger.debug(
-                "Pre-compute complete for %s: %d users", tz_name, count
-            )
+            logger.debug("Pre-compute complete for %s: %d users", tz_name, count)
 
     async def reschedule_user_notifications(self, user_id: str) -> int:
         """Reschedule notifications for a single user after preferences update.
@@ -124,22 +121,23 @@ class DailyContextPrecomputeService:
             self._locks[lock_key] = asyncio.Lock()
 
         async with self._locks[lock_key]:
-            return await asyncio.to_thread(self._reschedule_user_sync, user_id)
+            return await self._reschedule_user(user_id)
 
-    def _reschedule_user_sync(self, user_id: str) -> int:
-        """Sync implementation of user notification rescheduling."""
-        with UnitOfWork() as uow:
+    async def _reschedule_user(self, user_id: str) -> int:
+        """Reschedule user notifications using the async cron DB boundary."""
+        async with AsyncUnitOfWork() as uow:
             session = uow.session
 
             # Get user's timezone
-            user_row = session.execute(
+            user_result = await session.execute(
                 text("""
                     SELECT timezone
                     FROM users
                     WHERE id = :user_id AND is_active = true
                     """),
                 {"user_id": user_id},
-            ).fetchone()
+            )
+            user_row = user_result.fetchone()
 
             if not user_row or not user_row.timezone:
                 logger.warning("Cannot reschedule: user %s has no timezone", user_id)
@@ -158,7 +156,7 @@ class DailyContextPrecomputeService:
 
             # Delete only future pending notifications. Due rows may already be
             # claimed by the scheduler and must not be recreated for the same day.
-            session.execute(
+            await session.execute(
                 text("""
                     DELETE FROM notifications
                     WHERE user_id = :user_id
@@ -170,7 +168,7 @@ class DailyContextPrecomputeService:
             )
 
             # Get user's notification preferences
-            pref_row = session.execute(
+            pref_result = await session.execute(
                 text("""
                     SELECT meal_reminders_enabled, daily_summary_enabled,
                            hydration_reminders_enabled,
@@ -180,20 +178,22 @@ class DailyContextPrecomputeService:
                     WHERE user_id = :user_id AND is_deleted = false
                 """),
                 {"user_id": user_id},
-            ).fetchone()
+            )
+            pref_row = pref_result.fetchone()
 
             if not pref_row:
                 logger.info("No notification preferences for user %s", user_id)
                 return 0
 
             # Get active FCM tokens
-            token_rows = session.execute(
+            token_result = await session.execute(
                 text("""
                     SELECT fcm_token FROM user_fcm_tokens
                     WHERE user_id = :user_id AND is_active = true
                 """),
                 {"user_id": user_id},
-            ).fetchall()
+            )
+            token_rows = token_result.fetchall()
 
             tokens = [row.fcm_token for row in token_rows]
             if not tokens:
@@ -201,7 +201,7 @@ class DailyContextPrecomputeService:
                 return 0
 
             # Get profile for gender and calorie goal
-            profile_row = session.execute(
+            profile_result = await session.execute(
                 text("""
                     SELECT up.age, up.gender, up.height_cm, up.weight_kg,
                            up.body_fat_percentage, up.job_type,
@@ -214,7 +214,8 @@ class DailyContextPrecomputeService:
                     WHERE up.user_id = :user_id AND up.is_current = true
                 """),
                 {"user_id": user_id},
-            ).fetchone()
+            )
+            profile_row = profile_result.fetchone()
 
             gender = (profile_row.gender if profile_row else None) or "male"
             language_code = _resolve_notification_language(
@@ -223,17 +224,17 @@ class DailyContextPrecomputeService:
             )
 
             # Calculate calorie goal (simplified - use TDEE service for accuracy)
-            calorie_goal = self._get_user_calorie_goal(
+            calorie_goal = await self._get_user_calorie_goal(
                 uow, user_id, today, profile_row, tz_name
             )
 
             # Get today's consumed calories
             day_start_utc = datetime(
                 today.year, today.month, today.day, 0, 0, 0, tzinfo=tz
-            ).astimezone(timezone.utc)
+            ).astimezone(UTC)
             day_end_utc = day_start_utc + timedelta(days=1)
 
-            consumed_row = session.execute(
+            consumed_result = await session.execute(
                 text("""
                     SELECT COALESCE(SUM(
                         (n.protein * 4.0)
@@ -252,7 +253,8 @@ class DailyContextPrecomputeService:
                     "start": day_start_utc.replace(tzinfo=None),
                     "end": day_end_utc.replace(tzinfo=None),
                 },
-            ).fetchone()
+            )
+            consumed_row = consumed_result.fetchone()
 
             calories_consumed = int(round(consumed_row.total)) if consumed_row else 0
 
@@ -266,7 +268,7 @@ class DailyContextPrecomputeService:
             }
 
             expires_at = datetime(
-                today.year, today.month, today.day, tzinfo=timezone.utc
+                today.year, today.month, today.day, tzinfo=UTC
             ) + timedelta(days=_NOTIF_EXPIRY_DAYS)
             rows = []
 
@@ -298,6 +300,7 @@ class DailyContextPrecomputeService:
                                 "scheduled_for_utc": scheduled_utc,
                                 "status": "pending",
                                 "context": context,
+                                "context_schema_version": 1,
                                 "created_at": now,
                                 "expires_at": expires_at,
                             }
@@ -318,6 +321,7 @@ class DailyContextPrecomputeService:
                             "scheduled_for_utc": scheduled_utc,
                             "status": "pending",
                             "context": context,
+                            "context_schema_version": 1,
                             "created_at": now,
                             "expires_at": expires_at,
                         }
@@ -344,6 +348,7 @@ class DailyContextPrecomputeService:
                                 "scheduled_for_utc": scheduled_utc,
                                 "status": "pending",
                                 "context": hydration_context,
+                                "context_schema_version": 1,
                                 "created_at": now,
                                 "expires_at": expires_at,
                             }
@@ -357,15 +362,17 @@ class DailyContextPrecomputeService:
                     set_={
                         "scheduled_for_utc": stmt.excluded.scheduled_for_utc,
                         "context": stmt.excluded.context,
+                        "context_schema_version": stmt.excluded.context_schema_version,
                         "status": "pending",
                     },
                 )
-                session.execute(stmt)
+                await session.execute(stmt)
+                await session.flush()
 
             logger.info("Rescheduled %d notifications for user %s", len(rows), user_id)
             return len(rows)
 
-    def _get_user_calorie_goal(
+    async def _get_user_calorie_goal(
         self,
         uow,
         user_id: str,
@@ -375,7 +382,7 @@ class DailyContextPrecomputeService:
     ) -> int:
         """Get today's adjusted calorie goal from weekly budget, then TDEE fallback."""
         if profile_row is None:
-            profile_row = uow.session.execute(
+            profile_result = await uow.session.execute(
                 text("""
                     SELECT age, gender, height_cm, weight_kg, body_fat_percentage,
                            job_type, training_days_per_week,
@@ -385,7 +392,8 @@ class DailyContextPrecomputeService:
                     WHERE user_id = :user_id AND is_current = true
                 """),
                 {"user_id": user_id},
-            ).fetchone()
+            )
+            profile_row = profile_result.fetchone()
 
         if not profile_row:
             return 2000  # Default fallback
@@ -394,13 +402,13 @@ class DailyContextPrecomputeService:
             tdee_request = build_tdee_request(profile_row)
             result = self._tdee_service.calculate_tdee(tdee_request)
             week_start = target_date - timedelta(days=target_date.weekday())
-            weekly_budget = uow.weekly_budgets.find_by_user_and_week(
+            weekly_budget = await uow.weekly_budgets.find_by_user_and_week(
                 user_id, week_start
             )
             if not weekly_budget:
                 return int(round(result.macros.calories))
 
-            effective = WeeklyBudgetService.get_effective_adjusted_daily(
+            effective = await WeeklyBudgetService.get_effective_adjusted_daily_async(
                 uow=uow,
                 user_id=user_id,
                 week_start=week_start,
@@ -418,20 +426,20 @@ class DailyContextPrecomputeService:
             return 2000
 
     # ------------------------------------------------------------------
-    # Synchronous DB work (runs in thread pool via asyncio.to_thread)
+    # Async DB work
     # ------------------------------------------------------------------
 
-    def _precompute_db_sync(self, tz_name: str, today: date) -> int:
+    async def _precompute_db(self, tz_name: str, today: date) -> int:
         """
         All DB work: 5 SQL queries + 1 bulk INSERT.
         Returns count of users processed.
         Only processes users with at least one active FCM token.
         """
-        with UnitOfWork() as uow:
+        async with AsyncUnitOfWork() as uow:
             session = uow.session
 
             # ---- Query 1: users in this timezone with notification prefs ----
-            pref_rows = session.execute(
+            pref_result = await session.execute(
                 text("""
                     SELECT
                         np.user_id,
@@ -454,7 +462,8 @@ class DailyContextPrecomputeService:
                       )
                 """),
                 {"tz_name": tz_name},
-            ).fetchall()
+            )
+            pref_rows = pref_result.fetchall()
 
             if not pref_rows:
                 return 0
@@ -462,7 +471,7 @@ class DailyContextPrecomputeService:
             user_ids = [row.user_id for row in pref_rows]
 
             # ---- Query 2: active FCM tokens for all users ----
-            token_rows = session.execute(
+            token_result = await session.execute(
                 text("""
                     SELECT user_id, fcm_token
                     FROM user_fcm_tokens
@@ -470,14 +479,15 @@ class DailyContextPrecomputeService:
                       AND is_active = true
                 """),
                 {"ids": user_ids},
-            ).fetchall()
+            )
+            token_rows = token_result.fetchall()
 
             tokens_by_user: dict[str, list[str]] = defaultdict(list)
             for row in token_rows:
                 tokens_by_user[row.user_id].append(row.fcm_token)
 
             # ---- Query 3: current user profiles ----
-            profile_rows = session.execute(
+            profile_result = await session.execute(
                 text("""
                     SELECT
                         up.user_id,
@@ -498,7 +508,8 @@ class DailyContextPrecomputeService:
                       AND up.is_current = true
                 """),
                 {"ids": user_ids},
-            ).fetchall()
+            )
+            profile_rows = profile_result.fetchall()
 
             profiles_by_user = {row.user_id: row for row in profile_rows}
 
@@ -511,11 +522,11 @@ class DailyContextPrecomputeService:
 
             day_start_utc = datetime(
                 today.year, today.month, today.day, 0, 0, 0, tzinfo=tz
-            ).astimezone(timezone.utc)
+            ).astimezone(UTC)
             day_end_utc = day_start_utc + timedelta(days=1)
 
             # Canonical formula: P*4 + (C-fiber)*4 + fiber*2 + F*9.
-            consumed_rows = session.execute(
+            consumed_result = await session.execute(
                 text("""
                     SELECT
                         m.user_id,
@@ -541,7 +552,8 @@ class DailyContextPrecomputeService:
                     "start": day_start_utc.replace(tzinfo=None),
                     "end": day_end_utc.replace(tzinfo=None),
                 },
-            ).fetchall()
+            )
+            consumed_rows = consumed_result.fetchall()
 
             consumed_by_user: dict[str, float] = {
                 row.user_id: float(row.consumed_calories) for row in consumed_rows
@@ -555,7 +567,7 @@ class DailyContextPrecomputeService:
                     calorie_goals[user_id] = 2000
                     continue
                 try:
-                    calorie_goals[user_id] = self._get_user_calorie_goal(
+                    calorie_goals[user_id] = await self._get_user_calorie_goal(
                         uow, user_id, today, profile, tz_name
                     )
                 except Exception as exc:
@@ -583,7 +595,8 @@ class DailyContextPrecomputeService:
                 stmt = stmt.on_conflict_do_nothing(
                     index_elements=["user_id", "notification_type", "scheduled_date"],
                 )
-                session.execute(stmt)
+                await session.execute(stmt)
+                await session.flush()
 
             return len(pref_rows)
 
@@ -604,7 +617,7 @@ class DailyContextPrecomputeService:
         """Build list of dicts for bulk INSERT into notifications table."""
         now = utc_now()
         expires_at = datetime(
-            today.year, today.month, today.day, tzinfo=timezone.utc
+            today.year, today.month, today.day, tzinfo=UTC
         ) + timedelta(days=_NOTIF_EXPIRY_DAYS)
 
         rows = []
@@ -657,6 +670,7 @@ class DailyContextPrecomputeService:
                             "scheduled_for_utc": scheduled_utc,
                             "status": "pending",
                             "context": context,
+                            "context_schema_version": 1,
                             "created_at": now,
                             "expires_at": expires_at,
                         }
@@ -677,6 +691,7 @@ class DailyContextPrecomputeService:
                             "scheduled_for_utc": scheduled_utc,
                             "status": "pending",
                             "context": context,
+                            "context_schema_version": 1,
                             "created_at": now,
                             "expires_at": expires_at,
                         }
@@ -704,6 +719,7 @@ class DailyContextPrecomputeService:
                             "scheduled_for_utc": scheduled_utc,
                             "status": "pending",
                             "context": hydration_context,
+                            "context_schema_version": 1,
                             "created_at": now,
                             "expires_at": expires_at,
                         }
@@ -725,7 +741,7 @@ def _local_minutes_to_utc(local_date: date, local_minutes: int, tz_name: str):
             0,
             tzinfo=tz,
         )
-        return local_dt.astimezone(timezone.utc)
+        return local_dt.astimezone(UTC)
     except (ZoneInfoNotFoundError, ValueError) as exc:
         logger.warning(
             "Cannot compute UTC for tz=%s minutes=%d: %s", tz_name, local_minutes, exc

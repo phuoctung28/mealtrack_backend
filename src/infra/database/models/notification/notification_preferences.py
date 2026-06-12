@@ -2,9 +2,9 @@
 Notification preferences model for user notification settings.
 """
 
-from sqlalchemy import Column, String, Boolean, Integer, CheckConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, ForeignKey, Integer, String
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 from src.infra.database.models.base import BaseMixin
 
 
@@ -14,12 +14,20 @@ class NotificationPreferencesORM(Base, BaseMixin):
     __tablename__ = "notification_preferences"
 
     # User relationship (one-to-one)
-    user_id = Column(String(36), nullable=False, unique=True, index=True)
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
 
     # Notification Type Toggles
     meal_reminders_enabled = Column(Boolean, default=True, nullable=False)
     daily_summary_enabled = Column(Boolean, default=True, nullable=False)
-    hydration_reminders_enabled = Column(Boolean, default=True, nullable=False, server_default="true")
+    hydration_reminders_enabled = Column(
+        Boolean, default=True, nullable=False, server_default="true"
+    )
 
     # Meal Reminder Timing (minutes from midnight: 0-1439)
     breakfast_time_minutes = Column(Integer, nullable=True)

@@ -63,7 +63,7 @@ omit = [
     "src/infra/database/models/**",
     # Database infrastructure
     "src/infra/database/migration_manager.py",
-    "src/infra/database/uow.py",
+    "src/infra/database/uow_async.py",
     # External service integrations
     "src/infra/services/cron_lifecycle_email_service.py",
     "src/infra/services/cron_notification_dispatch_service.py",

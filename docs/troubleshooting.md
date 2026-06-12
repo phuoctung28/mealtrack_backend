@@ -164,3 +164,26 @@ import pdb; pdb.set_trace()
 ---
 
 See related: `code-standards.md`, `testing-standards.md`, `system-architecture.md`
+
+---
+
+## Database Connection Issues
+
+### asyncpg prepared statement error in pooler mode
+**Symptom:** `asyncpg.exceptions.InvalidSQLStatementNameError: prepared statement ... does not exist`  
+**Cause:** Using a Neon `-pooler` URL without `DB_CONNECTION_MODE=neon_pooler`. PgBouncer transaction mode invalidates prepared statements between connections.  
+**Fix:** Set `DB_CONNECTION_MODE=neon_pooler` and ensure `APP_DATABASE_URL` points to a `-pooler` endpoint.
+
+### direct_pool startup error: pooler URL rejected
+**Symptom:** `ConnectionPolicyError: DB_CONNECTION_MODE=direct_pool requires a direct (non-pooler) Neon URL`  
+**Cause:** `APP_DATABASE_URL` contains `-pooler` in the hostname but mode is `direct_pool`.  
+**Fix:** Either change `APP_DATABASE_URL` to a direct endpoint, or set `DB_CONNECTION_MODE=neon_pooler`.
+
+### DB connection exhaustion (direct_pool)
+**Symptom:** Connection timeouts, Neon `max_connections` limit hit.  
+**Fix:** Reduce pool size: lower `ASYNC_POOL_SIZE_PER_WORKER` or `UVICORN_WORKERS`. Monitor `/v1/health/db-pool` for utilization. Consider switching to `neon_pooler` mode.
+
+### Migration fails but app works (or vice versa)
+**Symptom:** `alembic upgrade head` fails / succeeds independently of the app.  
+**Cause:** `DATABASE_URL_DIRECT` (migration URL) and `APP_DATABASE_URL` (app URL) can differ.  
+**Fix:** Ensure `DATABASE_URL_DIRECT` points to the direct Neon endpoint for migrations.

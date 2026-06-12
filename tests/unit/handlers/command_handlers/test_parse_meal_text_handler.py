@@ -12,7 +12,7 @@ class _FakeMealGenerationService:
     def __init__(self):
         self.call_kwargs = None
 
-    def generate_meal_plan(self, **kwargs):
+    async def generate_meal_plan_async(self, **kwargs):
         self.call_kwargs = kwargs
         return {
             "items": [

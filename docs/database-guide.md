@@ -1,23 +1,82 @@
 # Backend Database Guide
 
-**Last Updated:** May 15, 2026
-**Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 (psycopg2 sync / asyncpg async)
+**Last Updated:** June 10, 2026
+**Engine:** PostgreSQL (Neon) + SQLAlchemy 2.0 async runtime (asyncpg)
 **Migrations:** Alembic with auto-migration on startup
-**Tables:** 15+ (core tables + notification_sent_log + food_reference + referral tables)
+**Tables:** 30+ (core tables + normalized profile/hydration/recipe/food/referral tables)
+
+---
+
+## Standards Gate
+
+Before creating or changing tables, read and follow
+[`docs/standards/db-api.md`](./standards/db-api.md).
+
+Non-negotiable database rules:
+
+- OLTP source-of-truth tables follow 3NF unless a documented exception exists.
+- User-owned tables use `ForeignKey("users.id")` unless retention/legal rules require otherwise.
+- JSON must not be the permanent owner of business entities, user preferences, workflow state, or queryable product data.
+- Schema migrations use expand-migrate-contract for existing data: add normalized structure, backfill, dual-write/read fallback, cut over, then remove legacy columns later.
+- New ORM models must be imported by the central model registry so Alembic sees them.
+
+---
+
+## DB Connection Policy
+
+The app supports two runtime modes controlled by `DB_CONNECTION_MODE`:
+
+| Mode | Pool class | When to use |
+|------|-----------|-------------|
+| `direct_pool` | `AsyncAdaptedQueuePool` | Default. Use with a direct Neon endpoint (`ep-xxx.region.aws.neon.tech`). App owns the connection pool. |
+| `neon_pooler` | `NullPool` | Use with a Neon `-pooler` endpoint. PgBouncer (transaction mode) manages connections. Prepared statement caching is disabled automatically. |
+
+### URL priority
+
+App runtime URL resolution (highest to lowest priority):
+1. `APP_DATABASE_URL` — the preferred variable for production
+2. `DATABASE_URL` — backward-compat fallback (legacy deploys)
+3. Component vars (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`) — local dev only
+
+`DATABASE_URL_DIRECT` is **not** used for app runtime. It is reserved for Alembic migration tooling only.
+
+### Pool capacity formula (direct_pool)
+
+```
+total_connections = UVICORN_WORKERS × ASYNC_POOL_SIZE_PER_WORKER + ASYNC_POOL_MAX_OVERFLOW
+```
+
+Keep this value below your Neon project's `max_connections` limit. Monitor via `GET /v1/health/db-pool`.
+
+### Pooler mode notes
+
+- Use only when direct connections would exhaust `max_connections` at scale.
+- Set `APP_DATABASE_URL` to the `-pooler` endpoint and `DB_CONNECTION_MODE=neon_pooler`.
+- PgBouncer runs in transaction mode — prepared statements are disabled automatically.
+- `ASYNC_POOL_SIZE_PER_WORKER` and related settings are ignored in pooler mode.
 
 ---
 
 ## Connection Configuration
 
 ```python
-# src/infra/database/config.py
-DATABASE_URL = "postgresql+psycopg2://user:pass@host/db"
+# src/infra/database/config_async.py
+DATABASE_URL = "postgresql+asyncpg://user:pass@host/db"
 
-pool_size = 20       # Base connections
-max_overflow = 10    # Additional under load
-pool_recycle = 3600  # Recycle hourly
-pool_pre_ping = True # Verify before use
+async_engine = create_async_engine(
+    DATABASE_URL,
+    pool_size=20,       # Base connections
+    max_overflow=10,    # Additional under load
+    pool_recycle=3600,  # Recycle hourly
+    pool_pre_ping=True, # Verify before use
+)
+
+AsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
 ```
+
+Runtime code uses `get_async_db` and `AsyncUnitOfWork` for request and handler
+transaction boundaries. Alembic uses its migration-specific engine utilities
+instead of the request/runtime session factory.
 
 ---
 
@@ -27,20 +86,31 @@ pool_pre_ping = True # Verify before use
 |-------|---------|-----------|
 | **users** | Auth & identity | id, firebase_uid, email, language_code, is_active |
 | **user_profiles** | Health metrics | user_id, age, gender, height, weight, body_fat_percentage, date_of_birth |
+| **user_profile_preferences** | Normalized profile arrays | profile_id, preference_type, value, position |
 | **subscriptions** | RevenueCat cache | user_id, product_id, platform, status, expires_at |
-| **meal** | Meal records | id, user_id, status (state machine), dish_name, ready_at |
-| **meal_image** | Cloudinary refs | meal_id, url, format, size, width, height |
-| **nutrition** | Macros | meal_id, calories, protein, carbs, fat, fiber, sugar, confidence_score |
-| **food_item** | Ingredients | meal_id, name, quantity, unit, fdc_id, is_custom, fiber, sugar |
+| **meal** | Meal records | meal_id, user_id, status (state machine), dish_name, ready_at |
+| **mealimage** | Cloudinary refs | image_id, url, format, size_bytes, width, height |
+| **nutrition** | Meal macro facts | meal_id, protein, carbs, fat, fiber, sugar, confidence_score |
+| **food_item** | Ingredients | nutrition_id, name, quantity, unit, fdc_id, food_reference_id, is_custom, fiber, sugar |
 | **food_reference** | Barcode/food data | barcode, name, name_normalized, nutrition data |
-| **meal_plan** | Weekly plans | user_id, start_date, end_date, user_preferences |
-| **meal_plan_day** | Daily breakdown | meal_plan_id, day_index |
-| **planned_meal** | Individual meals | day_plan_id, meal_type, dish_name, nutrition |
-| **user_fcm_tokens** | Push tokens | user_id, token, platform (ios/android), device_id |
-| **notification_preferences** | FCM settings | user_id, enabled, timing, interval |
-| **chat_threads** | Conversations | id, user_id, title, status, created_at |
-| **chat_messages** | Messages | thread_id, user_id, role (user/assistant), content, created_at |
-| **notification_sent_log** | FCM dedup | user_id, notification_type, sent_minute, created_at |
+| **food_reference_serving_sizes** | Normalized serving conversions | food_reference_id, name, grams, milliliters, is_default, position |
+| **food_reference_nutrients** | Normalized extended nutrients | food_reference_id, nutrient_key, amount, unit |
+| **hydration_entries** | Normalized hydration logs | user_id, drink_id, volume_ml, credited_ml, macro facts, logged_at, legacy_meal_id |
+| **meal_instruction_steps** | Normalized recipe steps | meal_id, instruction, duration_minutes, position |
+| **user_fcm_tokens** | Push tokens | user_id, fcm_token, device_type, is_active |
+| **notification_preferences** | FCM settings | user_id, reminder flags, timing, language, is_deleted |
+| **notifications** | Prebuilt notification queue | user_id, notification_type, scheduled_date, scheduled_for_utc, context snapshot |
+| **saved_suggestions** | Saved meal suggestion headers | user_id, suggestion_id, meal_type, suggestion_data compatibility snapshot |
+| **saved_suggestion_items** | Saved suggestion ingredients | saved_suggestion_id, name, quantity, unit, macro facts, position |
+| **saved_suggestion_steps** | Saved suggestion recipe steps | saved_suggestion_id, instruction, duration_minutes, position |
+| **weekly_macro_budgets** | Weekly target/consumed facts | user_id, week_start_date, target macros, consumed macros |
+| **cheat_days** | User cheat day markers | user_id, date, marked_at |
+| **weight_entries** | Weight history | user_id, weight_kg, recorded_at |
+| **movement_entries** | Movement logs | user_id, activity_name, duration_min, kcal_burned, logged_at |
+| **referral_codes** | Referral code ownership | user_id, code, created_at |
+| **referral_conversions** | Referral conversion audit | referrer_user_id, referred_user_id, status, commission fields |
+| **referral_wallets** | Referral wallet totals | user_id, balance, total_earned, total_withdrawn |
+| **payout_requests** | Referral payout workflow | user_id, amount, payment_method, typed masked destination, payment_details snapshot, status |
 
 ---
 
@@ -61,11 +131,13 @@ All mixins add `created_at` and `updated_at` timestamps.
 ## Relationships
 
 ```
-User (1:N) UserProfile, Subscription, Meal, NotificationPreferences, UserFcmToken
+User (1:N) UserProfile, Subscription, Meal, NotificationPreferences, UserFcmToken, HydrationEntry
+UserProfile (1:N) UserProfilePreference
 Meal (1:1) MealImage, Nutrition
+Meal (1:N) MealInstructionStep
 Nutrition (1:N) FoodItem
-MealPlan (1:N) MealPlanDay (1:N) PlannedMeal
-ChatThread (1:N) ChatMessage
+SavedSuggestion (1:N) SavedSuggestionItem, SavedSuggestionStep
+FoodReference (1:N) FoodReferenceServingSize, FoodReferenceNutrient
 ```
 
 ---
@@ -96,6 +168,12 @@ Auto-migrate runs on startup with retry logic. Use timestamp naming for new migr
 
 | Version | Changes |
 |---------|---------|
+| 20260609000006 | Add normalized read-path indexes for active FCM tokens, notification reschedule/delete, and stale processing reclaim |
+| 20260609000005 | Add normalized food serving/nutrient tables, payout typed workflow fields, notification context schema version |
+| 20260609000004 | Add normalized saved suggestion ingredients/steps and meal recipe instruction steps |
+| 20260609000003 | Add normalized hydration_entries and backfill from legacy hydration meals |
+| 20260609000002 | Add normalized user_profile_preferences and backfill profile JSON arrays |
+| 20260609000001 | Add/align user ownership FKs for private user-owned tables |
 | 047 | Add notification_sent_log for FCM deduplication |
 | 046 | Add name_normalized to food_reference |
 | 045 | Add challenge_duration, training_types (onboarding) |
@@ -105,15 +183,21 @@ Auto-migrate runs on startup with retry logic. Use timestamp naming for new migr
 | 035 | Evolve barcode_products → food_reference |
 | 034 | Add fiber, sugar to food_item and nutrition |
 
+**Temporary compatibility fields:** `user_profiles` keeps legacy JSON array columns during read fallback, `saved_suggestions.suggestion_data` remains a raw compatibility snapshot, `meal.instructions` remains a recipe-step compatibility snapshot, `food_reference.serving_sizes` and `food_reference.extra_nutrients` remain legacy response snapshots, `payout_requests.payment_details` remains raw sensitive payout detail pending a security/contract pass, and legacy hydration meal rows remain readable during rollout. `notifications.context` is an immutable render snapshot only; recipient truth lives in `user_fcm_tokens`. Do not add new source-of-truth JSON fields without a documented exception in `docs/standards/db-api.md`.
+
+**Production migration rule:** production schema creation is Alembic-only. `migrations/run.py` upgrades empty databases from base to head and refuses to stamp an existing unversioned schema automatically.
+
 ---
 
 ## Repository Pattern
 
-**Smart Sync:** Update existing or insert new record, with diff-based updates for nested entities.
+**Smart Async:** Update existing or insert new record, with diff-based updates for nested entities.
 
 **Eager Loading:** Pre-defined `joinedload` options per repository — avoids N+1 queries consistently.
 
-**Session Scope:** Request-scoped sessions via FastAPI dependency injection. One session per request, never shared across requests.
+**Session Scope:** Async sessions are scoped to FastAPI dependencies, background
+handler UoW scopes, or explicit test fixtures. A session is never shared across
+concurrent requests.
 
 ---
 
@@ -126,4 +210,4 @@ Auto-migrate runs on startup with retry logic. Use timestamp naming for new migr
 
 ---
 
-See related: `system-architecture.md`, `external-services.md`, `code-standards.md`
+See related: `system-architecture.md`, `external-services.md`, `code-standards.md`, `standards/db-api.md`

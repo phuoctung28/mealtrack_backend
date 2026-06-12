@@ -1,19 +1,22 @@
 """Notification job queue model — replaces notification_sent_log."""
 
 import uuid
+
 from sqlalchemy import (
-    Column,
-    ForeignKey,
     JSON,
-    String,
+    Column,
     Date,
     DateTime,
-    UniqueConstraint,
+    ForeignKey,
     Index,
+    Integer,
+    String,
+    UniqueConstraint,
     text,
 )
-from src.infra.database.config import Base
+
 from src.domain.utils.timezone_utils import utc_now
+from src.infra.database.base import Base
 
 
 class NotificationORM(Base):
@@ -22,7 +25,8 @@ class NotificationORM(Base):
 
     Each row represents one scheduled send (user × type × date).
     UNIQUE constraint on (user_id, notification_type, scheduled_date) provides dedup.
-    context JSONB: {fcm_tokens: [...], calorie_goal: int, gender: str, language_code: str}
+    context JSON is an immutable render snapshot. Recipient truth must come from
+    normalized user_fcm_tokens at dispatch time, not from this context payload.
     """
 
     __tablename__ = "notifications"
@@ -36,6 +40,7 @@ class NotificationORM(Base):
     scheduled_for_utc = Column(DateTime(timezone=True), nullable=False)
     status = Column(String(10), nullable=False, default="pending")
     context = Column(JSON, nullable=False)
+    context_schema_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     expires_at = Column(DateTime(timezone=True), nullable=False)
 
@@ -56,5 +61,16 @@ class NotificationORM(Base):
             "idx_notifications_expires",
             "expires_at",
             postgresql_where=text("status != 'pending'"),
+        ),
+        Index(
+            "idx_notifications_user_status_date",
+            "user_id",
+            "status",
+            "scheduled_date",
+        ),
+        Index(
+            "idx_notifications_processing_reclaim",
+            "scheduled_for_utc",
+            postgresql_where=text("status = 'processing'"),
         ),
     )

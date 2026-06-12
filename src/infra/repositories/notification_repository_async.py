@@ -1,25 +1,18 @@
-"""Async notification repository.
-
-Only implements request-path methods (FCM token + preferences CRUD).
-Background-task methods (find_users_for_meal_reminder,
-find_users_for_daily_summary) remain on the sync NotificationRepository
-and will be migrated in Phase 3b.
-"""
+"""Async notification repository."""
 
 import logging
 from datetime import date
-from typing import List, Optional
 
-from sqlalchemy import select, and_, delete, update
+from sqlalchemy import and_, delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.model.notification import UserFcmToken, NotificationPreferences
+from src.domain.model.notification import NotificationPreferences, UserFcmToken
 from src.infra.database.models.notification.notification import NotificationORM
-from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM
 from src.infra.database.models.notification.notification_preferences import (
     NotificationPreferencesORM,
 )
+from src.infra.database.models.notification.user_fcm_token import UserFcmTokenORM
 from src.infra.mappers.notification_mapper import (
     fcm_token_orm_to_domain,
     notification_prefs_orm_to_domain,
@@ -70,7 +63,7 @@ class AsyncNotificationRepository:
         db_token = result.scalar_one()
         return fcm_token_orm_to_domain(db_token)
 
-    async def find_fcm_token_by_token(self, fcm_token: str) -> Optional[UserFcmToken]:
+    async def find_fcm_token_by_token(self, fcm_token: str) -> UserFcmToken | None:
         """Find an FCM token by the token string."""
         result = await self.session.execute(
             select(UserFcmTokenORM).where(UserFcmTokenORM.fcm_token == fcm_token)
@@ -78,7 +71,7 @@ class AsyncNotificationRepository:
         db_token = result.scalars().first()
         return fcm_token_orm_to_domain(db_token) if db_token else None
 
-    async def find_active_fcm_tokens_by_user(self, user_id: str) -> List[UserFcmToken]:
+    async def find_active_fcm_tokens_by_user(self, user_id: str) -> list[UserFcmToken]:
         """Find all active FCM tokens for a user."""
         result = await self.session.execute(
             select(UserFcmTokenORM).where(
@@ -160,7 +153,7 @@ class AsyncNotificationRepository:
 
     async def find_notification_preferences_by_user(
         self, user_id: str
-    ) -> Optional[NotificationPreferences]:
+    ) -> NotificationPreferences | None:
         """Find notification preferences by user ID."""
         result = await self.session.execute(
             select(NotificationPreferencesORM).where(

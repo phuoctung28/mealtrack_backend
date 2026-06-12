@@ -9,6 +9,7 @@ from src.app.commands.ingredient import RecognizeIngredientCommand
 # Import all commands
 from src.app.commands.meal import (
     AnalyzeMealImageByUrlCommand,
+    ScanByUrlCommand,
     UploadMealImageImmediatelyCommand,
     EditMealCommand,
     AddCustomIngredientCommand,
@@ -54,6 +55,7 @@ from src.app.handlers.command_handlers import (
     CreateManualMealCommandHandler,
     UpdateUserMetricsCommandHandler,
     AnalyzeMealImageByUrlHandler,
+    ScanByUrlCommandHandler,
     UpdateCustomMacrosCommandHandler,
     UploadMealImageImmediatelyHandler,
     DiscoverMealsCommandHandler,
@@ -205,7 +207,6 @@ def get_food_search_event_bus() -> EventBus:
         get_food_mapping_service,
         get_open_food_facts_service_instance,
         get_fat_secret_service_instance,
-        get_food_reference_repository,
         get_deepl_text_translation_service,
     )
 
@@ -216,6 +217,7 @@ def get_food_search_event_bus() -> EventBus:
     from src.domain.services.meal_suggestion.macro_validation_service import (
         MacroValidationService,
     )
+    from src.infra.database.uow_async import AsyncUnitOfWork
 
     event_bus = PyMediatorEventBus()
 
@@ -225,7 +227,6 @@ def get_food_search_event_bus() -> EventBus:
     food_mapping_service = get_food_mapping_service()
     open_food_facts_service = get_open_food_facts_service_instance()
     fat_secret_service = get_fat_secret_service_instance()
-    food_reference_repository = get_food_reference_repository()
 
     # Translation service for localized food search (DeepL-backed)
     text_translation_service = get_deepl_text_translation_service()
@@ -261,7 +262,7 @@ def get_food_search_event_bus() -> EventBus:
         LookupBarcodeQueryHandler(
             open_food_facts_service=open_food_facts_service,
             fat_secret_service=fat_secret_service,
-            food_reference_repository=food_reference_repository,
+            async_uow_factory=AsyncUnitOfWork,
             translation_service=text_translation_service,
             nutritionix_service=nutritionix_service,
             brave_search_service=brave_search_service,
@@ -281,8 +282,7 @@ def get_configured_event_bus() -> EventBus:
     This is now a singleton to prevent memory leaks from creating new event buses
     and dynamically generated handler classes on every request.
 
-    Handlers use ScopedSession to access the current request's database session,
-    ensuring proper isolation while allowing the event bus to be reused.
+    Handlers receive fresh async Unit of Work instances while the event bus is reused.
 
     Returns:
         EventBus: Singleton event bus instance
@@ -345,6 +345,17 @@ def get_configured_event_bus() -> EventBus:
     event_bus.register_handler(
         AnalyzeMealImageByUrlCommand,
         AnalyzeMealImageByUrlHandler(
+            uow=AsyncUnitOfWork(),
+            event_bus=event_bus,
+            vision_service=vision_service,
+            gpt_parser=gpt_parser,
+            meal_translation_service=meal_translation_service,
+            cache_invalidation=cache_invalidation_service,
+        ),
+    )
+    event_bus.register_handler(
+        ScanByUrlCommand,
+        ScanByUrlCommandHandler(
             uow=AsyncUnitOfWork(),
             event_bus=event_bus,
             vision_service=vision_service,

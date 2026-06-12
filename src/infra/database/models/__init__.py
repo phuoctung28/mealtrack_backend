@@ -8,25 +8,39 @@ to provide a centralized access point.
 # Base models
 from .base import BaseMixin, PrimaryEntityMixin, SecondaryEntityMixin, TimestampMixin
 
+# Cheat days
+from .cheat_day.cheat_day import CheatDayORM
+
 # Enums
 from .enums import (
-    MealStatusEnum,
     DietaryPreferenceEnum,
     FitnessGoalEnum,
+    GoalEnum,
+    JobTypeEnum,
+    MealStatusEnum,
     MealTypeEnum,
     PlanDurationEnum,
-    JobTypeEnum,
     SexEnum,
-    GoalEnum,
 )
+
+# Feature flags
+from .feature_flag import FeatureFlag
+
+# Food reference (evolved from barcode_products)
+from .food_reference_model import FoodReferenceModel
+from .food_reference_nutrient import FoodReferenceNutrientModel
+from .food_reference_serving_size import FoodReferenceServingSizeModel
+from .hydration_entry import HydrationEntryORM
+from .meal.food_item_translation_model import FoodItemTranslationORM
 
 # Meal models
 from .meal.meal import MealORM
 from .meal.meal_image import MealImageORM
+from .meal.meal_instruction_step import MealInstructionStepORM
 
 # Translation models (meals + food items)
 from .meal.meal_translation_model import MealTranslationORM
-from .meal.food_item_translation_model import FoodItemTranslationORM
+from .meal_image_cache import MealImageCacheModel
 
 # Notification models
 from .notification import NotificationORM, NotificationPreferencesORM, UserFcmTokenORM
@@ -34,44 +48,41 @@ from .nutrition.food_item import FoodItemORM
 
 # Nutrition models
 from .nutrition.nutrition import NutritionORM
+from .pending_meal_image_resolution import PendingMealImageResolutionModel
+
+# Saved suggestions
+from .saved_suggestion import SavedSuggestionModel
+from .saved_suggestion_item import SavedSuggestionItemModel
+from .saved_suggestion_step import SavedSuggestionStepModel
 from .subscription import Subscription
 from .user.profile import UserProfile
+from .user.profile_preference import UserProfilePreference
 
 # User models
 from .user.user import User
 
-# Feature flags
-from .feature_flag import FeatureFlag
-
-# Saved suggestions
-from .saved_suggestion import SavedSuggestionModel
-
 # Weekly budgets
 from .weekly.weekly_macro_budget import WeeklyMacroBudgetORM
-
-# Cheat days
-from .cheat_day.cheat_day import CheatDayORM
-
-# Food reference (evolved from barcode_products)
-from .food_reference_model import FoodReferenceModel
 
 # Backward-compatible alias
 BarcodeProductModel = FoodReferenceModel
 
-# Referral system
-from .referral import ReferralCode, ReferralConversion, ReferralWallet, PayoutRequest
+# Affiliate outbox
+from .affiliate_event_outbox import AffiliateEventOutbox
 
-# Weight tracking
-from .weight_entry import WeightEntryORM
+# Referral system
+# Email log
+from .email_log import EmailLog
 
 # Movement tracking
 from .movement_entry import MovementEntryORM
 
-# Email log
-from .email_log import EmailLog
-
 # Promo codes (email marketing)
 from .promo_code import PromoCode, PromoCodeRedemption
+from .referral import PayoutRequest, ReferralCode, ReferralConversion, ReferralWallet
+
+# Weight tracking
+from .weight_entry import WeightEntryORM
 
 __all__ = [
     # Base
@@ -91,6 +102,7 @@ __all__ = [
     # User models
     "User",
     "UserProfile",
+    "UserProfilePreference",
     "Subscription",
     # Nutrition models
     "NutritionORM",
@@ -98,6 +110,7 @@ __all__ = [
     # Meal models
     "MealORM",
     "MealImageORM",
+    "MealInstructionStepORM",
     "MealTranslationORM",
     "FoodItemTranslationORM",
     # Test models
@@ -109,13 +122,20 @@ __all__ = [
     "FeatureFlag",
     # Saved suggestions
     "SavedSuggestionModel",
+    "SavedSuggestionItemModel",
+    "SavedSuggestionStepModel",
     # Weekly budgets
     "WeeklyMacroBudgetORM",
     # Cheat days
     "CheatDayORM",
     # Food reference (evolved from barcode_products)
     "FoodReferenceModel",
+    "FoodReferenceNutrientModel",
+    "FoodReferenceServingSizeModel",
     "BarcodeProductModel",  # backward-compatible alias
+    "HydrationEntryORM",
+    "MealImageCacheModel",
+    "PendingMealImageResolutionModel",
     # Referral system
     "ReferralCode",
     "ReferralConversion",
@@ -130,4 +150,6 @@ __all__ = [
     # Promo codes
     "PromoCode",
     "PromoCodeRedemption",
+    # Affiliate outbox
+    "AffiliateEventOutbox",
 ]

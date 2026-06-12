@@ -4,6 +4,7 @@ Clean separation with event bus pattern.
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -222,7 +223,14 @@ async def create_manual_meal(
             source=payload.source,
             emoji=payload.emoji,
         )
+        _t0 = time.perf_counter()
         meal = await event_bus.send(cmd)
+        _elapsed_ms = (time.perf_counter() - _t0) * 1000
+        logger.info(
+            "manual_save timing: user=%s total_handler_ms=%.1f",
+            user_id,
+            _elapsed_ms,
+        )
 
         return ManualMealCreationResponse(
             meal_id=meal.meal_id,

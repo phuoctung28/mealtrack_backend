@@ -1,14 +1,17 @@
 """Timezone utilities for notification scheduling and datetime operations."""
 
 import logging
-from datetime import datetime, date, timezone, timedelta
-from typing import TYPE_CHECKING, Optional, Union
+from datetime import UTC, date, datetime, timedelta
+from datetime import timezone as datetime_timezone
+from typing import TYPE_CHECKING, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 if TYPE_CHECKING:
-    from src.domain.ports.unit_of_work_port import UnitOfWorkPort
+    from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 
 logger = logging.getLogger(__name__)
+
+timezone = datetime_timezone
 
 # Legacy IANA timezone aliases that may not resolve on slim Docker images
 _TIMEZONE_ALIASES: dict[str, str] = {
@@ -34,10 +37,10 @@ def utc_now() -> datetime:
 
     Use this instead of datetime.now() or datetime.utcnow().
     """
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
-def format_iso_utc(dt: Optional[datetime]) -> Optional[str]:
+def format_iso_utc(dt: datetime | None) -> str | None:
     """Format datetime as ISO 8601 with UTC timezone suffix.
 
     Args:
@@ -50,11 +53,11 @@ def format_iso_utc(dt: Optional[datetime]) -> Optional[str]:
         return None
     # If naive, assume UTC
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).isoformat()
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat()
 
 
-def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+def ensure_utc(dt: datetime | None) -> datetime | None:
     """Ensure datetime is timezone-aware UTC.
 
     Converts naive datetimes by assuming they are UTC.
@@ -62,8 +65,8 @@ def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 # Default timezone
@@ -131,7 +134,7 @@ def is_valid_timezone(timezone_str: str) -> bool:
 
 
 def is_in_quiet_hours(
-    local_minutes: int, quiet_start: Optional[int], quiet_end: Optional[int]
+    local_minutes: int, quiet_start: int | None, quiet_end: int | None
 ) -> bool:
     """
     Check if local_minutes falls within quiet hours window.
@@ -159,9 +162,9 @@ def is_in_quiet_hours(
 
 
 def get_user_monday(
-    target_date: Union[date, datetime],
+    target_date: date | datetime,
     user_id: str,
-    uow: Optional["UnitOfWorkPort"] = None,
+    uow: Optional["AsyncUnitOfWorkPort"] = None,
 ) -> date:
     """
     Get the Monday of the week for a given date in user's timezone.
@@ -203,7 +206,7 @@ def get_user_monday(
 
 
 async def get_user_monday_async(
-    target_date: Union[date, datetime],
+    target_date: date | datetime,
     user_id: str,
     uow,  # AsyncUnitOfWorkPort
 ) -> date:
@@ -234,7 +237,7 @@ async def get_user_monday_async(
 async def resolve_user_timezone_async(
     user_id: str,
     uow,  # AsyncUnitOfWorkPort
-    header_timezone: Optional[str] = None,
+    header_timezone: str | None = None,
 ) -> str:
     """Async version of resolve_user_timezone for use with AsyncUnitOfWork."""
     db_tz = "UTC"
@@ -259,8 +262,8 @@ async def resolve_user_timezone_async(
 
 def resolve_user_timezone(
     user_id: str,
-    uow: "UnitOfWorkPort",
-    header_timezone: Optional[str] = None,
+    uow: "AsyncUnitOfWorkPort",
+    header_timezone: str | None = None,
 ) -> str:
     """Resolve user timezone: DB → X-Timezone header → UTC.
 
@@ -326,4 +329,4 @@ def noon_utc_for_date(target_date: date, user_timezone: str = "UTC") -> datetime
         0,
         tzinfo=tz,
     )
-    return local_noon.astimezone(timezone.utc)
+    return local_noon.astimezone(UTC)

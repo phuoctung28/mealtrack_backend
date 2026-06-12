@@ -1,12 +1,12 @@
 import logging
 import os
 import uuid
-from typing import Optional
 
 import cloudinary
 import cloudinary.api
 import cloudinary.exceptions
 import cloudinary.uploader
+import cloudinary.utils
 from dotenv import load_dotenv
 
 from src.domain.ports.image_store_port import ImageStorePort
@@ -45,7 +45,7 @@ class CloudinaryImageStore(ImageStorePort):
         logger.debug("CloudinaryImageStore initialized successfully")
 
     def save(
-        self, image_bytes: bytes, content_type: str, image_id: Optional[str] = None
+        self, image_bytes: bytes, content_type: str, image_id: str | None = None
     ) -> str:
         """
         Save image bytes to Cloudinary.
@@ -115,7 +115,7 @@ class CloudinaryImageStore(ImageStorePort):
             logger.error(f"Error uploading to Cloudinary: {str(e)}")
             raise
 
-    def load(self, image_id: str) -> Optional[bytes]:
+    def load(self, image_id: str) -> bytes | None:
         """
         Load image bytes by ID from Cloudinary.
 
@@ -125,8 +125,6 @@ class CloudinaryImageStore(ImageStorePort):
         Returns:
             The raw bytes of the image if found, None otherwise
         """
-        import requests
-
         logger.debug(f"Loading image with ID: {image_id}")
 
         # Get the URL for the image
@@ -139,7 +137,8 @@ class CloudinaryImageStore(ImageStorePort):
         # Fetch the image from Cloudinary
         try:
             logger.debug(f"Fetching image from URL: {url}")
-            response = requests.get(url)
+            import httpx
+            response = httpx.get(url)
             if response.status_code == 200:
                 logger.debug("Image successfully fetched")
                 return response.content
@@ -153,7 +152,7 @@ class CloudinaryImageStore(ImageStorePort):
 
         return None
 
-    def get_url(self, image_id: str) -> Optional[str]:
+    def get_url(self, image_id: str) -> str | None:
         """
         Gets a URL for accessing the image from Cloudinary.
 
@@ -206,13 +205,13 @@ class CloudinaryImageStore(ImageStorePort):
 
                 # Check if the URL is accessible
                 try:
-                    import requests
+                    import httpx
 
-                    response = requests.head(url, timeout=5)
+                    response = httpx.head(url, timeout=5)
                     if response.status_code == 200:
                         logger.debug(f"Found working fallback URL: {url}")
                         return url
-                except (requests.exceptions.RequestException, Exception) as e:
+                except httpx.RequestError as e:
                     logger.debug(f"URL check failed for {url}: {e}")
                     continue
 
@@ -240,3 +239,55 @@ class CloudinaryImageStore(ImageStorePort):
         except Exception as e:
             logger.error(f"Error deleting image: {str(e)}")
             return False
+
+    async def save_async(
+        self, image_bytes: bytes, content_type: str, image_id: str | None = None
+    ) -> str:
+        """Async wrapper — runs blocking Cloudinary SDK upload off the event loop."""
+        import asyncio
+        return await asyncio.to_thread(self.save, image_bytes, content_type, image_id)
+
+    async def load_async(self, image_id: str) -> bytes | None:
+        """Async wrapper — runs blocking Cloudinary SDK + HTTP load off the event loop."""
+        import asyncio
+        return await asyncio.to_thread(self.load, image_id)
+
+    async def get_url_async(self, image_id: str) -> str | None:
+        """Async wrapper — runs blocking Cloudinary API call off the event loop."""
+        import asyncio
+        return await asyncio.to_thread(self.get_url, image_id)
+
+    async def delete_async(self, image_id: str) -> bool:
+        """Async wrapper — runs blocking Cloudinary SDK delete off the event loop."""
+        import asyncio
+        return await asyncio.to_thread(self.delete, image_id)
+
+    def generate_upload_signature(self, image_id: str, ttl: int = 300) -> dict:
+        """Return signed Cloudinary upload params for direct client upload."""
+        import time as _time
+
+        folder = "mealtrack"
+        public_id = f"{folder}/{image_id}"
+        timestamp = int(_time.time())
+
+        params_to_sign = {
+            "public_id": public_id,
+            "timestamp": timestamp,
+        }
+        api_secret = os.getenv("CLOUDINARY_API_SECRET", "")
+        signature = cloudinary.utils.api_sign_request(params_to_sign, api_secret)
+
+        return {
+            "image_id": image_id,
+            "cloud_name": os.getenv("CLOUDINARY_CLOUD_NAME", ""),
+            "api_key": os.getenv("CLOUDINARY_API_KEY", ""),
+            "timestamp": timestamp,
+            "signature": signature,
+            "folder": folder,
+            "public_id": public_id,
+        }
+
+    async def generate_upload_signature_async(self, image_id: str, ttl: int = 300) -> dict:
+        """Async wrapper for generate_upload_signature."""
+        import asyncio
+        return await asyncio.to_thread(self.generate_upload_signature, image_id, ttl)

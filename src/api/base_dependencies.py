@@ -2,14 +2,10 @@ import logging
 import os
 from typing import TYPE_CHECKING, Optional
 
-from fastapi import Depends
-from sqlalchemy.orm import Session
-
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
-from src.domain.ports.meal_repository_port import MealRepositoryPort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
 from src.domain.services.food_mapping_service import FoodMappingService
 from src.infra.adapters.cloudinary_image_store import CloudinaryImageStore
@@ -23,8 +19,7 @@ from src.infra.cache.cache_service import CacheService
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
 from src.infra.config.settings import settings
-from src.infra.database.config import get_db as get_db_from_config
-from src.infra.repositories.meal_repository import MealRepository
+from src.infra.database.config_async import get_async_db
 from src.infra.services.ai.ai_model_manager import AIModelManager
 from src.infra.services.firebase_service import FirebaseService
 
@@ -38,14 +33,14 @@ if TYPE_CHECKING:
 
 # Globals
 logger = logging.getLogger(__name__)
-_redis_client: Optional[RedisClient] = None
-_cache_service: Optional[CacheService] = None
+_redis_client: RedisClient | None = None
+_cache_service: CacheService | None = None
 _cache_monitor = CacheMonitor()
 
 # Singleton service instances (initialized once, reused across requests)
-_image_store: Optional[ImageStorePort] = None
-_vision_service: Optional[VisionAIServicePort] = None
-_ai_model_manager: Optional[AIModelManager] = None
+_image_store: ImageStorePort | None = None
+_vision_service: VisionAIServicePort | None = None
+_ai_model_manager: AIModelManager | None = None
 
 
 async def initialize_cache_layer() -> None:
@@ -83,18 +78,10 @@ async def shutdown_cache_layer() -> None:
 
 
 # Database
-def get_db():
-    """
-    Get a database session.
-
-    Uses scoped session from config for request isolation.
-    This allows singleton services to safely access the current request's session.
-
-    Yields:
-        Session: SQLAlchemy database session
-    """
-    # Delegate to the config's get_db which handles scoped sessions
-    yield from get_db_from_config()
+async def get_db():
+    """Backward-compatible FastAPI dependency that yields an async DB session."""
+    async for session in get_async_db():
+        yield session
 
 
 # Image Store (singleton pattern)
@@ -109,20 +96,6 @@ def get_image_store() -> ImageStorePort:
     if _image_store is None:
         _image_store = CloudinaryImageStore()
     return _image_store
-
-
-# Meal Repository
-def get_meal_repository(db: Session = Depends(get_db)) -> MealRepositoryPort:
-    """
-    Get the meal repository instance.
-
-    Args:
-        db: Database session
-
-    Returns:
-        MealRepositoryPort: The meal repository
-    """
-    return MealRepository(db)
 
 
 # Vision Service (singleton pattern)
@@ -175,7 +148,7 @@ def get_food_cache_service() -> FoodCacheServicePort:
     return FoodCacheService(cache_service=_cache_service)
 
 
-def get_cache_service() -> Optional[CacheService]:
+def get_cache_service() -> CacheService | None:
     """Expose cache service for dependency injection."""
     return _cache_service
 
@@ -222,22 +195,23 @@ def get_fat_secret_service_instance():
 
 
 # Food Reference Repository (replaces barcode_product_repository)
-_food_reference_repository = None
+_async_food_reference_repository = None
 
 
-def get_food_reference_repository():
-    """Get the food reference repository singleton."""
-    global _food_reference_repository
-    if _food_reference_repository is None:
-        from src.infra.repositories.food_reference_repository import (
-            FoodReferenceRepository,
+def get_async_food_reference_repository():
+    """Get the async food reference repository adapter singleton."""
+    global _async_food_reference_repository
+    if _async_food_reference_repository is None:
+        from src.infra.repositories.food_reference_uow_adapter import (
+            AsyncFoodReferenceUowAdapter,
         )
 
-        _food_reference_repository = FoodReferenceRepository()
-    return _food_reference_repository
+        _async_food_reference_repository = AsyncFoodReferenceUowAdapter()
+    return _async_food_reference_repository
 
 
-# Backward-compatible alias
+# Backward-compatible aliases for older callers; runtime receives async adapter.
+get_food_reference_repository = get_async_food_reference_repository
 get_barcode_product_repository = get_food_reference_repository
 
 
@@ -268,7 +242,7 @@ def get_daily_context_precompute_service():
 
 
 # Phase 06: Meal Suggestion Dependencies
-def get_redis_client() -> Optional[RedisClient]:
+def get_redis_client() -> RedisClient | None:
     """Return Redis client used by optional caches and required session stores."""
     return _redis_client
 
@@ -327,15 +301,13 @@ def get_suggestion_orchestration_service():
     """
     Get suggestion orchestration service (singleton-safe).
 
-    This service uses ScopedSession internally to access the current request's
-    database session, making it safe to use as a singleton in the event bus.
+    This service uses AsyncUnitOfWork for DB-backed user profile lookups.
     """
     from src.domain.services.meal_suggestion.suggestion_orchestration_service import (
         SuggestionOrchestrationService,
     )
     from src.infra.adapters.meal_generation_service import MealGenerationService
-    from src.infra.database.config import SessionLocal
-    from src.infra.repositories.user_repository import UserRepository
+    from src.infra.database.uow_async import AsyncUnitOfWork
     from src.infra.services.ai.schemas import (
         DiscoveryMealsResponse,
         MealNamesResponse,
@@ -345,16 +317,9 @@ def get_suggestion_orchestration_service():
     meal_gen_service = MealGenerationService()
     suggestion_repo = get_meal_suggestion_repository()
 
-    # Profile provider keeps domain decoupled from infra while still using SessionLocal
-    def profile_provider(user_id: str):
-        db = SessionLocal()
-        try:
-            repo = UserRepository(db)
-            return repo.get_profile(user_id)
-        finally:
-            db.close()
-
-    from src.infra.database.uow_async import AsyncUnitOfWork
+    async def profile_provider(user_id: str):
+        async with AsyncUnitOfWork() as uow:
+            return await uow.users.get_profile(user_id)
 
     return SuggestionOrchestrationService(
         generation_service=meal_gen_service,
@@ -374,6 +339,19 @@ def get_suggestion_orchestration_service():
 
 
 _deepl_meal_translation_service = None
+_async_meal_translation_repository = None
+
+
+def get_async_meal_translation_repository():
+    """Get the async meal translation repository adapter singleton."""
+    global _async_meal_translation_repository
+    if _async_meal_translation_repository is None:
+        from src.infra.repositories.meal_translation_uow_adapter import (
+            AsyncMealTranslationUowAdapter,
+        )
+
+        _async_meal_translation_repository = AsyncMealTranslationUowAdapter()
+    return _async_meal_translation_repository
 
 
 def get_deepl_meal_translation_service():
@@ -396,12 +374,9 @@ def get_deepl_meal_translation_service():
     from src.domain.services.meal_analysis.deepl_meal_translation_service import (
         DeepLMealTranslationService,
     )
-    from src.infra.repositories.meal_translation_repository import (
-        MealTranslationRepository,
-    )
 
     _deepl_meal_translation_service = DeepLMealTranslationService(
-        translation_repo=MealTranslationRepository(),
+        translation_repo=get_async_meal_translation_repository(),
         text_translation_service=text_service,
     )
     logger.info("DeepL meal translation service initialised")
@@ -452,7 +427,7 @@ def get_ingredient_nutrition_resolver():
 
         _ingredient_nutrition_resolver = IngredientNutritionResolver(
             fatsecret=get_fat_secret_service_instance(),
-            food_ref_repo=get_food_reference_repository(),
+            food_ref_repo=get_async_food_reference_repository(),
         )
     return _ingredient_nutrition_resolver
 
@@ -471,7 +446,7 @@ def get_nutrition_lookup_service():
         from src.infra.adapters.meal_generation_service import MealGenerationService
 
         _nutrition_lookup_service = NutritionLookupService(
-            food_ref_repo=get_food_reference_repository(),
+            food_ref_repo=get_async_food_reference_repository(),
             ingredient_nutrition_resolver=get_ingredient_nutrition_resolver(),
             generation_service=MealGenerationService(),
             redis_client=_redis_client,

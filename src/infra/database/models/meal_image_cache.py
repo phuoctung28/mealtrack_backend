@@ -8,7 +8,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, DateTime, Float, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 
-from src.infra.database.config import Base
+from src.infra.database.base import Base
 
 
 class MealImageCacheModel(Base):

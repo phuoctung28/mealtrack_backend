@@ -18,8 +18,7 @@ import sentry_sdk
 from sqlalchemy import text
 
 from src.domain.utils.timezone_utils import utc_now
-from src.infra.database.config import engine
-from src.infra.database.uow import UnitOfWork
+from src.infra.database.config_async import async_engine
 from src.infra.monitoring.sentry import initialize_sentry
 from src.infra.services.cron_notification_dispatch_service import (
     CronNotificationDispatchService,
@@ -42,8 +41,10 @@ async def run() -> None:
 
     # DB warm-up — triggers Neon compute wakeup; abort if unreachable
     try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+        if async_engine is None:
+            raise RuntimeError("Async database engine is not initialized")
+        async with async_engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
     except Exception as exc:
         logger.error("DB warm-up failed (Neon cold start?): %s", exc)
         sentry_sdk.flush(timeout=5)
@@ -56,10 +57,11 @@ async def run() -> None:
     # DailyContextPrecomputeService.precompute_for_timezone() is idempotent:
     # it checks an in-memory sentinel (fast) then a DB fallback, so re-running is free.
     try:
-        with UnitOfWork() as uow:
-            tz_rows = uow.session.execute(
+        async with async_engine.connect() as conn:
+            tz_result = await conn.execute(
                 text("SELECT DISTINCT timezone FROM users WHERE timezone IS NOT NULL")
-            ).fetchall()
+            )
+            tz_rows = tz_result.fetchall()
         timezones = [r.timezone for r in tz_rows]
         precompute = DailyContextPrecomputeService()
         for tz_name in timezones:
@@ -73,7 +75,7 @@ async def run() -> None:
     # prevents duplicates.
     try:
         trial_push = CronTrialPushService()
-        await asyncio.to_thread(trial_push.check_and_schedule_pushes, now)
+        await trial_push.check_and_schedule_pushes(now)
     except Exception:
         logger.exception("Phase 2 (trial push scheduling) failed")
 
@@ -88,11 +90,12 @@ async def run() -> None:
 
     # Phase 4 — delete expired rows that are no longer eligible for dispatch
     try:
-        await asyncio.to_thread(dispatch.cleanup_expired_notifications)
+        await dispatch.cleanup_expired_notifications()
     except Exception:
         logger.exception("Phase 4 (notification cleanup) failed")
 
-    engine.dispose()
+    if async_engine is not None:
+        await async_engine.dispose()
     sentry_sdk.flush(timeout=5)
 
 
