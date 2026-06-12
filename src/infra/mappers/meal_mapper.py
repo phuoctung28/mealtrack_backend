@@ -1,5 +1,6 @@
 """Meal cluster ORM <-> domain mapping functions."""
 
+import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
