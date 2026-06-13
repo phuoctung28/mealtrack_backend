@@ -1,6 +1,6 @@
 """AI-related exception classes for resilience layer."""
 
-from typing import Any, List, Optional
+from typing import Any
 
 
 class AIError(Exception):
@@ -15,8 +15,8 @@ class AIUnavailableError(AIError):
     def __init__(
         self,
         message: str,
-        attempted_models: Optional[List[str]] = None,
-        last_error: Optional[str] = None,
+        attempted_models: list[str] | None = None,
+        last_error: str | None = None,
     ) -> None:
         super().__init__(message)
         self.attempted_models = attempted_models or []
@@ -37,9 +37,36 @@ class AIPartialResultError(AIError):
     def __init__(
         self,
         message: str,
-        successful: Optional[List[Any]] = None,
-        failed: Optional[List[Any]] = None,
+        successful: list[Any] | None = None,
+        failed: list[Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.successful = successful or []
         self.failed = failed or []
+
+
+class AIOutputValidationError(AIError):
+    """Raised when an AI response fails the expected structured output contract."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        purpose: str,
+        attempt_count: int,
+        validation_details: list[str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.purpose = purpose
+        self.attempt_count = attempt_count
+        self.validation_details = validation_details or []
+
+    def __str__(self) -> str:
+        parts = [
+            super().__str__(),
+            f"purpose={self.purpose}",
+            f"attempt_count={self.attempt_count}",
+        ]
+        if self.validation_details:
+            parts.append(f"validation_details={self.validation_details}")
+        return " | ".join(parts)

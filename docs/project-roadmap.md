@@ -1,6 +1,6 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.6.3
+**Version:** 0.6.4
 **Last Updated:** June 13, 2026
 **Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 681+ tests, 70%+ coverage.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
@@ -31,6 +31,9 @@
       image URL, email, and webhook provider identifiers from representative
       application logs.
 
+### June 2026: Vision Parser Resilience
+- [x] Canonical AI nutrition contracts now reject impossible over-limit food quantities before domain hydration, invalid AI items now fail instead of being silently repaired, and structured meal image/text output retries exactly once before raising controlled `AIOutputValidationError`.
+
 ### June 2026: Normalized Database Foundation
 - [x] Added normalized profile preferences, hydration entries, saved suggestion items/steps, meal instruction steps, food serving sizes, and food nutrient tables.
 - [x] Added typed payout workflow fields while retaining raw payout details pending a later security/contract pass.
@@ -39,7 +42,7 @@
 - [x] Local Postgres upgrade verified to Alembic head `20260609000006`.
 
 ### June 2026: Neon Direct Pool + Async Library Alignment
-- [x] Explicit DB connection mode resolver: `direct_pool` uses `AsyncAdaptedQueuePool` against direct Neon URL; `neon_pooler` uses `NullPool` with PgBouncer-safe asyncpg settings.
+- [x] Explicit DB connection mode resolver: `direct_pool` uses a dedicated async queue pool against the direct Neon URL; `neon_pooler` uses `NullPool` with PgBouncer-safe asyncpg settings.
 - [x] `APP_DATABASE_URL` is the app runtime URL; `DATABASE_URL_DIRECT` is migration/admin only — no silent priority drift.
 - [x] `FoodDataService` converted from `requests` to `httpx.AsyncClient`.
 - [x] Cloudinary blocking SDK calls wrapped with `asyncio.to_thread` off-loop boundary.
@@ -50,7 +53,7 @@
 
 ### June 2026: Async Repository Consolidation
 - [x] Runtime database access consolidated to async SQLAlchemy: FastAPI dependencies, cron jobs, handlers, repositories, and UoW use `AsyncSession`.
-- [x] Deleted sync `UnitOfWork`, sync database config, and legacy sync repositories after replacing remaining test consumers with explicit test-only facades.
+- [x] Deleted the sync unit-of-work runtime, sync database config, and legacy sync repositories after replacing remaining test consumers with explicit test-only facades.
 - [x] Architecture guard now expects zero sync DB runtime imports in `src` and no broad sync repository transition allowlist.
 - [x] Default validation: `pytest -q` passes (`1499 passed, 3 skipped`).
 

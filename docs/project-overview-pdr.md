@@ -1,8 +1,8 @@
 # MealTrack Backend - Project Overview & Product Development Requirements
 
-**Version:** 0.6.2
-**Last Updated:** May 15, 2026
-**Status:** Production-ready. 430 Python files, ~38.5K LOC across 4 layers. 681+ tests, 70%+ coverage. Latest: configurable referral commissions, BMR floor protection, custom unit normalization, email Universal Links, AsyncUnitOfWork concurrency guard.
+**Version:** 0.6.5
+**Last Updated:** June 13, 2026
+**Status:** Production-ready. 430 Python files, ~38.5K LOC across 4 layers. 681+ tests, 70%+ coverage. Latest: configurable referral commissions, BMR floor protection, custom unit normalization, email Universal Links, AsyncUnitOfWork concurrency guard, AI nutrition validation retries.
 
 ---
 
@@ -117,6 +117,8 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.6.5 | Jun 13, 2026 | Added validation retry orchestration for structured AI nutrition output, with exactly one repair attempt for meal image scan and text parse flows, controlled `AIOutputValidationError` handling, preserved ingredient-recognition's unstructured contract, and kept calorie divergence checks anchored to backend-derived macro calories. |
+| 0.6.4 | Jun 13, 2026 | Added canonical AI nutrition contracts for image and text flows, rejected impossible over-limit food quantities at validation time, preserved current text-parse macro compatibility, and removed silent invalid-food filtering from the legacy parser. |
 | 0.6.2 | May 15, 2026 | Configurable referral commissions (`REFERRAL_COMMISSIONS` env var, per-currency JSON). Custom unit-to-grams fix in nutrition calculation. BMR floor raised to 85% of standard daily; cutting deficit 500→300 kcal; clinical minimums 1200F/1500M. Email Universal Links (apple-app-site-association, /app-download). AsyncUnitOfWork concurrency guard (asyncio.Lock). Variable-length referral codes (3–15 chars). |
 | 0.6.0 | Mar 14, 2026 | Nutrition accuracy (5-phase implementation): fiber-aware calories, food density conversion, macro validation, food reference evolution, meal decomposition. Custom macro targets per profile. Date of birth tracking. Adjusted daily target from weekly budget in suggestions. 3 new services, 3 new migrations (034-037), 28+ modified/new files. |
 | 0.5.0 | Feb 3, 2026 | Updated metrics across all layers: API (76 files, 8,605 LOC), App (140 files, 6,229 LOC), Domain (133 files, 14,556 LOC), Infra (80 files, 8,895 LOC). Total: 430 files, ~38K LOC. Fixed metric inconsistencies from previous documentation. |

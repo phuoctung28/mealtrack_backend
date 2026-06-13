@@ -1,5 +1,6 @@
 from src.domain.exceptions.ai_exceptions import (
     AIError,
+    AIOutputValidationError,
     AIPartialResultError,
     AIUnavailableError,
 )
@@ -56,3 +57,21 @@ def test_ai_partial_result_error_default_values():
     err = AIPartialResultError("partial")
     assert err.successful == []
     assert err.failed == []
+
+
+def test_ai_output_validation_error_stores_sanitized_context():
+    err = AIOutputValidationError(
+        "Invalid AI output",
+        purpose="meal_scan",
+        attempt_count=2,
+        validation_details=["foods.0.quantity_g: Input should be <= 10000"],
+    )
+
+    assert isinstance(err, AIError)
+    assert err.purpose == "meal_scan"
+    assert err.attempt_count == 2
+    assert err.validation_details == ["foods.0.quantity_g: Input should be <= 10000"]
+    assert str(err) == (
+        "Invalid AI output | purpose=meal_scan | attempt_count=2 | "
+        "validation_details=['foods.0.quantity_g: Input should be <= 10000']"
+    )

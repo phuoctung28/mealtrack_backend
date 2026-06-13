@@ -1,6 +1,9 @@
-import pytest
+import inspect
 from abc import ABC
-from src.domain.ports.ai_provider_port import AIProviderPort, AICapability
+
+import pytest
+
+from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
 
 
 def test_ai_provider_port_is_abstract():
@@ -13,6 +16,13 @@ def test_ai_capability_enum_values():
     assert AICapability.TEXT_GENERATION.value == "text_generation"
     assert AICapability.VISION.value == "vision"
     assert AICapability.STRUCTURED_OUTPUT.value == "structured_output"
+
+
+def test_generate_with_vision_accepts_structured_output_schema():
+    signature = inspect.signature(AIProviderPort.generate_with_vision)
+
+    assert "schema" in signature.parameters
+    assert signature.parameters["schema"].default is None
 
 
 class ConcreteProvider(AIProviderPort):
@@ -32,7 +42,9 @@ class ConcreteProvider(AIProviderPort):
     async def generate(self, model, prompt, system_message, **kwargs):
         return {"result": "test"}
 
-    async def generate_with_vision(self, model, prompt, image_data, **kwargs):
+    async def generate_with_vision(
+        self, model, prompt, image_data, system_message=None, *, schema=None, **kwargs
+    ):
         raise NotImplementedError("Vision not supported")
 
 

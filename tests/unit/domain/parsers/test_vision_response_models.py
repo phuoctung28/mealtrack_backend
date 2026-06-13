@@ -123,71 +123,135 @@ def test_out_of_range_confidence_is_allowed_for_parser_clamping():
     assert result.confidence == pytest.approx(1.2)
 
 
-def test_zero_float_quantity_is_silently_dropped():
-    """GPT sometimes returns quantity=0.0 for trace ingredients — must not raise."""
+def test_zero_float_quantity_fails_validation():
+    """Invalid AI output must fail validation instead of silently dropping foods."""
     payload = {
         "foods": [
-            {"name": "Rice", "quantity": 1.0, "unit": "cup", "macros": {"protein": 3, "carbs": 45, "fat": 0}},
-            {"name": "Sauce", "quantity": 0.0, "unit": "tbsp", "macros": {"protein": 0, "carbs": 0, "fat": 0}},
+            {
+                "name": "Rice",
+                "quantity": 1.0,
+                "unit": "cup",
+                "macros": {"protein": 3, "carbs": 45, "fat": 0},
+            },
+            {
+                "name": "Sauce",
+                "quantity": 0.0,
+                "unit": "tbsp",
+                "macros": {"protein": 0, "carbs": 0, "fat": 0},
+            },
         ]
     }
 
-    result = VisionAnalyzeResponse.model_validate(payload)
-
-    assert len(result.foods) == 1
-    assert result.foods[0].name == "Rice"
+    with pytest.raises(ValidationError):
+        VisionAnalyzeResponse.model_validate(payload)
 
 
-def test_zero_integer_quantity_is_silently_dropped():
+def test_zero_integer_quantity_fails_validation():
     payload = {
         "foods": [
-            {"name": "Rice", "quantity": 200, "unit": "g", "macros": {"protein": 4, "carbs": 40, "fat": 1}},
-            {"name": "Ghost", "quantity": 0, "unit": "g", "macros": {"protein": 0, "carbs": 0, "fat": 0}},
+            {
+                "name": "Rice",
+                "quantity": 200,
+                "unit": "g",
+                "macros": {"protein": 4, "carbs": 40, "fat": 1},
+            },
+            {
+                "name": "Ghost",
+                "quantity": 0,
+                "unit": "g",
+                "macros": {"protein": 0, "carbs": 0, "fat": 0},
+            },
         ]
     }
 
-    result = VisionAnalyzeResponse.model_validate(payload)
-
-    assert len(result.foods) == 1
-    assert result.foods[0].name == "Rice"
+    with pytest.raises(ValidationError):
+        VisionAnalyzeResponse.model_validate(payload)
 
 
-def test_negative_quantity_is_silently_dropped():
+def test_negative_quantity_fails_validation():
     payload = {
         "foods": [
-            {"name": "Rice", "quantity": 200, "unit": "g", "macros": {"protein": 4, "carbs": 40, "fat": 1}},
-            {"name": "Bad", "quantity": -1.0, "unit": "g", "macros": {"protein": 0, "carbs": 0, "fat": 0}},
+            {
+                "name": "Rice",
+                "quantity": 200,
+                "unit": "g",
+                "macros": {"protein": 4, "carbs": 40, "fat": 1},
+            },
+            {
+                "name": "Bad",
+                "quantity": -1.0,
+                "unit": "g",
+                "macros": {"protein": 0, "carbs": 0, "fat": 0},
+            },
         ]
     }
 
-    result = VisionAnalyzeResponse.model_validate(payload)
+    with pytest.raises(ValidationError):
+        VisionAnalyzeResponse.model_validate(payload)
 
-    assert len(result.foods) == 1
 
-
-def test_non_numeric_quantity_is_silently_dropped():
-    """String quantity that can't be parsed as positive float is dropped."""
+def test_non_numeric_quantity_fails_validation():
+    """String quantity that can't be parsed as positive float must fail."""
     payload = {
         "foods": [
-            {"name": "Rice", "quantity": 200, "unit": "g", "macros": {"protein": 4, "carbs": 40, "fat": 1}},
-            {"name": "Bad", "quantity": "unknown", "unit": "g", "macros": {"protein": 0, "carbs": 0, "fat": 0}},
+            {
+                "name": "Rice",
+                "quantity": 200,
+                "unit": "g",
+                "macros": {"protein": 4, "carbs": 40, "fat": 1},
+            },
+            {
+                "name": "Bad",
+                "quantity": "unknown",
+                "unit": "g",
+                "macros": {"protein": 0, "carbs": 0, "fat": 0},
+            },
         ]
     }
 
-    result = VisionAnalyzeResponse.model_validate(payload)
-
-    assert len(result.foods) == 1
-    assert result.foods[0].name == "Rice"
+    with pytest.raises(ValidationError):
+        VisionAnalyzeResponse.model_validate(payload)
 
 
-def test_all_zero_quantity_foods_results_in_empty_list():
+def test_over_max_quantity_fails_validation():
     payload = {
         "foods": [
-            {"name": "A", "quantity": 0.0, "unit": "g", "macros": {"protein": 0, "carbs": 0, "fat": 0}},
-            {"name": "B", "quantity": 0, "unit": "g", "macros": {"protein": 0, "carbs": 0, "fat": 0}},
+            {
+                "name": "Rice",
+                "quantity": 200,
+                "unit": "g",
+                "macros": {"protein": 4, "carbs": 40, "fat": 1},
+            },
+            {
+                "name": "Bad",
+                "quantity": 150000,
+                "unit": "g",
+                "macros": {"protein": 0, "carbs": 0, "fat": 0},
+            },
         ]
     }
 
-    result = VisionAnalyzeResponse.model_validate(payload)
+    with pytest.raises(ValidationError):
+        VisionAnalyzeResponse.model_validate(payload)
 
-    assert result.foods == []
+
+def test_all_zero_quantity_foods_fails_validation():
+    payload = {
+        "foods": [
+            {
+                "name": "A",
+                "quantity": 0.0,
+                "unit": "g",
+                "macros": {"protein": 0, "carbs": 0, "fat": 0},
+            },
+            {
+                "name": "B",
+                "quantity": 0,
+                "unit": "g",
+                "macros": {"protein": 0, "carbs": 0, "fat": 0},
+            },
+        ]
+    }
+
+    with pytest.raises(ValidationError):
+        VisionAnalyzeResponse.model_validate(payload)
