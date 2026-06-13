@@ -5,8 +5,6 @@ This module provides strongly-typed schemas for validating GPT responses,
 improving type safety and error handling in the parsing process.
 """
 
-from typing import List, Optional
-
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -52,21 +50,19 @@ class GPTAnalysisResponse(BaseModel):
     """Complete GPT analysis response structure."""
 
     dish_name: str = Field(..., description="Overall dish name or food list")
-    foods: List[GPTFoodItem] = Field(
-        ..., min_items=1, max_items=8, description="List of analyzed foods"
+    foods: list[GPTFoodItem] = Field(
+        ..., min_length=1, max_length=8, description="List of analyzed foods"
     )
     total_calories: float = Field(..., ge=0, description="Total calories")
     confidence: float = Field(..., ge=0, le=1, description="Overall confidence")
 
     # Optional fields for enhanced analysis
-    portion_adjustment: Optional[str] = Field(
-        None, description="Portion adjustment note"
-    )
-    weight_adjustment: Optional[str] = Field(None, description="Weight adjustment note")
-    ingredient_based: Optional[bool] = Field(
+    portion_adjustment: str | None = Field(None, description="Portion adjustment note")
+    weight_adjustment: str | None = Field(None, description="Weight adjustment note")
+    ingredient_based: bool | None = Field(
         None, description="Whether ingredient-based analysis"
     )
-    total_weight_grams: Optional[float] = Field(
+    total_weight_grams: float | None = Field(
         None, gt=0, description="Total weight if provided"
     )
 

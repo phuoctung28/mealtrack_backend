@@ -5,7 +5,10 @@ import threading
 from enum import Enum
 from typing import Any, Optional
 
-from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.domain.exceptions.ai_exceptions import (
+    AIOutputValidationError,
+    AIUnavailableError,
+)
 from src.domain.ports.ai_provider_port import AICapability
 from src.observability import log_event
 from src.infra.services.ai.provider_circuit_breaker import (
@@ -182,6 +185,8 @@ class AIModelManager:
 
                 return result
 
+            except AIOutputValidationError:
+                raise
             except Exception as e:
                 last_error = str(e)
                 error_code = provider.extract_error_code(e)
@@ -218,7 +223,9 @@ class AIModelManager:
                 )
             return None
         except Exception as e:
-            logger.warning("[AI-CACHE-LOOKUP-FAILED] cache_type=%s error=%s", cache_type, e)
+            logger.warning(
+                "[AI-CACHE-LOOKUP-FAILED] cache_type=%s error=%s", cache_type, e
+            )
             return None
 
     async def generate_with_vision(
@@ -227,6 +234,8 @@ class AIModelManager:
         prompt: str,
         image_data: bytes,
         system_message: str | None = None,
+        *,
+        schema: type | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Generate with vision, with automatic fallback."""
@@ -255,6 +264,7 @@ class AIModelManager:
                     prompt=prompt,
                     image_data=image_data,
                     system_message=system_message,
+                    schema=schema,
                     purpose_hint=purpose.value,  # NEW
                     **kwargs,
                 )
@@ -262,6 +272,8 @@ class AIModelManager:
                 self._circuit_breaker.record_success(model)
                 return result
 
+            except AIOutputValidationError:
+                raise
             except Exception as e:
                 last_error = str(e)
                 error_code = provider.extract_error_code(e)

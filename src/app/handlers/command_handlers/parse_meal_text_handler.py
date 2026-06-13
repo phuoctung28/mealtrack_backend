@@ -16,7 +16,13 @@ from src.app.handlers.command_handlers.meal_text_parsing_utils import (
     parse_fatsecret_nutrition,
 )
 from src.app.schemas.meal_schemas import ParsedFoodItemDto, ParseMealTextResponseDto
+from src.domain.exceptions.ai_exceptions import AIOutputValidationError
+from src.domain.model.ai.nutrition_contracts import MealTextNutritionResponse
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
+from src.domain.services.ai_output_validation_service import (
+    build_validation_retry_prompt,
+    validate_ai_output,
+)
 from src.domain.services.emoji_validator import validate_emoji
 from src.domain.services.nutrition_calculation_service import (
     clamp_nutrition_values,
@@ -29,6 +35,8 @@ from src.domain.services.translation.deepl_text_translation_service import (
 )
 
 logger = logging.getLogger(__name__)
+PARSE_TEXT_VALIDATION_PURPOSE = "parse_text"
+MAX_VALIDATION_ATTEMPTS = 2
 
 
 def _parse_text_fatsecret_timeout_seconds() -> float:
@@ -54,6 +62,8 @@ class ParseMealTextHandler(
     async def handle(self, command: ParseMealTextCommand) -> ParseMealTextResponseDto:
         # Sanitize user input
         sanitized_text = sanitize_user_description(command.text)
+        if not sanitized_text:
+            raise ValueError("Invalid or empty meal description.")
 
         # Add refinement context if current_items provided
         if command.current_items:
@@ -68,26 +78,13 @@ class ParseMealTextHandler(
             language=command.language
         )
 
-        raw = await self._meal_generation_service.generate_meal_plan_async(
+        validated_payload, raw_payload = await self._generate_parse_text_payload(
             prompt=sanitized_text,
-            system_message=system_prompt,
-            response_type="json",
-            max_tokens=2048,
-            model_purpose="parse_text",
-            thinking_budget=0,
+            system_prompt=system_prompt,
         )
 
-        # Extract JSON from response — may be {emoji, items: [...]} or plain [...]
-        emoji = None
-        if isinstance(raw, dict):
-            emoji = validate_emoji(raw.get("emoji"))
-            parsed_items = raw.get("items", [])
-            if not isinstance(parsed_items, list):
-                parsed_items = [parsed_items]
-        elif isinstance(raw, list):
-            parsed_items = raw
-        else:
-            parsed_items = extract_json_from_response(str(raw))
+        emoji = validate_emoji(validated_payload.get("emoji"))
+        parsed_items = self._to_flat_parse_text_items(validated_payload, raw_payload)
 
         # Enhance items with USDA/FatSecret cascade lookup
         enhanced_items = []
@@ -140,6 +137,103 @@ class ParseMealTextHandler(
             total_fat=total_fat,
             emoji=emoji,
         )
+
+    async def _generate_parse_text_payload(
+        self, *, prompt: str, system_prompt: str
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        retry_system_prompt = system_prompt
+        for attempt in range(1, MAX_VALIDATION_ATTEMPTS + 1):
+            try:
+                raw = await self._meal_generation_service.generate_meal_plan_async(
+                    prompt=prompt,
+                    system_message=retry_system_prompt,
+                    response_type="json",
+                    max_tokens=2048,
+                    schema=MealTextNutritionResponse,
+                    model_purpose="parse_text",
+                    thinking_budget=0,
+                )
+                raw_payload = self._extract_parse_text_payload(raw)
+                validated_payload = validate_ai_output(
+                    raw_payload,
+                    schema=MealTextNutritionResponse,
+                    purpose=PARSE_TEXT_VALIDATION_PURPOSE,
+                    attempt_count=attempt,
+                )
+                if attempt > 1:
+                    logger.info(
+                        "[AI-OUTPUT-VALIDATION-RETRY-SUCCESS] purpose=%s attempt=%s",
+                        PARSE_TEXT_VALIDATION_PURPOSE,
+                        attempt,
+                    )
+                return validated_payload, raw_payload
+            except AIOutputValidationError as exc:
+                logger.warning(
+                    "[AI-OUTPUT-VALIDATION-FAILED] purpose=%s attempt=%s details=%s",
+                    PARSE_TEXT_VALIDATION_PURPOSE,
+                    attempt,
+                    exc.validation_details,
+                )
+                if attempt >= MAX_VALIDATION_ATTEMPTS:
+                    raise AIOutputValidationError(
+                        "Invalid AI output after validation retry",
+                        purpose=PARSE_TEXT_VALIDATION_PURPOSE,
+                        attempt_count=attempt,
+                        validation_details=exc.validation_details,
+                    ) from exc
+                retry_system_prompt = build_validation_retry_prompt(system_prompt, exc)
+
+        raise RuntimeError("Failed to parse meal text after validation retry")
+
+    def _extract_parse_text_payload(self, raw: Any) -> dict[str, Any]:
+        if isinstance(raw, dict):
+            payload = dict(raw)
+        elif isinstance(raw, list):
+            payload = {"items": raw}
+        else:
+            extracted = extract_json_from_response(str(raw))
+            payload = {"items": extracted} if isinstance(extracted, list) else extracted
+
+        if not isinstance(payload, dict):
+            raise AIOutputValidationError(
+                "Invalid AI structured output",
+                purpose=PARSE_TEXT_VALIDATION_PURPOSE,
+                attempt_count=1,
+                validation_details=["response root must be an object or item list"],
+            )
+        return payload
+
+    def _to_flat_parse_text_items(
+        self, validated_payload: dict[str, Any], _raw_payload: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        flat_items = []
+        for item in validated_payload.get("items", []):
+            macros = item.get("macros", {})
+            flat_item = {
+                "name": item.get("name"),
+                "quantity": item.get("quantity"),
+                "unit": item.get("unit"),
+                "english_unit": item.get("english_unit"),
+                "protein": macros.get("protein_g", 0.0),
+                "carbs": macros.get("carbs_g", 0.0),
+                "fat": macros.get("fat_g", 0.0),
+                "calories": self._derive_calories_from_macros(macros),
+            }
+            if item.get("quantity_g") is not None:
+                flat_item["quantity_g"] = item["quantity_g"]
+
+            flat_items.append(flat_item)
+
+        return flat_items
+
+    @staticmethod
+    def _derive_calories_from_macros(macros: dict[str, Any]) -> float:
+        protein = float(macros.get("protein_g", 0.0) or 0.0)
+        carbs = float(macros.get("carbs_g", 0.0) or 0.0)
+        fiber = float(macros.get("fiber_g", 0.0) or 0.0)
+        fat = float(macros.get("fat_g", 0.0) or 0.0)
+        digestible_carbs = max(carbs - fiber, 0.0)
+        return round(protein * 4 + digestible_carbs * 4 + fiber * 2 + fat * 9, 2)
 
     # Max ratio between FatSecret and AI estimate before rejecting FatSecret
     _FATSECRET_DIVERGENCE_THRESHOLD = 3.0
@@ -224,6 +318,9 @@ class ParseMealTextHandler(
         self, items: list[dict[str, Any]], language: str
     ) -> None:
         """Detect and batch-translate any remaining English food names using DeepL."""
+        if self._translation_service is None:
+            return
+
         english_indices = [
             i for i, item in enumerate(items) if self._is_english(item.get("name", ""))
         ]

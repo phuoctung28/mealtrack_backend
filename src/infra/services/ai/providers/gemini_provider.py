@@ -1,12 +1,16 @@
 """Gemini implementation of AIProviderPort."""
+
 import asyncio
 import logging
 import re
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from pydantic import ValidationError
 
+from src.domain.exceptions.ai_exceptions import AIOutputValidationError
 from src.domain.ports.ai_provider_port import AICapability, AIProviderPort
+from src.domain.services.ai_output_validation_service import summarize_validation_error
 from src.infra.adapters.ai_json_utils import (
     extract_json as extract_ai_json,
 )
@@ -21,14 +25,14 @@ MODEL_PURPOSE_MAP = {
 }
 
 _PURPOSE_HINT_MAP: dict[str, GeminiModelPurpose] = {
-    "recipe":          GeminiModelPurpose.RECIPE,
-    "barcode":         GeminiModelPurpose.BARCODE,
-    "meal_names":      GeminiModelPurpose.MEAL_NAMES,
-    "discovery":       GeminiModelPurpose.MEAL_NAMES,
-    "parse_text":      GeminiModelPurpose.GENERAL,
+    "recipe": GeminiModelPurpose.RECIPE,
+    "barcode": GeminiModelPurpose.BARCODE,
+    "meal_names": GeminiModelPurpose.MEAL_NAMES,
+    "discovery": GeminiModelPurpose.MEAL_NAMES,
+    "parse_text": GeminiModelPurpose.GENERAL,
     "ingredient_scan": GeminiModelPurpose.GENERAL,
-    "meal_scan":       GeminiModelPurpose.GENERAL,
-    "general":         GeminiModelPurpose.GENERAL,
+    "meal_scan": GeminiModelPurpose.GENERAL,
+    "general": GeminiModelPurpose.GENERAL,
 }
 
 
@@ -77,7 +81,7 @@ class GeminiProvider(AIProviderPort):
         if not schema and response_type == "json":
             response_mime_type = "application/json"
 
-        extra_kwargs = {}
+        extra_kwargs: dict[str, Any] = {}
         if cache_name:
             extra_kwargs["cached_content"] = cache_name
 
@@ -90,7 +94,7 @@ class GeminiProvider(AIProviderPort):
         )
 
         # When using explicit cache, system message is already in cache — omit it to avoid duplication errors
-        messages = []
+        messages: list[BaseMessage] = []
         if cache_name:
             # system content is already in the Gemini cache — omit to avoid 400 error
             pass
@@ -100,10 +104,23 @@ class GeminiProvider(AIProviderPort):
 
         if schema:
             llm_structured = llm.with_structured_output(schema, include_raw=True)
-            result = await asyncio.to_thread(llm_structured.invoke, messages)
+            try:
+                result = await asyncio.to_thread(llm_structured.invoke, messages)
+            except (ValueError, ValidationError) as exc:
+                raise AIOutputValidationError(
+                    "Invalid AI structured output",
+                    purpose=purpose_hint or "general",
+                    attempt_count=1,
+                    validation_details=summarize_validation_error(exc),
+                ) from exc
             parsed = result.get("parsed") if isinstance(result, dict) else result
             if parsed is None:
-                raise ValueError("Structured output returned None")
+                raise AIOutputValidationError(
+                    "Invalid AI structured output",
+                    purpose=purpose_hint or "general",
+                    attempt_count=1,
+                    validation_details=["structured output returned empty result"],
+                )
             if hasattr(parsed, "model_dump"):
                 return parsed.model_dump()
             return dict(parsed)
@@ -121,7 +138,9 @@ class GeminiProvider(AIProviderPort):
         prompt: str,
         image_data: bytes,
         system_message: str | None = None,
-        purpose_hint: str | None = None,   # NEW
+        purpose_hint: str | None = None,  # NEW
+        *,
+        schema: type | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Generate with image input."""
@@ -141,7 +160,7 @@ class GeminiProvider(AIProviderPort):
         image_b64 = base64.b64encode(image_data).decode("utf-8")
         image_url = f"data:image/jpeg;base64,{image_b64}"
 
-        messages = []
+        messages: list[BaseMessage] = []
         if system_message:
             messages.append(SystemMessage(content=system_message))
 
@@ -153,6 +172,31 @@ class GeminiProvider(AIProviderPort):
                 ]
             )
         )
+
+        if schema:
+            llm_structured = llm.with_structured_output(schema, include_raw=True)
+            try:
+                result = await asyncio.to_thread(llm_structured.invoke, messages)
+            except (ValueError, ValidationError) as exc:
+                raise AIOutputValidationError(
+                    "Invalid AI structured output",
+                    purpose=purpose_hint or "meal_scan",
+                    attempt_count=1,
+                    validation_details=summarize_validation_error(exc),
+                ) from exc
+            parsed = result.get("parsed") if isinstance(result, dict) else result
+            if parsed is None:
+                raise AIOutputValidationError(
+                    "Invalid AI structured output",
+                    purpose=purpose_hint or "meal_scan",
+                    attempt_count=1,
+                    validation_details=[
+                        "structured vision output returned empty result"
+                    ],
+                )
+            if hasattr(parsed, "model_dump"):
+                return parsed.model_dump()
+            return dict(parsed)
 
         response = await asyncio.to_thread(llm.invoke, messages)
         return self._extract_json(response.content)

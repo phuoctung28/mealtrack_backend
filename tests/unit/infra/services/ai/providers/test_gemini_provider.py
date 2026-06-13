@@ -1,7 +1,10 @@
 from unittest.mock import Mock, patch
 
 import pytest
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel
 
+from src.domain.exceptions.ai_exceptions import AIOutputValidationError
 from src.domain.ports.ai_provider_port import AICapability
 from src.infra.services.ai.providers.gemini_provider import GeminiProvider
 
@@ -146,6 +149,92 @@ class TestGenerateWithVision:
 
         call_kwargs = mock_model_manager.get_model_for_purpose.call_args[1]
         assert call_kwargs["model_name"] == "gemini-2.5-flash-lite"
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_uses_structured_output_schema(
+        self, provider, mock_model_manager
+    ):
+        class DummyVisionResponse(BaseModel):
+            result: str
+
+        captured_messages = []
+        mock_structured_llm = Mock()
+        mock_structured_llm.invoke = Mock(
+            side_effect=lambda messages: captured_messages.extend(messages)
+            or {"parsed": DummyVisionResponse(result="ok")}
+        )
+        mock_llm = Mock()
+        mock_llm.with_structured_output = Mock(return_value=mock_structured_llm)
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+        result = await provider.generate_with_vision(
+            model="gemini-2.5-flash-lite",
+            prompt="analyze this meal",
+            image_data=b"fake-image",
+            system_message="system instructions",
+            purpose_hint="meal_scan",
+            schema=DummyVisionResponse,
+        )
+
+        assert result == {"result": "ok"}
+        mock_llm.with_structured_output.assert_called_once_with(
+            DummyVisionResponse, include_raw=True
+        )
+        assert any(isinstance(message, SystemMessage) for message in captured_messages)
+        human_message = next(
+            message
+            for message in captured_messages
+            if isinstance(message, HumanMessage)
+        )
+        assert human_message.content[0] == {
+            "type": "text",
+            "text": "analyze this meal",
+        }
+        assert human_message.content[1]["type"] == "image_url"
+        assert human_message.content[1]["image_url"]["url"].startswith(
+            "data:image/jpeg;base64,"
+        )
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_raises_when_structured_output_is_empty(
+        self, provider, mock_model_manager
+    ):
+        class DummyVisionResponse(BaseModel):
+            result: str
+
+        mock_structured_llm = Mock()
+        mock_structured_llm.invoke = Mock(return_value={"parsed": None})
+        mock_llm = Mock()
+        mock_llm.with_structured_output = Mock(return_value=mock_structured_llm)
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+        with pytest.raises(AIOutputValidationError) as exc_info:
+            await provider.generate_with_vision(
+                model="gemini-2.5-flash-lite",
+                prompt="analyze",
+                image_data=b"fake-image",
+                schema=DummyVisionResponse,
+            )
+        assert exc_info.value.purpose == "meal_scan"
+        assert "empty result" in exc_info.value.validation_details[0]
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_without_schema_uses_raw_json_path(
+        self, provider, mock_model_manager
+    ):
+        mock_llm = Mock()
+        mock_llm.invoke = Mock(return_value=Mock(content='{"result": "ok"}'))
+        mock_llm.with_structured_output = Mock()
+        mock_model_manager.get_model_for_purpose.return_value = mock_llm
+
+        result = await provider.generate_with_vision(
+            model="gemini-2.5-flash-lite",
+            prompt="analyze",
+            image_data=b"fake-image",
+        )
+
+        assert result == {"result": "ok"}
+        mock_llm.with_structured_output.assert_not_called()
 
 
 class TestErrorExtraction:

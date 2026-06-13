@@ -19,11 +19,25 @@ def _make_jpeg(width: int, height: int, quality: int = 95) -> bytes:
     return buf.getvalue()
 
 
+def _valid_vision_response() -> dict:
+    return {
+        "dish_name": "test",
+        "foods": [
+            {
+                "name": "rice",
+                "quantity_g": 180,
+                "macros": {"protein": 4, "carbs": 50, "fat": 1},
+            }
+        ],
+        "confidence": 0.8,
+    }
+
+
 def _make_service(max_output_tokens: int | None = None) -> VisionAIService:
     with patch(_MGR_PATCH) as mock_cls:
         mock_manager = MagicMock()
         mock_manager.generate_with_vision = AsyncMock(
-            return_value={"dish_name": "test", "ingredients": []}
+            return_value=_valid_vision_response()
         )
         mock_cls.get_instance.return_value = mock_manager
         return VisionAIService(max_output_tokens=max_output_tokens)
