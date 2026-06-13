@@ -93,14 +93,22 @@ class VisionNutritionResponse(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    is_food: bool = Field(True, description="Whether the image contains edible food")
     dish_name: str | None = Field(None, max_length=200)
     foods: list[VisionFoodEstimate] = Field(
-        ...,
-        min_length=1,
+        default_factory=list,
         max_length=MAX_AI_FOOD_ITEMS,
         description="Foods visible in the image",
     )
     confidence: float = Field(0.5, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def require_foods_for_food_images(self) -> "VisionNutritionResponse":
+        if self.is_food and not self.foods:
+            raise ValueError(
+                "foods must contain at least one item when is_food is true"
+            )
+        return self
 
 
 class MealTextFoodEstimate(BaseModel):

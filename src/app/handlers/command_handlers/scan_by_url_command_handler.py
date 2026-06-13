@@ -22,13 +22,13 @@ from src.domain.services.meal_analysis.deepl_meal_translation_service import (
 from src.domain.services.meal_type_determination_service import (
     determine_meal_type_from_timestamp,
 )
+from src.domain.utils.image_compression import compress_image
 from src.domain.utils.timezone_utils import (
     get_zone_info,
     is_valid_timezone,
     noon_utc_for_date,
     utc_now,
 )
-from src.domain.utils.image_compression import compress_image
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,9 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
             image_bytes = await asyncio.to_thread(compress_image, raw_bytes)
             logger.info(
                 "[SCAN-BY-URL] image_id=%s raw=%d compressed=%d bytes",
-                image_id, len(raw_bytes), len(image_bytes),
+                image_id,
+                len(raw_bytes),
+                len(image_bytes),
             )
 
             # Determine timezone-aware datetime
@@ -86,21 +88,32 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 meal_datetime = now
 
             zone_info = get_zone_info(user_timezone)
-            meal_type = determine_meal_type_from_timestamp(meal_datetime.astimezone(zone_info))
+            meal_type = determine_meal_type_from_timestamp(
+                meal_datetime.astimezone(zone_info)
+            )
 
             # Vision analysis via bytes path (never sends URL to Gemini)
             if command.user_description:
                 from src.domain.strategies.meal_analysis_strategy import (
                     AnalysisStrategyFactory,
                 )
+
                 strategy = AnalysisStrategyFactory.create_user_context_strategy(
                     command.user_description
                 )
-                vision_result = await self.vision_service.analyze_with_strategy(image_bytes, strategy)
+                vision_result = await self.vision_service.analyze_with_strategy(
+                    image_bytes, strategy
+                )
             else:
                 vision_result = await self.vision_service.analyze(image_bytes)
 
             vision_elapsed = time.time() - start
+
+            if not self.gpt_parser.parse_is_food(vision_result):
+                raise ValueError(
+                    "Image does not appear to contain food. "
+                    "Please take a photo of food and try again."
+                )
 
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
             dish_name = self.gpt_parser.parse_dish_name(vision_result)
@@ -143,7 +156,9 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
 
             logger.info(
                 "[SCAN-BY-URL-COMPLETE] meal=%s vision=%.2fs total=%.2fs",
-                saved_meal.meal_id, vision_elapsed, time.time() - start,
+                saved_meal.meal_id,
+                vision_elapsed,
+                time.time() - start,
             )
 
             if (
@@ -163,7 +178,8 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 except Exception as exc:
                     logger.warning(
                         "[SCAN-BY-URL] translation failed meal=%s: %s",
-                        saved_meal.meal_id, exc,
+                        saved_meal.meal_id,
+                        exc,
                     )
 
             async with self.uow as uow:
@@ -172,9 +188,11 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
                 )
 
             if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
+                await self.cache_invalidation.after_meal_write(
+                    command.user_id, meal_date
+                )
 
             return final_meal
 
-        except Exception as e:
+        except Exception:
             raise

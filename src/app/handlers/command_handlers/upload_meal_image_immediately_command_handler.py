@@ -139,8 +139,7 @@ class UploadMealImageImmediatelyHandler(
 
         upload_elapsed = time.time() - start
         logger.info(
-            f"[UPLOAD-COMPLETE] image_id={image_id} | "
-            f"elapsed={upload_elapsed:.2f}s"
+            f"[UPLOAD-COMPLETE] image_id={image_id} | " f"elapsed={upload_elapsed:.2f}s"
         )
 
         # Step 4: Run AI analysis
@@ -149,7 +148,7 @@ class UploadMealImageImmediatelyHandler(
 
         try:
             analysis_result = await self._run_vision_analysis(command, image_id)
-        except Exception as e:
+        except Exception:
             # Image uploaded but analysis failed - acceptable orphan in Cloudinary
             raise
 
@@ -159,6 +158,12 @@ class UploadMealImageImmediatelyHandler(
         )
 
         # Step 5: Parse nutrition and validate food detected
+        if not self.gpt_parser.parse_is_food(analysis_result):
+            raise ValueError(
+                "Image does not appear to contain food. "
+                "Please take a photo of food and try again."
+            )
+
         nutrition = self.gpt_parser.parse_to_nutrition(analysis_result)
         dish_name = self.gpt_parser.parse_dish_name(analysis_result)
 

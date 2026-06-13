@@ -160,6 +160,7 @@ Return ONLY valid JSON matching the structure above. No additional keys. No mark
 
 RESPONSE FORMAT — return exactly this structure:
 {
+  "is_food": true,
   "dish_name": "Overall dish name or comma-separated items if complex",
   "emoji": "single food emoji that best represents this dish",
   "foods": [
@@ -174,6 +175,11 @@ RESPONSE FORMAT — return exactly this structure:
   "total_calories": 248,
   "confidence": 0.85
 }
+
+FOOD GUARD:
+- If the image contains no edible food, return:
+  {"is_food": false, "dish_name": null, "emoji": null, "foods": [], "total_calories": 0, "confidence": 0.95}
+- Do not invent food, ingredients, portions, or nutrition for non-food images.
 
 IDENTIFICATION RULES:
 - Identify every visible distinct food component in the image.
@@ -210,6 +216,7 @@ EMOJI SELECTION — one emoji for the overall dish:
 
 WORKED EXAMPLE — Chicken rice bowl image:
 {
+  "is_food": true,
   "dish_name": "Grilled Chicken Rice Bowl",
   "emoji": "🍚",
   "foods": [

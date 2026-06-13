@@ -98,7 +98,9 @@ def test_meals_analyze_ai_unavailable_returns_503(client: TestClient):
                 last_error="503 UNAVAILABLE",
             )
 
-    client.app.dependency_overrides[get_configured_event_bus] = lambda: _UnavailableBus()
+    client.app.dependency_overrides[get_configured_event_bus] = (
+        lambda: _UnavailableBus()
+    )
 
     r = client.post(
         "/v1/meals/image/analyze",
@@ -107,6 +109,43 @@ def test_meals_analyze_ai_unavailable_returns_503(client: TestClient):
 
     assert r.status_code == 503
     assert r.json()["detail"]["error_code"] == "AI_UNAVAILABLE"
+
+
+def test_meals_analyze_non_food_returns_not_food_image(client: TestClient):
+    from src.api.dependencies.event_bus import get_configured_event_bus
+
+    class _NonFoodBus:
+        async def send(self, msg):
+            raise ValueError("Image does not appear to contain food")
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _NonFoodBus()
+
+    r = client.post(
+        "/v1/meals/image/analyze",
+        files={"file": ("x.jpg", b"image-bytes", "image/jpeg")},
+    )
+
+    assert r.status_code == 400
+    assert r.json()["detail"]["error_code"] == "NOT_FOOD_IMAGE"
+
+
+def test_scan_by_url_non_food_returns_not_food_image(client: TestClient):
+    from src.api.dependencies.event_bus import get_configured_event_bus
+
+    class _NonFoodBus:
+        async def send(self, msg):
+            raise ValueError("Image does not appear to contain food")
+
+    client.app.dependency_overrides[get_configured_event_bus] = lambda: _NonFoodBus()
+
+    payload = {
+        "image_url": "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc.jpg",
+        "image_id": "abc",
+    }
+    r = client.post("/v1/meals/scan-by-url", json=payload)
+
+    assert r.status_code == 400
+    assert r.json()["detail"]["error_code"] == "NOT_FOOD_IMAGE"
 
 
 def test_user_profiles_onboarding_invalid_birth_date(client: TestClient):

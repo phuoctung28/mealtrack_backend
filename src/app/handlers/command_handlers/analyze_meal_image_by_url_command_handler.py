@@ -113,8 +113,16 @@ class AnalyzeMealImageByUrlHandler(EventHandler[AnalyzeMealImageByUrlCommand, Me
                     command.image_url, strategy
                 )
             else:
-                vision_result = await self.vision_service.analyze_by_url(command.image_url)
+                vision_result = await self.vision_service.analyze_by_url(
+                    command.image_url
+                )
             phase1_elapsed = time.time() - phase1_start
+
+            if not self.gpt_parser.parse_is_food(vision_result):
+                raise ValueError(
+                    "Image does not appear to contain food. "
+                    "Please take a photo of food and try again."
+                )
 
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
             dish_name = self.gpt_parser.parse_dish_name(vision_result)
@@ -180,7 +188,9 @@ class AnalyzeMealImageByUrlHandler(EventHandler[AnalyzeMealImageByUrlCommand, Me
                 )
 
             if self.cache_invalidation:
-                await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
+                await self.cache_invalidation.after_meal_write(
+                    command.user_id, meal_date
+                )
             return final_meal
         except Exception as e:
             logger.warning("Failed to analyze meal by URL: %s", type(e).__name__)

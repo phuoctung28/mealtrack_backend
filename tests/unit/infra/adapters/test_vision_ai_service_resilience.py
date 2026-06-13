@@ -79,6 +79,29 @@ async def test_analyze_with_strategy_returns_structured_data(
 
 
 @pytest.mark.asyncio
+async def test_analyze_with_strategy_preserves_non_food_guard(
+    service, mock_ai_manager, mock_strategy
+):
+    mock_ai_manager.generate_with_vision = AsyncMock(
+        return_value={
+            "is_food": False,
+            "dish_name": None,
+            "foods": [],
+            "confidence": 0.95,
+        }
+    )
+
+    result = await service.analyze_with_strategy(b"fake_image", mock_strategy)
+
+    assert result["structured_data"]["is_food"] is False
+    assert result["structured_data"]["foods"] == []
+
+    from src.domain.parsers.gpt_response_parser import GPTResponseParser
+
+    assert GPTResponseParser().parse_is_food(result) is False
+
+
+@pytest.mark.asyncio
 async def test_analyze_with_strategy_calls_correct_purpose(
     service, mock_ai_manager, mock_strategy
 ):

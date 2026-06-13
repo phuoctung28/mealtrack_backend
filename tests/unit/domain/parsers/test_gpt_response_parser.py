@@ -112,6 +112,31 @@ class TestGPTResponseParserOptionalFoods:
         assert nutrition.confidence_score == pytest.approx(1.0)
 
 
+class TestGPTResponseParserFoodGuard:
+    def test_parse_is_food_defaults_true_when_missing(self, gpt_parser):
+        gpt_response = {"structured_data": {"dish_name": "Rice Bowl"}}
+
+        assert gpt_parser.parse_is_food(gpt_response) is True
+
+    def test_parse_is_food_returns_false_for_boolean_false(self, gpt_parser):
+        gpt_response = {"structured_data": {"is_food": False}}
+
+        assert gpt_parser.parse_is_food(gpt_response) is False
+
+    def test_parse_is_food_returns_false_for_string_false(self, gpt_parser):
+        gpt_response = {"structured_data": {"is_food": "false"}}
+
+        assert gpt_parser.parse_is_food(gpt_response) is False
+
+    def test_parse_is_food_returns_false_for_numeric_zero(self, gpt_parser):
+        gpt_response = {"structured_data": {"is_food": 0}}
+
+        assert gpt_parser.parse_is_food(gpt_response) is False
+
+    def test_parse_is_food_defaults_true_when_structured_data_missing(self, gpt_parser):
+        assert gpt_parser.parse_is_food({}) is True
+
+
 class TestGPTResponseParserStrictSchemaMode:
     def test_non_strict_mode_allows_non_list_foods_with_top_level_macros(self):
         from src.domain.parsers.gpt_response_parser import GPTResponseParser

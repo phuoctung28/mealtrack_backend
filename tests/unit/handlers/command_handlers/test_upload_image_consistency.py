@@ -35,7 +35,9 @@ async def test_upload_failure_does_not_create_db_record():
 
     # Cloudinary upload fails
     handler.image_store = MagicMock()
-    handler.image_store.save_async = AsyncMock(side_effect=Exception("Cloudinary upload failed"))
+    handler.image_store.save_async = AsyncMock(
+        side_effect=Exception("Cloudinary upload failed")
+    )
 
     handler.vision_service = MagicMock()
     handler.gpt_parser = MagicMock()
@@ -97,6 +99,50 @@ async def test_invalid_cloudinary_url_does_not_create_db_record_or_log_url(caplo
 
 
 @pytest.mark.asyncio
+async def test_non_food_upload_rejects_before_db_record():
+    """Non-food vision output should not create a meal or parse nutrition."""
+    mock_uow = MagicMock()
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users = MagicMock()
+    mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
+    mock_uow.meals = MagicMock()
+    mock_uow.meals.save = AsyncMock()
+    mock_uow.commit = AsyncMock()
+
+    mock_event_bus = MagicMock()
+    mock_event_bus.publish = AsyncMock()
+
+    handler = UploadMealImageImmediatelyHandler(
+        uow=mock_uow,
+        event_bus=mock_event_bus,
+    )
+    handler.image_store = MagicMock()
+    handler.image_store.save_async = AsyncMock(
+        return_value="https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc123.jpg"
+    )
+    handler.vision_service = MagicMock()
+    handler.vision_service.analyze = AsyncMock(
+        return_value={"structured_data": {"is_food": False, "foods": []}}
+    )
+    handler.gpt_parser = MagicMock()
+    handler.gpt_parser.parse_is_food.return_value = False
+
+    command = UploadMealImageImmediatelyCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        file_contents=b"fake-image-bytes",
+        content_type="image/jpeg",
+    )
+
+    with pytest.raises(ValueError, match="Image does not appear to contain food"):
+        await handler.handle(command)
+
+    handler.gpt_parser.parse_to_nutrition.assert_not_called()
+    mock_uow.meals.save.assert_not_called()
+    mock_uow.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_successful_upload_creates_meal_with_verified_url():
     """When upload succeeds with valid URL, meal is created with that URL."""
     saved_meals = []
@@ -126,9 +172,11 @@ async def test_successful_upload_creates_meal_with_verified_url():
 
     # Cloudinary returns valid URL
     handler.image_store = MagicMock()
-    handler.image_store.save_async = AsyncMock(return_value=(
-        "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc123.jpg"
-    ))
+    handler.image_store.save_async = AsyncMock(
+        return_value=(
+            "https://res.cloudinary.com/test/image/upload/v123/mealtrack/abc123.jpg"
+        )
+    )
 
     # Vision service returns valid analysis
     handler.vision_service = MagicMock()

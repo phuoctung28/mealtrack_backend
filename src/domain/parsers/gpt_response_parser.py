@@ -160,6 +160,27 @@ class GPTResponseParser:
 
         return total_macros
 
+    def parse_is_food(self, gpt_response: dict[str, Any]) -> bool:
+        """Parse food-presence guard from GPT response with legacy-safe default."""
+        try:
+            structured_data = gpt_response.get("structured_data", {})
+            if (
+                not isinstance(structured_data, dict)
+                or "is_food" not in structured_data
+            ):
+                return True
+
+            value = structured_data.get("is_food")
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                return value.strip().lower() not in {"false", "0", "no", "non_food"}
+            if isinstance(value, (int, float)):
+                return value != 0
+            return True
+        except (KeyError, TypeError):
+            return True
+
     def parse_dish_name(self, gpt_response: dict[str, Any]) -> str | None:
         """
         Parse dish name from GPT response.
