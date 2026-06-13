@@ -8,6 +8,8 @@ import time
 from typing import Any
 from uuid import uuid4
 
+from src.observability import distribution_metric
+
 logger = logging.getLogger(__name__)
 
 from src.app.commands.meal.create_manual_meal_command import CreateManualMealCommand
@@ -58,6 +60,8 @@ class CreateManualMealCommandHandler(EventHandler[CreateManualMealCommand, Any])
             _cache_ms = (time.perf_counter() - _t_cache_start) * 1000
 
             _total_ms = (time.perf_counter() - _t_start) * 1000
+            distribution_metric("meal.manual_save.db_ms", _db_ms, unit="millisecond", attributes={"component": "manual_meal"})
+            distribution_metric("meal.manual_save.cache_ms", _cache_ms, unit="millisecond", attributes={"component": "manual_meal"})
             logger.info(
                 "manual_save handler timing: user=%s db_ms=%.1f cache_ms=%.1f total_ms=%.1f",
                 event.user_id,

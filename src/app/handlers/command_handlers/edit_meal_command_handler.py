@@ -121,7 +121,6 @@ class EditMealCommandHandler(EventHandler[EditMealCommand, dict[str, Any]]):
                 raise ValidationException(str(e)) from None
             except Exception as e:
                 await uow.rollback()
-                logger.error(f"Error editing meal: {str(e)}")
                 raise
 
     async def _apply_food_item_changes(self, current_food_items, changes):

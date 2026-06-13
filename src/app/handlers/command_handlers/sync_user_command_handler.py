@@ -160,7 +160,6 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, dict[str, Any]]):
 
             except Exception as e:
                 await uow.rollback()
-                logger.error(f"Error syncing user data: {str(e)}")
                 raise
 
     def _create_new_user(
@@ -270,7 +269,7 @@ class SyncUserCommandHandler(EventHandler[SyncUserCommand, dict[str, Any]]):
 
             uuid.UUID(user_id_str)
         except ValueError:
-            logger.error(f"Skipping notification prefs: invalid UUID {user_id_str!r}")
+            logger.warning("Skipping notification prefs: invalid UUID value (len=%d)", len(user_id_str))
             return
 
         try:

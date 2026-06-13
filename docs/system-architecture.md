@@ -1,6 +1,6 @@
 # Backend System Architecture Overview
 
-**Last Updated:** June 9, 2026
+**Last Updated:** June 13, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
 **Codebase:** 430 files, ~38.5K LOC across 4 layers
@@ -67,6 +67,25 @@ Background subscriber tasks are owned by `BackgroundTaskManager` (`src/infra/eve
 
 ### Repository Pattern
 Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW owns commit/rollback boundaries; repositories flush only when generated IDs or relationship state are needed.
+
+### Observability Connector
+Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Infrastructure owns the Sentry connector, and startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
+
+The connector sends unexpected API failures, `ERROR` logs, sampled request/SQL/cron spans, explicit Sentry Logs, operational metrics, swallowed cron failures, and affiliate outbox permanent failures. It does not send expected 4xx/business errors, product analytics, request bodies, auth headers, Firebase claims, emails, food payloads, raw image URLs, provider payloads, or secrets. Context, log attributes, and metric attributes are allowlisted scalar values.
+
+### Exception Ownership by Layer (Single-Owner Logger)
+
+**Rule: log-or-raise, not both.** One root-cause `ERROR` per unexpected request failure.
+
+| Layer / File | Role | Log behavior |
+|---|---|---|
+| `src/api/exception_handlers.py` | Global FastAPI boundary | Owns single `ERROR` for unexpected exceptions; `MealTrackException` converts silently (no log); `AIUnavailableError` logs `WARNING` |
+| `src/api/middleware/request_logger.py` | Outcome indicator | 5xx response lines logged at `WARNING` — never `ERROR`; root-cause ERROR is upstream |
+| Command/query handlers | Pure conversion | Call `handle_exception()` or propagate directly; do **not** log before re-raising |
+| Event handlers / background tasks | Swallowing boundary | Own their `ERROR` log + `capture_exception` at subscriber boundary |
+| `src/cron/email.py`, `src/cron/push.py` | Cron boundary | `capture_exception` + `flush_observability` on failure; `log_event("info", "cron.phase.completed")` per phase |
+
+Architecture guardrails enforced by `tests/unit/architecture/test_logging_ownership_guardrails.py`: bans direct `sentry_sdk` outside connector, log-and-rethrow pattern, and sensitive substrings in log statements.
 
 ---
 

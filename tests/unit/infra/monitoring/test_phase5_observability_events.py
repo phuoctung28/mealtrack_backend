@@ -1,0 +1,209 @@
+"""TDD guards: Phase 5 structured observability events.
+
+Verifies that each target boundary emits the correct metric/event via the
+facade, with safe low-cardinality attributes and no user/meal/resource IDs.
+"""
+
+from __future__ import annotations
+
+from contextlib import nullcontext
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from src.observability import (
+    reset_observability_connector_for_test,
+    set_observability_connector_for_test,
+)
+
+
+class _Rec:
+    """Minimal recording connector for facade assertions."""
+
+    def __init__(self):
+        self.calls: list[tuple] = []
+
+    def initialize(self):
+        pass
+
+    def capture_exception(self, error, *, context=None):
+        pass
+
+    def capture_message(self, message, *, level="info", context=None):
+        pass
+
+    def log_event(self, level, message, *, attributes=None):
+        self.calls.append(("log_event", level, message, attributes))
+
+    def increment_metric(self, name, value=1.0, *, unit=None, attributes=None):
+        self.calls.append(("increment_metric", name, value, unit, attributes))
+
+    def gauge_metric(self, name, value, *, unit=None, attributes=None):
+        pass
+
+    def distribution_metric(self, name, value, *, unit=None, attributes=None):
+        self.calls.append(("distribution_metric", name, value, unit, attributes))
+
+    def set_request_context(self, *, request_id, method, path, user_id=None):
+        pass
+
+    def start_span(self, *, operation, description=None, context=None):
+        return nullcontext()
+
+    def flush(self, *, timeout=5):
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _reset_obs():
+    yield
+    reset_observability_connector_for_test()
+
+
+# ---------------------------------------------------------------------------
+# Manual meal save — db and cache latency distributions
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_manual_meal_save_emits_db_and_cache_latency_metrics():
+    from src.app.handlers.command_handlers.create_manual_meal_command_handler import (
+        CreateManualMealCommandHandler,
+    )
+
+    rec = _Rec()
+    set_observability_connector_for_test(rec)
+
+    mock_uow = AsyncMock()
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+
+    mock_cache = AsyncMock()
+    mock_cache.after_meal_write = AsyncMock()
+
+    handler = CreateManualMealCommandHandler(uow=mock_uow, cache_invalidation=mock_cache)
+    # Patch _process_meal so we don't need a real DB / domain object
+    handler._process_meal = AsyncMock(return_value=(MagicMock(), "2026-06-13"))
+
+    # Minimal command — exact fields don't matter since _process_meal is mocked
+    command = MagicMock()
+    command.user_id = "user-1"
+
+    await handler.handle(command)
+
+    dist_names = [c[1] for c in rec.calls if c[0] == "distribution_metric"]
+    assert "meal.manual_save.db_ms" in dist_names, f"missing db_ms metric, got {dist_names}"
+    assert "meal.manual_save.cache_ms" in dist_names, f"missing cache_ms metric, got {dist_names}"
+
+    # No high-cardinality IDs in attributes
+    for call in rec.calls:
+        if call[0] == "distribution_metric":
+            attrs = call[4] or {}
+            assert "user_id" not in attrs, "user_id must not appear in metric attributes"
+            assert "meal_id" not in attrs
+
+
+# ---------------------------------------------------------------------------
+# AI provider total failure — log_event("warning", "ai.provider.failure")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ai_all_models_fail_emits_provider_failure_log_event():
+    from src.domain.exceptions.ai_exceptions import AIUnavailableError
+    from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
+
+    rec = _Rec()
+    set_observability_connector_for_test(rec)
+
+    manager = AIModelManager()
+
+    # Mock circuit breaker to allow one model, mock provider to always fail
+    manager._circuit_breaker = MagicMock()
+    manager._circuit_breaker.filter_available = MagicMock(return_value=["model-a"])
+    manager._circuit_breaker.should_trip = MagicMock(return_value=False)
+    manager._circuit_breaker.record_failure = MagicMock()
+
+    failing_provider = MagicMock()
+    failing_provider.generate = AsyncMock(side_effect=RuntimeError("provider down"))
+    failing_provider.extract_error_code = MagicMock(return_value="UNKNOWN")
+    manager._get_provider_for_model = MagicMock(return_value=failing_provider)
+    manager._get_cache_name_for_model = AsyncMock(return_value=None)
+
+    with pytest.raises(AIUnavailableError):
+        await manager.generate(ModelPurpose.GENERAL, "test prompt", "sys")
+
+    failure_events = [
+        c for c in rec.calls
+        if c[0] == "log_event" and c[2] == "ai.provider.failure"
+    ]
+    assert len(failure_events) >= 1, "expected ai.provider.failure log_event"
+
+    # Check level and safe attributes
+    for ev in failure_events:
+        assert ev[1] == "warning", f"expected warning level, got {ev[1]}"
+        attrs = ev[3] or {}
+        assert "user_id" not in attrs
+        assert "model" not in attrs  # model name per-request is high-cardinality
+
+
+# ---------------------------------------------------------------------------
+# Affiliate outbox permanent failure — increment_metric("affiliate.outbox.failure")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_affiliate_outbox_permanent_failure_emits_metric():
+    from src.infra.services.affiliate_outbox_dispatch_service import (
+        dispatch_affiliate_outbox,
+    )
+
+    rec = _Rec()
+    set_observability_connector_for_test(rec)
+
+    mock_row = MagicMock()
+    mock_row.id = "row-1"
+    mock_row.event_id = "evt-1"
+    mock_row.event_type = "purchase"
+    mock_row.payload = {}
+
+    mock_repo = AsyncMock()
+    mock_repo.claim_pending = AsyncMock(return_value=[mock_row])
+    mock_repo.mark_sent = AsyncMock()
+    mock_repo.mark_failed = AsyncMock(return_value=True)  # is_terminal=True
+
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session.begin = MagicMock(return_value=mock_session)
+
+    mock_adapter = MagicMock()
+    mock_adapter.send_event = AsyncMock(return_value=False)  # force failure
+
+    with (
+        patch(
+            "src.infra.services.affiliate_outbox_dispatch_service.AsyncSessionLocal",
+            return_value=mock_session,
+        ),
+        patch(
+            "src.infra.services.affiliate_outbox_dispatch_service.AffiliateEventOutboxRepository",
+            return_value=mock_repo,
+        ),
+        patch(
+            "src.infra.services.affiliate_outbox_dispatch_service.AffiliateServiceAdapter",
+            return_value=mock_adapter,
+        ),
+    ):
+        await dispatch_affiliate_outbox()
+
+    failure_metrics = [
+        c for c in rec.calls
+        if c[0] == "increment_metric" and c[1] == "affiliate.outbox.failure"
+    ]
+    assert len(failure_metrics) >= 1, "expected affiliate.outbox.failure metric"
+
+    for m in failure_metrics:
+        attrs = m[4] or {}
+        assert "row_id" not in attrs, "row_id is high-cardinality, must not be a metric tag"
+        assert "event_id" not in attrs, "event_id is high-cardinality"
+        assert attrs.get("status") == "permanent"

@@ -1,13 +1,35 @@
 # MealTrack Backend - Project Roadmap
 
 **Version:** 0.6.3
-**Last Updated:** June 9, 2026
+**Last Updated:** June 13, 2026
 **Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 681+ tests, 70%+ coverage.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
 
 ## Completed Phases
+
+### June 2026: Single-Owner Logger System
+- [x] Established log-or-raise rule: one root-cause `ERROR` per unexpected request failure; expected 4xx exceptions produce zero ERROR logs.
+- [x] `src/api/exception_handlers.py` — new central exception boundary with `register_exception_handlers(app)`; owns single ERROR for unexpected exceptions.
+- [x] `RequestLoggerMiddleware` — 5xx response lines downgraded from ERROR to WARNING (outcome indicator only).
+- [x] `handle_exception()` in `src/api/exceptions.py` — pure conversion helper, no ERROR log before re-raise.
+- [x] All command/query handlers — removed `logger.error` before re-raise patterns.
+- [x] `src/infra/services/ai/ai_model_manager.py` — emits `log_event("warning", "ai.provider.failure")` before raising `AIUnavailableError`.
+- [x] Cron entrypoints — emit `log_event("info", "cron.phase.completed")` per phase; `capture_exception` + `flush_observability` on failure.
+- [x] `src/infra/services/affiliate_outbox_dispatch_service.py` — emits `increment_metric("affiliate.outbox.failure")` for permanent failures.
+- [x] Architecture guardrails: `tests/unit/architecture/test_logging_ownership_guardrails.py` and `tests/unit/api/test_single_owner_exception_logging.py`.
+
+### June 2026: Observability Connector
+- [x] Added provider-neutral observability facade with no-op fallback and Sentry connector.
+- [x] Isolated all direct `sentry_sdk` usage to `src/infra/monitoring/sentry.py`.
+- [x] Migrated API startup, request context, cron flush/capture, and affiliate outbox permanent failure alerts through the facade.
+- [x] Enabled configurable Sentry Logs, operational metrics, and explicit profile session settings through the connector.
+- [x] Added safe scalar attribute filtering for logs and metrics.
+- [x] Documented Sentry event contract, safe context allowlist, and alert/dashboard setup guidance.
+- [x] Normalized production log severity semantics and removed raw AI response,
+      image URL, email, and webhook provider identifiers from representative
+      application logs.
 
 ### June 2026: Normalized Database Foundation
 - [x] Added normalized profile preferences, hydration entries, saved suggestion items/steps, meal instruction steps, food serving sizes, and food nutrient tables.

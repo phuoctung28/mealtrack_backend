@@ -177,5 +177,4 @@ class ScanByUrlCommandHandler(EventHandler[ScanByUrlCommand, Meal]):
             return final_meal
 
         except Exception as e:
-            logger.error("[SCAN-BY-URL] failed: %s", str(e))
             raise

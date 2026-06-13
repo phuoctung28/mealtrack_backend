@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
 from src.domain.ports.ai_provider_port import AICapability
+from src.observability import log_event
 from src.infra.services.ai.provider_circuit_breaker import (
     ProviderCircuitBreaker,
 )
@@ -193,6 +194,7 @@ class AIModelManager:
                     f"model={model} | error={last_error[:100]}"
                 )
 
+        log_event("warning", "ai.provider.failure", attributes={"component": "ai_model_manager", "attempt_count": len(attempted)})
         raise AIUnavailableError(
             f"All models failed for {purpose.value}",
             attempted_models=attempted,
@@ -267,6 +269,7 @@ class AIModelManager:
                 if self._circuit_breaker.should_trip(error_code):
                     self._circuit_breaker.record_failure(model)
 
+        log_event("warning", "ai.provider.failure", attributes={"component": "ai_model_manager", "attempt_count": len(attempted)})
         raise AIUnavailableError(
             f"All vision models failed for {purpose.value}",
             attempted_models=attempted,

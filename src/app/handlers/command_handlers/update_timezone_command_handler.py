@@ -73,7 +73,7 @@ class UpdateTimezoneCommandHandler(EventHandler[UpdateTimezoneCommand, dict[str,
                     command.user_id,
                 )
             except Exception as exc:
-                logger.error(
+                logger.warning(
                     "Failed to reschedule notifications after timezone update: %s",
                     exc,
                 )

@@ -125,8 +125,12 @@ class TestWebhookHandler:
                 # commit/rollback are owned by the AsyncUnitOfWork context manager, not called explicitly
                 mock_uow.commit.assert_not_awaited()
 
-    async def test_webhook_user_not_found(self, mock_request, webhook_event):
+    async def test_webhook_user_not_found_redacts_provider_ids(
+        self, mock_request, webhook_event, caplog
+    ):
         """Test webhook returns 404 when user not found (so RevenueCat retries)."""
+        webhook_event["event"]["aliases"] = ["$RCAnonymousID:alias_secret"]
+        webhook_event["event"]["original_app_user_id"] = "original_secret"
         mock_request.json.return_value = webhook_event
 
         # Set a valid webhook secret for the test
@@ -153,10 +157,17 @@ class TestWebhookHandler:
                 mock_uow.subscriptions = MagicMock()
                 mock_uow.subscriptions.find_by_revenuecat_id = AsyncMock(return_value=None)
 
-                with pytest.raises(HTTPException) as exc_info:
-                    await revenuecat_webhook(mock_request, authorization="test_secret")
+                with caplog.at_level("ERROR"):
+                    with pytest.raises(HTTPException) as exc_info:
+                        await revenuecat_webhook(
+                            mock_request, authorization="test_secret"
+                        )
 
                 assert exc_info.value.status_code == 404
+                assert "user_123" not in caplog.text
+                assert "$RCAnonymousID:alias_secret" not in caplog.text
+                assert "original_secret" not in caplog.text
+                assert "premium_monthly" not in caplog.text
 
     async def test_webhook_lifecycle_user_not_found_is_ignored(self, mock_request):
         """Test userless lifecycle events ACK to stop RevenueCat retry storms."""

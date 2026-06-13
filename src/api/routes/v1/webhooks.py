@@ -16,6 +16,7 @@ from sqlalchemy import select, text
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.posthog_adapter import PostHogAdapter
+from src.observability import increment_metric
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
@@ -82,27 +83,29 @@ async def revenuecat_webhook(
     # Extract event data
     event = payload.get("event", {})
     event_type = event.get("type")
-    app_user_id = event.get("app_user_id")
 
     logger.info(
-        f"RevenueCat webhook received: {event_type} for app_user_id={app_user_id}"
+        "RevenueCat webhook received: event_type=%s environment=%s",
+        event_type,
+        event.get("environment"),
     )
 
     # Get user
     async with AsyncUnitOfWork() as uow:
         if event_type == "TRANSFER":
             await handle_transfer(uow, event)
+            increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
             return {"status": "success"}
 
         user = await find_user_for_revenuecat_event(uow, event)
 
         if not user:
             logger.error(
-                f"RevenueCat webhook: user not found — "
-                f"event_type={event_type}, app_user_id={app_user_id}, "
-                f"aliases={event.get('aliases', [])}, "
-                f"original_app_user_id={event.get('original_app_user_id')}, "
-                f"product_id={event.get('product_id')}"
+                "RevenueCat webhook: user not found — event_type=%s "
+                "environment=%s id_candidates=%s",
+                event_type,
+                event.get("environment"),
+                len(_candidate_revenuecat_ids(event)),
             )
             if event_type in NON_RETRYABLE_USERLESS_EVENTS:
                 return {"status": "ignored", "reason": "user_not_found"}
@@ -130,6 +133,7 @@ async def revenuecat_webhook(
         elif event_type == "REFUND":
             await handle_refund(uow, user, event)
 
+    increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type or "unknown", "status": "success"})
     return {"status": "success"}
 
 

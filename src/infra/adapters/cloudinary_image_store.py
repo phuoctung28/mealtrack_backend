@@ -14,8 +14,6 @@ from src.domain.ports.image_store_port import ImageStorePort
 # Load environment variables if not already loaded
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -103,7 +101,7 @@ class CloudinaryImageStore(ImageStorePort):
             response_url = response.get("secure_url")
 
             if response_url:
-                logger.debug(f"Upload successful. Cloudinary URL: {response_url}")
+                logger.debug("Cloudinary upload successful for image_id=%s", image_id)
                 return response_url
             else:
                 logger.warning(
@@ -136,7 +134,7 @@ class CloudinaryImageStore(ImageStorePort):
 
         # Fetch the image from Cloudinary
         try:
-            logger.debug(f"Fetching image from URL: {url}")
+            logger.debug("Fetching Cloudinary image for image_id=%s", image_id)
             import httpx
             response = httpx.get(url)
             if response.status_code == 200:
@@ -173,7 +171,7 @@ class CloudinaryImageStore(ImageStorePort):
             # Extract the secure_url which includes the version number
             secure_url = resource.get("secure_url")
             if secure_url:
-                logger.debug(f"Found Cloudinary URL: {secure_url}")
+                logger.debug("Found Cloudinary URL for image_id=%s", image_id)
                 return secure_url
             else:
                 logger.error(
@@ -201,7 +199,11 @@ class CloudinaryImageStore(ImageStorePort):
                 # Build the direct Cloudinary URL (without version as fallback)
                 url = f"https://res.cloudinary.com/{cloud_name}/image/upload/{folder}/{image_id}.{fmt}"
 
-                logger.debug(f"Trying fallback URL: {url}")
+                logger.debug(
+                    "Trying Cloudinary fallback URL for image_id=%s format=%s",
+                    image_id,
+                    fmt,
+                )
 
                 # Check if the URL is accessible
                 try:
@@ -209,10 +211,20 @@ class CloudinaryImageStore(ImageStorePort):
 
                     response = httpx.head(url, timeout=5)
                     if response.status_code == 200:
-                        logger.debug(f"Found working fallback URL: {url}")
+                        logger.debug(
+                            "Found working fallback URL for image_id=%s format=%s",
+                            image_id,
+                            fmt,
+                        )
                         return url
                 except httpx.RequestError as e:
-                    logger.debug(f"URL check failed for {url}: {e}")
+                    logger.debug(
+                        "Cloudinary fallback URL check failed for image_id=%s "
+                        "format=%s error_type=%s",
+                        image_id,
+                        fmt,
+                        type(e).__name__,
+                    )
                     continue
 
             return None

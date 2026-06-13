@@ -37,7 +37,7 @@ def extract_json(content: str) -> dict[str, Any]:
             f"pos={e.pos} | "
             f"line={e.lineno} | "
             f"col={e.colno} | "
-            f"context={truncate(content[max(0, e.pos-30):e.pos+30], 60)}"
+            f"content_len={len(content)}"
         )
 
         # Try to fix common JSON issues
@@ -56,7 +56,7 @@ def extract_json(content: str) -> dict[str, Any]:
                 logger.warning(
                     f"[JSON-PARSE-FAIL-CLEANED] error={e2.msg} | "
                     f"pos={e2.pos} | "
-                    f"context={truncate(cleaned_content[max(0, e2.pos-30):e2.pos+30], 60)}"
+                    f"cleaned_len={len(cleaned_content)}"
                 )
 
         # Fallback: try to find JSON in markdown code block
@@ -93,11 +93,9 @@ def extract_json(content: str) -> dict[str, Any]:
             except json.JSONDecodeError as e4:
                 logger.warning(f"[JSON-PARSE-FAIL-REGEX] error={e4.msg} | pos={e4.pos}")
 
-        # Log the problematic content for debugging (truncated)
-        content_preview = content[:500] + "..." if len(content) > 500 else content
         logger.error(
             f"[JSON-EXTRACT-FAILED] all parsing attempts failed | "
-            f"content_preview={content_preview}"
+            f"content_len={len(content)}"
         )
         raise ValueError(f"Could not extract valid JSON from response: {str(e)}") from e
 

@@ -322,13 +322,10 @@ async def get_streak(
     - best_streak: longest consecutive run ever
     - last_logged_date: most recent date with a meal (YYYY-MM-DD), null if never logged
     """
-    try:
-        header_tz = request.headers.get("X-Timezone")
-        query = GetStreakQuery(user_id=user_id, header_timezone=header_tz)
-        result = await event_bus.send(query)
-        return result
-    except Exception as e:
-        raise handle_exception(e) from e
+    header_tz = request.headers.get("X-Timezone")
+    query = GetStreakQuery(user_id=user_id, header_timezone=header_tz)
+    result = await event_bus.send(query)
+    return result
 
 
 @router.get("/weekly/daily-breakdown", response_model=DailyBreakdownResponse)
@@ -347,21 +344,18 @@ async def get_daily_breakdown(
     Returns an array of 7 entries, one per day, with calories/protein/carbs/fat
     consumed and base daily targets from the user's TDEE.
     """
-    try:
-        parsed_week_start = None
-        if week_start:
-            parsed_week_start = datetime.strptime(week_start, "%Y-%m-%d").date()
+    parsed_week_start = None
+    if week_start:
+        parsed_week_start = datetime.strptime(week_start, "%Y-%m-%d").date()
 
-        header_tz = request.headers.get("X-Timezone")
-        query = GetDailyBreakdownQuery(
-            user_id=user_id,
-            week_start=parsed_week_start,
-            header_timezone=header_tz,
-        )
-        result = await event_bus.send(query)
-        return result
-    except Exception as e:
-        raise handle_exception(e) from e
+    header_tz = request.headers.get("X-Timezone")
+    query = GetDailyBreakdownQuery(
+        user_id=user_id,
+        week_start=parsed_week_start,
+        header_timezone=header_tz,
+    )
+    result = await event_bus.send(query)
+    return result
 
 
 @router.get("/{meal_id}", response_model=DetailedMealResponse)
@@ -377,28 +371,24 @@ async def get_meal(
     Language preference is read from Accept-Language header.
     Requires authentication - users can only access their own meals.
     """
-    try:
-        # Send query with user_id for ownership check
-        query = GetMealByIdQuery(meal_id=meal_id, user_id=user_id)
-        meal = await event_bus.send(query)
+    # Send query with user_id for ownership check
+    query = GetMealByIdQuery(meal_id=meal_id, user_id=user_id)
+    meal = await event_bus.send(query)
 
-        # Get image URL if available (injected via DI)
-        image_url = None
-        if meal.image:
-            # Prefer persisted Cloudinary URL from upload response.
-            # Avoid extra Cloudinary API calls unless URL is missing.
-            image_url = meal.image.url or image_store.get_url(meal.image.image_id)
+    # Get image URL if available (injected via DI)
+    image_url = None
+    if meal.image:
+        # Prefer persisted Cloudinary URL from upload response.
+        # Avoid extra Cloudinary API calls unless URL is missing.
+        image_url = meal.image.url or image_store.get_url(meal.image.image_id)
 
-        # Get language from Accept-Language header via middleware
-        language = get_request_language(request)
+    # Get language from Accept-Language header via middleware
+    language = get_request_language(request)
 
-        # Use mapper to convert to response with translation support
-        return MealMapper.to_detailed_response(
-            meal, image_url, target_language=language
-        )
-
-    except Exception as e:
-        raise handle_exception(e) from e
+    # Use mapper to convert to response with translation support
+    return MealMapper.to_detailed_response(
+        meal, image_url, target_language=language
+    )
 
 
 @router.delete("/{meal_id}")
@@ -408,12 +398,9 @@ async def delete_meal(
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """Hard-delete a meal (idempotent — returns success if already deleted)."""
-    try:
-        command = DeleteMealCommand(meal_id=meal_id, user_id=user_id)
-        result = await event_bus.send(command)
-        return result
-    except Exception as e:
-        raise handle_exception(e) from e
+    command = DeleteMealCommand(meal_id=meal_id, user_id=user_id)
+    result = await event_bus.send(command)
+    return result
 
 
 @router.get("/daily/macros", response_model=DailyNutritionResponse)
@@ -428,26 +415,22 @@ async def get_daily_macros(
 
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
-    try:
-        # Parse date
-        target_date = None
-        if date:
-            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+    # Parse date
+    target_date = None
+    if date:
+        target_date = datetime.strptime(date, "%Y-%m-%d").date()
 
-        # Send query with user_id for TDEE targets
-        header_tz = request.headers.get("X-Timezone")
-        query = GetDailyMacrosQuery(
-            user_id=user_id,
-            target_date=target_date,
-            header_timezone=header_tz,
-        )
-        result = await event_bus.send(query)
+    # Send query with user_id for TDEE targets
+    header_tz = request.headers.get("X-Timezone")
+    query = GetDailyMacrosQuery(
+        user_id=user_id,
+        target_date=target_date,
+        header_timezone=header_tz,
+    )
+    result = await event_bus.send(query)
 
-        # Use mapper to convert to response
-        return MealMapper.to_daily_nutrition_response(result)
-
-    except Exception as e:
-        raise handle_exception(e) from e
+    # Use mapper to convert to response
+    return MealMapper.to_daily_nutrition_response(result)
 
 
 @router.put("/{meal_id}/ingredients", response_model=None)
@@ -463,47 +446,41 @@ async def update_meal_ingredients(
     Supports adding, removing, and modifying ingredients with automatic nutrition recalculation.
     Requires authentication - users can only modify their own meals.
     """
-    try:
-        logger.info("Updating meal ingredients for meal %s", meal_id)
-        # Convert request to command
-        food_item_changes = []
-        for change_request in request.food_item_changes:
-            custom_nutrition = None
-            if change_request.custom_nutrition:
-                custom_nutrition = CustomNutritionData(
-                    calories_per_100g=change_request.custom_nutrition.calories_per_100g,
-                    protein_per_100g=change_request.custom_nutrition.protein_per_100g,
-                    carbs_per_100g=change_request.custom_nutrition.carbs_per_100g,
-                    fat_per_100g=change_request.custom_nutrition.fat_per_100g,
-                )
-
-            food_item_changes.append(
-                FoodItemChange(
-                    action=change_request.action,
-                    id=change_request.id,
-                    fdc_id=change_request.fdc_id,
-                    name=change_request.name,
-                    quantity=change_request.quantity,
-                    unit=change_request.unit,
-                    custom_nutrition=custom_nutrition,
-                )
+    logger.info("Updating meal ingredients for meal %s", meal_id)
+    # Convert request to command
+    food_item_changes = []
+    for change_request in request.food_item_changes:
+        custom_nutrition = None
+        if change_request.custom_nutrition:
+            custom_nutrition = CustomNutritionData(
+                calories_per_100g=change_request.custom_nutrition.calories_per_100g,
+                protein_per_100g=change_request.custom_nutrition.protein_per_100g,
+                carbs_per_100g=change_request.custom_nutrition.carbs_per_100g,
+                fat_per_100g=change_request.custom_nutrition.fat_per_100g,
             )
 
-        logger.info("Food item changes: %s", food_item_changes)
-
-        command = EditMealCommand(
-            meal_id=meal_id,
-            user_id=user_id,
-            dish_name=request.dish_name,
-            food_item_changes=food_item_changes,
+        food_item_changes.append(
+            FoodItemChange(
+                action=change_request.action,
+                id=change_request.id,
+                fdc_id=change_request.fdc_id,
+                name=change_request.name,
+                quantity=change_request.quantity,
+                unit=change_request.unit,
+                custom_nutrition=custom_nutrition,
+            )
         )
 
-        logger.info("Sending command to event bus: %s", command)
-        result = await event_bus.send(command)
-        return result
+    command = EditMealCommand(
+        meal_id=meal_id,
+        user_id=user_id,
+        dish_name=request.dish_name,
+        food_item_changes=food_item_changes,
+    )
 
-    except Exception as e:
-        raise handle_exception(e) from e
+    logger.info("Sending command to event bus: %s", command)
+    result = await event_bus.send(command)
+    return result
 
 
 @router.get("/weekly/budget", response_model=WeeklyBudgetResponse)
@@ -521,19 +498,16 @@ async def get_weekly_budget(
 
     Returns current week's budget with consumed totals and adjusted daily targets.
     """
-    try:
-        # Parse week_start date
-        target_date = None
-        if week_start:
-            target_date = datetime.strptime(week_start, "%Y-%m-%d").date()
+    # Parse week_start date
+    target_date = None
+    if week_start:
+        target_date = datetime.strptime(week_start, "%Y-%m-%d").date()
 
-        header_tz = request.headers.get("X-Timezone")
-        query = GetWeeklyBudgetQuery(
-            user_id=user_id,
-            target_date=target_date,
-            header_timezone=header_tz,
-        )
-        result = await event_bus.send(query)
-        return result
-    except Exception as e:
-        raise handle_exception(e) from e
+    header_tz = request.headers.get("X-Timezone")
+    query = GetWeeklyBudgetQuery(
+        user_id=user_id,
+        target_date=target_date,
+        header_timezone=header_tz,
+    )
+    result = await event_bus.send(query)
+    return result
