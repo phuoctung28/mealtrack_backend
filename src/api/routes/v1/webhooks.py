@@ -16,7 +16,7 @@ from sqlalchemy import select, text
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.posthog_adapter import PostHogAdapter
-from src.infra.monitoring import increment_metric
+from src.observability import increment_metric
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
