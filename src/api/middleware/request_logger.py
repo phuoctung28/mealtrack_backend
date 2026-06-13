@@ -13,6 +13,8 @@ from fastapi import Request
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from src.infra.monitoring import set_request_context
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,6 +56,12 @@ class RequestLoggerMiddleware:
         request_id = uuid.uuid4().hex[:8]
         scope.setdefault("state", {})
         scope["state"]["request_id"] = request_id
+        set_request_context(
+            request_id=request_id,
+            method=request.method,
+            path=request.url.path,
+            user_id=self._get_user_id(request),
+        )
 
         start_time = time.time()
         self._log_request(request, request_id)
@@ -102,9 +110,7 @@ class RequestLoggerMiddleware:
         elapsed: float,
     ) -> None:
         log_level = logging.INFO
-        if elapsed > self.SLOW_REQUEST_THRESHOLD_SECONDS:
-            log_level = logging.WARNING
-        if status_code >= 400:
+        if elapsed > self.SLOW_REQUEST_THRESHOLD_SECONDS or status_code == 429:
             log_level = logging.WARNING
         if status_code >= 500:
             log_level = logging.ERROR

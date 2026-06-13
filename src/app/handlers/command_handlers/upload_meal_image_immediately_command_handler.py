@@ -131,19 +131,22 @@ class UploadMealImageImmediatelyHandler(
                 image_id,
             )
         except Exception as e:
-            logger.error(f"[UPLOAD-FAILED] image_id={image_id} | error={e}")
+            logger.error(
+                "[UPLOAD-FAILED] image_id=%s | error_type=%s",
+                image_id,
+                type(e).__name__,
+            )
             raise RuntimeError(f"Cloudinary upload failed: {e}") from e
 
         # Step 3: Verify we got a valid URL back
         if not self._validate_cloudinary_url(image_url):
-            logger.error(f"[UPLOAD-INVALID-URL] image_id={image_id} | url={image_url}")
-            raise RuntimeError(
-                f"Cloudinary upload failed - invalid URL returned: {image_url}"
-            )
+            logger.error("[UPLOAD-INVALID-URL] image_id=%s", image_id)
+            raise RuntimeError("Cloudinary upload failed - invalid URL returned")
 
         upload_elapsed = time.time() - start
         logger.info(
-            f"[UPLOAD-COMPLETE] image_id={image_id} | url={image_url} | elapsed={upload_elapsed:.2f}s"
+            f"[UPLOAD-COMPLETE] image_id={image_id} | "
+            f"elapsed={upload_elapsed:.2f}s"
         )
 
         # Step 4: Run AI analysis

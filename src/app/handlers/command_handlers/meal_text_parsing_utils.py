@@ -6,12 +6,12 @@ Extracted from parse_meal_text_handler.py for better organization.
 import json
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def extract_json_from_response(content: str) -> List[Dict[str, Any]]:
+def extract_json_from_response(content: str) -> list[dict[str, Any]]:
     """
     Extract JSON array from AI response.
 
@@ -67,11 +67,11 @@ def extract_json_from_response(content: str) -> List[Dict[str, Any]]:
         except json.JSONDecodeError:
             pass
 
-    logger.error(f"Could not extract JSON from response: {content[:500]}")
+    logger.error("Could not extract JSON from AI response: length=%s", len(content))
     raise ValueError("Could not parse AI response. Please try again.")
 
 
-def extract_usda_nutrition(nutrients: List[Dict[str, Any]]) -> Dict[str, float]:
+def extract_usda_nutrition(nutrients: list[dict[str, Any]]) -> dict[str, float]:
     """Extract nutrition values from USDA nutrients list."""
     result = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
     for n in nutrients:
@@ -90,7 +90,7 @@ def extract_usda_nutrition(nutrients: List[Dict[str, Any]]) -> Dict[str, float]:
     return result
 
 
-def parse_fatsecret_nutrition(food: Dict[str, Any]) -> Dict[str, float]:
+def parse_fatsecret_nutrition(food: dict[str, Any]) -> dict[str, float]:
     """Parse per-100g nutrition from FatSecret food_description field.
 
     FatSecret format: 'Per 100g - Calories: 155kcal | Fat: 11g | Carbs: 1.1g | Protein: 13g'
@@ -98,7 +98,7 @@ def parse_fatsecret_nutrition(food: Dict[str, Any]) -> Dict[str, float]:
     desc = food.get("food_description", "")
     if not desc:
         return {}
-    result: Dict[str, float] = {}
+    result: dict[str, float] = {}
     try:
         for part in desc.split("|"):
             part = part.strip().lower()

@@ -1,4 +1,5 @@
 """Unit tests for affiliate outbox dispatch service."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -6,7 +7,9 @@ import pytest
 MODULE = "src.infra.services.affiliate_outbox_dispatch_service"
 
 
-def _make_row(row_id="row-1", event_id="evt-1", event_type="subscription_initial_purchase"):
+def _make_row(
+    row_id="row-1", event_id="evt-1", event_type="subscription_initial_purchase"
+):
     row = MagicMock()
     row.id = row_id
     row.event_id = event_id
@@ -48,6 +51,7 @@ async def test_dispatch_sends_pending_rows():
         from src.infra.services.affiliate_outbox_dispatch_service import (
             dispatch_affiliate_outbox,
         )
+
         summary = await dispatch_affiliate_outbox()
 
     assert summary["sent"] == 1
@@ -73,6 +77,7 @@ async def test_dispatch_marks_failed_when_send_returns_false():
         from src.infra.services.affiliate_outbox_dispatch_service import (
             dispatch_affiliate_outbox,
         )
+
         summary = await dispatch_affiliate_outbox()
 
     assert summary["sent"] == 0
@@ -95,6 +100,7 @@ async def test_dispatch_marks_failed_on_exception():
         from src.infra.services.affiliate_outbox_dispatch_service import (
             dispatch_affiliate_outbox,
         )
+
         summary = await dispatch_affiliate_outbox()
 
     assert summary["sent"] == 0
@@ -113,6 +119,7 @@ async def test_dispatch_no_rows_returns_zero_counts():
         from src.infra.services.affiliate_outbox_dispatch_service import (
             dispatch_affiliate_outbox,
         )
+
         summary = await dispatch_affiliate_outbox()
 
     assert summary == {"sent": 0, "failed": 0, "permanently_failed": 0, "skipped": 0}
@@ -129,16 +136,19 @@ async def test_permanently_failed_row_triggers_sentry_alert():
         patch(f"{MODULE}.AsyncSessionLocal", return_value=session),
         patch(f"{MODULE}.AffiliateEventOutboxRepository", return_value=repo),
         patch(f"{MODULE}.AffiliateServiceAdapter") as mock_adapter_cls,
-        patch(f"{MODULE}.sentry_sdk") as mock_sentry,
+        patch(f"{MODULE}.capture_message") as mock_capture_message,
     ):
         mock_adapter_cls.return_value.send_event = AsyncMock(return_value=False)
         from src.infra.services.affiliate_outbox_dispatch_service import (
             dispatch_affiliate_outbox,
         )
+
         summary = await dispatch_affiliate_outbox()
 
     assert summary["permanently_failed"] == 1
-    mock_sentry.capture_message.assert_called_once()
-    msg = mock_sentry.capture_message.call_args[0][0]
+    mock_capture_message.assert_called_once()
+    msg = mock_capture_message.call_args[0][0]
+    context = mock_capture_message.call_args.kwargs["context"]
     assert "permanently failed" in msg
-    assert "row-1" in msg
+    assert context["row_id"] == "row-1"
+    assert "payload" not in context

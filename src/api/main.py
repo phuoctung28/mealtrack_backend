@@ -36,9 +36,9 @@ from src.api.base_dependencies import (
     shutdown_cache_layer,
 )
 from src.api.dependencies.task_manager import (
+    clear_task_manager,
     create_task_manager,
     set_task_manager,
-    clear_task_manager,
 )
 from src.api.middleware.accept_language import AcceptLanguageMiddleware
 from src.api.middleware.dev_auth_bypass import add_dev_auth_bypass
@@ -54,8 +54,8 @@ from src.api.routes.v1.health import root_router as root_health_router
 from src.api.routes.v1.health import router as health_router
 from src.api.routes.v1.hydration import router as hydration_router
 from src.api.routes.v1.ingredients import router as ingredients_router
-from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
 from src.api.routes.v1.meal_scan_by_url import router as meal_scan_by_url_router
+from src.api.routes.v1.meal_suggestions import router as meal_suggestions_router
 from src.api.routes.v1.meal_upload_token import router as meal_upload_token_router
 from src.api.routes.v1.meals import router as meals_router
 from src.api.routes.v1.monitoring import router as monitoring_router
@@ -73,12 +73,13 @@ from src.api.routes.v1.weight_entries import router as weight_entries_router
 from src.api.routes.well_known import router as well_known_router
 from src.infra.config.settings import settings
 from src.infra.database.config_async import async_engine
-from src.infra.monitoring.sentry import initialize_sentry
+from src.infra.monitoring import initialize_observability
 
 load_dotenv()
 
-# Initialize Sentry before creating the FastAPI app so integrations can patch middleware
-initialize_sentry()
+# Initialize observability before creating the FastAPI app so provider integrations
+# can patch framework middleware.
+initialize_observability()
 
 # Configure logging
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -206,7 +207,7 @@ async def lifespan(app: FastAPI):
     try:
         initialize_firebase()
     except Exception as e:
-        logger.error("Failed to initialize Firebase: %s", e)
+        logger.critical("Failed to initialize Firebase; aborting startup: %s", e)
         raise
 
     # NOTE: Database migrations are run via docker-entrypoint.sh BEFORE app startup
@@ -226,6 +227,7 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error("Failed to initialize cache layer: %s", exc)
         if os.getenv("FAIL_ON_CACHE_ERROR", "false").lower() == "true":
+            logger.critical("Cache layer is required; aborting startup")
             raise
 
     # Initialize Gemini explicit context caches

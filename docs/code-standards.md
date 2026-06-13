@@ -117,6 +117,42 @@ async def handle(self, query: GetMealByIdQuery) -> Meal:
     return meal
 ```
 
+## Production Logging
+
+Use stdlib `logging` unless a file already uses the provider-neutral observability
+facade. Keep direct `sentry_sdk` imports isolated to `src/infra/monitoring/sentry.py`.
+
+### Severity Rules
+
+| Level | Use For | Do Not Use For |
+|-------|---------|----------------|
+| `INFO` | Normal milestones: startup complete, background job complete, expected 2xx/3xx/most 4xx requests | Raw payloads or noisy per-item traces |
+| `WARNING` | Unexpected but non-breaking events: slow requests, 429 rate limits, retries, degraded optional dependencies, invalid webhook auth | Expected 400/401/403/404 responses |
+| `ERROR` | Functional failures needing engineering attention: unhandled exceptions, 5xx responses, provider failures that break a user flow | Process-fatal startup failures |
+| `CRITICAL` | Page-worthy service-unusable paths: required startup dependency failure that aborts serving, core health failure | Ordinary request failures or optional integration degradation |
+
+### Privacy Rules
+
+Never log request/response bodies, auth headers, Firebase tokens/claims, emails,
+email subjects, food payloads, raw image URLs, raw AI responses, raw provider
+payloads, API keys, DSNs, or service account JSON.
+
+Prefer stable operational metadata:
+
+```python
+logger.warning(
+    "provider retry scheduled: provider=%s operation=%s error_type=%s",
+    provider_name,
+    operation,
+    type(exc).__name__,
+)
+```
+
+For AI parsing failures, log parser stage, content length, and error type rather
+than a response preview. For image uploads, log generated image ID, result, and
+elapsed time rather than delivery URLs. For webhooks, log event type and
+environment, not alias lists or raw provider identifiers.
+
 ---
 
 ## Code Quality Checklist
@@ -129,6 +165,7 @@ async def handle(self, query: GetMealByIdQuery) -> Meal:
 - [ ] `snake_case.py` file names
 - [ ] Pattern-based naming (command/query/event/handler/service/repo)
 - [ ] No `dynamic` types (always explicit)
+- [ ] Logs follow severity and privacy rules
 - [ ] Run before commit: `black src/ tests/ && ruff check src/ && mypy src/`
 
 ---

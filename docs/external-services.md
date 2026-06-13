@@ -1,6 +1,6 @@
 # Backend External Services Integration
 
-**Last Updated:** June 8, 2026
+**Last Updated:** June 13, 2026
 **Services:** Firebase, Cloudinary, Google Gemini, RevenueCat, PostHog, Redis, Sentry
 **Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
@@ -144,12 +144,63 @@
 
 ## Sentry Monitoring
 
-**Purpose:** Error tracking, performance profiling, crash reporting
+**Purpose:** Error tracking, Sentry Logs, operational metrics, performance profiling, crash reporting
 
-- FastAPI, Starlette, SQLAlchemy integrations built-in
-- Gracefully disabled if `SENTRY_DSN` not set
+- Sentry is an infrastructure connector only. Runtime code calls `src.infra.monitoring` facade functions; direct `sentry_sdk` imports belong only in `src/infra/monitoring/sentry.py`.
+- FastAPI, Starlette, SQLAlchemy, and logging integrations are initialized before the `FastAPI` app is created.
+- Sentry Logs are emitted only through the provider-neutral `log_event(...)` facade when `SENTRY_ENABLE_LOGS=true`.
+- Operational metrics are emitted only through provider-neutral metric facade calls when `SENTRY_ENABLE_METRICS=true`.
+- Gracefully disabled if `SENTRY_DSN` is not set; the facade falls back to no-op behavior.
+- Request context is allowlisted: request ID, method, route/path, environment, release, and internal user ID when available.
+- Log and metric attributes use the same allowlist and scalar-only filtering as request context.
+- Cron entrypoints capture swallowed failures and flush via the facade before exit.
+- Affiliate outbox permanent failures send an operational alert with row/event identifiers only; raw affiliate payload is never attached.
 
-**Config:** `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE=0.1`, `SENTRY_PROFILES_SAMPLE_RATE=0.0`, `SENTRY_SEND_PII=false`
+**Config:** `SENTRY_DSN`, `SENTRY_RELEASE`, `SENTRY_ENABLE_LOGS=true`, `SENTRY_ENABLE_METRICS=true`, `SENTRY_TRACES_SAMPLE_RATE=0.1`, `SENTRY_PROFILES_SAMPLE_RATE=0.05`, `SENTRY_PROFILE_SESSION_SAMPLE_RATE`, `SENTRY_PROFILE_LIFECYCLE`, `SENTRY_SEND_PII=false`
+
+### Event Contract
+
+Sent to Sentry:
+- Unhandled API exceptions and unexpected 500-class failures.
+- `ERROR` logs with exception info through the logging integration.
+- Structured operational logs emitted through the facade when Sentry Logs are enabled.
+- Operational counter, gauge, and distribution metrics emitted through the facade.
+- Caught-and-swallowed cron failures.
+- Affiliate outbox permanent failures.
+- Sampled FastAPI/Starlette request transactions, SQLAlchemy spans, coarse cron spans, and sampled profiles.
+
+Not sent to Sentry:
+- Expected 4xx validation/auth/not-found responses or business exceptions.
+- Product analytics or audit logs.
+- Request/response bodies, auth headers, Firebase tokens/claims, emails, food payloads, raw image URLs, raw provider payloads, or secrets.
+- Debug/info Python logging records as Sentry issues.
+- Unstructured application logs outside the observability facade.
+
+### Application Log Severity
+
+Use the production log levels as an operational contract:
+
+- `INFO`: normal milestones, successful startup/cron/request completion, and
+  expected client rejections such as 400/401/403/404.
+- `WARNING`: unexpected but non-breaking signals such as slow requests, 429 rate
+  limits, invalid webhook authorization, automatic retries, and optional
+  dependency degradation.
+- `ERROR`: user-impacting failures that need engineering attention, including
+  unhandled exceptions, 5xx responses, and broken required provider calls.
+- `CRITICAL`: page-worthy service-unusable paths only, such as a required
+  startup dependency failure that aborts serving.
+
+Log content must remain safe before it reaches Sentry or any downstream log
+sink. Do not log emails, email subjects, auth data, Firebase claims, raw image
+URLs, raw AI response text, food payloads, raw webhook provider payloads, DSNs,
+API keys, or service account JSON. Use operation names, generated internal IDs,
+event types, environment, durations, sizes, counts, and error class names.
+
+### Operational Setup
+
+- Alerts: page on new/reopened production issues with level `error`; route affiliate outbox permanent failures to backend operations.
+- Dashboards: track error rate, p95 request latency, slow SQL spans, cron failure count, and affiliate outbox permanent failure count.
+- Release health: set `SENTRY_RELEASE` during deploy so issues and performance regressions are grouped by release.
 
 ---
 
