@@ -62,6 +62,36 @@ async def test_recognize_ingredient_preserves_ai_unavailable():
         await handler.handle(RecognizeIngredientCommand(image_data=valid_image))
 
 
+@pytest.mark.asyncio
+async def test_recognize_ingredient_uses_ingredient_identification_strategy():
+    vision_service = Mock()
+    vision_service.analyze_with_strategy = AsyncMock(
+        return_value={
+            "structured_data": {
+                "name": "broccoli",
+                "confidence": 0.92,
+                "category": "vegetable",
+            }
+        }
+    )
+    handler = RecognizeIngredientCommandHandler(vision_service=vision_service)
+    valid_image = base64.b64encode(b"image").decode("ascii")
+
+    result = await handler.handle(
+        RecognizeIngredientCommand(image_data=valid_image, language="en")
+    )
+
+    strategy = vision_service.analyze_with_strategy.await_args.args[1]
+    assert strategy.get_strategy_name() == "IngredientIdentification"
+    assert result == {
+        "name": "broccoli",
+        "confidence": 0.92,
+        "category": "vegetable",
+        "success": True,
+        "message": None,
+    }
+
+
 def test_ingredient_request_rejects_oversized_base64_payload():
     with pytest.raises(ValidationError):
         IngredientRecognitionRequest(image_data="a" * (MAX_IMAGE_BASE64_LENGTH + 1))

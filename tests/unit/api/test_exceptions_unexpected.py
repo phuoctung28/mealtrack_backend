@@ -3,7 +3,10 @@
 from fastapi import HTTPException, status
 
 from src.api.exceptions import handle_exception
-from src.domain.exceptions.ai_exceptions import AIUnavailableError
+from src.domain.exceptions.ai_exceptions import (
+    AIOutputValidationError,
+    AIUnavailableError,
+)
 
 
 def test_handle_exception_unexpected_returns_500():
@@ -34,3 +37,24 @@ def test_handle_exception_ai_unavailable_returns_503_without_provider_error():
         "attempted_models": ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
     }
     assert "RESOURCE_EXHAUSTED" not in str(exc.detail)
+
+
+def test_handle_exception_ai_output_validation_returns_422_without_field_details():
+    exc = handle_exception(
+        AIOutputValidationError(
+            "Invalid AI output after validation retry",
+            purpose="meal_scan",
+            attempt_count=2,
+            validation_details=["foods.0.quantity_g: Input should be <= 10000"],
+        )
+    )
+
+    assert isinstance(exc, HTTPException)
+    assert exc.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert exc.detail["error_code"] == "AI_OUTPUT_INVALID"
+    assert "clearer photo" in exc.detail["message"]
+    assert exc.detail["details"] == {
+        "purpose": "meal_scan",
+        "attempt_count": 2,
+    }
+    assert "quantity_g" not in str(exc.detail)

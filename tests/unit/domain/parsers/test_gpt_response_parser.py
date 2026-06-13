@@ -2,9 +2,11 @@
 
 import pytest
 
+from src.domain.parsers.gpt_response_parser import GPTResponseParsingError
+
 
 class TestGPTResponseParserFoodLimit:
-    def test_caps_food_items_to_max(self, gpt_parser):
+    def test_rejects_food_items_over_max(self, gpt_parser):
         foods = [
             {
                 "name": f"Food {i}",
@@ -24,16 +26,8 @@ class TestGPTResponseParserFoodLimit:
             }
         }
 
-        nutrition = gpt_parser.parse_to_nutrition(gpt_response)
-
-        assert nutrition.food_items is not None
-        assert len(nutrition.food_items) == 8
-        assert [item.name for item in nutrition.food_items] == [
-            f"Food {i}" for i in range(8)
-        ]
-        assert nutrition.macros.protein == pytest.approx(8.0)
-        assert nutrition.macros.carbs == pytest.approx(16.0)
-        assert nutrition.macros.fat == pytest.approx(24.0)
+        with pytest.raises(GPTResponseParsingError):
+            gpt_parser.parse_to_nutrition(gpt_response)
 
 
 class TestGPTResponseParserDishNameCompatibility:
@@ -140,8 +134,8 @@ class TestGPTResponseParserStrictSchemaMode:
 
 
 class TestGPTResponseParserZeroQuantity:
-    def test_filters_out_zero_quantity_food_items(self, gpt_parser):
-        """AI sometimes returns quantity=0, which should be filtered out."""
+    def test_rejects_zero_quantity_food_items(self, gpt_parser):
+        """AI quantity=0 should fail validation instead of producing partial meals."""
         gpt_response = {
             "structured_data": {
                 "dish_name": "Mixed Plate",
@@ -169,19 +163,11 @@ class TestGPTResponseParserZeroQuantity:
             }
         }
 
-        nutrition = gpt_parser.parse_to_nutrition(gpt_response)
+        with pytest.raises(GPTResponseParsingError):
+            gpt_parser.parse_to_nutrition(gpt_response)
 
-        assert nutrition.food_items is not None
-        assert len(nutrition.food_items) == 2
-        assert nutrition.food_items[0].name == "Valid Food"
-        assert nutrition.food_items[1].name == "Another Valid Food"
-        # Macros should only include valid foods
-        assert nutrition.macros.protein == pytest.approx(18.0)
-        assert nutrition.macros.carbs == pytest.approx(35.0)
-        assert nutrition.macros.fat == pytest.approx(8.0)
-
-    def test_filters_out_negative_quantity_food_items(self, gpt_parser):
-        """Negative quantities should also be filtered out."""
+    def test_rejects_negative_quantity_food_items(self, gpt_parser):
+        """Negative quantities should fail validation."""
         gpt_response = {
             "structured_data": {
                 "dish_name": "Test Meal",
@@ -203,8 +189,31 @@ class TestGPTResponseParserZeroQuantity:
             }
         }
 
-        nutrition = gpt_parser.parse_to_nutrition(gpt_response)
+        with pytest.raises(GPTResponseParsingError):
+            gpt_parser.parse_to_nutrition(gpt_response)
 
-        assert nutrition.food_items is not None
-        assert len(nutrition.food_items) == 1
-        assert nutrition.food_items[0].name == "Valid Food"
+    def test_rejects_over_max_quantity_food_items(self, gpt_parser):
+        """Impossible AI quantities should fail validation."""
+        gpt_response = {
+            "structured_data": {
+                "dish_name": "Mixed Plate",
+                "foods": [
+                    {
+                        "name": "Valid Food",
+                        "quantity": 100,
+                        "unit": "g",
+                        "macros": {"protein": 10, "carbs": 20, "fat": 5},
+                    },
+                    {
+                        "name": "Impossible Quantity",
+                        "quantity": 150000,
+                        "unit": "g",
+                        "macros": {"protein": 500, "carbs": 1000, "fat": 200},
+                    },
+                ],
+                "confidence": 0.9,
+            }
+        }
+
+        with pytest.raises(GPTResponseParsingError):
+            gpt_parser.parse_to_nutrition(gpt_response)

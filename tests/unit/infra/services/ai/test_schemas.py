@@ -6,13 +6,13 @@ Tests validate 6-name generation and removal of description field.
 import pytest
 from pydantic import ValidationError
 
+from src.domain.model.ai.gpt_response import GPTAnalysisResponse
 from src.infra.services.ai.schemas import (
+    IngredientItem,
     MealNamesResponse,
     RecipeDetailsResponse,
-    IngredientItem,
     RecipeStepItem,
 )
-from src.domain.model.ai.gpt_response import GPTAnalysisResponse
 
 
 class TestMealNamesResponse:
@@ -99,6 +99,29 @@ class TestRecipeDetailsResponse:
         assert response.protein == 45.5
         assert response.carbs == 25.0
         assert response.fat == 18.0
+
+    def test_ai_nutrition_fields_remain_metadata(self):
+        response = RecipeDetailsResponse(
+            ingredients=[
+                IngredientItem(name="Chicken breast", amount=200, unit="g"),
+                IngredientItem(name="Rice", amount=150, unit="g"),
+                IngredientItem(name="Broccoli", amount=100, unit="g"),
+            ],
+            recipe_steps=[
+                RecipeStepItem(step=1, instruction="Cook rice", duration_minutes=12),
+                RecipeStepItem(step=2, instruction="Cook chicken", duration_minutes=10),
+            ],
+            prep_time_minutes=25,
+            calories=9999,
+            protein=999.0,
+            carbs=999.0,
+            fat=999.0,
+        )
+
+        assert response.calories == 9999
+        assert response.protein == 999.0
+        assert response.carbs == 999.0
+        assert response.fat == 999.0
 
     def test_rejects_missing_ingredients(self):
         """Invalid: missing ingredients."""

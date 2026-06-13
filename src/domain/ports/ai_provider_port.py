@@ -1,7 +1,8 @@
 """Abstract interface for AI providers."""
+
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 
 class AICapability(Enum):
@@ -27,11 +28,11 @@ class AIProviderPort(ABC):
 
     @property
     @abstractmethod
-    def supported_capabilities(self) -> Set[AICapability]:
+    def supported_capabilities(self) -> set[AICapability]:
         """Set of capabilities this provider supports."""
 
     @abstractmethod
-    def get_available_models(self) -> List[str]:
+    def get_available_models(self) -> list[str]:
         """Return list of model identifiers available from this provider."""
 
     @abstractmethod
@@ -41,10 +42,10 @@ class AIProviderPort(ABC):
         prompt: str,
         system_message: str,
         response_type: str = "json",
-        max_tokens: Optional[int] = None,
-        schema: Optional[type] = None,
+        max_tokens: int | None = None,
+        schema: type | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate text completion.
 
@@ -69,9 +70,11 @@ class AIProviderPort(ABC):
         model: str,
         prompt: str,
         image_data: bytes,
-        system_message: Optional[str] = None,
+        system_message: str | None = None,
+        *,
+        schema: type | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate completion with image input.
 
@@ -80,6 +83,7 @@ class AIProviderPort(ABC):
             prompt: User prompt
             image_data: Image bytes
             system_message: Optional system instructions
+            schema: Optional Pydantic model for structured output
 
         Returns:
             Generated content as dictionary

@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from pydantic import BaseModel
 
 from src.domain.exceptions.ai_exceptions import AIUnavailableError
 from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
@@ -41,12 +42,15 @@ def mock_circuit_breaker():
 
 @pytest.fixture
 def manager(mock_gemini_provider, mock_circuit_breaker):
-    with patch(
-        "src.infra.services.ai.ai_model_manager.GeminiProvider",
-        return_value=mock_gemini_provider,
-    ), patch(
-        "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
-        return_value=mock_circuit_breaker,
+    with (
+        patch(
+            "src.infra.services.ai.ai_model_manager.GeminiProvider",
+            return_value=mock_gemini_provider,
+        ),
+        patch(
+            "src.infra.services.ai.ai_model_manager.ProviderCircuitBreaker",
+            return_value=mock_circuit_breaker,
+        ),
     ):
         return AIModelManager()
 
@@ -188,7 +192,9 @@ class TestGenerate:
         assert mock_gemini_provider.generate.call_args_list[0].kwargs["cache_name"] == (
             "cachedContents/primary"
         )
-        assert mock_gemini_provider.generate.call_args_list[1].kwargs["cache_name"] is None
+        assert (
+            mock_gemini_provider.generate.call_args_list[1].kwargs["cache_name"] is None
+        )
         cache_manager.get_cache_name_for_model.assert_any_await(
             "text_parse", "gemini-2.5-flash-lite"
         )
@@ -255,3 +261,22 @@ class TestVision:
             image_data=b"fake_image",
         )
         assert result == {"result": "vision_success"}
+
+    @pytest.mark.asyncio
+    async def test_generate_with_vision_forwards_schema(
+        self, manager, mock_gemini_provider
+    ):
+        class DummyVisionResponse(BaseModel):
+            result: str
+
+        await manager.generate_with_vision(
+            purpose=ModelPurpose.MEAL_SCAN,
+            prompt="analyze",
+            image_data=b"fake_image",
+            system_message="system",
+            schema=DummyVisionResponse,
+        )
+
+        call_kwargs = mock_gemini_provider.generate_with_vision.call_args.kwargs
+        assert call_kwargs["schema"] is DummyVisionResponse
+        assert call_kwargs["purpose_hint"] == "meal_scan"
