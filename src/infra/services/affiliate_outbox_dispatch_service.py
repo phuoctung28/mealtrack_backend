@@ -1,10 +1,11 @@
 """Claims pending outbox rows and delivers them to nutree-affiliate."""
-import logging
 
-import sentry_sdk
+import logging
+from typing import cast
 
 from src.infra.adapters.affiliate_service_adapter import AffiliateServiceAdapter
 from src.infra.database.config_async import AsyncSessionLocal
+from src.infra.monitoring import capture_message, start_span
 from src.infra.repositories.affiliate_event_outbox_repository import (
     AffiliateEventOutboxRepository,
 )
@@ -23,10 +24,15 @@ async def dispatch_affiliate_outbox(batch_size: int = 50) -> dict:
     sent = failed = permanently_failed = skipped = 0
     adapter = AffiliateServiceAdapter()
 
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            repo = AffiliateEventOutboxRepository(session)
-            rows = await repo.claim_pending(limit=batch_size)
+    with start_span(
+        operation="affiliate_outbox.claim",
+        description="claim pending affiliate outbox rows",
+        context={"component": "affiliate_outbox", "operation": "claim"},
+    ):
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                repo = AffiliateEventOutboxRepository(session)
+                rows = await repo.claim_pending(limit=batch_size)
 
     for row in rows:
         payload = dict(row.payload)
@@ -43,21 +49,40 @@ async def dispatch_affiliate_outbox(batch_size: int = 50) -> dict:
             async with session.begin():
                 repo = AffiliateEventOutboxRepository(session)
                 if ok:
-                    await repo.mark_sent(row.id)
+                    await repo.mark_sent(cast(str, row.id))
                     sent += 1
                 else:
-                    is_terminal = await repo.mark_failed(row.id, "send_event returned False")
+                    row_id = cast(str, row.id)
+                    event_id = cast(str, row.event_id)
+                    event_type = cast(str, row.event_type)
+                    is_terminal = await repo.mark_failed(
+                        row_id, "send_event returned False"
+                    )
                     failed += 1
                     if is_terminal:
                         permanently_failed += 1
-                        sentry_sdk.capture_message(
-                            f"Affiliate outbox row permanently failed: "
-                            f"id={row.id} event_type={row.event_type} event_id={row.event_id}",
+                        capture_message(
+                            "Affiliate outbox row permanently failed",
                             level="error",
+                            context={
+                                "component": "affiliate_outbox",
+                                "operation": "send_event",
+                                "row_id": row_id,
+                                "event_type": event_type,
+                                "event_id": event_id,
+                            },
                         )
 
     logger.info(
         "Affiliate outbox dispatch: sent=%d failed=%d permanently_failed=%d skipped=%d",
-        sent, failed, permanently_failed, skipped,
+        sent,
+        failed,
+        permanently_failed,
+        skipped,
     )
-    return {"sent": sent, "failed": failed, "permanently_failed": permanently_failed, "skipped": skipped}
+    return {
+        "sent": sent,
+        "failed": failed,
+        "permanently_failed": permanently_failed,
+        "skipped": skipped,
+    }

@@ -1,6 +1,6 @@
 # Backend System Architecture Overview
 
-**Last Updated:** June 9, 2026
+**Last Updated:** June 13, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
 **Codebase:** 430 files, ~38.5K LOC across 4 layers
@@ -67,6 +67,11 @@ Background subscriber tasks are owned by `BackgroundTaskManager` (`src/infra/eve
 
 ### Repository Pattern
 Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW owns commit/rollback boundaries; repositories flush only when generated IDs or relationship state are needed.
+
+### Observability Connector
+Observability is owned by the infrastructure layer and exposed through `src.infra.monitoring`. API startup, request middleware, cron entrypoints, and infrastructure services call the provider-neutral facade. Sentry is the current connector, but direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
+
+The connector sends unexpected API failures, `ERROR` logs, sampled request/SQL/cron spans, explicit Sentry Logs, operational metrics, swallowed cron failures, and affiliate outbox permanent failures. It does not send expected 4xx/business errors, product analytics, request bodies, auth headers, Firebase claims, emails, food payloads, raw image URLs, provider payloads, or secrets. Context, log attributes, and metric attributes are allowlisted scalar values.
 
 ---
 

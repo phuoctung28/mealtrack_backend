@@ -2,7 +2,7 @@
 Unit tests for RequestLoggerMiddleware.
 """
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -99,6 +99,20 @@ class TestRequestLogging:
         assert any("[RES-" in record.message for record in caplog.records)
         assert any("status=200" in record.message for record in caplog.records)
 
+    def test_sets_observability_request_context(self, client):
+        """Should attach only safe request metadata to observability context."""
+        with patch(
+            "src.api.middleware.request_logger.set_request_context"
+        ) as mock_set_context:
+            response = client.get("/test", headers={"Authorization": "Bearer secret"})
+
+        assert response.status_code == 200
+        mock_set_context.assert_called_once()
+        kwargs = mock_set_context.call_args.kwargs
+        assert kwargs["method"] == "GET"
+        assert kwargs["path"] == "/test"
+        assert "authorization" not in kwargs
+
 
 class TestSlowRequestLogging:
     """Test slow request warning logging."""
@@ -108,7 +122,7 @@ class TestSlowRequestLogging:
         """Should log warning for slow requests."""
         with caplog.at_level("WARNING"):
             # This will be slow
-            response = client.get("/slow")
+            client.get("/slow")
 
         # Should have warning level log
         warnings = [r for r in caplog.records if r.levelname == "WARNING"]
@@ -130,22 +144,43 @@ class TestErrorLogging:
         errors = [r for r in caplog.records if r.levelname == "ERROR"]
         assert len(errors) >= 1
 
-    def test_logs_warning_on_4xx(self, app, caplog):
-        """Should log warning on 4xx responses."""
+    @pytest.mark.parametrize("status_code", [400, 401, 403, 404])
+    def test_expected_client_errors_log_at_info(self, app, caplog, status_code):
+        """Expected client errors should not page or warn by default."""
 
-        @app.get("/notfound")
-        def notfound():
+        @app.get(f"/client-error-{status_code}")
+        def client_error():
             from fastapi import HTTPException
 
-            raise HTTPException(status_code=404)
+            raise HTTPException(status_code=status_code)
+
+        client = TestClient(app, raise_server_exceptions=False)
+
+        with caplog.at_level("INFO"):
+            client.get(f"/client-error-{status_code}")
+
+        response_logs = [r for r in caplog.records if "[RES-" in r.message]
+        assert any(f"status={status_code}" in r.message for r in response_logs)
+        assert all(r.levelname != "WARNING" for r in response_logs)
+
+    def test_logs_warning_on_rate_limit_response(self, app, caplog):
+        """Rate-limit responses are operational warnings."""
+
+        @app.get("/rate-limited")
+        def rate_limited():
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=429)
 
         client = TestClient(app, raise_server_exceptions=False)
 
         with caplog.at_level("WARNING"):
-            client.get("/notfound")
+            client.get("/rate-limited")
 
-        # Should have warning
-        assert any(r.levelname == "WARNING" for r in caplog.records)
+        assert any(
+            r.levelname == "WARNING" and "status=429" in r.message
+            for r in caplog.records
+        )
 
 
 class TestRequestIdHelper:

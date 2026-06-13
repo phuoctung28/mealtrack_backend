@@ -1,13 +1,24 @@
 # MealTrack Backend - Project Roadmap
 
 **Version:** 0.6.3
-**Last Updated:** June 9, 2026
+**Last Updated:** June 13, 2026
 **Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 681+ tests, 70%+ coverage.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
 
 ## Completed Phases
+
+### June 2026: Observability Connector
+- [x] Added provider-neutral observability facade with no-op fallback and Sentry connector.
+- [x] Isolated all direct `sentry_sdk` usage to `src/infra/monitoring/sentry.py`.
+- [x] Migrated API startup, request context, cron flush/capture, and affiliate outbox permanent failure alerts through the facade.
+- [x] Enabled configurable Sentry Logs, operational metrics, and explicit profile session settings through the connector.
+- [x] Added safe scalar attribute filtering for logs and metrics.
+- [x] Documented Sentry event contract, safe context allowlist, and alert/dashboard setup guidance.
+- [x] Normalized production log severity semantics and removed raw AI response,
+      image URL, email, and webhook provider identifiers from representative
+      application logs.
 
 ### June 2026: Normalized Database Foundation
 - [x] Added normalized profile preferences, hydration entries, saved suggestion items/steps, meal instruction steps, food serving sizes, and food nutrient tables.
