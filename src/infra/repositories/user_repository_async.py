@@ -12,6 +12,7 @@ from src.domain.model.user import UserDomainModel, UserProfileDomainModel
 from src.domain.ports.user_repository_port import UserRepositoryPort
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.database.models.user.profile import UserProfile
+from src.infra.database.models.user.profile_preference import UserProfilePreference
 from src.infra.database.models.user.user import User
 from src.infra.mappers.user_mapper import (
     UserMapper,
@@ -26,6 +27,56 @@ _USER_LOADS = (
     selectinload(User.subscriptions),
 )
 
+_USER_SAVE_COLUMNS = (
+    "firebase_uid",
+    "email",
+    "username",
+    "password_hash",
+    "provider",
+    "is_active",
+    "onboarding_completed",
+    "last_accessed",
+    "timezone",
+    "first_name",
+    "last_name",
+    "phone_number",
+    "display_name",
+    "photo_url",
+    "deleted_at",
+)
+
+
+def _copy_user_save_columns(entity: User, updated: User) -> None:
+    for col_name in _USER_SAVE_COLUMNS:
+        new_val = getattr(updated, col_name)
+        if getattr(entity, col_name) != new_val:
+            setattr(entity, col_name, new_val)
+
+
+def _sync_profile_preference_entries(
+    entity: UserProfile,
+    profile_domain: UserProfileDomainModel,
+) -> None:
+    desired_entries = build_profile_preference_entries(profile_domain)
+    existing_by_key: dict[tuple[str, str], UserProfilePreference] = {
+        (entry.preference_type, entry.value): entry
+        for entry in entity.preference_entries
+    }
+
+    next_entries: list[UserProfilePreference] = []
+    for desired in desired_entries:
+        key = (desired.preference_type, desired.value)
+        existing = existing_by_key.pop(key, None)
+        if existing:
+            existing.position = desired.position
+            next_entries.append(existing)
+            continue
+
+        desired.profile_id = str(entity.id)
+        next_entries.append(desired)
+
+    entity.preference_entries = next_entries
+
 
 class AsyncUserRepository(UserRepositoryPort):
     """Async SQLAlchemy user repository. Never calls session.commit()."""
@@ -35,13 +86,23 @@ class AsyncUserRepository(UserRepositoryPort):
 
     async def save(self, user_domain: UserDomainModel) -> UserDomainModel:
         user_entity = UserMapper.to_persistence(user_domain)
-        user_entity.profiles = [
-            UserProfileMapper.to_persistence(p) for p in user_domain.profiles
-        ]
-        if user_entity.id is None:
-            self.session.add(user_entity)
+
+        if user_entity.id is not None:
+            result = await self.session.execute(
+                select(User).options(*_USER_LOADS).where(User.id == str(user_entity.id))
+            )
+            existing_entity = result.scalars().first()
         else:
-            user_entity = await self.session.merge(user_entity)
+            existing_entity = None
+
+        if existing_entity:
+            _copy_user_save_columns(existing_entity, user_entity)
+            user_entity = existing_entity
+        else:
+            user_entity.profiles = [
+                UserProfileMapper.to_persistence(p) for p in user_domain.profiles
+            ]
+            self.session.add(user_entity)
         try:
             await self.session.flush()
             # Re-fetch with eager loading to satisfy lazy="raise" on profiles/subscriptions
@@ -163,7 +224,7 @@ class AsyncUserRepository(UserRepositoryPort):
                     # Only mark a column dirty when its value truly changes.
                     if new_val != old_val:
                         setattr(entity, col_name, new_val)
-            entity.preference_entries = build_profile_preference_entries(profile_domain)
+            _sync_profile_preference_entries(entity, profile_domain)
 
         # Data hygiene: legacy rows may have NULL timestamps despite NOT NULL constraints.
         # Backfill them so any subsequent UPDATE does not violate constraints.
