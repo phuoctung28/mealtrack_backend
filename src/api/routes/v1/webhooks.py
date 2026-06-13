@@ -16,6 +16,7 @@ from sqlalchemy import select, text
 from src.domain.services.email_service import EmailService
 from src.domain.utils.timezone_utils import utc_now
 from src.infra.adapters.posthog_adapter import PostHogAdapter
+from src.infra.monitoring import increment_metric
 from src.infra.adapters.resend_email_adapter import ResendEmailAdapter
 from src.infra.database.models.subscription import Subscription
 from src.infra.database.models.user.user import User
@@ -93,6 +94,7 @@ async def revenuecat_webhook(
     async with AsyncUnitOfWork() as uow:
         if event_type == "TRANSFER":
             await handle_transfer(uow, event)
+            increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type, "status": "success"})
             return {"status": "success"}
 
         user = await find_user_for_revenuecat_event(uow, event)
@@ -131,6 +133,7 @@ async def revenuecat_webhook(
         elif event_type == "REFUND":
             await handle_refund(uow, user, event)
 
+    increment_metric("webhook.revenuecat.processed", attributes={"event_type": event_type or "unknown", "status": "success"})
     return {"status": "success"}
 
 

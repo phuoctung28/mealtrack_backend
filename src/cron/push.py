@@ -23,6 +23,7 @@ from src.infra.monitoring import (
     capture_exception,
     flush_observability,
     initialize_observability,
+    log_event,
     start_span,
 )
 from src.infra.services.cron_notification_dispatch_service import (
@@ -82,6 +83,7 @@ async def run() -> None:
             for tz_name in timezones:
                 local_today = now.astimezone(ZoneInfo(tz_name)).date()
                 await precompute.precompute_for_timezone(tz_name, local_today)
+        log_event("info", "cron.phase.completed", attributes={"phase": "push.precompute", "status": "success"})
     except Exception as exc:
         logger.exception("Phase 1 (precompute) failed")
         capture_exception(
@@ -98,6 +100,7 @@ async def run() -> None:
         ):
             trial_push = CronTrialPushService()
             await trial_push.check_and_schedule_pushes(now)
+        log_event("info", "cron.phase.completed", attributes={"phase": "push.trial", "status": "success"})
     except Exception as exc:
         logger.exception("Phase 2 (trial push scheduling) failed")
         capture_exception(
@@ -112,6 +115,7 @@ async def run() -> None:
     try:
         with start_span(operation="cron.push.dispatch", description="FCM dispatch"):
             await dispatch._send_due_notifications(now)
+        log_event("info", "cron.phase.completed", attributes={"phase": "push.dispatch", "status": "success"})
     except Exception as exc:
         logger.exception("Phase 3 (FCM dispatch) failed")
         capture_exception(
@@ -125,6 +129,7 @@ async def run() -> None:
             operation="cron.push.cleanup", description="notification cleanup"
         ):
             await dispatch.cleanup_expired_notifications()
+        log_event("info", "cron.phase.completed", attributes={"phase": "push.cleanup", "status": "success"})
     except Exception as exc:
         logger.exception("Phase 4 (notification cleanup) failed")
         capture_exception(

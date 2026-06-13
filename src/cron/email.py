@@ -22,6 +22,7 @@ from src.infra.monitoring import (
     capture_exception,
     flush_observability,
     initialize_observability,
+    log_event,
     start_span,
 )
 from src.infra.services.cron_lifecycle_email_service import CronLifecycleEmailService
@@ -62,6 +63,7 @@ async def run() -> None:
             )
             lifecycle_email = CronLifecycleEmailService(email_service=email_service)
             await lifecycle_email.check_and_send_emails()
+        log_event("info", "cron.phase.completed", attributes={"phase": "email", "status": "success"})
     except Exception as exc:
         logger.exception("Email cron failed")
         capture_exception(

@@ -26,6 +26,7 @@ SAFE_CONTEXT_KEYS = frozenset(
         "status",
         "result",
         "phase",
+        "provider",
     }
 )
 
@@ -43,6 +44,7 @@ SAFE_TAG_KEYS = frozenset(
         "event_type",
         "status",
         "result",
+        "provider",
     }
 )
 

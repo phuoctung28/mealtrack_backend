@@ -104,17 +104,13 @@ async def get_user_metrics(
 
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
-    try:
-        # Create query
-        query = GetUserMetricsQuery(user_id=user_id)
+    # Create query
+    query = GetUserMetricsQuery(user_id=user_id)
 
-        # Send query
-        result = await event_bus.send(query)
+    # Send query
+    result = await event_bus.send(query)
 
-        return UserMetricsResponse(**result)
-
-    except Exception as e:
-        raise handle_exception(e) from e
+    return UserMetricsResponse(**result)
 
 
 @router.get("/tdee", response_model=TdeeCalculationResponse)
@@ -132,42 +128,38 @@ async def get_user_tdee(
 
     Authentication required: User ID is automatically extracted from the Firebase token.
     """
-    try:
-        # Create query
-        query = GetUserTdeeQuery(user_id=user_id)
+    # Create query
+    query = GetUserTdeeQuery(user_id=user_id)
 
-        # Send query
-        result = await event_bus.send(query)
+    # Send query
+    result = await event_bus.send(query)
 
-        # Map goal string to enum
-        goal_map = {"cut": Goal.CUT, "bulk": Goal.BULK, "recomp": Goal.RECOMP}
+    # Map goal string to enum
+    goal_map = {"cut": Goal.CUT, "bulk": Goal.BULK, "recomp": Goal.RECOMP}
 
-        # Create domain response
-        domain_response = TdeeResponse(
-            bmr=result["bmr"],
-            tdee=result["tdee"],
-            goal=goal_map[result["profile_data"]["fitness_goal"]],
-            macros=MacroTargets(
-                calories=result["macros"]["calories"],
-                protein=result["macros"]["protein"],
-                carbs=result["macros"]["carbs"],
-                fat=result["macros"]["fat"],
-            ),
-        )
+    # Create domain response
+    domain_response = TdeeResponse(
+        bmr=result["bmr"],
+        tdee=result["tdee"],
+        goal=goal_map[result["profile_data"]["fitness_goal"]],
+        macros=MacroTargets(
+            calories=result["macros"]["calories"],
+            protein=result["macros"]["protein"],
+            carbs=result["macros"]["carbs"],
+            fat=result["macros"]["fat"],
+        ),
+    )
 
-        # Use mapper to convert to response DTO
-        mapper = TdeeMapper()
-        response = mapper.to_response_dto(domain_response)
+    # Use mapper to convert to response DTO
+    mapper = TdeeMapper()
+    response = mapper.to_response_dto(domain_response)
 
-        # Add additional metadata
-        response.activity_multiplier = result["activity_multiplier"]
-        response.formula_used = result["formula_used"]
-        response.is_custom = result.get("is_custom", False)
+    # Add additional metadata
+    response.activity_multiplier = result["activity_multiplier"]
+    response.formula_used = result["formula_used"]
+    response.is_custom = result.get("is_custom", False)
 
-        return response
-
-    except Exception as e:
-        raise handle_exception(e) from e
+    return response
 
 
 @router.post("/metrics", response_model=TdeeCalculationResponse)
@@ -185,61 +177,57 @@ async def update_user_metrics(
     """
     import logging
     logger = logging.getLogger(__name__)
-    try:
-        # Debug: log incoming request values
-        logger.info(
-            f"update_user_metrics: goal={request.fitness_goal}, "
-            f"target_weight_kg={request.target_weight_kg}, "
-            f"weight_kg={request.weight_kg}"
-        )
-        # Update metrics (including optional fitness goal and target weight)
-        command = UpdateUserMetricsCommand(
-            user_id=user_id,
-            weight_kg=request.weight_kg,
-            job_type=request.job_type,
-            training_days_per_week=request.training_days_per_week,
-            training_minutes_per_session=request.training_minutes_per_session,
-            body_fat_percent=request.body_fat_percent,
-            fitness_goal=request.fitness_goal.value if request.fitness_goal else None,
-            training_level=(
-                request.training_level.value if request.training_level else None
-            ),
-            target_weight_kg=request.target_weight_kg,
-            goal_start_weight_kg=request.goal_start_weight_kg,
-            goal_started_at=request.goal_started_at,
-            daily_water_goal_ml=request.daily_water_goal_ml,
-            reset_water_goal=request.reset_water_goal,
-        )
+    # Debug: log incoming request values
+    logger.info(
+        f"update_user_metrics: goal={request.fitness_goal}, "
+        f"target_weight_kg={request.target_weight_kg}, "
+        f"weight_kg={request.weight_kg}"
+    )
+    # Update metrics (including optional fitness goal and target weight)
+    command = UpdateUserMetricsCommand(
+        user_id=user_id,
+        weight_kg=request.weight_kg,
+        job_type=request.job_type,
+        training_days_per_week=request.training_days_per_week,
+        training_minutes_per_session=request.training_minutes_per_session,
+        body_fat_percent=request.body_fat_percent,
+        fitness_goal=request.fitness_goal.value if request.fitness_goal else None,
+        training_level=(
+            request.training_level.value if request.training_level else None
+        ),
+        target_weight_kg=request.target_weight_kg,
+        goal_start_weight_kg=request.goal_start_weight_kg,
+        goal_started_at=request.goal_started_at,
+        daily_water_goal_ml=request.daily_water_goal_ml,
+        reset_water_goal=request.reset_water_goal,
+    )
 
-        await event_bus.send(command)
+    await event_bus.send(command)
 
-        # Return updated TDEE/macros
-        query = GetUserTdeeQuery(user_id=user_id)
-        result = await event_bus.send(query)
+    # Return updated TDEE/macros
+    query = GetUserTdeeQuery(user_id=user_id)
+    result = await event_bus.send(query)
 
-        goal_map = {"cut": Goal.CUT, "bulk": Goal.BULK, "recomp": Goal.RECOMP}
+    goal_map = {"cut": Goal.CUT, "bulk": Goal.BULK, "recomp": Goal.RECOMP}
 
-        domain_response = TdeeResponse(
-            bmr=result["bmr"],
-            tdee=result["tdee"],
-            goal=goal_map[result["profile_data"]["fitness_goal"]],
-            macros=MacroTargets(
-                calories=result["macros"]["calories"],
-                protein=result["macros"]["protein"],
-                carbs=result["macros"]["carbs"],
-                fat=result["macros"]["fat"],
-            ),
-        )
+    domain_response = TdeeResponse(
+        bmr=result["bmr"],
+        tdee=result["tdee"],
+        goal=goal_map[result["profile_data"]["fitness_goal"]],
+        macros=MacroTargets(
+            calories=result["macros"]["calories"],
+            protein=result["macros"]["protein"],
+            carbs=result["macros"]["carbs"],
+            fat=result["macros"]["fat"],
+        ),
+    )
 
-        mapper = TdeeMapper()
-        response = mapper.to_response_dto(domain_response)
-        response.activity_multiplier = result["activity_multiplier"]
-        response.formula_used = result["formula_used"]
-        response.is_custom = result.get("is_custom", False)
-        return response
-
-    except Exception as e:
-        raise handle_exception(e) from e
+    mapper = TdeeMapper()
+    response = mapper.to_response_dto(domain_response)
+    response.activity_multiplier = result["activity_multiplier"]
+    response.formula_used = result["formula_used"]
+    response.is_custom = result.get("is_custom", False)
+    return response
 
 
 @router.put("/custom-macros", response_model=TdeeCalculationResponse)
@@ -254,43 +242,39 @@ async def update_custom_macros(
     Send all three values to set custom macros.
     Send all null to reset to algorithm-calculated values.
     """
-    try:
-        command = UpdateCustomMacrosCommand(
-            user_id=user_id,
-            protein_g=request.protein_g,
-            carbs_g=request.carbs_g,
-            fat_g=request.fat_g,
-        )
-        await event_bus.send(command)
+    command = UpdateCustomMacrosCommand(
+        user_id=user_id,
+        protein_g=request.protein_g,
+        carbs_g=request.carbs_g,
+        fat_g=request.fat_g,
+    )
+    await event_bus.send(command)
 
-        # Return updated TDEE (reflects custom values if set)
-        query = GetUserTdeeQuery(user_id=user_id)
-        result = await event_bus.send(query)
+    # Return updated TDEE (reflects custom values if set)
+    query = GetUserTdeeQuery(user_id=user_id)
+    result = await event_bus.send(query)
 
-        goal_map = {
-            "cut": Goal.CUT,
-            "bulk": Goal.BULK,
-            "recomp": Goal.RECOMP,
-        }
+    goal_map = {
+        "cut": Goal.CUT,
+        "bulk": Goal.BULK,
+        "recomp": Goal.RECOMP,
+    }
 
-        domain_response = TdeeResponse(
-            bmr=result["bmr"],
-            tdee=result["tdee"],
-            goal=goal_map[result["profile_data"]["fitness_goal"]],
-            macros=MacroTargets(
-                calories=result["macros"]["calories"],
-                protein=result["macros"]["protein"],
-                carbs=result["macros"]["carbs"],
-                fat=result["macros"]["fat"],
-            ),
-        )
+    domain_response = TdeeResponse(
+        bmr=result["bmr"],
+        tdee=result["tdee"],
+        goal=goal_map[result["profile_data"]["fitness_goal"]],
+        macros=MacroTargets(
+            calories=result["macros"]["calories"],
+            protein=result["macros"]["protein"],
+            carbs=result["macros"]["carbs"],
+            fat=result["macros"]["fat"],
+        ),
+    )
 
-        mapper = TdeeMapper()
-        response = mapper.to_response_dto(domain_response)
-        response.activity_multiplier = result["activity_multiplier"]
-        response.formula_used = result["formula_used"]
-        response.is_custom = result.get("is_custom", False)
-        return response
-
-    except Exception as e:
-        raise handle_exception(e) from e
+    mapper = TdeeMapper()
+    response = mapper.to_response_dto(domain_response)
+    response.activity_multiplier = result["activity_multiplier"]
+    response.formula_used = result["formula_used"]
+    response.is_custom = result.get("is_custom", False)
+    return response

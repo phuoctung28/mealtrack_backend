@@ -68,5 +68,4 @@ class GetNotificationPreferencesQueryHandler(
                 else:
                     return preferences.to_dict()
         except Exception as e:
-            logger.error(f"Error getting notification preferences: {e}")
             raise

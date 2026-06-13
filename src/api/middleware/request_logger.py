@@ -112,8 +112,10 @@ class RequestLoggerMiddleware:
         log_level = logging.INFO
         if elapsed > self.SLOW_REQUEST_THRESHOLD_SECONDS or status_code == 429:
             log_level = logging.WARNING
+        # 5xx → WARNING here (outcome indicator only); the authoritative root-cause
+        # ERROR is owned by the global exception handler or handle_exception().
         if status_code >= 500:
-            log_level = logging.ERROR
+            log_level = logging.WARNING
         logger.log(
             log_level,
             f"[RES-{request_id}] {request.method} {request.url.path}"
@@ -127,9 +129,13 @@ class RequestLoggerMiddleware:
         elapsed: float,
         error: Exception,
     ) -> None:
-        logger.error(
+        # WARNING only — the authoritative root-cause ERROR is owned by
+        # _unexpected_exception_handler (global handler). ServerErrorMiddleware
+        # re-raises after calling the handler, so this path fires every time;
+        # logging at WARNING avoids a duplicate ERROR/Sentry issue per request.
+        logger.warning(
             f"[ERR-{request_id}] {request.method} {request.url.path}"
-            f" elapsed={elapsed:.3f}s error={type(error).__name__}: {error}"
+            f" elapsed={elapsed:.3f}s error={type(error).__name__}"
         )
 
     def _get_client_ip(self, request: Request) -> str:

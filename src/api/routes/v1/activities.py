@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.exceptions import ValidationException, handle_exception
+from src.api.exceptions import ValidationException
 from src.api.middleware.accept_language import get_request_language
 from src.app.queries.activity import GetDailyActivitiesQuery, GetBulkActivitiesQuery
 from src.domain.utils.timezone_utils import utc_now
@@ -42,33 +42,29 @@ async def get_daily_activities(
     Authentication required: User ID is automatically extracted from the Firebase token.
     Language preference is read from Accept-Language header.
     """
-    try:
-        # Parse and validate date
-        if date:
-            try:
-                target_date = datetime.strptime(date, "%Y-%m-%d")
-            except ValueError as e:
-                raise ValidationException("Invalid date format. Use YYYY-MM-DD") from e
-        else:
-            target_date = utc_now()
+    # Parse and validate date
+    if date:
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d")
+        except ValueError as e:
+            raise ValidationException("Invalid date format. Use YYYY-MM-DD") from e
+    else:
+        target_date = utc_now()
 
-        # Get language from Accept-Language header
-        language = get_request_language(request)
+    # Get language from Accept-Language header
+    language = get_request_language(request)
 
-        # Send query with language and timezone support
-        header_tz = request.headers.get("X-Timezone")
-        query = GetDailyActivitiesQuery(
-            user_id=user_id,
-            target_date=target_date,
-            language=language,
-            header_timezone=header_tz,
-        )
-        activities = await event_bus.send(query)
+    # Send query with language and timezone support
+    header_tz = request.headers.get("X-Timezone")
+    query = GetDailyActivitiesQuery(
+        user_id=user_id,
+        target_date=target_date,
+        language=language,
+        header_timezone=header_tz,
+    )
+    activities = await event_bus.send(query)
 
-        return activities
-
-    except Exception as e:
-        raise handle_exception(e) from e
+    return activities
 
 
 @router.get("/bulk", response_model=None)
@@ -85,22 +81,18 @@ async def get_bulk_activities(
     Returns a dict of { "YYYY-MM-DD": [activities] } for each date in the range.
     Max range: 60 days.
     """
-    try:
-        if start > end:
-            raise ValidationException("Start date must be before or equal to end date")
-        if (end - start).days > 60:
-            raise ValidationException("Date range cannot exceed 60 days")
+    if start > end:
+        raise ValidationException("Start date must be before or equal to end date")
+    if (end - start).days > 60:
+        raise ValidationException("Date range cannot exceed 60 days")
 
-        language = get_request_language(request)
-        header_tz = request.headers.get("X-Timezone")
-        query = GetBulkActivitiesQuery(
-            user_id=user_id,
-            start_date=start,
-            end_date=end,
-            language=language,
-            header_timezone=header_tz,
-        )
-        return await event_bus.send(query)
-
-    except Exception as e:
-        raise handle_exception(e) from e
+    language = get_request_language(request)
+    header_tz = request.headers.get("X-Timezone")
+    query = GetBulkActivitiesQuery(
+        user_id=user_id,
+        start_date=start,
+        end_date=end,
+        language=language,
+        header_timezone=header_tz,
+    )
+    return await event_bus.send(query)

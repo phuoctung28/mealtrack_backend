@@ -14,8 +14,6 @@ from src.domain.ports.image_store_port import ImageStorePort
 # Load environment variables if not already loaded
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

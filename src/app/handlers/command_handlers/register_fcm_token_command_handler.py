@@ -105,7 +105,7 @@ class RegisterFcmTokenCommandHandler(
                     command.user_id,
                 )
             except Exception as exc:
-                logger.error(
+                logger.warning(
                     "Failed to reschedule notifications after FCM timezone update: %s",
                     exc,
                 )

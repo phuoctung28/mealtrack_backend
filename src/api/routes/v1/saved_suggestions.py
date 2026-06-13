@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.exceptions import handle_exception
 from src.app.commands.saved_suggestion import (
     SaveSuggestionCommand,
     DeleteSavedSuggestionCommand,
@@ -33,11 +32,8 @@ async def list_saved_suggestions(
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """List all saved suggestions for the current user (newest first)."""
-    try:
-        query = GetSavedSuggestionsQuery(user_id=user_id)
-        return await event_bus.send(query)
-    except Exception as e:
-        raise handle_exception(e) from e
+    query = GetSavedSuggestionsQuery(user_id=user_id)
+    return await event_bus.send(query)
 
 
 @router.post("")
@@ -47,17 +43,14 @@ async def save_suggestion(
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """Save a meal suggestion. Idempotent — returns existing if already saved."""
-    try:
-        command = SaveSuggestionCommand(
-            user_id=user_id,
-            suggestion_id=request.suggestion_id,
-            meal_type=request.meal_type,
-            portion_multiplier=request.portion_multiplier,
-            suggestion_data=request.suggestion_data,
-        )
-        return await event_bus.send(command)
-    except Exception as e:
-        raise handle_exception(e) from e
+    command = SaveSuggestionCommand(
+        user_id=user_id,
+        suggestion_id=request.suggestion_id,
+        meal_type=request.meal_type,
+        portion_multiplier=request.portion_multiplier,
+        suggestion_data=request.suggestion_data,
+    )
+    return await event_bus.send(command)
 
 
 @router.delete("/{suggestion_id}")
@@ -67,11 +60,8 @@ async def delete_saved_suggestion(
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """Remove a saved suggestion."""
-    try:
-        command = DeleteSavedSuggestionCommand(
-            user_id=user_id,
-            suggestion_id=suggestion_id,
-        )
-        return await event_bus.send(command)
-    except Exception as e:
-        raise handle_exception(e) from e
+    command = DeleteSavedSuggestionCommand(
+        user_id=user_id,
+        suggestion_id=suggestion_id,
+    )
+    return await event_bus.send(command)

@@ -5,7 +5,7 @@ from typing import cast
 
 from src.infra.adapters.affiliate_service_adapter import AffiliateServiceAdapter
 from src.infra.database.config_async import AsyncSessionLocal
-from src.infra.monitoring import capture_message, start_span
+from src.infra.monitoring import capture_message, increment_metric, start_span
 from src.infra.repositories.affiliate_event_outbox_repository import (
     AffiliateEventOutboxRepository,
 )
@@ -61,6 +61,7 @@ async def dispatch_affiliate_outbox(batch_size: int = 50) -> dict:
                     failed += 1
                     if is_terminal:
                         permanently_failed += 1
+                        increment_metric("affiliate.outbox.failure", attributes={"component": "affiliate_outbox", "status": "permanent", "event_type": event_type})
                         capture_message(
                             "Affiliate outbox row permanently failed",
                             level="error",
