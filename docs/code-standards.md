@@ -117,6 +117,56 @@ async def handle(self, query: GetMealByIdQuery) -> Meal:
     return meal
 ```
 
+## Logging Ownership
+
+**Core rule: log-or-raise, not both.** Every unexpected failure produces exactly one root-cause `ERROR` log. Expected domain exceptions (4xx) produce zero `ERROR` logs.
+
+### Exception Owner Matrix
+
+| Boundary | Owns ERROR log? | Notes |
+|----------|----------------|-------|
+| `src/api/exception_handlers.py` | Yes — unexpected exceptions only | `_unexpected_exception_handler` is the single catch-all ERROR owner |
+| `src/api/exception_handlers.py` | No — expected 4xx | `_meal_track_exception_handler` converts silently, no log |
+| `src/api/middleware/request_logger.py` | No | 5xx response lines are `WARNING` (outcome indicator); root-cause ERROR is elsewhere |
+| Command/query handlers | No | Pure conversion via `handle_exception()` or direct propagation; do not log before re-raising |
+| Event handlers / background tasks | Yes — at their boundary | These swallow exceptions, so they own the ERROR at the subscriber boundary |
+| Cron entrypoints (`src/cron/`) | Yes — `capture_exception` + `flush_observability` before exit | Use `log_event("info", "cron.phase.completed")` per phase for lifecycle tracing |
+
+### Log Level Guide
+
+| Level | When to Use |
+|-------|-------------|
+| `ERROR` | Unexpected/unrecoverable: unhandled exception, broken required dependency, background task failure |
+| `WARNING` | Degradation or recoverable signal: 5xx response outcome, slow request, retry, optional dependency bypass, AI provider fallback |
+| `INFO` | Normal lifecycle: request completion, cron phase done, startup |
+
+### Catch Block Examples
+
+```python
+# BAD — log-and-rethrow creates duplicate Sentry issues
+try:
+    result = await service.do_work()
+except SomeError as e:
+    logger.error("Work failed: %s", e)   # ERROR here
+    raise handle_exception(e)            # ERROR again in exception_handlers.py
+
+# GOOD — let the global handler own the single ERROR
+try:
+    result = await service.do_work()
+except MealTrackException as e:
+    raise handle_exception(e)            # pure conversion, no log
+
+# GOOD — background handler owns its own ERROR (it swallows, not re-raises)
+async def handle(self, event: SomeEvent) -> None:
+    try:
+        await self._process(event)
+    except Exception as e:
+        logger.error("Background handler failed: %s", type(e).__name__, exc_info=True)
+        capture_exception(e)
+```
+
+---
+
 ## Production Logging
 
 Use stdlib `logging` unless a file already uses the provider-neutral observability

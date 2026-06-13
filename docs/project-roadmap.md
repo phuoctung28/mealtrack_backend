@@ -9,6 +9,17 @@
 
 ## Completed Phases
 
+### June 2026: Single-Owner Logger System
+- [x] Established log-or-raise rule: one root-cause `ERROR` per unexpected request failure; expected 4xx exceptions produce zero ERROR logs.
+- [x] `src/api/exception_handlers.py` — new central exception boundary with `register_exception_handlers(app)`; owns single ERROR for unexpected exceptions.
+- [x] `RequestLoggerMiddleware` — 5xx response lines downgraded from ERROR to WARNING (outcome indicator only).
+- [x] `handle_exception()` in `src/api/exceptions.py` — pure conversion helper, no ERROR log before re-raise.
+- [x] All command/query handlers — removed `logger.error` before re-raise patterns.
+- [x] `src/infra/services/ai/ai_model_manager.py` — emits `log_event("warning", "ai.provider.failure")` before raising `AIUnavailableError`.
+- [x] Cron entrypoints — emit `log_event("info", "cron.phase.completed")` per phase; `capture_exception` + `flush_observability` on failure.
+- [x] `src/infra/services/affiliate_outbox_dispatch_service.py` — emits `increment_metric("affiliate.outbox.failure")` for permanent failures.
+- [x] Architecture guardrails: `tests/unit/architecture/test_logging_ownership_guardrails.py` and `tests/unit/api/test_single_owner_exception_logging.py`.
+
 ### June 2026: Observability Connector
 - [x] Added provider-neutral observability facade with no-op fallback and Sentry connector.
 - [x] Isolated all direct `sentry_sdk` usage to `src/infra/monitoring/sentry.py`.

@@ -1,9 +1,15 @@
 """
-API Exception classes for consistent error handling.
+API Exception classes and conversion helpers for consistent error handling.
+
+Log-or-raise rule: handle_exception() is a PURE CONVERSION HELPER.
+It does not log expected exceptions (MealTrackException, HTTPException).
+AIUnavailableError is logged at WARNING because it represents a degraded
+service state worth operational visibility.
+Unexpected exceptions log once at ERROR; the global exception handler in
+exception_handlers.py owns that log after route try/except blocks are removed.
 """
 
 import logging
-import traceback
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException, status
@@ -96,16 +102,23 @@ def create_http_exception(exc: MealTrackException) -> HTTPException:
 
 
 def handle_exception(exc: Exception) -> HTTPException:
-    """Handle any exception and convert to appropriate HTTP exception."""
+    """Convert any exception to an appropriate HTTPException.
+
+    Expected exceptions are converted silently (no ERROR log).
+    AIUnavailableError logs WARNING (degraded state worth noting).
+    Unexpected exceptions log ERROR once — until all routes drop this
+    helper in favour of direct propagation to the global handler
+    (see exception_handlers.py and Phase 3 route cleanup).
+    """
 
     if isinstance(exc, AIUnavailableError):
+        # Degraded service state — WARNING is appropriate
         logger.warning(
             "AI provider unavailable: %s",
-            exc,
+            type(exc).__name__,
             extra={
                 "error_code": "AI_UNAVAILABLE",
                 "attempted_models": exc.attempted_models,
-                "last_error": exc.last_error,
             },
         )
         return HTTPException(
@@ -113,32 +126,24 @@ def handle_exception(exc: Exception) -> HTTPException:
             detail={
                 "error_code": "AI_UNAVAILABLE",
                 "message": "AI meal generation is temporarily unavailable",
-                "details": {
-                    "attempted_models": exc.attempted_models,
-                },
+                "details": {"attempted_models": exc.attempted_models},
             },
         )
 
     if isinstance(exc, MealTrackException):
-        logger.warning(
-            f"MealTrack exception occurred: {exc.error_code} - {exc.message}",
-            extra={"error_code": exc.error_code, "details": exc.details},
-        )
+        # Expected domain error — pure conversion, no log (it is not an error)
         return create_http_exception(exc)
 
     if isinstance(exc, HTTPException):
-        logger.warning(f"HTTP exception occurred: {exc.status_code} - {exc.detail}")
+        # Already an HTTP exception — pass through
         return exc
 
-    # Unexpected exceptions - log full stack trace
+    # Unexpected exceptions — one root-cause ERROR; no internal details to client
     logger.error(
-        f"Unexpected exception occurred: {type(exc).__name__} - {str(exc)}",
+        "Unexpected exception: %s",
+        type(exc).__name__,
         exc_info=True,
-        extra={
-            "exception_type": type(exc).__name__,
-            "exception_message": str(exc),
-            "stack_trace": traceback.format_exc(),
-        },
+        extra={"error_type": type(exc).__name__},
     )
 
     return HTTPException(

@@ -158,6 +158,26 @@
 
 **Config:** `SENTRY_DSN`, `SENTRY_RELEASE`, `SENTRY_ENABLE_LOGS=true`, `SENTRY_ENABLE_METRICS=true`, `SENTRY_TRACES_SAMPLE_RATE=0.1`, `SENTRY_PROFILES_SAMPLE_RATE=0.05`, `SENTRY_PROFILE_SESSION_SAMPLE_RATE`, `SENTRY_PROFILE_LIFECYCLE`, `SENTRY_SEND_PII=false`
 
+### Single-Owner Rule and Duplicate Suppression
+
+Python `ERROR` log records are automatically captured by Sentry as issues via the logging integration. This means every `logger.error(...)` in the request path generates a Sentry issue — logging the same failure twice (log-and-rethrow pattern) produces two distinct Sentry issues for one real event.
+
+The single-owner logging strategy prevents this:
+- **One root-cause ERROR per unexpected request failure** — owned by `src/api/exception_handlers.py`.
+- **Expected 4xx domain exceptions** convert silently to responses; zero ERROR logs and zero Sentry issues.
+- **Background/cron boundaries** own their own ERROR log + `capture_exception` because they swallow rather than propagate.
+
+When to call each facade function:
+
+| Function | When |
+|----------|------|
+| `capture_exception(exc)` | Swallowed exceptions at background/cron boundaries that never reach the global handler |
+| `log_event("warning", "...")` | Degradation signals that need structured log metadata (e.g. `ai.provider.failure`) |
+| `increment_metric("...")` | Operational counters: permanent outbox failures, retry counts |
+| `distribution_metric("...")` | Latency histograms: `meal.manual_save.db_ms`, `meal.manual_save.cache_ms` |
+
+Do **not** call `capture_exception` after a `logger.error(..., exc_info=True)` — the logging integration already ships it to Sentry.
+
 ### Event Contract
 
 Sent to Sentry:

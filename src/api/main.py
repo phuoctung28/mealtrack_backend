@@ -35,6 +35,7 @@ from src.api.base_dependencies import (
     initialize_cache_layer,
     shutdown_cache_layer,
 )
+from src.api.exception_handlers import register_exception_handlers
 from src.api.dependencies.task_manager import (
     clear_task_manager,
     create_task_manager,
@@ -324,6 +325,9 @@ from slowapi.errors import RateLimitExceeded
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Global exception boundary — one authoritative ERROR per unexpected failure
+register_exception_handlers(app)
 
 # Dev auth bypass: inject a fixed user during development
 add_dev_auth_bypass(app)

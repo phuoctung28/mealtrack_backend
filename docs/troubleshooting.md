@@ -132,6 +132,33 @@ grep -r "@handles" src/app/handlers/
 
 ---
 
+### Detecting Duplicate ERROR Logs
+
+**Symptom:** A single failed request generates two or more Sentry issues, or `ERROR` appears in both middleware and exception handler logs for the same request.
+
+The single-owner rule means exactly one `ERROR` per unexpected failure. Use these commands to find violations:
+
+```bash
+# Verify no direct sentry_sdk outside the connector
+rg "import sentry_sdk|sentry_sdk\." src/
+
+# Find log-and-rethrow patterns (should be 0 in route files)
+rg "logger\.(error|exception)" src/api/routes/
+
+# Find handlers that log before re-raising (should be 0)
+rg -A2 "logger\.error" src/app/handlers/ | grep -A1 "raise"
+
+# Check sensitive data in logs
+rg "food_item_changes|image_url|\"Authorization\"|Bearer|Email sent to" src/ tests/
+
+# Run architecture guardrails (bans sentry_sdk outside connector, log-and-rethrow, sensitive substrings)
+pytest tests/unit/architecture/ -q
+```
+
+**Fix:** Remove `logger.error(...)` from catch blocks that re-raise — let `src/api/exception_handlers.py` own the single root-cause ERROR. Background handlers that swallow exceptions keep their own `ERROR` + `capture_exception`.
+
+---
+
 ### Sentry Events Missing
 
 **Problem:** Expected production errors do not appear in Sentry
