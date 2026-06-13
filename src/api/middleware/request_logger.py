@@ -13,7 +13,7 @@ from fastapi import Request
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from src.infra.monitoring import set_request_context
+from src.observability import set_request_context
 
 logger = logging.getLogger(__name__)
 

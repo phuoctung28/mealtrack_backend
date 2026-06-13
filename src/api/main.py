@@ -71,9 +71,9 @@ from src.api.routes.v1.users import router as users_router
 from src.api.routes.v1.webhooks import router as webhooks_router
 from src.api.routes.v1.weight_entries import router as weight_entries_router
 from src.api.routes.well_known import router as well_known_router
+from src.bootstrap.observability import initialize_observability
 from src.infra.config.settings import settings
 from src.infra.database.config_async import async_engine
-from src.infra.monitoring import initialize_observability
 
 load_dotenv()
 

@@ -69,7 +69,7 @@ Background subscriber tasks are owned by `BackgroundTaskManager` (`src/infra/eve
 Async SQLAlchemy repositories are accessed through `AsyncUnitOfWork`. The UoW owns commit/rollback boundaries; repositories flush only when generated IDs or relationship state are needed.
 
 ### Observability Connector
-Observability is owned by the infrastructure layer and exposed through `src.infra.monitoring`. API startup, request middleware, cron entrypoints, and infrastructure services call the provider-neutral facade. Sentry is the current connector, but direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
+Observability uses a provider-neutral facade at `src.observability` so API middleware does not import infrastructure directly. Infrastructure owns the Sentry connector, and startup composition wires it through `src.bootstrap.observability`. The compatibility export at `src.infra.monitoring` remains for cron and infrastructure services. Direct `sentry_sdk` imports are isolated to `src/infra/monitoring/sentry.py`.
 
 The connector sends unexpected API failures, `ERROR` logs, sampled request/SQL/cron spans, explicit Sentry Logs, operational metrics, swallowed cron failures, and affiliate outbox permanent failures. It does not send expected 4xx/business errors, product analytics, request bodies, auth headers, Firebase claims, emails, food payloads, raw image URLs, provider payloads, or secrets. Context, log attributes, and metric attributes are allowlisted scalar values.
 

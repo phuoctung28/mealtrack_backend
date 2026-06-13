@@ -1,14 +1,14 @@
 """Tests for the provider-neutral observability facade."""
 
 from contextlib import nullcontext
-from unittest.mock import MagicMock
 
-from src.infra.monitoring import (
+from src.observability import (
     capture_exception,
     capture_message,
     distribution_metric,
     flush_observability,
     gauge_metric,
+    get_observability_connector,
     increment_metric,
     initialize_observability,
     log_event,
@@ -118,13 +118,22 @@ def test_noop_connector_methods_do_not_raise():
     connector.flush(timeout=1)
 
 
-def test_facade_uses_default_connector_lazily(monkeypatch):
-    mock_connector = MagicMock()
-    monkeypatch.setattr(
-        "src.infra.monitoring.observability._build_default_connector",
-        lambda: mock_connector,
-    )
-
+def test_facade_defaults_to_noop_connector():
     initialize_observability()
 
-    mock_connector.initialize.assert_called_once()
+
+def test_bootstrap_installs_infrastructure_connector(monkeypatch):
+    from src.bootstrap import observability as bootstrap_observability
+    from src.infra.monitoring import sentry as sentry_module
+
+    connector = RecordingConnector()
+    monkeypatch.setattr(
+        sentry_module,
+        "SentryObservabilityConnector",
+        lambda: connector,
+    )
+
+    bootstrap_observability.initialize_observability()
+
+    assert get_observability_connector() is connector
+    assert connector.calls == [("initialize",)]
