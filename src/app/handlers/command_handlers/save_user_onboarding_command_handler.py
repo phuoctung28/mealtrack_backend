@@ -125,7 +125,6 @@ class SaveUserOnboardingCommandHandler(EventHandler[SaveUserOnboardingCommand, N
 
             except Exception as e:
                 await uow.rollback()
-                logger.error(f"Error saving onboarding data: {str(e)}")
                 raise
 
     async def _invalidate_user_profile(self, user_id: str):

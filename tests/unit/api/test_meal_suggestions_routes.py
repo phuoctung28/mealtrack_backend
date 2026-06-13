@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.exception_handlers import register_exception_handlers
 from src.api.middleware.rate_limit import limiter
 from src.api.routes.v1 import meal_suggestions as ms_mod
 from src.app.commands.meal_suggestion import (
@@ -59,6 +60,7 @@ def ms_client():
     app = FastAPI()
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    register_exception_handlers(app)
     app.include_router(ms_mod.router)
     app.dependency_overrides[get_current_user_id] = lambda: "user-1"
     bus = _BusOk()

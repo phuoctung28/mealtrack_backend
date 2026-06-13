@@ -5,11 +5,21 @@ from fastapi.testclient import TestClient
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
+from src.api.exception_handlers import register_exception_handlers
 from src.api.exceptions import ValidationException
 from src.api.routes.v1 import activities as activities_mod
 from src.api.routes.v1 import cheat_days as cheat_days_mod
 from src.api.routes.v1 import foods as foods_mod
 from src.api.routes.v1 import ingredients as ingredients_mod
+
+
+def _make_app(*routers):
+    """Create a test FastAPI app with global exception handlers registered."""
+    app = FastAPI()
+    register_exception_handlers(app)
+    for router in routers:
+        app.include_router(router)
+    return app
 
 
 class _Bus:
@@ -24,8 +34,7 @@ class _Bus:
 
 @pytest.fixture
 def foods_app():
-    app = FastAPI()
-    app.include_router(foods_mod.router)
+    app = _make_app(foods_mod.router)
     return app
 
 
@@ -43,7 +52,7 @@ def test_foods_search_500(foods_app, monkeypatch):
             raise RuntimeError("down")
 
     monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: _Bad())
-    r = TestClient(foods_app).get("/v1/foods/search?q=x")
+    r = TestClient(foods_app, raise_server_exceptions=False).get("/v1/foods/search?q=x")
     assert r.status_code == 500
 
 
@@ -86,8 +95,7 @@ def test_foods_barcode_404(foods_app, monkeypatch):
 
 @pytest.fixture
 def activities_app():
-    app = FastAPI()
-    app.include_router(activities_mod.router)
+    app = _make_app(activities_mod.router)
     app.dependency_overrides[get_current_user_id] = lambda: "u1"
     return app
 
@@ -108,8 +116,7 @@ def test_activities_daily_invalid_date(activities_app):
 
 @pytest.fixture
 def cheat_app():
-    app = FastAPI()
-    app.include_router(cheat_days_mod.router)
+    app = _make_app(cheat_days_mod.router)
     app.dependency_overrides[get_current_user_id] = lambda: "u1"
     return app
 
@@ -126,8 +133,8 @@ def test_cheat_mark_and_list(cheat_app):
 
 def test_cheat_invalid_date_post(cheat_app):
     cheat_app.dependency_overrides[get_configured_event_bus] = lambda: _Bus({})
-    with pytest.raises(ValidationException):
-        TestClient(cheat_app).post("/v1/cheat-days?date=not-a-date")
+    r = TestClient(cheat_app).post("/v1/cheat-days?date=not-a-date")
+    assert r.status_code == 400
 
 
 def test_cheat_delete_and_week(cheat_app):
@@ -142,8 +149,7 @@ def test_cheat_delete_and_week(cheat_app):
 
 @pytest.fixture
 def ingredients_app():
-    app = FastAPI()
-    app.include_router(ingredients_mod.router)
+    app = _make_app(ingredients_mod.router)
     app.dependency_overrides[get_current_user_id] = lambda: "u1"
     return app
 
@@ -179,7 +185,7 @@ def test_ingredients_recognize_handle_exception(ingredients_app):
             raise RuntimeError("vision down")
 
     ingredients_app.dependency_overrides[get_configured_event_bus] = lambda: _Bad()
-    r = TestClient(ingredients_app).post(
+    r = TestClient(ingredients_app, raise_server_exceptions=False).post(
         "/v1/ingredients/recognize",
         json={"image_data": "abc"},
     )
@@ -212,7 +218,7 @@ def test_cheat_days_handle_exception(cheat_app):
             raise RuntimeError("db")
 
     cheat_app.dependency_overrides[get_configured_event_bus] = lambda: _Bad()
-    r = TestClient(cheat_app).post("/v1/cheat-days?date=2026-06-15")
+    r = TestClient(cheat_app, raise_server_exceptions=False).post("/v1/cheat-days?date=2026-06-15")
     assert r.status_code == 500
 
 
@@ -223,5 +229,5 @@ def test_foods_barcode_generic_exception(foods_app, monkeypatch):
 
     monkeypatch.setattr(foods_mod, "get_food_search_event_bus", lambda: _Bad())
     foods_app.dependency_overrides[get_current_user_id] = lambda: "u1"
-    r = TestClient(foods_app).get("/v1/foods/barcode/xyz")
+    r = TestClient(foods_app, raise_server_exceptions=False).get("/v1/foods/barcode/xyz")
     assert r.status_code == 500

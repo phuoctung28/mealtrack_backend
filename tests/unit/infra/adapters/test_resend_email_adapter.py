@@ -1,6 +1,6 @@
 """Tests for ResendEmailAdapter."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -37,34 +37,45 @@ async def test_send_email_success(mock_settings):
 
 
 @pytest.mark.asyncio
-async def test_send_email_disabled(mock_settings):
+async def test_send_email_disabled_does_not_log_recipient_or_subject(
+    mock_settings, caplog
+):
     mock_settings.EMAIL_ENABLED = False
 
     adapter = ResendEmailAdapter()
-    result = await adapter.send_email(
-        to="user@example.com",
-        subject="Welcome!",
-        html_body="<p>Hello</p>",
-    )
-
-    assert result.success is True
-    assert result.message_id == "disabled"
-
-
-@pytest.mark.asyncio
-async def test_send_email_api_error(mock_settings):
-    with patch("src.infra.adapters.resend_email_adapter.resend") as mock_resend:
-        mock_resend.Emails.send.side_effect = Exception("API error")
-
-        adapter = ResendEmailAdapter()
+    with caplog.at_level("INFO"):
         result = await adapter.send_email(
             to="user@example.com",
             subject="Welcome!",
             html_body="<p>Hello</p>",
         )
 
+    assert result.success is True
+    assert result.message_id == "disabled"
+    assert "user@example.com" not in caplog.text
+    assert "Welcome!" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_send_email_api_error_does_not_log_recipient_or_subject(
+    mock_settings, caplog
+):
+    with patch("src.infra.adapters.resend_email_adapter.resend") as mock_resend:
+        mock_resend.Emails.send.side_effect = Exception("API error")
+
+        adapter = ResendEmailAdapter()
+        with caplog.at_level("ERROR"):
+            result = await adapter.send_email(
+                to="user@example.com",
+                subject="Welcome!",
+                html_body="<p>Hello</p>",
+            )
+
         assert result.success is False
         assert "API error" in result.error
+        assert "user@example.com" not in caplog.text
+        assert "Welcome!" not in caplog.text
+        assert "API error" not in caplog.text
 
 
 @pytest.mark.asyncio

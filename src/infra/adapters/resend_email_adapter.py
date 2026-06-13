@@ -32,7 +32,7 @@ class ResendEmailAdapter(EmailServicePort):
     ) -> EmailResult:
         """Send email via Resend API."""
         if not self._enabled:
-            logger.info(f"Email disabled, skipping send to {to}: {subject}")
+            logger.info("Email disabled, skipping send")
             return EmailResult(success=True, message_id="disabled")
 
         if not self._api_key:
@@ -52,10 +52,10 @@ class ResendEmailAdapter(EmailServicePort):
             )
             message_id = result.get("id") if isinstance(result, dict) else str(result)
             if not message_id:
-                logger.warning(f"Email sent but no message_id returned for {to}")
-            logger.info(f"Email sent to {to}: {subject} (id={message_id})")
+                logger.warning("Email sent but no message_id returned")
+            logger.info("Email sent successfully (id=%s)", message_id)
             return EmailResult(success=True, message_id=message_id)
 
         except Exception as e:
-            logger.error(f"Failed to send email to {to}: {e}")
+            logger.error("Failed to send email: error_type=%s", type(e).__name__)
             return EmailResult(success=False, error=str(e))

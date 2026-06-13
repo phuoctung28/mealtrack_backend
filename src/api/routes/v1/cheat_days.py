@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.exceptions import ValidationException, handle_exception
+from src.api.exceptions import ValidationException
 from src.app.commands.cheat_day import MarkCheatDayCommand, UnmarkCheatDayCommand
 from src.app.queries.cheat_day import GetCheatDaysQuery
 from src.infra.event_bus import EventBus
@@ -23,15 +23,13 @@ async def mark_cheat_day(
     """Mark a date as cheat day. Current day or future only."""
     try:
         target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        command = MarkCheatDayCommand(user_id=user_id, date=target_date)
-        return await event_bus.send(command)
     except ValueError as e:
         raise ValidationException(
             message="Invalid date format. Use YYYY-MM-DD",
             error_code="INVALID_DATE_FORMAT",
         ) from e
-    except Exception as e:
-        raise handle_exception(e) from e
+    command = MarkCheatDayCommand(user_id=user_id, date=target_date)
+    return await event_bus.send(command)
 
 
 @router.delete("/{date_str}")
@@ -43,15 +41,13 @@ async def unmark_cheat_day(
     """Unmark a cheat day."""
     try:
         target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        command = UnmarkCheatDayCommand(user_id=user_id, date=target_date)
-        return await event_bus.send(command)
     except ValueError as e:
         raise ValidationException(
             message="Invalid date format. Use YYYY-MM-DD",
             error_code="INVALID_DATE_FORMAT",
         ) from e
-    except Exception as e:
-        raise handle_exception(e) from e
+    command = UnmarkCheatDayCommand(user_id=user_id, date=target_date)
+    return await event_bus.send(command)
 
 
 @router.get("")
@@ -61,16 +57,14 @@ async def get_cheat_days(
     event_bus: EventBus = Depends(get_configured_event_bus),
 ):
     """Get cheat days for a week."""
-    try:
-        target_date = None
-        if week_of:
+    target_date = None
+    if week_of:
+        try:
             target_date = datetime.strptime(week_of, "%Y-%m-%d").date()
-        query = GetCheatDaysQuery(user_id=user_id, week_of=target_date)
-        return await event_bus.send(query)
-    except ValueError as e:
-        raise ValidationException(
-            message="Invalid date format. Use YYYY-MM-DD",
-            error_code="INVALID_DATE_FORMAT",
-        ) from e
-    except Exception as e:
-        raise handle_exception(e) from e
+        except ValueError as e:
+            raise ValidationException(
+                message="Invalid date format. Use YYYY-MM-DD",
+                error_code="INVALID_DATE_FORMAT",
+            ) from e
+    query = GetCheatDaysQuery(user_id=user_id, week_of=target_date)
+    return await event_bus.send(query)

@@ -68,5 +68,4 @@ class MarkCheatDayCommandHandler(EventHandler[MarkCheatDayCommand, dict[str, Any
                 raise
             except Exception as e:
                 await uow.rollback()
-                logger.error(f"Error marking cheat day: {e}")
                 raise

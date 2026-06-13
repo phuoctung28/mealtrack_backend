@@ -60,5 +60,4 @@ class AddCustomIngredientCommandHandler(
                 "message": f"Added custom ingredient: {command.name}",
             }
         except Exception as e:
-            logger.error(f"Error adding custom ingredient: {str(e)}")
             raise

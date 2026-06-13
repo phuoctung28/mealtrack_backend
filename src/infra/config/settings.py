@@ -175,11 +175,28 @@ class Settings(BaseSettings):
     SENTRY_DSN: str | None = Field(
         default=None, description="Sentry DSN; disables Sentry when unset"
     )
+    SENTRY_RELEASE: str | None = Field(
+        default=None, description="Application release identifier for Sentry"
+    )
     SENTRY_TRACES_SAMPLE_RATE: float = Field(
         default=0.1, description="Performance trace sample rate (0.0-1.0)"
     )
     SENTRY_PROFILES_SAMPLE_RATE: float = Field(
         default=0.05, description="Profile sample rate (0.0-1.0)"
+    )
+    SENTRY_ENABLE_LOGS: bool = Field(
+        default=True, description="Enable Sentry Logs ingestion"
+    )
+    SENTRY_ENABLE_METRICS: bool = Field(
+        default=True, description="Enable Sentry application metrics ingestion"
+    )
+    SENTRY_PROFILE_SESSION_SAMPLE_RATE: float | None = Field(
+        default=None,
+        description="Optional Sentry profile session sample rate (0.0-1.0)",
+    )
+    SENTRY_PROFILE_LIFECYCLE: str | None = Field(
+        default=None,
+        description="Optional Sentry profile lifecycle mode, e.g. 'trace'",
     )
     SENTRY_SEND_PII: bool = Field(
         default=False, description="Send user IP/headers to Sentry"

@@ -81,7 +81,6 @@ class UpdateNotificationPreferencesCommandHandler(
                 result = {"success": True, "preferences": final_prefs.to_dict()}
 
         except Exception as e:
-            logger.error(f"Error updating notification preferences: {e}")
             raise e
 
         # Invalidate cache
@@ -99,6 +98,6 @@ class UpdateNotificationPreferencesCommandHandler(
                     f"Rescheduled {scheduled_count} notifications for user {command.user_id}"
                 )
             except Exception as e:
-                logger.error(f"Failed to reschedule notifications: {e}")
+                logger.warning(f"Failed to reschedule notifications: {e}")
 
         return result

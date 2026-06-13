@@ -1,8 +1,9 @@
 """Tests for image-database consistency in upload handler."""
 
-import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from src.app.commands.meal.upload_meal_image_immediately_command import (
     UploadMealImageImmediatelyCommand,
@@ -54,7 +55,7 @@ async def test_upload_failure_does_not_create_db_record():
 
 
 @pytest.mark.asyncio
-async def test_invalid_cloudinary_url_does_not_create_db_record():
+async def test_invalid_cloudinary_url_does_not_create_db_record_or_log_url(caplog):
     """When Cloudinary returns invalid URL, no meal record should be created."""
     mock_uow = MagicMock()
     mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
@@ -86,11 +87,13 @@ async def test_invalid_cloudinary_url_does_not_create_db_record():
         content_type="image/jpeg",
     )
 
-    with pytest.raises(RuntimeError, match="Cloudinary upload failed"):
-        await handler.handle(command)
+    with caplog.at_level("ERROR"):
+        with pytest.raises(RuntimeError, match="Cloudinary upload failed"):
+            await handler.handle(command)
 
     mock_uow.meals.save.assert_not_called()
     mock_uow.commit.assert_not_called()
+    assert "just-an-id-not-a-url" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -148,7 +151,7 @@ async def test_successful_upload_creates_meal_with_verified_url():
         content_type="image/jpeg",
     )
 
-    result = await handler.handle(command)
+    await handler.handle(command)
 
     # Verify meal was saved with the Cloudinary URL
     assert len(saved_meals) > 0

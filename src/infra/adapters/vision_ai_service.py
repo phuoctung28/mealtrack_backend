@@ -113,12 +113,24 @@ class VisionAIService(VisionAIServicePort):
         )
 
         if is_truncated:
-            logger.error(f"Truncated JSON response detected: {content[:500]}")
+            logger.error(
+                "Truncated JSON response detected: length=%s open_braces=%s "
+                "close_braces=%s",
+                len(content),
+                open_braces,
+                close_braces,
+            )
             raise ValueError(
                 "AI response was truncated. Please try again with a simpler image."
             )
 
-        logger.error(f"Could not extract JSON from response: {content[:500]}")
+        logger.error(
+            "Could not extract JSON from AI response: length=%s open_braces=%s "
+            "close_braces=%s",
+            len(content),
+            open_braces,
+            close_braces,
+        )
         raise ValueError(
             "Could not extract JSON from AI response. "
             "Please try again or use a clearer image."

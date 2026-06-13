@@ -53,7 +53,7 @@ class UpdateLanguageCommandHandler(EventHandler[UpdateLanguageCommand, Dict[str,
                     str(command.user_id)
                 )
             except Exception as exc:
-                logger.error(
+                logger.warning(
                     "Failed to reschedule notifications after language update: %s",
                     exc,
                 )

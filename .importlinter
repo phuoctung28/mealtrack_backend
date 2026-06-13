@@ -209,7 +209,6 @@ ignore_imports =
     src.api.main -> src.infra.config.settings
     src.api.main -> src.infra.database.config
     src.api.main -> src.infra.database.config_async
-    src.api.main -> src.infra.monitoring.sentry
     src.api.main -> src.infra.services.ai.ai_model_manager
     src.api.main -> src.infra.services.ai.gemini_cache_manager
     src.api.middleware.dev_auth_bypass -> src.infra.database.config_async

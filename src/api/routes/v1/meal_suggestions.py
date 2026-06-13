@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.exceptions import handle_exception
 from src.api.middleware.accept_language import get_request_language
 from src.api.middleware.rate_limit import limiter
 from src.api.schemas.request.meal_suggestion_requests import (
@@ -72,177 +71,173 @@ async def discover_meals(
     No recipes/ingredients generated here — use POST /recipes for selected meals.
     Supports pagination via session_id — previously shown meals are auto-excluded.
     """
-    try:
-        import uuid
+    import uuid
 
-        language = get_request_language(request)
-        portion_type = body.get_effective_portion_type()
+    language = get_request_language(request)
+    portion_type = body.get_effective_portion_type()
 
-        command = DiscoverMealsCommand(
-            user_id=user_id,
-            meal_type=body.meal_type,
-            meal_portion_type=portion_type.value,
-            ingredients=body.ingredients,
-            time_available_minutes=(
-                body.cooking_time_minutes.value if body.cooking_time_minutes else None
-            ),
-            session_id=body.session_id,
-            language=language,
-            cuisine_region=body.cuisine_region,
-            calorie_target=body.calorie_target,
-            protein_target=body.protein_target,
-            carbs_target=body.carbs_target,
-            fat_target=body.fat_target,
-            count=body.batch_size,
+    command = DiscoverMealsCommand(
+        user_id=user_id,
+        meal_type=body.meal_type,
+        meal_portion_type=portion_type.value,
+        ingredients=body.ingredients,
+        time_available_minutes=(
+            body.cooking_time_minutes.value if body.cooking_time_minutes else None
+        ),
+        session_id=body.session_id,
+        language=language,
+        cuisine_region=body.cuisine_region,
+        calorie_target=body.calorie_target,
+        protein_target=body.protein_target,
+        carbs_target=body.carbs_target,
+        fat_target=body.fat_target,
+        count=body.batch_size,
+    )
+    session, meals = await event_bus.send(command)
+
+    # --- meal-image-cache integration (always enabled) ---
+    from src.api.dependencies.food_image import get_food_image_service
+    from src.api.dependencies.meal_image_cache import get_meal_image_cache_service
+    from src.domain.model.meal_image_cache import PendingItem
+    from src.domain.services.meal_image_cache.name_canonicalizer import (
+        slug as _slug,
+    )
+
+    image_service = get_food_image_service()
+    cache_svc = await get_meal_image_cache_service(session=db)
+    english_names = [m["english_name"] for m in meals]
+    cache_hits = await cache_svc.lookup_batch(english_names)
+
+    # Separate cache hits from misses
+    images_list: list = [None] * len(meals)
+    miss_indices: list[int] = []
+    miss_names: list[str] = []
+
+    for i, m in enumerate(meals):
+        hit = cache_hits[i]
+        if hit is not None:
+            logger.info(
+                "image cache hit: meal=%r source=%s cosine=%.3f url=%s",
+                m["english_name"],
+                hit.source,
+                hit.cosine,
+                hit.image_url,
+            )
+            images_list[i] = hit
+        else:
+            miss_indices.append(i)
+            miss_names.append(m["english_name"])
+
+    # Fetch cache misses in parallel
+    if miss_names:
+        miss_results = await _fetch_images_parallel(
+            miss_names,
+            image_service.search_food_image,
+            timeout=3.0,
         )
-        session, meals = await event_bus.send(command)
+        for idx, result in zip(miss_indices, miss_results, strict=True):
+            images_list[idx] = result
 
-        # --- meal-image-cache integration (always enabled) ---
-        from src.api.dependencies.food_image import get_food_image_service
-        from src.api.dependencies.meal_image_cache import get_meal_image_cache_service
-        from src.domain.model.meal_image_cache import PendingItem
-        from src.domain.services.meal_image_cache.name_canonicalizer import (
-            slug as _slug,
+    # Build pending queue items for misses
+    misses: list[PendingItem] = []
+    for i in miss_indices:
+        img_result = images_list[i]
+        misses.append(
+            PendingItem(
+                meal_name=meals[i]["english_name"],
+                name_slug=_slug(meals[i]["english_name"]),
+                candidate_image_url=(img_result.url if img_result else None),
+                candidate_thumbnail_url=(
+                    img_result.thumbnail_url if img_result else None
+                ),
+                candidate_source=(img_result.source if img_result else None),
+            )
         )
 
-        image_service = get_food_image_service()
-        cache_svc = await get_meal_image_cache_service(session=db)
-        english_names = [m["english_name"] for m in meals]
-        cache_hits = await cache_svc.lookup_batch(english_names)
+    if misses:
+        from src.api.dependencies.meal_image_cache import enqueue_pending_images
 
-        # Separate cache hits from misses
-        images_list: list = [None] * len(meals)
-        miss_indices: list[int] = []
-        miss_names: list[str] = []
+        await enqueue_pending_images(misses)
 
-        for i, m in enumerate(meals):
-            hit = cache_hits[i]
-            if hit is not None:
-                logger.info(
-                    "image cache hit: meal=%r source=%s cosine=%.3f url=%s",
-                    m["english_name"],
-                    hit.source,
-                    hit.cosine,
-                    hit.image_url,
+    images = images_list
+    # --- end integration ---
+
+    # Translate meal names if non-English
+    translated_names = [m["name"] for m in meals]
+    if language and language != "en":
+        from src.api.base_dependencies import (
+            get_deepl_suggestion_translation_service,
+        )
+
+        try:
+            translation_svc = get_deepl_suggestion_translation_service()
+            if translation_svc:
+                translated = await translation_svc.translate_names(
+                    [m["name"] for m in meals], language
                 )
-                images_list[i] = hit
-            else:
-                miss_indices.append(i)
-                miss_names.append(m["english_name"])
+                if translated and len(translated) == len(meals):
+                    translated_names = translated
+        except Exception as e:
+            logger.warning("Name translation failed, using English: %s", e)
 
-        # Fetch cache misses in parallel
-        if miss_names:
-            miss_results = await _fetch_images_parallel(
-                miss_names,
-                image_service.search_food_image,
-                timeout=3.0,
-            )
-            for idx, result in zip(miss_indices, miss_results, strict=True):
-                images_list[idx] = result
-
-        # Build pending queue items for misses
-        misses: list[PendingItem] = []
-        for i in miss_indices:
-            img_result = images_list[i]
-            misses.append(
-                PendingItem(
-                    meal_name=meals[i]["english_name"],
-                    name_slug=_slug(meals[i]["english_name"]),
-                    candidate_image_url=(img_result.url if img_result else None),
-                    candidate_thumbnail_url=(
-                        img_result.thumbnail_url if img_result else None
-                    ),
-                    candidate_source=(img_result.source if img_result else None),
-                )
-            )
-
-        if misses:
-            from src.api.dependencies.meal_image_cache import enqueue_pending_images
-
-            await enqueue_pending_images(misses)
-
-        images = images_list
-        # --- end integration ---
-
-        # Translate meal names if non-English
-        translated_names = [m["name"] for m in meals]
-        if language and language != "en":
-            from src.api.base_dependencies import (
-                get_deepl_suggestion_translation_service,
-            )
-
-            try:
-                translation_svc = get_deepl_suggestion_translation_service()
-                if translation_svc:
-                    translated = await translation_svc.translate_names(
-                        [m["name"] for m in meals], language
-                    )
-                    if translated and len(translated) == len(meals):
-                        translated_names = translated
-            except Exception as e:
-                logger.warning("Name translation failed, using English: %s", e)
-
-        def _as_image_fields(x):
-            """Accepts CachedImage (image_url attr) or FoodImageResult (url attr)."""
-            if x is None:
-                return {
-                    "image_url": None,
-                    "thumbnail_url": None,
-                    "image_source": None,
-                    "photographer": None,
-                    "photographer_url": None,
-                    "unsplash_download_location": None,
-                    "image_confidence": 0.0,
-                }
-            image_url = getattr(x, "image_url", None) or getattr(x, "url", None)
-            thumbnail_url = (
-                getattr(x, "thumbnail_url", None) or image_url
-            )  # fallback to full URL
+    def _as_image_fields(x):
+        """Accepts CachedImage (image_url attr) or FoodImageResult (url attr)."""
+        if x is None:
             return {
-                "image_url": image_url,
-                "thumbnail_url": thumbnail_url,
-                "image_source": getattr(x, "source", None),
-                "photographer": getattr(x, "photographer", None),
-                "photographer_url": getattr(x, "photographer_url", None),
-                "unsplash_download_location": getattr(x, "download_location", None),
-                "image_confidence": float(getattr(x, "confidence", 0.0) or 0.0),
+                "image_url": None,
+                "thumbnail_url": None,
+                "image_source": None,
+                "photographer": None,
+                "photographer_url": None,
+                "unsplash_download_location": None,
+                "image_confidence": 0.0,
             }
+        image_url = getattr(x, "image_url", None) or getattr(x, "url", None)
+        thumbnail_url = (
+            getattr(x, "thumbnail_url", None) or image_url
+        )  # fallback to full URL
+        return {
+            "image_url": image_url,
+            "thumbnail_url": thumbnail_url,
+            "image_source": getattr(x, "source", None),
+            "photographer": getattr(x, "photographer", None),
+            "photographer_url": getattr(x, "photographer_url", None),
+            "unsplash_download_location": getattr(x, "download_location", None),
+            "image_confidence": float(getattr(x, "confidence", 0.0) or 0.0),
+        }
 
-        # Build response
-        from src.api.schemas.response.meal_suggestion_responses import (
-            DiscoveryMealResponse,
-            MacroEstimateResponse,
-        )
+    # Build response
+    from src.api.schemas.response.meal_suggestion_responses import (
+        DiscoveryMealResponse,
+        MacroEstimateResponse,
+    )
 
-        response_meals = []
-        for i, m in enumerate(meals):
-            img = images[i] if i < len(images) else None
-            meal_id = m.get("id") or f"disc_{uuid.uuid4().hex[:12]}"
-            response_meals.append(
-                DiscoveryMealResponse(
-                    id=meal_id,
-                    meal_name=translated_names[i],
-                    english_name=m["english_name"],
-                    macros=MacroEstimateResponse(
-                        calories=m["calories"],
-                        protein=m["protein"],
-                        carbs=m["carbs"],
-                        fat=m["fat"],
-                    ),
-                    **_as_image_fields(img),
-                )
+    response_meals = []
+    for i, m in enumerate(meals):
+        img = images[i] if i < len(images) else None
+        meal_id = m.get("id") or f"disc_{uuid.uuid4().hex[:12]}"
+        response_meals.append(
+            DiscoveryMealResponse(
+                id=meal_id,
+                meal_name=translated_names[i],
+                english_name=m["english_name"],
+                macros=MacroEstimateResponse(
+                    calories=m["calories"],
+                    protein=m["protein"],
+                    carbs=m["carbs"],
+                    fat=m["fat"],
+                ),
+                **_as_image_fields(img),
             )
-
-        shown_count = len(session.shown_meal_names)
-        return DiscoveryBatchResponse(
-            session_id=session.id,
-            meals=response_meals,
-            has_more=len(meals) >= 4 and shown_count < 30,
-            meal_count=len(response_meals),
         )
 
-    except Exception as e:
-        raise handle_exception(e) from e
+    shown_count = len(session.shown_meal_names)
+    return DiscoveryBatchResponse(
+        session_id=session.id,
+        meals=response_meals,
+        has_more=len(meals) >= 4 and shown_count < 30,
+        meal_count=len(response_meals),
+    )
 
 
 @router.post("/recipes", response_model=RecipeBatchResponse)
@@ -257,37 +252,33 @@ async def generate_recipes(
     Generate full recipes for 1-3 selected discovery meals.
     Called after user picks meals from the discovery grid.
     """
-    try:
-        language = get_request_language(request)
+    language = get_request_language(request)
 
-        recipes = await event_bus.send(
-            GenerateMealRecipesCommand(
-                user_id=user_id,
-                meal_type=body.meal_type,
-                language=language,
-                meal_names=body.meal_names,
-                session_id=body.session_id,
-                selected_meal_ids=body.selected_meal_ids,
-                selected_meals=body.selected_meals,
-                ingredients=body.ingredients,
-                cooking_time_minutes=body.cooking_time_minutes,
-                cuisine_region=body.cuisine_region,
-                calorie_target=body.calorie_target,
-                protein_target=body.protein_target,
-                carbs_target=body.carbs_target,
-                fat_target=body.fat_target,
-            )
+    recipes = await event_bus.send(
+        GenerateMealRecipesCommand(
+            user_id=user_id,
+            meal_type=body.meal_type,
+            language=language,
+            meal_names=body.meal_names,
+            session_id=body.session_id,
+            selected_meal_ids=body.selected_meal_ids,
+            selected_meals=body.selected_meals,
+            ingredients=body.ingredients,
+            cooking_time_minutes=body.cooking_time_minutes,
+            cuisine_region=body.cuisine_region,
+            calorie_target=body.calorie_target,
+            protein_target=body.protein_target,
+            carbs_target=body.carbs_target,
+            fat_target=body.fat_target,
         )
+    )
 
-        # Map to response
-        from src.api.mappers.meal_suggestion_mapper import to_meal_suggestion_response
+    # Map to response
+    from src.api.mappers.meal_suggestion_mapper import to_meal_suggestion_response
 
-        return RecipeBatchResponse(
-            recipes=[to_meal_suggestion_response(r) for r in recipes],
-        )
-
-    except Exception as e:
-        raise handle_exception(e) from e
+    return RecipeBatchResponse(
+        recipes=[to_meal_suggestion_response(r) for r in recipes],
+    )
 
 
 @router.post("/save", response_model=SaveMealSuggestionResponse)
@@ -302,62 +293,58 @@ async def save_meal_suggestion(
     This creates a Meal entity populated with the suggestion's nutrition data
     for the specified date so that it participates in daily macros and history.
     """
-    try:
-        command = SaveMealSuggestionCommand(
-            user_id=user_id,
-            suggestion_id=request.suggestion_id,
-            name=request.name,
-            meal_type=request.meal_type,
-            calories=request.calories
-            or round(request.protein * 4 + request.carbs * 4 + request.fat * 9),
-            protein=request.protein,
-            carbs=request.carbs,
-            fat=request.fat,
-            description=request.description,
-            estimated_cook_time_minutes=request.estimated_cook_time_minutes,
-            ingredients=[
-                IngredientItem(
-                    name=i.name,
-                    amount=i.amount,
-                    unit=i.unit,
-                    calories=i.calories,
-                    protein=i.protein,
-                    carbs=i.carbs,
-                    fat=i.fat,
-                )
-                for i in request.ingredients
-            ],
-            instructions=[
-                i.model_dump() if hasattr(i, "model_dump") else i
-                for i in request.instructions
-            ],
-            portion_multiplier=request.portion_multiplier,
-            meal_date=request.meal_date,
-            cuisine_type=request.cuisine_type,
-            origin_country=request.origin_country,
-            emoji=request.emoji,
-            image_url=request.image_url,
-        )
-
-        meal_id = await event_bus.send(command)
-
-        # Unsplash API compliance: trigger download event (fire-and-forget, managed)
-        if request.unsplash_download_location:
-            from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
-            from src.api.dependencies.task_manager import get_task_manager
-
-            get_task_manager().spawn(
-                "unsplash_download",
-                UnsplashImageAdapter.trigger_download(
-                    request.unsplash_download_location
-                ),
+    command = SaveMealSuggestionCommand(
+        user_id=user_id,
+        suggestion_id=request.suggestion_id,
+        name=request.name,
+        meal_type=request.meal_type,
+        calories=request.calories
+        or round(request.protein * 4 + request.carbs * 4 + request.fat * 9),
+        protein=request.protein,
+        carbs=request.carbs,
+        fat=request.fat,
+        description=request.description,
+        estimated_cook_time_minutes=request.estimated_cook_time_minutes,
+        ingredients=[
+            IngredientItem(
+                name=i.name,
+                amount=i.amount,
+                unit=i.unit,
+                calories=i.calories,
+                protein=i.protein,
+                carbs=i.carbs,
+                fat=i.fat,
             )
+            for i in request.ingredients
+        ],
+        instructions=[
+            i.model_dump() if hasattr(i, "model_dump") else i
+            for i in request.instructions
+        ],
+        portion_multiplier=request.portion_multiplier,
+        meal_date=request.meal_date,
+        cuisine_type=request.cuisine_type,
+        origin_country=request.origin_country,
+        emoji=request.emoji,
+        image_url=request.image_url,
+    )
 
-        return SaveMealSuggestionResponse(
-            meal_id=meal_id,
-            message="Meal suggestion saved successfully",
-            meal_date=request.meal_date,
+    meal_id = await event_bus.send(command)
+
+    # Unsplash API compliance: trigger download event (fire-and-forget, managed)
+    if request.unsplash_download_location:
+        from src.infra.adapters.unsplash_image_adapter import UnsplashImageAdapter
+        from src.api.dependencies.task_manager import get_task_manager
+
+        get_task_manager().spawn(
+            "unsplash_download",
+            UnsplashImageAdapter.trigger_download(
+                request.unsplash_download_location
+            ),
         )
 
-    except Exception as e:
-        raise handle_exception(e) from e
+    return SaveMealSuggestionResponse(
+        meal_id=meal_id,
+        message="Meal suggestion saved successfully",
+        meal_date=request.meal_date,
+    )

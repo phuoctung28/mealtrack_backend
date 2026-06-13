@@ -183,7 +183,7 @@ class AnalyzeMealImageByUrlHandler(EventHandler[AnalyzeMealImageByUrlCommand, Me
                 await self.cache_invalidation.after_meal_write(command.user_id, meal_date)
             return final_meal
         except Exception as e:
-            logger.error("Failed to analyze meal by URL: %s", str(e))
+            logger.warning("Failed to analyze meal by URL: %s", type(e).__name__)
             if "meal" in locals() and meal.meal_id:
                 meal = meal.mark_failed(error_message=str(e))
                 async with self.uow as uow:

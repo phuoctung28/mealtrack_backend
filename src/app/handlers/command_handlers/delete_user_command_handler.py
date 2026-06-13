@@ -154,7 +154,6 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, dict[str, Any]]):
                 raise
             except Exception as e:
                 await uow.rollback()
-                logger.error(f"Error deleting user account: {str(e)}")
                 raise Exception(f"Failed to delete user account: {str(e)}") from e
 
     async def _soft_delete_related_data(self, uow, user_id: str) -> None:
@@ -200,5 +199,4 @@ class DeleteUserCommandHandler(EventHandler[DeleteUserCommand, dict[str, Any]]):
                 f"fcm_tokens={fcm_tokens_count}, notification_prefs={notif_prefs_count}"
             )
         except Exception as e:
-            logger.error(f"Failed to soft-delete related data: {str(e)}")
             raise

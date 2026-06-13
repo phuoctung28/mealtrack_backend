@@ -37,16 +37,26 @@ def fresh_main(monkeypatch, tmp_path):
     return m
 
 
-def test_lifespan_firebase_failure_propagates(monkeypatch, fresh_main):
+def test_lifespan_firebase_failure_propagates_with_critical_log(
+    monkeypatch, fresh_main, caplog
+):
     fresh_main.initialize_firebase = lambda: (_ for _ in ()).throw(  # type: ignore[assignment]
         RuntimeError("firebase down")
     )
-    with pytest.raises(RuntimeError, match="firebase down"):
-        with TestClient(fresh_main.app):
-            pass
+    with caplog.at_level("CRITICAL"):
+        with pytest.raises(RuntimeError, match="firebase down"):
+            with TestClient(fresh_main.app):
+                pass
+
+    assert any(
+        record.levelname == "CRITICAL" and "aborting startup" in record.message
+        for record in caplog.records
+    )
 
 
-def test_lifespan_cache_failure_raises_when_env_true(monkeypatch, fresh_main):
+def test_lifespan_cache_failure_raises_when_env_true_with_critical_log(
+    monkeypatch, fresh_main, caplog
+):
     monkeypatch.setenv("FAIL_ON_CACHE_ERROR", "true")
 
     async def boom():
@@ -54,9 +64,33 @@ def test_lifespan_cache_failure_raises_when_env_true(monkeypatch, fresh_main):
 
     fresh_main.initialize_cache_layer = boom  # type: ignore[assignment]
 
-    with pytest.raises(RuntimeError, match="cache"):
+    with caplog.at_level("CRITICAL"):
+        with pytest.raises(RuntimeError, match="cache"):
+            with TestClient(fresh_main.app):
+                pass
+
+    assert any(
+        record.levelname == "CRITICAL" and "Cache layer is required" in record.message
+        for record in caplog.records
+    )
+
+
+def test_lifespan_cache_failure_without_fail_fast_does_not_log_critical(
+    monkeypatch, fresh_main, caplog
+):
+    monkeypatch.setenv("FAIL_ON_CACHE_ERROR", "false")
+
+    async def boom():
+        raise RuntimeError("cache")
+
+    fresh_main.initialize_cache_layer = boom  # type: ignore[assignment]
+
+    with caplog.at_level("ERROR"):
         with TestClient(fresh_main.app):
             pass
+
+    assert any(record.levelname == "ERROR" for record in caplog.records)
+    assert all(record.levelname != "CRITICAL" for record in caplog.records)
 
 
 def test_initialize_firebase_already_initialized(monkeypatch):

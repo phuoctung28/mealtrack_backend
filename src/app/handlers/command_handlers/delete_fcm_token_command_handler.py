@@ -49,5 +49,4 @@ class DeleteFcmTokenCommandHandler(EventHandler[DeleteFcmTokenCommand, Dict[str,
                 else:
                     return {"success": False, "message": "Failed to delete token"}
         except Exception as e:
-            logger.error(f"Error deleting FCM token: {e}")
             raise e

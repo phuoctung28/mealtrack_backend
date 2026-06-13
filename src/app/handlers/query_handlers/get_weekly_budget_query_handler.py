@@ -265,7 +265,6 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                 return result
 
             except Exception as e:
-                logger.error(f"Error getting weekly budget: {str(e)}")
                 raise
 
     async def _get_effective_adjusted_daily_async(

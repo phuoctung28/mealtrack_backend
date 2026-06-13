@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from src.api.dependencies.auth import get_current_user_id
 from src.api.dependencies.event_bus import get_configured_event_bus
-from src.api.exceptions import ValidationException, handle_exception
+from src.api.exceptions import ValidationException
 from src.api.schemas.response.nutrition_responses import BulkNutritionResponse
 from src.app.queries.nutrition import GetNutritionBulkQuery, GetActivitiesPresenceQuery
 from src.infra.event_bus import EventBus
@@ -36,30 +36,26 @@ async def get_nutrition_bulk(
 
     Authentication required.
     """
-    try:
-        if start > end:
-            raise ValidationException(
-                message="Start date must be before or equal to end date",
-                error_code="INVALID_DATE_RANGE",
-            )
-
-        if (end - start).days > 60:
-            raise ValidationException(
-                message="Date range cannot exceed 60 days",
-                error_code="DATE_RANGE_TOO_LARGE",
-            )
-
-        header_tz = request.headers.get("X-Timezone")
-        query = GetNutritionBulkQuery(
-            user_id=user_id,
-            start_date=start,
-            end_date=end,
-            header_timezone=header_tz,
+    if start > end:
+        raise ValidationException(
+            message="Start date must be before or equal to end date",
+            error_code="INVALID_DATE_RANGE",
         )
-        return await event_bus.send(query)
 
-    except Exception as e:
-        raise handle_exception(e) from e
+    if (end - start).days > 60:
+        raise ValidationException(
+            message="Date range cannot exceed 60 days",
+            error_code="DATE_RANGE_TOO_LARGE",
+        )
+
+    header_tz = request.headers.get("X-Timezone")
+    query = GetNutritionBulkQuery(
+        user_id=user_id,
+        start_date=start,
+        end_date=end,
+        header_timezone=header_tz,
+    )
+    return await event_bus.send(query)
 
 
 @router.get("/presence")
@@ -82,27 +78,23 @@ async def get_activities_presence(
 
     Authentication required.
     """
-    try:
-        if start > end:
-            raise ValidationException(
-                message="Start date must be before or equal to end date",
-                error_code="INVALID_DATE_RANGE",
-            )
-
-        if (end - start).days > 60:
-            raise ValidationException(
-                message="Date range cannot exceed 60 days",
-                error_code="DATE_RANGE_TOO_LARGE",
-            )
-
-        header_tz = request.headers.get("X-Timezone")
-        query = GetActivitiesPresenceQuery(
-            user_id=user_id,
-            start_date=start,
-            end_date=end,
-            header_timezone=header_tz,
+    if start > end:
+        raise ValidationException(
+            message="Start date must be before or equal to end date",
+            error_code="INVALID_DATE_RANGE",
         )
-        return await event_bus.send(query)
 
-    except Exception as e:
-        raise handle_exception(e) from e
+    if (end - start).days > 60:
+        raise ValidationException(
+            message="Date range cannot exceed 60 days",
+            error_code="DATE_RANGE_TOO_LARGE",
+        )
+
+    header_tz = request.headers.get("X-Timezone")
+    query = GetActivitiesPresenceQuery(
+        user_id=user_id,
+        start_date=start,
+        end_date=end,
+        header_timezone=header_tz,
+    )
+    return await event_bus.send(query)

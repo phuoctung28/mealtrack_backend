@@ -1,6 +1,6 @@
 # Backend Troubleshooting Guide
 
-**Last Updated:** May 6, 2026
+**Last Updated:** June 13, 2026
 
 ---
 
@@ -129,6 +129,69 @@ grep -r "@handles" src/app/handlers/
 2. Implement retry logic with exponential backoff
 3. Cache responses where possible
 4. Add circuit breaker for repeated failures
+
+---
+
+### Detecting Duplicate ERROR Logs
+
+**Symptom:** A single failed request generates two or more Sentry issues, or `ERROR` appears in both middleware and exception handler logs for the same request.
+
+The single-owner rule means exactly one `ERROR` per unexpected failure. Use these commands to find violations:
+
+```bash
+# Verify no direct sentry_sdk outside the connector
+rg "import sentry_sdk|sentry_sdk\." src/
+
+# Find log-and-rethrow patterns (should be 0 in route files)
+rg "logger\.(error|exception)" src/api/routes/
+
+# Find handlers that log before re-raising (should be 0)
+rg -A2 "logger\.error" src/app/handlers/ | grep -A1 "raise"
+
+# Check sensitive data in logs
+rg "food_item_changes|image_url|\"Authorization\"|Bearer|Email sent to" src/ tests/
+
+# Run architecture guardrails (bans sentry_sdk outside connector, log-and-rethrow, sensitive substrings)
+pytest tests/unit/architecture/ -q
+```
+
+**Fix:** Remove `logger.error(...)` from catch blocks that re-raise — let `src/api/exception_handlers.py` own the single root-cause ERROR. Background handlers that swallow exceptions keep their own `ERROR` + `capture_exception`.
+
+---
+
+### Sentry Events Missing
+
+**Problem:** Expected production errors do not appear in Sentry
+
+**Diagnosis:**
+```bash
+echo $SENTRY_DSN
+rg "import sentry_sdk|sentry_sdk\\." src
+```
+
+**Solutions:**
+1. Verify `SENTRY_DSN` is set in the runtime environment.
+2. Verify startup calls `initialize_observability()` before `FastAPI(...)`.
+3. Keep direct SDK usage isolated to `src/infra/monitoring/sentry.py`; cron and service code should call the facade.
+4. For swallowed cron failures, call `capture_exception(...)` and `flush_observability(timeout=5)` before process exit.
+5. Do not attach raw request bodies, auth headers, Firebase claims, emails, food payloads, raw image URLs, provider payloads, or secrets.
+
+### Sentry Logs or Metrics Missing
+
+**Problem:** Sentry error events appear, but Sentry Logs or application metrics are missing.
+
+**Diagnosis:**
+```bash
+echo $SENTRY_ENABLE_LOGS
+echo $SENTRY_ENABLE_METRICS
+rg "log_event|increment_metric|gauge_metric|distribution_metric" src
+```
+
+**Solutions:**
+1. Set `SENTRY_ENABLE_LOGS=true` for Sentry Logs ingestion.
+2. Set `SENTRY_ENABLE_METRICS=true` for application metric ingestion.
+3. Emit structured logs and metrics through `src.infra.monitoring`; Python `logging.info(...)` is not the same as a Sentry Logs facade call.
+4. Keep attributes allowlisted and scalar. Non-allowlisted, `None`, list, and dict attributes are dropped before reaching Sentry.
 
 ---
 

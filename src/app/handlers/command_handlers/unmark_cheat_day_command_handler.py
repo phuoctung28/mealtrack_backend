@@ -43,5 +43,4 @@ class UnmarkCheatDayCommandHandler(EventHandler[UnmarkCheatDayCommand, dict[str,
                 raise
             except Exception as e:
                 await uow.rollback()
-                logger.error(f"Error unmarking cheat day: {e}")
                 raise
