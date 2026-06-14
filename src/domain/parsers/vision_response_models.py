@@ -32,6 +32,7 @@ class VisionAnalyzeResponse(BaseModel):
     """
 
     dish_name: str | None = Field(None, description="Dish name")
+    is_food: bool = Field(True, description="Whether the image contains edible food")
     foods: list[FoodItemResponse] | None = Field(
         None, max_length=8, description="List of foods"
     )

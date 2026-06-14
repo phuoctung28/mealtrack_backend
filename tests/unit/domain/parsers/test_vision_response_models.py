@@ -105,6 +105,37 @@ def test_missing_confidence_defaults():
     assert result.confidence == pytest.approx(0.5)
 
 
+def test_is_food_defaults_true():
+    payload = {
+        "foods": [
+            {
+                "name": "Lettuce",
+                "quantity": 50,
+                "unit": "g",
+                "macros": {"protein": 1, "carbs": 2, "fat": 0},
+            }
+        ]
+    }
+
+    result = VisionAnalyzeResponse.model_validate(payload)
+
+    assert result.is_food is True
+
+
+def test_is_food_allows_false_with_empty_foods():
+    payload = {
+        "is_food": False,
+        "dish_name": None,
+        "foods": [],
+        "confidence": 0.2,
+    }
+
+    result = VisionAnalyzeResponse.model_validate(payload)
+
+    assert result.is_food is False
+    assert result.foods == []
+
+
 def test_out_of_range_confidence_is_allowed_for_parser_clamping():
     payload = {
         "foods": [

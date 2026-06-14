@@ -62,9 +62,23 @@ class TestVisionNutritionResponse:
         )
 
         assert response.dish_name == "Chicken rice bowl"
+        assert response.is_food is True
         assert response.foods[0].quantity_g == pytest.approx(150.0)
         assert response.foods[0].macros.protein_g == pytest.approx(35.0)
         assert "calories" not in response.model_dump()
+
+    def test_accepts_non_food_with_empty_foods(self):
+        response = VisionNutritionResponse.model_validate(
+            {
+                "is_food": False,
+                "dish_name": None,
+                "foods": [],
+                "confidence": 0.95,
+            }
+        )
+
+        assert response.is_food is False
+        assert response.foods == []
 
     def test_rejects_impossible_quantity_g(self):
         with pytest.raises(ValidationError):
@@ -109,7 +123,7 @@ class TestVisionNutritionResponse:
                 }
             )
 
-    def test_rejects_empty_foods(self):
+    def test_rejects_empty_foods_when_is_food_defaults_true(self):
         with pytest.raises(ValidationError):
             VisionNutritionResponse.model_validate({"foods": []})
 

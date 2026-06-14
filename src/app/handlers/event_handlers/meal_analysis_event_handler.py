@@ -98,6 +98,12 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
             logger.info(f"Performing real AI analysis for meal {meal.meal_id}")
             vision_result = await self.vision_service.analyze(image_contents)
 
+            if not self.gpt_parser.parse_is_food(vision_result):
+                raise ValueError(
+                    "Image does not appear to contain food. "
+                    "Please take a photo of food and try again."
+                )
+
             nutrition = self.gpt_parser.parse_to_nutrition(vision_result)
             dish_name = self.gpt_parser.parse_dish_name(vision_result)
             meal = meal.mark_ready(

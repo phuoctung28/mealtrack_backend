@@ -279,6 +279,7 @@ class VisionAIService(VisionAIServicePort):
             )
 
         return {
+            "is_food": payload.get("is_food", True),
             "dish_name": payload.get("dish_name"),
             "foods": foods,
             "confidence": payload.get("confidence", 0.5),
