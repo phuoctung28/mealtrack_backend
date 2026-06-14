@@ -1,13 +1,21 @@
 # MealTrack Backend - Project Roadmap
 
-**Version:** 0.6.4
-**Last Updated:** June 13, 2026
-**Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 681+ tests, 70%+ coverage.
+**Version:** 0.6.5
+**Last Updated:** June 14, 2026
+**Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 1649+ unit tests, 70%+ coverage.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
 ---
 
 ## Completed Phases
+
+### June 2026: Python 3.13 and Dependency Standardization
+- [x] Upgraded runtime, Docker, CI, and documented backend baseline to Python 3.13.
+- [x] Upgraded FastAPI and core production libraries to current Python 3.13-compatible releases.
+- [x] Pinned direct production and test dependencies for reproducible local, CI, and Docker installs.
+- [x] Removed unused `fatsecret` package dependency; runtime FatSecret integration uses the in-repo HTTP adapter.
+- [x] Upgraded pytest tooling to 9.x to clear the test dependency audit finding.
+- [x] Verified `requirements.txt` and `requirements-test.txt` with `pip-audit`; ML-only `torch` remains isolated in `requirements-ml.txt` pending an upstream CVE fix.
 
 ### June 2026: Single-Owner Logger System
 - [x] Established log-or-raise rule: one root-cause `ERROR` per unexpected request failure; expected 4xx exceptions produce zero ERROR logs.
