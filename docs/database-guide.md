@@ -43,10 +43,10 @@ App runtime URL resolution (highest to lowest priority):
 ### Pool capacity formula (direct_pool)
 
 ```
-total_connections = UVICORN_WORKERS × ASYNC_POOL_SIZE_PER_WORKER + ASYNC_POOL_MAX_OVERFLOW
+total_connections = UVICORN_WORKERS × (ASYNC_POOL_SIZE_PER_WORKER + ASYNC_POOL_MAX_OVERFLOW)
 ```
 
-Keep this value below your Neon project's `max_connections` limit. Monitor via `GET /v1/health/db-pool`.
+`ASYNC_POOL_SIZE_PER_WORKER` maps directly to SQLAlchemy `pool_size` inside each worker process; `ASYNC_POOL_MAX_OVERFLOW` is also per worker. Keep the total below your Neon project's `max_connections` limit. Monitor via `GET /v1/health/db-pool`.
 
 ### Pooler mode notes
 

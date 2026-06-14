@@ -1,7 +1,6 @@
 """Async database engine, session factory, and FastAPI dependency."""
 
 import logging
-import os
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from dotenv import load_dotenv
@@ -83,9 +82,10 @@ _connect_args = {**_url_connect_args, **_policy.connect_args}
 CONNECTION_MODE = _policy.mode
 _IS_NEON_POOLER = _policy.mode == "neon_pooler"  # backward-compat alias
 
-_UVICORN_WORKERS = int(os.getenv("UVICORN_WORKERS", "4"))
-_ASYNC_POOL_SIZE = _policy.pool_size // _UVICORN_WORKERS if _UVICORN_WORKERS > 0 else 0
+_UVICORN_WORKERS = _policy.worker_count
+_ASYNC_POOL_SIZE = _policy.pool_size
 _ASYNC_POOL_OVERFLOW = _policy.max_overflow
+_ASYNC_POOL_TOTAL_CAPACITY = _policy.total_capacity
 
 try:
     if _policy.mode == "neon_pooler":

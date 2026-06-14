@@ -23,6 +23,14 @@ class DatabaseConnectionPolicy:
     max_overflow: int = 0
     pool_timeout: int = 10
     pool_recycle: int = 120
+    worker_count: int = 1
+
+    @property
+    def total_capacity(self) -> int:
+        """Total possible app DB connections across worker processes."""
+        if self.pool_class is NullPool:
+            return 0
+        return self.worker_count * (self.pool_size + self.max_overflow)
 
 
 def _int_env(env: dict, *keys: str, default: int) -> int:
@@ -95,8 +103,12 @@ def resolve_connection_policy(env: dict | None = None) -> DatabaseConnectionPoli
         )
 
     workers = _int_env(env, "UVICORN_WORKERS", default=4)
-    pool_size_per_worker = _int_env(env, "ASYNC_POOL_SIZE_PER_WORKER", "POOL_SIZE_PER_WORKER", default=3)
-    max_overflow = _int_env(env, "ASYNC_POOL_MAX_OVERFLOW", "POOL_MAX_OVERFLOW", default=2)
+    pool_size_per_worker = _int_env(
+        env, "ASYNC_POOL_SIZE_PER_WORKER", "POOL_SIZE_PER_WORKER", default=3
+    )
+    max_overflow = _int_env(
+        env, "ASYNC_POOL_MAX_OVERFLOW", "POOL_MAX_OVERFLOW", default=2
+    )
     pool_timeout = _int_env(env, "ASYNC_POOL_TIMEOUT", "POOL_TIMEOUT", default=10)
     pool_recycle = _int_env(env, "ASYNC_POOL_RECYCLE", default=120)
 
@@ -115,8 +127,9 @@ def resolve_connection_policy(env: dict | None = None) -> DatabaseConnectionPoli
         mode="direct_pool",
         app_url=raw_url,
         pool_class=AsyncAdaptedQueuePool,
-        pool_size=workers * pool_size_per_worker,
+        pool_size=pool_size_per_worker,
         max_overflow=max_overflow,
         pool_timeout=pool_timeout,
         pool_recycle=pool_recycle,
+        worker_count=workers,
     )

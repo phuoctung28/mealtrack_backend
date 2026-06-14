@@ -243,8 +243,8 @@ See related: `code-standards.md`, `testing-standards.md`, `system-architecture.m
 **Fix:** Either change `APP_DATABASE_URL` to a direct endpoint, or set `DB_CONNECTION_MODE=neon_pooler`.
 
 ### DB connection exhaustion (direct_pool)
-**Symptom:** Connection timeouts, Neon `max_connections` limit hit.  
-**Fix:** Reduce pool size: lower `ASYNC_POOL_SIZE_PER_WORKER` or `UVICORN_WORKERS`. Monitor `/v1/health/db-pool` for utilization. Consider switching to `neon_pooler` mode.
+**Symptom:** `QueuePool limit ... connection timed out`, request latency spikes, or Neon `max_connections` limit hit.
+**Fix:** If SQLAlchemy pool utilization is high but Neon has spare capacity, increase `ASYNC_POOL_SIZE_PER_WORKER` or `ASYNC_POOL_MAX_OVERFLOW` and keep DB work in short unit-of-work scopes. If Neon `max_connections` is the bottleneck, reduce `UVICORN_WORKERS` or per-worker pool settings, then consider switching to `neon_pooler` mode. Monitor `/v1/health/db-pool` for checked-out connections and total capacity.
 
 ### Migration fails but app works (or vice versa)
 **Symptom:** `alembic upgrade head` fails / succeeds independently of the app.  
