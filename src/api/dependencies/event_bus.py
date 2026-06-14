@@ -210,7 +210,6 @@ def get_food_search_event_bus() -> EventBus:
         get_deepl_text_translation_service,
     )
 
-    from src.infra.adapters.nutritionix_service import get_nutritionix_service
     from src.infra.adapters.brave_search_nutrition_service import (
         get_brave_search_nutrition_service,
     )
@@ -231,8 +230,7 @@ def get_food_search_event_bus() -> EventBus:
     # Translation service for localized food search (DeepL-backed)
     text_translation_service = get_deepl_text_translation_service()
 
-    # Barcode cascade: Nutritionix + Brave Search (optional — None if keys not set)
-    nutritionix_service = get_nutritionix_service()
+    # Barcode cascade: Brave Search is optional — None if keys are not set.
     macro_validation_service = MacroValidationService()
     from src.infra.adapters.meal_generation_service import MealGenerationService
 
@@ -264,7 +262,6 @@ def get_food_search_event_bus() -> EventBus:
             fat_secret_service=fat_secret_service,
             async_uow_factory=AsyncUnitOfWork,
             translation_service=text_translation_service,
-            nutritionix_service=nutritionix_service,
             brave_search_service=brave_search_service,
             meal_generation_service=meal_generation_service,
             macro_validation_service=macro_validation_service,

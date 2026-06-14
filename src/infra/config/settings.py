@@ -120,12 +120,6 @@ class Settings(BaseSettings):
     FATSECRET_CLIENT_SECRET: str | None = Field(
         default=None, description="FatSecret OAuth 2.0 client secret"
     )
-    NUTRITIONIX_APP_ID: str | None = Field(
-        default=None, description="Nutritionix API app ID"
-    )
-    NUTRITIONIX_API_KEY: str | None = Field(
-        default=None, description="Nutritionix API key"
-    )
     BRAVE_SEARCH_API_KEY: str | None = Field(
         default=None, description="Brave Search API key (free tier: 2K/mo)"
     )
