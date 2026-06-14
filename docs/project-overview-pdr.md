@@ -87,7 +87,7 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 ---
 
 ## 3. Technical Stack
-- **Framework**: FastAPI 0.115+ (Python 3.11+)
+- **Framework**: FastAPI 0.115+ (Python 3.13)
 - **Database**: PostgreSQL (Neon) with SQLAlchemy 2.0 async runtime, 13+ core tables
 - **Cache**: Redis 7.0 for selective optional caching and AI-cost optimization; required state must be modeled separately
 - **Vector DB**: Pinecone Inference API (1024-dim, llama-text-embed-v2)

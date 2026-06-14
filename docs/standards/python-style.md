@@ -1,6 +1,6 @@
 # Python Style & Conventions
 
-**Python Version**: 3.11+
+**Python Version**: 3.13
 
 ## Tools
 - **Ruff**: Primary linter and formatter.

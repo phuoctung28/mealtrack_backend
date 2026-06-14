@@ -8,7 +8,7 @@ FastAPI backend for MealTrack. 4-layer Clean Architecture + CQRS + PyMediator ev
 
 | Item | Value |
 |------|-------|
-| **Framework** | FastAPI 0.115+ / Python 3.11+ |
+| **Framework** | FastAPI 0.115+ / Python 3.13 |
 | **Database** | PostgreSQL (Neon) + SQLAlchemy 2.0 |
 | **Migrations** | Alembic (timestamp naming for new migrations) |
 | **Event Bus** | PyMediator (singleton) |

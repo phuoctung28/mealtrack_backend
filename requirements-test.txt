@@ -2,32 +2,32 @@
 -r requirements.txt
 
 # Testing dependencies
-pytest>=8.0.0,<9.0.0
-pytest-asyncio>=0.23.0,<0.24.0  # Compatible with pytest 8.x
-pytest-cov>=4.1.0
-pytest-mock>=3.11.0
-pytest-timeout>=2.1.0
-pytest-xdist>=3.3.0  # For parallel test execution
+pytest==9.1.0
+pytest-asyncio==1.4.0
+pytest-cov==7.1.0
+pytest-mock==3.15.1
+pytest-timeout==2.4.0
+pytest-xdist==3.8.0
 
 # Code quality tools
-ruff>=0.4.0
-black>=23.0.0
-isort>=5.12.0
-mypy>=1.5.0
-pre-commit>=3.7.0
+ruff==0.15.17
+black==26.5.1
+isort==8.0.1
+mypy==2.1.0
+pre-commit==4.6.0
 
 # Security tools
-bandit>=1.7.0
-safety>=2.3.0
+bandit==1.9.4
+safety==3.8.1
 
 # Testing utilities
-factory-boy>=3.3.0  # For test data factories
-faker>=19.0.0  # For generating fake data
+factory-boy==3.3.3  # For test data factories
+faker==40.23.0  # For generating fake data
 # httpx comes from requirements.txt
-respx>=0.20.0  # For mocking httpx
+respx==0.23.1  # For mocking httpx
 
 # Coverage
-coverage[toml]>=7.3.0
+coverage[toml]==7.14.1
 
 # Architecture enforcement
-import-linter>=2.0
+import-linter==2.11
