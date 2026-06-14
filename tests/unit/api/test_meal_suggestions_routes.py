@@ -25,7 +25,6 @@ from src.domain.model.meal_suggestion.meal_suggestion import (
     RecipeStep,
 )
 from src.domain.model.meal_suggestion.suggestion_session import SuggestionSession
-from src.infra.database.config_async import get_async_db
 
 
 class _BusOk:
@@ -65,7 +64,6 @@ def ms_client():
     app.dependency_overrides[get_current_user_id] = lambda: "user-1"
     bus = _BusOk()
     app.dependency_overrides[get_configured_event_bus] = lambda: bus
-    app.dependency_overrides[get_async_db] = lambda: AsyncMock()
     yield TestClient(app), bus
     app.dependency_overrides = {}
 
@@ -151,6 +149,16 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
     async def _cache_service(session):
         return _Cache()
 
+    mock_image_cache_db = AsyncMock()
+    mock_image_cache_context = MagicMock()
+    mock_image_cache_context.__aenter__ = AsyncMock(return_value=mock_image_cache_db)
+    mock_image_cache_context.__aexit__ = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        ms_mod,
+        "AsyncSessionLocal",
+        lambda: mock_image_cache_context,
+    )
+
     monkeypatch.setattr(
         "src.api.dependencies.food_image.get_food_image_service",
         lambda: _Images(),
@@ -178,12 +186,15 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
     mock_uow.__aexit__ = AsyncMock(return_value=False)
     mock_uow.session = AsyncMock()
 
-    with patch(
-        "src.infra.database.uow_async.AsyncUnitOfWork",
-        return_value=mock_uow,
-    ), patch(
-        "src.infra.repositories.pending_meal_image_repository_async.AsyncPendingMealImageRepository",
-    ) as mock_repo_cls:
+    with (
+        patch(
+            "src.infra.database.uow_async.AsyncUnitOfWork",
+            return_value=mock_uow,
+        ),
+        patch(
+            "src.infra.repositories.pending_meal_image_repository_async.AsyncPendingMealImageRepository",
+        ) as mock_repo_cls,
+    ):
         mock_repo = AsyncMock()
         mock_repo_cls.return_value = mock_repo
 
@@ -194,6 +205,8 @@ def test_discover_meals_sends_cqrs_command(ms_client, monkeypatch):
     assert captured["msg"].meal_type == "lunch"
     assert captured["msg"].count == 10
     assert r.json()["meals"][0]["id"] == "disc_a"
+    mock_image_cache_context.__aenter__.assert_awaited_once()
+    mock_image_cache_context.__aexit__.assert_awaited_once()
 
 
 def test_generate_recipes_accepts_selected_discovery_ids(ms_client):

@@ -1,6 +1,6 @@
 # Multi-stage build for faster deployments
 # Stage 1: Build dependencies
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -55,10 +55,10 @@ USER appuser
 
 # Ensure venv is in PATH
 ENV PATH="/opt/venv/bin:$PATH"
-ENV PYTHONPATH="/app:${PYTHONPATH}"
+ENV PYTHONPATH="/app"
 ENV PYTHONUNBUFFERED=1
 
-# Default worker count. Override with WEB_CONCURRENCY on Render.
+# Default worker count. Override with UVICORN_WORKERS on Render.
 ENV UVICORN_WORKERS=1
 
 # Health check uses PORT at runtime. The entrypoint defaults to 8000 locally

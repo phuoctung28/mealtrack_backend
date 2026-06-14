@@ -13,6 +13,7 @@ from src.api.dependencies.auth import require_monitoring_access
 from src.infra.database.config_async import (
     _ASYNC_POOL_OVERFLOW,
     _ASYNC_POOL_SIZE,
+    _ASYNC_POOL_TOTAL_CAPACITY,
     _IS_NEON_POOLER,
     _UVICORN_WORKERS,
     CONNECTION_MODE,
@@ -99,7 +100,6 @@ async def database_pool_status(_monitor=Depends(require_monitoring_access)):
         overflow = pool.overflow()
         available = max(pool_size - checked_out, 0)
         utilization_pct = (checked_out / pool_size) * 100 if pool_size > 0 else 0.0
-        total_capacity = (_UVICORN_WORKERS * _ASYNC_POOL_SIZE) + _ASYNC_POOL_OVERFLOW
 
         return {
             "status": "healthy",
@@ -107,10 +107,12 @@ async def database_pool_status(_monitor=Depends(require_monitoring_access)):
             "pool_type": "QueuePool",
             "pool_size": pool_size,
             "max_overflow": _ASYNC_POOL_OVERFLOW,
+            "worker_count": _UVICORN_WORKERS,
+            "pool_size_per_worker": _ASYNC_POOL_SIZE,
             "checked_out": checked_out,
             "available": available,
             "overflow": overflow,
-            "total_capacity": total_capacity,
+            "total_capacity": _ASYNC_POOL_TOTAL_CAPACITY,
             "utilization_pct": round(utilization_pct, 2),
         }
     except Exception as exc:
@@ -154,7 +156,9 @@ async def _fetch_pg_connection_stats() -> dict[str, Any]:
         # SHOW commands may fail through PgBouncer in transaction mode
         max_connections: int | None = None
         try:
-            max_conn_row = (await connection.execute(text("SHOW max_connections"))).fetchone()
+            max_conn_row = (
+                await connection.execute(text("SHOW max_connections"))
+            ).fetchone()
             if max_conn_row:
                 max_connections = int(max_conn_row[0])
         except Exception:

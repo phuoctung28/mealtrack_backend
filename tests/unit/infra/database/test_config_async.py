@@ -11,6 +11,7 @@ def _reset_config_async_module():
     """Reload config_async after each test so module-level state never leaks."""
     yield
     import src.infra.database.config_async as cfg
+
     importlib.reload(cfg)
 
 
@@ -99,6 +100,26 @@ def test_async_engine_defaults_to_direct_pool(monkeypatch):
 
     importlib.reload(cfg)
     assert isinstance(cfg.async_engine.sync_engine.pool, AsyncAdaptedQueuePool)
+
+
+def test_direct_pool_applies_pool_size_per_worker_to_engine(monkeypatch):
+    """SQLAlchemy pool_size is per process; worker count is only for capacity reporting."""
+    monkeypatch.setenv("APP_DATABASE_URL", "postgresql://user:pw@host/db")
+    monkeypatch.setenv("DB_CONNECTION_MODE", "direct_pool")
+    monkeypatch.setenv("UVICORN_WORKERS", "4")
+    monkeypatch.setenv("ASYNC_POOL_SIZE_PER_WORKER", "8")
+    monkeypatch.setenv("ASYNC_POOL_MAX_OVERFLOW", "3")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL_DIRECT", raising=False)
+
+    import src.infra.database.config_async as cfg
+
+    importlib.reload(cfg)
+    assert cfg.async_engine.sync_engine.pool.size() == 8
+    assert cfg._UVICORN_WORKERS == 4
+    assert cfg._ASYNC_POOL_SIZE == 8
+    assert cfg._ASYNC_POOL_OVERFLOW == 3
+    assert cfg._ASYNC_POOL_TOTAL_CAPACITY == 44
 
 
 def test_neon_pooler_url_auto_selects_null_pool(monkeypatch):

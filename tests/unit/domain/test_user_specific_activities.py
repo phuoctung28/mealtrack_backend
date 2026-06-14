@@ -2,14 +2,14 @@
 Test user-specific daily activities functionality.
 """
 
-from datetime import datetime, date
+from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.app.handlers.query_handlers import GetDailyActivitiesQueryHandler
 from src.app.queries.activity.get_daily_activities_query import GetDailyActivitiesQuery
-from src.domain.model import Macros, Meal, MealStatus, MealImage, Nutrition
+from src.domain.model import Macros, Meal, MealImage, MealStatus, Nutrition
 
 
 @pytest.mark.asyncio
@@ -170,3 +170,62 @@ class TestUserSpecificActivities:
                 user_id="123e4567-e89b-12d3-a456-426614174300",
                 user_timezone="UTC",
             )
+
+    async def test_daily_activities_uses_short_lived_uow_scopes(self):
+        """Cache misses should not hold one DB checkout across all daily reads."""
+
+        class _UowScope:
+            def __init__(self, *, users=None, meals=None, movement_entries=None):
+                self.users = users or AsyncMock()
+                self.meals = meals or AsyncMock()
+                self.movement_entries = movement_entries or AsyncMock()
+                self.enter = AsyncMock()
+                self.exit = AsyncMock()
+
+            async def __aenter__(self):
+                await self.enter()
+                return self
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                await self.exit(exc_type, exc_val, exc_tb)
+                return False
+
+        users_repo = AsyncMock()
+        users_repo.find_by_id.return_value = None
+
+        meals_repo = AsyncMock()
+        meals_repo.find_by_date.return_value = []
+
+        movement_repo = AsyncMock()
+        movement_repo.find_by_user_and_logged_range.return_value = []
+
+        scopes = [
+            _UowScope(users=users_repo),
+            _UowScope(meals=meals_repo),
+            _UowScope(movement_entries=movement_repo),
+        ]
+        uow_factory = MagicMock(side_effect=scopes)
+
+        handler = GetDailyActivitiesQueryHandler()
+        query = GetDailyActivitiesQuery(
+            user_id="123e4567-e89b-12d3-a456-426614174300",
+            target_date=datetime(2024, 8, 15),
+        )
+
+        with patch(
+            "src.app.handlers.query_handlers.get_daily_activities_query_handler.AsyncUnitOfWork",
+            uow_factory,
+        ):
+            activities = await handler.handle(query)
+
+        assert activities == []
+        assert uow_factory.call_count == 3
+        for scope in scopes:
+            scope.enter.assert_awaited_once()
+            scope.exit.assert_awaited_once()
+        meals_repo.find_by_date.assert_awaited_once_with(
+            date(2024, 8, 15),
+            user_id="123e4567-e89b-12d3-a456-426614174300",
+            user_timezone="UTC",
+        )
+        movement_repo.find_by_user_and_logged_range.assert_awaited_once()

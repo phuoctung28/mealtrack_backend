@@ -4,10 +4,11 @@ All tests use a mock CacheService — no real Redis required.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
-from src.domain.cache.cache_keys import CacheKeys
 from src.app.queries.tdee import GetUserTdeeQuery
+from src.domain.cache.cache_keys import CacheKeys
 
 
 class TestGetUserTdeeQueryHandlerCache:
@@ -84,6 +85,7 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         """When a UoW is injected, handler should use it instead of creating a new one."""
         import zoneinfo
         from datetime import date
+
         from src.app.handlers.query_handlers.get_weekly_budget_query_handler import (
             GetWeeklyBudgetQueryHandler,
         )
@@ -106,18 +108,23 @@ class TestGetWeeklyBudgetQueryHandlerCache:
             user_id="u1", target_date=target_date, header_timezone="UTC"
         )
 
-        with patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.AsyncUnitOfWork"
-        ) as async_uow_cls, patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.resolve_user_timezone_async",
-            new_callable=AsyncMock,
-            return_value="UTC",
-        ), patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_zone_info",
-            return_value=zoneinfo.ZoneInfo("UTC"),
-        ), patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_user_monday",
-            return_value=date(2024, 1, 1),
+        with (
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.AsyncUnitOfWork"
+            ) as async_uow_cls,
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.resolve_user_timezone_async",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_zone_info",
+                return_value=zoneinfo.ZoneInfo("UTC"),
+            ),
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_user_monday",
+                return_value=date(2024, 1, 1),
+            ),
         ):
             result = await handler.handle(query)
 
@@ -131,6 +138,7 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         """On a Redis cache hit find_by_user_and_week is never called."""
         import zoneinfo
         from datetime import date
+
         from src.app.handlers.query_handlers.get_weekly_budget_query_handler import (
             GetWeeklyBudgetQueryHandler,
         )
@@ -151,26 +159,29 @@ class TestGetWeeklyBudgetQueryHandlerCache:
             user_id="u1", target_date=target_date, header_timezone="UTC"
         )
 
-        with patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.AsyncUnitOfWork",
-            return_value=mock_uow,
-        ), patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.resolve_user_timezone_async",
-            new_callable=AsyncMock,
-            return_value="UTC",
-        ), patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_zone_info",
-            return_value=zoneinfo.ZoneInfo("UTC"),
-        ), patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_user_monday",
-            return_value=date(2024, 1, 1),
+        with (
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.AsyncUnitOfWork",
+                return_value=mock_uow,
+            ),
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.resolve_user_timezone_async",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_zone_info",
+                return_value=zoneinfo.ZoneInfo("UTC"),
+            ),
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_user_monday",
+                return_value=date(2024, 1, 1),
+            ),
         ):
             result = await handler.handle(query)
 
         assert result == cached_payload
-        expected_key, _ = CacheKeys.weekly_budget(
-            "u1", date(2024, 1, 1), target_date
-        )
+        expected_key, _ = CacheKeys.weekly_budget("u1", date(2024, 1, 1), target_date)
         cache_service.get_json.assert_awaited_once_with(expected_key)
         cache_service.set_json.assert_not_awaited()
 
@@ -179,6 +190,7 @@ class TestGetWeeklyBudgetQueryHandlerCache:
         """On a Redis cache miss the result is stored with the correct key and TTL."""
         import zoneinfo
         from datetime import date
+
         from src.app.handlers.query_handlers.get_weekly_budget_query_handler import (
             GetWeeklyBudgetQueryHandler,
         )
@@ -244,29 +256,36 @@ class TestGetWeeklyBudgetQueryHandlerCache:
             "u1", week_start, target_date
         )
 
-        with patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.AsyncUnitOfWork",
-            return_value=mock_uow,
-        ), patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.resolve_user_timezone_async",
-            new_callable=AsyncMock,
-            return_value="UTC",
-        ), patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_zone_info",
-            return_value=zoneinfo.ZoneInfo("UTC"),
-        ), patch(
-            "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_user_monday",
-            return_value=week_start,
-        ), patch.object(
-            handler,
-            "_sync_targets_if_stale",
-            AsyncMock(return_value=(mock_budget, 1800.0)),
-        ), patch.object(
-            handler,
-            "_get_effective_adjusted_daily_async",
-            AsyncMock(return_value=mock_effective),
+        with (
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.AsyncUnitOfWork",
+                return_value=mock_uow,
+            ),
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.resolve_user_timezone_async",
+                new_callable=AsyncMock,
+                return_value="UTC",
+            ),
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_zone_info",
+                return_value=zoneinfo.ZoneInfo("UTC"),
+            ),
+            patch(
+                "src.app.handlers.query_handlers.get_weekly_budget_query_handler.get_user_monday",
+                return_value=week_start,
+            ),
+            patch.object(
+                handler,
+                "_sync_targets_if_stale",
+                AsyncMock(return_value=(mock_budget, 1800.0)),
+            ),
+            patch.object(
+                handler,
+                "_get_effective_adjusted_daily_async",
+                AsyncMock(return_value=mock_effective),
+            ),
         ):
-            result = await handler.handle(query)
+            await handler.handle(query)
 
         cache_service.set_json.assert_awaited_once()
         call_args = cache_service.set_json.call_args[0]
@@ -277,10 +296,10 @@ class TestGetWeeklyBudgetQueryHandlerCache:
     async def test_passes_cache_service_to_tdee_handler(self):
         """_create_weekly_budget passes cache_service to GetUserTdeeQueryHandler."""
         from datetime import date
+
         from src.app.handlers.query_handlers.get_weekly_budget_query_handler import (
             GetWeeklyBudgetQueryHandler,
         )
-        from src.infra.database.uow_async import AsyncUnitOfWork
 
         cache_service = MagicMock()
         mock_uow = AsyncMock()
@@ -498,7 +517,8 @@ class TestGetDailyActivitiesQueryHandlerCache:
 
     @pytest.mark.asyncio
     async def test_returns_cached_value_on_hit(self):
-        from datetime import datetime, date
+        from datetime import datetime
+
         from src.app.handlers.query_handlers.get_daily_activities_query_handler import (
             GetDailyActivitiesQueryHandler,
         )
@@ -521,7 +541,8 @@ class TestGetDailyActivitiesQueryHandlerCache:
 
     @pytest.mark.asyncio
     async def test_stores_result_in_cache_on_miss(self):
-        from datetime import datetime, date
+        from datetime import datetime
+
         from src.app.handlers.query_handlers.get_daily_activities_query_handler import (
             GetDailyActivitiesQueryHandler,
         )
@@ -537,9 +558,13 @@ class TestGetDailyActivitiesQueryHandlerCache:
 
         expected_key, _ = CacheKeys.daily_activities("u1", target_dt.date())
 
-        with patch.object(
-            handler, "_get_meal_activities", return_value=[]
-        ), patch.object(handler, "_get_workout_activities", return_value=[]):
+        with (
+            patch.object(
+                handler, "_resolve_user_timezone", AsyncMock(return_value="UTC")
+            ),
+            patch.object(handler, "_get_meal_activities", return_value=[]),
+            patch.object(handler, "_get_workout_activities", return_value=[]),
+        ):
             await handler.handle(query)
 
         cache_service.set_json.assert_awaited_once()
