@@ -325,7 +325,7 @@ Return ONLY valid JSON matching the structure above."""
   {{"name": "Bánh mì bơ (Toast with butter)", "quantity": 1, "unit": "lát", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
 ]"""
 
-    PROMPT_VERSION = "2026-06-16-bev"
+    PROMPT_VERSION = "2026-06-16"
 
     BARCODE_AI_ESTIMATE = (
         "You are a nutrition expert. This barcode was scanned in a food tracking app. "
