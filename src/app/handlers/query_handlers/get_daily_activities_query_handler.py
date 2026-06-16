@@ -108,7 +108,16 @@ class GetDailyActivitiesQueryHandler(
             user_id=query.user_id,
             user_timezone=user_tz_str,
         )
-        return [
+        meal_id_set = {m.meal_id for m in items}
+
+        hydration_entries = await uow.hydration_entries.find_by_date(
+            local_date,
+            user_id=query.user_id,
+            user_timezone=user_tz_str,
+        )
+        deduped = [e for e in hydration_entries if e.legacy_meal_id not in meal_id_set]
+
+        meal_activities = [
             (
                 self._build_hydration_activity(item, query.language or "en")
                 if item.meal_type == "hydration"
@@ -116,6 +125,11 @@ class GetDailyActivitiesQueryHandler(
             )
             for item in items
         ]
+        hydration_activities = [
+            self._build_hydration_entry_activity(entry, query.language or "en")
+            for entry in deduped
+        ]
+        return meal_activities + hydration_activities
 
     async def _get_workout_activities(
         self,
@@ -133,6 +147,30 @@ class GetDailyActivitiesQueryHandler(
             query.user_id, start_utc, end_utc
         )
         return [self._build_movement_activity(entry) for entry in entries]
+
+    def _build_hydration_entry_activity(self, entry, language: str = "en") -> Dict[str, Any]:
+        kcal = round(entry.calories, 1)
+        return {
+            "id": entry.id,
+            "type": "hydration",
+            "timestamp": format_iso_utc(entry.logged_at),
+            "title": localized_name_for_catalog_name(entry.drink_name_snapshot, language)
+            or entry.drink_name_snapshot
+            or "Water",
+            "emoji": entry.emoji_snapshot or "💧",
+            "meal_type": "hydration",
+            "calories": kcal,
+            "macros": {
+                "protein": round(entry.protein_g or 0, 1),
+                "carbs": round(entry.carbs_g or 0, 1),
+                "fat": round(entry.fat_g or 0, 1),
+            },
+            "quantity": entry.credited_ml,
+            "volume_ml": entry.credited_ml,
+            "status": "completed",
+            "source": entry.source or "hydration",
+            "image_url": entry.image_url,
+        }
 
     def _build_movement_activity(self, entry) -> Dict[str, Any]:
         return {

@@ -332,6 +332,17 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
             user_timezone=user_timezone,
         )
 
+        week_hydration = await uow.hydration_entries.find_by_date_range(
+            user_id,
+            week_start,
+            week_end,
+            user_timezone=user_timezone,
+        )
+        meal_id_set = {m.meal_id for m in week_meals}
+        deduped_week_hydration = [
+            e for e in week_hydration if e.legacy_meal_id not in meal_id_set
+        ]
+
         tz = get_zone_info(user_timezone) if user_timezone else None
         from src.domain.model.meal import MealStatus
 
@@ -356,12 +367,45 @@ class GetWeeklyBudgetQueryHandler(EventHandler[GetWeeklyBudgetQuery, Dict[str, A
                     fat += macros.fat or 0
             return {"calories": cal, "protein": prot, "carbs": carbs, "fat": fat}
 
-        consumed_total = _sum_meals(week_meals)
+        def _sum_hydration(entries, end_date=None, exclude_dates=None):
+            exclude_dates_set = set(exclude_dates) if exclude_dates else set()
+            cal = prot = carbs = fat = 0.0
+            for entry in entries:
+                if (end_date or exclude_dates_set) and entry.logged_at:
+                    aware_dt = ensure_utc(entry.logged_at)
+                    entry_local_date = (
+                        aware_dt.astimezone(tz).date() if tz else aware_dt.date()
+                    )
+                    if end_date and entry_local_date > end_date:
+                        continue
+                    if entry_local_date in exclude_dates_set:
+                        continue
+                cal += entry.calories
+                prot += entry.protein_g or 0
+                carbs += entry.carbs_g or 0
+                fat += entry.fat_g or 0
+            return {"calories": cal, "protein": prot, "carbs": carbs, "fat": fat}
+
+        def _add_dicts(a, b):
+            return {k: a[k] + b[k] for k in a}
+
         past_end = target_date - timedelta(days=1)
-        consumed_before_today = _sum_meals(week_meals, end_date=past_end)
+        consumed_total = _add_dicts(
+            _sum_meals(week_meals),
+            _sum_hydration(deduped_week_hydration),
+        )
+        consumed_before_today = _add_dicts(
+            _sum_meals(week_meals, end_date=past_end),
+            _sum_hydration(deduped_week_hydration, end_date=past_end),
+        )
         if past_cheat_dates:
-            consumed_for_redistribution = _sum_meals(
-                week_meals, end_date=past_end, exclude_dates=past_cheat_dates
+            consumed_for_redistribution = _add_dicts(
+                _sum_meals(week_meals, end_date=past_end, exclude_dates=past_cheat_dates),
+                _sum_hydration(
+                    deduped_week_hydration,
+                    end_date=past_end,
+                    exclude_dates=past_cheat_dates,
+                ),
             )
         else:
             consumed_for_redistribution = consumed_before_today

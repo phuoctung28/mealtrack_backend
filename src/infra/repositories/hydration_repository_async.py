@@ -118,6 +118,27 @@ class AsyncHydrationRepository:
         )
         return [_orm_to_domain(row) for row in result.scalars().all()]
 
+    async def find_by_date_range(
+        self,
+        user_id: str,
+        start_date: date,
+        end_date: date,
+        user_timezone: str | None = None,
+    ) -> list[HydrationEntry]:
+        """Return all entries whose local date is in [start_date, end_date]."""
+        start_dt, _ = _local_day_range(start_date, user_timezone)
+        _, end_dt = _local_day_range(end_date, user_timezone)
+        result = await self.session.execute(
+            select(HydrationEntryORM)
+            .where(
+                HydrationEntryORM.user_id == user_id,
+                HydrationEntryORM.logged_at >= start_dt,
+                HydrationEntryORM.logged_at < end_dt,
+            )
+            .order_by(HydrationEntryORM.logged_at.desc())
+        )
+        return [_orm_to_domain(row) for row in result.scalars().all()]
+
     async def sum_ml_for_date(
         self,
         date_obj: date,

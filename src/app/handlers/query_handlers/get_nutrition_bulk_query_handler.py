@@ -3,7 +3,7 @@ Handler for bulk nutrition query - returns date-indexed summaries for a range.
 """
 import hashlib
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from src.app.events.base import EventHandler, handles
@@ -82,6 +82,28 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                 if meal_date:
                     meals_by_date.setdefault(meal_date, []).append(meal)
 
+            # Fetch hydration entries for the date range and dedup against meals
+            hydration_entries_all = await uow.hydration_entries.find_by_date_range(
+                query.user_id,
+                query.start_date,
+                query.end_date,
+                user_timezone=user_tz_str,
+            )
+            meal_id_set_all = {m.meal_id for m in meals}
+            deduped_hydration = [
+                e for e in hydration_entries_all if e.legacy_meal_id not in meal_id_set_all
+            ]
+
+            hydration_by_date: Dict[date, list] = {}
+            for entry in deduped_hydration:
+                aware_dt = (
+                    entry.logged_at
+                    if entry.logged_at.tzinfo
+                    else entry.logged_at.replace(tzinfo=timezone.utc)
+                )
+                entry_date = aware_dt.astimezone(user_tz).date()
+                hydration_by_date.setdefault(entry_date, []).append(entry)
+
             # Single query for the full range; bucket by local date in Python.
             movement_by_date: Dict[date, float] = {}
             try:
@@ -103,6 +125,7 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                 dates_result[current.isoformat()] = self._build_date_summary(
                     day_meals, target_calories, target_macros,
                     movement_kcal=movement_by_date.get(current, 0.0),
+                    hydration_entries=hydration_by_date.get(current, []),
                 )
                 current += timedelta(days=1)
 
@@ -170,6 +193,7 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
         target_calories: Optional[float],
         target_macros: Optional[Dict],
         movement_kcal: float = 0.0,
+        hydration_entries: list = None,
     ) -> Dict[str, Any]:
         """Build summary for a single date."""
         total_protein = 0.0
@@ -186,6 +210,13 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                     total_carbs += meal.nutrition.macros.carbs or 0
                     total_fat += meal.nutrition.macros.fat or 0
                     total_fiber += meal.nutrition.macros.fiber or 0
+
+        for entry in (hydration_entries or []):
+            meal_count += 1
+            total_protein += entry.protein_g or 0
+            total_carbs += entry.carbs_g or 0
+            total_fat += entry.fat_g or 0
+            total_fiber += entry.fiber_g or 0
 
         food_calories = Macros(
             protein=total_protein,
