@@ -1,7 +1,7 @@
 ---
 title: "AI Rearchitecture and Beverage Scan"
 description: "Consolidate Gemini AI layer to one service/registry/extractor, add branded-beverage vision recognition, and eliminate the meals+hydration_entries dual-write anti-pattern. Zero mobile changes, same API surface."
-status: pending
+status: completed
 priority: P1
 effort: "2-3 weeks"
 branch: "delivery"
@@ -30,9 +30,9 @@ Three coordinated goals shipped in sequence:
 | Phase | Name | Status | Effort |
 |-------|------|--------|--------|
 | 1 | [Dead Code Cleanup](./phase-01-dead-code-cleanup.md) | Completed | 0.5d |
-| 2 | [AI Core Consolidation](./phase-02-ai-core-consolidation.md) | Pending | 2–3d |
-| 3 | [Beverage Scanning and Single-Source Persistence](./phase-03-beverage-scanning-and-single-source-persistence.md) | Pending | 3–5d |
-| 4 | [Docs and Observability](./phase-04-docs-and-observability.md) | Pending | 0.5d |
+| 2 | [AI Core Consolidation](./phase-02-ai-core-consolidation.md) | Completed | 2–3d |
+| 3 | [Beverage Scanning and Single-Source Persistence](./phase-03-beverage-scanning-and-single-source-persistence.md) | Completed | 3–5d |
+| 4 | [Docs and Observability](./phase-04-docs-and-observability.md) | Completed | 0.5d |
 
 ## Dependencies
 
