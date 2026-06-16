@@ -12,6 +12,8 @@ from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.hydration import HydrationEntry
 from src.domain.model.meal import Meal, MealImage, MealStatus
+from src.domain.model.nutrition.macros import Macros
+from src.domain.model.nutrition.nutrition import Nutrition
 from src.domain.model.meal_projection import MealProjection
 from src.domain.parsers.vision_response_parser import VisionResponseParser as GPTResponseParser
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
