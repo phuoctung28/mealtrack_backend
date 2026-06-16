@@ -246,6 +246,69 @@ Return ONLY valid JSON matching the structure above."""
   {{"name": "Bánh mì bơ (Toast with butter)", "quantity": 1, "unit": "lát", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
 ]"""
 
+    PROMPT_VERSION = "2026-06-16"
+
+    BARCODE_AI_ESTIMATE = (
+        "You are a nutrition expert. This barcode was scanned in a food tracking app. "
+        "Assume it IS a food product unless the product name clearly indicates otherwise "
+        "(e.g. 'Dettol Soap', 'iPhone Charger', 'Paracetamol'). "
+        "Based on the product name (if known), barcode prefix (country of origin), "
+        "and your knowledge, estimate approximate nutrition per 100g. "
+        "Be conservative with estimates. "
+        "If the product name clearly indicates a non-food item, return "
+        '{"is_food": false}. '
+        "Otherwise return ONLY valid JSON: "
+        '{"is_food": true, "name": "product name", "brand": null, '
+        '"protein_100g": float, "carbs_100g": float, "fat_100g": float, '
+        '"fiber_100g": float, "sugar_100g": float}'
+    )
+
+    BARCODE_BRAVE_EXTRACT = (
+        "You are a nutrition data extraction expert. "
+        "Extract nutrition information per 100g from web search snippets about a food product. "
+        "If snippets mention nutrition values per serving, convert to per 100g. "
+        "If snippets identify the product but lack exact macros, estimate based on "
+        "your knowledge of similar products and set confidence to medium. "
+        "Return ONLY valid JSON with these fields: "
+        '{"name": "product name", "brand": "brand or null", '
+        '"protein_100g": float, "carbs_100g": float, "fat_100g": float, '
+        '"fiber_100g": float, "sugar_100g": float, "serving_size": "description or null", '
+        '"confidence": "high|medium|low"} '
+        "Return null ONLY if you cannot identify the product at all from the snippets."
+    )
+
+    INGREDIENT_IDENTIFY = """
+        You are a food ingredient identification assistant.
+        Identify the single food ingredient shown in this image.
+
+        Return your analysis in the following JSON format:
+        {
+          "name": "ingredient name in English",
+          "confidence": 0.95,
+          "category": "vegetable|fruit|protein|grain|dairy|seasoning|other"
+        }
+
+        Guidelines:
+        - Identify the PRIMARY/LARGEST ingredient if multiple are visible
+        - Name should be in English, lowercase (e.g., "chicken breast", "broccoli", "salmon fillet")
+        - Confidence between 0 (unsure) and 1 (certain)
+        - Category must be one of: vegetable, fruit, protein, grain, dairy, seasoning, other
+        - If no clear ingredient visible, return {"name": null, "confidence": 0, "category": null}
+        - Always return well-formed JSON
+        """
+
+    DISCOVERY_SYSTEM = (
+        "You are a creative chef and nutritionist. Generate {count} VERY DIFFERENT meals. "
+        "CRITICAL: ALL meal names MUST be in ENGLISH ONLY. Do NOT use Vietnamese, Japanese, or any "
+        "non-English words in meal names. Translate ingredient names to English. Return valid JSON only."
+    )
+
+    MEAL_NAMES_SYSTEM = (
+        "You are a creative chef. Generate {count} VERY DIFFERENT meal names with "
+        "diverse flavors and cooking styles. Each name must be unique. "
+        "Output meal names in ENGLISH. Keep all JSON keys in English."
+    )
+
     @staticmethod
     def get_meal_text_parsing_prompt(language: str = "en") -> str:
         """Get meal text parsing prompt with locale-aware food names."""

@@ -163,11 +163,7 @@ class ParallelRecipeGenerator:
         # Request extra for dedup headroom
         request_count = count + 2
 
-        system = (
-            f"You are a creative chef and nutritionist. Generate {request_count} VERY DIFFERENT meals. "
-            "CRITICAL: ALL meal names MUST be in ENGLISH ONLY. Do NOT use Vietnamese, Japanese, or any "
-            "non-English words in meal names. Translate ingredient names to English. Return valid JSON only."
-        )
+        system = SystemPrompts.DISCOVERY_SYSTEM.format(count=request_count)
         prompt = PromptTemplateManager.build_discovery_prompt(
             meal_type=session.meal_type,
             target_calories=session.target_calories,
@@ -386,11 +382,7 @@ class ParallelRecipeGenerator:
         )
         # Always generate names in English — Phase 3 translates to target language.
         # English names are preserved in MealSuggestion.english_name for image search.
-        names_system = (
-            f"You are a creative chef. Generate {names_to_generate} VERY DIFFERENT meal names with "
-            f"diverse flavors and cooking styles. Each name must be unique. "
-            "Output meal names in ENGLISH. Keep all JSON keys in English."
-        )
+        names_system = SystemPrompts.MEAL_NAMES_SYSTEM.format(count=names_to_generate)
         seen: set = set()
         meal_names: list = []
         max_attempts = 2

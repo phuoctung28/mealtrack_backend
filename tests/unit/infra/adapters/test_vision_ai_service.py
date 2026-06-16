@@ -83,15 +83,16 @@ def test_compress_image_fallback_on_corrupt_bytes():
 
 
 def test_extract_json_failure_does_not_log_raw_ai_response(caplog):
-    service = _make_service()
+    from src.infra.ai.json_extract import extract_json
+
     raw_response = "not json with private meal notes and user@example.com"
 
     with caplog.at_level("ERROR"), pytest.raises(ValueError):
-        service._extract_json_from_response(raw_response)
+        extract_json(raw_response)
 
     assert raw_response not in caplog.text
     assert "user@example.com" not in caplog.text
-    assert "length=" in caplog.text
+    assert "content_len=" in caplog.text
 
 
 @pytest.mark.asyncio
