@@ -13,17 +13,17 @@ from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
 from src.domain.services.emoji_validator import validate_emoji
 
 
-class GPTResponseParsingError(Exception):
-    """Exception raised for errors in parsing GPT responses."""
+class VisionResponseParsingError(Exception):
+    """Exception raised for errors in parsing Vision AI responses."""
 
     pass
 
 
-class GPTResponseParser:
+class VisionResponseParser:
     """
-    Service for parsing GPT Vision API responses into domain models.
+    Service for parsing Vision AI responses into domain models.
 
-    This class implements US-2.2 - Parse the GPT response to structured food list and macros.
+    This class implements US-2.2 - Parse the vision AI response to structured food list and macros.
     """
 
     MAX_FOOD_ITEMS = 8
@@ -44,13 +44,13 @@ class GPTResponseParser:
             Nutrition object with food items and macros
 
         Raises:
-            GPTResponseParsingError: If parsing fails due to invalid format
+            VisionResponseParsingError: If parsing fails due to invalid format
         """
         try:
             # Get the structured data part
             data = gpt_response.get("structured_data")
             if not data:
-                raise GPTResponseParsingError(
+                raise VisionResponseParsingError(
                     "No structured data found in GPT response"
                 )
 
@@ -79,7 +79,7 @@ class GPTResponseParser:
             return nutrition
 
         except (KeyError, ValueError, TypeError, ValidationError) as e:
-            raise GPTResponseParsingError(
+            raise VisionResponseParsingError(
                 f"Failed to parse GPT response: {str(e)}"
             ) from e
 
@@ -99,7 +99,7 @@ class GPTResponseParser:
             required_fields = ["name", "quantity", "unit", "macros"]
             for field in required_fields:
                 if field not in food_data:
-                    raise GPTResponseParsingError(
+                    raise VisionResponseParsingError(
                         f"Missing required field '{field}' in food item"
                     )
 
@@ -224,3 +224,8 @@ class GPTResponseParser:
             return json.dumps(gpt_response["structured_data"])
         except (KeyError, TypeError):
             return json.dumps(gpt_response)
+
+
+# Backward-compat aliases — existing callers that import the old names continue to work.
+GPTResponseParser = VisionResponseParser
+GPTResponseParsingError = VisionResponseParsingError
