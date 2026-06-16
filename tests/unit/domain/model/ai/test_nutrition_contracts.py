@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from src.domain.model.ai.nutrition_contracts import (
     AINutritionMacros,
+    BeverageMetadata,
     MealTextNutritionResponse,
     VisionNutritionResponse,
 )
@@ -130,6 +131,70 @@ class TestVisionNutritionResponse:
     def test_rejects_missing_foods(self):
         with pytest.raises(ValidationError):
             VisionNutritionResponse.model_validate({"dish_name": "Unknown meal"})
+
+    def test_beverage_metadata_is_food_false_foods_empty_passes_validation(self):
+        response = VisionNutritionResponse.model_validate(
+            {
+                "is_food": False,
+                "dish_name": "Coca-Cola 330ml Can",
+                "foods": [],
+                "confidence": 0.95,
+                "beverage_metadata": {
+                    "is_packaged_beverage": True,
+                    "brand": "Coca-Cola",
+                    "product_name": "Coca-Cola Original",
+                    "container_type": "can",
+                    "volume_ml": 330,
+                    "sugar_per_100ml": 10.6,
+                    "kcal_per_100ml": 42.0,
+                    "label_source": "nutrition_panel",
+                },
+            }
+        )
+
+        assert response.is_food is False
+        assert response.foods == []
+        assert response.beverage_metadata is not None
+        assert response.beverage_metadata.is_packaged_beverage is True
+        assert response.beverage_metadata.brand == "Coca-Cola"
+        assert response.beverage_metadata.container_type == "can"
+        assert response.beverage_metadata.volume_ml == 330
+        assert response.beverage_metadata.label_source == "nutrition_panel"
+
+    def test_beverage_metadata_with_is_food_true_but_packaged_beverage_passes_validation(self):
+        # Validator bypass: is_food=True with no foods is allowed when beverage metadata
+        # flags is_packaged_beverage=True (safety net for AI output variation).
+        response = VisionNutritionResponse.model_validate(
+            {
+                "is_food": True,
+                "dish_name": "Pocari Sweat",
+                "foods": [],
+                "confidence": 0.88,
+                "beverage_metadata": {
+                    "is_packaged_beverage": True,
+                    "brand": "Pocari Sweat",
+                    "container_type": "bottle",
+                    "volume_ml": 500,
+                    "kcal_per_100ml": 25.0,
+                    "sugar_per_100ml": 6.2,
+                    "label_source": "estimate",
+                },
+            }
+        )
+
+        assert response.is_food is True
+        assert response.foods == []
+        assert response.beverage_metadata is not None
+        assert response.beverage_metadata.is_packaged_beverage is True
+
+    def test_brand_max_length_100_enforced(self):
+        with pytest.raises(ValidationError):
+            BeverageMetadata.model_validate(
+                {
+                    "is_packaged_beverage": True,
+                    "brand": "X" * 101,
+                }
+            )
 
 
 class TestMealTextNutritionResponse:

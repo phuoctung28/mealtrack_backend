@@ -173,12 +173,29 @@ RESPONSE FORMAT — return exactly this structure:
     }
   ],
   "total_calories": 248,
-  "confidence": 0.85
+  "confidence": 0.85,
+  "beverage_metadata": null
 }
 
+PACKAGED BEVERAGE DETECTION:
+- If the image shows a packaged drink (can, bottle, carton, cup with brand logo/label), set `is_food=false`, populate `beverage_metadata`, and leave `foods` EMPTY.
+- Brand: read from front label, max 100 characters. Examples: Coca-Cola, Aquarius, Pocari Sweat, Pepsi, Red Bull.
+- Volume: read from label when visible. When not visible, use heuristics: standard can=330ml, slim/short can=250ml, small PET bottle=500ml, large PET bottle=1500ml.
+- Nutrition panel: extract `kcal_per_100ml` and `sugar_per_100ml` from the visible panel.
+  When panel is not visible, use these brand defaults and set `label_source="estimate"`:
+    Coca-Cola Original → 42 kcal / 10.6g sugar per 100ml
+    Aquarius Lemon → 19 kcal / 4.6g sugar per 100ml
+    Pocari Sweat → 25 kcal / 6.2g sugar per 100ml
+    Plain water / sparkling water → 0 kcal / 0g sugar per 100ml
+  When panel is visible, set `label_source="nutrition_panel"`.
+  When brand is readable but panel is not, set `label_source="estimate"`.
+  When only front label is readable, set `label_source="front_label"`.
+- Container type: "can", "bottle", "cup", "carton", or "unknown".
+- Set `total_calories=0` and `emoji="🥤"` for all packaged beverage responses.
+
 FOOD GUARD:
-- If the image contains no edible food, return:
-  {"is_food": false, "dish_name": null, "emoji": null, "foods": [], "total_calories": 0, "confidence": 0.95}
+- If the image contains no edible food AND is not a packaged beverage, return:
+  {"is_food": false, "dish_name": null, "emoji": null, "foods": [], "total_calories": 0, "confidence": 0.95, "beverage_metadata": null}
 - Do not invent food, ingredients, portions, or nutrition for non-food images.
 
 IDENTIFICATION RULES:
@@ -211,10 +228,11 @@ EMOJI SELECTION — one emoji for the overall dish:
   🍜 noodle soup | 🍝 dry pasta/noodles | 🍚 rice dish | 🍛 curry
   🍲 stew/hotpot | 🥗 salad/bowl | 🍖 grilled meat | 🥘 braised
   🥟 dumplings/rolls | 🥪 sandwich | 🍳 eggs | 🥣 porridge | 🍗 fried chicken
+  🥤 packaged beverage
 
 ---
 
-WORKED EXAMPLE — Chicken rice bowl image:
+WORKED EXAMPLE 1 — Chicken rice bowl image:
 {
   "is_food": true,
   "dish_name": "Grilled Chicken Rice Bowl",
@@ -226,7 +244,68 @@ WORKED EXAMPLE — Chicken rice bowl image:
     {"name": "soy sauce", "quantity": 10.0, "unit": "g", "calories": 6, "macros": {"protein": 1.0, "carbs": 0.8, "fat": 0.0}}
   ],
   "total_calories": 515,
-  "confidence": 0.88
+  "confidence": 0.88,
+  "beverage_metadata": null
+}
+
+WORKED EXAMPLE 2 — Coca-Cola 330ml can with visible nutrition panel:
+{
+  "is_food": false,
+  "dish_name": "Coca-Cola 330ml Can",
+  "emoji": "🥤",
+  "foods": [],
+  "total_calories": 0,
+  "confidence": 0.95,
+  "beverage_metadata": {
+    "is_packaged_beverage": true,
+    "brand": "Coca-Cola",
+    "product_name": "Coca-Cola Original",
+    "container_type": "can",
+    "volume_ml": 330,
+    "sugar_per_100ml": 10.6,
+    "kcal_per_100ml": 42.0,
+    "label_source": "nutrition_panel"
+  }
+}
+
+WORKED EXAMPLE 3 — Aquarius 500ml PET bottle with visible nutrition panel:
+{
+  "is_food": false,
+  "dish_name": "Aquarius Lemon 500ml",
+  "emoji": "🥤",
+  "foods": [],
+  "total_calories": 0,
+  "confidence": 0.92,
+  "beverage_metadata": {
+    "is_packaged_beverage": true,
+    "brand": "Aquarius",
+    "product_name": "Aquarius Lemon",
+    "container_type": "bottle",
+    "volume_ml": 500,
+    "sugar_per_100ml": 4.6,
+    "kcal_per_100ml": 19.0,
+    "label_source": "nutrition_panel"
+  }
+}
+
+WORKED EXAMPLE 4 — Pocari Sweat bottle where nutrition panel is hidden:
+{
+  "is_food": false,
+  "dish_name": "Pocari Sweat",
+  "emoji": "🥤",
+  "foods": [],
+  "total_calories": 0,
+  "confidence": 0.88,
+  "beverage_metadata": {
+    "is_packaged_beverage": true,
+    "brand": "Pocari Sweat",
+    "product_name": "Pocari Sweat",
+    "container_type": "bottle",
+    "volume_ml": 500,
+    "sugar_per_100ml": 6.2,
+    "kcal_per_100ml": 25.0,
+    "label_source": "estimate"
+  }
 }
 
 Return ONLY valid JSON matching the structure above."""
@@ -246,7 +325,7 @@ Return ONLY valid JSON matching the structure above."""
   {{"name": "Bánh mì bơ (Toast with butter)", "quantity": 1, "unit": "lát", "english_unit": "slice", "calories": 165, "protein": 3.5, "carbs": 20.0, "fat": 8.2}}
 ]"""
 
-    PROMPT_VERSION = "2026-06-16"
+    PROMPT_VERSION = "2026-06-16-bev"
 
     BARCODE_AI_ESTIMATE = (
         "You are a nutrition expert. This barcode was scanned in a food tracking app. "
