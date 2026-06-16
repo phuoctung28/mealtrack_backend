@@ -12,7 +12,7 @@ from src.domain.cache.cache_keys import CacheKeys
 from src.domain.model.meal import MealStatus
 from src.domain.model.nutrition.macros import Macros
 from src.domain.services.weekly_budget_service import WeeklyBudgetService
-from src.domain.utils.timezone_utils import get_user_monday, get_zone_info, resolve_user_timezone_async
+from src.domain.utils.timezone_utils import ensure_utc, get_user_monday, get_zone_info, resolve_user_timezone_async
 from src.domain.ports.cache_port import CachePort
 from src.infra.database.uow_async import AsyncUnitOfWork
 from src.domain.model.meal_projection import MealProjection
@@ -82,6 +82,25 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                 if meal_date:
                     meals_by_date.setdefault(meal_date, []).append(meal)
 
+            # Fetch hydration entries for range; dedup by legacy_meal_id
+            hydration_by_date: Dict[date, list] = {}
+            try:
+                meal_id_set = {m.meal_id for m in meals}
+                h_entries = await uow.hydration_entries.find_by_date_range(
+                    query.user_id,
+                    query.start_date,
+                    query.end_date,
+                    user_timezone=user_tz_str,
+                )
+                for entry in h_entries:
+                    if entry.legacy_meal_id and entry.legacy_meal_id in meal_id_set:
+                        continue
+                    entry_date = self._get_hydration_date(entry, user_tz_str)
+                    if entry_date:
+                        hydration_by_date.setdefault(entry_date, []).append(entry)
+            except Exception as exc:
+                logger.warning("Failed to fetch bulk hydration data: %s", exc)
+
             # Single query for the full range; bucket by local date in Python.
             movement_by_date: Dict[date, float] = {}
             try:
@@ -103,6 +122,7 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                 dates_result[current.isoformat()] = self._build_date_summary(
                     day_meals, target_calories, target_macros,
                     movement_kcal=movement_by_date.get(current, 0.0),
+                    hydration_entries=hydration_by_date.get(current, []),
                 )
                 current += timedelta(days=1)
 
@@ -164,12 +184,19 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
         aware_dt = ensure_utc(meal.created_at)
         return aware_dt.astimezone(tz).date()
 
+    def _get_hydration_date(self, entry, user_tz_str: str):
+        if not entry.logged_at:
+            return None
+        tz = get_zone_info(user_tz_str)
+        return ensure_utc(entry.logged_at).astimezone(tz).date()
+
     def _build_date_summary(
         self,
         meals: list,
         target_calories: Optional[float],
         target_macros: Optional[Dict],
         movement_kcal: float = 0.0,
+        hydration_entries: Optional[list] = None,
     ) -> Dict[str, Any]:
         """Build summary for a single date."""
         total_protein = 0.0
@@ -186,6 +213,13 @@ class GetNutritionBulkQueryHandler(EventHandler[GetNutritionBulkQuery, Dict[str,
                     total_carbs += meal.nutrition.macros.carbs or 0
                     total_fat += meal.nutrition.macros.fat or 0
                     total_fiber += meal.nutrition.macros.fiber or 0
+
+        for entry in (hydration_entries or []):
+            meal_count += 1
+            total_protein += entry.protein_g or 0
+            total_carbs += entry.carbs_g or 0
+            total_fat += entry.fat_g or 0
+            total_fiber += entry.fiber_g or 0
 
         food_calories = Macros(
             protein=total_protein,

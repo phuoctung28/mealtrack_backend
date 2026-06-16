@@ -108,7 +108,8 @@ class GetDailyActivitiesQueryHandler(
             user_id=query.user_id,
             user_timezone=user_tz_str,
         )
-        return [
+
+        meal_activities = [
             (
                 self._build_hydration_activity(item, query.language or "en")
                 if item.meal_type == "hydration"
@@ -116,6 +117,24 @@ class GetDailyActivitiesQueryHandler(
             )
             for item in items
         ]
+
+        # Include hydration_entries not already covered by a meal row (legacy_meal_id dedup).
+        # Pre-Phase-3d entries have legacy_meal_id set → skip (meal row already in feed).
+        # Post-Phase-3d LogCaloricDrink entries have legacy_meal_id=None → include.
+        meal_id_set = {item.meal_id for item in items}
+        hydration_entries = await uow.hydration_entries.find_by_date(
+            local_date,
+            user_id=query.user_id,
+            user_timezone=user_tz_str,
+        )
+        for entry in hydration_entries:
+            if entry.legacy_meal_id and entry.legacy_meal_id in meal_id_set:
+                continue
+            meal_activities.append(
+                self._build_hydration_entry_activity(entry, query.language or "en")
+            )
+
+        return meal_activities
 
     async def _get_workout_activities(
         self,
@@ -214,6 +233,29 @@ class GetDailyActivitiesQueryHandler(
             "status": "completed",
             "image_url": None,
             "source": meal.source or "hydration",
+        }
+
+    def _build_hydration_entry_activity(self, entry, language: str = "en") -> Dict[str, Any]:
+        """Build activity dict from a HydrationEntry domain object (no Meal row)."""
+        return {
+            "id": entry.id,
+            "type": "hydration",
+            "timestamp": format_iso_utc(entry.logged_at),
+            "title": localized_name_for_catalog_name(entry.drink_name_snapshot, language)
+            or entry.drink_name_snapshot or "Water",
+            "emoji": entry.emoji_snapshot or "💧",
+            "meal_type": "hydration",
+            "calories": round(entry.calories, 1),
+            "macros": {
+                "protein": round(entry.protein_g or 0, 1),
+                "carbs": round(entry.carbs_g or 0, 1),
+                "fat": round(entry.fat_g or 0, 1),
+            },
+            "quantity": entry.credited_ml,
+            "volume_ml": entry.volume_ml,
+            "status": "completed",
+            "image_url": entry.image_url,
+            "source": entry.source,
         }
 
     def _estimate_meal_weight(self, meal) -> float:

@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import threading
+import time
 from typing import Any, Optional
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -159,6 +160,7 @@ class GeminiService:
 
         attempted: list[str] = []
         last_error: str | None = None
+        _start = time.monotonic()
 
         for model in available:
             attempted.append(model)
@@ -173,6 +175,11 @@ class GeminiService:
                     purpose_hint=purpose.value,
                 )
                 self._circuit_breaker.record_success(model)
+                logger.info(
+                    "[AI-CALL] method=vision purpose=%s model=%s latency_ms=%d retry_count=%d fallback_used=%s",
+                    purpose.value, model, int((time.monotonic() - _start) * 1000),
+                    len(attempted) - 1, model != chain[0],
+                )
                 return result
 
             except AIOutputValidationError:
@@ -238,6 +245,7 @@ class GeminiService:
         cache_type: str | None = _PURPOSE_TO_CACHE_TYPE.get(purpose)
         attempted: list[str] = []
         last_error: str | None = None
+        _start = time.monotonic()
 
         for model in available:
             attempted.append(model)
@@ -256,14 +264,11 @@ class GeminiService:
                     purpose_hint=purpose.value,
                 )
                 self._circuit_breaker.record_success(model)
-
-                if model != chain[0]:
-                    logger.info(
-                        "[AI-FALLBACK-SUCCESS] purpose=%s failed=%s succeeded=%s",
-                        purpose.value,
-                        attempted[:-1],
-                        model,
-                    )
+                logger.info(
+                    "[AI-CALL] method=text_json purpose=%s model=%s latency_ms=%d retry_count=%d fallback_used=%s",
+                    purpose.value, model, int((time.monotonic() - _start) * 1000),
+                    len(attempted) - 1, model != chain[0],
+                )
                 return result
 
             except AIOutputValidationError:
