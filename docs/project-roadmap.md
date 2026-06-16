@@ -1,7 +1,7 @@
 # MealTrack Backend - Project Roadmap
 
 **Version:** 0.6.5
-**Last Updated:** June 14, 2026
+**Last Updated:** June 16, 2026
 **Status:** Production-ready. 430 source files, ~38K LOC across 4 layers (API: 76, App: 140, Domain: 133, Infra: 80). 1649+ unit tests, 70%+ coverage.
 **Architecture**: 4-Layer Clean Architecture + CQRS + Event-Driven with PyMediator singleton registry + Sentry monitoring.
 
@@ -43,6 +43,7 @@
 - [x] Canonical AI nutrition contracts now reject impossible over-limit food quantities before domain hydration, invalid AI items now fail instead of being silently repaired, and structured meal image/text output retries exactly once before raising controlled `AIOutputValidationError`.
 - [x] Meal image analysis now carries an explicit `is_food` guard through Gemini schema validation, adapter mapping, parsers, command handlers, and API error mapping so explicit non-food images reject before nutrition parsing without changing successful meal response shape.
 - [x] LLM nutrition output contracts: Structured Pydantic contracts for all AI meal-analysis flows; bounded validation retry; parser becomes deterministic mapping; `quantity=150000` and similar impossible AI outputs are rejected before persistence. Background event handler sanitizes `AIOutputValidationError` into a user-friendly failure message. `PromptEvalLoop` tracks schema `validation_success_rate` as a separate observable metric alongside `parse_success_rate`.
+- [x] Beverage image scans now persist only normalized `hydration_entries` rows, with no compatibility meal row, while preserving the existing meal-shaped scan response.
 
 ### June 2026: Normalized Database Foundation
 - [x] Added normalized profile preferences, hydration entries, saved suggestion items/steps, meal instruction steps, food serving sizes, and food nutrient tables.

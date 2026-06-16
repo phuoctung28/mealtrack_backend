@@ -2,9 +2,16 @@
 Unit tests for DeleteMeal (hard delete) command handler.
 """
 
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 from src.app.commands.meal.delete_meal_command import DeleteMealCommand
+from src.app.handlers.command_handlers.delete_meal_command_handler import (
+    DeleteMealCommandHandler,
+)
 
 
 @pytest.mark.unit
@@ -44,3 +51,34 @@ class TestDeleteMealCommandHandler:
 
         assert result["meal_id"] == meal_id
         assert result["message"] == "Meal already deleted"
+
+
+@pytest.mark.asyncio
+async def test_delete_meal_command_deletes_hydration_entry_alias():
+    entry_id = "11111111-1111-1111-1111-111111111111"
+    user_id = "22222222-2222-2222-2222-222222222222"
+    logged_at = datetime(2026, 6, 16, 12, 0, tzinfo=UTC)
+
+    uow = MagicMock()
+    uow.__aenter__ = AsyncMock(return_value=uow)
+    uow.__aexit__ = AsyncMock(return_value=False)
+    uow.meals.find_by_id = AsyncMock(return_value=None)
+    uow.hydration_entries.find_by_id_or_legacy_meal_id = AsyncMock(
+        return_value=SimpleNamespace(id=entry_id, logged_at=logged_at)
+    )
+    uow.hydration_entries.delete_by_id_or_legacy_meal_id = AsyncMock(return_value=True)
+
+    cache = MagicMock()
+    cache.after_hydration_write = AsyncMock()
+    cache.after_meal_write = AsyncMock()
+
+    handler = DeleteMealCommandHandler(uow=uow, cache_invalidation=cache)
+
+    result = await handler.handle(DeleteMealCommand(meal_id=entry_id, user_id=user_id))
+
+    assert result == {"meal_id": entry_id, "message": "Hydration entry deleted"}
+    uow.hydration_entries.delete_by_id_or_legacy_meal_id.assert_awaited_once_with(
+        user_id, entry_id
+    )
+    cache.after_hydration_write.assert_awaited_once_with(user_id, logged_at.date())
+    cache.after_meal_write.assert_not_called()

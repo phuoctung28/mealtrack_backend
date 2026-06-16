@@ -2,12 +2,13 @@
 Integration tests for meal query handlers.
 """
 
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.api.exceptions import ResourceNotFoundException
-from src.app.queries.meal import GetMealByIdQuery, GetDailyMacrosQuery
+from src.app.queries.meal import GetDailyMacrosQuery, GetMealByIdQuery
 from src.domain.model import MealStatus
 from src.infra.database.models.enums import MealStatusEnum
 from src.infra.database.models.meal.meal import MealORM
@@ -27,6 +28,7 @@ def create_test_meal_in_db(
 ):
     """Helper to create a test meal with proper structure."""
     import uuid
+
     from src.infra.database.models.nutrition.nutrition import NutritionORM
 
     # Create image
@@ -97,16 +99,61 @@ class TestGetMealByIdQueryHandler:
             await event_bus.send(query)
 
     @pytest.mark.asyncio
+    async def test_get_meal_by_id_falls_back_to_hydration_entry_alias(self, monkeypatch):
+        """Scanned beverages return a meal-shaped response backed by hydration_entries."""
+        from src.app.handlers.query_handlers import (
+            get_meal_by_id_query_handler as module,
+        )
+        from src.domain.model.hydration import HydrationEntry
+
+        entry_id = "11111111-1111-1111-1111-111111111111"
+        user_id = "22222222-2222-2222-2222-222222222222"
+        logged_at = datetime(2026, 6, 16, 12, 0)
+
+        fake_uow = MagicMock()
+        fake_uow.__aenter__ = AsyncMock(return_value=fake_uow)
+        fake_uow.__aexit__ = AsyncMock(return_value=False)
+        fake_uow.meals.find_by_id = AsyncMock(return_value=None)
+        fake_uow.hydration_entries.find_by_id_or_legacy_meal_id = AsyncMock(
+            return_value=HydrationEntry(
+                id=entry_id,
+                user_id=user_id,
+                drink_id="scanned",
+                drink_name_snapshot="Coca-Cola",
+                emoji_snapshot="🥤",
+                volume_ml=330,
+                credited_ml=230,
+                carbs_g=35.0,
+                fat_g=0.0,
+                sugar_g=35.0,
+                logged_at=logged_at,
+                source="scan_beverage",
+                image_url="https://example.com/drink.jpg",
+            )
+        )
+        monkeypatch.setattr(module, "AsyncUnitOfWork", lambda: fake_uow)
+
+        meal = await module.GetMealByIdQueryHandler().handle(
+            GetMealByIdQuery(meal_id=entry_id, user_id=user_id)
+        )
+
+        assert meal.meal_id == entry_id
+        assert meal.meal_type == "hydration"
+        assert meal.source == "scan_beverage"
+        assert meal.dish_name == "Coca-Cola"
+        assert meal.image.url == "https://example.com/drink.jpg"
+
+    @pytest.mark.asyncio
     async def test_get_meal_by_id_with_food_items(
         self, event_bus, test_session, sample_meal_domain
     ):
         """Test meal retrieval includes food items."""
         # Arrange - Create meal with food items
-        from src.infra.database.models.nutrition.food_item import FoodItemORM
-        from src.infra.database.models.nutrition.nutrition import NutritionORM
-
         # First create the meal image
         import uuid
+
+        from src.infra.database.models.nutrition.food_item import FoodItemORM
+        from src.infra.database.models.nutrition.nutrition import NutritionORM
 
         meal_image = MealImageORM(
             image_id=str(uuid.uuid4()),

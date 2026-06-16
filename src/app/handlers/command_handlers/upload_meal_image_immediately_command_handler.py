@@ -12,10 +12,12 @@ from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.hydration import HydrationEntry
 from src.domain.model.meal import Meal, MealImage, MealStatus
+from src.domain.model.meal_projection import MealProjection
 from src.domain.model.nutrition.macros import Macros
 from src.domain.model.nutrition.nutrition import Nutrition
-from src.domain.model.meal_projection import MealProjection
-from src.domain.parsers.vision_response_parser import VisionResponseParser as GPTResponseParser
+from src.domain.parsers.vision_response_parser import (
+    VisionResponseParser as GPTResponseParser,
+)
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort
@@ -283,11 +285,10 @@ class UploadMealImageImmediatelyHandler(
     ) -> Meal:
         """Route a packaged-beverage scan to hydration_entries instead of meals.
 
-        Follows the same pattern as LogCaloricDrinkCommandHandler:
-        1. Create a Meal row with source="hydration" (for legacy compatibility).
-        2. Create a HydrationEntry linked via legacy_meal_id.
-        3. Invalidate hydration caches (not meal caches).
-        4. Return the Meal domain object so the API response shape is unchanged.
+        Follows the hydration-only LogCaloricDrinkCommandHandler pattern:
+        1. Create a HydrationEntry with no legacy meal row/link.
+        2. Invalidate hydration caches (not meal caches).
+        3. Return a transient Meal domain object so the API response shape is unchanged.
         """
         structured_data = analysis_result.get("structured_data", {}) or {}
         bev_meta = structured_data.get("beverage_metadata", {}) or {}
@@ -335,34 +336,12 @@ class UploadMealImageImmediatelyHandler(
             else:
                 meal_datetime = now
 
-            zone_info = get_zone_info(user_timezone)
-            local_datetime = meal_datetime.astimezone(zone_info)
-            meal_type = determine_meal_type_from_timestamp(local_datetime)
-
-            meal = Meal(
-                meal_id=str(uuid4()),
-                user_id=command.user_id,
-                status=MealStatus.READY,
-                created_at=meal_datetime,
-                ready_at=meal_datetime,
-                image=MealImage(
-                    image_id=str(uuid4()),
-                    format="jpeg" if "jpeg" in command.content_type else "png",
-                    size_bytes=len(command.file_contents),
-                    url=image_url,
-                ),
-                dish_name=params.drink_name,
-                emoji=params.emoji,
-                meal_type=meal_type,
-                source="hydration",
-                quantity=params.credited_ml,
-                nutrition=nutrition,
-            )
-            saved_meal = await uow.meals.save(meal)
-
-            await uow.hydration_entries.add(
+            entry_id = str(uuid4())
+            hydration_entry = await uow.hydration_entries.add(
                 HydrationEntry(
+                    id=entry_id,
                     user_id=command.user_id,
+                    drink_id="scanned",
                     drink_name_snapshot=params.drink_name,
                     emoji_snapshot=params.emoji,
                     volume_ml=params.volume_ml,
@@ -372,15 +351,15 @@ class UploadMealImageImmediatelyHandler(
                     sugar_g=nutrition.macros.sugar,
                     logged_at=meal_datetime,
                     source="scan_beverage",
-                    legacy_meal_id=saved_meal.meal_id,
+                    legacy_meal_id=None,
                     image_url=image_url,
                 )
             )
             await uow.commit()
 
             logger.info(
-                "[BEVERAGE-SCAN-CREATED] meal=%s drink=%s volume_ml=%d credited_ml=%d",
-                saved_meal.meal_id,
+                "[BEVERAGE-SCAN-CREATED] entry=%s drink=%s volume_ml=%d credited_ml=%d",
+                hydration_entry.id,
                 params.drink_name,
                 params.volume_ml,
                 params.credited_ml,
@@ -389,7 +368,25 @@ class UploadMealImageImmediatelyHandler(
         if self.cache_invalidation:
             await self.cache_invalidation.after_hydration_write(command.user_id, meal_date)
 
-        return saved_meal
+        return Meal(
+            meal_id=hydration_entry.id,
+            user_id=command.user_id,
+            status=MealStatus.READY,
+            created_at=meal_datetime,
+            ready_at=meal_datetime,
+            image=MealImage(
+                image_id=str(uuid4()),
+                format="jpeg" if "jpeg" in command.content_type else "png",
+                size_bytes=len(command.file_contents),
+                url=image_url,
+            ),
+            dish_name=params.drink_name,
+            emoji=params.emoji,
+            meal_type="hydration",
+            source="scan_beverage",
+            quantity=params.credited_ml,
+            nutrition=nutrition,
+        )
 
     async def handle(self, command: UploadMealImageImmediatelyCommand) -> Meal:
         """Handle immediate meal image upload and analysis."""

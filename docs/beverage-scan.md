@@ -4,28 +4,35 @@ AI-powered packaged-beverage detection routed to `hydration_entries` instead of 
 
 ## Endpoint
 
-`POST /v1/meals/image/analyze` — same endpoint as food scan. Response shape is unchanged.
+- `POST /v1/meals/image/analyze` — direct multipart scan.
+- `POST /v1/meals/scan-by-url` — Cloudinary URL scan after direct mobile upload.
+
+Both endpoints keep the existing meal-shaped response.
 
 ## End-to-End Flow
 
 ```
-Mobile → POST /v1/meals/image/analyze
+Mobile → POST /v1/meals/image/analyze or /v1/meals/scan-by-url
          ↓
-UploadMealImageImmediatelyHandler
-  1. Upload image → Cloudinary
+UploadMealImageImmediatelyHandler or ScanByUrlCommandHandler
+  1. Get image bytes (multipart upload or Cloudinary URL download)
   2. GeminiService.vision(MEAL_SCAN, image_bytes, VISION_ANALYSIS prompt)
   3. VisionAIService._to_legacy_vision_payload() → includes beverage_metadata
   4. bev_meta = structured_data.get("beverage_metadata")
-  5. if bev_meta.is_packaged_beverage → _handle_beverage_scan()
+  5. if bev_meta.is_packaged_beverage → hydration-only scan path
      else → normal food path
 
-_handle_beverage_scan()
+hydration-only scan path
   1. build_beverage_scan_params(bev_meta) → BeverageScanParams
-  2. Save Meal(source="hydration") for backward compat
-  3. Save HydrationEntry(legacy_meal_id=meal.meal_id, source="scan_beverage")
-  4. Invalidate hydration caches (not meal caches)
-  5. Return Meal (API shape unchanged)
+  2. Save HydrationEntry(id=<uuid>, drink_id="scanned", legacy_meal_id=None, source="scan_beverage")
+  3. Invalidate hydration caches (not meal caches)
+  4. Return transient Meal-shaped response with meal_id=<hydration_entry.id> and meal_type="hydration"
 ```
+
+For mobile backward compatibility, `GET /v1/meals/{meal_id}` and
+`DELETE /v1/meals/{meal_id}` also resolve hydration-only scanned beverage IDs.
+This keeps existing detail/delete flows working while avoiding a persisted
+compatibility row in `meals`.
 
 ## BeverageMetadata Contract
 
@@ -78,18 +85,18 @@ If Gemini cannot read the label volume, the prompt instructs it to estimate:
 
 | Condition | Weight |
 |-----------|--------|
-| `label_source = "label"` and sugar < 5g/100ml | 0.95 |
-| `label_source = "label"` and sugar 5–10g/100ml | 0.85 |
-| `label_source = "label"` and sugar > 10g/100ml | 0.70 |
+| `label_source = "label"` and sugar = 0g/100ml | 1.00 |
+| `label_source = "label"` and sugar > 0–5g/100ml | 0.85 |
+| `label_source = "label"` and sugar > 5g/100ml | 0.70 |
 | `label_source = "estimate"` (any sugar) | 0.70 (conservative) |
 
 ## Deduplication in Feeds
 
-`HydrationEntry.legacy_meal_id` links an entry to its corresponding Meal row:
+`HydrationEntry.legacy_meal_id` links old dual-write entries to a corresponding Meal row:
 
 - **Pre-Phase-3d entries** (LogCaloricDrink dual-write): `legacy_meal_id` set → Meal row exists → feed reads via Meal
 - **Post-Phase-3d entries** (LogCaloricDrink hydration-only): `legacy_meal_id = None` → feed reads via HydrationEntry
-- **Beverage scan entries**: `legacy_meal_id` set → Meal row exists → feed reads via Meal
+- **Beverage scan entries**: `legacy_meal_id = None` → feed reads via HydrationEntry
 
 Dedup algorithm used in activities feed and calorie aggregates:
 ```python

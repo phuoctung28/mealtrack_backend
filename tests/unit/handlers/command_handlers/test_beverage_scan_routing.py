@@ -5,7 +5,8 @@ instead of the standard meal path, and that food scans are unchanged.
 """
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock
+from uuid import UUID
 
 import pytest
 
@@ -99,17 +100,21 @@ async def test_beverage_scan_creates_hydration_entry_not_meal():
     assert added_entry.volume_ml == 330
     assert added_entry.image_url == _CLOUDINARY_URL
 
-    # A meal row is saved (legacy_meal_id linking), but with source="hydration"
-    assert len(mock_uow._saved_meals) == 1
-    saved_meal = mock_uow._saved_meals[0]
-    assert saved_meal.source == "hydration"
+    # Beverage scan should be hydration-only: no legacy meal row/link.
+    assert len(mock_uow._saved_meals) == 0
+    assert added_entry.legacy_meal_id is None
+    assert added_entry.drink_id == "scanned"
+    UUID(added_entry.id)
 
     # Cache invalidation: after_hydration_write called, NOT after_meal_write
     cache.after_hydration_write.assert_called_once()
     cache.after_meal_write.assert_not_called()
 
-    # Return value is the saved Meal domain object
-    assert result is saved_meal
+    # Return value keeps the meal-shaped API response but points at hydration entry.
+    assert result.meal_id == added_entry.id
+    assert result.meal_type == "hydration"
+    assert result.source == "scan_beverage"
+    assert result.image.url == _CLOUDINARY_URL
 
 
 @pytest.mark.asyncio
@@ -195,8 +200,6 @@ async def test_beverage_scan_hydration_weight_conservative_for_estimate():
 @pytest.mark.asyncio
 async def test_food_scan_unchanged_path():
     """Non-beverage food scans follow the standard meal creation path."""
-    saved_meals = []
-
     mock_uow = _make_uow()
     mock_uow.meals.find_by_id = AsyncMock(
         side_effect=lambda mid, **kw: mock_uow._saved_meals[-1]
