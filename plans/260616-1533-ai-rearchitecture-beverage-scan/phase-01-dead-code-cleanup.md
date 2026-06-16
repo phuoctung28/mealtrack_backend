@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Dead Code Cleanup"
-status: pending
+status: completed
 priority: P1
 effort: "0.5d"
 dependencies: []
@@ -77,11 +77,11 @@ Delete all unreachable code paths and fix cosmetic misnaming. No behavior change
 
 ## Success Criteria
 
-- [ ] `pytest` passes at each step (after test cleanup, after file deletion, after rename).
-- [ ] `ruff check src tests` passes.
-- [ ] `mypy src` passes.
-- [ ] `grep -r "MealImageUploadedEvent\|MealAnalysisEventHandler\|AnalyzeMealImageByUrl\|GPTResponseParser\|get_gpt_parser\|_legacy_analysis_prompt\|analyze_by_url" src tests` returns zero hits.
-- [ ] Route smoke test passes: `/meals/image/analyze`, `/meals/parse-text`, `/foods/barcode/*`, `/meal-suggestions/*`, `/ingredients/recognize`.
+- [x] `pytest` passes at each step (after test cleanup, after file deletion, after rename).
+- [x] `ruff check src tests` passes.
+- [x] `mypy src` passes.
+- [x] `grep -r "MealImageUploadedEvent\|MealAnalysisEventHandler\|AnalyzeMealImageByUrl\|GPTResponseParser\|get_gpt_parser\|_legacy_analysis_prompt\|analyze_by_url" src tests` returns zero hits.
+- [x] Route smoke test passes: `/meals/image/analyze`, `/meals/parse-text`, `/foods/barcode/*`, `/meal-suggestions/*`, `/ingredients/recognize`.
 
 ## Risk Assessment
 

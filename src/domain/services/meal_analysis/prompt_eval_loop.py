@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
-from src.domain.parsers.gpt_response_parser import (
-    GPTResponseParser,
+from src.domain.parsers.vision_response_parser import (
+    VisionResponseParser,
     GPTResponseParsingError,
 )
 from src.domain.parsers.vision_response_models import VisionAnalyzeResponse
@@ -29,8 +29,8 @@ class PromptEvalResult:
 class PromptEvalLoop:
     """Offline evaluator for ranking prompt candidates with parser fidelity and cost."""
 
-    def __init__(self, parser: GPTResponseParser | None = None):
-        self._parser = parser or GPTResponseParser()
+    def __init__(self, parser: VisionResponseParser | None = None):
+        self._parser = parser or VisionResponseParser()
 
     def rank_candidates(
         self,

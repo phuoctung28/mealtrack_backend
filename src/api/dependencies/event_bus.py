@@ -8,7 +8,6 @@ from src.app.commands.ingredient import RecognizeIngredientCommand
 
 # Import all commands
 from src.app.commands.meal import (
-    AnalyzeMealImageByUrlCommand,
     ScanByUrlCommand,
     UploadMealImageImmediatelyCommand,
     EditMealCommand,
@@ -40,8 +39,6 @@ from src.app.commands.user.sync_user_command import (
     UpdateUserLastAccessedCommand,
 )
 from src.app.commands.user.update_user_metrics_command import UpdateUserMetricsCommand
-from src.app.events.meal import MealImageUploadedEvent
-
 # Import all command handlers from module
 from src.app.handlers.command_handlers import (
     EditMealCommandHandler,
@@ -54,7 +51,6 @@ from src.app.handlers.command_handlers import (
     DeleteUserCommandHandler,
     CreateManualMealCommandHandler,
     UpdateUserMetricsCommandHandler,
-    AnalyzeMealImageByUrlHandler,
     ScanByUrlCommandHandler,
     UpdateCustomMacrosCommandHandler,
     UploadMealImageImmediatelyHandler,
@@ -117,10 +113,6 @@ from src.app.handlers.query_handlers.get_cheat_days_query_handler import (
     GetCheatDaysQueryHandler,
 )
 
-# Import event handlers
-from src.app.handlers.event_handlers.meal_analysis_event_handler import (
-    MealAnalysisEventHandler,
-)
 from src.app.handlers.query_handlers import (
     GetNotificationPreferencesQueryHandler,
 )
@@ -336,17 +328,6 @@ def get_configured_event_bus() -> EventBus:
             uow=AsyncUnitOfWork(),
             event_bus=event_bus,
             image_store=image_store,
-            vision_service=vision_service,
-            gpt_parser=gpt_parser,
-            meal_translation_service=meal_translation_service,
-            cache_invalidation=cache_invalidation_service,
-        ),
-    )
-    event_bus.register_handler(
-        AnalyzeMealImageByUrlCommand,
-        AnalyzeMealImageByUrlHandler(
-            uow=AsyncUnitOfWork(),
-            event_bus=event_bus,
             vision_service=vision_service,
             gpt_parser=gpt_parser,
             meal_translation_service=meal_translation_service,
@@ -631,15 +612,6 @@ def get_configured_event_bus() -> EventBus:
         GetSavedSuggestionsQuery,
         GetSavedSuggestionsQueryHandler(cache_service=cache_service),
     )
-
-    # Register domain event subscribers
-    meal_analysis_handler = MealAnalysisEventHandler(
-        vision_service=vision_service,
-        gpt_parser=gpt_parser,
-        image_store=image_store,
-        meal_translation_service=meal_translation_service,
-    )
-    event_bus.subscribe(MealImageUploadedEvent, meal_analysis_handler.handle)
 
     _configured_event_bus = event_bus
     return _configured_event_bus

@@ -348,15 +348,6 @@ class VisionAIService(VisionAIServicePort):
         )
         return await self.analyze_with_strategy(image_bytes, strategy)
 
-    async def analyze_by_url(self, image_url: str) -> dict[str, Any]:
-        """
-        Analyze a food image from a public URL.
-        """
-        strategy = AnalysisStrategyFactory.create_basic_strategy(
-            optimized_prompt_enabled=self._optimized_prompt_enabled
-        )
-        return await self.analyze_by_url_with_strategy(image_url, strategy)
-
     async def analyze_with_portion_context(
         self, image_bytes: bytes, portion_size: float, unit: str
     ) -> dict[str, Any]:

@@ -9,7 +9,7 @@ class VisionAIServicePort(ABC):
     Port interface for AI vision services that can analyze food images.
 
     This port is used by the application layer to interact with vision AI services
-    like OpenAI Vision API.
+    like Vision AI provider (currently Gemini).
 
     NOTE: All methods generate content in English. Translation to user's
     language happens post-generation via TranslationService (PR #61 approach).
@@ -28,19 +28,6 @@ class VisionAIServicePort(ABC):
 
         Raises:
             RuntimeError: If analysis fails
-        """
-        pass
-
-    @abstractmethod
-    async def analyze_by_url(self, image_url: str) -> Dict[str, Any]:
-        """
-        Analyze a food image from a public URL.
-
-        Args:
-            image_url: Public URL of image to analyze
-
-        Returns:
-            JSON-compatible dictionary with the raw AI response
         """
         pass
 

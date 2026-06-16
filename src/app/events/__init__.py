@@ -7,7 +7,6 @@ from .base import DomainEvent
 # Meal events
 from .meal import (
     MealAnalysisStartedEvent,
-    MealImageUploadedEvent,
     MealNutritionUpdatedEvent,
     MealEditedEvent,
 )
@@ -28,7 +27,6 @@ __all__ = [
     "DomainEvent",
     # Meal events
     "MealAnalysisStartedEvent",
-    "MealImageUploadedEvent",
     "MealNutritionUpdatedEvent",
     "MealEditedEvent",
     # TDEE events

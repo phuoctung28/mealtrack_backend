@@ -2,7 +2,6 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 
-from src.domain.services.prompts.prompt_constants import VISION_DECOMPOSITION_RULES
 from src.domain.services.prompts.system_prompts import SystemPrompts
 
 logger = logging.getLogger(__name__)
@@ -56,16 +55,6 @@ class BasicAnalysisStrategy(MealAnalysisStrategy):
         if optimized_prompt_enabled is None:
             optimized_prompt_enabled = True
         self.optimized_prompt_enabled = bool(optimized_prompt_enabled)
-
-    def _legacy_analysis_prompt(self) -> str:
-        return (
-            "You are a nutrition analysis assistant. "
-            "Examine the image and return JSON with dish_name, emoji, foods, "
-            "total_calories, and confidence. "
-            "Each food item includes name, quantity, unit, calories, and macros. "
-            "Confidence should be between 0 and 1. "
-            "Always return well-formed JSON."
-        ) + VISION_DECOMPOSITION_RULES
 
     def get_analysis_prompt(self) -> str:
         return SystemPrompts.VISION_ANALYSIS
