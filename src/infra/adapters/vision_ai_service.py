@@ -210,6 +210,7 @@ class VisionAIService(VisionAIServicePort):
             "dish_name": payload.get("dish_name"),
             "foods": foods,
             "confidence": payload.get("confidence", 0.5),
+            "beverage_metadata": payload.get("beverage_metadata"),
         }
 
     async def analyze_by_url_with_strategy(
