@@ -79,8 +79,10 @@ async def test_log_caloric_drink_credits_hydration_weight_and_localizes_name():
         )
     )
 
-    assert uow.meals.saved.quantity == 333
-    assert uow.hydration_entries.saved.legacy_meal_id == uow.meals.saved.meal_id
+    assert uow.meals.saved is None  # no dual-write; meals table untouched
+    assert uow.hydration_entries.saved.legacy_meal_id is None
+    assert uow.hydration_entries.saved.credited_ml == 333
     assert result["volume_ml"] == 350  # raw input
     assert result["credited_ml"] == 333  # hydration-weighted amount stored
     assert result["drink_name"] == "Nước ép"
+    assert result["meal_id"] == uow.hydration_entries.saved.id  # backward-compat alias
