@@ -2,7 +2,7 @@ import logging
 import os
 from typing import TYPE_CHECKING, Optional
 
-from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.parsers.vision_response_parser import VisionResponseParser
 from src.domain.ports.food_cache_service_port import FoodCacheServicePort
 from src.domain.ports.food_mapping_service_port import FoodMappingServicePort
 from src.domain.ports.image_store_port import ImageStorePort
@@ -126,15 +126,19 @@ def get_ai_model_manager() -> AIModelManager:
     return _ai_model_manager
 
 
-# GPT Parser
-def get_gpt_parser() -> GPTResponseParser:
+# Vision Response Parser
+def get_vision_parser() -> VisionResponseParser:
     """
-    Get the GPT response parser instance.
+    Get the vision response parser instance.
 
     Returns:
-        GPTResponseParser: The parser instance
+        VisionResponseParser: The parser instance
     """
-    return GPTResponseParser(strict_schema_mode=True)
+    return VisionResponseParser(strict_schema_mode=True)
+
+
+# Backward-compat alias so existing code referring to get_gpt_parser continues to work.
+get_gpt_parser = get_vision_parser
 
 
 # Food Cache Service

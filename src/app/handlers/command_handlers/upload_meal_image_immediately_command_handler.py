@@ -12,7 +12,7 @@ from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.meal_projection import MealProjection
-from src.domain.parsers.gpt_response_parser import GPTResponseParser
+from src.domain.parsers.vision_response_parser import VisionResponseParser as GPTResponseParser
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
 from src.domain.ports.image_store_port import ImageStorePort
 from src.domain.ports.vision_ai_service_port import VisionAIServicePort

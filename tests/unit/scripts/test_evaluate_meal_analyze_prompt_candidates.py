@@ -24,12 +24,14 @@ def test_resolve_gate_candidate_prefers_runtime_selected_candidate():
         PromptEvalResult(
             name="legacy",
             parse_success_rate=1.0,
+            validation_success_rate=1.0,
             prompt_tokens_estimate=180.0,
             score=98.2,
         ),
         PromptEvalResult(
             name="optimized",
             parse_success_rate=1.0,
+            validation_success_rate=1.0,
             prompt_tokens_estimate=220.0,
             score=97.8,
         ),

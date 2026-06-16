@@ -2,9 +2,19 @@
 Domain parsers for external data.
 
 This package contains parsers for converting external data formats
-(like GPT responses) into domain models.
+into domain models.
 """
 
-from .gpt_response_parser import GPTResponseParser, GPTResponseParsingError
+from .vision_response_parser import (
+    VisionResponseParser,
+    VisionResponseParsingError,
+    GPTResponseParser,
+    GPTResponseParsingError,
+)
 
-__all__ = ["GPTResponseParser", "GPTResponseParsingError"]
+__all__ = [
+    "VisionResponseParser",
+    "VisionResponseParsingError",
+    "GPTResponseParser",
+    "GPTResponseParsingError",
+]

@@ -1,6 +1,9 @@
+import pytest
+
 from src.domain.services.meal_analysis.prompt_eval_loop import (
     PromptEvalCase,
     PromptEvalLoop,
+    PromptEvalResult,
 )
 
 
@@ -83,3 +86,59 @@ def test_enforce_thresholds_raises_on_regression():
     except ValueError as exc:
         message = str(exc)
         assert "parse_success_rate" in message or "prompt_tokens_estimate" in message
+
+
+def test_schema_invalid_payload_has_lower_validation_rate():
+    """Candidate with validation-failing payloads scores lower validation_success_rate."""
+    loop = PromptEvalLoop()
+    invalid_quantity_payload = {
+        "structured_data": {
+            "dish_name": "Broken",
+            "foods": [
+                {
+                    "name": "Huge",
+                    "quantity": 150000,
+                    "unit": "g",
+                    "macros": {"protein": 500, "carbs": 1000, "fat": 200},
+                }
+            ],
+        }
+    }
+    cases = [
+        PromptEvalCase(case_id="valid", response_payload=_valid_payload()),
+        PromptEvalCase(case_id="invalid", response_payload=invalid_quantity_payload),
+    ]
+    candidates = {"candidate": "x" * 200}
+    ranked = loop.rank_candidates(candidates, cases)
+    assert ranked[0].validation_success_rate == pytest.approx(0.5)
+
+
+def test_enforce_thresholds_fails_on_validation_rate():
+    """enforce_thresholds raises when validation_success_rate below threshold."""
+    loop = PromptEvalLoop()
+    result = PromptEvalResult(
+        name="candidate",
+        parse_success_rate=1.0,
+        validation_success_rate=0.4,
+        prompt_tokens_estimate=100.0,
+        score=100.0,
+    )
+    with pytest.raises(ValueError, match="validation_success_rate"):
+        loop.enforce_thresholds(
+            result,
+            min_parse_success_rate=0.5,
+            max_prompt_tokens=200,
+            min_validation_success_rate=0.8,
+        )
+
+
+def test_valid_payload_achieves_full_validation_rate():
+    """All-valid cases yield validation_success_rate=1.0."""
+    loop = PromptEvalLoop()
+    cases = [
+        PromptEvalCase(case_id="ok1", response_payload=_valid_payload()),
+        PromptEvalCase(case_id="ok2", response_payload=_valid_payload()),
+    ]
+    candidates = {"candidate": "x" * 200}
+    ranked = loop.rank_candidates(candidates, cases)
+    assert ranked[0].validation_success_rate == pytest.approx(1.0)

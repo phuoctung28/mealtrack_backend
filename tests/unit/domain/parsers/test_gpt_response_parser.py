@@ -242,3 +242,54 @@ class TestGPTResponseParserZeroQuantity:
 
         with pytest.raises(GPTResponseParsingError):
             gpt_parser.parse_to_nutrition(gpt_response)
+
+
+class TestGPTResponseParserQuantityGMapping:
+    def test_valid_quantity_maps_to_food_item_with_grams_unit(self, gpt_parser):
+        """quantity=100 (from legacy vision payload, converted from quantity_g=100) maps to FoodItem(quantity=100, unit='g')."""
+        gpt_response = {
+            "structured_data": {
+                "dish_name": "Grilled Chicken",
+                "foods": [
+                    {
+                        "name": "Chicken breast",
+                        "quantity": 100,
+                        "unit": "g",
+                        "macros": {"protein": 30.0, "carbs": 0.0, "fat": 6.0},
+                        "confidence": 0.9,
+                    }
+                ],
+                "confidence": 0.85,
+            }
+        }
+
+        nutrition = gpt_parser.parse_to_nutrition(gpt_response)
+
+        assert nutrition.food_items is not None
+        assert len(nutrition.food_items) == 1
+        item = nutrition.food_items[0]
+        assert item.quantity == pytest.approx(100.0)
+        assert item.unit == "g"
+
+    def test_calories_derived_from_macros_not_from_ai_field(self, gpt_parser):
+        """Calories must come from macro arithmetic, never from AI-provided kcal field."""
+        gpt_response = {
+            "structured_data": {
+                "dish_name": "Test Meal",
+                "foods": [
+                    {
+                        "name": "Rice",
+                        "quantity": 100,
+                        "unit": "g",
+                        "macros": {"protein": 3.0, "carbs": 28.0, "fat": 0.5},
+                    }
+                ],
+                "kcal": 99999,
+                "confidence": 0.9,
+            }
+        }
+
+        nutrition = gpt_parser.parse_to_nutrition(gpt_response)
+        # Calories = protein*4 + carbs*4 + fat*9 = 3*4 + 28*4 + 0.5*9 = 12 + 112 + 4.5 = 128.5
+        assert nutrition.calories == pytest.approx(128.5, abs=1.0)
+        assert nutrition.calories < 500

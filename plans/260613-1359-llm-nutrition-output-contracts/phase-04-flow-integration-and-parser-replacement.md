@@ -1,8 +1,8 @@
 ---
 phase: 4
-title: "Flow Integration And Parser Replacement"
-status: pending
-effort: "1-2d"
+title: Flow Integration And Parser Replacement
+status: completed
+effort: 1-2d
 ---
 
 # Phase 4: Flow Integration And Parser Replacement
