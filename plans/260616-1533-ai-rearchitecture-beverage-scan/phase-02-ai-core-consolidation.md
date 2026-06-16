@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "AI Core Consolidation"
-status: completed
+status: pending
 priority: P1
 effort: "2-3d"
 dependencies: [1]

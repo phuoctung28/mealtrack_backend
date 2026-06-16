@@ -24,7 +24,6 @@ from src.domain.strategies.meal_analysis_strategy import (
     MealAnalysisStrategy,
 )
 from src.infra.ai.gemini_service import GeminiService
-from src.infra.ai.json_extract import extract_json
 from src.infra.ai.model_config import ModelPurpose
 from src.infra.config.settings import get_settings
 
