@@ -24,8 +24,8 @@ from src.domain.exceptions.ai_exceptions import (
     AIUnavailableError,
 )
 from src.domain.services.ai_output_validation_service import summarize_validation_error
-from src.infra.adapters.ai_json_utils import extract_json as extract_ai_json
 from src.infra.ai.circuit_breaker import ProviderCircuitBreaker
+from src.infra.ai.json_extract import extract_json as extract_ai_json
 from src.infra.ai.model_config import (
     FALLBACK_CHAINS,
     NO_THINKING_PURPOSES,

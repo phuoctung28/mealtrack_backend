@@ -8,6 +8,7 @@ from typing import Any
 
 from src.app.events.base import EventHandler, handles
 from src.app.queries.food.lookup_barcode_query import LookupBarcodeQuery
+from src.domain.services.prompts.system_prompts import SystemPrompts
 from src.domain.services.translation.deepl_text_translation_service import (
     DeepLTextTranslationService,
 )
@@ -260,20 +261,7 @@ class LookupBarcodeQueryHandler(EventHandler[LookupBarcodeQuery, dict[str, Any] 
             return None
         try:
             country = _get_country_from_barcode(barcode)
-            system_prompt = (
-                "You are a nutrition expert. This barcode was scanned in a food tracking app. "
-                "Assume it IS a food product unless the product name clearly indicates otherwise "
-                "(e.g. 'Dettol Soap', 'iPhone Charger', 'Paracetamol'). "
-                "Based on the product name (if known), barcode prefix (country of origin), "
-                "and your knowledge, estimate approximate nutrition per 100g. "
-                "Be conservative with estimates. "
-                "If the product name clearly indicates a non-food item, return "
-                '{"is_food": false}. '
-                "Otherwise return ONLY valid JSON: "
-                '{"is_food": true, "name": "product name", "brand": null, '
-                '"protein_100g": float, "carbs_100g": float, "fat_100g": float, '
-                '"fiber_100g": float, "sugar_100g": float}'
-            )
+            system_prompt = SystemPrompts.BARCODE_AI_ESTIMATE
             name_hint = f"Product name: {partial_name}\n" if partial_name else ""
             user_prompt = (
                 f"{name_hint}"

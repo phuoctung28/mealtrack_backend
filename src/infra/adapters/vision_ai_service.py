@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import re
 from io import BytesIO
 from typing import Any
 from urllib.parse import urlparse
@@ -25,6 +24,7 @@ from src.domain.strategies.meal_analysis_strategy import (
     MealAnalysisStrategy,
 )
 from src.infra.ai.gemini_service import GeminiService
+from src.infra.ai.json_extract import extract_json
 from src.infra.ai.model_config import ModelPurpose
 from src.infra.config.settings import get_settings
 
@@ -79,77 +79,6 @@ class VisionAIService(VisionAIServicePort):
         except Exception as exc:
             logger.warning("Image compression failed, using original: %s", exc)
             return image_bytes
-
-    def _extract_json_from_response(self, content: str) -> dict[str, Any]:
-        """
-        Extract JSON from AI response, handling various formats.
-
-        Args:
-            content: The raw response string from the AI
-
-        Returns:
-            Parsed JSON as dictionary
-
-        Raises:
-            ValueError: If JSON cannot be extracted
-        """
-        # Try to parse the entire response as JSON
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            pass
-
-        # Try to find JSON in markdown code block (with closing ```)
-        json_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
-        if json_match:
-            try:
-                return json.loads(json_match.group(1).strip())
-            except json.JSONDecodeError:
-                pass
-
-        # Try to find any complete JSON object
-        json_match = re.search(r"\{[\s\S]*\}", content)
-        if json_match:
-            try:
-                return json.loads(json_match.group(0))
-            except json.JSONDecodeError:
-                pass
-
-        # Detect truncated response:
-        # 1. Has opening { but no closing }
-        # 2. Unbalanced braces (more { than })
-        # 3. Ends mid-string (common truncation pattern)
-        open_braces = content.count("{")
-        close_braces = content.count("}")
-        is_truncated = (
-            (open_braces > 0 and close_braces == 0)
-            or (open_braces > close_braces)
-            or content.rstrip().endswith(('":', '": "', '"name": "', '",'))
-        )
-
-        if is_truncated:
-            logger.error(
-                "Truncated JSON response detected: length=%s open_braces=%s "
-                "close_braces=%s",
-                len(content),
-                open_braces,
-                close_braces,
-            )
-            raise ValueError(
-                "AI response was truncated. Please try again with a simpler image."
-            )
-
-        logger.error(
-            "Could not extract JSON from AI response: length=%s open_braces=%s "
-            "close_braces=%s",
-            len(content),
-            open_braces,
-            close_braces,
-        )
-        raise ValueError(
-            "Could not extract JSON from AI response. "
-            "Please try again or use a clearer image."
-        )
 
     async def analyze_with_strategy(
         self, image_bytes: bytes, strategy: MealAnalysisStrategy
@@ -244,9 +173,7 @@ class VisionAIService(VisionAIServicePort):
                 max_tokens=self._max_output_tokens,
             )
             structured_data = (
-                result
-                if isinstance(result, dict)
-                else self._extract_json_from_response(str(result))
+                result if isinstance(result, dict) else extract_json(str(result))
             )
             return {
                 "raw_response": json.dumps(structured_data),
