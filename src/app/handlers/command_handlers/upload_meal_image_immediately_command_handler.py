@@ -363,6 +363,7 @@ class UploadMealImageImmediatelyHandler(
             await uow.hydration_entries.add(
                 HydrationEntry(
                     user_id=command.user_id,
+                    drink_id="scanned",
                     drink_name_snapshot=params.drink_name,
                     emoji_snapshot=params.emoji,
                     volume_ml=params.volume_ml,
