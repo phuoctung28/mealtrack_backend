@@ -1,10 +1,10 @@
-"""Circuit breaker for AI provider health tracking."""
+"""Circuit breaker for AI model health tracking per model name."""
+
 import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,8 @@ class ModelCircuit:
     """State for a single model's circuit."""
 
     state: CircuitState = CircuitState.CLOSED
-    failure_timestamps: List[float] = field(default_factory=list)
-    opened_at: Optional[float] = None
+    failure_timestamps: list[float] = field(default_factory=list)
+    opened_at: float | None = None
 
     def reset(self) -> None:
         """Reset to closed state."""
@@ -36,7 +36,7 @@ class ProviderCircuitBreaker:
     """
     Circuit breaker tracking health per model.
 
-    Thread-safe singleton that tracks failures across all requests.
+    Thread-safe; tracks failures across all requests.
     Opens circuit after failure_threshold failures within failure_window_seconds.
     """
 
@@ -51,7 +51,7 @@ class ProviderCircuitBreaker:
         self._failure_threshold = failure_threshold
         self._failure_window = failure_window_seconds
         self._cooldown = cooldown_seconds
-        self._circuits: Dict[str, ModelCircuit] = {}
+        self._circuits: dict[str, ModelCircuit] = {}
         self._lock = threading.Lock()
 
     def get_state(self, model: str) -> CircuitState:
@@ -94,11 +94,11 @@ class ProviderCircuitBreaker:
 
             circuit.reset()
 
-    def filter_available(self, models: List[str]) -> List[str]:
+    def filter_available(self, models: list[str]) -> list[str]:
         """Return models with CLOSED or HALF_OPEN circuits."""
         return [m for m in models if self.get_state(m) != CircuitState.OPEN]
 
-    def should_trip(self, error: Union[int, str]) -> bool:
+    def should_trip(self, error: int | str) -> bool:
         """Check if an error should trip the circuit."""
         if isinstance(error, int):
             return error in self.TRIPPING_ERRORS

@@ -110,28 +110,36 @@ async def test_manual_meal_save_emits_db_and_cache_latency_metrics():
 
 @pytest.mark.asyncio
 async def test_ai_all_models_fail_emits_provider_failure_log_event():
+    from unittest.mock import patch as _patch
+
     from src.domain.exceptions.ai_exceptions import AIUnavailableError
-    from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
+    from src.infra.ai.gemini_service import GeminiService
+    from src.infra.ai.model_config import ModelPurpose
 
     rec = _Rec()
     set_observability_connector_for_test(rec)
 
-    manager = AIModelManager()
+    with _patch.dict("os.environ", {"GOOGLE_API_KEY": "test-key"}):
+        GeminiService.reset_instance()
+        manager = GeminiService()
 
-    # Mock circuit breaker to allow one model, mock provider to always fail
+    # Mock circuit breaker to allow one model; mock _call_text to always fail
     manager._circuit_breaker = MagicMock()
     manager._circuit_breaker.filter_available = MagicMock(return_value=["model-a"])
     manager._circuit_breaker.should_trip = MagicMock(return_value=False)
     manager._circuit_breaker.record_failure = MagicMock()
+    manager._circuit_breaker.record_success = MagicMock()
+    manager._resolve_cache_name = AsyncMock(return_value=None)
+    manager._call_text = AsyncMock(side_effect=RuntimeError("provider down"))
 
-    failing_provider = MagicMock()
-    failing_provider.generate = AsyncMock(side_effect=RuntimeError("provider down"))
-    failing_provider.extract_error_code = MagicMock(return_value="UNKNOWN")
-    manager._get_provider_for_model = MagicMock(return_value=failing_provider)
-    manager._get_cache_name_for_model = AsyncMock(return_value=None)
+    GeminiService.reset_instance()
 
     with pytest.raises(AIUnavailableError):
-        await manager.generate(ModelPurpose.GENERAL, "test prompt", "sys")
+        await manager.text_json(
+            purpose=ModelPurpose.GENERAL,
+            user_prompt="test prompt",
+            system_prompt="sys",
+        )
 
     failure_events = [
         c for c in rec.calls
