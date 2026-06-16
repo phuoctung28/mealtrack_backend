@@ -1,12 +1,13 @@
 """
-Meal generation service implementation using AI Model Manager.
+Meal generation service implementation using GeminiService.
 Provides resilient AI calls with automatic fallback.
 """
 
 import logging
 
 from src.domain.ports.meal_generation_service_port import MealGenerationServicePort
-from src.infra.services.ai.ai_model_manager import AIModelManager, ModelPurpose
+from src.infra.ai.gemini_service import GeminiService
+from src.infra.ai.model_config import ModelPurpose
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +23,13 @@ PURPOSE_MAP = {
 
 class MealGenerationService(MealGenerationServicePort):
     """
-    Unified meal generation service using AIModelManager.
+    Unified meal generation service using GeminiService.
     Provides automatic fallback on provider failures.
     """
 
     def __init__(self):
-        """Initialize with AI model manager."""
-        self._ai_manager = AIModelManager.get_instance()
+        """Initialize with GeminiService."""
+        self._ai_manager = GeminiService.get_instance()
 
     async def generate_meal_plan_async(
         self,
@@ -42,12 +43,10 @@ class MealGenerationService(MealGenerationServicePort):
     ):
         """Generate meal plan — runs directly on the caller's event loop."""
         purpose = PURPOSE_MAP.get(model_purpose, ModelPurpose.GENERAL)
-        return await self._ai_manager.generate(
+        return await self._ai_manager.text_json(
             purpose=purpose,
-            prompt=prompt,
-            system_message=system_message,
-            response_type=response_type,
+            user_prompt=prompt,
+            system_prompt=system_message,
             max_tokens=max_tokens,
             schema=schema,
-            thinking_budget=thinking_budget,
         )

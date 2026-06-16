@@ -8,13 +8,13 @@ from src.infra.adapters.meal_generation_service import MealGenerationService
 @pytest.fixture
 def mock_ai_manager():
     manager = Mock()
-    manager.generate = AsyncMock(return_value={"meal": "test"})
+    manager.text_json = AsyncMock(return_value={"meal": "test"})
     return manager
 
 
 @pytest.fixture
 def service(mock_ai_manager):
-    with patch("src.infra.adapters.meal_generation_service.AIModelManager") as mock_cls:
+    with patch("src.infra.adapters.meal_generation_service.GeminiService") as mock_cls:
         mock_cls.get_instance.return_value = mock_ai_manager
         return MealGenerationService()
 
@@ -39,7 +39,7 @@ async def test_model_purpose_maps_to_enum(service, mock_ai_manager):
         model_purpose="recipe",
     )
 
-    call_kwargs = mock_ai_manager.generate.call_args[1]
+    call_kwargs = mock_ai_manager.text_json.call_args[1]
     assert call_kwargs["purpose"].value == "recipe"
 
 
@@ -51,5 +51,5 @@ async def test_discovery_model_purpose_maps_to_enum(service, mock_ai_manager):
         model_purpose="discovery",
     )
 
-    call_kwargs = mock_ai_manager.generate.call_args[1]
+    call_kwargs = mock_ai_manager.text_json.call_args[1]
     assert call_kwargs["purpose"].value == "discovery"
