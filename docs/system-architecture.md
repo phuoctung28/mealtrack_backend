@@ -1,6 +1,6 @@
 # Backend System Architecture Overview
 
-**Last Updated:** June 13, 2026
+**Last Updated:** June 16, 2026
 **Architecture:** 4-Layer Clean + CQRS + Event-Driven
 **Event Bus:** PyMediator (singleton registry pattern)
 **Codebase:** 430 files, ~38.5K LOC across 4 layers
@@ -106,13 +106,24 @@ Architecture guardrails enforced by `tests/unit/architecture/test_logging_owners
 
 ## Data Flow Example: Meal Analysis
 
+Analysis is fully synchronous — there is no background event handler for vision AI.
+
+**Standard food scan:**
 1. `POST /v1/meals/image/analyze` receives image
 2. Route creates `UploadMealImageImmediatelyCommand`
 3. `EventBus.send()` → `UploadMealImageImmediatelyHandler`
-4. Handler uploads to Cloudinary, creates Meal (PROCESSING), publishes `MealImageUploadedEvent`
-5. Handler returns Meal immediately to API (synchronous response to client)
-6. `EventBus.publish()` → `MealAnalysisEventHandler` (background)
-7. Background: calls `VisionAIService` (Gemini), parses nutrition, updates Meal to READY
+4. Handler uploads image to Cloudinary
+5. Handler calls `GeminiService.vision(MEAL_SCAN, image_bytes)` inline
+6. Handler parses nutrition, creates Meal (READY), returns to API
+
+**Packaged beverage scan** (when `beverage_metadata.is_packaged_beverage=True`):
+1–5. Same as above through `GeminiService.vision(MEAL_SCAN)`
+6. Beverage branch: creates Meal row (`source="hydration"`) + `HydrationEntry` (`drink_id="scanned"`, `image_url`, macros)
+7. Cache invalidation via `after_hydration_write`, returns Meal domain object
+
+### AI Layer
+
+A single `GeminiService` (`src/infra/ai/gemini_service.py`) handles all AI inference. It manages the model pool, circuit breaker, context cache, and fallback chain internally. Application handlers depend on `VisionAIServicePort` (domain port); infrastructure wires `GeminiService` as the implementation.
 
 ---
 
@@ -145,6 +156,12 @@ Nutree mobile ──→ MealTrack (validate/apply code)
 | `affiliate_event_outbox` retry queue | MealTrack (infrastructure only) |
 
 **Integration:** See `docs/external-services.md` → nutree-affiliate section.
+
+---
+
+## Activities Feed
+
+The daily activities feed (`GetDailyActivitiesQueryHandler`) reads from the `meals` table only. Beverage scans produce a `Meal` row (`source="hydration"`) and a `HydrationEntry` linked via `legacy_meal_id`. The feed renders the `Meal` row as a hydration activity; the `HydrationEntry` is the authoritative hydration record and is not rendered as a separate feed item. This `legacy_meal_id` FK is also used by `find_by_id_or_legacy_meal_id` and `delete_by_id_or_legacy_meal_id` in the hydration repository so external callers can reference either ID.
 
 ---
 

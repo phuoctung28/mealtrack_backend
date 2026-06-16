@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import threading
+import time
 from typing import Any, Optional
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -159,9 +160,11 @@ class GeminiService:
 
         attempted: list[str] = []
         last_error: str | None = None
+        primary_model = chain[0]
 
         for model in available:
             attempted.append(model)
+            t0 = time.perf_counter()
             try:
                 result = await self._call_vision(
                     model=model,
@@ -172,7 +175,18 @@ class GeminiService:
                     max_tokens=max_tokens,
                     purpose_hint=purpose.value,
                 )
+                latency_ms = int((time.perf_counter() - t0) * 1000)
                 self._circuit_breaker.record_success(model)
+                from src.domain.services.prompts.system_prompts import SystemPrompts  # lazy import avoids circular dep
+                logger.info(
+                    "[AI-CALL] purpose=%s model=%s prompt_version=%s latency_ms=%d retry_count=%d fallback_used=%s",
+                    purpose.value,
+                    model,
+                    SystemPrompts.PROMPT_VERSION,
+                    latency_ms,
+                    len(attempted) - 1,
+                    model != primary_model,
+                )
                 return result
 
             except AIOutputValidationError:
@@ -238,9 +252,11 @@ class GeminiService:
         cache_type: str | None = _PURPOSE_TO_CACHE_TYPE.get(purpose)
         attempted: list[str] = []
         last_error: str | None = None
+        primary_model = chain[0]
 
         for model in available:
             attempted.append(model)
+            t0 = time.perf_counter()
             try:
                 logger.debug("[AI-ATTEMPT] purpose=%s model=%s", purpose.value, model)
                 resolved_cache = cache_name or await self._resolve_cache_name(
@@ -255,15 +271,27 @@ class GeminiService:
                     cache_name=resolved_cache,
                     purpose_hint=purpose.value,
                 )
+                latency_ms = int((time.perf_counter() - t0) * 1000)
                 self._circuit_breaker.record_success(model)
 
-                if model != chain[0]:
+                fallback_used = model != primary_model
+                if fallback_used:
                     logger.info(
                         "[AI-FALLBACK-SUCCESS] purpose=%s failed=%s succeeded=%s",
                         purpose.value,
                         attempted[:-1],
                         model,
                     )
+                from src.domain.services.prompts.system_prompts import SystemPrompts  # lazy import avoids circular dep
+                logger.info(
+                    "[AI-CALL] purpose=%s model=%s prompt_version=%s latency_ms=%d retry_count=%d fallback_used=%s",
+                    purpose.value,
+                    model,
+                    SystemPrompts.PROMPT_VERSION,
+                    latency_ms,
+                    len(attempted) - 1,
+                    fallback_used,
+                )
                 return result
 
             except AIOutputValidationError:

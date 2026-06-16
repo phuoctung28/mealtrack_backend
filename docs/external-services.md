@@ -1,6 +1,6 @@
 # Backend External Services Integration
 
-**Last Updated:** June 13, 2026
+**Last Updated:** June 16, 2026
 **Services:** Firebase, Cloudinary, Google Gemini, RevenueCat, PostHog, Redis, Sentry
 **Failure handling:** Optional integrations degrade when safe. Firebase Auth and the primary DB fail fast. Redis optional caches degrade by bypassing cache; any Redis-backed required state must be documented and health-checked separately.
 
@@ -50,14 +50,21 @@
 
 **Purpose:** AI Meal Analysis + Content Generation
 
-### Multi-Model Strategy (Rate Distribution)
+### GeminiService (`src/infra/ai/gemini_service.py`)
 
-| Purpose | Model | Env Key |
-|---------|-------|---------|
-| General / Recipe / Barcode | `gemini-2.5-flash` | `GEMINI_MODEL` |
-| Meal names | `gemini-2.5-flash-lite` | `GEMINI_MODEL_NAMES` |
-| Recipe primary | `gemini-2.5-flash` | `GEMINI_MODEL_RECIPE_PRIMARY` |
-| Recipe secondary | `gemini-2.5-flash` | `GEMINI_MODEL_RECIPE_SECONDARY` |
+Single service replacing the former `AIModelManager` / `GeminiModelManager` / `GeminiProvider` chain. Exposes two async methods: `vision()` for image inference and `text_json()` for structured text inference. Circuit breaking, context caching, and fallback routing are internal implementation details.
+
+### Model Assignment
+
+All purposes use a primary → fallback chain. `ProviderCircuitBreaker` is an internal concern of `GeminiService` and is not visible at the application layer.
+
+| Purpose | Primary | Fallback |
+|---------|---------|---------|
+| `MEAL_SCAN` (food + packaged beverage) | `gemini-2.5-flash-lite` | `gemini-2.5-flash` |
+| `INGREDIENT_SCAN` | `gemini-2.5-flash-lite` | `gemini-2.5-flash` |
+| `PARSE_TEXT`, `BARCODE`, `MEAL_NAMES`, `DISCOVERY`, `GENERAL`, `RECIPE` | `gemini-2.5-flash-lite` | `gemini-2.5-flash` |
+
+`ModelPurpose.MEAL_SCAN` handles both standard food images and packaged-beverage images; the handler routes to a beverage branch when `beverage_metadata.is_packaged_beverage` is `True`.
 
 ### Vision AI (Meal Analysis)
 - 6 analysis strategies: basic, portion-aware, ingredient-aware, weight-aware, user-context, combined
