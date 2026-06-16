@@ -178,6 +178,13 @@ class GeminiCacheManager:
                     )
             await self.warm_all()
 
+    def wire_to_gemini_service(self) -> None:
+        """Inject this cache manager into GeminiService singleton."""
+        from src.infra.ai.gemini_service import GeminiService  # infra→infra, allowed
+
+        GeminiService.get_instance().set_cache_manager(self)
+        logger.info("GeminiCacheManager wired into GeminiService")
+
 
 # ---------------------------------------------------------------------------
 # Helper accessors — isolated so that import failures affect only warm_all

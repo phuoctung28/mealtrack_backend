@@ -243,10 +243,7 @@ async def lifespan(app: FastAPI):
             await gemini_cache_manager.warm_all()
             gemini_cache_manager.start_refresh_loop()
             logger.info("Gemini context caches warmed")
-            from src.infra.ai.gemini_service import GeminiService
-
-            GeminiService.get_instance().set_cache_manager(gemini_cache_manager)
-            logger.info("GeminiCacheManager wired into GeminiService")
+            gemini_cache_manager.wire_to_gemini_service()
         else:
             logger.warning("Redis not available — Gemini cache skipped")
     except Exception as e:
