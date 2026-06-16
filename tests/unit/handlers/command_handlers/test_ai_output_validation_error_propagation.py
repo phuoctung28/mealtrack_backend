@@ -1,0 +1,141 @@
+"""Tests that AIOutputValidationError from vision service produces controlled failures."""
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from src.domain.exceptions.ai_exceptions import AIOutputValidationError
+
+VALIDATION_ERROR = AIOutputValidationError(
+    "Invalid AI output after validation retry",
+    purpose="meal_scan",
+    attempt_count=2,
+    validation_details=["quantity_g: value is not a valid float"],
+)
+
+
+@pytest.mark.asyncio
+async def test_upload_handler_propagates_ai_validation_error():
+    """AIOutputValidationError from vision_service propagates as-is (not wrapped)."""
+    from src.app.commands.meal.upload_meal_image_immediately_command import (
+        UploadMealImageImmediatelyCommand,
+    )
+    from src.app.handlers.command_handlers.upload_meal_image_immediately_command_handler import (
+        UploadMealImageImmediatelyHandler,
+    )
+    from src.domain.services.meal_analysis.fast_path_policy import (
+        MealAnalyzeFastPathPolicy,
+    )
+
+    handler = UploadMealImageImmediatelyHandler(
+        uow=MagicMock(),
+        event_bus=MagicMock(),
+        fast_path_policy=MealAnalyzeFastPathPolicy(max_attempts=1),
+    )
+    handler.vision_service = MagicMock()
+    handler.vision_service.analyze = AsyncMock(side_effect=VALIDATION_ERROR)
+
+    command = UploadMealImageImmediatelyCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        file_contents=b"img",
+        content_type="image/jpeg",
+    )
+
+    with pytest.raises(AIOutputValidationError) as exc_info:
+        await handler._run_vision_analysis(command, "meal-123")
+
+    assert exc_info.value is VALIDATION_ERROR
+
+
+@pytest.mark.asyncio
+async def test_scan_by_url_handler_propagates_ai_validation_error():
+    """AIOutputValidationError from vision_service.analyze propagates out of handle()."""
+    from src.app.commands.meal.scan_by_url_command import ScanByUrlCommand
+    from src.app.handlers.command_handlers.scan_by_url_command_handler import (
+        ScanByUrlCommandHandler,
+    )
+
+    mock_uow = MagicMock()
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.users = MagicMock()
+    mock_uow.users.get_user_timezone = AsyncMock(return_value="UTC")
+
+    handler = ScanByUrlCommandHandler(
+        uow=mock_uow,
+        event_bus=MagicMock(),
+        vision_service=MagicMock(),
+        gpt_parser=MagicMock(),
+    )
+    handler.vision_service.analyze = AsyncMock(side_effect=VALIDATION_ERROR)
+
+    command = ScanByUrlCommand(
+        user_id="00000000-0000-0000-0000-000000000001",
+        image_url="https://res.cloudinary.com/demo/image/upload/sample.jpg",
+        public_id="demo/sample",
+    )
+
+    image_bytes = b"fake-image-bytes"
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_response = MagicMock()
+        mock_response.content = image_bytes
+        mock_response.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("asyncio.to_thread", return_value=image_bytes):
+            with pytest.raises(AIOutputValidationError) as exc_info:
+                await handler.handle(command)
+
+    assert exc_info.value is VALIDATION_ERROR
+
+
+@pytest.mark.asyncio
+async def test_background_event_handler_marks_meal_failed_on_validation_error():
+    """MealAnalysisEventHandler marks meal failed with sanitized message on AIOutputValidationError."""
+    from datetime import datetime
+
+    from src.app.handlers.event_handlers.meal_analysis_event_handler import (
+        MealAnalysisEventHandler,
+    )
+    from src.domain.model.meal import Meal, MealImage, MealStatus
+
+    meal = Meal(
+        meal_id="00000000-0000-0000-0000-000000000002",
+        user_id="00000000-0000-0000-0000-000000000001",
+        status=MealStatus.ANALYZING,
+        created_at=datetime.utcnow(),
+        image=MealImage(
+            image_id="00000000-0000-0000-0000-000000000003",
+            format="jpeg",
+            size_bytes=1000,
+            url="https://res.cloudinary.com/demo/image/upload/sample",
+        ),
+    )
+
+    mock_uow = MagicMock()
+    mock_uow.__aenter__ = AsyncMock(return_value=mock_uow)
+    mock_uow.__aexit__ = AsyncMock(return_value=False)
+    mock_uow.meals = MagicMock()
+    mock_uow.meals.find_by_id = AsyncMock(return_value=meal)
+    mock_uow.meals.save = AsyncMock(return_value=meal)
+
+    mock_image_store = MagicMock()
+    mock_image_store.load_async = AsyncMock(side_effect=VALIDATION_ERROR)
+
+    handler = MealAnalysisEventHandler(
+        uow=mock_uow,
+        vision_service=MagicMock(),
+        image_store=mock_image_store,
+    )
+
+    await handler._perform_analysis(meal, language="en")
+
+    mock_uow.meals.save.assert_awaited()
+    saved_meal = mock_uow.meals.save.call_args[0][0]
+    assert saved_meal.status == MealStatus.FAILED
+    error_msg = saved_meal.error_message
+    assert "validation_details" not in error_msg
+    assert "quantity_g" not in error_msg
+    assert len(error_msg) < 200

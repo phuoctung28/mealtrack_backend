@@ -92,6 +92,8 @@ Empower users to understand their nutrition through effortless, AI-driven tracki
 - **Cache**: Redis 7.0 for selective optional caching and AI-cost optimization; required state must be modeled separately
 - **Vector DB**: Pinecone Inference API (1024-dim, llama-text-embed-v2)
 - **AI Services**: Google Gemini 2.5 Flash (multi-model for rate distribution)
+
+**AI Output Validation (2026-06)**: All Gemini vision and text-parse flows now use canonical Pydantic contracts (`VisionNutritionResponse`, `MealTextNutritionResponse`) with bounded retry. Invalid AI output (over-limit quantities, empty foods) is rejected at the contract boundary with one automatic retry. The parser is a deterministic mapper, not a silent repair engine. Calories are always derived from backend macros, never from AI-reported kcal.
 - **Storage**: Cloudinary (image storage with folder organization)
 - **Image Search**: Unsplash + Pexels adapters (meal discovery)
 - **Auth**: Firebase JWT with development bypass middleware

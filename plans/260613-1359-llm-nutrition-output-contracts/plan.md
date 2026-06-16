@@ -1,14 +1,23 @@
 ---
-title: "LLM Nutrition Output Contracts"
-description: "Replace parser-side AI cleanup with structured nutrition contracts, bounded validation retry, deterministic mapping, and observability across image, text, and recipe AI flows."
-status: in-progress
+title: LLM Nutrition Output Contracts
+description: >-
+  Replace parser-side AI cleanup with structured nutrition contracts, bounded
+  validation retry, deterministic mapping, and observability across image, text,
+  and recipe AI flows.
+status: completed
 priority: P1
-branch: ""
-tags: [ai, nutrition, structured-output, validation, ux]
+branch: ''
+tags:
+  - ai
+  - nutrition
+  - structured-output
+  - validation
+  - ux
 blockedBy: []
-blocks: []
-created: "2026-06-13T06:59:38.595Z"
-createdBy: "ck:plan"
+blocks:
+  - 260616-1533-ai-rearchitecture-beverage-scan
+created: '2026-06-13T06:59:38.595Z'
+createdBy: 'ck:plan'
 source: skill
 ---
 
@@ -40,8 +49,8 @@ Source report: `plans/reports/260613-1350-llm-nutrition-contract-brainstorm.md`
 | 1 | [Provider Structured Vision Spike](./phase-01-provider-structured-vision-spike.md) | Completed | 0.5d |
 | 2 | [Canonical AI Nutrition Contracts](./phase-02-canonical-ai-nutrition-contracts.md) | Completed | 0.5-1d |
 | 3 | [Validation Retry Orchestration](./phase-03-validation-retry-orchestration.md) | Completed | 1d |
-| 4 | [Flow Integration And Parser Replacement](./phase-04-flow-integration-and-parser-replacement.md) | Pending | 1-2d |
-| 5 | [Evaluation Observability And Documentation](./phase-05-evaluation-observability-and-documentation.md) | Pending | 0.5d |
+| 4 | [Flow Integration And Parser Replacement](./phase-04-flow-integration-and-parser-replacement.md) | Completed | 1-2d |
+| 5 | [Evaluation Observability And Documentation](./phase-05-evaluation-observability-and-documentation.md) | Completed | 0.5d |
 
 ## Dependencies
 

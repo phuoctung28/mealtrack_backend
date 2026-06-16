@@ -6,6 +6,10 @@ import logging
 
 from src.app.events.base import EventHandler, handles
 from src.app.events.meal import MealImageUploadedEvent
+from src.domain.exceptions.ai_exceptions import (
+    AIOutputValidationError,
+    AIUnavailableError,
+)
 from src.domain.model.meal import MealStatus
 from src.domain.parsers.gpt_response_parser import GPTResponseParser
 from src.domain.ports.async_unit_of_work_port import AsyncUnitOfWorkPort
@@ -136,6 +140,18 @@ class MealAnalysisEventHandler(EventHandler[MealImageUploadedEvent, None]):
                 await uow.meals.save(meal)
             logger.info(f"Real analysis completed for meal {meal.meal_id}")
 
+        except AIOutputValidationError:
+            logger.warning(
+                "[AI-OUTPUT-VALIDATION-EXHAUSTED] meal=%s purpose=meal_scan",
+                meal.meal_id,
+            )
+            await self._mark_meal_as_failed(
+                meal.meal_id,
+                "AI could not produce valid nutrition analysis. Please try again with a clearer photo.",
+            )
+        except AIUnavailableError as e:
+            logger.error("AI unavailable for meal %s: %s", meal.meal_id, e)
+            await self._mark_meal_as_failed(meal.meal_id, "AI service temporarily unavailable. Please try again.")
         except Exception as e:
             logger.error(f"Analysis failed for meal {meal.meal_id}: {str(e)}")
             await self._mark_meal_as_failed(meal.meal_id, str(e))
