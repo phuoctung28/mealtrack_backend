@@ -1,15 +1,12 @@
 """Command handler for logging a caloric drink entry."""
 
 import logging
-from uuid import uuid4
 
 from src.app.commands.hydration.log_caloric_drink_command import LogCaloricDrinkCommand
 from src.app.events.base import EventHandler, handles
 from src.app.services.cache_invalidation_service import CacheInvalidationService
 from src.domain.model.hydration import DrinkCategory, HydrationEntry
-from src.domain.model.meal import Meal, MealImage, MealStatus
 from src.domain.model.nutrition.macros import Macros
-from src.domain.model.nutrition.nutrition import Nutrition
 from src.domain.services.hydration_catalog_service import find_by_id, localized_name
 from src.domain.utils.timezone_utils import (
     format_iso_utc,
@@ -62,35 +59,10 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
             volume_factor = cmd.volume_ml / 100.0
             credited_ml = drink.credited_ml_for_volume(cmd.volume_ml)
 
-            nutrition = Nutrition(
-                macros=Macros(
-                    protein=0.0,
-                    carbs=round(carbs_100ml * volume_factor, 1),
-                    fat=round(fat_100ml * volume_factor, 1),
-                    fiber=0.0,
-                    sugar=round(drink.sugar_per_100ml * volume_factor, 1),
-                ),
-                food_items=None,
-            )
+            carbs = round(carbs_100ml * volume_factor, 1)
+            fat = round(fat_100ml * volume_factor, 1)
+            sugar = round(drink.sugar_per_100ml * volume_factor, 1)
 
-            meal = Meal(
-                meal_id=str(uuid4()),
-                user_id=cmd.user_id,
-                status=MealStatus.READY,
-                created_at=log_dt,
-                ready_at=log_dt,
-                image=MealImage(
-                    image_id=str(uuid4()), format="jpeg", size_bytes=1, url=None
-                ),
-                dish_name=drink.name,
-                emoji=drink.emoji,
-                meal_type="hydration",
-                source="hydration",
-                quantity=credited_ml,
-                nutrition=nutrition,
-            )
-            saved = await uow.meals.save(meal)
-            macros = saved.nutrition.macros if saved.nutrition else nutrition.macros
             hydration_entry = await uow.hydration_entries.add(
                 HydrationEntry(
                     user_id=cmd.user_id,
@@ -99,22 +71,23 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
                     emoji_snapshot=drink.emoji,
                     volume_ml=cmd.volume_ml,
                     credited_ml=credited_ml,
-                    protein_g=macros.protein,
-                    carbs_g=macros.carbs,
-                    fat_g=macros.fat,
-                    fiber_g=macros.fiber,
-                    sugar_g=macros.sugar,
+                    protein_g=0.0,
+                    carbs_g=carbs,
+                    fat_g=fat,
+                    fiber_g=0.0,
+                    sugar_g=sugar,
                     logged_at=log_dt,
                     source="hydration",
-                    legacy_meal_id=saved.meal_id,
                 )
             )
 
-        # Synchronous invalidation guarantees Redis is cleared before the response returns
         if self.cache_invalidation:
             await self.cache_invalidation.after_hydration_write(cmd.user_id, log_date)
 
-        kcal = round(saved.nutrition.calories if saved.nutrition else 0.0, 1)
+        kcal = round(
+            Macros(protein=0.0, carbs=carbs, fat=fat, fiber=0.0, sugar=sugar).total_calories,
+            1,
+        )
         return {
             "id": hydration_entry.id,
             "drink_id": cmd.drink_id,
@@ -125,6 +98,6 @@ class LogCaloricDrinkCommandHandler(EventHandler[LogCaloricDrinkCommand, dict]):
             "kcal": kcal,
             "calories": kcal,
             "source": "hydration",
-            "meal_id": saved.meal_id,
+            "meal_id": hydration_entry.id,  # backward-compat: hydration entry id
             "logged_at": format_iso_utc(hydration_entry.logged_at),
         }

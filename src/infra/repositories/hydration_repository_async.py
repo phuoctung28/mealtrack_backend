@@ -48,6 +48,7 @@ def _orm_to_domain(row: HydrationEntryORM | None) -> HydrationEntry | None:
         legacy_meal_id=row.legacy_meal_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        image_url=row.image_url,
     )
 
 
@@ -68,6 +69,7 @@ def _domain_to_orm(entry: HydrationEntry) -> HydrationEntryORM:
         logged_at=entry.logged_at,
         source=entry.source,
         legacy_meal_id=entry.legacy_meal_id,
+        image_url=entry.image_url,
     )
 
 

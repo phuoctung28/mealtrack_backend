@@ -5,7 +5,7 @@ models. They intentionally ignore AI-reported calories because calories are
 derived from backend macros.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import (
     AliasChoices,
@@ -88,6 +88,21 @@ class VisionFoodEstimate(BaseModel):
         return _strip_required_text(value)
 
 
+class BeverageMetadata(BaseModel):
+    """Metadata for packaged beverage images detected by AI."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    is_packaged_beverage: bool
+    brand: str | None = Field(None, max_length=100)
+    product_name: str | None = Field(None, max_length=100)
+    container_type: Literal["can", "bottle", "cup", "carton", "unknown"] = "unknown"
+    volume_ml: int | None = None
+    sugar_per_100ml: float | None = Field(None, ge=0)
+    kcal_per_100ml: float | None = Field(None, ge=0)
+    label_source: Literal["nutrition_panel", "front_label", "estimate"] = "estimate"
+
+
 class VisionNutritionResponse(BaseModel):
     """Structured image meal-analysis response."""
 
@@ -101,10 +116,17 @@ class VisionNutritionResponse(BaseModel):
         description="Foods visible in the image",
     )
     confidence: float = Field(0.5, ge=0, le=1)
+    beverage_metadata: BeverageMetadata | None = None
 
     @model_validator(mode="after")
     def require_foods_for_food_images(self) -> "VisionNutritionResponse":
-        if self.is_food and not self.foods:
+        if (
+            self.is_food
+            and not self.foods
+            and not (
+                self.beverage_metadata and self.beverage_metadata.is_packaged_beverage
+            )
+        ):
             raise ValueError(
                 "foods must contain at least one item when is_food is true"
             )
