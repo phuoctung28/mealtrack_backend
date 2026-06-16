@@ -15,7 +15,6 @@ from src.infra.adapters.open_food_facts_service import (
     get_open_food_facts_service,
 )
 from src.infra.adapters.vision_ai_service import VisionAIService
-from src.infra.ai.gemini_service import GeminiService
 from src.infra.cache.cache_service import CacheService
 from src.infra.cache.metrics import CacheMonitor
 from src.infra.cache.redis_client import RedisClient
@@ -40,7 +39,6 @@ _cache_monitor = CacheMonitor()
 # Singleton service instances (initialized once, reused across requests)
 _image_store: ImageStorePort | None = None
 _vision_service: VisionAIServicePort | None = None
-_ai_model_manager: GeminiService | None = None
 
 
 async def initialize_cache_layer() -> None:
@@ -110,20 +108,6 @@ def get_vision_service() -> VisionAIServicePort:
     if _vision_service is None:
         _vision_service = VisionAIService()
     return _vision_service
-
-
-# AI Model Manager (singleton pattern)
-def get_ai_model_manager() -> GeminiService:
-    """
-    Get the GeminiService singleton (replaces AIModelManager).
-
-    Returns:
-        GeminiService: The AI service with circuit breaker and fallback support
-    """
-    global _ai_model_manager
-    if _ai_model_manager is None:
-        _ai_model_manager = GeminiService.get_instance()
-    return _ai_model_manager
 
 
 # Vision Response Parser
